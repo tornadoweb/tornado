@@ -344,7 +344,7 @@ uses authentication (and stores user data in a MySQL database).
 
 ### Cross-site request forgery protection
 
-[Cross-site request forgery](http://en.wikipedia.org/wiki/Cross-site_request_forgery), or XSRF, is a common problem for personalized web applcations. See the
+[Cross-site request forgery](http://en.wikipedia.org/wiki/Cross-site_request_forgery), or XSRF, is a common problem for personalized web applications. See the
 [Wikipedia article](http://en.wikipedia.org/wiki/Cross-site_request_forgery)
 for more information on how XSRF works.
 
