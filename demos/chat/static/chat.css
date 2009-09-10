@@ -49,3 +49,8 @@ td {
 #inbox .message {
   padding-top: 0.25em;
 }
+
+#nav {
+  float: right;
+  z-index: 99;
+}
