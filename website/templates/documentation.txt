@@ -76,7 +76,7 @@ Tornado has been tested on Python 2.5 and 2.6. To use all of the features of Tor
 
 **Ubuntu Linux**
 
-    sudo apt-get install python-pycurl python-simplejson
+    sudo apt-get install python-dev python-pycurl python-simplejson
 
 
 Module index
