@@ -187,4 +187,4 @@ class HTTPHeaders(dict):
         return dict.__getitem__(self, self._normalize_name(name))
 
     def _normalize_name(self, name):
-        return intern("-".join([w.capitalize() for w in name.split("-")]))
+        return "-".join([w.capitalize() for w in name.split("-")])
