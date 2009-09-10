@@ -1,4 +1,4 @@
-Running the Tornado AppEngine example
+Running the Tornado Facebook example
 =====================================
 To work with the provided Facebook api key, this example must be
 accessed at http://localhost:8888/ to match the Connect URL set in the
