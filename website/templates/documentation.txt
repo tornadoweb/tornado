@@ -624,14 +624,14 @@ at the end of the page.
 When a request handler is executed, the request is automatically finished.
 Since Tornado uses a non-blocking I/O style, you can override this default
 behavior if you want a request to remain open after the main request handler
-method returns using the `tonado.web.asynchronous` decorator.
+method returns using the `tornado.web.asynchronous` decorator.
 
 When you use this decorator, it is your responsibility to call
 `self.finish()` to finish the HTTP request, or the user's browser
 will simply hang:
 
     class MainHandler(tornado.web.RequestHandler):
-        @tonado.web.asynchronous
+        @tornado.web.asynchronous
         def get(self):
             self.write("Hello, world")
             self.finish()
