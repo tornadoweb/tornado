@@ -856,11 +856,11 @@ app built on Tornado.
 Caveats and support
 -------------------
 Tornado was refactored from the [FriendFeed](http://friendfeed.com/)
-code base to reduce dependencies. This refactoring may have introduced bugs.
-Likewise, because the FriendFeed servers have always run
+code base to reduce dependencies. This refactoring may have introduced
+bugs.  Likewise, because the FriendFeed servers have always run
 [behind nginx](#running-tornado-in-production), Tornado has not been
-extensively tested HTTP/1.1 clients beyond Firefox. Tornado currently
-does not attempt to handle multi-line headers and some types of malformed
-input.
+extensively tested with HTTP/1.1 clients beyond Firefox. Tornado
+currently does not attempt to handle multi-line headers and some types
+of malformed input.
 
 You can discuss Tornado and report bugs on [the Tornado developer mailing list](http://groups.google.com/group/python-tornado).
