@@ -11,9 +11,5 @@ handlers:
   static_files: static/robots.txt
   upload: static/robots.txt
 
-- url: /favicon\.ico
-  static_files: static/favicon.ico
-  upload: static/favicon.ico
-
 - url: /.*
   script: website.py
