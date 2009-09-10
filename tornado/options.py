@@ -1,0 +1,350 @@
+#!/usr/bin/env python
+#
+# Copyright 2009 Facebook
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+"""A command line parsing module that lets modules define their own options.
+
+Each module defines its own options, e.g.,
+
+    from tornado.options import define, options
+
+    define("mysql_host", default="127.0.0.1:3306", help="Main user DB")
+    define("memcache_hosts", default="127.0.0.1:11011", multiple=True,
+           help="Main user memcache servers")
+
+    def connect():
+        db = database.Connection(options.mysql_host)
+        ...
+
+The main() method of your application does not need to be aware of all of
+the options used throughout your program; they are all automatically loaded
+when the modules are loaded. Your main() method can parse the command line
+or parse a config file with:
+
+    import tornado.options
+    tornado.options.parse_config_file("/etc/server.conf")
+    tornado.options.parse_command_line()
+
+Command line formats are what you would expect ("--myoption=myvalue").
+Config files are just Python files. Global names become options, e.g.,
+
+    myoption = "myvalue"
+    myotheroption = "myothervalue"
+
+We support datetimes, timedeltas, ints, and floats (just pass a 'type'
+kwarg to define). We also accept multi-value options. See the documentation
+for define() below.
+"""
+
+import datetime
+import logging
+import re
+import sys
+import time
+
+# For pretty log messages, if available
+try:
+    import curses
+except:
+    curses = None
+
+
+def define(name, default=None, type=str, help=None, metavar=None,
+           multiple=False):
+    """Defines a new command line option.
+
+    If type is given (one of str, float, int, datetime, or timedelta),
+    we parse the command line arguments based on the given type. If
+    multiple is True, we accept comma-separated values, and the option
+    value is always a list.
+
+    For multi-value integers, we also accept the syntax x:y, which
+    turns into range(x, y) - very useful for long integer ranges.
+
+    help and metavar are used to construct the automatically generated
+    command line help string. The help message is formatted like:
+
+       --name=METAVAR      help string
+
+    Command line option names must be unique globally. They can be parsed
+    from the command line with parse_command_line() or parsed from a
+    config file with parse_config_file.
+    """
+    if name in options:
+        raise Error("Option %r already defined in %s", name,
+                    options[name].file_name)
+    frame = sys._getframe(0)
+    options_file = frame.f_code.co_filename
+    file_name = frame.f_back.f_code.co_filename
+    if file_name == options_file: file_name = ""
+    options[name] = _Option(name, file_name=file_name, default=default,
+                            type=type, help=help, metavar=metavar,
+                            multiple=multiple)
+
+
+def parse_command_line(args=None):
+    """Parses all options given on the command line.
+
+    We return all command line arguments that are not options as a list.
+    """
+    if args is None: args = sys.argv
+    for i in xrange(1, len(args)):
+        # All things after the last option are command line arguments
+        if not args[i].startswith("-"):
+            return args[i:]
+        if args[i] == "--":
+            continue
+        arg = args[i].lstrip("-")
+        name, equals, value = arg.partition("=")
+        name = name.replace('-', '_')
+        if not name in options:
+            print_help()
+            raise Error('Unrecognized command line option: %r' % name)
+        option = options[name]
+        if not equals:
+            if option.type == bool:
+                value = "true"
+            else:
+                raise Error('Option %r requires a value' % name)
+        option.parse(value)
+    if options.help:
+        print_help()
+        sys.exit(0)
+
+    # Set up log level and pretty console logging by default
+    logging.getLogger().setLevel(getattr(logging, options.logging.upper()))
+    enable_pretty_logging()
+
+    return []
+
+
+def parse_config_file(path, overwrite=True):
+    """Parses and loads the Python config file at the given path."""
+    config = {}
+    execfile(path, config, config)
+    for name in config:
+        if name in options:
+            options[name].set(config[name])
+
+
+def print_help(file=sys.stdout):
+    """Prints all the command line options to stdout."""
+    print >> file, "Usage: %s [OPTIONS]" % sys.argv[0]
+    print >> file, ""
+    print >> file, "Options:"
+    by_file = {}
+    for option in options.itervalues():
+        by_file.setdefault(option.file_name, []).append(option)
+
+    for filename, o in sorted(by_file.items()):
+        if filename: print >> file, filename
+        o.sort(key=lambda option: option.name)
+        for option in o:
+            prefix = option.name
+            if option.metavar:
+                prefix += "=" + option.metavar
+            print >> file, "  --%-30s %s" % (prefix, option.help or "")
+    print >> file
+
+
+class _Options(dict):
+    """Our global program options, an dictionary with object-like access."""
+    @classmethod
+    def instance(cls):
+        if not hasattr(cls, "_instance"):
+            cls._instance = cls()
+        return cls._instance
+
+    def __getattr__(self, name):
+        if isinstance(self.get(name), _Option):
+            return self[name].value()
+        raise Error("Unrecognized option %r" % name)
+
+
+class _Option(object):
+    def __init__(self, name, default=None, type=str, help=None, metavar=None,
+                 multiple=False, file_name=None):
+        if default is None and multiple:
+            default = []
+        self.name = name
+        self.type = type
+        self.help = help
+        self.metavar = metavar
+        self.multiple = multiple
+        self.file_name = file_name
+        self.default = default
+        self._value = None
+
+    def value(self):
+        return self.default if self._value is None else self._value
+
+    def parse(self, value):
+        _parse = {
+            datetime.datetime: self._parse_datetime,
+            datetime.timedelta: self._parse_timedelta,
+            bool: self._parse_bool,
+            str: self._parse_string,
+        }.get(self.type, self.type)
+        if self.multiple:
+            if self._value is None:
+                self._value = []
+            for part in value.split(","):
+                if self.type in (int, long):
+                    # allow ranges of the form X:Y (inclusive at both ends)
+                    lo, _, hi = part.partition(":")
+                    lo = _parse(lo)
+                    hi = _parse(hi) if hi else lo
+                    self._value.extend(range(lo, hi+1))
+                else:
+                    self._value.append(_parse(part))
+        else:
+            self._value = _parse(value)
+        return self.value()
+
+    def set(self, value):
+        if self.multiple:
+            if not isinstance(value, list):
+                raise Error("Option %r is required to be a list of %s" %
+                            (self.name, self.type.__name__))
+            for item in value:
+                if item != None and not isinstance(item, self.type):
+                    raise Error("Option %r is required to be a list of %s" %
+                                (self.name, self.type.__name__))
+        else:
+            if value != None and not isinstance(value, self.type):
+                raise Error("Option %r is required to be a %s" %
+                            (self.name, self.type.__name__))
+        self._value = value
+
+    # Supported date/time formats in our options
+    _DATETIME_FORMATS = [
+        "%a %b %d %H:%M:%S %Y",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M",
+        "%Y%m%d %H:%M:%S",
+        "%Y%m%d %H:%M",
+        "%Y-%m-%d",
+        "%Y%m%d",
+        "%H:%M:%S",
+        "%H:%M",
+    ]
+
+    def _parse_datetime(self, value):
+        for format in self._DATETIME_FORMATS:
+            try:
+                return datetime.datetime.strptime(value, format)
+            except ValueError:
+                pass
+        raise Error('Unrecognized date/time format: %r' % value)
+
+    _TIMEDELTA_ABBREVS = [
+        ('hours', ['h']),
+        ('minutes', ['m', 'min']),
+        ('seconds', ['s', 'sec']),
+        ('milliseconds', ['ms']),
+        ('microseconds', ['us']),
+        ('days', ['d']),
+        ('weeks', ['w']),
+    ]
+
+    _TIMEDELTA_ABBREV_DICT = dict(
+        (abbrev, full) for full, abbrevs in _TIMEDELTA_ABBREVS
+        for abbrev in abbrevs)
+
+    _FLOAT_PATTERN = r'[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?'
+
+    _TIMEDELTA_PATTERN = re.compile(
+        r'\s*(%s)\s*(\w*)\s*' % _FLOAT_PATTERN, re.IGNORECASE)
+
+    def _parse_timedelta(self, value):
+        try:
+            sum = datetime.timedelta()
+            start = 0
+            while start < len(value):
+                m = self._TIMEDELTA_PATTERN.match(value, start)
+                if not m:
+                    raise Exception()
+                num = float(m.group(1))
+                units = m.group(2) or 'seconds'
+                units = self._TIMEDELTA_ABBREV_DICT.get(units, units)
+                sum += datetime.timedelta(**{units: num})
+                start = m.end()
+            return sum
+        except:
+            raise
+
+    def _parse_bool(self, value):
+        return value.lower() not in ("false", "0", "f")
+
+    def _parse_string(self, value):
+        return value.decode("utf-8")
+
+
+class Error(Exception):
+    pass
+
+
+def enable_pretty_logging():
+    """Turns on colored logging output for stderr if we are in a tty."""
+    if not curses: return
+    try:
+        if not sys.stderr.isatty(): return
+        curses.setupterm()
+    except:
+        return
+    channel = logging.StreamHandler()
+    channel.setFormatter(_ColorLogFormatter())
+    logging.getLogger().addHandler(channel)        
+
+
+class _ColorLogFormatter(logging.Formatter):
+    def __init__(self, *args, **kwargs):
+        logging.Formatter.__init__(self, *args, **kwargs)
+        fg_color = curses.tigetstr("setaf") or curses.tigetstr("setf") or ""
+        self._colors = {
+            logging.DEBUG: curses.tparm(fg_color, 4), # Blue
+            logging.INFO: curses.tparm(fg_color, 2), # Green
+            logging.WARNING: curses.tparm(fg_color, 3), # Yellow
+            logging.ERROR: curses.tparm(fg_color, 1), # Red
+        }
+        self._normal = curses.tigetstr("sgr0")
+
+    def format(self, record):
+        try:
+            record.message = record.getMessage()
+        except Exception, e:
+            record.message = "Bad message (%r): %r" % (e, record.__dict__)
+        record.asctime = time.strftime(
+            "%y%m%d %H:%M:%S", self.converter(record.created))
+        prefix = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]' % \
+            record.__dict__
+        color = self._colors.get(record.levelno, self._normal)
+        formatted = color + prefix + self._normal + " " + record.message
+        if record.exc_info:
+            if not record.exc_text:
+                record.exc_text = self.formatException(record.exc_info)
+        if record.exc_text:
+            formatted = formatted.rstrip() + "\n" + record.exc_text
+        return formatted.replace("\n", "\n    ")
+
+
+options = _Options.instance()
+
+
+# Default options
+define("help", type=bool, help="show this help information")
+define("logging", default="info", help="set the Python log level",
+       metavar="info|warning|error")

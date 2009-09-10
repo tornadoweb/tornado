@@ -1,0 +1,22 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/> 
+    <title>Tornado Facebook Stream Demo</title>
+    <link rel="stylesheet" href="{{ static_url("facebook.css") }}" type="text/css"/>
+  </head>
+  <body>
+    <div id="body">
+      <div style="float:right">
+	<b>{{ escape(current_user["name"]) }}</b> -
+	<a href="/auth/logout">{{ _("Sign out") }}</a>
+      </div>
+      <div style="margin-bottom:1em"><a href="/">{{ _("Refresh stream") }}</a></div>
+      <div id="stream">
+	{% for post in stream["posts"] %}
+          {{ modules.Post(post, stream["profiles"][post["actor_id"]]) }}
+	{% end %}
+      </div>
+    </div>
+  </body>
+</html>

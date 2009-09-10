@@ -1,0 +1,97 @@
+/*
+ * Copyright 2009 Facebook
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+  background: white;
+  color: black;
+  margin: 15px;
+}
+
+body,
+input,
+textarea {
+  font-family: "Lucida Grande", Tahoma, Verdana, sans-serif;
+  font-size: 10pt;
+}
+
+table {
+  border-collapse: collapse;
+  border: 0;
+}
+
+td {
+  border: 0;
+  padding: 0;
+}
+
+img {
+  border: 0;
+}
+
+a {
+  text-decoration: none;
+  color: #3b5998;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.post {
+  border-bottom: 1px solid #eeeeee;
+  min-height: 50px;
+  padding-bottom: 10px;
+  margin-top: 10px;
+}
+
+.post .picture {
+  float: left;
+}
+
+.post .picture img {
+  height: 50px;
+  width: 50px;
+}
+
+.post .body {
+  margin-left: 60px;
+}
+
+.post .media img {
+  border: 1px solid #cccccc;
+  padding: 3px;
+}
+
+.post .media:hover img {
+  border: 1px solid #3b5998;
+}
+
+.post a.actor {
+  font-weight: bold;
+}
+
+.post .meta {
+  font-size: 11px;
+}
+
+.post a.permalink {
+  color: #777777;
+}
+
+#body {
+  max-width: 700px;
+  margin: auto;
+}

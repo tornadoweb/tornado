@@ -1,0 +1,153 @@
+/*
+ * Copyright 2009 Facebook
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+  background: white;
+  color: black;
+  margin: 15px;
+  margin-top: 0;
+}
+
+body,
+input,
+textarea {
+  font-family: Georgia, serif;
+  font-size: 12pt;
+}
+
+table {
+  border-collapse: collapse;
+  border: 0;
+}
+
+td {
+  border: 0;
+  padding: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "Helvetica Nue", Helvetica, Arial, sans-serif;
+  margin: 0;
+}
+
+h1 {
+  font-size: 20pt;
+}
+
+pre,
+code {
+  font-family: monospace;
+  color: #060;
+}
+
+pre {
+  margin-left: 1em;
+  padding-left: 1em;
+  border-left: 1px solid silver;
+  line-height: 14pt;
+}
+
+a,
+a code {
+  color: #00c;
+}
+
+#body {
+  max-width: 800px;
+  margin: auto;
+}
+
+#header {
+  background-color: #3b5998;
+  padding: 5px;
+  padding-left: 10px;
+  padding-right: 10px;
+  margin-bottom: 1em;
+}
+
+#header,
+#header a {
+  color: white;
+}
+
+#header h1 a {
+  text-decoration: none;
+}
+
+#footer,
+#content {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+
+#footer {
+  margin-top: 3em;
+}
+
+.entry h1 a {
+  color: black;
+  text-decoration: none;
+}
+
+.entry {
+  margin-bottom: 2em;
+}
+
+.entry .date {
+  margin-top: 3px;
+}
+
+.entry p {
+  margin: 0;
+  margin-bottom: 1em;
+}
+
+.entry .body {
+  margin-top: 1em;
+  line-height: 16pt;
+}
+
+.compose td {
+  vertical-align: middle;
+  padding-bottom: 5px;
+}
+
+.compose td.field {
+  padding-right: 10px;
+}
+
+.compose .title,
+.compose .submit {
+  font-family: "Helvetica Nue", Helvetica, Arial, sans-serif;
+  font-weight: bold;
+}
+
+.compose .title {
+  font-size: 20pt;
+}
+
+.compose .title,
+.compose .markdown {
+  width: 100%;
+}
+
+.compose .markdown {
+  height: 500px;
+  line-height: 16pt;
+}

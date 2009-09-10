@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block body %}
+  <p><a href="http://www.tornadoserver.org/">Tornado</a> is an open source version of the scalable, non-blocking web server and and tools that power <a href="http://friendfeed.com/">FriendFeed</a>. The FriendFeed application is written using a web framework that looks a bit like <a href="http://webpy.org/">web.py</a> or <a href="http://code.google.com/appengine/docs/python/tools/webapp/">Google's webapp</a>, but with additional tools and optimizations to take advantage of the underlying non-blocking infrastructure.</p>
+  <p>The framework is distinct from most mainstream web server frameworks (and certainly most Python frameworks) because it is non-blocking and reasonably fast. Because it is non-blocking and uses <a href="http://www.kernel.org/doc/man-pages/online/pages/man4/epoll.4.html">epoll</a>, it can handle thousands of simultaneous standing connections, which means it is ideal for real-time web services. We built the web server specifically to handle FriendFeed's real-time features &mdash; every active user of FriendFeed maintains an open connection to the FriendFeed servers. (For more information on scaling servers to support thousands of clients, see The <a href="http://www.kegel.com/c10k.html">C10K problem</a>.)</p>
+  <p>See the <a href="/documentation">Tornado documentation</a> for a detailed walkthrough of the framework.</p>
+
+  <h2>Download and install</h2>
+  <p><b>Download:</b> <a href="/static/tornado-0.1.tar.gz">tornado-0.1.tar.gz</a></p>
+  <pre><code>tar xvzf python-tornado-0.1.tar.gz
+cd python-tornado-0.1
+python setup.py build
+sudo python setup.py install</code></pre>
+  <p>The Tornado source code is <a href="http://github.com/facebook/tornado">hosted on GitHub</a>.</p>
+
+  <h3>Prerequisites</h3>
+  <p>Tornado has been tested on Python 2.5 and 2.6. To use all of the features of Tornado, you need to have <a href="http://pycurl.sourceforge.net/">PycURL</a> and a JSON library like <a href="http://pypi.python.org/pypi/simplejson/">simplejson</a> installed. Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.</p>
+  <p style="font-weight:bold">Mac OS X 10.5/10.6</p>
+  <pre><code>sudo easy_install setuptools pycurl==7.16.2.1 simplejson</code></pre>
+
+  <p style="font-weight:bold">Ubuntu Linux</p>
+  <pre><code>sudo apt-get install python-pycurl python-simplejson</code></pre>
+
+  <h2>Hello, world</h2>
+  <p>Here is the canonical &quot;Hello, world&quot; example app for Tornado:</p>
+  <pre><code>import tornado.httpserver
+import tornado.ioloop
+import tornado.web
+
+class MainHandler(tornado.web.RequestHandler):
+    def get(self):
+        self.write("Hello, world")
+
+application = tornado.web.Application([
+    (r"/", MainHandler),
+])
+
+if __name__ == "__main__":
+    http_server = tornado.httpserver.HTTPServer(application)
+    http_server.listen(8888)
+    tornado.ioloop.IOLoop.instance().start()</code></pre>
+  <p>See the <a href="/documentation">Tornado documentation</a> for a detailed walkthrough of the framework.</p>
+
+  <h2>Discussion and support</h2>
+  <p>You can discuss Tornado and report bugs on <a href="http://groups.google.com/group/python-tornado">the Tornado developer mailing list</a>.
+
+{% end %}
+

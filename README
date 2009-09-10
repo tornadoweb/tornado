@@ -1,16 +1,11 @@
 Tornado
 =======
 Tornado is an open source version of the scalable, non-blocking web server
-and and tools that power FriendFeed. The FriendFeed application is written
-using a web framework that looks a bit like web.py or Google's webapp, but
-with additional tools and optimizations to take advantage of the underlying
-non-blocking infrastructure.
-
-Documentation and downloads are available at http://www.tornadoweb.org/
+and and tools that power FriendFeed. Documentation and downloads are
+available at http://www.tornadoweb.org/
 
 Tornado is licensed under the Apache Licence, Version 2.0
 (http://www.apache.org/licenses/LICENSE-2.0.html).
-
 
 Installation
 ============
@@ -30,4 +25,3 @@ On Mac OS X, you can install the packages with:
 On Ubuntu Linux, you can install the packages with:
 
     sudo apt-get install python-pycurl python-simplejson
-

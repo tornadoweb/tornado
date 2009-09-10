@@ -1,0 +1,27 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/> 
+    <title>{% block title %}Tornado Web Server{% end %}</title>
+    <link rel="stylesheet" href="/static/base.css" type="text/css"/>
+    {% block head %}{% end %}
+  </head>
+  <body>
+    <div id="body">
+      <div id="header">
+	<table>
+	  <tr>
+	    <td class="logo"><a href="/"><img src="/static/tornado.png" alt="Tornado"/></a></td>
+	    <td class="title">{% block headertitle %}{% end %}</td>
+	  </tr>
+	</table>
+      </div>
+      <div id="content">{% block body %}{% end %}</div>
+      <div id="footer">
+	<div>Tornado is one of <a href="http://developer.facebook.com/opensource.php">Facebook's open source technolgies</a>. It is available under the <a href="http://www.apache.org/licenses/LICENSE-2.0.html">Apache Licence, Version 2.0</a>.</div>
+	<div>This web site and all documentation is licensed under <a href="http://creativecommons.org/licenses/by/3.0/">Creative Commons 3.0</a>.</div>
+      </div>
+    </div>
+    {% block bottom %}{% end %}
+  </body>
+</html>
