@@ -54,9 +54,7 @@ Download the most recent version of Tornado from GitHub:
 
 > [tornado-0.1.tar.gz](/static/tornado-0.1.tar.gz)
 
-You can also [browse the source](http://github.com/facebook/tornado) on GitHub.
-
-To install Tornado:
+You can also [browse the source](http://github.com/facebook/tornado) on GitHub. To install Tornado:
 
     tar xvzf tornado-1.0.tar.gz
     cd tornado-1.0
@@ -67,6 +65,18 @@ After installation, you should be able to run any of the demos in the `demos`
 directory included with the Tornado package.
 
     ./demos/helloworld/helloworld.py
+
+### Prerequisites
+
+Tornado has been tested on Python 2.5 and 2.6. To use all of the features of Tornado, you need to have [PycURL](http://pycurl.sourceforge.net/) and a JSON library like [simplejson](http://pypi.python.org/pypi/simplejson/) installed. Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.
+
+**Mac OS X 10.5/10.6**
+
+    sudo easy_install setuptools pycurl==7.16.2.1 simplejson
+
+**Ubuntu Linux**
+
+    sudo apt-get install python-pycurl python-simplejson
 
 
 Module index
