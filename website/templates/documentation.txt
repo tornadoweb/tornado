@@ -373,7 +373,7 @@ correct `_xsrf` value. If you turn this setting on, you need to instrument
 all forms that submit via `POST` to contain this field. You can do this with
 the special function `xsrf_form_html()`, available in all templates:
 
-    <form method="/login" method="post">
+    <form action="/login" method="post">
       {{ xsrf_form_html() }}
       <div>Username: <input type="text" name="username"/></div>
       <div>Password: <input type="password" name="password"/></div>
@@ -602,8 +602,8 @@ Within `entry.html`, you reference the `Entry` module with the
     {{ modules.Entry(entry, show_comments=True) }}
 
 Modules can include custom CSS and JavaScript functions by overriding
-the `embedded_css`, `embedded_javascript`, `javascript_file`, or
-`css_file` methods:
+the `embedded_css`, `embedded_javascript`, `javascript_files`, or
+`css_files` methods:
 
     class Entry(tornado.web.UIModule):
         def embedded_css(self):
