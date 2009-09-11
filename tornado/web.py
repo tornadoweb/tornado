@@ -39,7 +39,7 @@ Here is the canonical "Hello, world" example app:
         http_server.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
 
-See the Tornado walkthrough on Google Code for more details and a good
+See the Tornado walkthrough on GitHub for more details and a good
 getting started guide.
 """
 
