@@ -310,27 +310,14 @@ class HTTPResponse(object):
 class HTTPError(Exception):
     def __init__(self, code, message=None):
         self.code = code
-        Exception.__init__(self, "HTTP %d" % self.code)
-
-    def __repr__(self):
-        return "%s(%r)" % (self.__class__.__name__, self.code)
-
-    def __str__(self):
-        return "%d: %s" % (self.code, httplib.responses.get(
-            self.code, "Unknown"))
+        message = message or httplib.responses.get(code, "Unknown")
+        Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
                 
 
 class CurlError(HTTPError):
     def __init__(self, errno, message):
         HTTPError.__init__(self, 599, message)
         self.errno = errno
-
-    def __repr__(self):
-        return "%s(%r,%r)" % (self.__class__.__name__, self.errno,
-                              self.message)
-
-    def __str__(self):
-        return "%d: %s" % (self.errno, self.message)
 
 
 def _curl_create(max_simultaneous_connections=None):
