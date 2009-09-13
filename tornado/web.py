@@ -775,6 +775,46 @@ def asynchronous(method):
     return wrapper
 
 
+def removeslash(method):
+    """Use this decorator to remove trailing slashes from the request path.
+
+    For example, a request to '/foo/' would redirect to '/foo' with this
+    decorator. Your request handler mapping should use a regular expression
+    like r'/foo/*' in conjunction with using the decorator.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if self.request.path.endswith("/"):
+            if self.request.method == "GET":
+                uri = self.request.path.rstrip("/")
+                if self.request.query: uri += "?" + self.request.query
+                self.redirect(uri)
+                return
+            raise HTTPError(404)
+        return method(self, *args, **kwargs)
+    return wrapper
+
+
+def addslash(method):
+    """Use this decorator to add a missing trailing slash to the request path.
+
+    For example, a request to '/foo' would redirect to '/foo/' with this
+    decorator. Your request handler mapping should use a regular expression
+    like r'/foo/?' in conjunction with using the decorator.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if not self.request.path.endswith("/"):
+            if self.request.method == "GET":
+                uri = self.request.path + "/"
+                if self.request.query: uri += "?" + self.request.query
+                self.redirect(uri)
+                return
+            raise HTTPError(404)
+        return method(self, *args, **kwargs)
+    return wrapper
+
+
 class Application(object):
     """A collection of request handlers that make up a web application.
 
