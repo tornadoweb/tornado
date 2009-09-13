@@ -204,7 +204,7 @@ class IOStream(object):
                 if e[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     break
                 else:
-                    logging.warning("Read error on %d: %s",
+                    logging.warning("Write error on %d: %s",
                                     self.socket.fileno(), e)
                     self.close()
                     return
