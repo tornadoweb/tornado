@@ -129,7 +129,7 @@ class HTTPRequest(object):
                 self.arguments.setdefault(name, []).extend(values)
         elif content_type.startswith("multipart/form-data"):
             boundary = content_type[30:]
-            if boundary: self._parse_mime_body(boundary, data)
+            if boundary: self._parse_mime_body(boundary)
 
         self._start_time = time.time()
         self._finish_time = None
@@ -288,3 +288,12 @@ class HTTPHeaders(dict):
 
     def _normalize_name(self, name):
         return "-".join([w.capitalize() for w in name.split("-")])
+
+    @classmethod
+    def parse(cls, headers_string):
+        headers = cls()
+        for line in headers_string.splitlines():
+            if line:
+                name, value = line.split(": ", 1)
+                headers[name] = value
+        return headers
