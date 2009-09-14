@@ -46,12 +46,12 @@ def administrator(method):
             if self.request.method == "GET":
                 self.redirect(self.get_login_url())
                 return
-            raise web.HTTPError(403)
+            raise tornado.web.HTTPError(403)
         elif not self.current_user.administrator:
             if self.request.method == "GET":
                 self.redirect("/")
                 return
-            raise web.HTTPError(403)
+            raise tornado.web.HTTPError(403)
         else:
             return method(self, *args, **kwargs)
     return wrapper
