@@ -142,7 +142,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.GoogleMixin):
 class AuthLogoutHandler(BaseHandler):
     def get(self):
         self.clear_cookie("user")
-        self.redirect(self.get_argument("next", "/"))
+        self.write("You are now logged out")
 
 
 def main():
