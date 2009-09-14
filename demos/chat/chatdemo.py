@@ -139,7 +139,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.GoogleMixin):
         self.redirect("/")
 
 
-class AuthLogoutHandler(BaseHandler, tornado.auth.FacebookMixin):
+class AuthLogoutHandler(BaseHandler):
     def get(self):
         self.clear_cookie("user")
         self.redirect(self.get_argument("next", "/"))
