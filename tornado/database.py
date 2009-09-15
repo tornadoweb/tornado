@@ -22,6 +22,7 @@ import MySQLdb.constants
 import MySQLdb.converters
 import MySQLdb.cursors
 import itertools
+import logging
 
 
 class Connection(object):
@@ -66,23 +67,34 @@ class Connection(object):
                 args["port"] = 3306
 
         self._db = None
-        self._db = MySQLdb.connect(**args)
-        self._db.autocommit(True)
+        self._db_args = args
+        try:
+            self.reconnect()
+        except:
+            logging.error("Cannot connect to MySQL on %s", self.host,
+                          exc_info=True)
 
     def __del__(self):
-        if self._db is not None:
-            self.close()
+        self.close()
 
     def close(self):
         """Closes this database connection."""
-        self._db.close()
-        self._db = None
+        if self._db is not None:
+            self._db.close()
+            self._db = None
+
+    def reconnect(self):
+        """Closes the existing database connection and re-opens it."""
+        self.close()
+        self._db = MySQLdb.connect(**self._db_args)
+        self._db.autocommit(True)
 
     def iter(self, query, *parameters):
         """Returns an iterator for the given query and parameters."""
+        if self._db is None: self.reconnect()
         cursor = MySQLdb.cursors.SSCursor(self._db)
         try:
-            cursor.execute(query, parameters)
+            self._execute(cursor, query, parameters)
             column_names = [d[0] for d in cursor.description]
             for row in cursor:
                 yield Row(zip(column_names, row))
@@ -91,9 +103,9 @@ class Connection(object):
 
     def query(self, query, *parameters):
         """Returns a row list for the given query and parameters."""
-        cursor = self._db.cursor()
+        cursor = self._cursor()
         try:
-            cursor.execute(query, parameters)
+            self._execute(cursor, query, parameters)
             column_names = [d[0] for d in cursor.description]
             return [Row(itertools.izip(column_names, row)) for row in cursor]
         finally:
@@ -111,9 +123,9 @@ class Connection(object):
 
     def execute(self, query, *parameters):
         """Executes the given query, returning the lastrowid from the query."""
-        cursor = self._db.cursor()
+        cursor = self._cursor()
         try:
-            cursor.execute(query, parameters)
+            self._execute(cursor, query, parameters)
             return cursor.lastrowid
         finally:
             cursor.close()
@@ -123,12 +135,24 @@ class Connection(object):
 
         We return the lastrowid from the query.
         """
-        cursor = self._db.cursor()
+        cursor = self._cursor()
         try:
             cursor.executemany(query, parameters)
             return cursor.lastrowid
         finally:
             cursor.close()
+
+    def _cursor(self):
+        if self._db is None: self.reconnect()
+        return self._db.cursor()
+
+    def _execute(self, cursor, query, parameters):
+        try:
+            return cursor.execute(query, parameters)
+        except OperationalError:
+            logging.error("Error connecting to MySQL on %s", self.host)
+            self.close()
+            raise
 
 
 class Row(dict):
