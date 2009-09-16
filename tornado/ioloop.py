@@ -264,6 +264,33 @@ class _Timeout(object):
                    (other.deadline, id(other.callback)))
 
 
+class PeriodicCallback(object):
+    """Schedules the given callback to be called periodically.
+
+    The callback is called every callback_time milliseconds.
+    """
+    def __init__(self, callback, callback_time, io_loop=None):
+        self.callback = callback
+        self.callback_time = callback_time
+        self.io_loop = io_loop or ioloop.IOLoop.instance()
+        self._running = True
+
+    def start(self):
+        timeout = time.time() + self.callback_time / 1000.0
+        self.io_loop.add_timeout(timeout, self._run)
+
+    def stop(self):
+        self._running = False
+
+    def _run(self):
+        if not self._running: return
+        try:
+            self.callback()
+        except:
+            logging.error("Error in periodic callback", exc_info=True)
+        self.start()
+
+
 class _EPoll(object):
     """An epoll-based event loop using our C module for Python 2.5 systems"""
     _EPOLL_CTL_ADD = 1

@@ -877,6 +877,11 @@ class Application(object):
             ])
         if handlers: self.add_handlers(".*$", handlers)
 
+        # Automatically reload modified modules
+        if self.settings.get("auto_reload"):
+            import reloader
+            reloader.start()
+
     def add_handlers(self, host_pattern, host_handlers):
         """Appends the given handlers to our handler list."""
         if not host_pattern.endswith("$"):
