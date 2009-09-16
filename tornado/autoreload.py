@@ -14,6 +14,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+"""A module to automatically restart the server when a module is modified."""
+
 import functools
 import ioloop
 import logging

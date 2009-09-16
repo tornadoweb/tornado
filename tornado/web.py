@@ -879,8 +879,8 @@ class Application(object):
 
         # Automatically reload modified modules
         if self.settings.get("auto_reload"):
-            import reloader
-            reloader.start()
+            import autoreload
+            autoreload.start()
 
     def add_handlers(self, host_pattern, host_handlers):
         """Appends the given handlers to our handler list."""
