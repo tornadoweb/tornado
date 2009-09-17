@@ -256,7 +256,7 @@ class HTTPRequest(object):
                  connect_timeout=None, request_timeout=None,
                  if_modified_since=None, follow_redirects=True,
                  max_redirects=5, user_agent=None, use_gzip=True,
-                 network_interface=None):
+                 network_interface=None, streaming_callback=None):
         if if_modified_since:
             timestamp = calendar.timegm(if_modified_since.utctimetuple())
             headers["If-Modified-Since"] = email.utils.formatdate(
@@ -276,6 +276,7 @@ class HTTPRequest(object):
         self.user_agent = user_agent
         self.use_gzip = use_gzip
         self.network_interface = network_interface
+        self.streaming_callback = streaming_callback
 
 
 class HTTPResponse(object):
@@ -339,7 +340,10 @@ def _curl_setup_request(curl, request, buffer, headers):
     except:
         # Old version of curl; response will not include headers
         pass
-    curl.setopt(pycurl.WRITEFUNCTION, buffer.write)
+    if request.streaming_callback:
+        curl.setopt(pycurl.WRITEFUNCTION, request.streaming_callback)
+    else:
+        curl.setopt(pycurl.WRITEFUNCTION, buffer.write)
     curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
     curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
     curl.setopt(pycurl.CONNECTTIMEOUT, int(request.connect_timeout))
