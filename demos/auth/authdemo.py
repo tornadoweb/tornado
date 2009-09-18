@@ -35,8 +35,6 @@ class Application(tornado.web.Application):
         settings = dict(
             cookie_secret="32oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
             login_url="/auth/login",
-            google_consumer_key="www.tornadoweb.org",
-            google_consumer_secret="ZcyJGvEEFn82+h9/PWgBeB0E",
         )
         tornado.web.Application.__init__(self, handlers, **settings)
 

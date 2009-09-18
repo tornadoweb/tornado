@@ -854,7 +854,7 @@ class Application(object):
     and we will serve /favicon.ico and /robots.txt from the same directory.
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
-                 **settings):
+                 wsgi=False, **settings):
         if transforms is None:
             self.transforms = [ChunkedTransferEncoding]
         else:
@@ -864,7 +864,7 @@ class Application(object):
         self.settings = settings
         self.ui_modules = {}
         self.ui_methods = {}
-        self._wsgi = False
+        self._wsgi = wsgi
         self._load_ui_modules(settings.get("ui_modules", {}))
         self._load_ui_methods(settings.get("ui_methods", {}))
         if self.settings.get("static_path"):
@@ -878,7 +878,7 @@ class Application(object):
         if handlers: self.add_handlers(".*$", handlers)
 
         # Automatically reload modified modules
-        if self.settings.get("auto_reload"):
+        if self.settings.get("debug") and not wsgi:
             import autoreload
             autoreload.start()
 

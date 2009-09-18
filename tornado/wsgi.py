@@ -69,8 +69,7 @@ class WSGIApplication(web.Application):
     """
     def __init__(self, handlers=None, default_host="", **settings):
         web.Application.__init__(self, handlers, default_host, transforms=[],
-                                 **settings)
-        self._wsgi = True
+                                 wsgi=True, **settings)
 
     def __call__(self, environ, start_response):
         handler = web.Application.__call__(self, HTTPRequest(environ))
