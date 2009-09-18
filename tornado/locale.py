@@ -293,7 +293,7 @@ class Locale(object):
         if dow:
             return _("%(weekday)s, %(month_name)s %(day)s") % {
                 "month_name": self._months[local_date.month - 1],
-                "weekday": self.WEEKDAYS[local_date.weekday()],
+                "weekday": self._weekdays[local_date.weekday()],
                 "day": str(local_date.day),
             }
         else:

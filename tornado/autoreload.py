@@ -24,7 +24,7 @@ import os.path
 import sys
 
 
-def start(io_loop=None, check_time=200):
+def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
 
     We run on the I/O loop, and restarting is a destructive operation,
