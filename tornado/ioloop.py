@@ -272,7 +272,7 @@ class PeriodicCallback(object):
     def __init__(self, callback, callback_time, io_loop=None):
         self.callback = callback
         self.callback_time = callback_time
-        self.io_loop = io_loop or ioloop.IOLoop.instance()
+        self.io_loop = io_loop or IOLoop.instance()
         self._running = True
 
     def start(self):
