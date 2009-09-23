@@ -75,7 +75,7 @@ class HTTPServer(object):
         self.xheaders = xheaders
         self._socket = None
 
-    def listen(self, port):
+    def listen(self, port, address=""):
         assert not self._socket
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         flags = fcntl.fcntl(self._socket.fileno(), fcntl.F_GETFD)
@@ -83,7 +83,7 @@ class HTTPServer(object):
         fcntl.fcntl(self._socket.fileno(), fcntl.F_SETFD, flags)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._socket.setblocking(0)
-        self._socket.bind(("", port))
+        self._socket.bind((address, port))
         self._socket.listen(128)
         self.io_loop.add_handler(self._socket.fileno(), self._handle_events,
                                  self.io_loop.READ)
