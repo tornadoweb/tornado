@@ -225,7 +225,7 @@ class IOLoop(object):
 
     def remove_callback(self, callback):
         """Removes the given callback from the next I/O loop iteration."""
-        self._callbacks.pop(callback)
+        self._callbacks.remove(callback)
 
     def _wake(self):
         try:
