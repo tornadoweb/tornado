@@ -325,11 +325,6 @@ class RequestHandler(object):
                     css_files.extend(file_part)
             head_part = module.html_head()
             if head_part: html_heads.append(_utf8(head_part))
-        if js_embed:
-            js_embed = '<script type="text/javascript">\n//<![CDATA[\n' + \
-                '\n'.join(js_embed) + '\n//]]>\n</script>'
-            sloc = html.rindex('</body>')
-            html = html[:sloc] + js_embed + '\n' + html[sloc:]
         if js_files:
             paths = set()
             for path in js_files:
@@ -342,11 +337,11 @@ class RequestHandler(object):
                                  for p in paths)
             sloc = html.rindex('</body>')
             html = html[:sloc] + js_embed + '\n' + html[sloc:]
-        if css_embed:
-            css_embed = '<style type="text/css">\n' + '\n'.join(css_embed) + \
-                '\n</style>'
-            hloc = html.index('</head>')
-            html = html[:hloc] + css_embed + '\n' + html[hloc:]
+        if js_embed:
+            js_embed = '<script type="text/javascript">\n//<![CDATA[\n' + \
+                '\n'.join(js_embed) + '\n//]]>\n</script>'
+            sloc = html.rindex('</body>')
+            html = html[:sloc] + js_embed + '\n' + html[sloc:]
         if css_files:
             paths = set()
             for path in css_files:
@@ -357,6 +352,11 @@ class RequestHandler(object):
             css_embed = ''.join('<link href="' + escape.xhtml_escape(p) + '" '
                                 'type="text/css" rel="stylesheet"/>'
                                 for p in paths)
+            hloc = html.index('</head>')
+            html = html[:hloc] + css_embed + '\n' + html[hloc:]
+        if css_embed:
+            css_embed = '<style type="text/css">\n' + '\n'.join(css_embed) + \
+                '\n</style>'
             hloc = html.index('</head>')
             html = html[:hloc] + css_embed + '\n' + html[hloc:]
         if html_heads:
