@@ -332,16 +332,16 @@ class RequestHandler(object):
                     paths.add(self.static_url(path))
                 else:
                     paths.add(path)
-            js_embed = ''.join('<script src="' + escape.xhtml_escape(p) +
-                                 '" type="text/javascript"></script>'
-                                 for p in paths)
+            js = ''.join('<script src="' + escape.xhtml_escape(p) +
+                         '" type="text/javascript"></script>'
+                         for p in paths)
             sloc = html.rindex('</body>')
-            html = html[:sloc] + js_embed + '\n' + html[sloc:]
+            html = html[:sloc] + js + '\n' + html[sloc:]
         if js_embed:
-            js_embed = '<script type="text/javascript">\n//<![CDATA[\n' + \
+            js = '<script type="text/javascript">\n//<![CDATA[\n' + \
                 '\n'.join(js_embed) + '\n//]]>\n</script>'
             sloc = html.rindex('</body>')
-            html = html[:sloc] + js_embed + '\n' + html[sloc:]
+            html = html[:sloc] + js + '\n' + html[sloc:]
         if css_files:
             paths = set()
             for path in css_files:
@@ -349,16 +349,16 @@ class RequestHandler(object):
                     paths.add(self.static_url(path))
                 else:
                     paths.add(path)
-            css_embed = ''.join('<link href="' + escape.xhtml_escape(p) + '" '
-                                'type="text/css" rel="stylesheet"/>'
-                                for p in paths)
+            css = ''.join('<link href="' + escape.xhtml_escape(p) + '" '
+                          'type="text/css" rel="stylesheet"/>'
+                          for p in paths)
             hloc = html.index('</head>')
-            html = html[:hloc] + css_embed + '\n' + html[hloc:]
+            html = html[:hloc] + css + '\n' + html[hloc:]
         if css_embed:
-            css_embed = '<style type="text/css">\n' + '\n'.join(css_embed) + \
+            css = '<style type="text/css">\n' + '\n'.join(css_embed) + \
                 '\n</style>'
             hloc = html.index('</head>')
-            html = html[:hloc] + css_embed + '\n' + html[hloc:]
+            html = html[:hloc] + css + '\n' + html[hloc:]
         if html_heads:
             hloc = html.index('</head>')
             html = html[:hloc] + ''.join(html_heads) + '\n' + html[hloc:]
