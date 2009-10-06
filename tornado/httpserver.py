@@ -27,6 +27,11 @@ import socket
 import time
 import urlparse
 
+try:
+    import ssl # Python 2.6+
+except ImportError:
+    ssl = None
+
 
 class HTTPServer(object):
     """A non-blocking, single-threaded HTTP server.
@@ -66,13 +71,25 @@ class HTTPServer(object):
     which override the remote IP and HTTP scheme for all requests. These
     headers are useful when running Tornado behind a reverse proxy or
     load balancer.
+
+    HTTPServer can serve HTTPS (SSL) traffic with Python 2.6+ and OpenSSL.
+    To make this server serve SSL traffic, send the ssl_options dictionary
+    argument with the arguments required for the ssl.wrap_socket() method,
+    including "certfile" and "keyfile":
+
+       HTTPServer(applicaton, ssl_options={
+           "certfile": os.path.join(data_dir, "mydomain.crt"),
+           "keyfile": os.path.join(data_dir, "mydomain.key"),
+       })
+
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False):
+                 xheaders=False, ssl_options=None):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.io_loop = io_loop or ioloop.IOLoop.instance()
         self.xheaders = xheaders
+        self.ssl_options = ssl_options
         self._socket = None
 
     def listen(self, port, address=""):
@@ -96,6 +113,10 @@ class HTTPServer(object):
                 if e[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     return
                 raise
+            if self.ssl_options is not None:
+                assert ssl, "Python 2.6+ and OpenSSL required for SSL"
+                connection = ssl.wrap_socket(
+                    connection, server_side=True, **self.ssl_options)
             try:
                 stream = iostream.IOStream(connection, io_loop=self.io_loop)
                 HTTPConnection(stream, address, self.request_callback,
