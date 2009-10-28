@@ -751,7 +751,8 @@ class FacebookMixin(object):
                 self._on_get_user_info, callback, session),
             session_key=session["session_key"],
             uids=session["uid"],
-            fields="uid,first_name,last_name,name,locale,pic_square")
+            fields="uid,first_name,last_name,name,locale,pic_square," \
+                   "profile_url,username")
 
     def facebook_request(self, method, callback, **args):
         """Makes a Facebook API REST request.
@@ -809,6 +810,9 @@ class FacebookMixin(object):
             "last_name": users[0]["last_name"],
             "uid": users[0]["uid"],
             "locale": users[0]["locale"],
+            "pic_square": users[0]["pic_square"],
+            "profile_url": users[0]["profile_url"],
+            "username": users[0].get("username"),
             "session_key": session["session_key"],
             "session_expires": session["expires"],
         })

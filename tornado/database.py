@@ -79,7 +79,7 @@ class Connection(object):
 
     def close(self):
         """Closes this database connection."""
-        if self._db is not None:
+        if getattr(self, "_db", None) is not None:
             self._db.close()
             self._db = None
 
