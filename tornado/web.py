@@ -590,6 +590,8 @@ class RequestHandler(object):
 
         See http://en.wikipedia.org/wiki/Cross-site_request_forgery
         """
+        if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return
         token = self.get_argument("_xsrf", None)
         if not token:
             raise HTTPError(403, "'_xsrf' argument missing from POST")
