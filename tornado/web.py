@@ -590,6 +590,8 @@ class RequestHandler(object):
 
         See http://en.wikipedia.org/wiki/Cross-site_request_forgery
         """
+        if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return
         token = self.get_argument("_xsrf", None)
         if not token:
             raise HTTPError(403, "'_xsrf' argument missing from POST")
@@ -692,11 +694,12 @@ class RequestHandler(object):
             self._handle_request_exception(e)
 
     def _generate_headers(self):
+        headers = self._headers
         for transform in self._transforms:
-            headers = transform.transform_headers(self._headers)
+            headers = transform.transform_headers(headers)
         lines = [self.request.version + " " + str(self._status_code) + " " +
                  httplib.responses[self._status_code]]
-        lines.extend(["%s: %s" % (n, v) for n, v in self._headers.iteritems()])
+        lines.extend(["%s: %s" % (n, v) for n, v in headers.iteritems()])
         for cookie_dict in getattr(self, "_new_cookies", []):
             for cookie in cookie_dict.values():
                 lines.append("Set-Cookie: " + cookie.OutputString(None))
