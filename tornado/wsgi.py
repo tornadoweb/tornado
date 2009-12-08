@@ -247,6 +247,7 @@ class WSGIContainer(object):
             "SCRIPT_NAME": "",
             "PATH_INFO": request.path,
             "QUERY_STRING": request.query,
+            "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,
             "SERVER_PORT": port,
             "wsgi.version": (1, 0),
