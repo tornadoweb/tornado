@@ -23,6 +23,7 @@ import functools
 import ioloop
 import iostream
 import logging
+import os
 import socket
 import time
 import urlparse
@@ -82,17 +83,57 @@ class HTTPServer(object):
            "keyfile": os.path.join(data_dir, "mydomain.key"),
        })
 
+    By default, listen() runs in a single thread in a single process. You
+    can utilize all available CPUs on this machine by calling bind() and
+    start() instead of listen():
+
+        http_server = httpserver.HTTPServer(handle_request)
+        http_server.bind(8888)
+        http_server.start() # Forks multiple sub-processes
+        ioloop.IOLoop.instance().start()
+
+    start() detects the number of CPUs on this machine and "pre-forks" that
+    number of child processes so that we have one Tornado process per CPU,
+    all with their own IOLoop. You can also pass in the specific number of
+    child processes you want to run with if you want to override this
+    auto-detection.
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
                  xheaders=False, ssl_options=None):
+        """Initializes the server with the given request callback.
+
+        If you use pre-forking/start() instead of the listen() method to
+        start your server, you should not pass an IOLoop instance to this
+        constructor. Each pre-forked child process will create its own
+        IOLoop instance after the forking process.
+        """
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
-        self.io_loop = io_loop or ioloop.IOLoop.instance()
+        self.io_loop = io_loop
         self.xheaders = xheaders
         self.ssl_options = ssl_options
         self._socket = None
+        self._started = False
 
     def listen(self, port, address=""):
+        """Binds to the given port and starts the server in a single process.
+
+        This method is a shortcut for:
+
+            server.bind(port, address)
+            server.start(1)
+
+        """
+        self.bind(port, address)
+        self.start(1)
+
+    def bind(self, port, address=""):
+        """Binds this server to the given port on the given IP address.
+
+        To start the server, call start(). If you want to run this server
+        in a single process, you can call listen() as a shortcut to the
+        sequence of bind() and start() calls.
+        """
         assert not self._socket
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         flags = fcntl.fcntl(self._socket.fileno(), fcntl.F_GETFD)
@@ -102,8 +143,48 @@ class HTTPServer(object):
         self._socket.setblocking(0)
         self._socket.bind((address, port))
         self._socket.listen(128)
-        self.io_loop.add_handler(self._socket.fileno(), self._handle_events,
-                                 self.io_loop.READ)
+
+    def start(self, num_processes=None):
+        """Starts this server in the IOLoop.
+
+        By default, we detect the number of cores available on this machine
+        and fork that number of child processes. If num_processes is given, we
+        fork that specific number of sub-processes.
+
+        If num_processes is 1 or we detect only 1 CPU core, we run the server
+        in this process and do not fork any additional child process.
+
+        Since we run use processes and not threads, there is no shared memory
+        between any server code.
+        """
+        assert not self._started
+        self._started = True
+        if num_processes is None:
+            # Use sysconf to detect the number of CPUs (cores)
+            try:
+                num_processes = os.sysconf("SC_NPROCESSORS_CONF")
+            except ValueError:
+                logging.error("Could not get num processors from sysconf; "
+                              "running with one process")
+                num_processes = 1
+        if num_processes > 1 and ioloop.IOLoop.initialized():
+            logging.error("Cannot run in multiple processes: IOLoop instance "
+                          "has already been initialized. You cannot call "
+                          "IOLoop.instance() before calling start()")
+            num_processes = 1
+        if num_processes > 1:
+            logging.info("Pre-forking %d server processes", num_processes)
+            for i in range(num_processes):
+                if os.fork() == 0:
+                    ioloop.IOLoop.instance().add_handler(
+                        self._socket.fileno(), self._handle_events,
+                        ioloop.IOLoop.READ)
+                    return
+            os.waitpid(-1, 0)
+        else:
+            io_loop = self.io_loop or ioloop.IOLoop.instance()
+            io_loop.add_handler(self._socket.fileno(), self._handle_events,
+                                ioloop.IOLoop.READ)
 
     def _handle_events(self, fd, events):
         while True:

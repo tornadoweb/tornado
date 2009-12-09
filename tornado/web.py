@@ -47,10 +47,12 @@ import base64
 import binascii
 import calendar
 import Cookie
+import cStringIO
 import datetime
 import email.utils
 import escape
 import functools
+import gzip
 import hashlib
 import hmac
 import httplib
@@ -402,32 +404,24 @@ class RequestHandler(object):
         """Flushes the current output buffer to the nextwork."""
         if self.application._wsgi:
             raise Exception("WSGI applications do not support flush()")
+
+        chunk = "".join(self._write_buffer)
+        self._write_buffer = []
         if not self._headers_written:
             self._headers_written = True
+            for transform in self._transforms:
+                self._headers, chunk = transform.transform_first_chunk(
+                    self._headers, chunk, include_footers)
             headers = self._generate_headers()
         else:
+            for transform in self._transforms:
+                chunk = transform.transform_chunk(chunk, include_footers)
             headers = ""
 
         # Ignore the chunk and only write the headers for HEAD requests
         if self.request.method == "HEAD":
             if headers: self.request.write(headers)
             return
-
-        if self._write_buffer:
-            chunk = "".join(self._write_buffer)
-            self._write_buffer = []
-            if chunk:
-                # Don't write out empty chunks because that means
-                # END-OF-STREAM with chunked encoding
-                for transform in self._transforms:
-                    chunk = transform.transform_chunk(chunk)
-        else:
-            chunk = ""
-        if include_footers:
-            footers = []
-            for transform in self._transforms:
-                footer = transform.footer()
-                if footer: chunk += footer
 
         if headers or chunk:
             self.request.write(headers + chunk)
@@ -694,12 +688,9 @@ class RequestHandler(object):
             self._handle_request_exception(e)
 
     def _generate_headers(self):
-        headers = self._headers
-        for transform in self._transforms:
-            headers = transform.transform_headers(headers)
         lines = [self.request.version + " " + str(self._status_code) + " " +
                  httplib.responses[self._status_code]]
-        lines.extend(["%s: %s" % (n, v) for n, v in headers.iteritems()])
+        lines.extend(["%s: %s" % (n, v) for n, v in self._headers.iteritems()])
         for cookie_dict in getattr(self, "_new_cookies", []):
             for cookie in cookie_dict.values():
                 lines.append("Set-Cookie: " + cookie.OutputString(None))
@@ -859,7 +850,10 @@ class Application(object):
     def __init__(self, handlers=None, default_host="", transforms=None,
                  wsgi=False, **settings):
         if transforms is None:
-            self.transforms = [ChunkedTransferEncoding]
+            self.transforms = []
+            if settings.get("gzip"):
+                self.transforms.append(GZipContentEncoding)
+            self.transforms.append(ChunkedTransferEncoding)
         else:
             self.transforms = transforms
         self.handlers = []
@@ -1113,31 +1107,64 @@ class FallbackHandler(RequestHandler):
 class OutputTransform(object):
     """A transform modifies the result of an HTTP request (e.g., GZip encoding)
 
-    A new transform instance is created for every request. The sequence of
-    calls is:
-
-         t = Transform(request) # Constructor
-         # Request processing
-         headers = t.transform_headers(headers)
-         # Write headers
-         for block in result:
-             write(t.transform_chunk(block)
-         write(t.footer())
-
-    See the ChunkedTransferEncoding example below if you want to implement a
+    A new transform instance is created for every request. See the
+    ChunkedTransferEncoding example below if you want to implement a
     new Transform.
     """
     def __init__(self, request):
         pass
 
-    def transform_headers(self, headers):
-        return headers
+    def transform_first_chunk(self, headers, chunk, finishing):
+        return headers, chunk
 
-    def transform_chunk(self, block):
-        return block
+    def transform_chunk(self, chunk, finishing):
+        return chunk
 
-    def footer(self):
-        return None
+
+class GZipContentEncoding(OutputTransform):
+    """Applies the gzip content encoding to the response.
+
+    See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11
+    """
+    CONTENT_TYPES = set([
+        "text/plain", "text/html", "text/css", "text/xml",
+        "application/x-javascript", "application/xml", "application/atom+xml",
+        "text/javascript", "application/json", "application/xhtml+xml"])
+    MIN_LENGTH = 5
+
+    def __init__(self, request):
+        self._gzipping = request.supports_http_1_1() and \
+            "gzip" in request.headers.get("Accept-Encoding", "")
+
+    def transform_first_chunk(self, headers, chunk, finishing):
+        if self._gzipping:
+            ctype = headers.get("Content-Type", "").split(";")[0]
+            self._gzipping = (ctype in self.CONTENT_TYPES) and \
+                (not finishing or len(chunk) >= self.MIN_LENGTH) and \
+                (finishing or "Content-Length" not in headers) and \
+                ("Content-Encoding" not in headers)
+        if self._gzipping:
+            headers["Content-Encoding"] = "gzip"
+            self._gzip_value = cStringIO.StringIO()
+            self._gzip_file = gzip.GzipFile(mode="w", fileobj=self._gzip_value)
+            self._gzip_pos = 0
+            chunk = self.transform_chunk(chunk, finishing)
+            if "Content-Length" in headers:
+                headers["Content-Length"] = str(len(chunk))
+        return headers, chunk
+
+    def transform_chunk(self, chunk, finishing):
+        if self._gzipping:
+            self._gzip_file.write(chunk)
+            if finishing:
+                self._gzip_file.close()
+            else:
+                self._gzip_file.flush()
+            chunk = self._gzip_value.getvalue()
+            if self._gzip_pos > 0:
+                chunk = chunk[self._gzip_pos:]
+            self._gzip_pos += len(chunk)
+        return chunk
 
 
 class ChunkedTransferEncoding(OutputTransform):
@@ -1148,26 +1175,25 @@ class ChunkedTransferEncoding(OutputTransform):
     def __init__(self, request):
         self._chunking = request.supports_http_1_1()
 
-    def transform_headers(self, headers):
+    def transform_first_chunk(self, headers, chunk, finishing):
         if self._chunking:
             # No need to chunk the output if a Content-Length is specified
             if "Content-Length" in headers or "Transfer-Encoding" in headers:
                 self._chunking = False
             else:
                 headers["Transfer-Encoding"] = "chunked"
-        return headers
+                chunk = self.transform_chunk(chunk, finishing)
+        return headers, chunk
         
-    def transform_chunk(self, block):
+    def transform_chunk(self, block, finishing):
         if self._chunking:
-            return ("%x" % len(block)) + "\r\n" + block + "\r\n"
-        else:
-            return block
-
-    def footer(self):
-        if self._chunking:
-            return "0\r\n\r\n"
-        else:
-            return None
+            # Don't write out empty chunks because that means END-OF-STREAM
+            # with chunked encoding
+            if block:
+                block = ("%x" % len(block)) + "\r\n" + block + "\r\n"
+            if finishing:
+                block += "0\r\n\r\n"
+        return block
 
 
 def authenticated(method):
