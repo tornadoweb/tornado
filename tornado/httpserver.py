@@ -113,6 +113,7 @@ class HTTPServer(object):
         self.xheaders = xheaders
         self.ssl_options = ssl_options
         self._socket = None
+        self._started = False
 
     def listen(self, port, address=""):
         """Binds to the given port and starts the server in a single process.
@@ -156,6 +157,8 @@ class HTTPServer(object):
         Since we run use processes and not threads, there is no shared memory
         between any server code.
         """
+        assert not self._started
+        self._started = True
         if num_processes is None:
             # Use sysconf to detect the number of CPUs (cores)
             try:
