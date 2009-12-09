@@ -167,7 +167,7 @@ class HTTPServer(object):
         if num_processes > 1 and ioloop.IOLoop.initialized():
             logging.error("Cannot run in multiple processes: IOLoop instance "
                           "has already been initialized. You cannot call "
-                          "IOLoop.instance() before calling start_multi_cpu()")
+                          "IOLoop.instance() before calling start()")
             num_processes = 1
         if num_processes > 1:
             logging.info("Pre-forking %d server processes", num_processes)
