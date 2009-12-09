@@ -116,6 +116,10 @@ class IOLoop(object):
             cls._instance = cls()
         return cls._instance
 
+    @classmethod
+    def initialized(cls):
+        return hasattr(cls, "_instance")
+
     def add_handler(self, fd, handler, events):
         """Registers the given handler to receive the given events for fd."""
         self._handlers[fd] = handler
