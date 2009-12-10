@@ -1266,7 +1266,7 @@ class UIModule(object):
 
 class URLSpec(object):
     """Specifies mappings between URLs and handlers."""
-    def __init__(self, pattern, handler_class, kwargs=None, name=None):
+    def __init__(self, pattern, handler_class, kwargs={}, name=None):
         """Creates a URLSpec.
 
         Parameters:
