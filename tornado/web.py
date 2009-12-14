@@ -456,7 +456,7 @@ class RequestHandler(object):
             self._log()
         self._finished = True
 
-    def send_error(self, status_code=500):
+    def send_error(self, status_code=500, **kwargs):
         """Sends the given HTTP error code to the browser.
 
         We also send the error HTML for the given error code as returned by
@@ -470,11 +470,15 @@ class RequestHandler(object):
             return
         self.clear()
         self.set_status(status_code)
-        message = self.get_error_html(status_code)
+        message = self.get_error_html(status_code, **kwargs)
         self.finish(message)
 
-    def get_error_html(self, status_code):
-        """Override to implement custom error pages."""
+    def get_error_html(self, status_code, **kwargs):
+        """Override to implement custom error pages.
+
+        If this error was caused by an uncaught exception, the
+        exception object can be found in kwargs e.g. kwargs['exception']
+        """
         return "<html><title>%(code)d: %(message)s</title>" \
                "<body>%(code)d: %(message)s</body></html>" % {
             "code": status_code,
@@ -496,7 +500,7 @@ class RequestHandler(object):
                 self._locale = self.get_browser_locale()
                 assert self._locale
         return self._locale
-            
+
     def get_user_locale(self):
         """Override to determine the locale from the authenticated user.
 
@@ -681,7 +685,7 @@ class RequestHandler(object):
                self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
             self.prepare()
-            if not self._finished:  
+            if not self._finished:
                 getattr(self, self.request.method.lower())(*args, **kwargs)
                 if self._auto_finish and not self._finished:
                     self.finish()
@@ -720,13 +724,13 @@ class RequestHandler(object):
                 logging.warning(format, *args)
             if e.status_code not in httplib.responses:
                 logging.error("Bad HTTP status code: %d", e.status_code)
-                self.send_error(500)
+                self.send_error(500, exception=e)
             else:
-                self.send_error(e.status_code)
+                self.send_error(e.status_code, exception=e)
         else:
             logging.error("Uncaught exception %s\n%r", self._request_summary(),
                           self.request, exc_info=e)
-            self.send_error(500)
+            self.send_error(500, exception=e)
 
     def _ui_module(self, name, module):
         def render(*args, **kwargs):
@@ -951,7 +955,7 @@ class Application(object):
         handler = None
         args = []
         handlers = self._get_host_handlers(request)
-        if not handlers: 
+        if not handlers:
             handler = RedirectHandler(
                 request, "http://" + self.default_host + "/")
         else:
@@ -1021,7 +1025,7 @@ class RedirectHandler(RequestHandler):
         RequestHandler.__init__(self, application, request)
         self._url = url
         self._permanent = permanent
-        
+
     def get(self):
         self.redirect(self._url, permanent=self._permanent)
 
@@ -1196,7 +1200,7 @@ class ChunkedTransferEncoding(OutputTransform):
                 headers["Transfer-Encoding"] = "chunked"
                 chunk = self.transform_chunk(chunk, finishing)
         return headers, chunk
-        
+
     def transform_chunk(self, block, finishing):
         if self._chunking:
             # Don't write out empty chunks because that means END-OF-STREAM
@@ -1271,12 +1275,12 @@ class URLSpec(object):
 
         Parameters:
         pattern: Regular expression to be matched.  Any groups in the regex
-            will be passed in to the handler's get/post/etc methods as 
+            will be passed in to the handler's get/post/etc methods as
             arguments.
         handler_class: RequestHandler subclass to be invoked.
         kwargs (optional): A dictionary of additional arguments to be passed
             to the handler's constructor.
-        name (optional): A name for this handler.  Used by 
+        name (optional): A name for this handler.  Used by
             Application.reverse_url.
         """
         if not pattern.endswith('$'):
