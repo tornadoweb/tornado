@@ -86,6 +86,7 @@ class IOLoop(object):
         self._callbacks = set()
         self._timeouts = []
         self._running = False
+        self._stopped = False
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
@@ -144,6 +145,9 @@ class IOLoop(object):
         The loop will run until one of the I/O handlers calls stop(), which
         will make the loop stop after the current event iteration completes.
         """
+        if self._stopped:
+            self._stopped = False
+            return
         self._running = True
         while True:
             # Never use an infinite timeout here - it can stall epoll
@@ -203,10 +207,24 @@ class IOLoop(object):
                 except:
                     logging.error("Exception in I/O handler for fd %d",
                                   fd, exc_info=True)
+        # reset the stopped flag so another start/stop pair can be issued
+        self._stopped = False
 
     def stop(self):
-        """Stop the loop after the current event loop iteration is complete."""
+        """Stop the loop after the current event loop iteration is complete.
+        If the event loop is not currently running, the next call to start()
+        will return immediately.
+
+        To use asynchronous methods from otherwise-synchronous code (such as
+        unit tests), you can start and stop the event loop like this:
+          ioloop = IOLoop()
+          async_method(ioloop=ioloop, callback=ioloop.stop)
+          ioloop.start()
+        ioloop.start() will return after async_method has run its callback,
+        whether that callback was invoked before or after ioloop.start.
+        """
         self._running = False
+        self._stopped = True
         self._wake()
 
     def running(self):
