@@ -83,7 +83,7 @@ class RequestHandler(object):
     should override the class variable SUPPORTED_METHODS in your
     RequestHandler class.
     """
-    SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PUT")
+    SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PUT", "OPTIONS")
 
     def __init__(self, application, request, **kwargs):
         self.application = application
@@ -140,6 +140,9 @@ class RequestHandler(object):
         raise HTTPError(405)
 
     def put(self, *args, **kwargs):
+        raise HTTPError(405)
+
+    def options(self, *args, **kwargs):
         raise HTTPError(405)
 
     def prepare(self):
