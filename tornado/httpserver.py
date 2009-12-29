@@ -225,7 +225,8 @@ class HTTPConnection(object):
 
     def write(self, chunk):
         assert self._request, "Request closed"
-        self.stream.write(chunk, self._on_write_complete)
+        if not self.stream.closed():
+            self.stream.write(chunk, self._on_write_complete)
 
     def finish(self):
         assert self._request, "Request closed"
