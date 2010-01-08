@@ -92,6 +92,8 @@ class RequestHandler(object):
         self.ui["modules"] = _O((n, self._ui_module(n, m)) for n, m in
                                 application.ui_modules.iteritems())
         self.clear()
+        self.request.connection.stream.set_close_callback(
+            self.on_connection_close)
 
     @property
     def settings(self):
@@ -117,6 +119,20 @@ class RequestHandler(object):
 
         Useful to override in a handler if you want a common bottleneck for
         all of your requests.
+        """
+        pass
+
+    def on_connection_close(self):
+        """Called in async handlers if the client closed the connection.
+
+        You may override this to clean up resources associated with
+        long-lived connections.
+
+        Note that the select()-based implementation of IOLoop does not detect
+        closed connections and so this method will not be called until
+        you try (and fail) to produce some output.  The epoll- and kqueue-
+        based implementations should detect closed connections even while
+        the request is idle.
         """
         pass
 
