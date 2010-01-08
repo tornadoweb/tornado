@@ -335,6 +335,47 @@ class _EPoll(object):
         return epoll.epoll_wait(self._epoll_fd, int(timeout * 1000))
 
 
+class _KQueue(object):
+    """A kqueue-based event loop for BSD/Mac systems."""
+    def __init__(self):
+        self._kqueue = select.kqueue()
+        self._filters = {}
+
+    def register(self, fd, events):
+        filter = 0
+        if events & IOLoop.WRITE:
+            filter |= select.KQ_FILTER_WRITE
+        if events & IOLoop.READ or filter == 0:
+            filter |= select.KQ_FILTER_READ
+        self._filters[fd] = filter
+        kevent = select.kevent(fd, filter=filter)
+        self._kqueue.control([kevent], 0)
+
+    def modify(self, fd, events):
+        self.unregister(fd)
+        self.register(fd, events)
+
+    def unregister(self, fd):
+        kevent = select.kevent(fd, filter=self._filters[fd],
+                               flags=select.KQ_EV_DELETE)
+        self._kqueue.control([kevent], 0)
+
+    def poll(self, timeout):
+        kevents = self._kqueue.control(None, 1000, timeout)
+        events = []
+        for kevent in kevents:
+            fd = kevent.ident
+            flags = 0
+            if kevent.filter & select.KQ_FILTER_READ:
+                flags |= IOLoop.READ
+            if kevent.filter & select.KQ_FILTER_WRITE:
+                flags |= IOLoop.WRITE
+            if kevent.flags & select.KQ_EV_ERROR:
+                flags |= IOLoop.ERROR
+            events.append((fd, flags))
+        return events
+
+
 class _Select(object):
     """A simple, select()-based IOLoop implementation for non-Linux systems"""
     def __init__(self):
@@ -375,6 +416,9 @@ class _Select(object):
 if hasattr(select, "epoll"):
     # Python 2.6+ on Linux
     _poll = select.epoll
+elif hasattr(select, "kqueue"):
+    # Python 2.6+ on BSD or Mac
+    _poll = _KQueue
 else:
     try:
         # Linux systems with our C module installed
