@@ -254,7 +254,8 @@ class RequestHandler(object):
         if not value: return None
         parts = value.split("|")
         if len(parts) != 3: return None
-        if self._cookie_signature(parts[0], parts[1]) != parts[2]:
+        if not _time_independent_equals(parts[2],
+                    self._cookie_signature(parts[0], parts[1])):
             logging.warning("Invalid cookie signature %r", value)
             return None
         timestamp = int(parts[1])
@@ -1268,6 +1269,15 @@ def _unicode(s):
             raise HTTPError(400, "Non-utf8 argument")
     assert isinstance(s, unicode)
     return s
+
+
+def _time_independent_equals(a, b):
+    if len(a) != len(b):
+        return False
+    result = 0
+    for x, y in zip(a, b):
+        result |= ord(x) ^ ord(y)
+    return result == 0
 
 
 class _O(dict):
