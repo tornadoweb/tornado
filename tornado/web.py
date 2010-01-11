@@ -92,6 +92,8 @@ class RequestHandler(object):
         self.ui["modules"] = _O((n, self._ui_module(n, m)) for n, m in
                                 application.ui_modules.iteritems())
         self.clear()
+        self.request.connection.stream.set_close_callback(
+            self.on_connection_close)
 
     @property
     def settings(self):
@@ -117,6 +119,20 @@ class RequestHandler(object):
 
         Useful to override in a handler if you want a common bottleneck for
         all of your requests.
+        """
+        pass
+
+    def on_connection_close(self):
+        """Called in async handlers if the client closed the connection.
+
+        You may override this to clean up resources associated with
+        long-lived connections.
+
+        Note that the select()-based implementation of IOLoop does not detect
+        closed connections and so this method will not be called until
+        you try (and fail) to produce some output.  The epoll- and kqueue-
+        based implementations should detect closed connections even while
+        the request is idle.
         """
         pass
 
@@ -396,6 +412,7 @@ class RequestHandler(object):
             _=self.locale.translate,
             static_url=self.static_url,
             xsrf_form_html=self.xsrf_form_html,
+            reverse_url=self.application.reverse_url
         )
         args.update(self.ui)
         args.update(kwargs)
@@ -456,7 +473,7 @@ class RequestHandler(object):
             self._log()
         self._finished = True
 
-    def send_error(self, status_code=500):
+    def send_error(self, status_code=500, **kwargs):
         """Sends the given HTTP error code to the browser.
 
         We also send the error HTML for the given error code as returned by
@@ -470,11 +487,15 @@ class RequestHandler(object):
             return
         self.clear()
         self.set_status(status_code)
-        message = self.get_error_html(status_code)
+        message = self.get_error_html(status_code, **kwargs)
         self.finish(message)
 
-    def get_error_html(self, status_code):
-        """Override to implement custom error pages."""
+    def get_error_html(self, status_code, **kwargs):
+        """Override to implement custom error pages.
+
+        If this error was caused by an uncaught exception, the
+        exception object can be found in kwargs e.g. kwargs['exception']
+        """
         return "<html><title>%(code)d: %(message)s</title>" \
                "<body>%(code)d: %(message)s</body></html>" % {
             "code": status_code,
@@ -496,7 +517,7 @@ class RequestHandler(object):
                 self._locale = self.get_browser_locale()
                 assert self._locale
         return self._locale
-            
+
     def get_user_locale(self):
         """Override to determine the locale from the authenticated user.
 
@@ -681,7 +702,7 @@ class RequestHandler(object):
                self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
             self.prepare()
-            if not self._finished:  
+            if not self._finished:
                 getattr(self, self.request.method.lower())(*args, **kwargs)
                 if self._auto_finish and not self._finished:
                     self.finish()
@@ -720,13 +741,13 @@ class RequestHandler(object):
                 logging.warning(format, *args)
             if e.status_code not in httplib.responses:
                 logging.error("Bad HTTP status code: %d", e.status_code)
-                self.send_error(500)
+                self.send_error(500, exception=e)
             else:
-                self.send_error(e.status_code)
+                self.send_error(e.status_code, exception=e)
         else:
             logging.error("Uncaught exception %s\n%r", self._request_summary(),
                           self.request, exc_info=e)
-            self.send_error(500)
+            self.send_error(500, exception=e)
 
     def _ui_module(self, name, module):
         def render(*args, **kwargs):
@@ -823,10 +844,10 @@ class Application(object):
         http_server.listen(8080)
         ioloop.IOLoop.instance().start()
 
-    The constructor for this class takes in a list of (regexp, request_class)
-    tuples. When we receive requests, we iterate over the list in order and
-    instantiate an instance of the first request class whose regexp matches
-    the request path.
+    The constructor for this class takes in a list of URLSpec objects
+    or (regexp, request_class) tuples. When we receive requests, we
+    iterate over the list in order and instantiate an instance of the
+    first request class whose regexp matches the request path.
 
     Each tuple can contain an optional third element, which should be a
     dictionary if it is present. That dictionary is passed as keyword
@@ -858,6 +879,7 @@ class Application(object):
         else:
             self.transforms = transforms
         self.handlers = []
+        self.named_handlers = {}
         self.default_host = default_host
         self.settings = settings
         self.ui_modules = {}
@@ -887,17 +909,19 @@ class Application(object):
         handlers = []
         self.handlers.append((re.compile(host_pattern), handlers))
 
-        for handler_tuple in host_handlers:
-            assert len(handler_tuple) in (2, 3)
-            pattern = handler_tuple[0]
-            handler = handler_tuple[1]
-            if len(handler_tuple) == 3:
-                kwargs = handler_tuple[2]
-            else:
-                kwargs = {}
-            if not pattern.endswith("$"):
-                pattern += "$"
-            handlers.append((re.compile(pattern), handler, kwargs))
+        for spec in host_handlers:
+            if type(spec) is type(()):
+                assert len(spec) in (2, 3)
+                pattern = spec[0]
+                handler = spec[1]
+                if len(spec) == 3:
+                    kwargs = spec[2]
+                else:
+                    kwargs = {}
+                spec = URLSpec(pattern, handler, kwargs)
+            handlers.append(spec)
+            if spec.name:
+                self.named_handlers[spec.name] = spec
 
     def add_transform(self, transform_class):
         """Adds the given OutputTransform to our transform list."""
@@ -948,14 +972,14 @@ class Application(object):
         handler = None
         args = []
         handlers = self._get_host_handlers(request)
-        if not handlers: 
+        if not handlers:
             handler = RedirectHandler(
                 request, "http://" + self.default_host + "/")
         else:
-            for pattern, handler_class, kwargs in handlers:
-                match = pattern.match(request.path)
+            for spec in handlers:
+                match = spec.regex.match(request.path)
                 if match:
-                    handler = handler_class(self, request, **kwargs)
+                    handler = spec.handler_class(self, request, **spec.kwargs)
                     args = match.groups()
                     break
             if not handler:
@@ -970,6 +994,14 @@ class Application(object):
         handler._execute(transforms, *args)
         return handler
 
+    def reverse_url(self, name, *args):
+        """Returns a URL path for handler named `name`
+
+        The handler must be added to the application as a named URLSpec
+        """
+        if name in self.named_handlers:
+            return self.named_handlers[name].reverse(*args)
+        raise KeyError("%s not found in named urls" % name)
 
 class HTTPError(Exception):
     """An exception that will turn into an HTTP error response."""
@@ -1010,7 +1042,7 @@ class RedirectHandler(RequestHandler):
         RequestHandler.__init__(self, application, request)
         self._url = url
         self._permanent = permanent
-        
+
     def get(self):
         self.redirect(self._url, permanent=self._permanent)
 
@@ -1185,7 +1217,7 @@ class ChunkedTransferEncoding(OutputTransform):
                 headers["Transfer-Encoding"] = "chunked"
                 chunk = self.transform_chunk(chunk, finishing)
         return headers, chunk
-        
+
     def transform_chunk(self, block, finishing):
         if self._chunking:
             # Don't write out empty chunks because that means END-OF-STREAM
@@ -1253,6 +1285,67 @@ class UIModule(object):
     def render_string(self, path, **kwargs):
         return self.handler.render_string(path, **kwargs)
 
+class URLSpec(object):
+    """Specifies mappings between URLs and handlers."""
+    def __init__(self, pattern, handler_class, kwargs={}, name=None):
+        """Creates a URLSpec.
+
+        Parameters:
+        pattern: Regular expression to be matched.  Any groups in the regex
+            will be passed in to the handler's get/post/etc methods as
+            arguments.
+        handler_class: RequestHandler subclass to be invoked.
+        kwargs (optional): A dictionary of additional arguments to be passed
+            to the handler's constructor.
+        name (optional): A name for this handler.  Used by
+            Application.reverse_url.
+        """
+        if not pattern.endswith('$'):
+            pattern += '$'
+        self.regex = re.compile(pattern)
+        self.handler_class = handler_class
+        self.kwargs = kwargs
+        self.name = name
+        self._path, self._group_count = self._find_groups()
+
+    def _find_groups(self):
+        """Returns a tuple (reverse string, group count) for a url.
+
+        For example: Given the url pattern /([0-9]{4})/([a-z-]+)/, this method
+        would return ('/%s/%s/', 2).
+        """
+        pattern = self.regex.pattern
+        if pattern.startswith('^'):
+            pattern = pattern[1:]
+        if pattern.endswith('$'):
+            pattern = pattern[:-1]
+
+        if self.regex.groups != pattern.count('('):
+            # The pattern is too complicated for our simplistic matching,
+            # so we can't support reversing it.
+            return (None, None)
+
+        pieces = []
+        for fragment in pattern.split('('):
+            if ')' in fragment:
+                paren_loc = fragment.index(')')
+                if paren_loc >= 0:
+                    pieces.append('%s' + fragment[paren_loc + 1:])
+            else:
+                pieces.append(fragment)
+
+        return (''.join(pieces), self.regex.groups)
+
+    def reverse(self, *args):
+        assert self._path is not None, \
+            "Cannot reverse url regex " + self.regex.pattern
+        assert len(args) == self._group_count, "required number of arguments "\
+            "not found"
+        if not len(args):
+            return self._path
+        return self._path % tuple([str(a) for a in args])
+
+url = URLSpec
 
 def _utf8(s):
     if isinstance(s, unicode):

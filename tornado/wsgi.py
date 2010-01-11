@@ -214,7 +214,7 @@ class WSGIContainer(object):
             data["status"] = status
             data["headers"] = HTTPHeaders(response_headers)
         body = "".join(self.wsgi_application(
-            self._environ(request), start_response))
+            WSGIContainer.environ(request), start_response))
         if not data: raise Exception("WSGI app did not call start_response")
 
         status_code = int(data["status"].split()[0])
@@ -233,7 +233,8 @@ class WSGIContainer(object):
         request.finish()
         self._log(status_code, request)
 
-    def _environ(self, request):
+    @staticmethod
+    def environ(request):
         hostport = request.host.split(":")
         if len(hostport) == 2:
             host = hostport[0]
@@ -246,6 +247,7 @@ class WSGIContainer(object):
             "SCRIPT_NAME": "",
             "PATH_INFO": request.path,
             "QUERY_STRING": request.query,
+            "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,
             "SERVER_PORT": port,
             "wsgi.version": (1, 0),

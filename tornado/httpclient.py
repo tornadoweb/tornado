@@ -360,16 +360,23 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.setopt(pycurl.ENCODING, "none")
 
     # Set the request method through curl's retarded interface which makes
-    # up names for every single method
+    # up names for almost every single method
     curl_options = {
         "GET": pycurl.HTTPGET,
         "POST": pycurl.POST,
         "PUT": pycurl.UPLOAD,
         "HEAD": pycurl.NOBODY,
     }
+    custom_methods = set(["DELETE"])
     for o in curl_options.values():
         curl.setopt(o, False)
-    curl.setopt(curl_options[request.method], True)
+    if request.method in curl_options:
+        curl.unsetopt(pycurl.CUSTOMREQUEST)
+        curl.setopt(curl_options[request.method], True)
+    elif request.method in custom_methods:
+        curl.setopt(pycurl.CUSTOMREQUEST, request.method)
+    else:
+        raise KeyError('unknown method ' + request.method)
 
     # Handle curl's cryptic options for every individual HTTP method
     if request.method in ("POST", "PUT"):
