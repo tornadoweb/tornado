@@ -92,8 +92,10 @@ class RequestHandler(object):
         self.ui["modules"] = _O((n, self._ui_module(n, m)) for n, m in
                                 application.ui_modules.iteritems())
         self.clear()
-        self.request.connection.stream.set_close_callback(
-            self.on_connection_close)
+        # Check since connection is not available in WSGI
+        if hasattr(self.request, "connection"):
+            self.request.connection.stream.set_close_callback(
+                self.on_connection_close)
 
     @property
     def settings(self):
