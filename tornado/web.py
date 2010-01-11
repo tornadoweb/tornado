@@ -690,6 +690,9 @@ class RequestHandler(object):
             raise Exception("You must define the '%s' setting in your "
                             "application to use %s" % (name, feature))
 
+    def reverse_url(self, name, *args):
+        return self.application.reverse_url(name, *args)
+
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
         self._transforms = transforms
@@ -1002,6 +1005,7 @@ class Application(object):
         if name in self.named_handlers:
             return self.named_handlers[name].reverse(*args)
         raise KeyError("%s not found in named urls" % name)
+
 
 class HTTPError(Exception):
     """An exception that will turn into an HTTP error response."""
