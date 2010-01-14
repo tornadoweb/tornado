@@ -15,7 +15,7 @@
         {% if post["attachment"].get("description") %}
           <div class="description">{{ post["attachment"]["description"] }}</div>
         {% end %}
-        {% for media in filter(lambda m: m.get("src") and m["type"] in ("photo", "link"), post["attachment"]["media"]) %}
+        {% for media in filter(lambda m: m.get("src") and m["type"] in ("photo", "link"), post["attachment"].get("media", [])) %}
           <span class="media">
             <a href="{{ media["href"] }}"><img src="{{ media["src"] }}" alt="{{ escape(media.get("alt", "")) }}"/></a>
           </span>
