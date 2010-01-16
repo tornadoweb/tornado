@@ -102,7 +102,7 @@ class IOLoop(object):
         """Returns a global IOLoop instance.
 
         Most single-threaded applications have a single, global IOLoop.
-        Use this method instead of passing around IOLoop instances 
+        Use this method instead of passing around IOLoop instances
         throughout your code.
 
         A common pattern for classes that depend on IOLoops is to use
@@ -136,7 +136,7 @@ class IOLoop(object):
         self._events.pop(fd, None)
         try:
             self._impl.unregister(fd)
-        except OSError:
+        except (OSError, IOError):
             logging.debug("Error deleting fd from IOLoop", exc_info=True)
 
     def start(self):
