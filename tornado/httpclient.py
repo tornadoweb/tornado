@@ -220,7 +220,7 @@ class AsyncHTTPClient(object):
             elif old_events != events:
                 try:
                     self.io_loop.update_handler(fd, events)
-                except OSError, e:
+                except (OSError, IOError), e:
                     if e[0] == errno.ENOENT:
                         self.io_loop.add_handler(fd, self._handle_events,
                                                  events)
@@ -313,7 +313,7 @@ class HTTPError(Exception):
         self.code = code
         message = message or httplib.responses.get(code, "Unknown")
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
-                
+
 
 class CurlError(HTTPError):
     def __init__(self, errno, message):
