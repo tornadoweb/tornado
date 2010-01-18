@@ -211,7 +211,11 @@ class AsyncHTTPClient(object):
 
         for fd in self._fds:
             if fd not in fds:
-                self.io_loop.remove_handler(fd)
+                try:
+                    self.io_loop.remove_handler(fd)
+                except (OSError, IOError), e:
+                    if e[0] != errno.ENOENT:
+                        raise
 
         for fd, events in fds.iteritems():
             old_events = self._fds.get(fd, None)
@@ -220,7 +224,7 @@ class AsyncHTTPClient(object):
             elif old_events != events:
                 try:
                     self.io_loop.update_handler(fd, events)
-                except OSError, e:
+                except (OSError, IOError), e:
                     if e[0] == errno.ENOENT:
                         self.io_loop.add_handler(fd, self._handle_events,
                                                  events)
