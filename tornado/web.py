@@ -92,8 +92,10 @@ class RequestHandler(object):
         self.ui["modules"] = _O((n, self._ui_module(n, m)) for n, m in
                                 application.ui_modules.iteritems())
         self.clear()
-        self.request.connection.stream.set_close_callback(
-            self.on_connection_close)
+        # Check since connection is not available in WSGI
+        if hasattr(self.request, "connection"):
+            self.request.connection.stream.set_close_callback(
+                self.on_connection_close)
 
     @property
     def settings(self):
@@ -690,6 +692,9 @@ class RequestHandler(object):
             raise Exception("You must define the '%s' setting in your "
                             "application to use %s" % (name, feature))
 
+    def reverse_url(self, name, *args):
+        return self.application.reverse_url(name, *args)
+
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
         self._transforms = transforms
@@ -1002,6 +1007,7 @@ class Application(object):
         if name in self.named_handlers:
             return self.named_handlers[name].reverse(*args)
         raise KeyError("%s not found in named urls" % name)
+
 
 class HTTPError(Exception):
     """An exception that will turn into an HTTP error response."""

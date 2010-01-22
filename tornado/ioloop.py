@@ -197,7 +197,7 @@ class IOLoop(object):
                     self._handlers[fd](fd, events)
                 except KeyboardInterrupt:
                     raise
-                except OSError, e:
+                except (OSError, IOError), e:
                     if e[0] == errno.EPIPE:
                         # Happens when the client closes the connection
                         pass
