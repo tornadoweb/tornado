@@ -100,10 +100,12 @@ def parse_command_line(args=None):
     We return all command line arguments that are not options as a list.
     """
     if args is None: args = sys.argv
+    remaining = []
     for i in xrange(1, len(args)):
         # All things after the last option are command line arguments
         if not args[i].startswith("-"):
-            return args[i:]
+            remaining = args[i:]
+            break
         if args[i] == "--":
             continue
         arg = args[i].lstrip("-")
@@ -127,7 +129,7 @@ def parse_command_line(args=None):
     logging.getLogger().setLevel(getattr(logging, options.logging.upper()))
     enable_pretty_logging()
 
-    return []
+    return remaining
 
 
 def parse_config_file(path, overwrite=True):
@@ -307,7 +309,7 @@ def enable_pretty_logging():
         return
     channel = logging.StreamHandler()
     channel.setFormatter(_ColorLogFormatter())
-    logging.getLogger().addHandler(channel)        
+    logging.getLogger().addHandler(channel)
 
 
 class _ColorLogFormatter(logging.Formatter):
