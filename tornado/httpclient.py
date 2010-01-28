@@ -317,7 +317,7 @@ class HTTPError(Exception):
         self.code = code
         message = message or httplib.responses.get(code, "Unknown")
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
-                
+
 
 class CurlError(HTTPError):
     def __init__(self, errno, message):
