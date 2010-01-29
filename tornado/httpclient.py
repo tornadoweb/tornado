@@ -260,7 +260,8 @@ class HTTPRequest(object):
                  connect_timeout=20.0, request_timeout=20.0,
                  if_modified_since=None, follow_redirects=True,
                  max_redirects=5, user_agent=None, use_gzip=True,
-                 network_interface=None, streaming_callback=None):
+                 network_interface=None, streaming_callback=None,
+                 prepare_curl_callback=None):
         if if_modified_since:
             timestamp = calendar.timegm(if_modified_since.utctimetuple())
             headers["If-Modified-Since"] = email.utils.formatdate(
@@ -281,6 +282,7 @@ class HTTPRequest(object):
         self.use_gzip = use_gzip
         self.network_interface = network_interface
         self.streaming_callback = streaming_callback
+        self.prepare_curl_callback = prepare_curl_callback
 
 
 class HTTPResponse(object):
@@ -404,6 +406,8 @@ def _curl_setup_request(curl, request, buffer, headers):
     else:
         curl.unsetopt(pycurl.USERPWD)
         logging.info("%s %s", request.method, request.url)
+    if request.prepare_curl_callback is not None:
+        request.prepare_curl_callback(curl)
 
 
 def _curl_header_callback(headers, header_line):
