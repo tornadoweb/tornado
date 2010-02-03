@@ -107,7 +107,8 @@ def parse_command_line(args=None):
             remaining = args[i:]
             break
         if args[i] == "--":
-            continue
+            remaining = args[i+1:]
+            break
         arg = args[i].lstrip("-")
         name, equals, value = arg.partition("=")
         name = name.replace('-', '_')
