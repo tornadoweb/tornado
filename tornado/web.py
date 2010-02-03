@@ -909,12 +909,12 @@ class Application(object):
             handlers = list(handlers or [])
             static_url_prefix = settings.get("static_url_prefix",
                                              "/static/")
-            handlers.extend([
+            handlers = [
                 (re.escape(static_url_prefix) + r"(.*)", StaticFileHandler,
                  dict(path=path)),
                 (r"/(favicon\.ico)", StaticFileHandler, dict(path=path)),
                 (r"/(robots\.txt)", StaticFileHandler, dict(path=path)),
-            ])
+            ] + handlers
         if handlers: self.add_handlers(".*$", handlers)
 
         # Automatically reload modified modules
