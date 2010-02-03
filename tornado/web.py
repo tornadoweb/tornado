@@ -661,10 +661,11 @@ class RequestHandler(object):
                 hashes[path] = None
         base = self.request.protocol + "://" + self.request.host \
             if getattr(self, "include_host", False) else ""
+        static_url_prefix = self.settings.get('static_url_prefix', '/static/')
         if hashes.get(path):
-            return base + "/static/" + path + "?v=" + hashes[path][:5]
+            return base + static_url_prefix + path + "?v=" + hashes[path][:5]
         else:
-            return base + "/static/" + path
+            return base + static_url_prefix + path
 
     def async_callback(self, callback, *args, **kwargs):
         """Wrap callbacks with this if they are used on asynchronous requests.
@@ -871,7 +872,8 @@ class Application(object):
         ])
 
     You can serve static files by sending the static_path setting as a
-    keyword argument. We will serve those files from the /static/ URI,
+    keyword argument. We will serve those files from the /static/ URI
+    (this is configurable with the static_url_prefix setting),
     and we will serve /favicon.ico and /robots.txt from the same directory.
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
@@ -895,8 +897,11 @@ class Application(object):
         if self.settings.get("static_path"):
             path = self.settings["static_path"]
             handlers = list(handlers or [])
+            static_url_prefix = settings.get("static_url_prefix",
+                                             "/static/")
             handlers.extend([
-                (r"/static/(.*)", StaticFileHandler, dict(path=path)),
+                (re.escape(static_url_prefix) + r"(.*)", StaticFileHandler,
+                 dict(path=path)),
                 (r"/(favicon\.ico)", StaticFileHandler, dict(path=path)),
                 (r"/(robots\.txt)", StaticFileHandler, dict(path=path)),
             ])
