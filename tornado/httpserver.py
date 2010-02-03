@@ -18,7 +18,14 @@
 
 import cgi
 import errno
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    import sys
+    if sys.platform.startswith("win"):
+        import fcntl_win32 as fcntl
+    else:
+        raise
 import functools
 import ioloop
 import iostream
