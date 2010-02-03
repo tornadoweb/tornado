@@ -262,7 +262,7 @@ class RequestHandler(object):
         """
         timestamp = str(int(time.time()))
         value = base64.b64encode(value)
-        signature = self._cookie_signature(value, timestamp)
+        signature = self._cookie_signature(name, value, timestamp)
         value = "|".join([value, timestamp, signature])
         self.set_cookie(name, value, expires_days=expires_days, **kwargs)
 
@@ -273,7 +273,7 @@ class RequestHandler(object):
         parts = value.split("|")
         if len(parts) != 3: return None
         if not _time_independent_equals(parts[2],
-                    self._cookie_signature(parts[0], parts[1])):
+                    self._cookie_signature(name, parts[0], parts[1])):
             logging.warning("Invalid cookie signature %r", value)
             return None
         timestamp = int(parts[1])
