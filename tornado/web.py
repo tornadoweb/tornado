@@ -1073,7 +1073,7 @@ class StaticFileHandler(RequestHandler):
     """
     def __init__(self, application, request, path):
         RequestHandler.__init__(self, application, request)
-        self.root = os.path.abspath(path) + "/"
+        self.root = os.path.abspath(path) + os.path.sep
 
     def head(self, path):
         self.get(path, include_body=False)
