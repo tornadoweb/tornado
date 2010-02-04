@@ -347,25 +347,18 @@ class RequestHandler(object):
             head_part = module.html_head()
             if head_part: html_heads.append(_utf8(head_part))
         if js_files:
-            paths = {}
+            # Maintain order of JavaScript files given by modules
+            paths = []
+            unique_paths = set()
             for path in js_files:
                 if not path.startswith("/") and not path.startswith("http:"):
-                    paths[path] = self.static_url(path)
-                else:
-                    paths[path] = path
-
-            used_paths = set()
-            resolved_paths = []
-            for path in js_files:
-              resolved = paths[path]
-              if resolved in used_paths:
-                continue
-              used_paths.add(resolved)
-              resolved_paths.append(resolved)
-
+                    path = self.static_url(path)
+                if path not in unique_paths:
+                    paths.append(path)
+                    unique_paths.add(path)
             js = ''.join('<script src="' + escape.xhtml_escape(p) +
                          '" type="text/javascript"></script>'
-                         for p in resolved_paths)
+                         for p in paths)
             sloc = html.rindex('</body>')
             html = html[:sloc] + js + '\n' + html[sloc:]
         if js_embed:
