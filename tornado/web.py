@@ -1110,7 +1110,6 @@ class StaticFileHandler(RequestHandler):
         modified = datetime.datetime.fromtimestamp(stat_result[stat.ST_MTIME])
 
         self.set_header("Last-Modified", modified)
-        self.set_header("Content-Length", stat_result[stat.ST_SIZE])
         if "v" in self.request.arguments:
             self.set_header("Expires", datetime.datetime.utcnow() + \
                                        datetime.timedelta(days=365*10))
@@ -1133,6 +1132,7 @@ class StaticFileHandler(RequestHandler):
 
         if not include_body:
             return
+        self.set_header("Content-Length", stat_result[stat.ST_SIZE])
         file = open(abspath, "r")
         try:
             self.write(file.read())
