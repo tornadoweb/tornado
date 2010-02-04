@@ -266,14 +266,25 @@ class RequestHandler(object):
         value = "|".join([value, timestamp, signature])
         self.set_cookie(name, value, expires_days=expires_days, **kwargs)
 
-    def get_secure_cookie(self, name):
-        """Returns the given signed cookie if it validates, or None."""
+    def get_secure_cookie(self, name, include_name=True):
+        """Returns the given signed cookie if it validates, or None.
+
+        In older versions of Tornado (0.1 and 0.2), we did not include the
+        name of the cookie in the cookie signature. To read these old-style
+        cookies, pass include_name=False to this method. Otherwise, all
+        attempts to read old-style cookies will fail (and you may log all
+        your users out whose cookies were written with a previous Tornado
+        version).
+        """
         value = self.get_cookie(name)
         if not value: return None
         parts = value.split("|")
         if len(parts) != 3: return None
-        if not _time_independent_equals(parts[2],
-                    self._cookie_signature(name, parts[0], parts[1])):
+        if include_name:
+            signature = self._cookie_signature(name, parts[0], parts[1])
+        else:
+            signature = self._cookie_signature(parts[0], parts[1])
+        if not _time_independent_equals(parts[2], signature):
             logging.warning("Invalid cookie signature %r", value)
             return None
         timestamp = int(parts[1])
