@@ -339,6 +339,7 @@ class RequestHandler(object):
         css_embed = []
         css_files = []
         html_heads = []
+        html_bodies = []
         for module in getattr(self, "_active_modules", {}).itervalues():
             embed_part = module.embedded_javascript()
             if embed_part: js_embed.append(_utf8(embed_part))
@@ -358,6 +359,8 @@ class RequestHandler(object):
                     css_files.extend(file_part)
             head_part = module.html_head()
             if head_part: html_heads.append(_utf8(head_part))
+            body_part = module.html_body()
+            if body_part: html_bodies.append(_utf8(body_part))
         if js_files:
             # Maintain order of JavaScript files given by modules
             paths = []
@@ -398,7 +401,9 @@ class RequestHandler(object):
         if html_heads:
             hloc = html.index('</head>')
             html = html[:hloc] + ''.join(html_heads) + '\n' + html[hloc:]
-
+        if html_bodies:
+            hloc = html.index('</body>')
+            html = html[:hloc] + ''.join(html_bodies) + '\n' + html[hloc:]
         self.finish(html)
 
     def render_string(self, template_name, **kwargs):
@@ -1327,6 +1332,10 @@ class UIModule(object):
 
     def html_head(self):
         """Returns a CSS string that will be put in the <head/> element"""
+        return None
+
+    def html_body(self):
+        """Returns an HTML string that will be put in the <body/> element"""
         return None
 
     def render_string(self, path, **kwargs):
