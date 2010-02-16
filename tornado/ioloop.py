@@ -339,41 +339,47 @@ class _KQueue(object):
     """A kqueue-based event loop for BSD/Mac systems."""
     def __init__(self):
         self._kqueue = select.kqueue()
-        self._filters = {}
+        self._active = {}
 
     def register(self, fd, events):
-        filter = 0
-        if events & IOLoop.WRITE:
-            filter |= select.KQ_FILTER_WRITE
-        if events & IOLoop.READ or filter == 0:
-            filter |= select.KQ_FILTER_READ
-        self._filters[fd] = filter
-        kevent = select.kevent(fd, filter=filter)
-        self._kqueue.control([kevent], 0)
+        self._control(fd, events, select.KQ_EV_ADD)
+        self._active[fd] = events
 
     def modify(self, fd, events):
         self.unregister(fd)
         self.register(fd, events)
 
     def unregister(self, fd):
-        kevent = select.kevent(fd, filter=self._filters[fd],
-                               flags=select.KQ_EV_DELETE)
-        self._kqueue.control([kevent], 0)
+        events = self._active.pop(fd)
+        self._control(fd, events, select.KQ_EV_DELETE)
+
+    def _control(self, fd, events, flags):
+        kevents = []
+        if events & IOLoop.WRITE:
+            kevents.append(select.kevent(
+                    fd, filter=select.KQ_FILTER_WRITE, flags=flags))
+        if events & IOLoop.READ or not kevents:
+            # Always read when there is not a write
+            kevents.append(select.kevent(
+                    fd, filter=select.KQ_FILTER_READ, flags=flags))
+        # Even though control() takes a list, it seems to return EINVAL
+        # on Mac OS X (10.6) when there is more than one event in the list.
+        for kevent in kevents:
+            self._kqueue.control([kevent], 0)
 
     def poll(self, timeout):
         kevents = self._kqueue.control(None, 1000, timeout)
-        events = []
+        events = {}
         for kevent in kevents:
             fd = kevent.ident
             flags = 0
-            if kevent.filter & select.KQ_FILTER_READ:
-                flags |= IOLoop.READ
-            if kevent.filter & select.KQ_FILTER_WRITE:
-                flags |= IOLoop.WRITE
+            if kevent.filter == select.KQ_FILTER_READ:
+                events[fd] = events.get(fd, 0) | IOLoop.READ
+            if kevent.filter == select.KQ_FILTER_WRITE:
+                events[fd] = events.get(fd, 0) | IOLoop.WRITE
             if kevent.flags & select.KQ_EV_ERROR:
-                flags |= IOLoop.ERROR
-            events.append((fd, flags))
-        return events
+                events[fd] = events.get(fd, 0) | IOLoop.ERROR
+        return events.items()
 
 
 class _Select(object):
