@@ -27,6 +27,7 @@ import logging
 import os
 import os.path
 import sys
+import types
 
 
 def start(io_loop=None, check_time=500):
@@ -50,6 +51,11 @@ def _reload_on_update(io_loop, modify_times):
         # We already tried to reload and it didn't work, so don't try again.
         return
     for module in sys.modules.values():
+        # Some modules play games with sys.modules (e.g. email/__init__.py
+        # in the standard library), and occasionally this can cause strange
+        # failures in getattr.  Just ignore anything that's not an ordinary
+        # module.
+        if not isinstance(module, types.ModuleType): continue
         path = getattr(module, "__file__", None)
         if not path: continue
         if path.endswith(".pyc") or path.endswith(".pyo"):
