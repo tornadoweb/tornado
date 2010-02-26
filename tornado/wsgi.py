@@ -250,6 +250,7 @@ class WSGIContainer(object):
             "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,
             "SERVER_PORT": port,
+            "SERVER_PROTOCOL": request.version,
             "wsgi.version": (1, 0),
             "wsgi.url_scheme": request.protocol,
             "wsgi.input": cStringIO.StringIO(request.body),
