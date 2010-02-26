@@ -210,7 +210,7 @@ class WSGIContainer(object):
 
     def __call__(self, request):
         data = {}
-        def start_response(status, response_headers):
+        def start_response(status, response_headers, exc_info=None):
             data["status"] = status
             data["headers"] = HTTPHeaders(response_headers)
         body = "".join(self.wsgi_application(
