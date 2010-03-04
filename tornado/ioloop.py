@@ -261,7 +261,19 @@ class IOLoop(object):
         except (KeyboardInterrupt, SystemExit):
             raise
         except:
-            logging.error("Exception in callback %r", callback, exc_info=True)
+            self.handle_callback_exception(callback)
+
+    def handle_callback_exception(self, callback):
+        """This method is called whenever a callback run by the IOLoop
+        throws an exception.
+
+        By default simply logs the exception as an error.  Subclasses
+        may override this method to customize reporting of exceptions.
+
+        The exception itself is not passed explicitly, but is available
+        in sys.exc_info.
+        """
+        logging.error("Exception in callback %r", callback, exc_info=True)
 
     def _read_waker(self, fd, events):
         try:
