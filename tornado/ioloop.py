@@ -81,6 +81,8 @@ class IOLoop(object):
 
     def __init__(self, impl=None):
         self._impl = impl or _poll()
+        if hasattr(self._impl, 'fileno'):
+            self._set_close_exec(self._impl.fileno())
         self._handlers = {}
         self._events = {}
         self._callbacks = set()
@@ -93,6 +95,8 @@ class IOLoop(object):
         r, w = os.pipe()
         self._set_nonblocking(r)
         self._set_nonblocking(w)
+        self._set_close_exec(r)
+        self._set_close_exec(w)
         self._waker_reader = os.fdopen(r, "r", 0)
         self._waker_writer = os.fdopen(w, "w", 0)
         self.add_handler(r, self._read_waker, self.WRITE)
@@ -286,6 +290,10 @@ class IOLoop(object):
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
+    def _set_close_exec(self, fd):
+        flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+        fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
+
 
 class _Timeout(object):
     """An IOLoop timeout, a UNIX timestamp and a callback"""
@@ -336,6 +344,9 @@ class _EPoll(object):
     def __init__(self):
         self._epoll_fd = epoll.epoll_create()
 
+    def fileno(self):
+        return self._epoll_fd
+
     def register(self, fd, events):
         epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_ADD, fd, events)
 
@@ -354,6 +365,9 @@ class _KQueue(object):
     def __init__(self):
         self._kqueue = select.kqueue()
         self._active = {}
+
+    def fileno(self):
+        return self._kqueue.fileno()
 
     def register(self, fd, events):
         self._control(fd, events, select.KQ_EV_ADD)
