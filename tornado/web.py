@@ -463,7 +463,7 @@ class RequestHandler(object):
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
         assert not self._finished
-        if chunk: self.write(chunk)
+        if chunk is not None: self.write(chunk)
 
         # Automatically support ETags and add the Content-Length header if
         # we have not flushed any content yet.
