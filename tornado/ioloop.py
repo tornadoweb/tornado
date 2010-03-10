@@ -39,8 +39,10 @@ class Pipe(object):
         self.reader_fd = -1
         if os.name == 'posix':
             self.reader_fd, w = os.pipe()
-            self._set_posix_nonblocking(self.reader_fd)
-            self._set_posix_nonblocking(w)
+            IOLoop.set_nonblocking(self.reader_fd)
+            IOLoop.set_nonblocking(w)
+            IOLoop.set_close_exec(self.reader_fd)
+            IOLoop.set_close_exec(w)
             self.reader = os.fdopen(self.reader_fd, "r", 0)
             self.writer = os.fdopen(w, "w", 0)
         else:
@@ -93,10 +95,6 @@ class Pipe(object):
             self.writer.setblocking(0)
             a.close()
             self.reader_fd = self.reader.fileno()
-
-    def _set_posix_nonblocking(self, fd):
-        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
     def read(self):
         try:
@@ -167,7 +165,7 @@ class IOLoop(object):
     def __init__(self, impl=None):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
-            self._set_close_exec(self._impl.fileno())
+            self.set_close_exec(self._impl.fileno())
         self._handlers = {}
         self._events = {}
         self._callbacks = set()
@@ -366,11 +364,13 @@ class IOLoop(object):
         except IOError:
             pass
 
-    def _set_nonblocking(self, fd):
+    @staticmethod
+    def set_nonblocking(fd):
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-    def _set_close_exec(self, fd):
+    @staticmethod
+    def set_close_exec(fd):
         flags = fcntl.fcntl(fd, fcntl.F_GETFD)
         fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
