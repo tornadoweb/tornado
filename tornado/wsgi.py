@@ -210,11 +210,14 @@ class WSGIContainer(object):
 
     def __call__(self, request):
         data = {}
-        def start_response(status, response_headers):
+        def start_response(status, response_headers, exc_info=None):
             data["status"] = status
             data["headers"] = HTTPHeaders(response_headers)
-        body = "".join(self.wsgi_application(
-            WSGIContainer.environ(request), start_response))
+        response = self.wsgi_application(
+            WSGIContainer.environ(request), start_response)
+        body = "".join(response)
+        if hasattr(response, "close"):
+            response.close()
         if not data: raise Exception("WSGI app did not call start_response")
 
         status_code = int(data["status"].split()[0])
@@ -250,6 +253,7 @@ class WSGIContainer(object):
             "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,
             "SERVER_PORT": port,
+            "SERVER_PROTOCOL": request.version,
             "wsgi.version": (1, 0),
             "wsgi.url_scheme": request.protocol,
             "wsgi.input": cStringIO.StringIO(request.body),

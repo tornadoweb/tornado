@@ -27,6 +27,7 @@ import ioloop
 import logging
 import pycurl
 import time
+import weakref
 
 
 class HTTPClient(object):
@@ -100,14 +101,14 @@ class AsyncHTTPClient(object):
     determines the maximum number of simultaneous fetch() operations that
     can execute in parallel on each IOLoop.
     """
-    _ASYNC_CLIENTS = {}
+    _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
 
     def __new__(cls, io_loop=None, max_clients=10,
                 max_simultaneous_connections=None):
         # There is one client per IOLoop since they share curl instances
         io_loop = io_loop or ioloop.IOLoop.instance()
-        if id(io_loop) in cls._ASYNC_CLIENTS:
-            return cls._ASYNC_CLIENTS[id(io_loop)]
+        if io_loop in cls._ASYNC_CLIENTS:
+            return cls._ASYNC_CLIENTS[io_loop]
         else:
             instance = super(AsyncHTTPClient, cls).__new__(cls)
             instance.io_loop = io_loop
@@ -120,7 +121,7 @@ class AsyncHTTPClient(object):
             instance._events = {}
             instance._added_perform_callback = False
             instance._timeout = None
-            cls._ASYNC_CLIENTS[id(io_loop)] = instance
+            cls._ASYNC_CLIENTS[io_loop] = instance
             return instance
 
     def fetch(self, request, callback, **kwargs):
