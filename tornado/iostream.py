@@ -21,6 +21,7 @@ import ioloop
 import logging
 import socket
 
+_log = logging.getLogger('tornado.iostream')
 
 class IOStream(object):
     """A utility class to write to and read from a non-blocking socket.
@@ -138,7 +139,7 @@ class IOStream(object):
 
     def _handle_events(self, fd, events):
         if not self.socket:
-            logging.warning("Got events for closed stream %d", fd)
+            _log.warning("Got events for closed stream %d", fd)
             return
         if events & self.io_loop.READ:
             self._handle_read()
@@ -167,7 +168,7 @@ class IOStream(object):
             if e[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                 return
             else:
-                logging.warning("Read error on %d: %s",
+                _log.warning("Read error on %d: %s",
                                 self.socket.fileno(), e)
                 self.close()
                 return
@@ -176,7 +177,7 @@ class IOStream(object):
             return
         self._read_buffer += chunk
         if len(self._read_buffer) >= self.max_buffer_size:
-            logging.error("Reached maximum read buffer size")
+            _log.error("Reached maximum read buffer size")
             self.close()
             return
         if self._read_bytes:
@@ -204,7 +205,7 @@ class IOStream(object):
                 if e[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     break
                 else:
-                    logging.warning("Write error on %d: %s",
+                    _log.warning("Write error on %d: %s",
                                     self.socket.fileno(), e)
                     self.close()
                     return

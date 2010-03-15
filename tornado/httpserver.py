@@ -33,6 +33,7 @@ try:
 except ImportError:
     ssl = None
 
+_log = logging.getLogger('tornado.httpserver')
 
 class HTTPServer(object):
     """A non-blocking, single-threaded HTTP server.
@@ -164,16 +165,16 @@ class HTTPServer(object):
             try:
                 num_processes = os.sysconf("SC_NPROCESSORS_CONF")
             except ValueError:
-                logging.error("Could not get num processors from sysconf; "
+                _log.error("Could not get num processors from sysconf; "
                               "running with one process")
                 num_processes = 1
         if num_processes > 1 and ioloop.IOLoop.initialized():
-            logging.error("Cannot run in multiple processes: IOLoop instance "
+            _log.error("Cannot run in multiple processes: IOLoop instance "
                           "has already been initialized. You cannot call "
                           "IOLoop.instance() before calling start()")
             num_processes = 1
         if num_processes > 1:
-            logging.info("Pre-forking %d server processes", num_processes)
+            _log.info("Pre-forking %d server processes", num_processes)
             for i in range(num_processes):
                 if os.fork() == 0:
                     self.io_loop = ioloop.IOLoop.instance()
@@ -210,7 +211,7 @@ class HTTPServer(object):
                 HTTPConnection(stream, address, self.request_callback,
                                self.no_keep_alive, self.xheaders)
             except:
-                logging.error("Error in connection callback", exc_info=True)
+                _log.error("Error in connection callback", exc_info=True)
 
 
 class HTTPConnection(object):
@@ -313,13 +314,13 @@ class HTTPConnection(object):
             if not part: continue
             eoh = part.find("\r\n\r\n")
             if eoh == -1:
-                logging.warning("multipart/form-data missing headers")
+                _log.warning("multipart/form-data missing headers")
                 continue
             headers = HTTPHeaders.parse(part[:eoh])
             name_header = headers.get("Content-Disposition", "")
             if not name_header.startswith("form-data;") or \
                not part.endswith("\r\n"):
-                logging.warning("Invalid multipart/form-data")
+                _log.warning("Invalid multipart/form-data")
                 continue
             value = part[eoh + 4:-2]
             name_values = {}
@@ -327,7 +328,7 @@ class HTTPConnection(object):
                 name, name_value = name_part.strip().split("=", 1)
                 name_values[name] = name_value.strip('"').decode("utf-8")
             if not name_values.get("name"):
-                logging.warning("multipart/form-data value missing name")
+                _log.warning("multipart/form-data value missing name")
                 continue
             name = name_values["name"]
             if name_values.get("filename"):

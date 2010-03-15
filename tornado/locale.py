@@ -45,6 +45,7 @@ _default_locale = "en_US"
 _translations = {}
 _supported_locales = frozenset([_default_locale])
 
+_log = logging.getLogger('tornado.locale')
 
 def get(*locale_codes):
     """Returns the closest match for the given locale codes.
@@ -105,7 +106,7 @@ def load_translations(directory):
         if not path.endswith(".csv"): continue
         locale, extension = path.split(".")
         if locale not in LOCALE_NAMES:
-            logging.error("Unrecognized locale %r (path: %s)", locale,
+            _log.error("Unrecognized locale %r (path: %s)", locale,
                           os.path.join(directory, path))
             continue
         f = open(os.path.join(directory, path), "r")
@@ -119,13 +120,13 @@ def load_translations(directory):
             else:
                 plural = "unknown"
             if plural not in ("plural", "singular", "unknown"):
-                logging.error("Unrecognized plural indicator %r in %s line %d",
+                _log.error("Unrecognized plural indicator %r in %s line %d",
                               plural, path, i + 1)
                 continue
             _translations[locale].setdefault(plural, {})[english] = translation
         f.close()
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
-    logging.info("Supported locales: %s", sorted(_supported_locales))
+    _log.info("Supported locales: %s", sorted(_supported_locales))
 
 
 def get_supported_locales(cls):

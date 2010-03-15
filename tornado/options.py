@@ -49,6 +49,7 @@ for define() below.
 """
 
 import datetime
+import logging
 import logging.handlers
 import re
 import sys
