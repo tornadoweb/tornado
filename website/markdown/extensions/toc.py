@@ -135,6 +135,6 @@ class TocExtension(markdown.Extension):
         tocext = TocTreeprocessor(md)
         tocext.config = self.config
         md.treeprocessors.add("toc", tocext, "_begin")
-	
+        
 def makeExtension(configs={}):
     return TocExtension(configs=configs)
