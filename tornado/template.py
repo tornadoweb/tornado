@@ -460,6 +460,13 @@ def _parse(reader, in_block=None):
             if reader[curly + 1] not in ("{", "%"):
                 curly += 1
                 continue
+            # When there are more than 2 curlies in a row, use the
+            # innermost ones.  This is useful when generating languages
+            # like latex where curlies are also meaningful
+            if (curly + 2 < reader.remaining() and
+                reader[curly + 1] == '{' and reader[curly + 2] == '{'):
+                curly += 1
+                continue
             break
 
         # Append any text before the special token
