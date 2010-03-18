@@ -995,6 +995,7 @@ class Application(object):
         transforms = [t(request) for t in self.transforms]
         handler = None
         args = []
+        kwargs = {}
         handlers = self._get_host_handlers(request)
         if not handlers:
             handler = RedirectHandler(
@@ -1004,7 +1005,14 @@ class Application(object):
                 match = spec.regex.match(request.path)
                 if match:
                     handler = spec.handler_class(self, request, **spec.kwargs)
-                    args = match.groups()
+                    # Pass matched groups to the handler.  Since
+                    # match.groups() includes both named and unnamed groups,
+                    # we want to use either groups or groupdict but not both.
+                    kwargs = match.groupdict()
+                    if kwargs:
+                        args = []
+                    else:
+                        args = match.groups()
                     break
             if not handler:
                 handler = ErrorHandler(self, request, 404)
@@ -1015,7 +1023,7 @@ class Application(object):
             RequestHandler._templates = None
             RequestHandler._static_hashes = {}
 
-        handler._execute(transforms, *args)
+        handler._execute(transforms, *args, **kwargs)
         return handler
 
     def reverse_url(self, name, *args):
