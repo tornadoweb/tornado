@@ -421,7 +421,12 @@ def _curl_header_callback(headers, header_line):
     if len(parts) != 2:
         logging.warning("Invalid HTTP response header line %r", header_line)
         return
-    headers[parts[0].strip()] = parts[1].strip()
+    name = parts[0].strip()
+    value = parts[1].strip()
+    if name in headers:
+        headers[name] = headers[name] + ',' + value
+    else:
+        headers[name] = value
 
 
 def _curl_debug(debug_type, debug_msg):
