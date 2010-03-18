@@ -169,7 +169,10 @@ class Loader(object):
         self.root = os.path.abspath(root_directory)
         self.templates = {}
 
-    def load(self, name, parent_path=None):
+    def reset(self):
+      self.templates = {}
+
+    def resolve_path(self, name, parent_path=None):
         if parent_path and not parent_path.startswith("<") and \
            not parent_path.startswith("/") and \
            not name.startswith("/"):
@@ -178,6 +181,10 @@ class Loader(object):
             relative_path = os.path.abspath(os.path.join(file_dir, name))
             if relative_path.startswith(self.root):
                 name = relative_path[len(self.root) + 1:]
+        return name
+
+    def load(self, name, parent_path=None):
+        name = self.resolve_path(name, parent_path=parent_path)
         if name not in self.templates:
             path = os.path.join(self.root, name)
             f = open(path, "r")
