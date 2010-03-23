@@ -23,7 +23,7 @@ try:
 except ImportError:
     import sys
     if sys.platform.startswith("win"):
-        import fcntl_win32 as fcntl
+        import win32_support as fcntl
     else:
         raise
 import functools
