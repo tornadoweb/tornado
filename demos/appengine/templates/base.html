@@ -10,17 +10,17 @@
   <body>
     <div id="body">
       <div id="header">
-	<div style="float:right">
-	  {% if not current_user %}
-	    {{ _('<a href="%(url)s">Sign in</a> to compose/edit') % {"url": escape(users.create_login_url(request.uri))} }}
-	  {% else %}
-	    {% if current_user.administrator %}
-	      <a href="/compose">{{ _("New post") }}</a> -
-	    {% end %}
-	    <a href="{{ escape(users.create_logout_url(request.uri)) }}">{{ _("Sign out") }}</a>
-	  {% end %}
-	</div>
-	<h1><a href="/">{{ escape(handler.settings["blog_title"]) }}</a></h1>
+        <div style="float:right">
+          {% if not current_user %}
+            {{ _('<a href="%(url)s">Sign in</a> to compose/edit') % {"url": escape(users.create_login_url(request.uri))} }}
+          {% else %}
+            {% if current_user.administrator %}
+              <a href="/compose">{{ _("New post") }}</a> -
+            {% end %}
+            <a href="{{ escape(users.create_logout_url(request.uri)) }}">{{ _("Sign out") }}</a>
+          {% end %}
+        </div>
+        <h1><a href="/">{{ escape(handler.settings["blog_title"]) }}</a></h1>
       </div>
       <div id="content">{% block body %}{% end %}</div>
     </div>

@@ -2,3 +2,5 @@
 *.so
 *~
 build
+dist/
+tornado.egg-info

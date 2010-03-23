@@ -26,8 +26,8 @@
 static PyObject* _epoll_create(void) {
     int fd = epoll_create(MAX_EVENTS);
     if (fd == -1) {
-	PyErr_SetFromErrno(PyExc_Exception);
-	return NULL;
+        PyErr_SetFromErrno(PyExc_Exception);
+        return NULL;
     }
 
     return PyInt_FromLong(fd);
@@ -50,8 +50,8 @@ static PyObject* _epoll_ctl(PyObject* self, PyObject* args) {
     event.events = events;
     event.data.fd = fd;
     if (epoll_ctl(epfd, op, fd, &event) == -1) {
-	PyErr_SetFromErrno(PyExc_OSError);
-	return NULL;
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
     }
 
     Py_INCREF(Py_None);
@@ -77,16 +77,16 @@ static PyObject* _epoll_wait(PyObject* self, PyObject* args) {
     num_events = epoll_wait(epfd, events, MAX_EVENTS, timeout);
     Py_END_ALLOW_THREADS
     if (num_events == -1) {
-	PyErr_SetFromErrno(PyExc_Exception);
-	return NULL;
+        PyErr_SetFromErrno(PyExc_Exception);
+        return NULL;
     }
 
     list = PyList_New(num_events);
     for (i = 0; i < num_events; i++) {
-	tuple = PyTuple_New(2);
-	PyTuple_SET_ITEM(tuple, 0, PyInt_FromLong(events[i].data.fd));
-	PyTuple_SET_ITEM(tuple, 1, PyInt_FromLong(events[i].events));
-	PyList_SET_ITEM(list, i, tuple);
+        tuple = PyTuple_New(2);
+        PyTuple_SET_ITEM(tuple, 0, PyInt_FromLong(events[i].data.fd));
+        PyTuple_SET_ITEM(tuple, 1, PyInt_FromLong(events[i].events));
+        PyList_SET_ITEM(list, i, tuple);
     }
     return list;
 }

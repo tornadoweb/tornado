@@ -23,8 +23,8 @@
   <ul class="archive">
     {% for entry in entries %}
       <li>
-	<div class="title"><a href="/entry/{{ entry.slug }}">{{ escape(entry.title) }}</a></div>
-	<div class="date">{{ locale.format_date(entry.published, full_format=True, shorter=True) }}</div>
+        <div class="title"><a href="/entry/{{ entry.slug }}">{{ escape(entry.title) }}</a></div>
+        <div class="date">{{ locale.format_date(entry.published, full_format=True, shorter=True) }}</div>
       </li>
     {% end %}
   </ul>

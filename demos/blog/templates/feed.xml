@@ -19,7 +19,7 @@
       <updated>{{ entry.updated.strftime(date_format) }}</updated>
       <published>{{ entry.published.strftime(date_format) }}</published>
       <content type="xhtml" xml:base="http://{{ request.host }}/">
-	<div xmlns="http://www.w3.org/1999/xhtml">{{ entry.html }}</div>
+        <div xmlns="http://www.w3.org/1999/xhtml">{{ entry.html }}</div>
       </content>
     </entry>
   {% end %}
