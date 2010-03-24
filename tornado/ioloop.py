@@ -297,6 +297,10 @@ class IOLoop(object):
 
 class _Timeout(object):
     """An IOLoop timeout, a UNIX timestamp and a callback"""
+
+    # Reduce memory overhead when there are lots of pending callbacks
+    __slots__ = ['deadline', 'callback']
+
     def __init__(self, deadline, callback):
         self.deadline = deadline
         self.callback = callback
