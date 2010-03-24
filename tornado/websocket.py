@@ -19,6 +19,8 @@ import logging
 import tornado.escape
 import tornado.web
 
+_log = logging.getLogger('tornado.websocket')
+
 class WebSocketHandler(tornado.web.RequestHandler):
     """A request handler for HTML 5 Web Sockets.
 
@@ -114,7 +116,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             try:
                 return callback(*args, **kwargs)
             except Exception, e:
-                logging.error("Uncaught exception in %s",
+                _log.error("Uncaught exception in %s",
                               self.request.path, exc_info=True)
                 self.stream.close()
         return wrapper

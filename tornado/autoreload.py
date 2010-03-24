@@ -29,6 +29,7 @@ import os.path
 import sys
 import types
 
+_log = logging.getLogger('tornado.autoreload')
 
 def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
@@ -68,7 +69,7 @@ def _reload_on_update(io_loop, modify_times):
             modify_times[path] = modified
             continue
         if modify_times[path] != modified:
-            logging.info("%s modified; restarting server", path)
+            _log.info("%s modified; restarting server", path)
             _reload_attempted = True
             for fd in io_loop._handlers.keys():
                 try:
