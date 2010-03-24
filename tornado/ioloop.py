@@ -110,8 +110,8 @@ class IOLoop(object):
             self._waker_reader = os.fdopen(r, "r", 0)
             self._waker_writer = os.fdopen(w, "w", 0)
         else:
-            pipe = win32_support.Pipe()
-            r = pipe.reader_fd
+            self._waker_reader = self._waker_writer = win32_support.Pipe()
+            r = self._waker_writer.reader_fd
         self.add_handler(r, self._read_waker, self.READ)
 
     @classmethod

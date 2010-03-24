@@ -2,6 +2,7 @@ import ctypes
 import ctypes.wintypes
 import os
 import socket
+import errno
 
 
 # See: http://msdn.microsoft.com/en-us/library/ms738573(VS.85).aspx
@@ -94,7 +95,7 @@ class Pipe(object):
                 if count >= 10:  # I've never seen it go above 2
                     a.close()
                     self.writer.close()
-                    raise BindError("Cannot bind trigger!")
+                    raise socket.error("Cannot bind trigger!")
                 # Close `a` and try again.  Note:  I originally put a short
                 # sleep() here, but it didn't appear to help or hurt.
                 a.close()
