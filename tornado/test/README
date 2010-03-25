@@ -1,0 +1,4 @@
+Test coverage is almost non-existent, but it's a start.  Be sure to
+set PYTHONPATH apprioriately (generally to the root directory of your
+tornado checkout) when running tests to make sure you're getting the
+version of the tornado package that you expect.
