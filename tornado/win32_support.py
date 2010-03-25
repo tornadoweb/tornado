@@ -1,3 +1,6 @@
+# NOTE: win32 support is currently experimental, and not recommended
+# for production use.
+
 import ctypes
 import ctypes.wintypes
 import os
