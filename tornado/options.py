@@ -311,7 +311,8 @@ def enable_pretty_logging():
         if curses and sys.stderr.isatty():
             try:
                 curses.setupterm()
-                color = True
+                if curses.tigetnum("colors") > 0:
+                    color = True
             except:
                 pass
         channel = logging.StreamHandler()
