@@ -1,11 +1,9 @@
-# So we can run this file standalone from the test directory
-import sys
-sys.path.insert(0, '..')
+#!/usr/bin/env python
 
 import unittest
 import time
 
-import ioloop
+from tornado import ioloop
 
 
 class TestIOLoop(unittest.TestCase):

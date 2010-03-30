@@ -19,18 +19,18 @@
 import bisect
 import errno
 import os
-try:
-    import fcntl
-except ImportError:
-    if os.name != 'posix':
-        import win32_support
-        import win32_support as fcntl
-    else:
-        raise
 import logging
 import select
 import time
 
+try:
+    import fcntl
+except ImportError:
+    if os.name == 'nt':
+        import win32_support
+        import win32_support as fcntl
+    else:
+        raise
 
 _log = logging.getLogger("tornado.ioloop")
 
@@ -101,7 +101,7 @@ class IOLoop(object):
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
-        if os.name == 'posix':
+        if os.name != 'nt':
             r, w = os.pipe()
             self._set_nonblocking(r)
             self._set_nonblocking(w)
