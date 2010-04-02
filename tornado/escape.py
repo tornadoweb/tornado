@@ -44,7 +44,7 @@ except:
 
 def xhtml_escape(value):
     """Escapes a string so it is valid within XML or XHTML."""
-    return utf8(xml.sax.saxutils.escape(value))
+    return utf8(xml.sax.saxutils.escape(value, {'"': "&quot;"}))
 
 
 def xhtml_unescape(value):
