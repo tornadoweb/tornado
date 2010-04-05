@@ -961,6 +961,10 @@ class Application(object):
                 spec = URLSpec(pattern, handler, kwargs)
             handlers.append(spec)
             if spec.name:
+                if spec.name in self.named_handlers:
+                    _log.warning(
+                        "Multiple handlers named %s; replacing previous value",
+                        spec.name)
                 self.named_handlers[spec.name] = spec
 
     def add_transform(self, transform_class):
