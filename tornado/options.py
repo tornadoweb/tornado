@@ -175,7 +175,7 @@ class _Options(dict):
     def __getattr__(self, name):
         if isinstance(self.get(name), _Option):
             return self[name].value()
-        raise Error("Unrecognized option %r" % name)
+        raise AttributeError("Unrecognized option %r" % name)
 
 
 class _Option(object):
