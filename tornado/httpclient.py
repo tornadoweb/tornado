@@ -438,7 +438,7 @@ def _curl_header_callback(headers, header_line):
         return
     if header_line == "\r\n":
         return
-    parts = header_line.split(": ")
+    parts = header_line.split(":")
     if len(parts) != 2:
         _log.warning("Invalid HTTP response header line %r", header_line)
         return
