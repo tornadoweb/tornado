@@ -70,8 +70,6 @@ import urllib
 import urlparse
 import uuid
 
-_log = logging.getLogger('tornado.web')
-
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
 
@@ -286,11 +284,11 @@ class RequestHandler(object):
         else:
             signature = self._cookie_signature(parts[0], parts[1])
         if not _time_independent_equals(parts[2], signature):
-            _log.warning("Invalid cookie signature %r", value)
+            logging.warning("Invalid cookie signature %r", value)
             return None
         timestamp = int(parts[1])
         if timestamp < time.time() - 31 * 86400:
-            _log.warning("Expired cookie %r", value)
+            logging.warning("Expired cookie %r", value)
             return None
         try:
             return base64.b64decode(parts[0])
@@ -505,7 +503,7 @@ class RequestHandler(object):
         for your application.
         """
         if self._headers_written:
-            _log.error("Cannot send error response after headers written")
+            logging.error("Cannot send error response after headers written")
             if not self._finished:
                 self.finish()
             return
@@ -679,7 +677,7 @@ class RequestHandler(object):
                 hashes[path] = hashlib.md5(f.read()).hexdigest()
                 f.close()
             except:
-                _log.error("Could not open static file %r", path)
+                logging.error("Could not open static file %r", path)
                 hashes[path] = None
         base = self.request.protocol + "://" + self.request.host \
             if getattr(self, "include_host", False) else ""
@@ -703,7 +701,7 @@ class RequestHandler(object):
                 return callback(*args, **kwargs)
             except Exception, e:
                 if self._headers_written:
-                    _log.error("Exception after headers written",
+                    logging.error("Exception after headers written",
                                   exc_info=True)
                 else:
                     self._handle_request_exception(e)
@@ -748,11 +746,11 @@ class RequestHandler(object):
 
     def _log(self):
         if self._status_code < 400:
-            log_method = _log.info
+            log_method = logging.info
         elif self._status_code < 500:
-            log_method = _log.warning
+            log_method = logging.warning
         else:
-            log_method = _log.error
+            log_method = logging.error
         request_time = 1000.0 * self.request.request_time()
         log_method("%d %s %.2fms", self._status_code,
                    self._request_summary(), request_time)
@@ -766,14 +764,14 @@ class RequestHandler(object):
             if e.log_message:
                 format = "%d %s: " + e.log_message
                 args = [e.status_code, self._request_summary()] + list(e.args)
-                _log.warning(format, *args)
+                logging.warning(format, *args)
             if e.status_code not in httplib.responses:
-                _log.error("Bad HTTP status code: %d", e.status_code)
+                logging.error("Bad HTTP status code: %d", e.status_code)
                 self.send_error(500, exception=e)
             else:
                 self.send_error(e.status_code, exception=e)
         else:
-            _log.error("Uncaught exception %s\n%r", self._request_summary(),
+            logging.error("Uncaught exception %s\n%r", self._request_summary(),
                           self.request, exc_info=e)
             self.send_error(500, exception=e)
 
@@ -962,7 +960,7 @@ class Application(object):
             handlers.append(spec)
             if spec.name:
                 if spec.name in self.named_handlers:
-                    _log.warning(
+                    logging.warning(
                         "Multiple handlers named %s; replacing previous value",
                         spec.name)
                 self.named_handlers[spec.name] = spec

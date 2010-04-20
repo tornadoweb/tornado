@@ -24,8 +24,6 @@ import MySQLdb.cursors
 import itertools
 import logging
 
-_log = logging.getLogger('tornado.database')
-
 class Connection(object):
     """A lightweight wrapper around MySQLdb DB-API connections.
 
@@ -72,7 +70,7 @@ class Connection(object):
         try:
             self.reconnect()
         except:
-            _log.error("Cannot connect to MySQL on %s", self.host,
+            logging.error("Cannot connect to MySQL on %s", self.host,
                           exc_info=True)
 
     def __del__(self):
@@ -151,7 +149,7 @@ class Connection(object):
         try:
             return cursor.execute(query, parameters)
         except OperationalError:
-            _log.error("Error connecting to MySQL on %s", self.host)
+            logging.error("Error connecting to MySQL on %s", self.host)
             self.close()
             raise
 
