@@ -21,6 +21,7 @@ import collections
 import cStringIO
 import email.utils
 import errno
+import escape
 import functools
 import httplib
 import ioloop
@@ -406,7 +407,7 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     # Handle curl's cryptic options for every individual HTTP method
     if request.method in ("POST", "PUT"):
-        request_buffer =  cStringIO.StringIO(request.body.encode('utf-8'))
+        request_buffer =  cStringIO.StringIO(escape.utf8(request.body))
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
         if request.method == "POST":
             def ioctl(cmd):
