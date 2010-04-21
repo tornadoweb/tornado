@@ -261,7 +261,7 @@ class WSGIContainer(object):
             "SERVER_PROTOCOL": request.version,
             "wsgi.version": (1, 0),
             "wsgi.url_scheme": request.protocol,
-            "wsgi.input": cStringIO.StringIO(request.body),
+            "wsgi.input": cStringIO.StringIO(request.body.encode('utf-8')),
             "wsgi.errors": sys.stderr,
             "wsgi.multithread": False,
             "wsgi.multiprocess": True,

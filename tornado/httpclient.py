@@ -406,7 +406,7 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     # Handle curl's cryptic options for every individual HTTP method
     if request.method in ("POST", "PUT"):
-        request_buffer =  cStringIO.StringIO(request.body)
+        request_buffer =  cStringIO.StringIO(request.body.encode('utf-8'))
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
         if request.method == "POST":
             def ioctl(cmd):
