@@ -29,6 +29,11 @@ import os.path
 import sys
 import types
 
+try:
+    import signal
+except ImportError:
+    signal = None
+
 def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
 
@@ -74,6 +79,11 @@ def _reload_on_update(io_loop, modify_times):
                     os.close(fd)
                 except:
                     pass
+            if hasattr(signal, "setitimer"):
+                # Clear the alarm signal set by
+                # ioloop.set_blocking_log_threshold so it doesn't fire
+                # after the exec.
+                signal.setitimer(signal.ITIMER_REAL, 0, 0)
             try:
                 os.execv(sys.executable, [sys.executable] + sys.argv)
             except OSError, e:
