@@ -1329,7 +1329,7 @@ class UIModule(object):
         return None
 
     def css_files(self):
-        """Returns a list of JavaScript files required by this module."""
+        """Returns a list of CSS files required by this module."""
         return None
 
     def html_head(self):
