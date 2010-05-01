@@ -813,7 +813,7 @@ class FacebookMixin(object):
             "profile_url": users[0]["profile_url"],
             "username": users[0].get("username"),
             "session_key": session["session_key"],
-            "session_expires": session["expires"],
+            "session_expires": session.get("expires"),
         })
 
     def _parse_response(self, callback, response):
