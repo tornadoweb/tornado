@@ -127,6 +127,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def _on_end_delimiter(self, callback, frame):
         callback(frame[:-1].decode("utf-8", "replace"))
+        self.receive_message(callback)
 
     def _not_supported(self, *args, **kwargs):
         raise Exception("Method not supported for Web Sockets")
