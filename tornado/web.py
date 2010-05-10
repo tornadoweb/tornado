@@ -215,8 +215,14 @@ class RequestHandler(object):
         return default
 
     def set_cookie(self, name, value, domain=None, expires=None, path="/",
-                   expires_days=None):
-        """Sets the given cookie name/value with the given options."""
+                   expires_days=None, **kwargs):
+        """Sets the given cookie name/value with the given options.
+
+        Additional keyword arguments are set on the Cookie.Morsel
+        directly.
+        See http://docs.python.org/library/cookie.html#morsel-objects
+        for available attributes.
+        """
         name = _utf8(name)
         value = _utf8(value)
         if re.search(r"[\x00-\x20]", name + value):
@@ -238,6 +244,8 @@ class RequestHandler(object):
                 timestamp, localtime=False, usegmt=True)
         if path:
             new_cookie[name]["path"] = path
+        for k, v in kwargs.iteritems():
+            new_cookie[name][k] = v
 
     def clear_cookie(self, name, path="/", domain=None):
         """Deletes the cookie with the given name."""
