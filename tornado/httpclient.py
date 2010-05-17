@@ -358,15 +358,11 @@ def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.URL, request.url)
     curl.setopt(pycurl.HTTPHEADER,
                 ["%s: %s" % i for i in request.headers.iteritems()])
-    try:
-        if request.header_callback:
-            curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
-        else:
-            curl.setopt(pycurl.HEADERFUNCTION,
-                        functools.partial(_curl_header_callback, headers))
-    except:
-        # Old version of curl; response will not include headers
-        pass
+    if request.header_callback:
+        curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
+    else:
+        curl.setopt(pycurl.HEADERFUNCTION,
+                    lambda line: _curl_header_callback(headers, line))
     if request.streaming_callback:
         curl.setopt(pycurl.WRITEFUNCTION, request.streaming_callback)
     else:
