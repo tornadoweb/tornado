@@ -419,7 +419,7 @@ class RequestHandler(object):
         as a response, use render() above.
         """
         # If no template_path is specified, use the path of the calling file
-        template_path = self.application.settings.get("template_path")
+        template_path = self.get_template_path()
         if not template_path:
             frame = sys._getframe(0)
             web_file = frame.f_code.co_filename
@@ -605,6 +605,14 @@ class RequestHandler(object):
         """
         self.require_setting("login_url", "@tornado.web.authenticated")
         return self.application.settings["login_url"]
+
+    def get_template_path(self):
+        """Override to customize template path for each handler.
+
+        By default, we use the 'template_path' application setting.
+        Return None to load templates relative to the calling file.
+        """
+        return self.application.settings.get("template_path")
 
     @property
     def xsrf_token(self):
