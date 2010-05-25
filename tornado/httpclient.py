@@ -226,7 +226,7 @@ class AsyncHTTPClient(object):
         for fd in exceptable:
             fds[fd] = fds.get(fd, 0) | 0x8 | 0x10
 
-        if max(fds.iterkeys()) > 900:
+        if fds and max(fds.iterkeys()) > 900:
             # Libcurl has a bug in which it behaves unpredictably with
             # file descriptors greater than 1024.  (This is because
             # even though it uses poll() instead of select(), it still
