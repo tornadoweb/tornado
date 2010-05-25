@@ -1164,6 +1164,8 @@ class StaticFileHandler(RequestHandler):
         if mime_type:
             self.set_header("Content-Type", mime_type)
 
+        self.set_extra_headers(path)
+
         # Check the If-Modified-Since, and don't send the result if the
         # content has not been modified
         ims_value = self.request.headers.get("If-Modified-Since")
@@ -1182,6 +1184,10 @@ class StaticFileHandler(RequestHandler):
             self.write(file.read())
         finally:
             file.close()
+
+    def set_extra_headers(self, path):
+      """For subclass to add extra headers to the response"""
+      pass
 
 
 class FallbackHandler(RequestHandler):
