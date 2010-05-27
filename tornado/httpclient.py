@@ -67,13 +67,13 @@ class HTTPClient(object):
             if code < 200 or code >= 300:
                 raise HTTPError(code)
             effective_url = self._curl.getinfo(pycurl.EFFECTIVE_URL)
+            buffer.seek(0)
             return HTTPResponse(
                 request=request, code=code, headers=headers,
-                body=buffer.getvalue(), effective_url=effective_url)
+                buffer=buffer, effective_url=effective_url)
         except pycurl.error, e:
-            raise CurlError(*e)
-        finally:
             buffer.close()
+            raise CurlError(*e)
 
 
 class AsyncHTTPClient(object):
@@ -273,20 +273,22 @@ class AsyncHTTPClient(object):
         curl.info = None
         self._multi.remove_handle(curl)
         self._free_list.append(curl)
+        buffer = info["buffer"]
         if curl_error:
             error = CurlError(curl_error, curl_message)
             code = error.code
             body = None
             effective_url = None
+            buffer.close()
+            buffer = None
         else:
             error = None
             code = curl.getinfo(pycurl.HTTP_CODE)
-            body = info["buffer"].getvalue()
             effective_url = curl.getinfo(pycurl.EFFECTIVE_URL)
-        info["buffer"].close()
+            buffer.seek(0)
         info["callback"](HTTPResponse(
             request=info["request"], code=code, headers=info["headers"],
-            body=body, effective_url=effective_url, error=error,
+            buffer=buffer, effective_url=effective_url, error=error,
             request_time=time.time() - info["start_time"]))
 
 
@@ -323,12 +325,13 @@ class HTTPRequest(object):
 
 
 class HTTPResponse(object):
-    def __init__(self, request, code, headers={}, body="", effective_url=None,
+    def __init__(self, request, code, headers={}, buffer=None, effective_url=None,
                  error=None, request_time=None):
         self.request = request
         self.code = code
         self.headers = headers
-        self.body = body
+        self.buffer = buffer
+        self._body = None
         if effective_url is None:
             self.effective_url = request.url
         else:
@@ -342,6 +345,16 @@ class HTTPResponse(object):
             self.error = error
         self.request_time = request_time
 
+    def _get_body(self):
+        if self.buffer is None:
+            return None
+        elif self._body is None:
+            self._body = self.buffer.getvalue()
+
+        return self._body
+
+    body = property(_get_body)
+
     def rethrow(self):
         if self.error:
             raise self.error
@@ -349,6 +362,10 @@ class HTTPResponse(object):
     def __repr__(self):
         args = ",".join("%s=%r" % i for i in self.__dict__.iteritems())
         return "%s(%s)" % (self.__class__.__name__, args)
+
+    def __del__(self):
+        if self.buffer is not None:
+            self.buffer.close()
 
 
 class HTTPError(Exception):
