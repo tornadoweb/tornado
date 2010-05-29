@@ -34,7 +34,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
               self.receive_message(self.on_message)
 
           def on_message(self, message):
-             self.write_message(u"You said: " + message)
+              self.write_message(u"You said: " + message)
+              # receive_message only reads a single message, so call it
+              # again to listen for the next one
+              self.receive_message(self.on_message)
 
     Web Sockets are not standard HTTP connections. The "handshake" is HTTP,
     but after the handshake, the protocol is message-based. Consequently,
