@@ -305,11 +305,21 @@ class HTTPConnection(object):
                         self._request.arguments.setdefault(name, []).extend(
                             values)
             elif content_type.startswith("multipart/form-data"):
-                boundary = content_type[30:]
-                if boundary: self._parse_mime_body(boundary, data)
+                if 'boundary=' in content_type:
+                    boundary = content_type.split('boundary=',1)[1]
+                    if boundary: self._parse_mime_body(boundary, data)
+                else:
+                    logging.warning("Invalid multipart/form-data")
         self.request_callback(self._request)
 
     def _parse_mime_body(self, boundary, data):
+        # The standard allows for the boundary to be quoted in the header,
+        # although it's rare (it happens at least for google app engine
+        # xmpp).  I think we're also supposed to handle backslash-escapes
+        # here but I'll save that until we see a client that uses them
+        # in the wild.
+        if boundary.startswith('"') and boundary.endswith('"'):
+            boundary = boundary[1:-1]
         if data.endswith("\r\n"):
             footer_length = len(boundary) + 6
         else:
