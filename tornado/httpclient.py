@@ -299,7 +299,8 @@ class HTTPRequest(object):
                  if_modified_since=None, follow_redirects=True,
                  max_redirects=5, user_agent=None, use_gzip=True,
                  network_interface=None, streaming_callback=None,
-                 header_callback=None, prepare_curl_callback=None):
+                 header_callback=None, prepare_curl_callback=None,
+                 allow_nonstandard_methods=False):
         if if_modified_since:
             timestamp = calendar.timegm(if_modified_since.utctimetuple())
             headers["If-Modified-Since"] = email.utils.formatdate(
@@ -322,6 +323,7 @@ class HTTPRequest(object):
         self.streaming_callback = streaming_callback
         self.header_callback = header_callback
         self.prepare_curl_callback = prepare_curl_callback
+        self.allow_nonstandard_methods = allow_nonstandard_methods
 
 
 class HTTPResponse(object):
@@ -432,7 +434,7 @@ def _curl_setup_request(curl, request, buffer, headers):
     if request.method in curl_options:
         curl.unsetopt(pycurl.CUSTOMREQUEST)
         curl.setopt(curl_options[request.method], True)
-    elif request.method in custom_methods:
+    elif request.allow_nonstandard_methods or request.method in custom_methods:
         curl.setopt(pycurl.CUSTOMREQUEST, request.method)
     else:
         raise KeyError('unknown method ' + request.method)
