@@ -512,6 +512,13 @@ class RequestHandler(object):
                 content_length = sum(len(part) for part in self._write_buffer)
                 self.set_header("Content-Length", content_length)
 
+        if hasattr(self.request, "connection"):
+            # Now that the request is finished, clear the callback we
+            # set on the IOStream (which would otherwise prevent the
+            # garbage collection of the RequestHandler when there
+            # are keepalive connections)
+            self.request.connection.stream.set_close_callback(None)
+
         if not self.application._wsgi:
             self.flush(include_footers=True)
             self.request.finish()
