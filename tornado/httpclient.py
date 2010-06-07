@@ -27,6 +27,7 @@ import httplib
 import ioloop
 import logging
 import pycurl
+import sys
 import time
 import weakref
 
