@@ -287,10 +287,16 @@ class AsyncHTTPClient(object):
             code = curl.getinfo(pycurl.HTTP_CODE)
             effective_url = curl.getinfo(pycurl.EFFECTIVE_URL)
             buffer.seek(0)
-        info["callback"](HTTPResponse(
-            request=info["request"], code=code, headers=info["headers"],
-            buffer=buffer, effective_url=effective_url, error=error,
-            request_time=time.time() - info["start_time"]))
+        try:
+            info["callback"](HTTPResponse(
+                request=info["request"], code=code, headers=info["headers"],
+                buffer=buffer, effective_url=effective_url, error=error,
+                request_time=time.time() - info["start_time"]))
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except:
+            logging.error("Exception in callback %r", info["callback"],
+                          exc_info=True)
 
 
 class HTTPRequest(object):
