@@ -244,6 +244,7 @@ class AsyncHTTPClient(object):
             # leak or need to run more tornado processes (so that none
             # of them are handling more than 1000 simultaneous connections)
             print >> sys.stderr, "ERROR: File descriptor too high for libcurl. Exiting."
+            logging.error("File descriptor too high for libcurl. Exiting.")
             sys.exit(1)
 
         for fd in self._fds:
