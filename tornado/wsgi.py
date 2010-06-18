@@ -219,11 +219,12 @@ class WSGIContainer(object):
             data["status"] = status
             data["headers"] = response_headers
             return response.append
-        response.extend(self.wsgi_application(
-                WSGIContainer.environ(request), start_response))
+        app_response = self.wsgi_application(
+            WSGIContainer.environ(request), start_response)
+        response.extend(app_response)
         body = "".join(response)
-        if hasattr(response, "close"):
-            response.close()
+        if hasattr(app_response, "close"):
+            app_response.close()
         if not data: raise Exception("WSGI app did not call start_response")
 
         status_code = int(data["status"].split()[0])
