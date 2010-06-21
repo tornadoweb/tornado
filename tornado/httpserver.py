@@ -160,7 +160,7 @@ class HTTPServer(object):
         If num_processes is 1 or we detect only 1 CPU core, we run the server
         in this process and do not fork any additional child process.
 
-        Since we run use processes and not threads, there is no shared memory
+        Since we use processes and not threads, there is no shared memory
         between any server code.
         """
         assert not self._started
