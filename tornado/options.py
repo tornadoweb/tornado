@@ -135,7 +135,7 @@ def parse_command_line(args=None):
     return remaining
 
 
-def parse_config_file(path, overwrite=True):
+def parse_config_file(path):
     """Parses and loads the Python config file at the given path."""
     config = {}
     execfile(path, config, config)
