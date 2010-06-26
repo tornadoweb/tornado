@@ -177,6 +177,63 @@ class AsyncHTTPClient(object):
                 if ret != pycurl.E_CALL_MULTI_PERFORM:
                     break
 
+            # Update the set of active file descriptors.  It is important
+            # that this happen immediately after perform() because
+            # fds that have been removed from fdset are free to be reused
+            # in user callbacks.
+            fds = {}
+            (readable, writable, exceptable) = self._multi.fdset()
+            for fd in readable:
+                fds[fd] = fds.get(fd, 0) | 0x1 | 0x2
+            for fd in writable:
+                fds[fd] = fds.get(fd, 0) | 0x4
+            for fd in exceptable:
+                fds[fd] = fds.get(fd, 0) | 0x8 | 0x10
+
+            if fds and max(fds.iterkeys()) > 900:
+                # Libcurl has a bug in which it behaves unpredictably with
+                # file descriptors greater than 1024.  (This is because
+                # even though it uses poll() instead of select(), it still
+                # uses FD_SET internally) Since curl opens its own file
+                # descriptors we can't catch this problem when it happens,
+                # and the best we can do is detect that it's about to
+                # happen.  Exiting is a lousy way to handle this error,
+                # but there's not much we can do at this point.  Exiting
+                # (and getting restarted by whatever monitoring process
+                # is handling crashed tornado processes) will at least
+                # get things working again and hopefully bring the issue
+                # to someone's attention.
+                # If you run into this issue, you either have a file descriptor
+                # leak or need to run more tornado processes (so that none
+                # of them are handling more than 1000 simultaneous connections)
+                print >> sys.stderr, "ERROR: File descriptor too high for libcurl. Exiting."
+                logging.error("File descriptor too high for libcurl. Exiting.")
+                sys.exit(1)
+
+            for fd in self._fds:
+                if fd not in fds:
+                    try:
+                        self.io_loop.remove_handler(fd)
+                    except (OSError, IOError), e:
+                        if e[0] != errno.ENOENT:
+                            raise
+
+            for fd, events in fds.iteritems():
+                old_events = self._fds.get(fd, None)
+                if old_events is None:
+                    self.io_loop.add_handler(fd, self._handle_events, events)
+                elif old_events != events:
+                    try:
+                        self.io_loop.update_handler(fd, events)
+                    except (OSError, IOError), e:
+                        if e[0] == errno.ENOENT:
+                            self.io_loop.add_handler(fd, self._handle_events,
+                                                     events)
+                        else:
+                            raise
+            self._fds = fds
+
+
             # Handle completed fetches
             completed = 0
             while True:
@@ -218,58 +275,6 @@ class AsyncHTTPClient(object):
             self._timeout = self.io_loop.add_timeout(
                 time.time() + 0.2, self._handle_timeout)
 
-        # Wait for more I/O
-        fds = {}
-        (readable, writable, exceptable) = self._multi.fdset()
-        for fd in readable:
-            fds[fd] = fds.get(fd, 0) | 0x1 | 0x2
-        for fd in writable:
-            fds[fd] = fds.get(fd, 0) | 0x4
-        for fd in exceptable:
-            fds[fd] = fds.get(fd, 0) | 0x8 | 0x10
-
-        if fds and max(fds.iterkeys()) > 900:
-            # Libcurl has a bug in which it behaves unpredictably with
-            # file descriptors greater than 1024.  (This is because
-            # even though it uses poll() instead of select(), it still
-            # uses FD_SET internally) Since curl opens its own file
-            # descriptors we can't catch this problem when it happens,
-            # and the best we can do is detect that it's about to
-            # happen.  Exiting is a lousy way to handle this error,
-            # but there's not much we can do at this point.  Exiting
-            # (and getting restarted by whatever monitoring process
-            # is handling crashed tornado processes) will at least
-            # get things working again and hopefully bring the issue
-            # to someone's attention.
-            # If you run into this issue, you either have a file descriptor
-            # leak or need to run more tornado processes (so that none
-            # of them are handling more than 1000 simultaneous connections)
-            print >> sys.stderr, "ERROR: File descriptor too high for libcurl. Exiting."
-            logging.error("File descriptor too high for libcurl. Exiting.")
-            sys.exit(1)
-
-        for fd in self._fds:
-            if fd not in fds:
-                try:
-                    self.io_loop.remove_handler(fd)
-                except (OSError, IOError), e:
-                    if e[0] != errno.ENOENT:
-                        raise
-
-        for fd, events in fds.iteritems():
-            old_events = self._fds.get(fd, None)
-            if old_events is None:
-                self.io_loop.add_handler(fd, self._handle_events, events)
-            elif old_events != events:
-                try:
-                    self.io_loop.update_handler(fd, events)
-                except (OSError, IOError), e:
-                    if e[0] == errno.ENOENT:
-                        self.io_loop.add_handler(fd, self._handle_events,
-                                                 events)
-                    else:
-                        raise
-        self._fds = fds
 
     def _finish(self, curl, curl_error=None, curl_message=None):
         info = curl.info
