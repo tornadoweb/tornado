@@ -65,13 +65,14 @@ class HTTPClient(object):
             _curl_setup_request(self._curl, request, buffer, headers)
             self._curl.perform()
             code = self._curl.getinfo(pycurl.HTTP_CODE)
-            if code < 200 or code >= 300:
-                raise HTTPError(code)
             effective_url = self._curl.getinfo(pycurl.EFFECTIVE_URL)
             buffer.seek(0)
-            return HTTPResponse(
+            response = HTTPResponse(
                 request=request, code=code, headers=headers,
                 buffer=buffer, effective_url=effective_url)
+            if code < 200 or code >= 300:
+                raise HTTPError(code, response=response)
+            return response
         except pycurl.error, e:
             buffer.close()
             raise CurlError(*e)
@@ -546,7 +547,7 @@ class HTTPResponse(object):
             self.effective_url = effective_url
         if error is None:
             if self.code < 200 or self.code >= 300:
-                self.error = HTTPError(self.code)
+                self.error = HTTPError(self.code, response=self)
             else:
                 self.error = None
         else:
@@ -577,9 +578,21 @@ class HTTPResponse(object):
 
 
 class HTTPError(Exception):
-    def __init__(self, code, message=None):
+    """Exception thrown for an unsuccessful HTTP request.
+
+    Attributes:
+    code - HTTP error integer error code, e.g. 404.  Error code 599 is
+           used when no HTTP response was received, e.g. for a timeout.
+    response - HTTPResponse object, if any.
+
+    Note that if follow_redirects is False, redirects become HTTPErrors,
+    and you can look at error.response.headers['Location'] to see the
+    destination of the redirect.
+    """
+    def __init__(self, code, message=None, response=None):
         self.code = code
         message = message or httplib.responses.get(code, "Unknown")
+        self.response = response
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
 
 
