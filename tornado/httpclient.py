@@ -619,7 +619,7 @@ def _curl_create(max_simultaneous_connections=None):
 def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.URL, request.url)
     curl.setopt(pycurl.HTTPHEADER,
-                ["%s: %s" % i for i in request.headers.iteritems()])
+                [_utf8("%s: %s" % i) for i in request.headers.iteritems()])
     if request.header_callback:
         curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
     else:
@@ -634,7 +634,7 @@ def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.CONNECTTIMEOUT, int(request.connect_timeout))
     curl.setopt(pycurl.TIMEOUT, int(request.request_timeout))
     if request.user_agent:
-        curl.setopt(pycurl.USERAGENT, request.user_agent)
+        curl.setopt(pycurl.USERAGENT, _utf8(request.user_agent))
     else:
         curl.setopt(pycurl.USERAGENT, "Mozilla/5.0 (compatible; pycurl)")
     if request.network_interface:
