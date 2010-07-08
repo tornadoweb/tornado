@@ -150,22 +150,23 @@ class HTTPServer(object):
         self._socket.bind((address, port))
         self._socket.listen(128)
 
-    def start(self, num_processes=None):
+    def start(self, num_processes=1):
         """Starts this server in the IOLoop.
 
-        By default, we detect the number of cores available on this machine
-        and fork that number of child processes. If num_processes is given, we
-        fork that specific number of sub-processes.
+        By default, we run the server in this process and do not fork any
+        additional child process.
 
-        If num_processes is 1 or we detect only 1 CPU core, we run the server
-        in this process and do not fork any additional child process.
+        If num_processes is None or <= 0, we detect the number of cores
+        available on this machine and fork that number of child
+        processes. If num_processes is given and > 1, we fork that
+        specific number of sub-processes.
 
         Since we use processes and not threads, there is no shared memory
         between any server code.
         """
         assert not self._started
         self._started = True
-        if num_processes is None:
+        if num_processes is None or num_processes <= 0:
             # Use sysconf to detect the number of CPUs (cores)
             try:
                 num_processes = os.sysconf("SC_NPROCESSORS_CONF")
