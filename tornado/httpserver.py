@@ -26,7 +26,6 @@ import logging
 import os
 import socket
 import time
-import urllib
 import urlparse
 
 try:
@@ -399,8 +398,7 @@ class HTTPRequest(object):
         self._finish_time = None
 
         scheme, netloc, path, query, fragment = urlparse.urlsplit(uri)
-        self.raw_path = path
-        self.path = urllib.unquote(path)
+        self.path = path
         self.query = query
         arguments = cgi.parse_qs(query)
         self.arguments = {}
