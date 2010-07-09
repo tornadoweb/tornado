@@ -1064,11 +1064,12 @@ class Application(object):
                     # Pass matched groups to the handler.  Since
                     # match.groups() includes both named and unnamed groups,
                     # we want to use either groups or groupdict but not both.
-                    kwargs = match.groupdict()
+                    kwargs = dict((k, urllib.unquote(v))
+                                  for (k, v) in match.groupdict().iteritems())
                     if kwargs:
                         args = []
                     else:
-                        args = match.groups()
+                        args = [urllib.unquote(s) for s in match.groups()]
                     break
             if not handler:
                 handler = ErrorHandler(self, request, 404)
