@@ -24,6 +24,7 @@ import errno
 import escape
 import functools
 import httplib
+import httputil
 import ioloop
 import logging
 import pycurl
@@ -60,7 +61,7 @@ class HTTPClient(object):
         if not isinstance(request, HTTPRequest):
            request = HTTPRequest(url=request, **kwargs)
         buffer = cStringIO.StringIO()
-        headers = {}
+        headers = httputil.HTTPHeaders()
         try:
             _curl_setup_request(self._curl, request, buffer, headers)
             self._curl.perform()
@@ -254,7 +255,7 @@ class AsyncHTTPClient(object):
                 curl = self._free_list.pop()
                 (request, callback) = self._requests.popleft()
                 curl.info = {
-                    "headers": {},
+                    "headers": httputil.HTTPHeaders(),
                     "buffer": cStringIO.StringIO(),
                     "request": request,
                     "callback": callback,
@@ -462,7 +463,7 @@ class AsyncHTTPClient2(object):
                 curl = self._free_list.pop()
                 (request, callback) = self._requests.popleft()
                 curl.info = {
-                    "headers": {},
+                    "headers": httputil.HTTPHeaders(),
                     "buffer": cStringIO.StringIO(),
                     "request": request,
                     "callback": callback,
@@ -505,7 +506,7 @@ class AsyncHTTPClient2(object):
 
 
 class HTTPRequest(object):
-    def __init__(self, url, method="GET", headers={}, body=None,
+    def __init__(self, url, method="GET", headers=None, body=None,
                  auth_username=None, auth_password=None,
                  connect_timeout=20.0, request_timeout=20.0,
                  if_modified_since=None, follow_redirects=True,
@@ -513,6 +514,8 @@ class HTTPRequest(object):
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
                  allow_nonstandard_methods=False):
+        if headers is None:
+            headers = httputil.HTTPHeaders()
         if if_modified_since:
             timestamp = calendar.timegm(if_modified_since.utctimetuple())
             headers["If-Modified-Since"] = email.utils.formatdate(
@@ -618,8 +621,13 @@ def _curl_create(max_simultaneous_connections=None):
 
 def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.URL, request.url)
-    curl.setopt(pycurl.HTTPHEADER,
-                [_utf8("%s: %s" % i) for i in request.headers.iteritems()])
+    # Request headers may be either a regular dict or HTTPHeaders object
+    if isinstance(request.headers, httputil.HTTPHeaders):
+      curl.setopt(pycurl.HTTPHEADER,
+                  [_utf8("%s: %s" % i) for i in request.headers.get_all()])
+    else:
+        curl.setopt(pycurl.HTTPHEADER,
+                    [_utf8("%s: %s" % i) for i in request.headers.iteritems()])
     if request.header_callback:
         curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
     else:
@@ -695,17 +703,7 @@ def _curl_header_callback(headers, header_line):
         return
     if header_line == "\r\n":
         return
-    parts = header_line.split(":", 1)
-    if len(parts) != 2:
-        logging.warning("Invalid HTTP response header line %r", header_line)
-        return
-    name = parts[0].strip()
-    value = parts[1].strip()
-    if name in headers:
-        headers[name] = headers[name] + ',' + value
-    else:
-        headers[name] = value
-
+    headers.parse_line(header_line)
 
 def _curl_debug(debug_type, debug_msg):
     debug_types = ('I', '<', '>', '<', '>')

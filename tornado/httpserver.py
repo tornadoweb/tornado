@@ -19,6 +19,7 @@
 import cgi
 import errno
 import functools
+import httputil
 import ioloop
 import iostream
 import logging
@@ -277,7 +278,7 @@ class HTTPConnection(object):
         method, uri, version = start_line.split(" ")
         if not version.startswith("HTTP/"):
             raise Exception("Malformed HTTP version in HTTP Request-Line")
-        headers = HTTPHeaders.parse(data[eol:])
+        headers = httputil.HTTPHeaders.parse(data[eol:])
         self._request = HTTPRequest(
             connection=self, method=method, uri=uri, version=version,
             headers=headers, remote_ip=self.address[0])
@@ -332,7 +333,7 @@ class HTTPConnection(object):
             if eoh == -1:
                 logging.warning("multipart/form-data missing headers")
                 continue
-            headers = HTTPHeaders.parse(part[:eoh])
+            headers = httputil.HTTPHeaders.parse(part[:eoh])
             name_header = headers.get("Content-Disposition", "")
             if not name_header.startswith("form-data;") or \
                not part.endswith("\r\n"):
@@ -380,7 +381,7 @@ class HTTPRequest(object):
         self.method = method
         self.uri = uri
         self.version = version
-        self.headers = headers or HTTPHeaders()
+        self.headers = headers or httputil.HTTPHeaders()
         self.body = body or ""
         if connection and connection.xheaders:
             # Squid uses X-Forwarded-For, others use X-Real-Ip
@@ -437,23 +438,3 @@ class HTTPRequest(object):
         return "%s(%s, headers=%s)" % (
             self.__class__.__name__, args, dict(self.headers))
 
-
-class HTTPHeaders(dict):
-    """A dictionary that maintains Http-Header-Case for all keys."""
-    def __setitem__(self, name, value):
-        dict.__setitem__(self, self._normalize_name(name), value)
-
-    def __getitem__(self, name):
-        return dict.__getitem__(self, self._normalize_name(name))
-
-    def _normalize_name(self, name):
-        return "-".join([w.capitalize() for w in name.split("-")])
-
-    @classmethod
-    def parse(cls, headers_string):
-        headers = cls()
-        for line in headers_string.splitlines():
-            if line:
-                name, value = line.split(":", 1)
-                headers[name] = value.strip()
-        return headers
