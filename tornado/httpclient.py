@@ -329,10 +329,10 @@ class AsyncHTTPClient2(object):
     the kqueue-based IOLoop (mac/bsd), but it may also occur on epoll (linux)
     and, in principle, for non-localhost sites.
     While the bug is unrelated to IPv6, disabling IPv6 will avoid the
-    most common manifestations of the bug (use a prepare_curl_callback that
-    calls curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)).
-    The underlying cause is a libcurl bug that has been confirmed to be
-    present in versions 7.20.0 and 7.21.0:
+    most common manifestations of the bug, so this class disables IPv6 when
+    it detects an affected version of libcurl.
+    The underlying cause is a libcurl bug in versions up to and including
+    7.21.0 (it will be fixed in the not-yet-released 7.21.1)
     http://sourceforge.net/tracker/?func=detail&aid=3017819&group_id=976&atid=100976
     """
     _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
@@ -469,6 +469,11 @@ class AsyncHTTPClient2(object):
                     "callback": callback,
                     "start_time": time.time(),
                 }
+                # Disable IPv6 to mitigate the effects of this bug
+                # on curl versions <= 7.21.0
+                # http://sourceforge.net/tracker/?func=detail&aid=3017819&group_id=976&atid=100976
+                if pycurl.version_info()[2] <= 0x71500:  # 7.21.0
+                    curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)
                 _curl_setup_request(curl, request, curl.info["buffer"],
                                     curl.info["headers"])
                 self._multi.add_handle(curl)
