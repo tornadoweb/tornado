@@ -45,7 +45,6 @@ class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
 
 """
 
-import base64
 import binascii
 import cgi
 import hashlib

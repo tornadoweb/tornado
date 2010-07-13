@@ -22,7 +22,6 @@ import cStringIO
 import email.utils
 import errno
 import escape
-import functools
 import httplib
 import httputil
 import ioloop

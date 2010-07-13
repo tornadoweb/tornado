@@ -17,7 +17,6 @@
 """A lightweight wrapper around MySQLdb."""
 
 import copy
-import MySQLdb
 import MySQLdb.constants
 import MySQLdb.converters
 import MySQLdb.cursors

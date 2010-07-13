@@ -43,8 +43,6 @@ import csv
 import datetime
 import logging
 import os
-import os.path
-import re
 
 _default_locale = "en_US"
 _translations = {}

@@ -21,11 +21,9 @@ and Google AppEngine.
 """
 
 import functools
-import errno
 import ioloop
 import logging
 import os
-import os.path
 import sys
 import types
 
@@ -86,7 +84,7 @@ def _reload_on_update(io_loop, modify_times):
                 signal.setitimer(signal.ITIMER_REAL, 0, 0)
             try:
                 os.execv(sys.executable, [sys.executable] + sys.argv)
-            except OSError, e:
+            except OSError:
                 # Mac OS X versions prior to 10.6 do not support execv in
                 # a process that contains multiple threads.  Instead of
                 # re-executing in the current process, start a new one

@@ -18,7 +18,6 @@
 
 import cgi
 import errno
-import functools
 import httputil
 import ioloop
 import iostream
