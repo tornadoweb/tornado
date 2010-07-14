@@ -169,7 +169,7 @@ CONVERSIONS = copy.deepcopy(MySQLdb.converters.conversions)
 
 field_types = [FIELD_TYPE.BLOB, FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING]
 if 'VARCHAR' in vars(FIELD_TYPE):
-    field_types.append([FIELD_TYPE.VARCHAR])
+    field_types.append(FIELD_TYPE.VARCHAR)
 
 for field_type in field_types:
     CONVERSIONS[field_type].insert(0, (FLAG.BINARY, str))
