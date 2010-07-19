@@ -224,7 +224,14 @@ class IOLoop(object):
             try:
                 event_pairs = self._impl.poll(poll_timeout)
             except Exception, e:
-                if hasattr(e, 'errno') and e.errno == errno.EINTR:
+                # Depending on python version and IOLoop implementation,
+                # different exception types may be thrown and there are
+                # two ways EINTR might be signaled:
+                # * e.errno == errno.EINTR
+                # * e.args is like (errno.EINTR, 'Interrupted system call')
+                if (getattr(e, 'errno') == errno.EINTR or
+                    (isinstance(getattr(e, 'args'), tuple) and
+                     len(e.args) == 2 and e.args[0] == errno.EINTR)):
                     logging.warning("Interrupted system call", exc_info=1)
                     continue
                 else:
