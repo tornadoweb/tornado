@@ -21,6 +21,8 @@ import re
 import xml.sax.saxutils
 import urllib
 
+# json module is in the standard library as of python 2.6; fall back to
+# simplejson if present for older versions.
 try:
     import json
     assert hasattr(json, "loads") and hasattr(json, "dumps")
@@ -38,8 +40,11 @@ except:
             _json_decode = lambda s: simplejson.loads(_unicode(s))
             _json_encode = lambda v: simplejson.dumps(v)
         except ImportError:
-            raise Exception("A JSON parser is required, e.g., simplejson at "
-                            "http://pypi.python.org/pypi/simplejson/")
+            def _json_decode(s):
+                raise NotImplementedError(
+                    "A JSON parser is required, e.g., simplejson at "
+                    "http://pypi.python.org/pypi/simplejson/")
+            _json_encode = _json_decode
 
 
 def xhtml_escape(value):
