@@ -1060,16 +1060,21 @@ class Application(object):
             for spec in handlers:
                 match = spec.regex.match(request.path)
                 if match:
+                    # None-safe wrapper around urllib.unquote to handle
+                    # unmatched optional groups correctly
+                    def unquote(s):
+                        if s is None: return s
+                        return urllib.unquote(s)
                     handler = spec.handler_class(self, request, **spec.kwargs)
                     # Pass matched groups to the handler.  Since
                     # match.groups() includes both named and unnamed groups,
                     # we want to use either groups or groupdict but not both.
-                    kwargs = dict((k, urllib.unquote(v))
+                    kwargs = dict((k, unquote(v))
                                   for (k, v) in match.groupdict().iteritems())
                     if kwargs:
                         args = []
                     else:
-                        args = [urllib.unquote(s) for s in match.groups()]
+                        args = [unquote(s) for s in match.groups()]
                     break
             if not handler:
                 handler = ErrorHandler(self, request, 404)
