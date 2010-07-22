@@ -70,11 +70,19 @@ directory included with the Tornado package.
 
 Tornado has been tested on Python 2.5 and 2.6. To use all of the features of Tornado, you need to have [PycURL](http://pycurl.sourceforge.net/) and a JSON library like [simplejson](http://pypi.python.org/pypi/simplejson/) installed. Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.
 
-**Mac OS X 10.5/10.6**
+**Mac OS X 10.6 (Python 2.6)**
+
+    sudo easy_install pycurl
+
+**Mac OS X 10.5 (Python 2.5)**
 
     sudo easy_install setuptools pycurl==7.16.2.1 simplejson
 
-**Ubuntu Linux**
+**Ubuntu Linux (Python 2.6)**
+
+    sudo apt-get install python-pycurl
+
+**Ubuntu Linux (Python 2.5)**
 
     sudo apt-get install python-dev python-pycurl python-simplejson
 
@@ -688,7 +696,7 @@ the Google credentials in a cookie for later access:
                 self.get_authenticated_user(self.async_callback(self._on_auth))
                 return
             self.authenticate_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 self.authenticate_redirect()
@@ -704,7 +712,7 @@ Web application performance is generally bound by architecture, not frontend
 performance. That said, Tornado is pretty fast relative to most popular
 Python web frameworks.
 
-We ran a few remedial load tests on a simple "Hello, world" application 
+We ran a few remedial load tests on a simple "Hello, world" application
 in each of the most popular Python web frameworks
 ([Django](http://www.djangoproject.com/), [web.py](http://webpy.org/), and
 [CherryPy](http://www.cherrypy.org/)) to get the baseline performance of
@@ -779,7 +787,7 @@ are running on ports 8000 - 8003:
         tcp_nodelay on;
         gzip on;
         gzip_min_length 1000;
-        gzip_proxied any;              
+        gzip_proxied any;
         gzip_types text/plain text/html text/css text/xml
                    application/x-javascript application/xml
                    application/atom+xml text/javascript;
