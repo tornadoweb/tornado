@@ -52,7 +52,7 @@ Download
 --------
 Download the most recent version of Tornado from GitHub:
 
-> [tornado-0.2.tar.gz](/static/tornado-0.2.tar.gz)
+> [tornado-0.2.tar.gz](http://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz)
 
 You can also [browse the source](http://github.com/facebook/tornado) on GitHub. To install Tornado:
 
