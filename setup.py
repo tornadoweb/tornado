@@ -33,7 +33,7 @@ if "linux" in sys.platform.lower() and not python_26:
 
 distutils.core.setup(
     name="tornado",
-    version="0.2",
+    version="1.0",
     packages = ["tornado"],
     ext_modules = extensions,
     author="Facebook",
