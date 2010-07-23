@@ -43,9 +43,12 @@ See the Tornado walkthrough on GitHub for more details and a good
 getting started guide.
 """
 
+from __future__ import with_statement
+
 import base64
 import binascii
 import calendar
+import contextlib
 import Cookie
 import cStringIO
 import datetime
@@ -61,6 +64,7 @@ import logging
 import mimetypes
 import os.path
 import re
+import stack_context
 import stat
 import sys
 import template
@@ -754,10 +758,17 @@ class RequestHandler(object):
     def reverse_url(self, name, *args):
         return self.application.reverse_url(name, *args)
 
+    @contextlib.contextmanager
+    def _stack_context(self):
+        try:
+            yield
+        except Exception, e:
+            self._handle_request_exception(e)
+
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
         self._transforms = transforms
-        try:
+        with stack_context.StackContext(self._stack_context):
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
             # If XSRF cookies are turned on, reject form submissions without
@@ -770,8 +781,6 @@ class RequestHandler(object):
                 getattr(self, self.request.method.lower())(*args, **kwargs)
                 if self._auto_finish and not self._finished:
                     self.finish()
-        except Exception, e:
-            self._handle_request_exception(e)
 
     def _generate_headers(self):
         lines = [self.request.version + " " + str(self._status_code) + " " +

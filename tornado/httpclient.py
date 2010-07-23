@@ -16,6 +16,8 @@
 
 """Blocking and non-blocking HTTP client implementations using pycurl."""
 
+from __future__ import with_statement
+
 import calendar
 import collections
 import cStringIO
@@ -27,6 +29,7 @@ import httputil
 import ioloop
 import logging
 import pycurl
+import stack_context
 import sys
 import time
 import weakref
@@ -150,7 +153,7 @@ class AsyncHTTPClient(object):
         """
         if not isinstance(request, HTTPRequest):
            request = HTTPRequest(url=request, **kwargs)
-        self._requests.append((request, callback))
+        self._requests.append((request, stack_context.wrap(callback)))
         self._process_queue()
         self._set_timeout(0)
 
@@ -202,16 +205,17 @@ class AsyncHTTPClient(object):
 
     def _handle_timeout(self):
         """Called by IOLoop when the requested timeout has passed."""
-        self._timeout = None
-        while True:
-            try:
-                ret, num_handles = self._multi.socket_action(
-                                        pycurl.SOCKET_TIMEOUT, 0)
-            except Exception, e:
-                ret = e[0]
-            if ret != pycurl.E_CALL_MULTI_PERFORM:
-                break
-        self._finish_pending_requests()
+        with stack_context.NullContext():
+            self._timeout = None
+            while True:
+                try:
+                    ret, num_handles = self._multi.socket_action(
+                                            pycurl.SOCKET_TIMEOUT, 0)
+                except Exception, e:
+                    ret = e[0]
+                if ret != pycurl.E_CALL_MULTI_PERFORM:
+                    break
+            self._finish_pending_requests()
 
         # In theory, we shouldn't have to do this because curl will
         # call _set_timeout whenever the timeout changes.  However,
@@ -245,30 +249,31 @@ class AsyncHTTPClient(object):
         self._process_queue()
 
     def _process_queue(self):
-        while True:
-            started = 0
-            while self._free_list and self._requests:
-                started += 1
-                curl = self._free_list.pop()
-                (request, callback) = self._requests.popleft()
-                curl.info = {
-                    "headers": httputil.HTTPHeaders(),
-                    "buffer": cStringIO.StringIO(),
-                    "request": request,
-                    "callback": callback,
-                    "start_time": time.time(),
-                }
-                # Disable IPv6 to mitigate the effects of this bug
-                # on curl versions <= 7.21.0
-                # http://sourceforge.net/tracker/?func=detail&aid=3017819&group_id=976&atid=100976
-                if pycurl.version_info()[2] <= 0x71500:  # 7.21.0
-                    curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)
-                _curl_setup_request(curl, request, curl.info["buffer"],
-                                    curl.info["headers"])
-                self._multi.add_handle(curl)
+        with stack_context.NullContext():
+            while True:
+                started = 0
+                while self._free_list and self._requests:
+                    started += 1
+                    curl = self._free_list.pop()
+                    (request, callback) = self._requests.popleft()
+                    curl.info = {
+                        "headers": httputil.HTTPHeaders(),
+                        "buffer": cStringIO.StringIO(),
+                        "request": request,
+                        "callback": callback,
+                        "start_time": time.time(),
+                    }
+                    # Disable IPv6 to mitigate the effects of this bug
+                    # on curl versions <= 7.21.0
+                    # http://sourceforge.net/tracker/?func=detail&aid=3017819&group_id=976&atid=100976
+                    if pycurl.version_info()[2] <= 0x71500:  # 7.21.0
+                        curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)
+                    _curl_setup_request(curl, request, curl.info["buffer"],
+                                        curl.info["headers"])
+                    self._multi.add_handle(curl)
 
-            if not started:
-                break
+                if not started:
+                    break
 
     def _finish(self, curl, curl_error=None, curl_message=None):
         info = curl.info
