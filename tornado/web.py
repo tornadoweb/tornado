@@ -83,13 +83,13 @@ class RequestHandler(object):
     """
     SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PUT")
 
-    def __init__(self, application, request, transforms=None):
+    def __init__(self, application, request):
         self.application = application
         self.request = request
         self._headers_written = False
         self._finished = False
         self._auto_finish = True
-        self._transforms = transforms or []
+        self._transforms = None  # will be set in _execute
         self.ui = _O((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
         self.ui["modules"] = _O((n, self._ui_module(n, m)) for n, m in
