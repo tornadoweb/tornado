@@ -134,6 +134,13 @@ class AsyncTestCase(unittest.TestCase):
         self.__stopped = True
 
     def wait(self, condition=None, timeout=5):
+        """Runs the IOLoop until stop is called or timeout has passed.
+
+        In the event of a timeout, an exception will be thrown.
+
+        If condition is not None, the IOLoop will be restarted after stop()
+        until condition() returns true.
+        """
         if not self.__stopped:
             if timeout:
                 def timeout_func():
@@ -194,12 +201,16 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_server.listen(self.get_http_port())
 
     def get_app(self):
-        '''
-        @rtype L{tornado.web.Application}
-        '''
+        """Should be overridden by subclasses to return a
+        tornado.web.Application or other HTTPServer callback.
+        """
         raise NotImplementedError()
 
     def get_http_port(self):
+        """Returns the port used by the HTTPServer.
+
+        A new port is chosen for each test.
+        """
         if self.__port is not None:
             return self.__port
         self.__port = AsyncHTTPTestCase.__next_port
@@ -207,6 +218,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
         return self.__port
 
     def get_url(self, path):
+        """Returns an absolute url for the given path on the test server."""
         return 'http://localhost:%s%s' % (self.get_http_port(), path)
 
     def tearDown(self):
