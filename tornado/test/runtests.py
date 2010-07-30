@@ -4,7 +4,7 @@ import unittest
 TEST_MODULES = [
     'tornado.httputil.doctests',
     'tornado.test.stack_context_test',
-    'tornado.test.test_ioloop',
+    'tornado.test.ioloop_test',
 ]
 
 def all():
