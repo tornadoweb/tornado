@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-from tornado.httpclient import AsyncHTTPClient
-from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop
+from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.web import asynchronous, Application, RequestHandler
 import logging
 import unittest
@@ -35,23 +33,20 @@ class TestRequestHandler(RequestHandler):
     else:
       return 'unexpected failure'
 
-class StackContextTest(unittest.TestCase):
-  # Note that this test logs an error even when it passes.
-  # TODO(bdarnell): better logging setup for unittests
+class StackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
+  def get_app(self):
+    return Application([('/', TestRequestHandler,
+                         dict(io_loop=self.io_loop))])
+
   def test_stack_context(self):
-    self.io_loop = IOLoop()
-    app = Application([('/', TestRequestHandler, dict(io_loop=self.io_loop))])
-    server = HTTPServer(app, io_loop=self.io_loop)
-    server.listen(11000)
-    client = AsyncHTTPClient(io_loop=self.io_loop)
-    client.fetch('http://localhost:11000/', self.handle_response)
-    self.io_loop.start()
+    self.http_client.fetch(self.get_url('/'), self.handle_response)
+    self.wait()
     self.assertEquals(self.response.code, 500)
     self.assertTrue('got expected exception' in self.response.body)
 
   def handle_response(self, response):
     self.response = response
-    self.io_loop.stop()
+    self.stop()
 
 if __name__ == '__main__':
   unittest.main()
