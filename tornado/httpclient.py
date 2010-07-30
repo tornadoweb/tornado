@@ -18,21 +18,22 @@
 
 from __future__ import with_statement
 
+import cStringIO
 import calendar
 import collections
-import cStringIO
 import email.utils
 import errno
-import escape
 import httplib
-import httputil
-import ioloop
 import logging
 import pycurl
-import stack_context
 import sys
 import time
 import weakref
+
+from tornado import escape
+from tornado import httputil
+from tornado import ioloop
+from tornado import stack_context
 
 class HTTPClient(object):
     """A blocking HTTP client backed with pycurl.

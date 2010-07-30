@@ -49,13 +49,14 @@ import binascii
 import cgi
 import hashlib
 import hmac
-import httpclient
-import escape
 import logging
 import time
 import urllib
 import urlparse
 import uuid
+
+from tornado import httpclient
+from tornado import escape
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.

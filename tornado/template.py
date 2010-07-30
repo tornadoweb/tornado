@@ -83,10 +83,11 @@ from __future__ import with_statement
 
 import cStringIO
 import datetime
-import escape
 import logging
 import os.path
 import re
+
+from tornado import escape
 
 class Template(object):
     """A compiled template.

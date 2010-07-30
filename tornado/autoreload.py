@@ -21,11 +21,12 @@ and Google AppEngine.
 """
 
 import functools
-import ioloop
 import logging
 import os
 import sys
 import types
+
+from tornado import ioloop
 
 try:
     import signal

@@ -45,34 +45,35 @@ getting started guide.
 
 from __future__ import with_statement
 
+import Cookie
 import base64
 import binascii
+import cStringIO
 import calendar
 import contextlib
-import Cookie
-import cStringIO
 import datetime
 import email.utils
-import escape
 import functools
 import gzip
 import hashlib
 import hmac
 import httplib
-import locale
 import logging
 import mimetypes
 import os.path
 import re
-import stack_context
 import stat
 import sys
-import template
 import time
 import types
 import urllib
 import urlparse
 import uuid
+
+from tornado import escape
+from tornado import locale
+from tornado import stack_context
+from tornado import template
 
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.

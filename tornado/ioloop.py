@@ -21,9 +21,10 @@ import errno
 import os
 import logging
 import select
-import stack_context
 import time
 import traceback
+
+from tornado import stack_context
 
 try:
     import signal

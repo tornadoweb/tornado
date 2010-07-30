@@ -17,9 +17,10 @@
 """A utility class to write to and read from a non-blocking socket."""
 
 import errno
-import ioloop
 import logging
 import socket
+
+from tornado import ioloop
 
 class IOStream(object):
     """A utility class to write to and read from a non-blocking socket.

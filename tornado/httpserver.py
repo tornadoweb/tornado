@@ -18,14 +18,15 @@
 
 import cgi
 import errno
-import httputil
-import ioloop
-import iostream
 import logging
 import os
 import socket
 import time
 import urlparse
+
+from tornado import httputil
+from tornado import ioloop
+from tornado import iostream
 
 try:
     import fcntl
