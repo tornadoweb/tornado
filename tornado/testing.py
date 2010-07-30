@@ -20,7 +20,7 @@ from __future__ import with_statement
 from cStringIO import StringIO
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
-from tornado.stack_context import StackContext
+from tornado.stack_context import StackContext, NullContext
 import contextlib
 import functools
 import logging
@@ -147,7 +147,11 @@ class AsyncTestCase(unittest.TestCase):
                 self.io_loop.add_timeout(time.time() + timeout, timeout_func)
             while True:
                 self.__running = True
-                self.io_loop.start()
+                with NullContext():
+                    # Wipe out the StackContext that was established in
+                    # self.run() so that all callbacks executed inside the
+                    # IOLoop will re-run it.
+                    self.io_loop.start()
                 if (self.__failure is not None or
                     condition is None or condition()):
                     break
