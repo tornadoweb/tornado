@@ -15,6 +15,8 @@ inheritance.  See the docstrings for each class/function below for more
 information.
 """
 
+from __future__ import with_statement
+
 from cStringIO import StringIO
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
