@@ -198,7 +198,7 @@ class AsyncHTTPClient(object):
         while True:
             try:
                 ret, num_handles = self._multi.socket_action(fd, action)
-            except Exception, e:
+            except pycurl.error, e:
                 ret = e[0]
             if ret != pycurl.E_CALL_MULTI_PERFORM:
                 break
@@ -212,7 +212,7 @@ class AsyncHTTPClient(object):
                 try:
                     ret, num_handles = self._multi.socket_action(
                                             pycurl.SOCKET_TIMEOUT, 0)
-                except Exception, e:
+                except pycurl.error, e:
                     ret = e[0]
                 if ret != pycurl.E_CALL_MULTI_PERFORM:
                     break
