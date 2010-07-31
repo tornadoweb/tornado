@@ -130,6 +130,19 @@ class AsyncHTTPClient(object):
             instance._fds = {}
             instance._timeout = None
             cls._ASYNC_CLIENTS[io_loop] = instance
+
+            try:
+                instance._socket_action = instance._multi.socket_action
+            except AttributeError:
+                # socket_action is found in pycurl since 7.18.2 (it's been
+                # in libcurl longer than that but wasn't accessible to
+                # python).
+                logging.warning("socket_action method missing from pycurl; "
+                                "falling back to socket_all. Upgrading "
+                                "libcurl and pycurl will improve performance")
+                instance._socket_action = \
+                    lambda fd, action: instance._multi.socket_all()
+
             return instance
 
     def close(self):
@@ -197,7 +210,7 @@ class AsyncHTTPClient(object):
         if events & ioloop.IOLoop.WRITE: action |= pycurl.CSELECT_OUT
         while True:
             try:
-                ret, num_handles = self._multi.socket_action(fd, action)
+                ret, num_handles = self._socket_action(fd, action)
             except pycurl.error, e:
                 ret = e[0]
             if ret != pycurl.E_CALL_MULTI_PERFORM:
@@ -210,8 +223,8 @@ class AsyncHTTPClient(object):
             self._timeout = None
             while True:
                 try:
-                    ret, num_handles = self._multi.socket_action(
-                                            pycurl.SOCKET_TIMEOUT, 0)
+                    ret, num_handles = self._socket_action(
+                        pycurl.SOCKET_TIMEOUT, 0)
                 except pycurl.error, e:
                     ret = e[0]
                 if ret != pycurl.E_CALL_MULTI_PERFORM:
