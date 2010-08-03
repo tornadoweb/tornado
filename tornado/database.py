@@ -22,6 +22,7 @@ import MySQLdb.converters
 import MySQLdb.cursors
 import itertools
 import logging
+import time
 
 class Connection(object):
     """A lightweight wrapper around MySQLdb DB-API connections.
@@ -39,9 +40,11 @@ class Connection(object):
     We explicitly set the timezone to UTC and the character encoding to
     UTF-8 on all connections to avoid time zone and encoding errors.
     """
-    def __init__(self, host, database, user=None, password=None):
+    def __init__(self, host, database, user=None, password=None,
+                 max_idle_time=7*3600):
         self.host = host
         self.database = database
+        self.max_idle_time = max_idle_time
 
         args = dict(conv=CONVERSIONS, use_unicode=True, charset="utf8",
                     db=database, init_command='SET time_zone = "+0:00"',
@@ -66,6 +69,7 @@ class Connection(object):
 
         self._db = None
         self._db_args = args
+        self._last_use_time = time.time()
         try:
             self.reconnect()
         except:
@@ -89,7 +93,7 @@ class Connection(object):
 
     def iter(self, query, *parameters):
         """Returns an iterator for the given query and parameters."""
-        if self._db is None: self.reconnect()
+        self._ensure_connected()
         cursor = MySQLdb.cursors.SSCursor(self._db)
         try:
             self._execute(cursor, query, parameters)
@@ -140,8 +144,19 @@ class Connection(object):
         finally:
             cursor.close()
 
+    def _ensure_connected(self):
+        # Mysql by default closes client connections that are idle for
+        # 8 hours, but the client library does not report this fact until
+        # you try to perform a query and it fails.  Protect against this
+        # case by preemptively closing and reopening the connection
+        # if it has been idle for too long (7 hours by default).
+        if (self._db is None or
+            (time.time() - self._last_use_time > self.max_idle_time)):
+            self.reconnect()
+        self._last_use_time = time.time()
+
     def _cursor(self):
-        if self._db is None: self.reconnect()
+        self._ensure_connected()
         return self._db.cursor()
 
     def _execute(self, cursor, query, parameters):
