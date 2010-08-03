@@ -41,6 +41,26 @@ try:
 except ImportError:
     ssl = None
 
+try:
+    import multiprocessing # Python 2.6+
+except ImportError:
+    multiprocessing = None
+
+def _cpu_count():
+    if multiprocessing is not None:
+        try:
+            return multiprocessing.cpu_count()
+        except NotImplementedError:
+            pass
+    try:
+        return os.sysconf("SC_NPROCESSORS_CONF")
+    except ValueError:
+        pass
+    logging.error("Could not detect number of processors; "
+                  "running with one process")
+    return 1
+
+
 class HTTPServer(object):
     """A non-blocking, single-threaded HTTP server.
 
@@ -168,13 +188,7 @@ class HTTPServer(object):
         assert not self._started
         self._started = True
         if num_processes is None or num_processes <= 0:
-            # Use sysconf to detect the number of CPUs (cores)
-            try:
-                num_processes = os.sysconf("SC_NPROCESSORS_CONF")
-            except ValueError:
-                logging.error("Could not get num processors from sysconf; "
-                              "running with one process")
-                num_processes = 1
+            num_processes = _cpu_count()
         if num_processes > 1 and ioloop.IOLoop.initialized():
             logging.error("Cannot run in multiple processes: IOLoop instance "
                           "has already been initialized. You cannot call "
