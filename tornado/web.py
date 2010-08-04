@@ -489,7 +489,7 @@ class RequestHandler(object):
         return t.generate(**args)
 
     def flush(self, include_footers=False):
-        """Flushes the current output buffer to the nextwork."""
+        """Flushes the current output buffer to the network."""
         if self.application._wsgi:
             raise Exception("WSGI applications do not support flush()")
 
