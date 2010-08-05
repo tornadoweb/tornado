@@ -143,6 +143,14 @@ class AsyncHTTPClient(object):
                 instance._socket_action = \
                     lambda fd, action: instance._multi.socket_all()
 
+            # libcurl has bugs that sometimes cause it to not report all
+            # relevant file descriptors and timeouts to TIMERFUNCTION/
+            # SOCKETFUNCTION.  Mitigate the effects of such bugs by
+            # forcing a periodic scan of all active requests.
+            instance._force_timeout_callback = ioloop.PeriodicCallback(
+                instance._multi.socket_all, 1000)
+            instance._force_timeout_callback.start()
+
             return instance
 
     def close(self):
@@ -152,6 +160,7 @@ class AsyncHTTPClient(object):
         on the AsyncHTTPClient after close().
         """
         del AsyncHTTPClient._ASYNC_CLIENTS[self.io_loop]
+        self._force_timeout_callback.stop()
         for curl in self._curls:
             curl.close()
         self._multi.close()
