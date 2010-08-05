@@ -148,7 +148,7 @@ class AsyncHTTPClient(object):
             # SOCKETFUNCTION.  Mitigate the effects of such bugs by
             # forcing a periodic scan of all active requests.
             instance._force_timeout_callback = ioloop.PeriodicCallback(
-                instance._multi.socket_all, 1000)
+                instance._multi.socket_all, 1000, io_loop=io_loop)
             instance._force_timeout_callback.start()
 
             return instance
