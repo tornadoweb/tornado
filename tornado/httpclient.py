@@ -284,7 +284,7 @@ class AsyncHTTPClient(object):
                         "buffer": cStringIO.StringIO(),
                         "request": request,
                         "callback": callback,
-                        "start_time": time.time(),
+                        "curl_start_time": time.time(),
                     }
                     # Disable IPv6 to mitigate the effects of this bug
                     # on curl versions <= 7.21.0
@@ -315,11 +315,23 @@ class AsyncHTTPClient(object):
             code = curl.getinfo(pycurl.HTTP_CODE)
             effective_url = curl.getinfo(pycurl.EFFECTIVE_URL)
             buffer.seek(0)
+        # the various curl timings are documented at
+        # http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html
+        time_info = dict(
+            queue=info["curl_start_time"] - info["request"].start_time,
+            namelookup=curl.getinfo(pycurl.NAMELOOKUP_TIME),
+            connect=curl.getinfo(pycurl.CONNECT_TIME),
+            pretransfer=curl.getinfo(pycurl.PRETRANSFER_TIME),
+            starttransfer=curl.getinfo(pycurl.STARTTRANSFER_TIME),
+            total=curl.getinfo(pycurl.TOTAL_TIME),
+            redirect=curl.getinfo(pycurl.REDIRECT_TIME),
+            )
         try:
             info["callback"](HTTPResponse(
                 request=info["request"], code=code, headers=info["headers"],
                 buffer=buffer, effective_url=effective_url, error=error,
-                request_time=time.time() - info["start_time"]))
+                request_time=time.time() - info["curl_start_time"],
+                time_info=time_info))
         except (KeyboardInterrupt, SystemExit):
             raise
         except:
@@ -375,11 +387,29 @@ class HTTPRequest(object):
         self.header_callback = header_callback
         self.prepare_curl_callback = prepare_curl_callback
         self.allow_nonstandard_methods = allow_nonstandard_methods
+        self.start_time = time.time()
 
 
 class HTTPResponse(object):
-    def __init__(self, request, code, headers={}, buffer=None, effective_url=None,
-                 error=None, request_time=None):
+    """HTTP Response object.
+
+    Attributes:
+    * request: HTTPRequest object
+    * code: numeric HTTP status code, e.g. 200 or 404
+    * headers: httputil.HTTPHeaders object
+    * buffer: cStringIO object for response body
+    * body: respose body as string (created on demand from self.buffer)
+    * error: Exception object, if any
+    * request_time: seconds from request start to finish
+    * time_info: dictionary of diagnostic timing information from the request.
+        Available data are subject to change, but currently uses timings
+        available from http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html,
+        plus 'queue', which is the delay (if any) introduced by waiting for
+        a slot under AsyncHTTPClient's max_clients setting.
+    """
+    def __init__(self, request, code, headers={}, buffer=None,
+                 effective_url=None, error=None, request_time=None,
+                 time_info={}):
         self.request = request
         self.code = code
         self.headers = headers
@@ -397,6 +427,7 @@ class HTTPResponse(object):
         else:
             self.error = error
         self.request_time = request_time
+        self.time_info = time_info
 
     def _get_body(self):
         if self.buffer is None:
