@@ -1372,7 +1372,12 @@ def authenticated(method):
             if self.request.method == "GET":
                 url = self.get_login_url()
                 if "?" not in url:
-                    url += "?" + urllib.urlencode(dict(next=self.request.uri))
+                    if urlparse.urlsplit(url).scheme:
+                        # if login url is absolute, make next absolute too
+                        next_url = self.request.full_url()
+                    else:
+                        next_url = self.request.uri
+                    url += "?" + urllib.urlencode(dict(next=next_url))
                 self.redirect(url)
                 return
             raise HTTPError(403)
