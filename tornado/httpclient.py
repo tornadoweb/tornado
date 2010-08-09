@@ -604,3 +604,28 @@ def _utf8(value):
         return value.encode("utf-8")
     assert isinstance(value, str)
     return value
+
+def main():
+    from tornado.options import define, options, parse_command_line
+    define("print_headers", type=bool, default=False)
+    define("print_body", type=bool, default=True)
+    define("follow_redirects", type=bool, default=True)
+    args = parse_command_line()
+    client = HTTPClient()
+    for arg in args:
+        try:
+            response = client.fetch(arg,
+                                    follow_redirects=options.follow_redirects)
+        except HTTPError, e:
+            if e.response is not None:
+                response = e.response
+            else:
+                raise
+        if options.print_headers:
+            print response.headers
+        if options.print_body:
+            print response.body
+
+if __name__ == "__main__":
+    main()
+
