@@ -148,7 +148,7 @@ class AsyncHTTPClient(object):
             # SOCKETFUNCTION.  Mitigate the effects of such bugs by
             # forcing a periodic scan of all active requests.
             instance._force_timeout_callback = ioloop.PeriodicCallback(
-                instance._multi.socket_all, 1000, io_loop=io_loop)
+                instance._handle_force_timeout, 1000, io_loop=io_loop)
             instance._force_timeout_callback.start()
 
             return instance
@@ -256,6 +256,20 @@ class AsyncHTTPClient(object):
         new_timeout = self._multi.timeout()
         if new_timeout != -1:
             self._set_timeout(new_timeout)
+
+    def _handle_force_timeout(self):
+        """Called by IOLoop periodically to ask libcurl to process any
+        events it may have forgotten about.
+        """
+        with stack_context.NullContext():
+            while True:
+                try:
+                    ret, num_handles = self._multi.socket_all()
+                except pycurl.error, e:
+                    ret = e[0]
+                if ret != pycurl.E_CALL_MULTI_PERFORM:
+                    break
+            self._finish_pending_requests()
 
     def _finish_pending_requests(self):
         """Process any requests that were completed by the last
