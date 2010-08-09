@@ -579,10 +579,12 @@ def _curl_setup_request(curl, request, buffer, headers):
 
 
 def _curl_header_callback(headers, header_line):
+    # header_line as returned by curl includes the end-of-line characters.
+    header_line = header_line.strip()
     if header_line.startswith("HTTP/"):
         headers.clear()
         return
-    if header_line == "\r\n":
+    if not header_line:
         return
     headers.parse_line(header_line)
 
