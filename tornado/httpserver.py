@@ -212,8 +212,8 @@ class HTTPServer(object):
                                      ioloop.IOLoop.READ)
 
     def stop(self):
-      self.io_loop.remove_handler(self._socket.fileno())
-      self._socket.close()
+        self.io_loop.remove_handler(self._socket.fileno())
+        self._socket.close()
 
     def _handle_events(self, fd, events):
         while True:
@@ -451,4 +451,3 @@ class HTTPRequest(object):
         args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
         return "%s(%s, headers=%s)" % (
             self.__class__.__name__, args, dict(self.headers))
-

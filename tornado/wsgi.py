@@ -294,4 +294,3 @@ class WSGIContainer(object):
         summary = request.method + " " + request.uri + " (" + \
             request.remote_ip + ")"
         log_method("%d %s %.2fms", status_code, summary, request_time)
-

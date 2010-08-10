@@ -170,7 +170,7 @@ class Loader(object):
         self.templates = {}
 
     def reset(self):
-      self.templates = {}
+        self.templates = {}
 
     def resolve_path(self, name, parent_path=None):
         if parent_path and not parent_path.startswith("<") and \

@@ -62,7 +62,7 @@ class HTTPClient(object):
         If an error occurs during the fetch, we raise an HTTPError.
         """
         if not isinstance(request, HTTPRequest):
-           request = HTTPRequest(url=request, **kwargs)
+            request = HTTPRequest(url=request, **kwargs)
         buffer = cStringIO.StringIO()
         headers = httputil.HTTPHeaders()
         try:
@@ -175,7 +175,7 @@ class AsyncHTTPClient(object):
         throw the exception (if any) in the callback.
         """
         if not isinstance(request, HTTPRequest):
-           request = HTTPRequest(url=request, **kwargs)
+            request = HTTPRequest(url=request, **kwargs)
         self._requests.append((request, stack_context.wrap(callback)))
         self._process_queue()
         self._set_timeout(0)
@@ -504,8 +504,8 @@ def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.URL, request.url)
     # Request headers may be either a regular dict or HTTPHeaders object
     if isinstance(request.headers, httputil.HTTPHeaders):
-      curl.setopt(pycurl.HTTPHEADER,
-                  [_utf8("%s: %s" % i) for i in request.headers.get_all()])
+        curl.setopt(pycurl.HTTPHEADER,
+                    [_utf8("%s: %s" % i) for i in request.headers.get_all()])
     else:
         curl.setopt(pycurl.HTTPHEADER,
                     [_utf8("%s: %s" % i) for i in request.headers.iteritems()])
@@ -630,4 +630,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -1114,8 +1114,8 @@ class Application(object):
         # request so you don't need to restart to see changes
         if self.settings.get("debug"):
             if getattr(RequestHandler, "_templates", None):
-              map(lambda loader: loader.reset(),
-                  RequestHandler._templates.values())
+                map(lambda loader: loader.reset(),
+                    RequestHandler._templates.values())
             RequestHandler._static_hashes = {}
 
         handler._execute(transforms, *args, **kwargs)
@@ -1245,8 +1245,8 @@ class StaticFileHandler(RequestHandler):
             file.close()
 
     def set_extra_headers(self, path):
-      """For subclass to add extra headers to the response"""
-      pass
+        """For subclass to add extra headers to the response"""
+        pass
 
 
 class FallbackHandler(RequestHandler):
