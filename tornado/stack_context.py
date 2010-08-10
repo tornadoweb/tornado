@@ -93,16 +93,13 @@ def NullContext():
     finally:
         _state.contexts = old_contexts
 
-def wrap(fn, *args, **kwargs):
+def wrap(fn):
     '''Returns a callable object that will resore the current StackContext
     when executed.
 
     Use this whenever saving a callback to be executed later in a
     different execution context (either in a different thread or
     asynchronously in the same thread).
-
-    As a convenience, also binds parameters to the given function
-    like functools.partial.
     '''
     # functools.wraps doesn't appear to work on functools.partial objects
     #@functools.wraps(fn)
@@ -131,11 +128,7 @@ def wrap(fn, *args, **kwargs):
             callback(*args, **kwargs)
     if getattr(fn, 'stack_context_wrapped', False):
         return fn
-    if args or kwargs:
-        callback = functools.partial(fn, *args, **kwargs)
-    else:
-        callback = fn
     contexts = _state.contexts
-    result = functools.partial(wrapped, callback, contexts, *args, **kwargs)
+    result = functools.partial(wrapped, fn, contexts)
     result.stack_context_wrapped = True
     return result
