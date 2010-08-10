@@ -129,13 +129,14 @@ def wrap(fn, *args, **kwargs):
         callback(*args, **kwargs)
     else:
       callback(*args, **kwargs)
+  if getattr(fn, 'stack_context_wrapped', False):
+    return fn
   if args or kwargs:
     callback = functools.partial(fn, *args, **kwargs)
   else:
     callback = fn
   contexts = _state.contexts
-  if contexts:
-    return functools.partial(wrapped, callback, contexts, *args, **kwargs)
-  else:
-    return callback
+  result = functools.partial(wrapped, callback, contexts, *args, **kwargs)
+  result.stack_context_wrapped = True
+  return result
 
