@@ -88,12 +88,18 @@ class AsyncTestCase(unittest.TestCase):
             # in the same process with autoreload (because curl does not
             # set FD_CLOEXEC on its file descriptors)
             for fd in self.io_loop._handlers.keys()[:]:
-                if (fd == self.io_loop._waker_reader.fileno() or
-                    fd == self.io_loop._waker_writer.fileno()):
-                    # Close these through the file objects that wrap
-                    # them, or else the destructor will try to close
-                    # them later and log a warning
-                    continue
+                try:
+                    if (fd == self.io_loop._waker_reader.fileno() or
+                        fd == self.io_loop._waker_writer.fileno()):
+                        # Close these through the file objects that wrap
+                        # them, or else the destructor will try to close
+                        # them later and log a warning
+                        continue
+                except:
+                    if os.name == 'nt':
+                        pass # win32_support.Pipe objects don't have a fileno
+                    else:
+                        raise
                 try:
                     os.close(fd)
                 except:

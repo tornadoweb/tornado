@@ -109,6 +109,10 @@ class Pipe(object):
         a.close()
         self.reader_fd = self.reader.fileno()
 
+    def close(self):
+        self.reader.close()
+        self.writer.close()
+
     def read(self):
         """Emulate a file descriptors read method"""
         try:
