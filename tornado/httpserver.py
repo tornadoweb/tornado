@@ -18,14 +18,15 @@
 
 import cgi
 import errno
-import httputil
-import ioloop
-import iostream
 import logging
 import os
 import socket
 import time
 import urlparse
+
+from tornado import httputil
+from tornado import ioloop
+from tornado import iostream
 
 try:
     import fcntl
@@ -39,6 +40,26 @@ try:
     import ssl # Python 2.6+
 except ImportError:
     ssl = None
+
+try:
+    import multiprocessing # Python 2.6+
+except ImportError:
+    multiprocessing = None
+
+def _cpu_count():
+    if multiprocessing is not None:
+        try:
+            return multiprocessing.cpu_count()
+        except NotImplementedError:
+            pass
+    try:
+        return os.sysconf("SC_NPROCESSORS_CONF")
+    except ValueError:
+        pass
+    logging.error("Could not detect number of processors; "
+                  "running with one process")
+    return 1
+
 
 class HTTPServer(object):
     """A non-blocking, single-threaded HTTP server.
@@ -167,13 +188,7 @@ class HTTPServer(object):
         assert not self._started
         self._started = True
         if num_processes is None or num_processes <= 0:
-            # Use sysconf to detect the number of CPUs (cores)
-            try:
-                num_processes = os.sysconf("SC_NPROCESSORS_CONF")
-            except ValueError:
-                logging.error("Could not get num processors from sysconf; "
-                              "running with one process")
-                num_processes = 1
+            num_processes = _cpu_count()
         if num_processes > 1 and ioloop.IOLoop.initialized():
             logging.error("Cannot run in multiple processes: IOLoop instance "
                           "has already been initialized. You cannot call "
@@ -197,8 +212,8 @@ class HTTPServer(object):
                                      ioloop.IOLoop.READ)
 
     def stop(self):
-      self.io_loop.remove_handler(self._socket.fileno())
-      self._socket.close()
+        self.io_loop.remove_handler(self._socket.fileno())
+        self._socket.close()
 
     def _handle_events(self, fd, events):
         while True:
@@ -297,7 +312,7 @@ class HTTPConnection(object):
     def _on_request_body(self, data):
         self._request.body = data
         content_type = self._request.headers.get("Content-Type", "")
-        if self._request.method == "POST":
+        if self._request.method in ("POST", "PUT"):
             if content_type.startswith("application/x-www-form-urlencoded"):
                 arguments = cgi.parse_qs(self._request.body)
                 for name, values in arguments.iteritems():
@@ -436,4 +451,3 @@ class HTTPRequest(object):
         args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
         return "%s(%s, headers=%s)" % (
             self.__class__.__name__, args, dict(self.headers))
-

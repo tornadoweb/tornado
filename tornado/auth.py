@@ -49,13 +49,14 @@ import binascii
 import cgi
 import hashlib
 import hmac
-import httpclient
-import escape
 import logging
 import time
 import urllib
 import urlparse
 import uuid
+
+from tornado import httpclient
+from tornado import escape
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -88,10 +89,11 @@ class OpenIdMixin(object):
         # Verify the OpenID response via direct request to the OP
         args = dict((k, v[-1]) for k, v in self.request.arguments.iteritems())
         args["openid.mode"] = u"check_authentication"
-        url = self._OPENID_ENDPOINT + "?" + urllib.urlencode(args)
+        url = self._OPENID_ENDPOINT
         http = httpclient.AsyncHTTPClient()
         http.fetch(url, self.async_callback(
-            self._on_authentication_verified, callback))
+            self._on_authentication_verified, callback),
+            method="POST", body=urllib.urlencode(args))
 
     def _openid_args(self, callback_uri, ax_attrs=[], oauth_scope=None):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)

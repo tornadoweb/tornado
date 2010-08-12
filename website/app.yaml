@@ -4,6 +4,12 @@ runtime: python
 api_version: 1
 
 handlers:
+- url: /static/tornado-0.1.tar.gz
+  script: website.py
+
+- url: /static/tornado-0.2.tar.gz
+  script: website.py
+
 - url: /static/
   static_dir: static
 

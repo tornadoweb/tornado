@@ -6,19 +6,25 @@
   <p>See the <a href="/documentation">Tornado documentation</a> for a detailed walkthrough of the framework.</p>
 
   <h2>Download and install</h2>
-  <p><b>Download:</b> <a href="/static/tornado-0.2.tar.gz">tornado-0.2.tar.gz</a></p>
-  <pre><code>tar xvzf tornado-0.2.tar.gz
-cd tornado-0.2
+  <p><b>Download:</b> <a href="http://github.com/downloads/facebook/tornado/tornado-1.0.tar.gz">tornado-1.0.tar.gz</a></p>
+  <pre><code>tar xvzf tornado-1.0.tar.gz
+cd tornado-1.0
 python setup.py build
 sudo python setup.py install</code></pre>
-  <p>The Tornado source code is <a href="http://github.com/facebook/tornado">hosted on GitHub</a>.</p>
+  <p>The Tornado source code is <a href="http://github.com/facebook/tornado">hosted on GitHub</a>.  On Python 2.6+, it is also possible to simply add the tornado directory to your <code>PYTHONPATH</code> instead of building with <code>setup.py</code>, since the standard library includes <code>epoll</code> support.</p>
 
   <h3>Prerequisites</h3>
   <p>Tornado has been tested on Python 2.5 and 2.6. To use all of the features of Tornado, you need to have <a href="http://pycurl.sourceforge.net/">PycURL</a> and a JSON library like <a href="http://pypi.python.org/pypi/simplejson/">simplejson</a> installed. Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.</p>
-  <p style="font-weight:bold">Mac OS X 10.5/10.6</p>
+  <p style="font-weight:bold">Mac OS X 10.6 (Python 2.6)</p>
+  <pre><code>sudo easy_install setuptools pycurl</code></pre>
+
+  <p style="font-weight:bold">Mac OS X 10.5 (Python 2.5)</p>
   <pre><code>sudo easy_install setuptools pycurl==7.16.2.1 simplejson</code></pre>
 
-  <p style="font-weight:bold">Ubuntu Linux</p>
+  <p style="font-weight:bold">Ubuntu Linux (Python 2.6)</p>
+  <pre><code>sudo apt-get install python-pycurl</code></pre>
+
+  <p style="font-weight:bold">Ubuntu Linux (Python 2.5)</p>
   <pre><code>sudo apt-get install python-dev python-pycurl python-simplejson</code></pre>
 
   <h2>Hello, world</h2>
@@ -43,7 +49,7 @@ if __name__ == "__main__":
 
   <h2>Discussion and support</h2>
   <p>You can discuss Tornado and report bugs on <a href="http://groups.google.com/group/python-tornado">the Tornado developer mailing list</a>.
-        
+
   <h2>Updates</h2>
   <p>Follow us on <a href="http://www.facebook.com/pages/Tornado-Web-Server/144144048921">Facebook</a>, <a href="http://twitter.com/tornadoweb">Twitter</a>, or <a href="http://friendfeed.com/tornado-web">FriendFeed</a> to get updates and announcements:</p>
   <div style="margin-top:1em"><a href="http://www.facebook.com/pages/Tornado-Web-Server/144144048921" style="margin-right:10px"><img src="/static/facebook.png" style="width:64px;height:64px" alt="Facebook"/></a><a href="http://twitter.com/tornadoweb" style="margin-right:10px"><img src="/static/twitter.png" style="width:64px;height:64px" alt="Twitter"/></a><a href="http://friendfeed.com/tornado-web" style="margin-right:10px"><img src="/static/friendfeed.png" style="width:64px;height:64px" alt="Facebook"/></a></div>

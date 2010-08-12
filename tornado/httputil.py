@@ -135,6 +135,10 @@ class HTTPHeaders(dict):
         return "-".join([w.capitalize() for w in name.split("-")])
 
 
+def doctests():
+    import doctest
+    return doctest.DocTestSuite()
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
