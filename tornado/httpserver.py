@@ -18,7 +18,7 @@
 
 import cgi
 import errno
-import functools
+import httputil
 import ioloop
 import iostream
 import logging
@@ -39,8 +39,6 @@ try:
     import ssl # Python 2.6+
 except ImportError:
     ssl = None
-
-_log = logging.getLogger('tornado.httpserver')
 
 class HTTPServer(object):
     """A non-blocking, single-threaded HTTP server.
@@ -152,36 +150,37 @@ class HTTPServer(object):
         self._socket.bind((address, port))
         self._socket.listen(128)
 
-    def start(self, num_processes=None):
+    def start(self, num_processes=1):
         """Starts this server in the IOLoop.
 
-        By default, we detect the number of cores available on this machine
-        and fork that number of child processes. If num_processes is given, we
-        fork that specific number of sub-processes.
+        By default, we run the server in this process and do not fork any
+        additional child process.
 
-        If num_processes is 1 or we detect only 1 CPU core, we run the server
-        in this process and do not fork any additional child process.
+        If num_processes is None or <= 0, we detect the number of cores
+        available on this machine and fork that number of child
+        processes. If num_processes is given and > 1, we fork that
+        specific number of sub-processes.
 
-        Since we run use processes and not threads, there is no shared memory
+        Since we use processes and not threads, there is no shared memory
         between any server code.
         """
         assert not self._started
         self._started = True
-        if num_processes is None:
+        if num_processes is None or num_processes <= 0:
             # Use sysconf to detect the number of CPUs (cores)
             try:
                 num_processes = os.sysconf("SC_NPROCESSORS_CONF")
             except ValueError:
-                _log.error("Could not get num processors from sysconf; "
+                logging.error("Could not get num processors from sysconf; "
                               "running with one process")
                 num_processes = 1
         if num_processes > 1 and ioloop.IOLoop.initialized():
-            _log.error("Cannot run in multiple processes: IOLoop instance "
+            logging.error("Cannot run in multiple processes: IOLoop instance "
                           "has already been initialized. You cannot call "
                           "IOLoop.instance() before calling start()")
             num_processes = 1
         if num_processes > 1:
-            _log.info("Pre-forking %d server processes", num_processes)
+            logging.info("Pre-forking %d server processes", num_processes)
             for i in range(num_processes):
                 if os.fork() == 0:
                     self.io_loop = ioloop.IOLoop.instance()
@@ -218,7 +217,7 @@ class HTTPServer(object):
                 HTTPConnection(stream, address, self.request_callback,
                                self.no_keep_alive, self.xheaders)
             except:
-                _log.error("Error in connection callback", exc_info=True)
+                logging.error("Error in connection callback", exc_info=True)
 
 
 class HTTPConnection(object):
@@ -278,7 +277,7 @@ class HTTPConnection(object):
         method, uri, version = start_line.split(" ")
         if not version.startswith("HTTP/"):
             raise Exception("Malformed HTTP version in HTTP Request-Line")
-        headers = HTTPHeaders.parse(data[eol:])
+        headers = httputil.HTTPHeaders.parse(data[eol:])
         self._request = HTTPRequest(
             connection=self, method=method, uri=uri, version=version,
             headers=headers, remote_ip=self.address[0])
@@ -307,11 +306,21 @@ class HTTPConnection(object):
                         self._request.arguments.setdefault(name, []).extend(
                             values)
             elif content_type.startswith("multipart/form-data"):
-                boundary = content_type[30:]
-                if boundary: self._parse_mime_body(boundary, data)
+                if 'boundary=' in content_type:
+                    boundary = content_type.split('boundary=',1)[1]
+                    if boundary: self._parse_mime_body(boundary, data)
+                else:
+                    logging.warning("Invalid multipart/form-data")
         self.request_callback(self._request)
 
     def _parse_mime_body(self, boundary, data):
+        # The standard allows for the boundary to be quoted in the header,
+        # although it's rare (it happens at least for google app engine
+        # xmpp).  I think we're also supposed to handle backslash-escapes
+        # here but I'll save that until we see a client that uses them
+        # in the wild.
+        if boundary.startswith('"') and boundary.endswith('"'):
+            boundary = boundary[1:-1]
         if data.endswith("\r\n"):
             footer_length = len(boundary) + 6
         else:
@@ -321,13 +330,13 @@ class HTTPConnection(object):
             if not part: continue
             eoh = part.find("\r\n\r\n")
             if eoh == -1:
-                _log.warning("multipart/form-data missing headers")
+                logging.warning("multipart/form-data missing headers")
                 continue
-            headers = HTTPHeaders.parse(part[:eoh])
+            headers = httputil.HTTPHeaders.parse(part[:eoh])
             name_header = headers.get("Content-Disposition", "")
             if not name_header.startswith("form-data;") or \
                not part.endswith("\r\n"):
-                _log.warning("Invalid multipart/form-data")
+                logging.warning("Invalid multipart/form-data")
                 continue
             value = part[eoh + 4:-2]
             name_values = {}
@@ -335,7 +344,7 @@ class HTTPConnection(object):
                 name, name_value = name_part.strip().split("=", 1)
                 name_values[name] = name_value.strip('"').decode("utf-8")
             if not name_values.get("name"):
-                _log.warning("multipart/form-data value missing name")
+                logging.warning("multipart/form-data value missing name")
                 continue
             name = name_values["name"]
             if name_values.get("filename"):
@@ -371,7 +380,7 @@ class HTTPRequest(object):
         self.method = method
         self.uri = uri
         self.version = version
-        self.headers = headers or HTTPHeaders()
+        self.headers = headers or httputil.HTTPHeaders()
         self.body = body or ""
         if connection and connection.xheaders:
             # Squid uses X-Forwarded-For, others use X-Real-Ip
@@ -428,23 +437,3 @@ class HTTPRequest(object):
         return "%s(%s, headers=%s)" % (
             self.__class__.__name__, args, dict(self.headers))
 
-
-class HTTPHeaders(dict):
-    """A dictionary that maintains Http-Header-Case for all keys."""
-    def __setitem__(self, name, value):
-        dict.__setitem__(self, self._normalize_name(name), value)
-
-    def __getitem__(self, name):
-        return dict.__getitem__(self, self._normalize_name(name))
-
-    def _normalize_name(self, name):
-        return "-".join([w.capitalize() for w in name.split("-")])
-
-    @classmethod
-    def parse(cls, headers_string):
-        headers = cls()
-        for line in headers_string.splitlines():
-            if line:
-                name, value = line.split(": ", 1)
-                headers[name] = value
-        return headers

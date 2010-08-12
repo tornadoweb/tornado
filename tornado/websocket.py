@@ -19,8 +19,6 @@ import logging
 import tornado.escape
 import tornado.web
 
-_log = logging.getLogger('tornado.websocket')
-
 class WebSocketHandler(tornado.web.RequestHandler):
     """A request handler for HTML 5 Web Sockets.
 
@@ -36,7 +34,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
               self.receive_message(self.on_message)
 
           def on_message(self, message):
-             self.write_message(u"You said: " + message)
+              self.write_message(u"You said: " + message)
+              # receive_message only reads a single message, so call it
+              # again to listen for the next one
+              self.receive_message(self.on_message)
 
     Web Sockets are not standard HTTP connections. The "handshake" is HTTP,
     but after the handshake, the protocol is message-based. Consequently,
@@ -116,7 +117,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             try:
                 return callback(*args, **kwargs)
             except Exception, e:
-                _log.error("Uncaught exception in %s",
+                logging.error("Uncaught exception in %s",
                               self.request.path, exc_info=True)
                 self.stream.close()
         return wrapper

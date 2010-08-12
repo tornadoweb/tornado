@@ -17,14 +17,11 @@
 """A lightweight wrapper around MySQLdb."""
 
 import copy
-import MySQLdb
 import MySQLdb.constants
 import MySQLdb.converters
 import MySQLdb.cursors
 import itertools
 import logging
-
-_log = logging.getLogger('tornado.database')
 
 class Connection(object):
     """A lightweight wrapper around MySQLdb DB-API connections.
@@ -72,7 +69,7 @@ class Connection(object):
         try:
             self.reconnect()
         except:
-            _log.error("Cannot connect to MySQL on %s", self.host,
+            logging.error("Cannot connect to MySQL on %s", self.host,
                           exc_info=True)
 
     def __del__(self):
@@ -151,7 +148,7 @@ class Connection(object):
         try:
             return cursor.execute(query, parameters)
         except OperationalError:
-            _log.error("Error connecting to MySQL on %s", self.host)
+            logging.error("Error connecting to MySQL on %s", self.host)
             self.close()
             raise
 
@@ -169,9 +166,12 @@ class Row(dict):
 FIELD_TYPE = MySQLdb.constants.FIELD_TYPE
 FLAG = MySQLdb.constants.FLAG
 CONVERSIONS = copy.deepcopy(MySQLdb.converters.conversions)
-for field_type in \
-        [FIELD_TYPE.BLOB, FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING] + \
-        ([FIELD_TYPE.VARCHAR] if 'VARCHAR' in vars(FIELD_TYPE) else []):
+
+field_types = [FIELD_TYPE.BLOB, FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING]
+if 'VARCHAR' in vars(FIELD_TYPE):
+    field_types.append(FIELD_TYPE.VARCHAR)
+
+for field_type in field_types:
     CONVERSIONS[field_type].insert(0, (FLAG.BINARY, str))
 
 

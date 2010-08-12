@@ -37,7 +37,7 @@ class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
             self.get_authenticated_user(self.async_callback(self._on_auth))
             return
         self.authenticate_redirect()
-    
+
     def _on_auth(self, user):
         if not user:
             raise tornado.web.HTTPError(500, "Google auth failed")
@@ -45,7 +45,6 @@ class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
 
 """
 
-import base64
 import binascii
 import cgi
 import hashlib
@@ -57,8 +56,6 @@ import time
 import urllib
 import urlparse
 import uuid
-
-_log = logging.getLogger("tornado.auth")
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -100,12 +97,12 @@ class OpenIdMixin(object):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)
         args = {
             "openid.ns": "http://specs.openid.net/auth/2.0",
-            "openid.claimed_id": 
+            "openid.claimed_id":
                 "http://specs.openid.net/auth/2.0/identifier_select",
-            "openid.identity": 
+            "openid.identity":
                 "http://specs.openid.net/auth/2.0/identifier_select",
             "openid.return_to": url,
-            "openid.realm": "http://" + self.request.host + "/",
+            "openid.realm": self.request.protocol + "://" + self.request.host + "/",
             "openid.mode": "checkid_setup",
         }
         if ax_attrs:
@@ -146,7 +143,7 @@ class OpenIdMixin(object):
 
     def _on_authentication_verified(self, callback, response):
         if response.error or u"is_valid:true" not in response.body:
-            _log.warning("Invalid OpenID response: %s", response.error or
+            logging.warning("Invalid OpenID response: %s", response.error or
                             response.body)
             callback(None)
             return
@@ -233,12 +230,12 @@ class OAuthMixin(object):
         request_key = self.get_argument("oauth_token")
         request_cookie = self.get_cookie("_oauth_request_token")
         if not request_cookie:
-            _log.warning("Missing OAuth request token cookie")
+            logging.warning("Missing OAuth request token cookie")
             callback(None)
             return
         cookie_key, cookie_secret = request_cookie.split("|")
         if cookie_key != request_key:
-            _log.warning("Request token does not match cookie")
+            logging.warning("Request token does not match cookie")
             callback(None)
             return
         token = dict(key=cookie_key, secret=cookie_secret)
@@ -290,7 +287,7 @@ class OAuthMixin(object):
 
     def _on_access_token(self, callback, response):
         if response.error:
-            _log.warning("Could not fetch access token")
+            logging.warning("Could not fetch access token")
             callback(None)
             return
         access_token = _oauth_parse_response(response.body)
@@ -352,7 +349,7 @@ class TwitterMixin(OAuthMixin):
                 self.get_authenticated_user(self.async_callback(self._on_auth))
                 return
             self.authorize_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "Twitter auth failed")
@@ -366,10 +363,10 @@ class TwitterMixin(OAuthMixin):
     the user; it is required to make requests on behalf of the user later
     with twitter_request().
     """
-    _OAUTH_REQUEST_TOKEN_URL = "http://twitter.com/oauth/request_token"
-    _OAUTH_ACCESS_TOKEN_URL = "http://twitter.com/oauth/access_token"
-    _OAUTH_AUTHORIZE_URL = "http://twitter.com/oauth/authorize"
-    _OAUTH_AUTHENTICATE_URL = "http://twitter.com/oauth/authenticate"
+    _OAUTH_REQUEST_TOKEN_URL = "http://api.twitter.com/oauth/request_token"
+    _OAUTH_ACCESS_TOKEN_URL = "http://api.twitter.com/oauth/access_token"
+    _OAUTH_AUTHORIZE_URL = "http://api.twitter.com/oauth/authorize"
+    _OAUTH_AUTHENTICATE_URL = "http://api.twitter.com/oauth/authenticate"
     _OAUTH_NO_CALLBACKS = True
 
     def authenticate_redirect(self):
@@ -421,7 +418,7 @@ class TwitterMixin(OAuthMixin):
 
         """
         # Add the OAuth resource request signature if we have credentials
-        url = "http://twitter.com" + path + ".json"
+        url = "http://api.twitter.com/1" + path + ".json"
         if access_token:
             all_args = {}
             all_args.update(args)
@@ -439,10 +436,10 @@ class TwitterMixin(OAuthMixin):
                        callback=callback)
         else:
             http.fetch(url, callback=callback)
-    
+
     def _on_twitter_request(self, callback, response):
         if response.error:
-            _log.warning("Error response %s fetching %s", response.error,
+            logging.warning("Error response %s fetching %s", response.error,
                             response.request.url)
             callback(None)
             return
@@ -488,7 +485,7 @@ class FriendFeedMixin(OAuthMixin):
                 self.get_authenticated_user(self.async_callback(self._on_auth))
                 return
             self.authorize_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "FriendFeed auth failed")
@@ -559,10 +556,10 @@ class FriendFeedMixin(OAuthMixin):
                        callback=callback)
         else:
             http.fetch(url, callback=callback)
-    
+
     def _on_friendfeed_request(self, callback, response):
         if response.error:
-            _log.warning("Error response %s fetching %s", response.error,
+            logging.warning("Error response %s fetching %s", response.error,
                             response.request.url)
             callback(None)
             return
@@ -605,7 +602,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
                self.get_authenticated_user(self.async_callback(self._on_auth))
                return
         self.authenticate_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "Google auth failed")
@@ -681,7 +678,7 @@ class FacebookMixin(object):
                 self.get_authenticated_user(self.async_callback(self._on_auth))
                 return
             self.authenticate_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "Facebook auth failed")
@@ -815,22 +812,22 @@ class FacebookMixin(object):
             "profile_url": users[0]["profile_url"],
             "username": users[0].get("username"),
             "session_key": session["session_key"],
-            "session_expires": session["expires"],
+            "session_expires": session.get("expires"),
         })
 
     def _parse_response(self, callback, response):
         if response.error:
-            _log.warning("HTTP error from Facebook: %s", response.error)
+            logging.warning("HTTP error from Facebook: %s", response.error)
             callback(None)
             return
         try:
             json = escape.json_decode(response.body)
         except:
-            _log.warning("Invalid JSON from Facebook: %r", response.body)
+            logging.warning("Invalid JSON from Facebook: %r", response.body)
             callback(None)
             return
         if isinstance(json, dict) and json.get("error_code"):
-            _log.warning("Facebook error: %d: %r", json["error_code"],
+            logging.warning("Facebook error: %d: %r", json["error_code"],
                             json.get("error_msg"))
             callback(None)
             return

@@ -135,7 +135,7 @@ def parse_command_line(args=None):
     return remaining
 
 
-def parse_config_file(path, overwrite=True):
+def parse_config_file(path):
     """Parses and loads the Python config file at the given path."""
     config = {}
     execfile(path, config, config)
@@ -175,7 +175,7 @@ class _Options(dict):
     def __getattr__(self, name):
         if isinstance(self.get(name), _Option):
             return self[name].value()
-        raise Error("Unrecognized option %r" % name)
+        raise AttributeError("Unrecognized option %r" % name)
 
 
 class _Option(object):

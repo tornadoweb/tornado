@@ -154,7 +154,7 @@ you can just raise a `tornado.web.HTTPError` exception:
 
 The request handler can access the object representing the current request
 with `self.request`. The `HTTPRequest` object includes a number of useful
-attribute, including:
+attributes, including:
 
  * `arguments` - all of the `GET` and `POST` arguments
  * `files` - all of the uploaded files (via `multipart/form-data` POST requests)

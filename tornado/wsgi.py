@@ -54,13 +54,12 @@ import cgi
 import cStringIO
 import escape
 import httplib
+import httputil
 import logging
 import sys
 import time
 import urllib
 import web
-
-_log = logging.getLogger('tornado.wsgi')
 
 class WSGIApplication(web.Application):
     """A WSGI-equivalent of web.Application.
@@ -102,7 +101,7 @@ class HTTPRequest(object):
                 values = [v for v in values if v]
                 if values: self.arguments[name] = values
         self.version = "HTTP/1.1"
-        self.headers = HTTPHeaders()
+        self.headers = httputil.HTTPHeaders()
         if environ.get("CONTENT_TYPE"):
             self.headers["Content-Type"] = environ["CONTENT_TYPE"]
         if environ.get("CONTENT_LENGTH"):
@@ -128,8 +127,11 @@ class HTTPRequest(object):
             for name, values in cgi.parse_qs(self.body).iteritems():
                 self.arguments.setdefault(name, []).extend(values)
         elif content_type.startswith("multipart/form-data"):
-            boundary = content_type[30:]
-            if boundary: self._parse_mime_body(boundary)
+            if 'boundary=' in content_type:
+                boundary = content_type.split('boundary=',1)[1]
+                if boundary: self._parse_mime_body(boundary)
+            else:
+                logging.warning("Invalid multipart/form-data")
 
         self._start_time = time.time()
         self._finish_time = None
@@ -150,6 +152,8 @@ class HTTPRequest(object):
             return self._finish_time - self._start_time
 
     def _parse_mime_body(self, boundary):
+        if boundary.startswith('"') and boundary.endswith('"'):
+            boundary = boundary[1:-1]
         if self.body.endswith("\r\n"):
             footer_length = len(boundary) + 6
         else:
@@ -159,13 +163,13 @@ class HTTPRequest(object):
             if not part: continue
             eoh = part.find("\r\n\r\n")
             if eoh == -1:
-                _log.warning("multipart/form-data missing headers")
+                logging.warning("multipart/form-data missing headers")
                 continue
-            headers = HTTPHeaders.parse(part[:eoh])
+            headers = httputil.HTTPHeaders.parse(part[:eoh])
             name_header = headers.get("Content-Disposition", "")
             if not name_header.startswith("form-data;") or \
                not part.endswith("\r\n"):
-                _log.warning("Invalid multipart/form-data")
+                logging.warning("Invalid multipart/form-data")
                 continue
             value = part[eoh + 4:-2]
             name_values = {}
@@ -173,7 +177,7 @@ class HTTPRequest(object):
                 name, name_value = name_part.strip().split("=", 1)
                 name_values[name] = name_value.strip('"').decode("utf-8")
             if not name_values.get("name"):
-                _log.warning("multipart/form-data value missing name")
+                logging.warning("multipart/form-data value missing name")
                 continue
             name = name_values["name"]
             if name_values.get("filename"):
@@ -211,14 +215,17 @@ class WSGIContainer(object):
 
     def __call__(self, request):
         data = {}
+        response = []
         def start_response(status, response_headers, exc_info=None):
             data["status"] = status
             data["headers"] = response_headers
-        response = self.wsgi_application(
+            return response.append
+        app_response = self.wsgi_application(
             WSGIContainer.environ(request), start_response)
+        response.extend(app_response)
         body = "".join(response)
-        if hasattr(response, "close"):
-            response.close()
+        if hasattr(app_response, "close"):
+            app_response.close()
         if not data: raise Exception("WSGI app did not call start_response")
 
         status_code = int(data["status"].split()[0])
@@ -261,7 +268,7 @@ class WSGIContainer(object):
             "SERVER_PROTOCOL": request.version,
             "wsgi.version": (1, 0),
             "wsgi.url_scheme": request.protocol,
-            "wsgi.input": cStringIO.StringIO(request.body),
+            "wsgi.input": cStringIO.StringIO(escape.utf8(request.body)),
             "wsgi.errors": sys.stderr,
             "wsgi.multithread": False,
             "wsgi.multiprocess": True,
@@ -277,33 +284,13 @@ class WSGIContainer(object):
 
     def _log(self, status_code, request):
         if status_code < 400:
-            log_method = _log.info
+            log_method = logging.info
         elif status_code < 500:
-            log_method = _log.warning
+            log_method = logging.warning
         else:
-            log_method = _log.error
+            log_method = logging.error
         request_time = 1000.0 * request.request_time()
         summary = request.method + " " + request.uri + " (" + \
             request.remote_ip + ")"
         log_method("%d %s %.2fms", status_code, summary, request_time)
 
-
-class HTTPHeaders(dict):
-    """A dictionary that maintains Http-Header-Case for all keys."""
-    def __setitem__(self, name, value):
-        dict.__setitem__(self, self._normalize_name(name), value)
-
-    def __getitem__(self, name):
-        return dict.__getitem__(self, self._normalize_name(name))
-
-    def _normalize_name(self, name):
-        return "-".join([w.capitalize() for w in name.split("-")])
-
-    @classmethod
-    def parse(cls, headers_string):
-        headers = cls()
-        for line in headers_string.splitlines():
-            if line:
-                name, value = line.split(": ", 1)
-                headers[name] = value
-        return headers
