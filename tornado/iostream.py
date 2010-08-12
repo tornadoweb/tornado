@@ -22,6 +22,11 @@ import socket
 
 from tornado import ioloop
 
+try:
+    import ssl # Python 2.6+
+except ImportError:
+    ssl = None
+
 class IOStream(object):
     """A utility class to write to and read from a non-blocking socket.
 
@@ -241,3 +246,34 @@ class IOStream(object):
         if not self._state & state:
             self._state = self._state | state
             self.io_loop.update_handler(self.socket.fileno(), self._state)
+
+
+class SSLIOStream(IOStream):
+    """Sets up an SSL connection in a non-blocking manner"""
+    def __init__(self, *args, **kwargs):
+        super(SSLIOStream, self).__init__(*args, **kwargs)
+        self._ssl_accepting = True
+        self._add_io_state(self.io_loop.READ)
+
+    def _do_ssl_handshake(self):
+        # Based on code from test_ssl.py in the python stdlib
+        try:
+            self.socket.do_handshake()
+        except ssl.SSLError, err:
+            if err.args[0] in (ssl.SSL_ERROR_WANT_READ,
+                               ssl.SSL_ERROR_WANT_WRITE):
+                return
+            elif err.args[0] == ssl.SSL_ERROR_EOF:
+                return self.close()
+            raise
+        except socket.error, err:
+            if err.args[0] == errno.ECONNABORTED:
+                return self.close()
+        else:
+            self._ssl_accepting = False
+
+    def _handle_read(self):
+        if self._ssl_accepting:
+            self._do_ssl_handshake()
+            return
+        super(SSLIOStream, self)._handle_read()
