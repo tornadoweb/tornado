@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import with_statement
 
 from tornado.stack_context import StackContext, wrap
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
