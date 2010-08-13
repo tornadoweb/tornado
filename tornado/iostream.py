@@ -253,7 +253,7 @@ class SSLIOStream(IOStream):
     def __init__(self, *args, **kwargs):
         super(SSLIOStream, self).__init__(*args, **kwargs)
         self._ssl_accepting = True
-        self._add_io_state(self.io_loop.READ)
+        self._do_ssl_handshake()
 
     def _do_ssl_handshake(self):
         # Based on code from test_ssl.py in the python stdlib
@@ -262,6 +262,7 @@ class SSLIOStream(IOStream):
         except ssl.SSLError, err:
             if err.args[0] in (ssl.SSL_ERROR_WANT_READ,
                                ssl.SSL_ERROR_WANT_WRITE):
+                self._add_io_state(self.io_loop.READ)
                 return
             elif err.args[0] == ssl.SSL_ERROR_EOF:
                 return self.close()
