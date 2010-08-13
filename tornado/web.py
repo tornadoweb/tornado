@@ -344,6 +344,16 @@ class RequestHandler(object):
         if timestamp < time.time() - 31 * 86400:
             logging.warning("Expired cookie %r", value)
             return None
+        if timestamp > time.time() + 31 * 86400:
+            # _cookie_signature does not hash a delimiter between the
+            # parts of the cookie, so an attacker could transfer trailing
+            # digits from the payload to the timestamp without altering the
+            # signature.  For backwards compatibility, sanity-check timestamp
+            # here instead of modifying _cookie_signature.
+            logging.warning("Cookie timestamp in future; possible tampering %r", value)
+            return None
+        if parts[1].startswith("0"):
+            logging.warning("Tampered cookie %r", value)
         try:
             return base64.b64decode(parts[0])
         except:
