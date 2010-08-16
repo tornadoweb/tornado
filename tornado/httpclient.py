@@ -365,7 +365,8 @@ class HTTPRequest(object):
                  max_redirects=5, user_agent=None, use_gzip=True,
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
-                 allow_nonstandard_methods=False):
+                 proxy_host=None, proxy_port=None, proxy_username=None,
+                 proxy_password='', allow_nonstandard_methods=False):
         if headers is None:
             headers = httputil.HTTPHeaders()
         if if_modified_since:
@@ -374,6 +375,12 @@ class HTTPRequest(object):
                 timestamp, localtime=False, usegmt=True)
         if "Pragma" not in headers:
             headers["Pragma"] = ""
+        # Proxy support: proxy_host and proxy_port must be set to connect via
+        # proxy.  The username and password credentials are optional.
+        self.proxy_host = proxy_host
+        self.proxy_port = proxy_port
+        self.proxy_username = proxy_username
+        self.proxy_password = proxy_password
         # libcurl's magic "Expect: 100-continue" behavior causes delays
         # with servers that don't support it (which include, among others,
         # Google's OpenID endpoint).  Additionally, this behavior has
@@ -532,6 +539,13 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.setopt(pycurl.ENCODING, "gzip,deflate")
     else:
         curl.setopt(pycurl.ENCODING, "none")
+    if request.proxy_host and request.proxy_port:
+        curl.setopt(pycurl.PROXY, request.proxy_host)
+        curl.setopt(pycurl.PROXYPORT, request.proxy_port)
+        if request.proxy_username:
+            credentials = '%s:%s' % (request.proxy_username, 
+                    request.proxy_password)
+            curl.setopt(pycurl.PROXYUSERPWD, credentials)
 
     # Set the request method through curl's retarded interface which makes
     # up names for almost every single method
