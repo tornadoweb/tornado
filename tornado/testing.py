@@ -74,12 +74,16 @@ class AsyncTestCase(unittest.TestCase):
                 response = self.wait()
                 # Test contents of response
     """
-    def setUp(self):
-        self.io_loop = self.get_new_ioloop()
+    def __init__(self, *args, **kwargs):
+        super(AsyncTestCase, self).__init__(*args, **kwargs)
         self.__stopped = False
         self.__running = False
         self.__failure = None
         self.__stop_args = None
+
+    def setUp(self):
+        super(AsyncTestCase, self).setUp()
+        self.io_loop = self.get_new_ioloop()
 
     def tearDown(self):
         if self.io_loop is not tornado.ioloop.IOLoop.instance():
