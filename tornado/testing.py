@@ -246,6 +246,12 @@ class LogTrapTestCase(unittest.TestCase):
     """
     def run(self, result=None):
         logger = logging.getLogger()
+        if len(logger.handlers) > 1:
+            # Multiple handlers have been defined.  It gets messy to handle
+            # this, especially since the handlers may have different
+            # formatters.  Just leave the logging alone in this case.
+            super(LogTrapTestCase, self).run(result)
+            return
         if not logger.handlers:
             logging.basicConfig()
         self.assertEqual(len(logger.handlers), 1)
