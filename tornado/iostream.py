@@ -260,9 +260,11 @@ class SSLIOStream(IOStream):
         try:
             self.socket.do_handshake()
         except ssl.SSLError, err:
-            if err.args[0] in (ssl.SSL_ERROR_WANT_READ,
-                               ssl.SSL_ERROR_WANT_WRITE):
+            if err.args[0] == ssl.SSL_ERROR_WANT_READ:
                 self._add_io_state(self.io_loop.READ)
+                return
+            elif err.args[0] == ssl.SSL_ERROR_WANT_WRITE:
+                self._add_io_state(self.io_loop.WRITE)
                 return
             elif err.args[0] in (ssl.SSL_ERROR_EOF,
                                  ssl.SSL_ERROR_ZERO_RETURN):
