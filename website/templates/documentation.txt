@@ -753,6 +753,11 @@ and static file server. We run multiple instances of the Tornado web
 server on multiple frontend machines. We typically run one Tornado frontend
 per core on the machine (sometimes more depending on utilization).
 
+When running behind a load balancer like nginx, it is recommended to pass
+`xheaders=True` to the `HTTPServer` constructor.  This will tell Tornado
+to use headers like `X-Real-IP` to get the user's IP address instead of
+attributing all traffic to the balancer's IP address.
+
 This is a barebones nginx config file that is structurally similar to the
 one we use at FriendFeed. It assumes nginx and the Tornado servers
 are running on the same machine, and the four Tornado servers
