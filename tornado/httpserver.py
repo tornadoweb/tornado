@@ -226,18 +226,20 @@ class HTTPServer(object):
             if self.ssl_options is not None:
                 assert ssl, "Python 2.6+ and OpenSSL required for SSL"
                 try:
-                    connection = ssl.wrap_socket(connection, 
-                                                 server_side=True, 
-                                                 do_handshake_on_connect=False, 
+                    connection = ssl.wrap_socket(connection,
+                                                 server_side=True,
+                                                 do_handshake_on_connect=False,
                                                  **self.ssl_options)
                 except ssl.SSLError, err:
-                    logging.error("SSL Error in SSL wrap:", exc_info=True)
                     if err.args[0] == ssl.SSL_ERROR_EOF:
                         return connection.close()
+                    else:
+                        raise
                 except socket.error, err:
-                    logging.error("Socket Error in SSL wrap:", exc_info=True)
                     if err.args[0] == errno.ECONNABORTED:
                         return connection.close()
+                    else:
+                        raise
             try:
                 if self.ssl_options is not None:
                     stream = iostream.SSLIOStream(connection, io_loop=self.io_loop)
