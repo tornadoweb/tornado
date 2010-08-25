@@ -201,7 +201,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
         self.http_client = AsyncHTTPClient(io_loop=self.io_loop)
         self._app = self.get_app()
-        self.http_server = HTTPServer(self._app, io_loop=self.io_loop)
+        self.http_server = HTTPServer(self._app, io_loop=self.io_loop,
+                                      **self.get_httpserver_options())
         self.http_server.listen(self.get_http_port())
 
     def get_app(self):
@@ -209,6 +210,12 @@ class AsyncHTTPTestCase(AsyncTestCase):
         tornado.web.Application or other HTTPServer callback.
         """
         raise NotImplementedError()
+
+    def get_httpserver_options(self):
+        """May be overridden by subclasses to return additional
+        keyword arguments for HTTPServer.
+        """
+        return {}
 
     def get_http_port(self):
         """Returns the port used by the HTTPServer.
