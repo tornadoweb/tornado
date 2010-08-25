@@ -6,7 +6,7 @@
 # NB. It's no longer possible to manually select which callback that should
 #     be invoked upon message reception. Instead you must override the
 #     on_message(message) method to handle incoming messsages.
-#     This also means that you don't have to explicitly invoke 
+#     This also means that you don't have to explicitly invoke
 #     receive_message, in fact you shouldn't.
 #
 # [1] http://github.com/facebook/tornado/blob/
@@ -26,36 +26,36 @@ import tornado.web
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
 
-    Override on_message to handle incoming messages. You can also override 
+    Override on_message to handle incoming messages. You can also override
     open and on_close to handle opened and closed connections.
 
     See http://www.w3.org/TR/2009/WD-websockets-20091222/ for details on the
     JavaScript interface. This implement the protocol as specified at
     http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-76.
- 
+
     Here is an example Web Socket handler that echos back all received messages
     back to the client:
- 
+
       class EchoWebSocket(websocket.WebSocketHandler):
           def open(self):
               print "WebSocket opened"
- 
+
           def on_message(self, message):
               self.write_message(u"You said: " + message)
 
           def on_close(self):
               print "WebSocket closed"
- 
+
     Web Sockets are not standard HTTP connections. The "handshake" is HTTP,
     but after the handshake, the protocol is message-based. Consequently,
     most of the Tornado HTTP facilities are not available in handlers of this
     type. The only communication methods available to you are send_message()
     and close(). Likewise, your request handler class should
     implement open() method rather than get() or post().
- 
+
     If you map the handler above to "/websocket" in your application, you can
     invoke it in JavaScript with:
- 
+
       var ws = new WebSocket("ws://localhost:8888/websocket");
       ws.onopen = function() {
          ws.send("Hello, world");
@@ -63,7 +63,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
       ws.onmessage = function (evt) {
          alert(evt.data);
       };
- 
+
     This script pops up an alert box that says "You said: Hello, world".
     """
     def __init__(self, application, request):
@@ -97,11 +97,15 @@ class WebSocketHandler(tornado.web.RequestHandler):
             "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
             "Upgrade: WebSocket\r\n"
             "Connection: Upgrade\r\n"
-            "Server: TornadoServer/0.1\r\n"
-            "Sec-WebSocket-Origin: %s\r\n"
-            "Sec-WebSocket-Location: ws://%s%s\r\n"
-            "\r\n%s" % (self.request.headers["Origin"], self.request.host, 
-             self.request.path, challenge))
+            "Server: TornadoServer/%(version)s\r\n"
+            "Sec-WebSocket-Origin: %(origin)s\r\n"
+            "Sec-WebSocket-Location: ws://%(host)s%(path)s\r\n"
+            "\r\n%(challenge)s" % (dict(
+                    version=tornado.version,
+                    origin=self.request.headers["Origin"],
+                    host=self.request.host,
+                    path=self.request.path,
+                    challeng=challenge)))
         self.async_callback(self.open)(*self.open_args, **self.open_kwargs)
         self._receive_message()
 
@@ -120,7 +124,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def on_message(self, message):
         """Handle incoming messages on the WebSocket
-        
+
         This method must be overloaded
         """
         raise NotImplementedError
@@ -132,7 +136,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def close(self):
         """Closes this Web Socket.
-        
+
         Once the close handshake is successful the socket will be closed.
         """
         if self.client_terminated and self._waiting:
@@ -189,7 +193,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             return
         self.client_terminated = True
         self.close()
-    
+
     def on_connection_close(self):
         self.client_terminated = True
         self.on_close()
@@ -207,7 +211,7 @@ class WebSocketRequest(object):
     """A single WebSocket request.
 
     This class provides basic functionality to process WebSockets requests as
-    specified in 
+    specified in
     http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-76
     """
     def __init__(self, request):
@@ -237,7 +241,7 @@ class WebSocketRequest(object):
         raised
         """
         headers = self.request.headers
-        fields = ("Origin", "Host", "Sec-Websocket-Key1", 
+        fields = ("Origin", "Host", "Sec-Websocket-Key1",
                   "Sec-Websocket-Key2")
         if headers.get("Upgrade", '').lower() != "websocket" or \
            headers.get("Connection", '').lower() != "upgrade" or \

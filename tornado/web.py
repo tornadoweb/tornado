@@ -65,6 +65,7 @@ import re
 import stat
 import sys
 import time
+import tornado
 import types
 import urllib
 import urlparse
@@ -171,7 +172,7 @@ class RequestHandler(object):
     def clear(self):
         """Resets all headers and content for this response."""
         self._headers = {
-            "Server": "TornadoServer/1.0",
+            "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
         }
         if not self.request.supports_http_1_1():
