@@ -172,6 +172,51 @@ attributes, including:
 See the class definition for `HTTPRequest` in `httpserver` for a complete list
 of attributes.
 
+### Overriding RequestHandler methods
+
+In addition to `get()`/`post()`/etc, certain other methods in `RequestHandler`
+are designed to be overridden by subclasses when necessary.  On every request,
+the following sequence of calls takes place:
+
+ 1. A new RequestHandler object is created on each request
+ 2. `initialize()` is called with keyword arguments from the `Application`
+    configuration. (the `initialize` method is new in Tornado 1.1; in older
+    versions subclasses would override `__init__` instead).  `initialize`
+    should typically just save the arguments passed into member variables;
+    it may not produce any output or call methods like `send_error`.
+ 3. `prepare()` is called.  This is most useful in a base class shared
+    by all of your handler subclasses, as `prepare` is called no matter
+    which HTTP method is used.  `prepare` may produce output; if it calls
+    `finish` (or `send_error`, etc), processing stops here.
+ 4. One of the HTTP methods is called: `get()`, `post()`, `put()`, etc.
+    If the URL regular expression contains capturing groups, they are
+    passed as arguments to this method.
+
+Here is an example demonstrating the `initialize()` method:
+
+    class ProfileHandler(RequestHandler):
+        def initialize(self, database):
+            self.database = database
+
+        def get(self, username):
+            ...
+
+    app = Application([
+        (r'/user/(.*)', ProfileHandler, dict(database=database)),
+        ])
+
+Other methods designed for overriding include:
+
+ * `get_error_html(self, status_code, exception=None, **kwargs)` - returns
+   HTML (as a string) for use on error pages.
+ * `get_current_user(self)` - see
+   [User Authentication](#user-authentication) below
+ * `get_user_locale(self)` - returns `locale` object to use for the current
+   user
+ * `get_login_url(self)` - returns login url to be used by the
+   `@authenticated` decorator (default is in `Application` settings)
+ * `get_template_path(self)` - returns location of template files (default is
+   in `Application` settings)
 
 ### Templates
 
