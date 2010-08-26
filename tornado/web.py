@@ -1018,7 +1018,13 @@ class Application(object):
             autoreload.start()
 
     def add_handlers(self, host_pattern, host_handlers):
-        """Appends the given handlers to our handler list."""
+        """Appends the given handlers to our handler list.
+
+        Note that host patterns are processed sequentially in the
+        order they were added, and only the first matching pattern is
+        used.  This means that all handlers for a given host must be
+        added in a single add_handlers call.
+        """
         if not host_pattern.endswith("$"):
             host_pattern += "$"
         handlers = []
