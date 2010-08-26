@@ -370,9 +370,10 @@ class PeriodicCallback(object):
         self.callback = callback
         self.callback_time = callback_time
         self.io_loop = io_loop or IOLoop.instance()
-        self._running = True
+        self._running = False
 
     def start(self):
+        self._running = True
         timeout = time.time() + self.callback_time / 1000.0
         self.io_loop.add_timeout(timeout, self._run)
 
