@@ -184,6 +184,11 @@ class HTTPServer(object):
 
         Since we use processes and not threads, there is no shared memory
         between any server code.
+
+        Note that multiple processes are not compatible with the autoreload
+        module (or the debug=True option to tornado.web.Application).
+        When using multiple processes, no IOLoops can be created or
+        referenced until after the call to HTTPServer.start(n).
         """
         assert not self._started
         self._started = True
