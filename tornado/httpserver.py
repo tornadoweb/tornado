@@ -116,10 +116,10 @@ class HTTPServer(object):
 
         http_server = httpserver.HTTPServer(handle_request)
         http_server.bind(8888)
-        http_server.start() # Forks multiple sub-processes
+        http_server.start(0) # Forks multiple sub-processes
         ioloop.IOLoop.instance().start()
 
-    start() detects the number of CPUs on this machine and "pre-forks" that
+    start(0) detects the number of CPUs on this machine and "pre-forks" that
     number of child processes so that we have one Tornado process per CPU,
     all with their own IOLoop. You can also pass in the specific number of
     child processes you want to run with if you want to override this
