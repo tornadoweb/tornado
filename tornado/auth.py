@@ -57,6 +57,7 @@ import uuid
 
 from tornado import httpclient
 from tornado import escape
+from tornado.ioloop import IOLoop
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -330,8 +331,220 @@ class OAuthMixin(object):
         base_args["oauth_signature"] = signature
         return base_args
 
+class OAuth10aMixin(object):
+    """Abstract implementation of OAuth v 1.0a.
 
-class TwitterMixin(OAuthMixin):
+       This class is based off of the work done by Marc Hedlund, references
+       to the suggested changes can be found in this thread:
+       http://groups.google.com/group/python-tornado/browse_thread/thread/f308d25962fd820f
+
+       See TwitterFeedMixin and YoutubeMixin below for example implementations.
+
+    """
+    def authorize_redirect(self, callback_uri=None, extra_params=None):
+        """Redirects the user to obtain OAuth authorization for this service.
+
+        Some providers require that you register a Callback
+        URL with your application. You should call this method to log the
+        user in, and then call get_authenticated_user() in the handler
+        you registered as your Callback URL to complete the authorization
+        process.
+
+        This method sets a cookie called _oauth_request_token which is
+        subsequently used (and cleared) in get_authenticated_user for
+        security purposes.
+
+        Some service providers require extra parameters on the authorization
+        request (for instance, Google OAuth requires a 'scope' parameter).
+        Pass a dict as extra_params to send these parameters in the request.
+        """
+        if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
+            raise Exception("This service does not support oauth_callback")
+        http = httpclient.AsyncHTTPClient()
+        http.fetch(self._oauth_request_token_url(callback_uri=callback_uri,
+            extra_params=extra_params),
+            self.async_callback(
+                self._on_request_token,
+                self._OAUTH_AUTHORIZE_URL,
+            callback_uri))
+
+    def get_authenticated_user(self, callback, auth_token_retry=0):
+        """Gets the OAuth authorized user and access token on callback.
+
+        This method should be called from the handler for your registered
+        OAuth Callback URL to complete the registration process. We call
+        callback with the authenticated user, which in addition to standard
+        attributes like 'name' includes the 'access_key' attribute, which
+        contains the OAuth access you can use to make authorized requests
+        to this service on behalf of the user.
+
+        auth_token_retry is the number of attempts to try and receive the
+        auth token from the service provider if the first attempt fails. This
+        was added due to a delay found with authenication and Youtube. If you
+        have problems with other providers appearing to be slow on making auth
+        tokens available, try setting this higher.
+        """
+        request_key = self.get_argument("oauth_token")
+        oauth_verifier = self.get_argument("oauth_verifier", None)
+        request_cookie = self.get_cookie("_oauth_request_token")
+        if not request_cookie:
+            logging.warning("Missing OAuth request token cookie")
+            callback(None)
+            return
+        self.clear_cookie("_oauth_request_token")
+        cookie_key, cookie_secret = request_cookie.split("|")
+        if cookie_key != request_key:
+            logging.warning("Request token does not match cookie")
+            callback(None)
+            return
+        token = dict(key=cookie_key, secret=cookie_secret)
+        if oauth_verifier:
+          token["verifier"] = oauth_verifier
+        http = httpclient.AsyncHTTPClient()
+        http.fetch(self._oauth_access_token_url(token), self.async_callback(
+            self._on_access_token, callback, auth_token_retry))
+
+    def _oauth_request_token_url(self, callback_uri= None, extra_params=None):
+        consumer_token = self._oauth_consumer_token()
+        url = self._OAUTH_REQUEST_TOKEN_URL
+        args = dict(
+            oauth_consumer_key=consumer_token["key"],
+            oauth_signature_method="HMAC-SHA1",
+            oauth_timestamp=str(int(time.time())),
+            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_version="1.0",
+        )
+        if callback_uri:
+            args["oauth_callback"] = urlparse.urljoin(
+                self.request.full_url(), callback_uri)
+        if extra_params: args.update(extra_params)
+        signature = _oauth10a_signature(consumer_token, "GET", url, args)
+        args["oauth_signature"] = signature
+        return url + "?" + urllib.urlencode(args)
+
+    def _on_request_token(self, authorize_url, callback_uri, response):
+        if response.error:
+            raise Exception("Could not get request token")
+        request_token = _oauth_parse_response(response.body)
+        data = "|".join([request_token["key"], request_token["secret"]])
+        self.set_cookie("_oauth_request_token", data)
+        args = dict(oauth_token=request_token["key"])
+        if callback_uri:
+            args["oauth_callback"] = urlparse.urljoin(
+                self.request.full_url(), callback_uri)
+        self.redirect(authorize_url + "?" + urllib.urlencode(args))
+
+    def _oauth_access_token_url(self, request_token):
+        consumer_token = self._oauth_consumer_token()
+        url = self._OAUTH_ACCESS_TOKEN_URL
+        args = dict(
+            oauth_consumer_key=consumer_token["key"],
+            oauth_token=request_token["key"],
+            oauth_signature_method="HMAC-SHA1",
+            oauth_timestamp=str(int(time.time())),
+            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_version="1.0",
+        )
+        if "verifier" in request_token:
+          args["oauth_verifier"]=request_token["verifier"]
+
+        signature = _oauth10a_signature(consumer_token, "GET", url, args, request_token)
+        args["oauth_signature"] = signature
+        return url + "?" + urllib.urlencode(args)
+
+    def _on_access_token(self, callback, auth_token_retry, response):
+        if response.error and auth_token_retry > 0:
+          # This kludge was the only way I could reliably authenticate
+          # with Youtube. I didn't have any problems authenticating with
+          # Twitter. It seems that Google (or just Youtube) had a delay in
+          # with validating request tokens. Strange, but true.
+          if getattr(self, "last_attempt", 0) < auth_token_retry:
+            logging.warning("Could not fetch access token, trying again.")
+            if not(getattr(self, "last_attempt", False)):
+              self.last_attempt = 1
+            else:
+              self.last_attempt += 1
+            http = httpclient.AsyncHTTPClient()
+            IOLoop.instance().add_timeout(time.time() + .5, http.fetch(
+              response.effective_url, self.async_callback(
+                self._on_access_token, callback)))
+          else:
+            logging.warning("Failed to fetch access token on 3 attempts")
+            callback(None)
+        else:
+          access_token = _oauth_parse_response(response.body)
+          user = self._oauth_get_user(access_token, self.async_callback(
+               self._on_oauth_get_user, access_token, callback))
+
+    def _oauth_get_user(self, access_token, callback):
+        raise NotImplementedError()
+
+    def _on_oauth_get_user(self, access_token, callback, user):
+        if not user:
+            callback(None)
+            return
+        user["access_token"] = access_token
+        callback(user)
+
+    def _oauth_request_parameters(self, url, access_token, parameters={},
+                                  method="GET"):
+        """Returns the OAuth parameters as a dict for the given request.
+
+        parameters should include all POST arguments and query string arguments
+        that will be sent with the request.
+        """
+        consumer_token = self._oauth_consumer_token()
+        base_args = dict(
+            oauth_consumer_key=consumer_token["key"],
+            oauth_token=access_token["key"],
+            oauth_signature_method="HMAC-SHA1",
+            oauth_timestamp=str(int(time.time())),
+            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_version="1.0",
+        )
+        args = {}
+        args.update(base_args)
+        args.update(parameters)
+        signature = _oauth10a_signature(consumer_token, method, url, args,
+                                     access_token)
+        base_args["oauth_signature"] = signature
+        return base_args
+
+class Oauth2Mixin(object):
+    """Abstract implementation of OAuth v 2."""
+
+    def authorize_redirect(self, redirect_uri=None, client_id=None,
+                           client_secret=None, extra_params=None ):
+        """Redirects the user to obtain OAuth authorization for this service.
+
+        Some providers require that you register a Callback
+        URL with your application. You should call this method to log the
+        user in, and then call get_authenticated_user() in the handler
+        you registered as your Callback URL to complete the authorization
+        process.
+        """
+        args = {
+          "redirect_uri": redirect_uri,
+          "client_id": client_id
+        }
+        if extra_params: args.update(extra_params)
+        self.redirect(self._OAUTH_AUTHORIZE_URL +
+              urllib.urlencode(args))
+
+    def _oauth_request_token_url(self, redirect_uri= None, client_id = None,
+                                 client_secret=None, code=None,
+                                 extra_params=None):
+        url = self._OAUTH_ACCESS_TOKEN_URL
+        args = dict(
+            redirect_uri=redirect_uri,
+            code=code,
+            client_id=client_id,
+            client_secret=client_secret,
+            )
+        if extra_params: args.update(extra_params)
+        return url + urllib.urlencode(args)
+
+class TwitterMixin(OAuth10aMixin):
     """Twitter OAuth authentication.
 
     To authenticate with Twitter, register your application with
@@ -369,7 +582,7 @@ class TwitterMixin(OAuthMixin):
     _OAUTH_ACCESS_TOKEN_URL = "http://api.twitter.com/oauth/access_token"
     _OAUTH_AUTHORIZE_URL = "http://api.twitter.com/oauth/authorize"
     _OAUTH_AUTHENTICATE_URL = "http://api.twitter.com/oauth/authenticate"
-    _OAUTH_NO_CALLBACKS = True
+    _OAUTH_NO_CALLBACKS = False
 
     def authenticate_redirect(self):
         """Just like authorize_redirect(), but auto-redirects if authorized.
@@ -660,6 +873,140 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
     def _oauth_get_user(self, access_token, callback):
         OpenIdMixin.get_authenticated_user(self, callback)
 
+class YoutubeMixin(OAuth10aMixin):
+    """ To authenticate with Youtube, register your application with Google.
+    See http://code.google.com/apis/accounts/docs/RegistrationForWebAppsAuto.html
+    Then copy your Consumer Key and Consumer Secret to the application settings
+    'google_consumer_key' and 'google_consumer_secret'. Use this Mixin on the
+    handler for the URL you registered as your application's Callback URL.
+
+    When your application is set up, you can use this Mixin like this
+    to authenticate the user with Twitter and get access to their stream:
+
+    class YoutubeHandler(tornado.web.RequestHandler,
+                         tornado.auth.YoutubeMixin):
+        @tornado.web.asynchronous
+        def get(self):
+            if self.get_argument("oauth_token", None):
+                self.get_authenticated_user(self.async_callback(self._on_auth),
+                    {"scope": "http://gdata.youtube.com"})
+                return
+            self.authorize_redirect()
+
+        def _on_auth(self, user):
+            if not user:
+                raise tornado.web.HTTPError(500, "Youtube auth failed")
+            # Save the user using, e.g., set_secure_cookie()
+
+    The user object returned by get_authenticated_user() includes the
+    attribute. 'username' in addition to 'access_token'. You should save the
+    access token with the user; it is required to make requests on behalf of the
+    user later with youtube_request().
+    """
+    _OAUTH_REQUEST_TOKEN_URL = "https://www.google.com/accounts/OAuthGetRequestToken"
+    _OAUTH_ACCESS_TOKEN_URL = "https://www.google.com/accounts/OAuthGetAccessToken"
+    _OAUTH_AUTHORIZE_URL = "https://www.google.com/accounts/OAuthAuthorizeToken"
+
+    def youtube_request(self, path, callback, access_token=None,
+                           post_args=None, scope="http://gdata.youtube.com", **args):
+        """Fetches the given API path, e.g., "/users/default/playlists"
+
+        The /feeds/api portion of the path is included for you already.
+
+        If you do not add version (v) or output type (alt) paramters they
+        will default to v=2&alt=json
+
+        If the request is a POST, post_args should be provided. Query
+        string arguments should be given as keyword arguments.
+
+        Extensive documentation on the Youtube API can be found here
+        http://code.google.com/apis/youtube/2.0/reference.html
+
+        Many methods require an OAuth access token which you can obtain
+        through authorize_redirect() and get_authenticated_user(). The
+        user returned through that process includes an 'access_token'
+        attribute that can be used to make authenticated requests via
+        this method. Example usage:
+
+        class MainHandler(tornado.web.RequestHandler,
+                          tornado.auth.YoutubeMixin):
+            @tornado.web.authenticated
+            @tornado.web.asynchronous
+            def get(self):
+                self.youtube_request(
+                    "/users/default/playlists",
+                    access_token=user["access_token"],
+                    callback=self.async_callback(self._on_post))
+
+            def _on_post(self, new_entry):
+                if not output:
+                    # Call failed; perhaps missing permission?
+                    self.authorize_redirect()
+                    return
+                # parse json output to display playlists
+                self.finish("Got my playlists!")
+
+        """
+
+        url = "http://gdata.youtube.com/feeds/api" + path
+        if access_token:
+            all_args = {"scope": scope}
+            if not "v" in args:
+              all_args["v"] = 2
+            if not "alt" in args:
+              all_args["alt"] = "json"
+            all_args.update(args)
+            all_args.update(post_args or {})
+            method = "POST" if post_args is not None else "GET"
+            oauth = self._oauth_request_parameters(
+                url, access_token, all_args, method=method)
+            all_args.update(oauth)
+        if all_args: url += "?" + urllib.urlencode(all_args)
+        callback = self.async_callback(self._on_youtube_request, callback)
+        http = httpclient.AsyncHTTPClient()
+        if post_args is not None:
+            http.fetch(url, method="POST", body=urllib.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, callback=callback)
+
+    def _on_youtube_request(self, callback, response):
+        if response.error:
+            logging.warning("Error response %s fetching %s", response.error,
+                            response.request.url)
+            callback(None)
+            return
+        callback(escape.json_decode(response.body))
+
+    def _oauth_consumer_token(self):
+        self.require_setting("google_consumer_key", "Google OAuth")
+        self.require_setting("google_consumer_secret", "Google OAuth")
+        return dict(
+            key=self.settings["google_consumer_key"],
+            secret=self.settings["google_consumer_secret"])
+
+    def _oauth_get_user(self, access_token, callback):
+        callback = self.async_callback(self._parse_user_response, callback)
+        self.youtube_request(
+            "/users/default",
+            access_token=access_token, callback=callback)
+
+    def _parse_user_response(self, callback, user):
+        if user:
+            user["username"] = user["entry"]["yt$username"]["$t"]
+        callback(user)
+
+    def get_authenticated_user(self, callback, auth_token_retry=3):
+        """ override get_authenticated_user to default auth_token_retry to 3 """
+        return OAuth10aMixin.get_authenticated_user(self,
+                                            callback,
+                                            auth_token_retry=auth_token_retry)
+
+    def authorize_redirect(self, callback_uri):
+        """ override authorize_redirect to set scope """
+        return OAuth10aMixin.authorize_redirect(self,
+            callback_uri = callback_uri,
+            extra_params = {"scope": "http://gdata.youtube.com"})
 
 class FacebookMixin(object):
     """Facebook Connect authentication.
@@ -841,6 +1188,139 @@ class FacebookMixin(object):
         if isinstance(body, unicode): body = body.encode("utf-8")
         return hashlib.md5(body).hexdigest()
 
+class FacebookGraphMixin(Oauth2Mixin):
+    _OAUTH_ACCESS_TOKEN_URL = "https://graph.facebook.com/oauth/access_token?"
+    _OAUTH_AUTHORIZE_URL = "https://graph.facebook.com/oauth/authorize?"
+    _OAUTH_NO_CALLBACKS = False
+
+    def get_authenticated_user(self, redirect_uri, client_id, client_secret,
+                              code, callback):
+      """ Handles the login for the Facebook user, returning a user object.
+
+      Example usage:
+      class FacebookGraphLoginHandler(LoginHandler, tornado.auth.FacebookGraphMixin):
+        @tornado.web.asynchronous
+        def get(self):
+            if self.get_argument("code", False):
+                self.get_authenticated_user(
+                  redirect_uri='/auth/facebookgraph/',
+                  client_id=self.settings["facebook_api_key"],
+                  client_secret=self.settings["facebook_secret"],
+                  code=self.get_argument("code"),
+                  callback=self.async_callback(
+                    self._on_login))
+                return
+            self.authorize_redirect(redirect_uri='/auth/facebookgraph/',
+                                    client_id=self.settings["facebook_api_key"],
+                                    extra_params={"scope": "read_stream,offline_access"})
+
+        def _on_login(self, user):
+          logging.error(user)
+          self.finish()
+
+      """
+      http = httpclient.AsyncHTTPClient()
+      args = {
+        "redirect_uri": redirect_uri,
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+      }
+
+      http.fetch(self._oauth_request_token_url(**args),
+          self.async_callback(self._on_access_token, redirect_uri, client_id,
+                              client_secret, callback))
+
+    def _on_access_token(self, redirect_uri, client_id, client_secret,
+                        callback, response):
+      session = {
+      "access_token": cgi.parse_qs(response.body)["access_token"][-1],
+      "expires": cgi.parse_qs(response.body)["expires"]
+      }
+
+      self.facebook_request(
+          path="/me",
+          callback=self.async_callback(
+              self._on_get_user_info, callback, session),
+          access_token=session["access_token"],
+          fields="picture"
+          )
+
+
+    def _on_get_user_info(self, callback, session, user):
+        if user is None:
+            callback(None)
+            return
+        callback({
+            "name": user["name"],
+            "first_name": user["first_name"],
+            "last_name": user["last_name"],
+            "id": user["id"],
+            "locale": user["locale"],
+            "picture": user.get("picture"),
+            "link": user["link"],
+            "username": user.get("username"),
+            "access_token": session["access_token"],
+            "session_expires": session.get("expires"),
+        })
+
+    def facebook_request(self, path, callback, access_token=None,
+                           post_args=None, **args):
+        """Fetches the given relative API path, e.g., "/btaylor/picture"
+
+        If the request is a POST, post_args should be provided. Query
+        string arguments should be given as keyword arguments.
+
+        An introduction to the Facebook Graph API can be found at
+        http://developers.facebook.com/docs/api
+
+        Many methods require an OAuth access token which you can obtain
+        through authorize_redirect() and get_authenticated_user(). The
+        user returned through that process includes an 'access_token'
+        attribute that can be used to make authenticated requests via
+        this method. Example usage:
+
+        class MainHandler(tornado.web.RequestHandler,
+                          tornado.auth.FacebookGraphMixin):
+            @tornado.web.authenticated
+            @tornado.web.asynchronous
+            def get(self):
+                self.facebook_request(
+                    "/me/feed",
+                    post_args={"message": "I am posting from my Tornado application!"},
+                    access_token=self.current_user["access_token"],
+                    callback=self.async_callback(self._on_post))
+
+            def _on_post(self, new_entry):
+                if not new_entry:
+                    # Call failed; perhaps missing permission?
+                    self.authorize_redirect()
+                    return
+                self.finish("Posted a message!")
+
+        """
+        url = "https://graph.facebook.com" + path
+        all_args = {}
+        if access_token:
+            all_args["access_token"] = access_token
+            all_args.update(args)
+            all_args.update(post_args or {})
+        if all_args: url += "?" + urllib.urlencode(all_args)
+        callback = self.async_callback(self._on_facebook_request, callback)
+        http = httpclient.AsyncHTTPClient()
+        if post_args is not None:
+            http.fetch(url, method="POST", body=urllib.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, callback=callback)
+
+    def _on_facebook_request(self, callback, response):
+        if response.error:
+            logging.warning("Error response %s fetching %s", response.error,
+                            response.request.url)
+            callback(None)
+            return
+        callback(escape.json_decode(response.body))
 
 def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
     """Calculates the HMAC-SHA1 OAuth signature for the given request.
@@ -865,6 +1345,28 @@ def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
     hash = hmac.new(key, base_string, hashlib.sha1)
     return binascii.b2a_base64(hash.digest())[:-1]
 
+def _oauth10a_signature(consumer_token, method, url, parameters={}, token=None):
+    """Calculates the HMAC-SHA1 OAuth 1.0a signature for the given request.
+
+    See http://oauth.net/core/1.0a/#signing_process
+    """
+    parts = urlparse.urlparse(url)
+    scheme, netloc, path = parts[:3]
+    normalized_url = scheme.lower() + "://" + netloc.lower() + path
+
+    base_elems = []
+    base_elems.append(method.upper())
+    base_elems.append(normalized_url)
+    base_elems.append("&".join("%s=%s" % (k, _oauth_escape(str(v)))
+                               for k, v in sorted(parameters.items())))
+
+    base_string =  "&".join(_oauth_escape(e) for e in base_elems)
+    key_elems = [urllib.quote(consumer_token["secret"], safe='~')]
+    key_elems.append(urllib.quote(token["secret"], safe='~') if token else "")
+    key = "&".join(key_elems)
+
+    hash = hmac.new(key, base_string, hashlib.sha1)
+    return binascii.b2a_base64(hash.digest())[:-1]
 
 def _oauth_escape(val):
     if isinstance(val, unicode):
@@ -880,3 +1382,5 @@ def _oauth_parse_response(body):
     special = ("oauth_token", "oauth_token_secret")
     token.update((k, p[k][0]) for k in p if k not in special)
     return token
+
+
