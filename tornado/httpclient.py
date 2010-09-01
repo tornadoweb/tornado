@@ -469,10 +469,6 @@ class HTTPResponse(object):
         args = ",".join("%s=%r" % i for i in self.__dict__.iteritems())
         return "%s(%s)" % (self.__class__.__name__, args)
 
-    def __del__(self):
-        if self.buffer is not None:
-            self.buffer.close()
-
 
 class HTTPError(Exception):
     """Exception thrown for an unsuccessful HTTP request.
