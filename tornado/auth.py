@@ -510,7 +510,7 @@ class OAuth10aMixin(object):
         base_args["oauth_signature"] = signature
         return base_args
 
-class Oauth2Mixin(object):
+class OAuth2Mixin(object):
     """Abstract implementation of OAuth v 2."""
 
     def authorize_redirect(self, redirect_uri=None, client_id=None,
@@ -1188,7 +1188,7 @@ class FacebookMixin(object):
         if isinstance(body, unicode): body = body.encode("utf-8")
         return hashlib.md5(body).hexdigest()
 
-class FacebookGraphMixin(Oauth2Mixin):
+class FacebookGraphMixin(OAuth2Mixin):
     _OAUTH_ACCESS_TOKEN_URL = "https://graph.facebook.com/oauth/access_token?"
     _OAUTH_AUTHORIZE_URL = "https://graph.facebook.com/oauth/authorize?"
     _OAUTH_NO_CALLBACKS = False
