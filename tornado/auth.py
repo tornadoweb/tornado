@@ -368,7 +368,7 @@ class OAuth10aMixin(object):
                 self._OAUTH_AUTHORIZE_URL,
             callback_uri))
 
-    def get_authenticated_user(self, callback, auth_token_retry=0):
+    def get_authenticated_user(self, callback, access_token_retry_limit=0):
         """Gets the OAuth authorized user and access token on callback.
 
         This method should be called from the handler for your registered
@@ -378,7 +378,7 @@ class OAuth10aMixin(object):
         contains the OAuth access you can use to make authorized requests
         to this service on behalf of the user.
 
-        auth_token_retry is the number of attempts to try and receive the
+        access_token_retry_limit is the number of attempts to try and receive the
         auth token from the service provider if the first attempt fails. This
         was added due to a delay found with authenication and Youtube. If you
         have problems with other providers appearing to be slow on making auth
@@ -402,7 +402,7 @@ class OAuth10aMixin(object):
           token["verifier"] = oauth_verifier
         http = httpclient.AsyncHTTPClient()
         http.fetch(self._oauth_access_token_url(token), self.async_callback(
-            self._on_access_token, callback, auth_token_retry))
+            self._on_access_token, callback, access_token_retry_limit))
 
     def _oauth_request_token_url(self, callback_uri= None, extra_params=None):
         consumer_token = self._oauth_consumer_token()
@@ -452,13 +452,13 @@ class OAuth10aMixin(object):
         args["oauth_signature"] = signature
         return url + "?" + urllib.urlencode(args)
 
-    def _on_access_token(self, callback, auth_token_retry, response):
-        if response.error and auth_token_retry > 0:
+    def _on_access_token(self, callback, access_token_retry_limit, response):
+        if response.error and access_token_retry_limit > 0:
           # This kludge was the only way I could reliably authenticate
           # with Youtube. I didn't have any problems authenticating with
           # Twitter. It seems that Google (or just Youtube) had a delay in
           # with validating request tokens. Strange, but true.
-          if getattr(self, "last_attempt", 0) < auth_token_retry:
+          if getattr(self, "last_attempt", 0) < access_token_retry_limit:
             logging.warning("Could not fetch access token, trying again.")
             if not(getattr(self, "last_attempt", False)):
               self.last_attempt = 1
@@ -996,11 +996,11 @@ class YoutubeMixin(OAuth10aMixin):
             user["username"] = user["entry"]["yt$username"]["$t"]
         callback(user)
 
-    def get_authenticated_user(self, callback, auth_token_retry=3):
-        """ override get_authenticated_user to default auth_token_retry to 3 """
+    def get_authenticated_user(self, callback, access_token_retry_limit=3):
+        """ override get_authenticated_user to default access_token_retry_limit to 3 """
         return OAuth10aMixin.get_authenticated_user(self,
                                             callback,
-                                            auth_token_retry=auth_token_retry)
+                                            access_token_retry_limit=access_token_retry_limit)
 
     def authorize_redirect(self, callback_uri):
         """ override authorize_redirect to set scope """
