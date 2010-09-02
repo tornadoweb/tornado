@@ -23,7 +23,8 @@ import urllib
 
 # json module is in the standard library as of python 2.6; fall back to
 # simplejson if present for older versions.
-# Didip: Why not try using the most capable json library first?
+
+# Try using the most capable json library first.
 try:
     import jspickle
     _json_decode = jspickle.decode
@@ -46,16 +47,21 @@ except ImportError:
                 _json_encode = lambda v: simplejson.dumps(v)
             except ImportError:
                 try:
-                    import json
-                    assert hasattr(json, "loads") and hasattr(json, "dumps")
-                    _json_decode = lambda s: json.loads(s)
-                    _json_encode = lambda v: json.dumps(v)
+                    import jsonlib
+                    _json_decode = jsonlib.read
+                    _json_encode = jsonlib.write    # Default character encoding is UTF-8
                 except ImportError:
-                    def _json_decode(s):
-                        raise NotImplementedError(
-                            "A JSON parser is required, e.g., simplejson at "
-                            "http://pypi.python.org/pypi/simplejson/")
-                    _json_encode = _json_decode
+                    try:
+                        import json
+                        assert hasattr(json, "loads") and hasattr(json, "dumps")
+                        _json_decode = lambda s: json.loads(s)
+                        _json_encode = lambda v: json.dumps(v)
+                    except ImportError:
+                        def _json_decode(s):
+                            raise NotImplementedError(
+                                "A JSON parser is required, e.g., simplejson at "
+                                "http://pypi.python.org/pypi/simplejson/")
+                        _json_encode = _json_decode
 
 
 def xhtml_escape(value):
