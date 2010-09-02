@@ -470,7 +470,7 @@ class OAuth10aMixin(object):
             http = httpclient.AsyncHTTPClient()
             IOLoop.instance().add_timeout(time.time() + .5, http.fetch(
               response.effective_url, self.async_callback(
-                self._on_access_token, callback)))
+                self._on_access_token, callback, access_token_retry_limit)))
           else:
             logging.warning("Failed to fetch access token on 3 attempts")
             callback(None)
