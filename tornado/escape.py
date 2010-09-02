@@ -24,7 +24,7 @@ import urllib
 # json module is in the standard library as of python 2.6; fall back to
 # simplejson if present for older versions.
 
-# Try using the most capable json library first.
+# Try using the most performant json library first.
 try:
     import jspickle
     _json_decode = jspickle.decode
