@@ -45,6 +45,7 @@ class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
 
 """
 
+import base64
 import binascii
 import cgi
 import hashlib
@@ -231,12 +232,12 @@ class OAuthMixin(object):
         to this service on behalf of the user.
         """
         request_key = self.get_argument("oauth_token")
-        request_cookie = self.get_secure_cookie("_oauth_request_token")
+        request_cookie = self.get_cookie("_oauth_request_token")
         if not request_cookie:
             logging.warning("Missing OAuth request token cookie")
             callback(None)
             return
-        cookie_key, cookie_secret = request_cookie.split("|")
+        cookie_key, cookie_secret = [base64.b64decode(i) for i in request_cookie.split("|")]
         if cookie_key != request_key:
             logging.warning("Request token does not match cookie")
             callback(None)
@@ -264,8 +265,9 @@ class OAuthMixin(object):
         if response.error:
             raise Exception("Could not get request token")
         request_token = _oauth_parse_response(response.body)
-        data = "|".join([request_token["key"], request_token["secret"]])
-        self.set_secure_cookie("_oauth_request_token", data)
+        data = "|".join([base64.b64encode(request_token["key"]),
+            base64.b64encode(request_token["secret"])])
+        self.set_cookie("_oauth_request_token", data)
         args = dict(oauth_token=request_token["key"])
         if callback_uri:
             args["oauth_callback"] = urlparse.urljoin(
@@ -386,13 +388,13 @@ class OAuth10aMixin(object):
         """
         request_key = self.get_argument("oauth_token")
         oauth_verifier = self.get_argument("oauth_verifier", None)
-        request_cookie = self.get_secure_cookie("_oauth_request_token")
+        request_cookie = self.get_cookie("_oauth_request_token")
         if not request_cookie:
             logging.warning("Missing OAuth request token cookie")
             callback(None)
             return
         self.clear_cookie("_oauth_request_token")
-        cookie_key, cookie_secret = request_cookie.split("|")
+        cookie_key, cookie_secret = [base64.b64decode(i) for i in request_cookie.split("|")]
         if cookie_key != request_key:
             logging.warning("Request token does not match cookie")
             callback(None)
@@ -426,8 +428,9 @@ class OAuth10aMixin(object):
         if response.error:
             raise Exception("Could not get request token")
         request_token = _oauth_parse_response(response.body)
-        data = "|".join([request_token["key"], request_token["secret"]])
-        self.set_secure_cookie("_oauth_request_token", data)
+        data = "|".join([base64.b64encode(request_token["key"]),
+            base64.b64encode(request_token["secret"])])
+        self.set_cookie("_oauth_request_token", data)
         args = dict(oauth_token=request_token["key"])
         if callback_uri:
             args["oauth_callback"] = urlparse.urljoin(
