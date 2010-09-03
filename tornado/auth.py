@@ -202,7 +202,8 @@ class OAuthMixin(object):
 
     See TwitterMixin and FriendFeedMixin below for example implementations.
     """
-    def authorize_redirect(self, callback_uri=None):
+
+    def authorize_redirect(self, callback_uri=None, extra_params=None):
         """Redirects the user to obtain OAuth authorization for this service.
 
         Twitter and FriendFeed both require that you register a Callback
@@ -218,8 +219,17 @@ class OAuthMixin(object):
         if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
             raise Exception("This service does not support oauth_callback")
         http = httpclient.AsyncHTTPClient()
-        http.fetch(self._oauth_request_token_url(), self.async_callback(
-            self._on_request_token, self._OAUTH_AUTHORIZE_URL, callback_uri))
+        if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
+            http.fetch(self._oauth_request_token_url(callback_uri=callback_uri,
+                extra_params=extra_params),
+                self.async_callback(
+                    self._on_request_token,
+                    self._OAUTH_AUTHORIZE_URL,
+                callback_uri))
+        else:
+            http.fetch(self._oauth_request_token_url(), self.async_callback(
+                self._on_request_token, self._OAUTH_AUTHORIZE_URL, callback_uri))
+
 
     def get_authenticated_user(self, callback):
         """Gets the OAuth authorized user and access token on callback.
@@ -230,24 +240,29 @@ class OAuthMixin(object):
         attributes like 'name' includes the 'access_key' attribute, which
         contains the OAuth access you can use to make authorized requests
         to this service on behalf of the user.
+
         """
         request_key = self.get_argument("oauth_token")
+        oauth_verifier = self.get_argument("oauth_verifier", None)
         request_cookie = self.get_cookie("_oauth_request_token")
         if not request_cookie:
             logging.warning("Missing OAuth request token cookie")
             callback(None)
             return
+        self.clear_cookie("_oauth_request_token")
         cookie_key, cookie_secret = [base64.b64decode(i) for i in request_cookie.split("|")]
         if cookie_key != request_key:
             logging.warning("Request token does not match cookie")
             callback(None)
             return
         token = dict(key=cookie_key, secret=cookie_secret)
+        if oauth_verifier:
+          token["verifier"] = oauth_verifier
         http = httpclient.AsyncHTTPClient()
         http.fetch(self._oauth_access_token_url(token), self.async_callback(
             self._on_access_token, callback))
 
-    def _oauth_request_token_url(self):
+    def _oauth_request_token_url(self, callback_uri= None, extra_params=None):
         consumer_token = self._oauth_consumer_token()
         url = self._OAUTH_REQUEST_TOKEN_URL
         args = dict(
@@ -255,9 +270,17 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version="1.0",
+            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
-        signature = _oauth_signature(consumer_token, "GET", url, args)
+        if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
+            if callback_uri:
+                args["oauth_callback"] = urlparse.urljoin(
+                    self.request.full_url(), callback_uri)
+            if extra_params: args.update(extra_params)
+            signature = _oauth10a_signature(consumer_token, "GET", url, args)
+        else:
+            signature = _oauth_signature(consumer_token, "GET", url, args)
+            
         args["oauth_signature"] = signature
         return url + "?" + urllib.urlencode(args)
 
@@ -283,10 +306,18 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version="1.0",
+            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
-        signature = _oauth_signature(consumer_token, "GET", url, args,
-                                     request_token)
+        if "verifier" in request_token:
+          args["oauth_verifier"]=request_token["verifier"]
+
+        if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
+            signature = _oauth10a_signature(consumer_token, "GET", url, args,
+                                            request_token)
+        else:
+            signature = _oauth_signature(consumer_token, "GET", url, args,
+                                         request_token)
+
         args["oauth_signature"] = signature
         return url + "?" + urllib.urlencode(args)
 
@@ -295,6 +326,7 @@ class OAuthMixin(object):
             logging.warning("Could not fetch access token")
             callback(None)
             return
+        
         access_token = _oauth_parse_response(response.body)
         user = self._oauth_get_user(access_token, self.async_callback(
              self._on_oauth_get_user, access_token, callback))
@@ -323,193 +355,17 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version="1.0",
+            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         args = {}
         args.update(base_args)
         args.update(parameters)
-        signature = _oauth_signature(consumer_token, method, url, args,
-                                     access_token)
-        base_args["oauth_signature"] = signature
-        return base_args
-
-class OAuth10aMixin(object):
-    """Abstract implementation of OAuth v 1.0a.
-
-       This class is based off of the work done by Marc Hedlund, references
-       to the suggested changes can be found in this thread:
-       http://groups.google.com/group/python-tornado/browse_thread/thread/f308d25962fd820f
-
-       See TwitterFeedMixin and YoutubeMixin below for example implementations.
-
-    """
-    def authorize_redirect(self, callback_uri=None, extra_params=None):
-        """Redirects the user to obtain OAuth authorization for this service.
-
-        Some providers require that you register a Callback
-        URL with your application. You should call this method to log the
-        user in, and then call get_authenticated_user() in the handler
-        you registered as your Callback URL to complete the authorization
-        process.
-
-        This method sets a cookie called _oauth_request_token which is
-        subsequently used (and cleared) in get_authenticated_user for
-        security purposes.
-
-        Some service providers require extra parameters on the authorization
-        request (for instance, Google OAuth requires a 'scope' parameter).
-        Pass a dict as extra_params to send these parameters in the request.
-        """
-        if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
-            raise Exception("This service does not support oauth_callback")
-        http = httpclient.AsyncHTTPClient()
-        http.fetch(self._oauth_request_token_url(callback_uri=callback_uri,
-            extra_params=extra_params),
-            self.async_callback(
-                self._on_request_token,
-                self._OAUTH_AUTHORIZE_URL,
-            callback_uri))
-
-    def get_authenticated_user(self, callback, access_token_retry_limit=0):
-        """Gets the OAuth authorized user and access token on callback.
-
-        This method should be called from the handler for your registered
-        OAuth Callback URL to complete the registration process. We call
-        callback with the authenticated user, which in addition to standard
-        attributes like 'name' includes the 'access_key' attribute, which
-        contains the OAuth access you can use to make authorized requests
-        to this service on behalf of the user.
-
-        access_token_retry_limit is the number of attempts to try and receive the
-        auth token from the service provider if the first attempt fails. This
-        was added due to a delay found with authenication and Youtube. If you
-        have problems with other providers appearing to be slow on making auth
-        tokens available, try setting this higher.
-        """
-        request_key = self.get_argument("oauth_token")
-        oauth_verifier = self.get_argument("oauth_verifier", None)
-        request_cookie = self.get_cookie("_oauth_request_token")
-        if not request_cookie:
-            logging.warning("Missing OAuth request token cookie")
-            callback(None)
-            return
-        self.clear_cookie("_oauth_request_token")
-        cookie_key, cookie_secret = [base64.b64decode(i) for i in request_cookie.split("|")]
-        if cookie_key != request_key:
-            logging.warning("Request token does not match cookie")
-            callback(None)
-            return
-        token = dict(key=cookie_key, secret=cookie_secret)
-        if oauth_verifier:
-          token["verifier"] = oauth_verifier
-        http = httpclient.AsyncHTTPClient()
-        http.fetch(self._oauth_access_token_url(token), self.async_callback(
-            self._on_access_token, callback, access_token_retry_limit))
-
-    def _oauth_request_token_url(self, callback_uri= None, extra_params=None):
-        consumer_token = self._oauth_consumer_token()
-        url = self._OAUTH_REQUEST_TOKEN_URL
-        args = dict(
-            oauth_consumer_key=consumer_token["key"],
-            oauth_signature_method="HMAC-SHA1",
-            oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version="1.0",
-        )
-        if callback_uri:
-            args["oauth_callback"] = urlparse.urljoin(
-                self.request.full_url(), callback_uri)
-        if extra_params: args.update(extra_params)
-        signature = _oauth10a_signature(consumer_token, "GET", url, args)
-        args["oauth_signature"] = signature
-        return url + "?" + urllib.urlencode(args)
-
-    def _on_request_token(self, authorize_url, callback_uri, response):
-        if response.error:
-            raise Exception("Could not get request token")
-        request_token = _oauth_parse_response(response.body)
-        data = "|".join([base64.b64encode(request_token["key"]),
-            base64.b64encode(request_token["secret"])])
-        self.set_cookie("_oauth_request_token", data)
-        args = dict(oauth_token=request_token["key"])
-        if callback_uri:
-            args["oauth_callback"] = urlparse.urljoin(
-                self.request.full_url(), callback_uri)
-        self.redirect(authorize_url + "?" + urllib.urlencode(args))
-
-    def _oauth_access_token_url(self, request_token):
-        consumer_token = self._oauth_consumer_token()
-        url = self._OAUTH_ACCESS_TOKEN_URL
-        args = dict(
-            oauth_consumer_key=consumer_token["key"],
-            oauth_token=request_token["key"],
-            oauth_signature_method="HMAC-SHA1",
-            oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version="1.0",
-        )
-        if "verifier" in request_token:
-          args["oauth_verifier"]=request_token["verifier"]
-
-        signature = _oauth10a_signature(consumer_token, "GET", url, args, request_token)
-        args["oauth_signature"] = signature
-        return url + "?" + urllib.urlencode(args)
-
-    def _on_access_token(self, callback, access_token_retry_limit, response):
-        if response.error and access_token_retry_limit > 0:
-          # This kludge was the only way I could reliably authenticate
-          # with Youtube. I didn't have any problems authenticating with
-          # Twitter. It seems that Google (or just Youtube) had a delay in
-          # with validating request tokens. Strange, but true.
-          if getattr(self, "last_attempt", 0) < access_token_retry_limit:
-            logging.warning("Could not fetch access token, trying again.")
-            if not(getattr(self, "last_attempt", False)):
-              self.last_attempt = 1
-            else:
-              self.last_attempt += 1
-            http = httpclient.AsyncHTTPClient()
-            IOLoop.instance().add_timeout(time.time() + .5, http.fetch(
-              response.effective_url, self.async_callback(
-                self._on_access_token, callback, access_token_retry_limit)))
-          else:
-            logging.warning("Failed to fetch access token on 3 attempts")
-            callback(None)
+        if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
+            signature = _oauth10a_signature(consumer_token, method, url, args,
+                                         access_token)
         else:
-          access_token = _oauth_parse_response(response.body)
-          user = self._oauth_get_user(access_token, self.async_callback(
-               self._on_oauth_get_user, access_token, callback))
-
-    def _oauth_get_user(self, access_token, callback):
-        raise NotImplementedError()
-
-    def _on_oauth_get_user(self, access_token, callback, user):
-        if not user:
-            callback(None)
-            return
-        user["access_token"] = access_token
-        callback(user)
-
-    def _oauth_request_parameters(self, url, access_token, parameters={},
-                                  method="GET"):
-        """Returns the OAuth parameters as a dict for the given request.
-
-        parameters should include all POST arguments and query string arguments
-        that will be sent with the request.
-        """
-        consumer_token = self._oauth_consumer_token()
-        base_args = dict(
-            oauth_consumer_key=consumer_token["key"],
-            oauth_token=access_token["key"],
-            oauth_signature_method="HMAC-SHA1",
-            oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version="1.0",
-        )
-        args = {}
-        args.update(base_args)
-        args.update(parameters)
-        signature = _oauth10a_signature(consumer_token, method, url, args,
-                                     access_token)
+            signature = _oauth_signature(consumer_token, method, url, args,
+                                         access_token)
         base_args["oauth_signature"] = signature
         return base_args
 
@@ -547,7 +403,7 @@ class OAuth2Mixin(object):
         if extra_params: args.update(extra_params)
         return url + urllib.urlencode(args)
 
-class TwitterMixin(OAuth10aMixin):
+class TwitterMixin(OAuthMixin):
     """Twitter OAuth authentication.
 
     To authenticate with Twitter, register your application with
@@ -586,6 +442,7 @@ class TwitterMixin(OAuth10aMixin):
     _OAUTH_AUTHORIZE_URL = "http://api.twitter.com/oauth/authorize"
     _OAUTH_AUTHENTICATE_URL = "http://api.twitter.com/oauth/authenticate"
     _OAUTH_NO_CALLBACKS = False
+
 
     def authenticate_redirect(self):
         """Just like authorize_redirect(), but auto-redirects if authorized.
@@ -715,10 +572,13 @@ class FriendFeedMixin(OAuthMixin):
     it is required to make requests on behalf of the user later with
     friendfeed_request().
     """
+    _OAUTH_VERSION = "1.0"
     _OAUTH_REQUEST_TOKEN_URL = "https://friendfeed.com/account/oauth/request_token"
     _OAUTH_ACCESS_TOKEN_URL = "https://friendfeed.com/account/oauth/access_token"
     _OAUTH_AUTHORIZE_URL = "https://friendfeed.com/account/oauth/authorize"
     _OAUTH_NO_CALLBACKS = True
+    _OAUTH_VERSION = "1.0"
+
 
     def friendfeed_request(self, path, callback, access_token=None,
                            post_args=None, **args):
