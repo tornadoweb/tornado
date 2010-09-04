@@ -154,6 +154,11 @@ You can get query string arguments and parse `POST` bodies with the
             self.set_header("Content-Type", "text/plain")
             self.write("You wrote " + self.get_argument("message"))
 
+Uploaded files are available in `self.request.files`, which maps names
+(the name of the HTML `<input type="file">` element) to a list of
+files. Each file is a dictionary of the form `{"filename":...,
+"content_type":..., "body":...}`.
+
 If you want to send an error response to the client, e.g., 403 Unauthorized,
 you can just raise a `tornado.web.HTTPError` exception:
 
