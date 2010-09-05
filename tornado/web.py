@@ -387,6 +387,11 @@ class RequestHandler(object):
 
         If the given chunk is a dictionary, we write it as JSON and set
         the Content-Type of the response to be text/javascript.
+
+        Note that lists are not converted to JSON because of a potential
+        cross-site security vulnerability.  All JSON output should be
+        wrapped in a dictionary.  More details at
+        http://haacked.com/archive/2008/11/20/anatomy-of-a-subtle-json-vulnerability.aspx
         """
         assert not self._finished
         if isinstance(chunk, dict):
