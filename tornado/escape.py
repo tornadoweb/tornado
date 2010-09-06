@@ -26,8 +26,8 @@ import urllib
 try:
     import json
     assert hasattr(json, "loads") and hasattr(json, "dumps")
-    _json_decode = lambda s: json.loads(s)
-    _json_encode = lambda v: json.dumps(v)
+    _json_decode = json.loads
+    _json_encode = json.dumps
 except:
     try:
         import simplejson
