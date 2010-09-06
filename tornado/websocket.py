@@ -105,7 +105,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
                     origin=self.request.headers["Origin"],
                     host=self.request.host,
                     path=self.request.path,
-                    challeng=challenge)))
+                    challenge=challenge)))
         self.async_callback(self.open)(*self.open_args, **self.open_kwargs)
         self._receive_message()
 
