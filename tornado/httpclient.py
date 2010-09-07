@@ -585,7 +585,7 @@ def _curl_setup_request(curl, request, buffer, headers):
     else:
         curl.unsetopt(pycurl.USERPWD)
         logging.info("%s %s", request.method, request.url)
-    if threading.active_count() > 1:
+    if threading.activeCount() > 1:
         # libcurl/pycurl is not thread-safe by default.  When multiple threads
         # are used, signals should be disabled.  This has the side effect
         # of disabling DNS timeouts in some environments (when libcurl is
@@ -593,7 +593,7 @@ def _curl_setup_request(curl, request, buffer, headers):
         # thread.  Applications that use many short-lived threads may need
         # to set NOSIGNAL manually in a prepare_curl_callback since
         # there may not be any other threads running at the time we call
-        # threading.active_count.
+        # threading.activeCount.
         curl.setopt(pycurl.NOSIGNAL, 1)
     if request.prepare_curl_callback is not None:
         request.prepare_curl_callback(curl)
