@@ -8,6 +8,11 @@ import re
 import unittest
 import urllib
 
+try:
+    import ssl
+except ImportError:
+    ssl = None
+
 class HelloWorldRequestHandler(RequestHandler):
     def get(self):
         self.finish("Hello world")
@@ -33,3 +38,7 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
                                prepare_curl_callback=disable_cert_check)
         response = self.wait()
         self.assertEqual(response.body, "Hello world")
+
+if ssl is None:
+    # Don't try to run ssl tests if we don't have the ssl module
+    del SSLTest
