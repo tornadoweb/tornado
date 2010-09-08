@@ -388,7 +388,8 @@ class PeriodicCallback(object):
             raise
         except:
             logging.error("Error in periodic callback", exc_info=True)
-        self.start()
+        if self._running:
+            self.start()
 
 
 class _EPoll(object):
