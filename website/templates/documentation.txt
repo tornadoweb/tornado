@@ -52,12 +52,12 @@ Download
 --------
 Download the most recent version of Tornado from GitHub:
 
-> [tornado-1.0.1.tar.gz](http://github.com/downloads/facebook/tornado/tornado-1.0.1.tar.gz)
+> [tornado-1.1.tar.gz](http://github.com/downloads/facebook/tornado/tornado-1.1.tar.gz)
 
 You can also [browse the source](http://github.com/facebook/tornado) on GitHub. To install Tornado:
 
-    tar xvzf tornado-1.0.1.tar.gz
-    cd tornado-1.0.1
+    tar xvzf tornado-1.1.tar.gz
+    cd tornado-1.1
     python setup.py build
     sudo python setup.py install
 
