@@ -1521,21 +1521,32 @@ class URLSpec(object):
 
 url = URLSpec
 
-def _utf8(s):
-    if isinstance(s, unicode):
-        return s.encode("utf-8")
-    assert isinstance(s, str)
-    return s
+if sys.version_info < (3,0):
+
+    def _utf8(s):
+        if isinstance(s, unicode):
+            return s.encode("utf-8")
+        assert isinstance(s, str)
+        return s
 
 
-def _unicode(s):
-    if isinstance(s, str):
-        try:
-            return s.decode("utf-8")
-        except UnicodeDecodeError:
-            raise HTTPError(400, "Non-utf8 argument")
-    assert isinstance(s, unicode)
-    return s
+    def _unicode(s):
+        if isinstance(s, str):
+            try:
+                return s.decode("utf-8")
+            except UnicodeDecodeError:
+                raise HTTPError(400, "Non-utf8 argument")
+        assert isinstance(s, unicode)
+        return s
+
+else:
+
+    def _utf8(s):
+        return s
+
+
+    def _unicode(s):
+        return s
 
 
 def _time_independent_equals(a, b):
