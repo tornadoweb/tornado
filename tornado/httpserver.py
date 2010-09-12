@@ -225,7 +225,7 @@ class HTTPServer(object):
             try:
                 connection, address = self._socket.accept()
             except socket.error, e:
-                if e[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     return
                 raise
             if self.ssl_options is not None:
