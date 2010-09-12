@@ -32,7 +32,7 @@ try:
     import fcntl
 except ImportError:
     if os.name == 'nt':
-        import win32_support as fcntl
+        from tornado import win32_support as fcntl
     else:
         raise
 
