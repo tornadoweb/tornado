@@ -1144,8 +1144,8 @@ class Application(object):
         # request so you don't need to restart to see changes
         if self.settings.get("debug"):
             if getattr(RequestHandler, "_templates", None):
-                map(lambda loader: loader.reset(),
-                    RequestHandler._templates.values())
+                for loader in RequestHandler._templates.values():
+                    loader.reset()
             RequestHandler._static_hashes = {}
 
         handler._execute(transforms, *args, **kwargs)
