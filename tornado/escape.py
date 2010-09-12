@@ -20,6 +20,7 @@ import htmlentitydefs
 import re
 import xml.sax.saxutils
 import urllib
+import sys
 
 # json module is in the standard library as of python 2.6; fall back to
 # simplejson if present for older versions.
@@ -88,18 +89,32 @@ def url_unescape(value):
     return _unicode(urllib.unquote_plus(value))
 
 
-def utf8(value):
-    if isinstance(value, unicode):
-        return value.encode("utf-8")
-    assert isinstance(value, str)
-    return value
+if sys.version_info < (3,0):
 
 
-def _unicode(value):
-    if isinstance(value, str):
-        return value.decode("utf-8")
-    assert isinstance(value, unicode)
-    return value
+    def utf8(value):
+        if isinstance(value, unicode):
+            return value.encode("utf-8")
+        assert isinstance(value, str)
+        return value
+
+
+    def _unicode(value):
+        if isinstance(value, str):
+            return value.decode("utf-8")
+        assert isinstance(value, unicode)
+        return value
+
+
+else:
+
+
+    def utf8(value):
+        return value
+    
+    
+    def _unicode(value):
+        return value 
 
 
 def _convert_entity(m):
