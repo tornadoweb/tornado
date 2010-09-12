@@ -183,7 +183,7 @@ class IOStream(object):
         try:
             chunk = self.socket.recv(self.read_chunk_size)
         except socket.error, e:
-            if e[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                 return
             else:
                 logging.warning("Read error on %d: %s",
@@ -221,7 +221,7 @@ class IOStream(object):
                 num_bytes = self.socket.send(self._write_buffer)
                 self._write_buffer = self._write_buffer[num_bytes:]
             except socket.error, e:
-                if e[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     break
                 else:
                     logging.warning("Write error on %d: %s",

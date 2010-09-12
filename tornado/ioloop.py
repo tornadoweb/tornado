@@ -60,7 +60,7 @@ class IOLoop(object):
                 try:
                     connection, address = sock.accept()
                 except socket.error, e:
-                    if e[0] not in (errno.EWOULDBLOCK, errno.EAGAIN):
+                    if e.args[0] not in (errno.EWOULDBLOCK, errno.EAGAIN):
                         raise
                     return
                 connection.setblocking(0)
@@ -255,7 +255,7 @@ class IOLoop(object):
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except (OSError, IOError), e:
-                    if e[0] == errno.EPIPE:
+                    if e.args[0] == errno.EPIPE:
                         # Happens when the client closes the connection
                         pass
                     else:
