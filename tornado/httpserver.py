@@ -203,6 +203,17 @@ class HTTPServer(object):
             logging.info("Pre-forking %d server processes", num_processes)
             for i in range(num_processes):
                 if os.fork() == 0:
+                    import random
+                    from binascii import hexlify
+                    try:
+                        # If available, use the same method as
+                        # random.py
+                        seed = long(hexlify(os.urandom(16)), 16)
+                    except NotImplementedError:
+                        # Include the pid to avoid initializing two
+                        # processes to the same value
+                        seed(int(time.time() * 1000) ^ os.getpid())
+                    random.seed(seed)
                     self.io_loop = ioloop.IOLoop.instance()
                     self.io_loop.add_handler(
                         self._socket.fileno(), self._handle_events,
