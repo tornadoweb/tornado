@@ -963,7 +963,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                         callback, response):
       session = {
       "access_token": cgi.parse_qs(response.body)["access_token"][-1],
-      "expires": cgi.parse_qs(response.body)["expires"]
+      "expires": cgi.parse_qs(response.body).get("expires")
       }
 
       self.facebook_request(
