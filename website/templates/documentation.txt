@@ -68,15 +68,11 @@ directory included with the Tornado package.
 
 ### Prerequisites
 
-Tornado has been tested on Python 2.5 and 2.6. To use all of the features of Tornado, you need to have [PycURL](http://pycurl.sourceforge.net/) and a JSON library like [simplejson](http://pypi.python.org/pypi/simplejson/) installed. Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.
+Tornado has been tested on Python 2.5 and 2.6. To use all of the features of Tornado, you need to have [PycURL](http://pycurl.sourceforge.net/) (version 7.18.2 or higher) and (for Python 2.5 only) [simplejson](http://pypi.python.org/pypi/simplejson/) installed (Python 2.6 includes JSON support in the standard library so simplejson is not needed). Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.
 
 **Mac OS X 10.6 (Python 2.6)**
 
     sudo easy_install pycurl
-
-**Mac OS X 10.5 (Python 2.5)**
-
-    sudo easy_install setuptools pycurl==7.16.2.1 simplejson
 
 **Ubuntu Linux (Python 2.6)**
 
