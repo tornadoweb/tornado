@@ -85,24 +85,28 @@ class IOStream(object):
     def read_until(self, delimiter, callback):
         """Call callback when we read the given delimiter."""
         assert not self._read_callback, "Already reading"
-        loc = self._read_buffer.find(delimiter)
-        if loc != -1:
-            self._run_callback(callback, self._consume(loc + len(delimiter)))
-            return
-        self._check_closed()
         self._read_delimiter = delimiter
         self._read_callback = callback
+        while True:
+            # See if we've already got the data from a previous read
+            if self._read_from_buffer():
+                return
+            self._check_closed()
+            if self._read_to_buffer() == 0:
+                break
         self._add_io_state(self.io_loop.READ)
 
     def read_bytes(self, num_bytes, callback):
         """Call callback when we read the given number of bytes."""
         assert not self._read_callback, "Already reading"
-        if len(self._read_buffer) >= num_bytes:
-            callback(self._consume(num_bytes))
-            return
-        self._check_closed()
         self._read_bytes = num_bytes
         self._read_callback = callback
+        while True:
+            if self._read_from_buffer():
+                return
+            self._check_closed()
+            if self._read_to_buffer() == 0:
+                break
         self._add_io_state(self.io_loop.READ)
 
     def write(self, data, callback=None):
@@ -180,24 +184,67 @@ class IOStream(object):
             raise
 
     def _handle_read(self):
+        while True:
+            try:
+                # Read from the socket until we get EWOULDBLOCK or equivalent.
+                # SSL sockets do some internal buffering, and if the data is
+                # sitting in the SSL object's buffer select() and friends
+                # can't see it; the only way to find out if it's there is to
+                # try to read it.
+                result = self._read_to_buffer()
+            except Exception:
+                self.close()
+                return
+            if result == 0:
+                break
+            else:
+                if self._read_from_buffer():
+                    return
+
+    def _read_from_socket(self):
+        """Attempts to read from the socket.
+
+        Returns the data read or None if there is nothing to read.
+        May be overridden in subclasses.
+        """
         try:
             chunk = self.socket.recv(self.read_chunk_size)
         except socket.error, e:
             if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
-                return
+                return None
             else:
-                logging.warning("Read error on %d: %s",
-                                self.socket.fileno(), e)
-                self.close()
-                return
-        if not chunk:
+                raise
+        return chunk
+
+    def _read_to_buffer(self):
+        """Reads from the socket and appends the result to the read buffer.
+
+        Returns the number of bytes read.  Returns 0 if there is nothing
+        to read (i.e. the read returns EWOULDBLOCK or equivalent).  On
+        error closes the socket and raises an exception.
+        """
+        try:
+            chunk = self._read_from_socket()
+        except socket.error, e:
+            # ssl.SSLError is a subclass of socket.error
+            logging.warning("Read error on %d: %s",
+                            self.socket.fileno(), e)
             self.close()
-            return
+            raise
+        if chunk is None:
+            return 0
         self._read_buffer += chunk
         if len(self._read_buffer) >= self.max_buffer_size:
             logging.error("Reached maximum read buffer size")
             self.close()
-            return
+            raise IOError("Reached maximum read buffer size")
+        return len(chunk)
+
+    def _read_from_buffer(self):
+        """Attempts to complete the currently-pending read from the buffer.
+
+        Returns True if the read was completed.
+        """
         if self._read_bytes:
             if len(self._read_buffer) >= self._read_bytes:
                 num_bytes = self._read_bytes
@@ -205,6 +252,7 @@ class IOStream(object):
                 self._read_callback = None
                 self._read_bytes = None
                 self._run_callback(callback, self._consume(num_bytes))
+                return True
         elif self._read_delimiter:
             loc = self._read_buffer.find(self._read_delimiter)
             if loc != -1:
@@ -214,6 +262,8 @@ class IOStream(object):
                 self._read_delimiter = None
                 self._run_callback(callback,
                                    self._consume(loc + delimiter_len))
+                return True
+        return False
 
     def _handle_write(self):
         while self._write_buffer:
@@ -287,3 +337,25 @@ class SSLIOStream(IOStream):
             self._do_ssl_handshake()
             return
         super(SSLIOStream, self)._handle_write()
+
+    def _read_from_socket(self):
+        try:
+            # SSLSocket objects have both a read() and recv() method,
+            # while regular sockets only have recv().
+            # The recv() method blocks (at least in python 2.6) if it is
+            # called when there is nothing to read, so we have to use
+            # read() instead.
+            chunk = self.socket.read(self.read_chunk_size)
+        except ssl.SSLError, e:
+            # SSLError is a subclass of socket.error, so this except
+            # block must come first.
+            if e.args[0] == ssl.SSL_ERROR_WANT_READ:
+                return None
+            else:
+                raise
+        except socket.error, e:
+            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                return None
+            else:
+                raise
+        return chunk

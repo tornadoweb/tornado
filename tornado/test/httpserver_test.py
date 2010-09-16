@@ -17,6 +17,9 @@ class HelloWorldRequestHandler(RequestHandler):
     def get(self):
         self.finish("Hello world")
 
+    def post(self):
+        self.finish("Got %d bytes in POST" % len(self.request.body))
+
 class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([('/', HelloWorldRequestHandler)])
@@ -29,15 +32,25 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
                 certfile=os.path.join(test_dir, 'test.crt'),
                 keyfile=os.path.join(test_dir, 'test.key')))
 
-    def test_ssl(self):
+    def fetch(self, path, **kwargs):
         def disable_cert_check(curl):
             # Our certificate was not signed by a CA, so don't check it
             curl.setopt(pycurl.SSL_VERIFYPEER, 0)
-        self.http_client.fetch(self.get_url('/').replace('http', 'https'),
+        self.http_client.fetch(self.get_url(path).replace('http', 'https'),
                                self.stop,
-                               prepare_curl_callback=disable_cert_check)
-        response = self.wait()
+                               prepare_curl_callback=disable_cert_check,
+                               **kwargs)
+        return self.wait()
+
+    def test_ssl(self):
+        response = self.fetch('/')
         self.assertEqual(response.body, "Hello world")
+
+    def test_large_post(self):
+        response = self.fetch('/',
+                              method='POST',
+                              body='A'*5000)
+        self.assertEqual(response.body, "Got 5000 bytes in POST")
 
 if (ssl is None or
     (pycurl.version_info()[5].startswith('GnuTLS') and
