@@ -321,7 +321,29 @@ class HTTPConnection(object):
     def _on_headers(self, data):
         eol = data.find("\r\n")
         start_line = data[:eol]
-        method, uri, version = start_line.split(" ")
+        
+        start_line_parts = start_line.split(" ")
+        
+        if not len(start_line_parts):
+            raise Exception("Malformed HTTP Request-Line: %s" % start_line)
+        
+        method = start_line_parts[0]
+        if method not in ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"]:
+            # Invalid HTTP method
+            raise Exception("Invalid HTTP method in HTTP Request-Line: %s" % method)
+
+        if len(start_line_parts) >= 2:        
+            uri = start_line_parts[1]
+        else:
+            # No URI, invalid request
+            raise Exception("Missing request URI in HTTP Request-Line: %s" % method)
+                
+        if len(start_line_parts) >= 3:
+            version = start_line_parts[2]
+        else:      
+            # No version assume 1.0
+            version =  "HTTP/1.0"
+            
         if not version.startswith("HTTP/"):
             raise Exception("Malformed HTTP version in HTTP Request-Line")
         headers = httputil.HTTPHeaders.parse(data[eol:])
