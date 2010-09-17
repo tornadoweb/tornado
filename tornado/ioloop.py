@@ -104,7 +104,7 @@ class IOLoop(object):
         self._timeouts = []
         self._running = False
         self._stopped = False
-        self._blocking_log_threshold = None
+        self._blocking_signal_threshold = None
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
@@ -163,22 +163,40 @@ class IOLoop(object):
         except (OSError, IOError):
             logging.debug("Error deleting fd from IOLoop", exc_info=True)
 
-    def set_blocking_log_threshold(self, s):
-        """Logs a stack trace if the ioloop is blocked for more than s seconds.
-        Pass None to disable.  Requires python 2.6 on a unixy platform.
+    def set_blocking_signal_threshold(self, seconds, action):
+        """Sends a signal if the ioloop is blocked for more than s seconds.
+
+        Pass seconds=None to disable.  Requires python 2.6 on a unixy
+        platform.
+
+        The action parameter is a python signal handler.  Read the
+        documentation for the python 'signal' module for more information.
+        If action is None, the process will be killed if it is blocked for
+        too long.
         """
         if not hasattr(signal, "setitimer"):
-            logging.error("set_blocking_log_threshold requires a signal module "
+            logging.error("set_blocking_signal_threshold requires a signal module "
                        "with the setitimer method")
             return
-        self._blocking_log_threshold = s
+        self._blocking_signal_threshold = s
         if s is not None:
-            signal.signal(signal.SIGALRM, self._handle_alarm)
+            signal.signal(signal.SIGALRM,
+                          action if action is not None else signal.SIG_DFL)
 
-    def _handle_alarm(self, signal, frame):
+    def set_blocking_log_threshold(self, seconds):
+        """Logs a stack trace if the ioloop is blocked for more than s seconds.
+        Equivalent to set_blocking_signal_threshold(seconds, self.log_stack)
+        """
+        self.set_blocking_signal_threshold(s, self.log_stack)
+
+    def log_stack(self, signal, frame):
+        """Signal handler to log the stack trace of the current thread.
+
+        For use with set_blocking_signal_threshold.
+        """
         logging.warning('IOLoop blocked for %f seconds in\n%s',
-                     self._blocking_log_threshold,
-                     ''.join(traceback.format_stack(frame)))
+                        self._blocking_signal_threshold,
+                        ''.join(traceback.format_stack(frame)))
 
     def start(self):
         """Starts the I/O loop.
@@ -218,7 +236,7 @@ class IOLoop(object):
             if not self._running:
                 break
 
-            if self._blocking_log_threshold is not None:
+            if self._blocking_signal_threshold is not None:
                 # clear alarm so it doesn't fire while poll is waiting for
                 # events.
                 signal.setitimer(signal.ITIMER_REAL, 0, 0)
@@ -239,9 +257,9 @@ class IOLoop(object):
                 else:
                     raise
 
-            if self._blocking_log_threshold is not None:
+            if self._blocking_signal_threshold is not None:
                 signal.setitimer(signal.ITIMER_REAL,
-                                 self._blocking_log_threshold, 0)
+                                 self._blocking_signal_threshold, 0)
 
             # Pop one fd at a time from the set of pending fds and run
             # its handler. Since that handler may perform actions on
@@ -266,7 +284,7 @@ class IOLoop(object):
                                   fd, exc_info=True)
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
-        if self._blocking_log_threshold is not None:
+        if self._blocking_signal_threshold is not None:
             signal.setitimer(signal.ITIMER_REAL, 0, 0)
 
     def stop(self):
