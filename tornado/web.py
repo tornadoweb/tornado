@@ -317,11 +317,21 @@ class RequestHandler(object):
 
         To read a cookie set with this method, use get_secure_cookie().
         """
+        self.set_cookie(name, self.create_signed_value(name, value),
+                        expires_days=expires_days, **kwargs)
+
+    def create_signed_value(self, name, value):
+        """Signs and timestamps a string so it cannot be forged.
+
+        Normally used via set_secure_cookie, but provided as a separate
+        method for non-cookie uses.  To decode a value not stored
+        as a cookie use the optional value argument to get_secure_cookie.
+        """
         timestamp = str(int(time.time()))
         value = base64.b64encode(value)
         signature = self._cookie_signature(name, value, timestamp)
         value = "|".join([value, timestamp, signature])
-        self.set_cookie(name, value, expires_days=expires_days, **kwargs)
+        return value
 
     def get_secure_cookie(self, name, include_name=True, value=None):
         """Returns the given signed cookie if it validates, or None.
