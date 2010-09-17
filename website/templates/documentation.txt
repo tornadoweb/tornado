@@ -268,6 +268,7 @@ module directly outside of a `RequestHandler` many of these entries are
 not present).
 
  * `escape`: alias for `tornado.escape.xhtml_escape`
+ * `xhtml_escape`: alias for `tornado.escape.xhtml_escape`
  * `url_escape`: alias for `tornado.escape.url_escape`
  * `json_encode`: alias for `tornado.escape.json_encode`
  * `squeeze`: alias for `tornado.escape.squeeze`
