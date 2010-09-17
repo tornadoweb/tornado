@@ -260,22 +260,34 @@ We also support *template inheritance* using the `extends` and `block`
 statements, which are described in detail in the documentation for the
 [`template` module](http://github.com/facebook/tornado/blob/master/tornado/template.py).
 
-Expressions can be any Python expression, including function calls. We
-support the functions `escape`, `url_escape`, and `json_encode` by default,
-and you can pass other functions into the template simply by passing them
-as keyword arguments to the template render function:
+Expressions can be any Python expression, including function calls.
+Template code is executed in a namespace that includes the following objects
+and functions (Note that this list applies to templates rendered using
+`RequestHandler.render` and `render_string`.  If you're using the `template`
+module directly outside of a `RequestHandler` many of these entries are
+not present).
 
-    class MainHandler(tornado.web.RequestHandler):
-        def get(self):
-            self.render("template.html", add=self.add)
-
-        def add(self, x, y):
-            return x + y
+ * `escape`: alias for `tornado.escape.xhtml_escape`
+ * `url_escape`: alias for `tornado.escape.url_escape`
+ * `json_encode`: alias for `tornado.escape.json_encode`
+ * `squeeze`: alias for `tornado.escape.squeeze`
+ * `datetime`: the Python `datetime` module
+ * `handler`: the current `RequestHandler` object
+ * `request`: alias for `handler.request`
+ * `current_user`: alias for `handler.current_user`
+ * `locale`: alias for `handler.locale`
+ * `_`: alias for `handler.locale.translate`
+ * `static_url`: alias for `handler.static_url`
+ * `xsrf_form_html`: alias for `handler.xsrf_form_html`
+ * `reverse_url`: alias for `Application.reverse_url`
+ * All entries from the `ui_methods` and `ui_modules` `Application` settings
+ * Any keyword arguments passed to `render` or `render_string`
 
 When you are building a real application, you are going to want to use
 all of the features of Tornado templates, especially template inheritance.
 Read all about those features in the [`template` module](http://github.com/facebook/tornado/blob/master/tornado/template.py)
-section.
+section (some features, including `UIModules` are implemented in the
+`web` module)
 
 Under the hood, Tornado templates are translated directly to Python.
 The expressions you include in your template are copied verbatim into
