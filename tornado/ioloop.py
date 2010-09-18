@@ -178,8 +178,8 @@ class IOLoop(object):
             logging.error("set_blocking_signal_threshold requires a signal module "
                        "with the setitimer method")
             return
-        self._blocking_signal_threshold = s
-        if s is not None:
+        self._blocking_signal_threshold = seconds
+        if seconds is not None:
             signal.signal(signal.SIGALRM,
                           action if action is not None else signal.SIG_DFL)
 
@@ -187,7 +187,7 @@ class IOLoop(object):
         """Logs a stack trace if the ioloop is blocked for more than s seconds.
         Equivalent to set_blocking_signal_threshold(seconds, self.log_stack)
         """
-        self.set_blocking_signal_threshold(s, self.log_stack)
+        self.set_blocking_signal_threshold(seconds, self.log_stack)
 
     def log_stack(self, signal, frame):
         """Signal handler to log the stack trace of the current thread.
