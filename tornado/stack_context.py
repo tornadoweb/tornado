@@ -104,23 +104,21 @@ def wrap(fn):
     # functools.wraps doesn't appear to work on functools.partial objects
     #@functools.wraps(fn)
     def wrapped(callback, contexts, *args, **kwargs):
-        # _state.contexts and contexts may share a common prefix.
-        # For each element of contexts not in that prefix, create a new
-        # StackContext object.
-        # TODO(bdarnell): do we want to be strict about the order,
-        # or is what we really want just set(contexts) - set(_state.contexts)?
-        # I think we do want to be strict about using identity comparison,
-        # so a set may not be quite right.  Conversely, it's not very stack-like
-        # to have new contexts pop up in the middle, so would we want to
-        # ensure there are no existing contexts not in the stack being restored?
-        # That feels right, but given the difficulty of handling errors at this
-        # level I'm not going to check for it now.
-        pairs = itertools.izip(itertools.chain(_state.contexts,
-                                               itertools.repeat(None)),
-                               contexts)
-        new_contexts = []
-        for old, new in itertools.dropwhile(lambda x: x[0] is x[1], pairs):
-            new_contexts.append(StackContext(new))
+        # If we're moving down the stack, _state.contexts is a prefix
+        # of contexts.  For each element of contexts not in that prefix,
+        # create a new StackContext object.
+        # If we're moving up the stack (or to an entirely different stack),
+        # _state.contexts will have elements not in contexts.  Use
+        # NullContext to clear the state and then recreate from contexts.
+        if (len(_state.contexts) > len(contexts) or
+            any(a is not b
+                for a, b in itertools.izip(_state.contexts, contexts))):
+            # contexts have been removed or changed, so start over
+            new_contexts = ([NullContext()] +
+                            [StackContext(c) for c in contexts])
+        else:
+            new_contexts = [StackContext(c)
+                            for c in contexts[len(_state.contexts):]]
         if new_contexts:
             with contextlib.nested(*new_contexts):
                 callback(*args, **kwargs)
