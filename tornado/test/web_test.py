@@ -113,7 +113,3 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
     def on_connection_close(self):
         logging.info('connection closed')
         self.stop()
-
-if tornado.ioloop._poll is tornado.ioloop._Select:
-    # select-based ioloop does not detect closed connections promptly
-    del ConnectionCloseTest

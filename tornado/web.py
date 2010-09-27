@@ -159,12 +159,6 @@ class RequestHandler(object):
         You may override this to clean up resources associated with
         long-lived connections.
 
-        Note that the select()-based implementation of IOLoop does not detect
-        closed connections and so this method will not be called until
-        you try (and fail) to produce some output.  The epoll- and kqueue-
-        based implementations should detect closed connections even while
-        the request is idle.
-
         Proxies may keep a connection open for a time (perhaps
         indefinitely) after the client has gone away, so this method
         may not be called promptly after the end user closes their

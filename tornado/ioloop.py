@@ -496,7 +496,12 @@ class _Select(object):
     def register(self, fd, events):
         if events & IOLoop.READ: self.read_fds.add(fd)
         if events & IOLoop.WRITE: self.write_fds.add(fd)
-        if events & IOLoop.ERROR: self.error_fds.add(fd)
+        if events & IOLoop.ERROR:
+            self.error_fds.add(fd)
+            # Closed connections are reported as errors by epoll and kqueue,
+            # but as zero-byte reads by select, so when errors are requested
+            # we need to listen for both read and error.
+            self.read_fds.add(fd)
 
     def modify(self, fd, events):
         self.unregister(fd)
