@@ -1,8 +1,11 @@
+from tornado.iostream import IOStream
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
-from tornado.web import RequestHandler, _O, authenticated, Application
+from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous
 
 import logging
 import re
+import socket
+import tornado.ioloop
 
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
@@ -79,3 +82,38 @@ class AuthRedirectTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(re.match(
             'http://example.com/login\?next=http%3A%2F%2Flocalhost%3A[0-9]+%2Fabsolute',
             response.headers['Location']), response.headers['Location'])
+
+
+class ConnectionCloseHandler(RequestHandler):
+    def initialize(self, test):
+        self.test = test
+
+    @asynchronous
+    def get(self):
+        self.test.on_handler_waiting()
+
+    def on_connection_close(self):
+        self.test.on_connection_close()
+
+class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        return Application([('/', ConnectionCloseHandler, dict(test=self))])
+
+    def test_connection_close(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        s.connect(("localhost", self.get_http_port()))
+        self.stream = IOStream(s, io_loop=self.io_loop)
+        self.stream.write("GET / HTTP/1.0\r\n\r\n")
+        self.wait()
+
+    def on_handler_waiting(self):
+        logging.info('handler waiting')
+        self.stream.close()
+
+    def on_connection_close(self):
+        logging.info('connection closed')
+        self.stop()
+
+if tornado.ioloop._poll is tornado.ioloop._Select:
+    # select-based ioloop does not detect closed connections promptly
+    del ConnectionCloseTest

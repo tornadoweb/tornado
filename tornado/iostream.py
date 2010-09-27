@@ -214,6 +214,9 @@ class IOStream(object):
                 return None
             else:
                 raise
+        if not chunk:
+            self.close()
+            return None
         return chunk
 
     def _read_to_buffer(self):
@@ -358,4 +361,7 @@ class SSLIOStream(IOStream):
                 return None
             else:
                 raise
+        if not chunk:
+            self.close()
+            return None
         return chunk
