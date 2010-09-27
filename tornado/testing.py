@@ -31,6 +31,14 @@ import tornado.ioloop
 import traceback
 import unittest
 
+_next_port = 10000
+def get_unused_port():
+    """Returns a (hopefully) unused port number."""
+    global _next_port
+    port = _next_port
+    _next_port = _next_port + 1
+    return port
+
 class AsyncTestCase(unittest.TestCase):
     """TestCase subclass for testing IOLoop-based asynchronous code.
 
@@ -193,8 +201,6 @@ class AsyncHTTPTestCase(AsyncTestCase):
                 response = self.wait()
                 # test contents of response
     '''
-    __next_port = 10000
-
     def setUp(self):
         super(AsyncHTTPTestCase, self).setUp()
         self.__port = None
@@ -222,10 +228,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
         A new port is chosen for each test.
         """
-        if self.__port is not None:
-            return self.__port
-        self.__port = AsyncHTTPTestCase.__next_port
-        AsyncHTTPTestCase.__next_port = self.__port + 1
+        if self.__port is None:
+            self.__port = get_unused_port()
         return self.__port
 
     def get_url(self, path):
