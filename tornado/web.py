@@ -780,9 +780,9 @@ class RequestHandler(object):
             return base + static_url_prefix + path
 
     def async_callback(self, callback, *args, **kwargs):
-        """Wrap callbacks with this if they are used on asynchronous requests.
+        """Obsolete - catches exceptions from the wrapped function.
 
-        Catches exceptions and properly finishes the request.
+        This function is unnecessary since Tornado 1.1.
         """
         if callback is None:
             return None
