@@ -330,7 +330,7 @@ class HTTPConnection(object):
             headers=headers, remote_ip=self.address[0])
 
         content_length = headers.get("Content-Length")
-        if content_length:
+        if content_length and int(content_length):
             content_length = int(content_length)
             if content_length > self.stream.max_buffer_size:
                 raise Exception("Content-Length too long")
