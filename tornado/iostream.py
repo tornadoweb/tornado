@@ -99,6 +99,9 @@ class IOStream(object):
     def read_bytes(self, num_bytes, callback):
         """Call callback when we read the given number of bytes."""
         assert not self._read_callback, "Already reading"
+        if num_bytes == 0:
+            callback("")
+            return
         self._read_bytes = num_bytes
         self._read_callback = callback
         while True:
