@@ -139,7 +139,8 @@ class AsyncTestCase(unittest.TestCase):
         Keyword arguments or a single positional argument passed to stop() are
         saved and will be returned by wait().
         '''
-        self.__stop_args = _arg or kwargs
+        assert _arg is None or not kwargs
+        self.__stop_args = kwargs or _arg
         if self.__running:
             self.io_loop.stop()
             self.__running = False
