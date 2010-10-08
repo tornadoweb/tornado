@@ -21,6 +21,7 @@ import logging
 import socket
 
 from tornado import ioloop
+from tornado import stack_context
 
 try:
     import ssl # Python 2.6+
@@ -79,14 +80,15 @@ class IOStream(object):
         self._write_callback = None
         self._close_callback = None
         self._state = self.io_loop.ERROR
-        self.io_loop.add_handler(
-            self.socket.fileno(), self._handle_events, self._state)
+        with stack_context.NullContext():
+            self.io_loop.add_handler(
+                self.socket.fileno(), self._handle_events, self._state)
 
     def read_until(self, delimiter, callback):
         """Call callback when we read the given delimiter."""
         assert not self._read_callback, "Already reading"
         self._read_delimiter = delimiter
-        self._read_callback = callback
+        self._read_callback = stack_context.wrap(callback)
         while True:
             # See if we've already got the data from a previous read
             if self._read_from_buffer():
@@ -103,7 +105,7 @@ class IOStream(object):
             callback("")
             return
         self._read_bytes = num_bytes
-        self._read_callback = callback
+        self._read_callback = stack_context.wrap(callback)
         while True:
             if self._read_from_buffer():
                 return
@@ -123,11 +125,11 @@ class IOStream(object):
         self._check_closed()
         self._write_buffer += data
         self._add_io_state(self.io_loop.WRITE)
-        self._write_callback = callback
+        self._write_callback = stack_context.wrap(callback)
 
     def set_close_callback(self, callback):
         """Call the given callback when the stream is closed."""
-        self._close_callback = callback
+        self._close_callback = stack_context.wrap(callback)
 
     def close(self):
         """Close this stream."""
@@ -177,6 +179,8 @@ class IOStream(object):
         try:
             callback(*args, **kwargs)
         except:
+            logging.error("Uncaught exception, closing connection.",
+                          exc_info=True)
             # Close the socket on an uncaught exception from a user callback
             # (It would eventually get closed when the socket object is
             # gc'd, but we don't want to rely on gc happening before we

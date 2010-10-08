@@ -101,6 +101,8 @@ def wrap(fn):
     different execution context (either in a different thread or
     asynchronously in the same thread).
     '''
+    if fn is None:
+      return None
     # functools.wraps doesn't appear to work on functools.partial objects
     #@functools.wraps(fn)
     def wrapped(callback, contexts, *args, **kwargs):
