@@ -1227,17 +1227,25 @@ class StaticFileHandler(RequestHandler):
     want browsers to cache a file indefinitely, send them to, e.g.,
     /static/images/myimage.png?v=xxx.
     """
-    def __init__(self, application, request, path):
+    def __init__(self, application, request, path, default_file=None):
         RequestHandler.__init__(self, application, request)
         self.root = os.path.abspath(path) + os.path.sep
+        self.default_file = default_file
 
-    def head(self, path):
+    def head(self, path=None):
         self.get(path, include_body=False)
 
-    def get(self, path, include_body=True):
-        abspath = os.path.abspath(os.path.join(self.root, path))
+    def get(self, path=None, include_body=True):
+        if not path:
+            path = os.path.sep
+            abspath = self.root
+        else:
+            abspath = os.path.abspath(os.path.join(self.root, path))
+
         if not abspath.startswith(self.root):
             raise HTTPError(403, "%s is not in root static directory", path)
+        if os.path.isdir(abspath) and self.default_file is not None:
+            abspath = os.path.join(abspath, self.default_file)
         if not os.path.exists(abspath):
             raise HTTPError(404)
         if not os.path.isfile(abspath):
