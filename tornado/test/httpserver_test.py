@@ -3,7 +3,10 @@
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.web import Application, RequestHandler
 import os
-import pycurl
+try:
+    import pycurl
+except ImportError:
+    pycurl = None
 import re
 import unittest
 import urllib
@@ -52,7 +55,7 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
                               body='A'*5000)
         self.assertEqual(response.body, "Got 5000 bytes in POST")
 
-if (ssl is None or
+if (ssl is None or pycurl is None or
     (pycurl.version_info()[5].startswith('GnuTLS') and
      pycurl.version_info()[2] < 0x71400)):
     # Don't try to run ssl tests if we don't have the ssl module (python 2.5).

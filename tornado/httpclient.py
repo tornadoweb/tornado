@@ -26,7 +26,14 @@ import errno
 import httplib
 import logging
 import os
-import pycurl
+try:
+    import pycurl
+except ImportError:
+    # See the other check for this variable at end of file
+    if os.environ.get('USE_SIMPLE_HTTPCLIENT'):
+        pycurl = None
+    else:
+        raise
 import sys
 import threading
 import time
