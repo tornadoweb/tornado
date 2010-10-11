@@ -25,6 +25,7 @@ import email.utils
 import errno
 import httplib
 import logging
+import os
 import pycurl
 import sys
 import threading
@@ -648,6 +649,14 @@ def main():
             print response.headers
         if options.print_body:
             print response.body
+
+# If the environment variable USE_SIMPLE_HTTPCLIENT is set to a non-empty
+# string, use SimpleAsyncHTTPClient instead of AsyncHTTPClient.
+# This is provided as a convenience for testing SimpleAsyncHTTPClient,
+# and may be removed or replaced with a better way of specifying the preferred
+# HTTPClient implementation before the next release.
+if os.environ.get('USE_SIMPLE_HTTPCLIENT'):
+    from tornado.simple_httpclient import SimpleAsyncHTTPClient as AsyncHTTPClient
 
 if __name__ == "__main__":
     main()
