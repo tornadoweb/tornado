@@ -30,20 +30,20 @@ that transfer control from one context to another (e.g. AsyncHTTPClient
 itself, IOLoop, thread pools, etc).
 
 Example usage:
-  @contextlib.contextmanager
-  def die_on_error():
-    try:
-      yield
-    except:
-      logging.error("exception in asynchronous operation", exc_info=True)
-      sys.exit(1)
+    @contextlib.contextmanager
+    def die_on_error():
+        try:
+            yield
+        except:
+            logging.error("exception in asynchronous operation",exc_info=True)
+            sys.exit(1)
 
-  with StackContext(die_on_error):
-    # Any exception thrown here *or in callback and its desendents*
-    # will cause the process to exit instead of spinning endlessly
-    # in the ioloop.
-    http_client.fetch(url, callback)
-  ioloop.start()
+    with StackContext(die_on_error):
+        # Any exception thrown here *or in callback and its desendents*
+        # will cause the process to exit instead of spinning endlessly
+        # in the ioloop.
+        http_client.fetch(url, callback)
+    ioloop.start()
 '''
 
 from __future__ import with_statement
