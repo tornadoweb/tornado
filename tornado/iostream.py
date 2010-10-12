@@ -177,7 +177,10 @@ class IOStream(object):
 
     def _run_callback(self, callback, *args, **kwargs):
         try:
-            callback(*args, **kwargs)
+            # Use a NullContext to ensure that all StackContexts are run
+            # inside our blanket exception handler rather than outside.
+            with stack_context.NullContext():
+                callback(*args, **kwargs)
         except:
             logging.error("Uncaught exception, closing connection.",
                           exc_info=True)
