@@ -242,15 +242,24 @@ class Locale(object):
 
         You can force a full format date ("July 10, 1980") with
         full_format=True.
+
+        This method is primarily intended for dates in the past.
+        For dates in the future, we fall back to full format.
         """
         if self.code.startswith("ru"):
             relative = False
         if type(date) in (int, long, float):
             date = datetime.datetime.utcfromtimestamp(date)
         now = datetime.datetime.utcnow()
-        # Round down to now. Due to click skew, things are somethings
-        # slightly in the future.
-        if date > now: date = now
+        if date > now:
+            if relative and (date - now).seconds < 60:
+                # Due to click skew, things are some things slightly
+                # in the future. Round timestamps in the immediate
+                # future down to now in relative mode.
+                date = now
+            else:
+                # Otherwise, future dates always use the full format.
+                full_format = True
         local_date = date - datetime.timedelta(minutes=gmt_offset)
         local_now = now - datetime.timedelta(minutes=gmt_offset)
         local_yesterday = local_now - datetime.timedelta(hours=24)
