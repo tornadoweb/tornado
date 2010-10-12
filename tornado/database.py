@@ -23,6 +23,12 @@ import MySQLdb.cursors
 import itertools
 import logging
 import time
+import re
+
+try:
+    import curses   # For pretty SQL log messages, if available
+except:
+    curses = None
 
 class Connection(object):
     """A lightweight wrapper around MySQLdb DB-API connections.
@@ -41,10 +47,11 @@ class Connection(object):
     UTF-8 on all connections to avoid time zone and encoding errors.
     """
     def __init__(self, host, database, user=None, password=None,
-                 max_idle_time=7*3600):
+                 max_idle_time=7*3600, debug=False):
         self.host = host
         self.database = database
         self.max_idle_time = max_idle_time
+        self.debug = debug
 
         args = dict(conv=CONVERSIONS, use_unicode=True, charset="utf8",
                     db=database, init_command='SET time_zone = "+0:00"',
@@ -144,6 +151,89 @@ class Connection(object):
         finally:
             cursor.close()
 
+    def scalar(self, query, *parameters):
+        """Returns the first row returned for the given query."""
+        rows = self.query(query, *parameters)
+        if not rows:
+            return None
+        else:
+            return rows[0][rows[0].keys()[0]]
+    
+    def array(self, query, *parameters):
+        """Returns values in the first column as a list"""
+        rows = self.query(query, *parameters)
+        if not rows:
+          return []
+        key = rows[0].keys()[0]
+        return [ x[key] for x in rows ]
+
+    def select(self, table, fields="*", limit=None, where=None, group=None, order=None, values=None, **params):
+        """ rows = db.select('Users', firstName='Larry', limit=10) """
+        sql = [ 'SELECT %s FROM %s' % (fields, table) ]
+
+        if where:
+            if type(where) == type([]): where = " AND ".join(where)
+            sql.append( 'WHERE ' + where )
+        elif params:
+            sql.append( 'WHERE ' + ' AND '.join([ p + ' = %s' for p in params]) )
+
+        if group:
+            sql.append('GROUP BY ' + group)
+        if order:
+            sql.append('ORDER BY ' + order)
+        if limit:
+            sql.append('LIMIT ' + str(limit))
+
+        sql = " ".join(sql)
+        if values:
+            return self.query(sql, *values)
+        return self.query(sql, *params.values())
+
+    def delete(self, table, **params):
+        """ db.delete('Users', firstName='Larry') """
+        sql = 'DELETE FROM ' + table
+        if params:
+            sql += ' WHERE ' + ' AND '.join([ p + ' = %s' for p in params])
+        return self.execute(sql, *params.values())
+        
+    def insert(self, table, **params):
+        """ user_id = db.insert(table='Users', firstName='Larry', lastName='Page') """
+        sql = 'INSERT IGNORE INTO ' + table + ' ('
+        sql += (', ').join(params.keys()) + ') VALUES ('
+        sql += ', '.join(['%s' for x in range(len(params))]) + ')'
+        return self.execute(sql, *params.values())
+
+    def update(self, table, record=None, key='id', **params):
+        """ user_id = db.update('Users', 13, firstName='Larry', lastName='Page') """
+        sql = 'UPDATE ' + table + ' SET '
+        sql += ', '.join([ p + ' = %s' for p in params])
+        params = params.values()
+        if record:
+          sql += ' WHERE ' + key + ' = %s'
+          params.append(record)
+        return self.execute(sql, *params)
+
+    def _debug(self, sql):
+        """ pretty-print SQL """
+        c, c2 = "", ""
+        if curses:
+            fg_color = curses.tigetstr("setaf") or curses.tigetstr("setf") or ""
+            c = curses.tparm(fg_color, 5)
+            c2 = curses.tparm(fg_color, 7)
+
+        sql = sql.lower()
+        keywords = [ 'select', 'delete', 'insert', 'update', 'ignore', 'from', 'order by', 'limit', 'where', 'left', 'inner', 'join', 'outer', 'and', 'or', 'group by', 'limit', 'asc', 'desc', 'on', 'in', 'as', 'sum', 'min', 'max' ]
+        for k in keywords:
+            k2 = c + k.upper() + c2
+            sql = re.sub("\\b" + k + "\\b", k2, sql)
+
+        sql = "\n" + sql.replace("FROM", "\n  FROM")\
+            .replace("WHERE", "\n  WHERE")\
+            .replace("GROUP BY", "\n  GROUP BY")\
+            .replace("ORDER BY", "\n  ORDER BY")\
+            .replace("LIMIT", "\n  LIMIT")
+        logging.debug(sql)
+        
     def _ensure_connected(self):
         # Mysql by default closes client connections that are idle for
         # 8 hours, but the client library does not report this fact until
@@ -161,6 +251,10 @@ class Connection(object):
 
     def _execute(self, cursor, query, parameters):
         try:
+            if self.debug:
+                self._debug(query)
+            # allow us to use question marks instead of %s
+            query = query.replace("?", "%s")
             return cursor.execute(query, parameters)
         except OperationalError:
             logging.error("Error connecting to MySQL on %s", self.host)
