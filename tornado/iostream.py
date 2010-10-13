@@ -49,6 +49,10 @@ class IOStream(object):
         from tornado import iostream
         import socket
 
+        def send_request():
+            stream.write("GET / HTTP/1.0\r\nHost: friendfeed.com\r\n\r\n")
+            stream.read_until("\r\n\r\n", on_headers)
+
         def on_headers(data):
             headers = {}
             for line in data.split("\r\n"):
@@ -64,9 +68,7 @@ class IOStream(object):
 
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         stream = iostream.IOStream(s)
-        stream.connect(("friendfeed.com", 80))
-        stream.write("GET / HTTP/1.0\r\nHost: friendfeed.com\r\n\r\n")
-        stream.read_until("\r\n\r\n", on_headers)
+        stream.connect(("friendfeed.com", 80), send_request)
         ioloop.IOLoop.instance().start()
 
     """
@@ -102,15 +104,16 @@ class IOStream(object):
 
         Note that it is safe to call IOStream.write while the
         connection is pending, in which case the data will be written
-        as soon as the connection is ready (see the example in the
-        docstring for this class).
+        as soon as the connection is ready.  Calling IOStream read
+        methods before the socket is connected works on some platforms
+        but is non-portable.
         """
         self._connecting = True
         try:
             self.socket.connect(address)
         except socket.error, e:
-            # In non-blocking mode connect() always raises EINPROGRESS
-            if e.errno != errno.EINPROGRESS:
+            # In non-blocking mode connect() always raises an exception
+            if e.errno not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
                 raise
         self._connect_callback = stack_context.wrap(callback)
         self._add_io_state(self.io_loop.WRITE)
