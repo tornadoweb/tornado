@@ -68,34 +68,24 @@ class _HTTPConnection(object):
         self.chunks = None
         with stack_context.StackContext(self.cleanup):
             parsed = urlparse.urlsplit(self.request.url)
-            sock = socket.socket()
-            sock.setblocking(False)
             if ":" in parsed.netloc:
                 host, _, port = parsed.netloc.partition(":")
                 port = int(port)
             else:
                 host = parsed.netloc
                 port = 443 if parsed.scheme == "https" else 80
-            try:
-                sock.connect((host, port))
-            except socket.error, e:
-                # In non-blocking mode connect() always raises EINPROGRESS
-                if e.errno != errno.EINPROGRESS:
-                    raise
-            # Wait for the non-blocking connect to complete
-            self.io_loop.add_handler(sock.fileno(),
-                                     functools.partial(self._on_connect,
-                                                       sock, parsed),
-                                     IOLoop.WRITE)
 
-    def _on_connect(self, sock, parsed, fd, events):
-        self.io_loop.remove_handler(fd)
-        if parsed.scheme == "https":
-            # TODO: cert verification, etc
-            sock = ssl.wrap_socket(sock, do_handshake_on_connect=False)
-            self.stream = SSLIOStream(sock, io_loop=self.io_loop)
-        else:
-            self.stream = IOStream(sock, io_loop=self.io_loop)
+            if parsed.scheme == "https":
+                # TODO: cert verification, etc
+                self.stream = SSLIOStream(socket.socket(),
+                                          io_loop=self.io_loop)
+            else:
+                self.stream = IOStream(socket.socket(),
+                                       io_loop=self.io_loop)
+            self.stream.connect((host, port),
+                                functools.partial(self._on_connect, parsed))
+
+    def _on_connect(self, parsed):
         if "Host" not in self.request.headers:
             self.request.headers["Host"] = parsed.netloc
         has_body = self.request.method in ("POST", "PUT")
