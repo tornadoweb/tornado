@@ -1,11 +1,12 @@
 from tornado.iostream import IOStream
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
-from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous
+from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, URLSpec
 
 import logging
 import re
 import socket
 import tornado.ioloop
+import unittest
 
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
@@ -113,3 +114,40 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
     def on_connection_close(self):
         logging.info('connection closed')
         self.stop()
+
+class ReverseUrlHandler(RequestHandler):
+    def __init__(self, application):
+        self.application = application
+
+    def noargs(self):
+        return self.reverse_url('NoArgs')
+
+    def args(self):
+        return self.reverse_url('Args', 1, 2)
+
+    def kwargs(self):
+        return self.reverse_url('KwArgs', arg1=1, arg2=2)
+    
+    def args_and_kwargs(self):
+        return self.reverse_url('ArgsAndKwArgs', 'a', 'b', arg1=1, arg2=2)
+
+class ReverseUrlTest(unittest.TestCase):
+    def get_app(self):
+        return Application([
+            URLSpec('/noargs', ReverseUrlHandler, name='NoArgs'),
+            URLSpec('/args/(?P<arg1>[0-9]*)/(?P<arg2>[0-9]*)', ReverseUrlHandler, name='Args'),
+            URLSpec('/kwargs', ReverseUrlHandler, name='KwArgs'),
+            URLSpec('/args_and_kwargs/(?P<arg1>[0-9]*)/(?P<arg2>[0-9]*)', ReverseUrlHandler, name='ArgsAndKwArgs'),
+        ])
+        
+    def test_reverse(self):
+        app = self.get_app()
+        
+        handler = ReverseUrlHandler(app)
+        self.assertEquals(handler.noargs(), '/noargs')
+        self.assertEquals(handler.args(), '/args/1/2')
+        self.assertEquals(handler.kwargs(), '/kwargs?arg1=1&arg2=2')
+        self.assertEquals(handler.args_and_kwargs(), '/args_and_kwargs/a/b?arg1=1&arg2=2')
+        
+        
+        

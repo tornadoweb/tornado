@@ -805,8 +805,8 @@ class RequestHandler(object):
             raise Exception("You must define the '%s' setting in your "
                             "application to use %s" % (name, feature))
 
-    def reverse_url(self, name, *args):
-        return self.application.reverse_url(name, *args)
+    def reverse_url(self, name, *args, **kwargs):
+        return self.application.reverse_url(name, *args, **kwargs)
 
     @contextlib.contextmanager
     def _stack_context(self):
@@ -1155,13 +1155,13 @@ class Application(object):
         handler._execute(transforms, *args, **kwargs)
         return handler
 
-    def reverse_url(self, name, *args):
+    def reverse_url(self, name, *args, **kwargs):
         """Returns a URL path for handler named `name`
 
         The handler must be added to the application as a named URLSpec
         """
         if name in self.named_handlers:
-            return self.named_handlers[name].reverse(*args)
+            return self.named_handlers[name].reverse(*args, **kwargs)
         raise KeyError("%s not found in named urls" % name)
 
 
@@ -1514,14 +1514,21 @@ class URLSpec(object):
 
         return (''.join(pieces), self.regex.groups)
 
-    def reverse(self, *args):
+    def reverse(self, *args, **kwargs):
         assert self._path is not None, \
             "Cannot reverse url regex " + self.regex.pattern
         assert len(args) == self._group_count, "required number of arguments "\
             "not found"
-        if not len(args):
+        
+        if not len(args) and not kwargs:
             return self._path
-        return self._path % tuple([str(a) for a in args])
+            
+        url = self._path % tuple([str(a) for a in args])
+        
+        if kwargs:
+            return '%s?%s' % (url, urllib.urlencode(kwargs))
+        else:
+            return url
 
 url = URLSpec
 
