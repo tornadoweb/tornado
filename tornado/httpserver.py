@@ -431,8 +431,13 @@ class HTTPRequest(object):
         self.body = body or ""
         if connection and connection.xheaders:
             # Squid uses X-Forwarded-For, others use X-Real-Ip
-            self.remote_ip = self.headers.get(
-                "X-Real-Ip", self.headers.get("X-Forwarded-For", remote_ip))
+            for h in ("X-Real-Ip",
+                      "X-Real-IP",
+                      "X-Forwarded-For"):
+                self.remote_ip = self.headers.get(h, None)
+                if self.remote_ip is not None:
+                    break
+
             self.protocol = self.headers.get("X-Scheme", protocol) or "http"
         else:
             self.remote_ip = remote_ip
