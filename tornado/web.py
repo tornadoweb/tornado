@@ -1236,6 +1236,8 @@ class StaticFileHandler(RequestHandler):
         self.get(path, include_body=False)
 
     def get(self, path, include_body=True):
+        if os.path.sep != "/":
+            path = path.replace("/", os.path.sep)
         abspath = os.path.abspath(os.path.join(self.root, path))
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
@@ -1245,8 +1247,8 @@ class StaticFileHandler(RequestHandler):
             # need to look at the request.path here for when path is empty
             # but there is some prefix to the path that was already
             # trimmed by the routing
-            if not self.request.path.endswith(os.path.sep):
-                self.redirect(self.request.path + os.path.sep)
+            if not self.request.path.endswith("/"):
+                self.redirect(self.request.path + "/")
                 return
             abspath = os.path.join(abspath, self.default_filename)
         if not os.path.exists(abspath):
