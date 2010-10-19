@@ -1,3 +1,4 @@
+from tornado.escape import json_decode
 from tornado.iostream import IOStream
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous
@@ -113,3 +114,19 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
     def on_connection_close(self):
         logging.info('connection closed')
         self.stop()
+
+class EchoHandler(RequestHandler):
+    def get(self, path):
+        self.write(dict(path=path, args=self.request.arguments))
+
+class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        return Application([("/(.*)", EchoHandler)])
+
+    def test_question_mark(self):
+        # Ensure that url-encoded question marks are handled properly
+        self.assertEqual(json_decode(self.fetch('/%3F').body),
+                         dict(path='?', args={}))
+        self.assertEqual(json_decode(self.fetch('/%3F?%3F=%3F').body),
+                         dict(path='?', args={'?': ['?']}))
+
