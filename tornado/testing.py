@@ -198,6 +198,10 @@ class AsyncHTTPTestCase(AsyncTestCase):
                 return Application([('/', MyHandler)...])
 
             def test_homepage(self):
+                # The following two lines are equivalent to
+                #   response = self.fetch('/')
+                # but are shown in full here to demonstrate explicit use
+                # of self.stop and self.wait.
                 self.http_client.fetch(self.get_url('/'), self.stop)
                 response = self.wait()
                 # test contents of response
@@ -217,6 +221,17 @@ class AsyncHTTPTestCase(AsyncTestCase):
         tornado.web.Application or other HTTPServer callback.
         """
         raise NotImplementedError()
+
+    def fetch(self, path, **kwargs):
+        """Convenience method to synchronously fetch a url.
+
+        The given path will be appended to the local server's host and port.
+        Any additional kwargs will be passed directly to
+        AsyncHTTPClient.fetch (and so could be used to pass method="POST",
+        body="...", etc).
+        """
+        self.http_client.fetch(self.get_url(path), self.stop, **kwargs)
+        return self.wait()
 
     def get_httpserver_options(self):
         """May be overridden by subclasses to return additional
