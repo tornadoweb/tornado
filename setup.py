@@ -36,7 +36,10 @@ version = "1.1"
 distutils.core.setup(
     name="tornado",
     version=version,
-    packages = ["tornado"],
+    packages = ["tornado", "tornado.test"],
+    package_data = {
+        "tornado.test": ["README", "test.crt", "test.key"],
+        },
     ext_modules = extensions,
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
