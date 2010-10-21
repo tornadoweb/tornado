@@ -22,10 +22,6 @@ class ChunkHandler(RequestHandler):
         self.write("qwer")
 
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
-    def fetch(self, url, **kwargs):
-        self.http_client.fetch(url, self.stop, **kwargs)
-        return self.wait()
-
     def get_app(self):
         return Application([
             ("/hello", HelloWorldHandler),
@@ -39,35 +35,35 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.http_client = SimpleAsyncHTTPClient(io_loop=self.io_loop)
 
     def test_hello_world(self):
-        response = self.fetch(self.get_url("/hello"))
+        response = self.fetch("/hello")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["Content-Type"], "text/plain")
         self.assertEqual(response.body, "Hello world!")
 
-        response = self.fetch(self.get_url("/hello?name=Ben"))
+        response = self.fetch("/hello?name=Ben")
         self.assertEqual(response.body, "Hello Ben!")
 
     def test_streaming_callback(self):
         # streaming_callback is also tested in test_chunked
         chunks = []
-        response = self.fetch(self.get_url("/hello"),
+        response = self.fetch("/hello",
                               streaming_callback=chunks.append)
         # with streaming_callback, data goes to the callback and not response.body
         self.assertEqual(chunks, ["Hello world!"])
         self.assertFalse(response.body)
 
     def test_post(self):
-        response = self.fetch(self.get_url("/post"), method="POST",
+        response = self.fetch("/post", method="POST",
                               body="arg1=foo&arg2=bar")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, "Post arg1: foo, arg2: bar")
 
     def test_chunked(self):
-        response = self.fetch(self.get_url("/chunk"))
+        response = self.fetch("/chunk")
         self.assertEqual(response.body, "asdfqwer")
 
         chunks = []
-        response = self.fetch(self.get_url("/chunk"),
+        response = self.fetch("/chunk",
                               streaming_callback=chunks.append)
         self.assertEqual(chunks, ["asdf", "qwer"])
         self.assertFalse(response.body)
