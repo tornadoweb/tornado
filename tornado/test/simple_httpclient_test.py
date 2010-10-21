@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import gzip
+import logging
+
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.web import Application, RequestHandler
@@ -32,7 +35,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             ("/post", PostHandler),
             ("/chunk", ChunkHandler),
             ("/auth", AuthHandler),
-            ])
+            ], gzip=True)
 
     def setUp(self):
         super(SimpleHTTPClientTestCase, self).setUp()
@@ -77,3 +80,17 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
                                     auth_password="open sesame").body,
                          "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
+
+    def test_gzip(self):
+        # All the tests in this file should be using gzip, but this test
+        # ensures that it is in fact getting compressed.
+        # Setting Accept-Encoding manually bypasses the client's
+        # decompression so we can see the raw data.
+        response = self.fetch("/chunk", use_gzip=False,
+                              headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(response.headers["Content-Encoding"], "gzip")
+        self.assertNotEqual(response.body, "asdfqwer")
+        # Our test data gets bigger when gzipped.  Oops.  :)
+        self.assertEqual(len(response.body), 34)
+        f = gzip.GzipFile(mode="r", fileobj=response.buffer)
+        self.assertEqual(f.read(), "asdfqwer")
