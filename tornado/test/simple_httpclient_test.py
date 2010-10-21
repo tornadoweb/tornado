@@ -21,12 +21,17 @@ class ChunkHandler(RequestHandler):
         self.flush()
         self.write("qwer")
 
+class AuthHandler(RequestHandler):
+    def get(self):
+        self.finish(self.request.headers["Authorization"])
+
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([
             ("/hello", HelloWorldHandler),
             ("/post", PostHandler),
             ("/chunk", ChunkHandler),
+            ("/auth", AuthHandler),
             ])
 
     def setUp(self):
@@ -67,3 +72,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
                               streaming_callback=chunks.append)
         self.assertEqual(chunks, ["asdf", "qwer"])
         self.assertFalse(response.body)
+
+    def test_basic_auth(self):
+        self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
+                                    auth_password="open sesame").body,
+                         "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")

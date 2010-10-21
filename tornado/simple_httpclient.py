@@ -88,6 +88,11 @@ class _HTTPConnection(object):
     def _on_connect(self, parsed):
         if "Host" not in self.request.headers:
             self.request.headers["Host"] = parsed.netloc
+        if self.request.auth_username:
+            auth = "%s:%s" % (self.request.auth_username,
+                              self.request.auth_password)
+            self.request.headers["Authorization"] = ("Basic %s" %
+                                                     auth.encode("base64"))
         has_body = self.request.method in ("POST", "PUT")
         if has_body:
             assert self.request.body is not None
