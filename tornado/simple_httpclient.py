@@ -59,6 +59,8 @@ class SimpleAsyncHTTPClient(object):
 
 
 class _HTTPConnection(object):
+    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
+
     def __init__(self, io_loop, request, callback):
         self.io_loop = io_loop
         self.request = request
@@ -86,6 +88,12 @@ class _HTTPConnection(object):
                                 functools.partial(self._on_connect, parsed))
 
     def _on_connect(self, parsed):
+        if (self.request.method not in self._SUPPORTED_METHODS and
+            not self.request.allow_nonstandard_methods):
+            raise KeyError("unknown method %s" % self.request.method)
+        if self.request.network_interface:
+            raise NotImplementedError(
+                "network interface selection not supported")
         if "Host" not in self.request.headers:
             self.request.headers["Host"] = parsed.netloc
         if self.request.auth_username:
@@ -93,6 +101,8 @@ class _HTTPConnection(object):
                               self.request.auth_password)
             self.request.headers["Authorization"] = ("Basic %s" %
                                                      auth.encode("base64"))
+        if self.request.user_agent:
+            self.request.headers["User-Agent"] = self.request.user_agent
         has_body = self.request.method in ("POST", "PUT")
         if has_body:
             assert self.request.body is not None
