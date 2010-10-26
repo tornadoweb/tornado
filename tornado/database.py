@@ -221,11 +221,10 @@ class Connection(object):
             c = curses.tparm(fg_color, 5)
             c2 = curses.tparm(fg_color, 7)
 
-        sql = sql.lower()
         keywords = [ 'select', 'delete', 'insert', 'update', 'ignore', 'from', 'order by', 'limit', 'where', 'left', 'inner', 'join', 'outer', 'and', 'or', 'group by', 'limit', 'asc', 'desc', 'on', 'in', 'as', 'sum', 'min', 'max' ]
         for k in keywords:
             k2 = c + k.upper() + c2
-            sql = re.sub("\\b" + k + "\\b", k2, sql)
+            sql = re.sub("(?i)\\b" + k + "\\b", k2, sql)
 
         sql = "\n" + sql.replace("FROM", "\n  FROM")\
             .replace("WHERE", "\n  WHERE")\
