@@ -15,6 +15,7 @@ import logging
 import re
 import socket
 import urlparse
+import zlib
 
 try:
     import ssl # python 2.6+
@@ -59,6 +60,8 @@ class SimpleAsyncHTTPClient(object):
 
 
 class _HTTPConnection(object):
+    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
+
     def __init__(self, io_loop, request, callback):
         self.io_loop = io_loop
         self.request = request
@@ -66,38 +69,42 @@ class _HTTPConnection(object):
         self.code = None
         self.headers = None
         self.chunks = None
+        self._decompressor = None
         with stack_context.StackContext(self.cleanup):
             parsed = urlparse.urlsplit(self.request.url)
-            sock = socket.socket()
-            sock.setblocking(False)
             if ":" in parsed.netloc:
                 host, _, port = parsed.netloc.partition(":")
                 port = int(port)
             else:
                 host = parsed.netloc
                 port = 443 if parsed.scheme == "https" else 80
-            try:
-                sock.connect((host, port))
-            except socket.error, e:
-                # In non-blocking mode connect() always raises EINPROGRESS
-                if e.errno != errno.EINPROGRESS:
-                    raise
-            # Wait for the non-blocking connect to complete
-            self.io_loop.add_handler(sock.fileno(),
-                                     functools.partial(self._on_connect,
-                                                       sock, parsed),
-                                     IOLoop.WRITE)
 
-    def _on_connect(self, sock, parsed, fd, events):
-        self.io_loop.remove_handler(fd)
-        if parsed.scheme == "https":
-            # TODO: cert verification, etc
-            sock = ssl.wrap_socket(sock, do_handshake_on_connect=False)
-            self.stream = SSLIOStream(sock, io_loop=self.io_loop)
-        else:
-            self.stream = IOStream(sock, io_loop=self.io_loop)
+            if parsed.scheme == "https":
+                # TODO: cert verification, etc
+                self.stream = SSLIOStream(socket.socket(),
+                                          io_loop=self.io_loop)
+            else:
+                self.stream = IOStream(socket.socket(),
+                                       io_loop=self.io_loop)
+            self.stream.connect((host, port),
+                                functools.partial(self._on_connect, parsed))
+
+    def _on_connect(self, parsed):
+        if (self.request.method not in self._SUPPORTED_METHODS and
+            not self.request.allow_nonstandard_methods):
+            raise KeyError("unknown method %s" % self.request.method)
+        if self.request.network_interface:
+            raise NotImplementedError(
+                "network interface selection not supported")
         if "Host" not in self.request.headers:
             self.request.headers["Host"] = parsed.netloc
+        if self.request.auth_username:
+            auth = "%s:%s" % (self.request.auth_username,
+                              self.request.auth_password)
+            self.request.headers["Authorization"] = ("Basic %s" %
+                                                     auth.encode("base64"))
+        if self.request.user_agent:
+            self.request.headers["User-Agent"] = self.request.user_agent
         has_body = self.request.method in ("POST", "PUT")
         if has_body:
             assert self.request.body is not None
@@ -108,6 +115,8 @@ class _HTTPConnection(object):
         if (self.request.method == "POST" and
             "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
+        if self.request.use_gzip:
+            self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((parsed.path or '/') +
                 (('?' + parsed.query) if parsed.query else ''))
         request_lines = ["%s %s HTTP/1.1" % (self.request.method,
@@ -142,6 +151,11 @@ class _HTTPConnection(object):
         if self.request.header_callback is not None:
             for k, v in self.headers.get_all():
                 self.request.header_callback("%s: %s\r\n" % (k, v))
+        if (self.request.use_gzip and
+            self.headers.get("Content-Encoding") == "gzip"):
+            # Magic parameter makes zlib module understand gzip header
+            # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
+            self._decompressor = zlib.decompressobj(16+zlib.MAX_WBITS)
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
             self.stream.read_until("\r\n", self._on_chunk_length)
@@ -153,6 +167,8 @@ class _HTTPConnection(object):
                             "don't know how to read %s", self.request.url)
 
     def _on_body(self, data):
+        if self._decompressor:
+            data = self._decompressor.decompress(data)
         if self.request.streaming_callback:
             if self.chunks is None:
                 # if chunks is not None, we already called streaming_callback
@@ -170,6 +186,9 @@ class _HTTPConnection(object):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         length = int(data.strip(), 16)
         if length == 0:
+            # all the data has been decompressed, so we don't need to
+            # decompress again in _on_body
+            self._decompressor = None
             self._on_body(''.join(self.chunks))
         else:
             self.stream.read_bytes(length + 2,  # chunk ends with \r\n
@@ -178,6 +197,8 @@ class _HTTPConnection(object):
     def _on_chunk_data(self, data):
         assert data[-2:] == "\r\n"
         chunk = data[:-2]
+        if self._decompressor:
+            chunk = self._decompressor.decompress(chunk)
         if self.request.streaming_callback is not None:
             self.request.streaming_callback(chunk)
         else:
