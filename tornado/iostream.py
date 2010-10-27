@@ -391,6 +391,9 @@ class SSLIOStream(IOStream):
             elif err.args[0] in (ssl.SSL_ERROR_EOF,
                                  ssl.SSL_ERROR_ZERO_RETURN):
                 return self.close()
+            elif err.args[0] == ssl.SSL_ERROR_SSL:
+                logging.warning("SSL Error on %d: %s", self.socket.fileno(), err)
+                return self.close()
             raise
         except socket.error, err:
             if err.args[0] == errno.ECONNABORTED:
