@@ -358,8 +358,11 @@ class AsyncHTTPClient(object):
         except (KeyboardInterrupt, SystemExit):
             raise
         except:
-            logging.error("Exception in callback %r", info["callback"],
-                          exc_info=True)
+            self.handle_callback_exception(info["callback"])
+
+
+    def handle_callback_exception(self, callback):
+        self.io_loop.handle_callback_exception(callback)
 
 # For backwards compatibility: Tornado 1.0 included a new implementation of
 # AsyncHTTPClient that has since replaced the original.  Define an alias
