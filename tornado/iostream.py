@@ -189,27 +189,33 @@ class IOStream(object):
         if not self.socket:
             logging.warning("Got events for closed stream %d", fd)
             return
-        if events & self.io_loop.READ:
-            self._handle_read()
-        if not self.socket:
-            return
-        if events & self.io_loop.WRITE:
-            if self._connecting:
-                self._handle_connect()
-            self._handle_write()
-        if not self.socket:
-            return
-        if events & self.io_loop.ERROR:
+        try:
+            if events & self.io_loop.READ:
+                self._handle_read()
+            if not self.socket:
+                return
+            if events & self.io_loop.WRITE:
+                if self._connecting:
+                    self._handle_connect()
+                self._handle_write()
+            if not self.socket:
+                return
+            if events & self.io_loop.ERROR:
+                self.close()
+                return
+            state = self.io_loop.ERROR
+            if self._read_delimiter or self._read_bytes:
+                state |= self.io_loop.READ
+            if self._write_buffer:
+                state |= self.io_loop.WRITE
+            if state != self._state:
+                self._state = state
+                self.io_loop.update_handler(self.socket.fileno(), self._state)
+        except:
+            logging.error("Uncaught exception, closing connection.",
+                          exc_info=True)
             self.close()
-            return
-        state = self.io_loop.ERROR
-        if self._read_delimiter or self._read_bytes:
-            state |= self.io_loop.READ
-        if self._write_buffer:
-            state |= self.io_loop.WRITE
-        if state != self._state:
-            self._state = state
-            self.io_loop.update_handler(self.socket.fileno(), self._state)
+            raise
 
     def _run_callback(self, callback, *args, **kwargs):
         try:
@@ -384,6 +390,9 @@ class SSLIOStream(IOStream):
                 return
             elif err.args[0] in (ssl.SSL_ERROR_EOF,
                                  ssl.SSL_ERROR_ZERO_RETURN):
+                return self.close()
+            elif err.args[0] == ssl.SSL_ERROR_SSL:
+                logging.warning("SSL Error on %d: %s", self.socket.fileno(), err)
                 return self.close()
             raise
         except socket.error, err:
