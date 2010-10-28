@@ -1284,7 +1284,6 @@ class StaticFileHandler(RequestHandler):
 
         if not include_body:
             return
-        self.set_header("Content-Length", stat_result[stat.ST_SIZE])
         file = open(abspath, "rb")
         try:
             self.write(file.read())
