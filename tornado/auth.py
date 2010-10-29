@@ -77,7 +77,7 @@ class OpenIdMixin(object):
         all those attributes for your app, you can request fewer with
         the ax_attrs keyword argument.
         """
-        callback_uri = callback_uri or self.request.path
+        callback_uri = callback_uri or self.request.uri
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs)
         self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))
 
