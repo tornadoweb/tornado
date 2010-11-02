@@ -21,7 +21,7 @@ import struct
 import time
 import tornado.escape
 import tornado.web
-
+import tornado.iostream
 
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
@@ -85,13 +85,16 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # This is necessary when using proxies (such as HAProxy), which
         # need to see the Upgrade headers before passing through the
         # non-HTTP traffic that follows.
+        scheme = "wss" if isinstance(self.stream, 
+                                     tornado.iostream.SSLIOStream) else "ws"
         self.stream.write(
             "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
             "Upgrade: WebSocket\r\n"
             "Connection: Upgrade\r\n"
             "Server: TornadoServer/%(version)s\r\n"
             "Sec-WebSocket-Origin: %(origin)s\r\n"
-            "Sec-WebSocket-Location: ws://%(host)s%(path)s\r\n\r\n" % (dict(
+            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(path)s\r\n\r\n" % (dict(
+                    scheme=scheme,
                     version=tornado.version,
                     origin=self.request.headers["Origin"],
                     host=self.request.host,
