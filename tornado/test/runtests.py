@@ -3,6 +3,7 @@ import unittest
 
 TEST_MODULES = [
     'tornado.httputil.doctests',
+    'tornado.test.escape_test',
     'tornado.test.httpserver_test',
     'tornado.test.ioloop_test',
     'tornado.test.iostream_test',

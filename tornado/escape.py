@@ -95,9 +95,12 @@ def utf8(value):
     return value
 
 
-# Regex from http://daringfireball.net/2010/07/improved_regex_for_matching_urls
-# Modified to capture protocol and to avoid HTML character entities other than &amp;
-_URL_RE = re.compile(ur"""(?i)\b((?:([a-z][\w-]+):(?:(/{1,3})|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>&]+|&amp;|\(([^\s()<>&]+|(\([^\s()<>&]+\)))*\))+(?:\(([^\s()<>&]+|(\([^\s()<>&]+\)))*\)|[^\s`!()\[\]{};:'".,<>?\xab\xbb\u201c\u201d\u2018\u2019&]))""")
+# I originally used the regex from 
+# http://daringfireball.net/2010/07/improved_regex_for_matching_urls
+# but it gets all exponential on certain patterns (such as too many trailing
+# dots), causing the regex matcher to never return.
+# This regex should avoid those problems.
+_URL_RE = re.compile(ur"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)""")
 
 
 def linkify(text, shorten=False, extra_params="",
