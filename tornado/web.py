@@ -166,12 +166,14 @@ class RequestHandler(object):
         """
         pass
 
-    def clear(self):
+    def clear(self, extra_headers=None):
         """Resets all headers and content for this response."""
         self._headers = {
             "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
         }
+        if extra_headers:
+            self._headers.update(extra_headers)
         if not self.request.supports_http_1_1():
             if self.request.headers.get("Connection") == "Keep-Alive":
                 self.set_header("Connection", "Keep-Alive")
@@ -579,7 +581,7 @@ class RequestHandler(object):
             self._log()
         self._finished = True
 
-    def send_error(self, status_code=500, **kwargs):
+    def send_error(self, status_code=500, extra_headers=None, **kwargs):
         """Sends the given HTTP error code to the browser.
 
         We also send the error HTML for the given error code as returned by
@@ -591,7 +593,7 @@ class RequestHandler(object):
             if not self._finished:
                 self.finish()
             return
-        self.clear()
+        self.clear(extra_headers)
         self.set_status(status_code)
         message = self.get_error_html(status_code, **kwargs)
         self.finish(message)
