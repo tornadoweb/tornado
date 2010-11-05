@@ -325,9 +325,13 @@ class HTTPConnection(object):
         if not version.startswith("HTTP/"):
             raise Exception("Malformed HTTP version in HTTP Request-Line")
         headers = httputil.HTTPHeaders.parse(data[eol:])
+        try:
+            cert = self.stream.socket.getpeercert()
+        except:
+            cert = None
         self._request = HTTPRequest(
             connection=self, method=method, uri=uri, version=version,
-            headers=headers, remote_ip=self.address[0])
+            headers=headers, remote_ip=self.address[0], ssl_peer_certificate=cert )
 
         content_length = headers.get("Content-Length")
         if content_length:
@@ -423,7 +427,7 @@ class HTTPRequest(object):
     """
     def __init__(self, method, uri, version="HTTP/1.0", headers=None,
                  body=None, remote_ip=None, protocol=None, host=None,
-                 files=None, connection=None):
+                 files=None, connection=None, ssl_peer_certificate=None):
         self.method = method
         self.uri = uri
         self.version = version
@@ -440,6 +444,7 @@ class HTTPRequest(object):
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}
         self.connection = connection
+        self.ssl_peer_certificate = ssl_peer_certificate
         self._start_time = time.time()
         self._finish_time = None
 
