@@ -27,6 +27,7 @@ import urlparse
 from tornado import httputil
 from tornado import ioloop
 from tornado import iostream
+from tornado import stack_context
 
 try:
     import fcntl
@@ -282,7 +283,10 @@ class HTTPConnection(object):
         self.xheaders = xheaders
         self._request = None
         self._request_finished = False
-        self.stream.read_until("\r\n\r\n", self._on_headers)
+        # Save stack context here, outside of any request.  This keeps
+        # contexts from one request from leaking into the next.
+        self._header_callback = stack_context.wrap(self._on_headers)
+        self.stream.read_until("\r\n\r\n", self._header_callback)
 
     def write(self, chunk):
         assert self._request, "Request closed"
@@ -316,7 +320,7 @@ class HTTPConnection(object):
         if disconnect:
             self.stream.close()
             return
-        self.stream.read_until("\r\n\r\n", self._on_headers)
+        self.stream.read_until("\r\n\r\n", self._header_callback)
 
     def _on_headers(self, data):
         eol = data.find("\r\n")
