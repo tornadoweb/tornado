@@ -359,7 +359,7 @@ class IOStream(object):
             raise IOError("Stream is closed")
 
     def _add_io_state(self, state):
-        if socket is None:
+        if self.socket is None:
             # connection has been closed, so there can be no future events
             return
         if not self._state & state:
