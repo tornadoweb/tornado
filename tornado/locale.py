@@ -398,6 +398,7 @@ class GettextLocale(Locale):
 
 LOCALE_NAMES = {
     "af_ZA": {"name_en": u"Afrikaans", "name": u"Afrikaans"},
+    "am_ET": {"name_en": u"Amharic", "name": u'\u12a0\u121b\u122d\u129b'},
     "ar_AR": {"name_en": u"Arabic", "name": u"\u0627\u0644\u0639\u0631\u0628\u064a\u0629"},
     "bg_BG": {"name_en": u"Bulgarian", "name": u"\u0411\u044a\u043b\u0433\u0430\u0440\u0441\u043a\u0438"},
     "bn_IN": {"name_en": u"Bengali", "name": u"\u09ac\u09be\u0982\u09b2\u09be"},
