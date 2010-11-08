@@ -81,6 +81,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
+        scheme = "wss" if self.request.protocol == "https" else "ws"
         # Write the initial headers before attempting to read the challenge.
         # This is necessary when using proxies (such as HAProxy), which
         # need to see the Upgrade headers before passing through the
@@ -91,9 +92,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
             "Connection: Upgrade\r\n"
             "Server: TornadoServer/%(version)s\r\n"
             "Sec-WebSocket-Origin: %(origin)s\r\n"
-            "Sec-WebSocket-Location: ws://%(host)s%(path)s\r\n\r\n" % (dict(
+            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(path)s\r\n\r\n" % (dict(
                     version=tornado.version,
                     origin=self.request.headers["Origin"],
+                    scheme=scheme,
                     host=self.request.host,
                     path=self.request.path)))
         self.stream.read_bytes(8, self._handle_challenge)
