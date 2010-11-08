@@ -437,7 +437,11 @@ class HTTPRequest(object):
             # Squid uses X-Forwarded-For, others use X-Real-Ip
             self.remote_ip = self.headers.get(
                 "X-Real-Ip", self.headers.get("X-Forwarded-For", remote_ip))
-            self.protocol = self.headers.get("X-Scheme", protocol) or "http"
+            # AWS uses X-Forwarded-Proto
+            self.protocol = self.headers.get(
+                "X-Scheme", self.headers.get("X-Forwarded-Proto", protocol))
+            if self.protocol not in ("http", "https"):
+                self.protocol = "http"
         else:
             self.remote_ip = remote_ip
             self.protocol = protocol or "http"
