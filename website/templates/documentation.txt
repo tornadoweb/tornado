@@ -435,7 +435,7 @@ include the application setting `xsrf_cookies`:
     ], **settings)
 
 If `xsrf_cookies` is set, the Tornado web application will set the `_xsrf`
-cookie for all users and reject all `POST` requests hat do not contain a
+cookie for all users and reject all `POST` requests that do not contain a
 correct `_xsrf` value. If you turn this setting on, you need to instrument
 all forms that submit via `POST` to contain this field. You can do this with
 the special function `xsrf_form_html()`, available in all templates:
