@@ -2,10 +2,12 @@
 
 import gzip
 import logging
+import socket
 
+from contextlib import closing
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
-from tornado.web import Application, RequestHandler
+from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
+from tornado.web import Application, RequestHandler, asynchronous
 
 class HelloWorldHandler(RequestHandler):
     def get(self):
@@ -28,6 +30,11 @@ class AuthHandler(RequestHandler):
     def get(self):
         self.finish(self.request.headers["Authorization"])
 
+class HangHandler(RequestHandler):
+    @asynchronous
+    def get(self):
+        pass
+
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([
@@ -35,6 +42,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             ("/post", PostHandler),
             ("/chunk", ChunkHandler),
             ("/auth", AuthHandler),
+            ("/hang", HangHandler),
             ], gzip=True)
 
     def setUp(self):
@@ -94,3 +102,23 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(len(response.body), 34)
         f = gzip.GzipFile(mode="r", fileobj=response.buffer)
         self.assertEqual(f.read(), "asdfqwer")
+
+    def test_connect_timeout(self):
+        # create a socket and bind it to a port, but don't
+        # call accept so the connection will timeout.
+        #get_unused_port()
+        port = get_unused_port()
+
+        with closing(socket.socket()) as sock:
+            sock.bind(('', port))
+            self.http_client.fetch("http://localhost:%d/" % port,
+                                   self.stop,
+                                   connect_timeout=0.1)
+            response = self.wait()
+            self.assertEqual(response.code, 599)
+            self.assertEqual(str(response.error), "HTTP 599: Timeout")
+
+    def test_request_timeout(self):
+        response = self.fetch('/hang', request_timeout=0.1)
+        self.assertEqual(response.code, 599)
+        self.assertEqual(str(response.error), "HTTP 599: Timeout")
