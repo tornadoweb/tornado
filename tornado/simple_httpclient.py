@@ -8,6 +8,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado import stack_context
 
+import collections
 import contextlib
 import errno
 import functools
@@ -47,11 +48,13 @@ class SimpleAsyncHTTPClient(object):
     _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
 
     def __new__(cls, io_loop=None, max_clients=10,
-                max_simultaneous_connections=None):
+                max_simultaneous_connections=None,
+                force_instance=False):
         """Creates a SimpleAsyncHTTPClient.
 
         Only a single SimpleAsyncHTTPClient instance exists per IOLoop
         in order to provide limitations on the number of pending connections.
+        force_instance=True may be used to suppress this behavior.
 
         max_clients is the number of concurrent requests that can be in
         progress.  max_simultaneous_connections has no effect and is accepted
@@ -60,13 +63,16 @@ class SimpleAsyncHTTPClient(object):
         and will be ignored when an existing client is reused.
         """
         io_loop = io_loop or IOLoop.instance()
-        if io_loop in cls._ASYNC_CLIENTS:
+        if io_loop in cls._ASYNC_CLIENTS and not force_instance:
             return cls._ASYNC_CLIENTS[io_loop]
         else:
             instance = super(SimpleAsyncHTTPClient, cls).__new__(cls)
             instance.io_loop = io_loop
             instance.max_clients = max_clients
-            cls._ASYNC_CLIENTS[io_loop] = instance
+            instance.queue = collections.deque()
+            instance.active = {}
+            if not force_instance:
+                cls._ASYNC_CLIENTS[io_loop] = instance
             return instance
 
     def close(self):
@@ -78,7 +84,23 @@ class SimpleAsyncHTTPClient(object):
         if not isinstance(request.headers, HTTPHeaders):
             request.headers = HTTPHeaders(request.headers)
         callback = stack_context.wrap(callback)
-        _HTTPConnection(self.io_loop, request, callback)
+        self.queue.append((request, callback))
+        self._process_queue()
+
+    def _process_queue(self):
+        with stack_context.NullContext():
+            while self.queue and len(self.active) < self.max_clients:
+                request, callback = self.queue.popleft()
+                key = object()
+                self.active[key] = (request, callback)
+                _HTTPConnection(self.io_loop, request,
+                                functools.partial(self._on_fetch_complete,
+                                                  key, callback))
+
+    def _on_fetch_complete(self, key, callback, response):
+        del self.active[key]
+        callback(response)
+        self._process_queue()
 
 
 
