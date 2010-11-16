@@ -16,6 +16,8 @@
 
 """A utility class to write to and read from a non-blocking socket."""
 
+from __future__ import with_statement
+
 import errno
 import logging
 import socket
@@ -113,7 +115,7 @@ class IOStream(object):
             self.socket.connect(address)
         except socket.error, e:
             # In non-blocking mode connect() always raises an exception
-            if e.errno not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
+            if e.args[0] not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
                 raise
         self._connect_callback = stack_context.wrap(callback)
         self._add_io_state(self.io_loop.WRITE)
