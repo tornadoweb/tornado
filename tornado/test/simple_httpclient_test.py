@@ -5,6 +5,7 @@ import logging
 import socket
 
 from contextlib import closing
+from tornado.ioloop import IOLoop
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
 from tornado.web import Application, RequestHandler, asynchronous
@@ -122,3 +123,12 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch('/hang', request_timeout=0.1)
         self.assertEqual(response.code, 599)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
+
+    def test_singleton(self):
+        # Class "constructor" reuses objects on the same IOLoop
+        self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is
+                        SimpleAsyncHTTPClient(self.io_loop))
+        # different IOLoops use different objects
+        io_loop2 = IOLoop()
+        self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is not
+                        SimpleAsyncHTTPClient(io_loop2))

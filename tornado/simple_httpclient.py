@@ -16,6 +16,7 @@ import re
 import socket
 import time
 import urlparse
+import weakref
 import zlib
 
 try:
@@ -43,9 +44,30 @@ class SimpleAsyncHTTPClient(object):
     Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
     should use the curl-based AsyncHTTPClient if HTTPS support is required.
     """
-    # TODO: singleton magic?
-    def __init__(self, io_loop=None):
-        self.io_loop = io_loop or IOLoop.instance()
+    _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
+
+    def __new__(cls, io_loop=None, max_clients=10,
+                max_simultaneous_connections=None):
+        """Creates a SimpleAsyncHTTPClient.
+
+        Only a single SimpleAsyncHTTPClient instance exists per IOLoop
+        in order to provide limitations on the number of pending connections.
+
+        max_clients is the number of concurrent requests that can be in
+        progress.  max_simultaneous_connections has no effect and is accepted
+        only for compatibility with the curl-based AsyncHTTPClient.  Note
+        that these arguments are only used when the client is first created,
+        and will be ignored when an existing client is reused.
+        """
+        io_loop = io_loop or IOLoop.instance()
+        if io_loop in cls._ASYNC_CLIENTS:
+            return cls._ASYNC_CLIENTS[io_loop]
+        else:
+            instance = super(SimpleAsyncHTTPClient, cls).__new__(cls)
+            instance.io_loop = io_loop
+            instance.max_clients = max_clients
+            cls._ASYNC_CLIENTS[io_loop] = instance
+            return instance
 
     def close(self):
         pass
