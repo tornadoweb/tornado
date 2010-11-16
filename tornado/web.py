@@ -23,7 +23,6 @@ Tornado non-blocking web server and tools.
 
 Here is the canonical "Hello, world" example app:
 
-    import tornado.httpserver
     import tornado.ioloop
     import tornado.web
 
@@ -35,12 +34,11 @@ Here is the canonical "Hello, world" example app:
         application = tornado.web.Application([
             (r"/", MainHandler),
         ])
-        http_server = tornado.httpserver.HTTPServer(application)
-        http_server.listen(8888)
+        application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
 
-See the Tornado walkthrough on GitHub for more details and a good
-getting started guide.
+See the Tornado walkthrough on http://tornadoweb.org for more details
+and a good getting started guide.
 """
 
 from __future__ import with_statement
@@ -1028,6 +1026,24 @@ class Application(object):
         if self.settings.get("debug") and not wsgi:
             import autoreload
             autoreload.start()
+
+    def listen(self, port, **kwargs):
+        """Starts an HTTP server for this application on the given port.
+
+        This is a convenience alias for creating an HTTPServer object
+        and calling its listen method.  Keyword arguments are passed to
+        the HTTPServer constructor.  For advanced uses (e.g. preforking),
+        do not use this method; create an HTTPServer and call its
+        bind/start methods directly.
+
+        Note that after calling this method you still need to call
+        IOLoop.instance().start() to start the server.
+        """
+        # import is here rather than top level because HTTPServer
+        # is not importable on appengine
+        from tornado.httpserver import HTTPServer
+        server = HTTPServer(self, **kwargs)
+        server.listen(port)
 
     def add_handlers(self, host_pattern, host_handlers):
         """Appends the given handlers to our handler list.
