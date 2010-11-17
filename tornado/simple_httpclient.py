@@ -86,6 +86,10 @@ class SimpleAsyncHTTPClient(object):
         callback = stack_context.wrap(callback)
         self.queue.append((request, callback))
         self._process_queue()
+        if self.queue:
+            logging.debug("max_clients limit reached, request queued. "
+                          "%d active, %d queued requests." % (
+                    len(self.active), len(self.queue)))
 
     def _process_queue(self):
         with stack_context.NullContext():
@@ -191,9 +195,6 @@ class _HTTPConnection(object):
                                              req_path)]
         for k, v in self.request.headers.get_all():
             request_lines.append("%s: %s" % (k, v))
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
-            for line in request_lines:
-                logging.debug(line)
         self.stream.write("\r\n".join(request_lines) + "\r\n\r\n")
         if has_body:
             self.stream.write(self.request.body)
@@ -210,7 +211,6 @@ class _HTTPConnection(object):
                 self.callback = None
 
     def _on_headers(self, data):
-        logging.debug(data)
         first_line, _, header_data = data.partition("\r\n")
         match = re.match("HTTP/1.[01] ([0-9]+) .*", first_line)
         assert match
