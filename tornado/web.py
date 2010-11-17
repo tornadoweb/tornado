@@ -1027,14 +1027,15 @@ class Application(object):
             import autoreload
             autoreload.start()
 
-    def listen(self, port, **kwargs):
+    def listen(self, port, address="", **kwargs):
         """Starts an HTTP server for this application on the given port.
 
         This is a convenience alias for creating an HTTPServer object
-        and calling its listen method.  Keyword arguments are passed to
-        the HTTPServer constructor.  For advanced uses (e.g. preforking),
-        do not use this method; create an HTTPServer and call its
-        bind/start methods directly.
+        and calling its listen method.  Keyword arguments not
+        supported by HTTPServer.listen are passed to the HTTPServer
+        constructor.  For advanced uses (e.g. preforking), do not use
+        this method; create an HTTPServer and call its bind/start
+        methods directly.
 
         Note that after calling this method you still need to call
         IOLoop.instance().start() to start the server.
@@ -1043,7 +1044,7 @@ class Application(object):
         # is not importable on appengine
         from tornado.httpserver import HTTPServer
         server = HTTPServer(self, **kwargs)
-        server.listen(port)
+        server.listen(port, address)
 
     def add_handlers(self, host_pattern, host_handlers):
         """Appends the given handlers to our handler list.
