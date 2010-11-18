@@ -543,6 +543,8 @@ def _curl_setup_request(curl, request, buffer, headers):
             credentials = '%s:%s' % (request.proxy_username,
                     request.proxy_password)
             curl.setopt(pycurl.PROXYUSERPWD, credentials)
+    else:
+        curl.setopt(pycurl.PROXY, '')
 
     # Set the request method through curl's retarded interface which makes
     # up names for almost every single method
