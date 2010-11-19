@@ -357,9 +357,12 @@ class HTTPConnection(object):
                         self._request.arguments.setdefault(name, []).extend(
                             values)
             elif content_type.startswith("multipart/form-data"):
-                if 'boundary=' in content_type:
-                    boundary = content_type.split('boundary=',1)[1]
-                    if boundary: self._parse_mime_body(boundary, data)
+                fields = content_type.split(";")
+                for field in fields:
+                    k, sep, v = field.partition("=")
+                    if k == "boundary" and v:
+                        self._parse_mime_body(v, data)
+                        break
                 else:
                     logging.warning("Invalid multipart/form-data")
         self.request_callback(self._request)
