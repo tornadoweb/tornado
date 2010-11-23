@@ -359,7 +359,7 @@ class HTTPConnection(object):
             elif content_type.startswith("multipart/form-data"):
                 fields = content_type.split(";")
                 for field in fields:
-                    k, sep, v = field.partition("=")
+                    k, sep, v = field.strip().partition("=")
                     if k == "boundary" and v:
                         self._parse_mime_body(v, data)
                         break
