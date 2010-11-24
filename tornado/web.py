@@ -143,7 +143,7 @@ class RequestHandler(object):
     def options(self, *args, **kwargs):
         raise HTTPError(405)
 
-    def prepare(self):
+    def prepare(self, *args, **kwargs):
         """Called before the actual handler method.
 
         Useful to override in a handler if you want a common bottleneck for
@@ -824,7 +824,7 @@ class RequestHandler(object):
             if self.request.method == "POST" and \
                self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
-            self.prepare()
+            self.prepare(*args, **kwargs)
             if not self._finished:
                 getattr(self, self.request.method.lower())(*args, **kwargs)
                 if self._auto_finish and not self._finished:
@@ -1204,7 +1204,7 @@ class ErrorHandler(RequestHandler):
         RequestHandler.__init__(self, application, request)
         self.set_status(status_code)
 
-    def prepare(self):
+    def prepare(self, *args, **kwargs):
         raise HTTPError(self._status_code)
 
 
@@ -1330,7 +1330,7 @@ class FallbackHandler(RequestHandler):
         RequestHandler.__init__(self, app, request)
         self.fallback = fallback
 
-    def prepare(self):
+    def prepare(self, *args, **kwargs):
         self.fallback(self.request)
         self._finished = True
 
