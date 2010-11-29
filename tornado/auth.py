@@ -77,7 +77,7 @@ class OpenIdMixin(object):
         all those attributes for your app, you can request fewer with
         the ax_attrs keyword argument.
         """
-        callback_uri = callback_uri or self.request.path
+        callback_uri = callback_uri or self.request.uri
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs)
         self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))
 
@@ -280,7 +280,7 @@ class OAuthMixin(object):
             signature = _oauth10a_signature(consumer_token, "GET", url, args)
         else:
             signature = _oauth_signature(consumer_token, "GET", url, args)
-            
+
         args["oauth_signature"] = signature
         return url + "?" + urllib.urlencode(args)
 
@@ -326,7 +326,7 @@ class OAuthMixin(object):
             logging.warning("Could not fetch access token")
             callback(None)
             return
-        
+
         access_token = _oauth_parse_response(response.body)
         user = self._oauth_get_user(access_token, self.async_callback(
              self._on_oauth_get_user, access_token, callback))
@@ -703,7 +703,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
         You can authorize multiple resources by separating the resource
         URLs with a space.
         """
-        callback_uri = callback_uri or self.request.path
+        callback_uri = callback_uri or self.request.uri
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs,
                                  oauth_scope=oauth_scope)
         self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))
@@ -771,7 +771,7 @@ class FacebookMixin(object):
                               extended_permissions=None):
         """Authenticates/installs this app for the current user."""
         self.require_setting("facebook_api_key", "Facebook Connect")
-        callback_uri = callback_uri or self.request.path
+        callback_uri = callback_uri or self.request.uri
         args = {
             "api_key": self.settings["facebook_api_key"],
             "v": "1.0",
