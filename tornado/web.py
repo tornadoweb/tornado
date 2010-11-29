@@ -550,7 +550,8 @@ class RequestHandler(object):
         # Automatically support ETags and add the Content-Length header if
         # we have not flushed any content yet.
         if not self._headers_written:
-            if (self._status_code == 200 and self.request.method == "GET" and
+            if (self._status_code == 200 and
+                self.request.method in ("GET", "HEAD") and
                 "Etag" not in self._headers):
                 hasher = hashlib.sha1()
                 for part in self._write_buffer:
@@ -924,7 +925,7 @@ def removeslash(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if self.request.path.endswith("/"):
-            if self.request.method == "GET":
+            if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path.rstrip("/")
                 if self.request.query: uri += "?" + self.request.query
                 self.redirect(uri)
@@ -944,7 +945,7 @@ def addslash(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if not self.request.path.endswith("/"):
-            if self.request.method == "GET":
+            if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path + "/"
                 if self.request.query: uri += "?" + self.request.query
                 self.redirect(uri)
@@ -1434,7 +1435,7 @@ def authenticated(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if not self.current_user:
-            if self.request.method == "GET":
+            if self.request.method in ("GET", "HEAD"):
                 url = self.get_login_url()
                 if "?" not in url:
                     if urlparse.urlsplit(url).scheme:
