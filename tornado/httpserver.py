@@ -488,6 +488,27 @@ class HTTPRequest(object):
         else:
             return self._finish_time - self._start_time
 
+    def get_ssl_certificate(self):
+        """Returns the client's SSL certificate, if any.
+
+        To use client certificates, the HTTPServer must have been constructed
+        with cert_reqs set in ssl_options, e.g.:
+            server = HTTPServer(app,
+                ssl_options=dict(
+                    certfile="foo.crt",
+                    keyfile="foo.key",
+                    cert_reqs=ssl.CERT_REQUIRED,
+                    ca_certs="cacert.crt"))
+
+        The return value is a dictionary, see SSLSocket.getpeercert() in
+        the standard library for more details.
+        http://docs.python.org/library/ssl.html#sslsocket-objects
+        """
+        try:
+            return self.connection.socket.getpeercert()
+        except:
+            return None
+
     def __repr__(self):
         attrs = ("protocol", "host", "method", "uri", "version", "remote_ip",
                  "remote_ip", "body")
