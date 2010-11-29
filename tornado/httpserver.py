@@ -267,6 +267,9 @@ class HTTPServer(object):
             except:
                 logging.error("Error in connection callback", exc_info=True)
 
+class _BadRequestException(Exception):
+    """Exception class for malformed HTTP requests."""
+    pass
 
 class HTTPConnection(object):
     """Handles a connection to an HTTP client, executing HTTP requests.
@@ -323,27 +326,36 @@ class HTTPConnection(object):
         self.stream.read_until("\r\n\r\n", self._header_callback)
 
     def _on_headers(self, data):
-        eol = data.find("\r\n")
-        start_line = data[:eol]
-        method, uri, version = start_line.split(" ")
-        if not version.startswith("HTTP/"):
-            raise Exception("Malformed HTTP version in HTTP Request-Line")
-        headers = httputil.HTTPHeaders.parse(data[eol:])
-        self._request = HTTPRequest(
-            connection=self, method=method, uri=uri, version=version,
-            headers=headers, remote_ip=self.address[0])
+        try:
+            eol = data.find("\r\n")
+            start_line = data[:eol]
+            try:
+                method, uri, version = start_line.split(" ")
+            except ValueError:
+                raise _BadRequestException("Malformed HTTP request line")
+            if not version.startswith("HTTP/"):
+                raise _BadRequestException("Malformed HTTP version in HTTP Request-Line")
+            headers = httputil.HTTPHeaders.parse(data[eol:])
+            self._request = HTTPRequest(
+                connection=self, method=method, uri=uri, version=version,
+                headers=headers, remote_ip=self.address[0])
 
-        content_length = headers.get("Content-Length")
-        if content_length:
-            content_length = int(content_length)
-            if content_length > self.stream.max_buffer_size:
-                raise Exception("Content-Length too long")
-            if headers.get("Expect") == "100-continue":
-                self.stream.write("HTTP/1.1 100 (Continue)\r\n\r\n")
-            self.stream.read_bytes(content_length, self._on_request_body)
+            content_length = headers.get("Content-Length")
+            if content_length:
+                content_length = int(content_length)
+                if content_length > self.stream.max_buffer_size:
+                    raise _BadRequestException("Content-Length too long")
+                if headers.get("Expect") == "100-continue":
+                    self.stream.write("HTTP/1.1 100 (Continue)\r\n\r\n")
+                self.stream.read_bytes(content_length, self._on_request_body)
+                return
+
+            self.request_callback(self._request)
+        except _BadRequestException, e:
+            logging.info("Malformed HTTP request from %s: %s",
+                         self.address[0], e)
+            self.stream.close()
             return
-
-        self.request_callback(self._request)
 
     def _on_request_body(self, data):
         self._request.body = data
