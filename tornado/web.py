@@ -455,12 +455,14 @@ class RequestHandler(object):
             sloc = html.rindex('</body>')
             html = html[:sloc] + js + '\n' + html[sloc:]
         if css_files:
-            paths = set()
+            paths = []
+            unique_paths = set()
             for path in css_files:
                 if not path.startswith("/") and not path.startswith("http:"):
-                    paths.add(self.static_url(path))
-                else:
-                    paths.add(path)
+                    path = self.static_url(path)
+                if path not in unique_paths:
+                    paths.append(path)
+                    unique_paths.add(path)
             css = ''.join('<link href="' + escape.xhtml_escape(p) + '" '
                           'type="text/css" rel="stylesheet"/>'
                           for p in paths)
