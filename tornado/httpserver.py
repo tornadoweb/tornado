@@ -523,7 +523,7 @@ class HTTPRequest(object):
 
     def __repr__(self):
         attrs = ("protocol", "host", "method", "uri", "version", "remote_ip",
-                 "remote_ip", "body")
+                 "body")
         args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
         return "%s(%s, headers=%s)" % (
             self.__class__.__name__, args, dict(self.headers))
