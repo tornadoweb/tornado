@@ -319,13 +319,15 @@ class RequestHandler(object):
         method for non-cookie uses.  To decode a value not stored
         as a cookie use the optional value argument to get_secure_cookie.
         """
+        ipaddr = self.request.remote_ip
         timestamp = str(int(time.time()))
         value = base64.b64encode(value)
-        signature = self._cookie_signature(name, value, timestamp)
-        value = "|".join([value, timestamp, signature])
+        signature = self._cookie_signature(name, value, timestamp, ipaddr)
+        value = "|".join([value, timestamp, ipaddr, signature])
         return value
 
-    def get_secure_cookie(self, name, include_name=True, value=None):
+    def get_secure_cookie(self, name, include_name=True, value=None,
+                          enforce_ip=False):
         """Returns the given signed cookie if it validates, or None.
 
         In older versions of Tornado (0.1 and 0.2), we did not include the
@@ -338,12 +340,12 @@ class RequestHandler(object):
         if value is None: value = self.get_cookie(name)
         if not value: return None
         parts = value.split("|")
-        if len(parts) != 3: return None
+        if len(parts) != 4: return None
         if include_name:
-            signature = self._cookie_signature(name, parts[0], parts[1])
+            signature = self._cookie_signature(name, parts[0], parts[1], parts[2])
         else:
-            signature = self._cookie_signature(parts[0], parts[1])
-        if not _time_independent_equals(parts[2], signature):
+            signature = self._cookie_signature(parts[0], parts[1], parts[2])
+        if not _time_independent_equals(parts[3], signature):
             logging.warning("Invalid cookie signature %r", value)
             return None
         timestamp = int(parts[1])
@@ -360,6 +362,9 @@ class RequestHandler(object):
             return None
         if parts[1].startswith("0"):
             logging.warning("Tampered cookie %r", value)
+        if enforce_ip and parts[2] != self.request.remote_ip:
+            logging.warning("Mismatched IP in cookie; possible theft %r", value)
+            return None
         try:
             return base64.b64decode(parts[0])
         except:
