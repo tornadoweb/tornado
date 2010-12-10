@@ -59,39 +59,69 @@ class _State(threading.local):
         self.contexts = ()
 _state = _State()
 
-@contextlib.contextmanager
-def StackContext(context_factory):
-    '''Establishes the given context as a StackContext that will be transferred.
+class StackContext(object):
+    def __init__(self, context_factory):
+        '''Establishes the given context as a StackContext that will be transferred.
 
-    Note that the parameter is a callable that returns a context
-    manager, not the context itself.  That is, where for a
-    non-transferable context manager you would say
-      with my_context():
-    StackContext takes the function itself rather than its result:
-      with StackContext(my_context):
+        Note that the parameter is a callable that returns a context
+        manager, not the context itself.  That is, where for a
+        non-transferable context manager you would say
+          with my_context():
+        StackContext takes the function itself rather than its result:
+          with StackContext(my_context):
+        '''
+        self.context_factory = context_factory
+
+    def __enter__(self):
+        self.old_contexts = _state.contexts
+        _state.contexts = self.old_contexts + (self.context_factory,)
+        try:
+            self.context = self.context_factory()
+            self.context.__enter__()
+        except Exception:
+            _state.contexts = self.old_contexts
+            raise
+
+    def __exit__(self, type, value, traceback):
+        try:
+            return self.context.__exit__(type, value, traceback)
+        finally:
+            _state.contexts = self.old_contexts
+
+def ExceptionStackContext(exception_handler):
+    '''Specialization of StackContext for exception handling.
+
+    The supplied exception_handler function will be called in the
+    event of an uncaught exception in this context.  The semantics are
+    similar to a try/finally clause, and intended use cases are to log
+    an error, close a socket, or similar cleanup actions.  The
+    exc_info triple (type, value, traceback) will be passed to the
+    exception_handler function.
+
+    If the exception handler returns true, the exception will be
+    consumed and will not be propagated to other exception handlers.
     '''
-    old_contexts = _state.contexts
-    try:
-        _state.contexts = old_contexts + (context_factory,)
-        with context_factory():
-            yield
-    finally:
-        _state.contexts = old_contexts
+    class Context(object):
+        def __enter__(self):
+            pass
+        def __exit__(self, type, value, traceback):
+            if type is not None:
+                return exception_handler(type, value, traceback)
+    return StackContext(Context)
 
-@contextlib.contextmanager
-def NullContext():
+class NullContext(object):
     '''Resets the StackContext.
 
     Useful when creating a shared resource on demand (e.g. an AsyncHTTPClient)
     where the stack that caused the creating is not relevant to future
     operations.
     '''
-    old_contexts = _state.contexts
-    try:
+    def __enter__(self):
+        self.old_contexts = _state.contexts
         _state.contexts = ()
-        yield
-    finally:
-        _state.contexts = old_contexts
+
+    def __exit__(self, type, value, traceback):
+        _state.contexts = self.old_contexts
 
 def wrap(fn):
     '''Returns a callable object that will resore the current StackContext
@@ -121,8 +151,11 @@ def wrap(fn):
         else:
             new_contexts = [StackContext(c)
                             for c in contexts[len(_state.contexts):]]
-        if new_contexts:
+        if len(new_contexts) > 1:
             with contextlib.nested(*new_contexts):
+                callback(*args, **kwargs)
+        elif new_contexts:
+            with new_contexts[0]:
                 callback(*args, **kwargs)
         else:
             callback(*args, **kwargs)
@@ -132,3 +165,4 @@ def wrap(fn):
     result = functools.partial(wrapped, fn, contexts)
     result.stack_context_wrapped = True
     return result
+

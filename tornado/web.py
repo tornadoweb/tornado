@@ -809,17 +809,15 @@ class RequestHandler(object):
     def reverse_url(self, name, *args):
         return self.application.reverse_url(name, *args)
 
-    @contextlib.contextmanager
-    def _stack_context(self):
-        try:
-            yield
-        except Exception, e:
-            self._handle_request_exception(e)
+    def _stack_context_handle_exception(self, type, value, traceback):
+        self._handle_request_exception(value)
+        return True
 
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
         self._transforms = transforms
-        with stack_context.StackContext(self._stack_context):
+        with stack_context.ExceptionStackContext(
+            self._stack_context_handle_exception):
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
             # If XSRF cookies are turned on, reject form submissions without
