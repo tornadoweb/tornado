@@ -16,6 +16,8 @@
 
 """HTTP utility code shared by clients and servers."""
 
+import re
+
 class HTTPHeaders(dict):
     """A dictionary that maintains Http-Header-Case for all keys.
 
@@ -125,6 +127,7 @@ class HTTPHeaders(dict):
         for k, v in dict(*args, **kwargs).iteritems():
             self[k] = v
 
+    _NORMALIZED_HEADER_RE = re.compile(r'^[A-Z0-9][a-z0-9]*(-[A-Z0-9][a-z0-9]*)*$')
     @staticmethod
     def _normalize_name(name):
         """Converts a name to Http-Header-Case.
@@ -132,6 +135,8 @@ class HTTPHeaders(dict):
         >>> HTTPHeaders._normalize_name("coNtent-TYPE")
         'Content-Type'
         """
+        if HTTPHeaders._NORMALIZED_HEADER_RE.match(name):
+            return name
         return "-".join([w.capitalize() for w in name.split("-")])
 
 
