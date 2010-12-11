@@ -72,9 +72,14 @@ class StackContext(object):
         '''
         self.context_factory = context_factory
 
+    # Note that some of this code is duplicated in ExceptionStackContext
+    # below.  ExceptionStackContext is more common and doesn't need
+    # the full generality of this class.
     def __enter__(self):
         self.old_contexts = _state.contexts
-        _state.contexts = self.old_contexts + (self.context_factory,)
+        # _state.contexts is a tuple of (class, arg) pairs
+        _state.contexts = (self.old_contexts + 
+                           ((StackContext, self.context_factory),))
         try:
             self.context = self.context_factory()
             self.context.__enter__()
@@ -88,26 +93,33 @@ class StackContext(object):
         finally:
             _state.contexts = self.old_contexts
 
-def ExceptionStackContext(exception_handler):
-    '''Specialization of StackContext for exception handling.
+class ExceptionStackContext(object):
+    def __init__(self, exception_handler):
+        '''Specialization of StackContext for exception handling.
 
-    The supplied exception_handler function will be called in the
-    event of an uncaught exception in this context.  The semantics are
-    similar to a try/finally clause, and intended use cases are to log
-    an error, close a socket, or similar cleanup actions.  The
-    exc_info triple (type, value, traceback) will be passed to the
-    exception_handler function.
+        The supplied exception_handler function will be called in the
+        event of an uncaught exception in this context.  The semantics are
+        similar to a try/finally clause, and intended use cases are to log
+        an error, close a socket, or similar cleanup actions.  The
+        exc_info triple (type, value, traceback) will be passed to the
+        exception_handler function.
 
-    If the exception handler returns true, the exception will be
-    consumed and will not be propagated to other exception handlers.
-    '''
-    class Context(object):
-        def __enter__(self):
-            pass
-        def __exit__(self, type, value, traceback):
+        If the exception handler returns true, the exception will be
+        consumed and will not be propagated to other exception handlers.
+        '''
+        self.exception_handler = exception_handler
+
+    def __enter__(self):
+        self.old_contexts = _state.contexts
+        _state.contexts = (self.old_contexts +
+                           ((ExceptionStackContext, self.exception_handler),))
+
+    def __exit__(self, type, value, traceback):
+        try:
             if type is not None:
-                return exception_handler(type, value, traceback)
-    return StackContext(Context)
+                return self.exception_handler(type, value, traceback)
+        finally:
+            _state.contexts = self.old_contexts
 
 class NullContext(object):
     '''Resets the StackContext.
@@ -143,14 +155,14 @@ def wrap(fn):
         # _state.contexts will have elements not in contexts.  Use
         # NullContext to clear the state and then recreate from contexts.
         if (len(_state.contexts) > len(contexts) or
-            any(a is not b
+            any(a[1] is not b[1]
                 for a, b in itertools.izip(_state.contexts, contexts))):
             # contexts have been removed or changed, so start over
             new_contexts = ([NullContext()] +
-                            [StackContext(c) for c in contexts])
+                            [cls(arg) for (cls,arg) in contexts])
         else:
-            new_contexts = [StackContext(c)
-                            for c in contexts[len(_state.contexts):]]
+            new_contexts = [cls(arg)
+                            for (cls, arg) in contexts[len(_state.contexts):]]
         if len(new_contexts) > 1:
             with contextlib.nested(*new_contexts):
                 callback(*args, **kwargs)
