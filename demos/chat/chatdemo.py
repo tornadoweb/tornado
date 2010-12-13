@@ -17,7 +17,6 @@
 import logging
 import tornado.auth
 import tornado.escape
-import tornado.httpserver
 import tornado.ioloop
 import tornado.options
 import tornado.web
