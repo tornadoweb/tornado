@@ -252,7 +252,6 @@ class IOLoop(object):
                 if (getattr(e, 'errno', None) == errno.EINTR or
                     (isinstance(getattr(e, 'args', None), tuple) and
                      len(e.args) == 2 and e.args[0] == errno.EINTR)):
-                    logging.warning("Interrupted system call", exc_info=1)
                     continue
                 else:
                     raise
