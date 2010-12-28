@@ -810,7 +810,14 @@ class RequestHandler(object):
         return self.application.reverse_url(name, *args)
 
     def _stack_context_handle_exception(self, type, value, traceback):
-        self._handle_request_exception(value)
+        try:
+            # For historical reasons _handle_request_exception only takes
+            # the exception value instead of the full triple,
+            # so re-raise the exception to ensure that it's in
+            # sys.exc_info()
+            raise type, value, traceback
+        except:
+            self._handle_request_exception(value)
         return True
 
     def _execute(self, transforms, *args, **kwargs):
