@@ -42,6 +42,7 @@ class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
         if not user:
             raise tornado.web.HTTPError(500, "Google auth failed")
         # Save the user with, e.g., set_secure_cookie()
+        self.finish()
 
 """
 
@@ -428,6 +429,7 @@ class TwitterMixin(OAuthMixin):
             if not user:
                 raise tornado.web.HTTPError(500, "Twitter auth failed")
             # Save the user using, e.g., set_secure_cookie()
+            self.finish()
 
     The user object returned by get_authenticated_user() includes the
     attributes 'username', 'name', and all of the custom Twitter user
@@ -565,6 +567,7 @@ class FriendFeedMixin(OAuthMixin):
             if not user:
                 raise tornado.web.HTTPError(500, "FriendFeed auth failed")
             # Save the user using, e.g., set_secure_cookie()
+            self.finish()
 
     The user object returned by get_authenticated_user() includes the
     attributes 'username', 'name', and 'description' in addition to
@@ -685,6 +688,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
             if not user:
                 raise tornado.web.HTTPError(500, "Google auth failed")
             # Save the user with, e.g., set_secure_cookie()
+            self.finish()
 
     """
     _OPENID_ENDPOINT = "https://www.google.com/accounts/o8/ud"
@@ -760,6 +764,7 @@ class FacebookMixin(object):
             if not user:
                 raise tornado.web.HTTPError(500, "Facebook auth failed")
             # Save the user using, e.g., set_secure_cookie()
+            self.finish()
 
     The user object returned by get_authenticated_user() includes the
     attributes 'facebook_uid' and 'name' in addition to session attributes
@@ -857,6 +862,7 @@ class FacebookMixin(object):
                    self.redirect(self.authorize_redirect("read_stream"))
                    return
                 self.render("stream.html", stream=stream)
+                self.finish()
 
         """
         self.require_setting("facebook_api_key", "Facebook Connect")
