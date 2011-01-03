@@ -875,7 +875,7 @@ class RequestHandler(object):
                 self.send_error(e.status_code, exception=e)
         else:
             logging.error("Uncaught exception %s\n%r", self._request_summary(),
-                          self.request, exc_info=e)
+                          self.request, exc_info=True)
             self.send_error(500, exception=e)
 
     def _ui_module(self, name, module):
