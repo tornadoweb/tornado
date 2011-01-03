@@ -763,20 +763,21 @@ class RequestHandler(object):
         if not hasattr(RequestHandler, "_static_hashes"):
             RequestHandler._static_hashes = {}
         hashes = RequestHandler._static_hashes
-        if path not in hashes:
+        abs_path = os.path.join(self.application.settings["static_path"],
+                                path)
+        if abs_path not in hashes:
             try:
-                f = open(os.path.join(
-                    self.application.settings["static_path"], path))
-                hashes[path] = hashlib.md5(f.read()).hexdigest()
+                f = open(abs_path)
+                hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
                 f.close()
             except:
                 logging.error("Could not open static file %r", path)
-                hashes[path] = None
+                hashes[abs_path] = None
         base = self.request.protocol + "://" + self.request.host \
             if getattr(self, "include_host", False) else ""
         static_url_prefix = self.settings.get('static_url_prefix', '/static/')
-        if hashes.get(path):
-            return base + static_url_prefix + path + "?v=" + hashes[path][:5]
+        if hashes.get(abs_path):
+            return base + static_url_prefix + path + "?v=" + hashes[abs_path][:5]
         else:
             return base + static_url_prefix + path
 
