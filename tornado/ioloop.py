@@ -100,7 +100,7 @@ class IOLoop(object):
             self._set_close_exec(self._impl.fileno())
         self._handlers = {}
         self._events = {}
-        self._callbacks = set()
+        self._callbacks = []
         self._timeouts = []
         self._running = False
         self._stopped = False
@@ -214,12 +214,10 @@ class IOLoop(object):
 
             # Prevent IO event starvation by delaying new callbacks
             # to the next iteration of the event loop.
-            callbacks = list(self._callbacks)
+            callbacks = self._callbacks
+            self._callbacks = []
             for callback in callbacks:
-                # A callback can add or remove other callbacks
-                if callback in self._callbacks:
-                    self._callbacks.remove(callback)
-                    self._run_callback(callback)
+                self._run_callback(callback)
 
             if self._callbacks:
                 poll_timeout = 0.0
@@ -325,7 +323,7 @@ class IOLoop(object):
 
     def add_callback(self, callback):
         """Calls the given callback on the next I/O loop iteration."""
-        self._callbacks.add(stack_context.wrap(callback))
+        self._callbacks.append(stack_context.wrap(callback))
         self._wake()
 
     def _wake(self):
