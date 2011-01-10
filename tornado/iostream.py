@@ -183,7 +183,7 @@ class IOStream(object):
 
     def writing(self):
         """Returns true if we are currently writing to the stream."""
-        return len(self._write_buffer.getvalue()) > 0
+        return self._write_buffer.tell() > 0
 
     def closed(self):
         return self.socket is None
@@ -292,7 +292,7 @@ class IOStream(object):
         if chunk is None:
             return 0
         self._read_buffer.write(chunk)
-        if len(self._read_buffer.getvalue()) >= self.max_buffer_size:
+        if self._read_buffer.tell() >= self.max_buffer_size:
             logging.error("Reached maximum read buffer size")
             self.close()
             raise IOError("Reached maximum read buffer size")
@@ -304,7 +304,7 @@ class IOStream(object):
         Returns True if the read was completed.
         """
         if self._read_bytes:
-            if len(self._read_buffer.getvalue()) >= self._read_bytes:
+            if self._read_buffer.tell() >= self._read_bytes:
                 num_bytes = self._read_bytes
                 callback = self._read_callback
                 self._read_callback = None
@@ -338,7 +338,7 @@ class IOStream(object):
                 # of bytes it was able to process.
                 buffered_string = self._write_buffer.getvalue()
                 num_bytes = self.socket.send(buffered_string[:128 * 1024])
-                self._write_buffer = StringIO()
+                self._write_buffer.reset()
                 self._write_buffer.write(buffered_string[num_bytes:])
             except socket.error, e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
@@ -355,7 +355,7 @@ class IOStream(object):
 
     def _consume(self, loc):
         buffered_string = self._read_buffer.getvalue()
-        self._read_buffer = StringIO()
+        self._read_buffer.reset()
         self._read_buffer.write(buffered_string[loc:])
         return buffered_string[:loc]
 
