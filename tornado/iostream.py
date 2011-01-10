@@ -338,7 +338,7 @@ class IOStream(object):
                 # of bytes it was able to process.
                 buffered_string = self._write_buffer.getvalue()
                 num_bytes = self.socket.send(buffered_string[:128 * 1024])
-                self._write_buffer.reset()
+                self._write_buffer = StringIO()
                 self._write_buffer.write(buffered_string[num_bytes:])
             except socket.error, e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
@@ -355,7 +355,7 @@ class IOStream(object):
 
     def _consume(self, loc):
         buffered_string = self._read_buffer.getvalue()
-        self._read_buffer.reset()
+        self._read_buffer = StringIO()
         self._read_buffer.write(buffered_string[loc:])
         return buffered_string[:loc]
 
