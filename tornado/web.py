@@ -39,6 +39,14 @@ Here is the canonical "Hello, world" example app:
 
 See the Tornado walkthrough on http://tornadoweb.org for more details
 and a good getting started guide.
+
+Thread-safety notes:
+
+In general, methods on RequestHandler and elsewhere in tornado are not
+thread-safe.  In particular, methods such as write(), finish(), and
+flush() must only be called from the main thread.  If you use multiple
+threads it is important to use IOLoop.add_callback to transfer control
+back to the main thread before finishing the request.
 """
 
 from __future__ import with_statement

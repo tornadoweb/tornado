@@ -322,7 +322,14 @@ class IOLoop(object):
         self._timeouts.remove(timeout)
 
     def add_callback(self, callback):
-        """Calls the given callback on the next I/O loop iteration."""
+        """Calls the given callback on the next I/O loop iteration.
+
+        It is safe to call this method from any thread at any time.
+        Note that this is the *only* method in IOLoop that makes this
+        guarantee; all other interaction with the IOLoop must be done
+        from that IOLoop's thread.  add_callback() may be used to transfer
+        control from other threads to the IOLoop's thread.
+        """
         self._callbacks.append(stack_context.wrap(callback))
         self._wake()
 
