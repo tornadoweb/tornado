@@ -496,8 +496,12 @@ class HTTPError(Exception):
     def __init__(self, code, message=None, response=None):
         self.code = code
         message = message or httplib.responses.get(code, "Unknown")
-        self.response = response
+        self._response = weakref.ref(response)
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
+
+    @property
+    def response(self):
+        return self._response()
 
 
 class CurlError(HTTPError):
