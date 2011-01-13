@@ -209,7 +209,7 @@ class IOStream(object):
             state = self.io_loop.ERROR
             if self._read_delimiter or self._read_bytes:
                 state |= self.io_loop.READ
-            if self._write_buffer.getvalue():
+            if self._write_buffer.tell():
                 state |= self.io_loop.WRITE
             if state != self._state:
                 self._state = state
@@ -331,7 +331,7 @@ class IOStream(object):
         self._connecting = False
 
     def _handle_write(self):
-        while self._write_buffer.getvalue():
+        while self._write_buffer.tell():
             try:
                 # On windows, socket.send blows up if given a write buffer
                 # that's too large, instead of just returning the number
@@ -348,7 +348,7 @@ class IOStream(object):
                                     self.socket.fileno(), e)
                     self.close()
                     return
-        if not self._write_buffer.getvalue() and self._write_callback:
+        if not self._write_buffer.tell() and self._write_callback:
             callback = self._write_callback
             self._write_callback = None
             self._run_callback(callback)
