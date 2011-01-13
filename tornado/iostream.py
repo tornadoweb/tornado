@@ -21,6 +21,7 @@ from __future__ import with_statement
 import errno
 import logging
 import socket
+from cStringIO import StringIO
 
 from tornado import ioloop
 from tornado import stack_context
@@ -81,8 +82,8 @@ class IOStream(object):
         self.io_loop = io_loop or ioloop.IOLoop.instance()
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
-        self._read_buffer = ""
-        self._write_buffer = ""
+        self._read_buffer = StringIO()
+        self._write_buffer = StringIO()
         self._read_delimiter = None
         self._read_bytes = None
         self._read_callback = None
@@ -159,7 +160,7 @@ class IOStream(object):
         callback is simply overwritten with this new callback.
         """
         self._check_closed()
-        self._write_buffer += data
+        self._write_buffer.write(data)
         self._add_io_state(self.io_loop.WRITE)
         self._write_callback = stack_context.wrap(callback)
 
@@ -182,7 +183,7 @@ class IOStream(object):
 
     def writing(self):
         """Returns true if we are currently writing to the stream."""
-        return len(self._write_buffer) > 0
+        return self._write_buffer.tell() > 0
 
     def closed(self):
         return self.socket is None
@@ -208,7 +209,7 @@ class IOStream(object):
             state = self.io_loop.ERROR
             if self._read_delimiter or self._read_bytes:
                 state |= self.io_loop.READ
-            if self._write_buffer:
+            if self._write_buffer.getvalue():
                 state |= self.io_loop.WRITE
             if state != self._state:
                 self._state = state
@@ -290,8 +291,8 @@ class IOStream(object):
             raise
         if chunk is None:
             return 0
-        self._read_buffer += chunk
-        if len(self._read_buffer) >= self.max_buffer_size:
+        self._read_buffer.write(chunk)
+        if self._read_buffer.tell() >= self.max_buffer_size:
             logging.error("Reached maximum read buffer size")
             self.close()
             raise IOError("Reached maximum read buffer size")
@@ -303,7 +304,7 @@ class IOStream(object):
         Returns True if the read was completed.
         """
         if self._read_bytes:
-            if len(self._read_buffer) >= self._read_bytes:
+            if self._read_buffer.tell() >= self._read_bytes:
                 num_bytes = self._read_bytes
                 callback = self._read_callback
                 self._read_callback = None
@@ -311,7 +312,7 @@ class IOStream(object):
                 self._run_callback(callback, self._consume(num_bytes))
                 return True
         elif self._read_delimiter:
-            loc = self._read_buffer.find(self._read_delimiter)
+            loc = self._read_buffer.getvalue().find(self._read_delimiter)
             if loc != -1:
                 callback = self._read_callback
                 delimiter_len = len(self._read_delimiter)
@@ -330,14 +331,15 @@ class IOStream(object):
         self._connecting = False
 
     def _handle_write(self):
-        while self._write_buffer:
+        while self._write_buffer.getvalue():
             try:
                 # On windows, socket.send blows up if given a write buffer
                 # that's too large, instead of just returning the number
                 # of bytes it was able to process.
-                temp_write_buffer = self._write_buffer[:128 * 1024]
-                num_bytes = self.socket.send(temp_write_buffer)
-                self._write_buffer = self._write_buffer[num_bytes:]
+                buffered_string = self._write_buffer.getvalue()
+                num_bytes = self.socket.send(buffered_string[:128 * 1024])
+                self._write_buffer = StringIO()
+                self._write_buffer.write(buffered_string[num_bytes:])
             except socket.error, e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     break
@@ -346,15 +348,16 @@ class IOStream(object):
                                     self.socket.fileno(), e)
                     self.close()
                     return
-        if not self._write_buffer and self._write_callback:
+        if not self._write_buffer.getvalue() and self._write_callback:
             callback = self._write_callback
             self._write_callback = None
             self._run_callback(callback)
 
     def _consume(self, loc):
-        result = self._read_buffer[:loc]
-        self._read_buffer = self._read_buffer[loc:]
-        return result
+        buffered_string = self._read_buffer.getvalue()
+        self._read_buffer = StringIO()
+        self._read_buffer.write(buffered_string[loc:])
+        return buffered_string[:loc]
 
     def _check_closed(self):
         if not self.socket:
