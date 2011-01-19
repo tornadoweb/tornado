@@ -517,8 +517,8 @@ class HTTPRequest(object):
         http://docs.python.org/library/ssl.html#sslsocket-objects
         """
         try:
-            return self.connection.socket.getpeercert()
-        except:
+            return self.connection.stream.socket.getpeercert()
+        except ssl.SSLError:
             return None
 
     def __repr__(self):
