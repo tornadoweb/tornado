@@ -1154,7 +1154,7 @@ class Application(object):
         handlers = self._get_host_handlers(request)
         if not handlers:
             handler = RedirectHandler(
-                self, request, "http://" + self.default_host + "/")
+                self, request, url="http://" + self.default_host + "/")
         else:
             for spec in handlers:
                 match = spec.regex.match(request.path)
