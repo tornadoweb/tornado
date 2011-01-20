@@ -18,6 +18,7 @@ except ImportError:
 
 class HelloWorldRequestHandler(RequestHandler):
     def get(self):
+        assert self.request.protocol == "https"
         self.finish("Hello world")
 
     def post(self):
