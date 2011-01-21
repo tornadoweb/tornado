@@ -461,7 +461,8 @@ class HTTPRequest(object):
             self.remote_ip = remote_ip
             if protocol:
                 self.protocol = protocol
-            elif isinstance(connection.stream, iostream.SSLIOStream):
+            elif connection and isinstance(connection.stream, 
+                                           iostream.SSLIOStream):
                 self.protocol = "https"
             else:
                 self.protocol = "http"
