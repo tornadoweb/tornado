@@ -189,6 +189,10 @@ class RequestHandler(object):
         assert status_code in httplib.responses
         self._status_code = status_code
 
+    def get_status(self):
+        """Returns the status code for our response."""
+        return self._status_code
+
     def set_header(self, name, value):
         """Sets the given response header name and value.
 
@@ -857,15 +861,13 @@ class RequestHandler(object):
         return "\r\n".join(lines) + "\r\n\r\n"
 
     def _log(self):
-        if self._status_code < 400:
-            log_method = logging.info
-        elif self._status_code < 500:
-            log_method = logging.warning
-        else:
-            log_method = logging.error
-        request_time = 1000.0 * self.request.request_time()
-        log_method("%d %s %.2fms", self._status_code,
-                   self._request_summary(), request_time)
+        """Logs the current request.
+
+        Sort of deprecated since this functionality was moved to the
+        Application, but left in place for the benefit of existing apps
+        that have overridden this method.
+        """
+        self.application.log_request(self)
 
     def _request_summary(self):
         return self.request.method + " " + self.request.uri + " (" + \
@@ -1197,6 +1199,28 @@ class Application(object):
         if name in self.named_handlers:
             return self.named_handlers[name].reverse(*args)
         raise KeyError("%s not found in named urls" % name)
+
+    def log_request(self, handler):
+        """Writes a completed HTTP request to the logs.
+
+        By default writes to the python root logger.  To change
+        this behavior either subclass Application and override this method,
+        or pass a function in the application settings dictionary as
+        'log_function'.
+        """
+        if "log_function" in self.settings:
+            self.settings["log_function"](handler)
+            return
+        if handler.get_status() < 400:
+            log_method = logging.info
+        elif handler.get_status() < 500:
+            log_method = logging.warning
+        else:
+            log_method = logging.error
+        request_time = 1000.0 * handler.request.request_time()
+        log_method("%d %s %.2fms", handler.get_status(),
+                   handler._request_summary(), request_time)
+
 
 
 class HTTPError(Exception):
