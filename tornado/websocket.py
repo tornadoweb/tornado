@@ -92,12 +92,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
             "Connection: Upgrade\r\n"
             "Server: TornadoServer/%(version)s\r\n"
             "Sec-WebSocket-Origin: %(origin)s\r\n"
-            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(path)s\r\n\r\n" % (dict(
+            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(uri)s\r\n\r\n" % (dict(
                     version=tornado.version,
                     origin=self.request.headers["Origin"],
                     scheme=scheme,
                     host=self.request.host,
-                    path=self.request.path)))
+                    uri=self.request.uri)))
         self.stream.read_bytes(8, self._handle_challenge)
 
     def _handle_challenge(self, challenge):
