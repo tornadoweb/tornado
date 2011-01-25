@@ -438,11 +438,10 @@ correct `_xsrf` value. If you turn this setting on, you need to instrument
 all forms that submit via `POST` to contain this field. You can do this with
 the special function `xsrf_form_html()`, available in all templates:
 
-    <form action="/login" method="post">
+    <form action="/new_message" method="post">
       {{ xsrf_form_html() }}
-      <div>Username: <input type="text" name="username"/></div>
-      <div>Password: <input type="password" name="password"/></div>
-      <div><input type="submit" value="Sign in"/></div>
+      <input type="text" name="message"/>
+      <input type="submit" value="Post"/>
     </form>
 
 If you submit AJAX `POST` requests, you will also need to instrument your
