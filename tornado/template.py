@@ -85,6 +85,7 @@ import cStringIO
 import datetime
 import logging
 import os.path
+import stat
 import re
 
 from tornado import escape
@@ -96,8 +97,9 @@ class Template(object):
     the template from variables with generate().
     """
     def __init__(self, template_string, name="<string>", loader=None,
-                 compress_whitespace=None):
+                 compress_whitespace=None, mod_time=None):
         self.name = name
+        self.mod_time = mod_time
         if compress_whitespace is None:
             compress_whitespace = name.endswith(".html") or \
                 name.endswith(".js")
@@ -164,11 +166,14 @@ class Loader(object):
 
     You must use a template loader to use template constructs like
     {% extends %} and {% include %}. Loader caches all templates after
-    they are loaded the first time.
+    they are loaded the first time unless the cached argument is set to
+    False. Modified templates will automatically be reloaded.
     """
-    def __init__(self, root_directory):
+    def __init__(self, root_directory, cached=True, auto_reload=True):
         self.root = os.path.abspath(root_directory)
         self.templates = {}
+        self.cached = cached
+        self.auto_reload = auto_reload
 
     def reset(self):
         self.templates = {}
@@ -186,12 +191,16 @@ class Loader(object):
 
     def load(self, name, parent_path=None):
         name = self.resolve_path(name, parent_path=parent_path)
-        if name not in self.templates:
-            path = os.path.join(self.root, name)
-            f = open(path, "r")
-            self.templates[name] = Template(f.read(), name=name, loader=self)
-            f.close()
-        return self.templates[name]
+        path = os.path.join(self.root, name)
+        mod_time = os.stat(path)[stat.ST_MTIME]
+        if name in self.templates and (not self.auto_reload or mod_time == self.templates[name].mod_time):
+            return self.templates[name]
+        f = open(path, "r")
+        template = Template(f.read(), name=name, loader=self, mod_time=mod_time)
+        f.close()
+        if self.cached:
+            self.templates[name] = template
+        return template
 
 
 class _Node(object):
