@@ -53,7 +53,7 @@ interesting. Syntax for the templates
 
     {% block student %}
       <li><span style="bold">{{ escape(student.name) }}</span></li>
-    {% block %}
+    {% end %}
 
 Unlike most other template systems, we do not put any restrictions on the
 expressions you can include in your statements. if and for blocks get
