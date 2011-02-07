@@ -166,13 +166,13 @@ class Loader(object):
 
     You must use a template loader to use template constructs like
     {% extends %} and {% include %}. Loader caches all templates after
-    they are loaded the first time unless the cached argument is set to
-    False. Modified templates will automatically be reloaded.
+    they are loaded the first time. If the auto_reload option is set
+    to True then file changes are monitored and templates reloaded
+    on change.
     """
-    def __init__(self, root_directory, cached=True, auto_reload=True):
+    def __init__(self, root_directory, auto_reload=False):
         self.root = os.path.abspath(root_directory)
         self.templates = {}
-        self.cached = cached
         self.auto_reload = auto_reload
 
     def reset(self):
@@ -192,14 +192,14 @@ class Loader(object):
     def load(self, name, parent_path=None):
         name = self.resolve_path(name, parent_path=parent_path)
         path = os.path.join(self.root, name)
-        mod_time = os.stat(path)[stat.ST_MTIME]
-        if name in self.templates and (not self.auto_reload or mod_time == self.templates[name].mod_time):
+        mod_time = os.stat(path)[stat.ST_MTIME] if self.auto_reload else None
+        if name in self.templates and \
+           (not self.auto_reload or mod_time == self.templates[name].mod_time):
             return self.templates[name]
         f = open(path, "r")
         template = Template(f.read(), name=name, loader=self, mod_time=mod_time)
         f.close()
-        if self.cached:
-            self.templates[name] = template
+        self.templates[name] = template
         return template
 
 

@@ -512,6 +512,8 @@ class RequestHandler(object):
         if template_path not in RequestHandler._templates:
             loader = self.application.settings.get("template_loader") or\
               template.Loader(template_path)
+            if self.settings.get("debug"):
+                loader.auto_reload = True
             RequestHandler._templates[template_path] = loader
         t = RequestHandler._templates[template_path].load(template_name)
         args = dict(
@@ -775,16 +777,28 @@ class RequestHandler(object):
         if not hasattr(RequestHandler, "_static_hashes"):
             RequestHandler._static_hashes = {}
         hashes = RequestHandler._static_hashes
+        debug = self.settings.get("debug", False)
+        if debug:
+            # Prepare timestamps in debug mode
+            if not hasattr(RequestHandler, "_static_timestamps"):
+                RequestHandler._static_timestamps = {}
+            timestamps = RequestHandler._static_timestamps
         abs_path = os.path.join(self.application.settings["static_path"],
                                 path)
-        if abs_path not in hashes:
+        if abs_path not in hashes \
+           or (debug and (abs_path not in timestamps
+              or os.stat(abs_path)[stat.ST_MTIME] != timestamps[abs_path])):
+           # If debug is set, is the file known or has it been modified?
             try:
                 f = open(abs_path)
                 hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
                 f.close()
+                if debug:
+                    timestamps[abs_path] = os.stat(abs_path)[stat.ST_MTIME]
             except:
-                logging.error("Could not open static file %r", path)
+                logging.error("Could not open static file %r", abs_path)
                 hashes[abs_path] = None
+            
         base = self.request.protocol + "://" + self.request.host \
             if getattr(self, "include_host", False) else ""
         static_url_prefix = self.settings.get('static_url_prefix', '/static/')
@@ -1179,15 +1193,6 @@ class Application(object):
                     break
             if not handler:
                 handler = ErrorHandler(self, request, status_code=404)
-
-        # In debug mode, re-compile templates and reload static files on every
-        # request so you don't need to restart to see changes
-        if self.settings.get("debug"):
-            if getattr(RequestHandler, "_templates", None):
-                for loader in RequestHandler._templates.values():
-                    loader.reset()
-            RequestHandler._static_hashes = {}
-
         handler._execute(transforms, *args, **kwargs)
         return handler
 
