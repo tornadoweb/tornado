@@ -16,5 +16,5 @@
 
 """The Tornado web server and tools."""
 
-version = "1.1"
-version_info = (1, 1, 0)
+version = "1.1.1"
+version_info = (1, 1, 1)

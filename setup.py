@@ -31,7 +31,7 @@ if "linux" in sys.platform.lower() and not python_26:
     extensions.append(distutils.core.Extension(
         "tornado.epoll", ["tornado/epoll.c"]))
 
-version = "1.1"
+version = "1.1.1"
 
 distutils.core.setup(
     name="tornado",

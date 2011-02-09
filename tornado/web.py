@@ -726,16 +726,27 @@ class RequestHandler(object):
     def check_xsrf_cookie(self):
         """Verifies that the '_xsrf' cookie matches the '_xsrf' argument.
 
-        To prevent cross-site request forgery, we set an '_xsrf' cookie
-        and include the same '_xsrf' value as an argument with all POST
-        requests. If the two do not match, we reject the form submission
-        as a potential forgery.
+        To prevent cross-site request forgery, we set an '_xsrf'
+        cookie and include the same value as a non-cookie
+        field with all POST requests. If the two do not match, we
+        reject the form submission as a potential forgery.
+
+        The _xsrf value may be set as either a form field named _xsrf
+        or in a custom HTTP header named X-XSRFToken or X-CSRFToken
+        (the latter is accepted for compatibility with Django).
 
         See http://en.wikipedia.org/wiki/Cross-site_request_forgery
+
+        Prior to release 1.1.1, this check was ignored if the HTTP header
+        "X-Requested-With: XMLHTTPRequest" was present.  This exception
+        has been shown to be insecure and has been removed.  For more
+        information please see
+        http://www.djangoproject.com/weblog/2011/feb/08/security/
+        http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
         """
-        if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return
-        token = self.get_argument("_xsrf", None)
+        token = (self.get_argument("_xsrf", None) or
+                 self.request.headers.get("X-Xsrftoken") or
+                 self.request.headers.get("X-Csrftoken"))
         if not token:
             raise HTTPError(403, "'_xsrf' argument missing from POST")
         if self.xsrf_token != token:
