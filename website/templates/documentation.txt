@@ -23,6 +23,7 @@ thousands of clients, see
 
 Here is the canonical "Hello, world" example app:
 
+    import tornado.httpserver
     import tornado.ioloop
     import tornado.web
 
@@ -35,7 +36,8 @@ Here is the canonical "Hello, world" example app:
     ])
 
     if __name__ == "__main__":
-        application.listen(8888)
+        http_server = tornado.httpserver.HTTPServer(application)
+        http_server.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
 
 See [Tornado walkthrough](#tornado-walkthrough) below for a detailed

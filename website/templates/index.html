@@ -26,7 +26,8 @@ sudo python setup.py install</code></pre>
 
   <h2>Hello, world</h2>
   <p>Here is the canonical &quot;Hello, world&quot; example app for Tornado:</p>
-  <pre><code>import tornado.ioloop
+  <pre><code>import tornado.httpserver
+import tornado.ioloop
 import tornado.web
 
 class MainHandler(tornado.web.RequestHandler):
@@ -38,7 +39,8 @@ application = tornado.web.Application([
 ])
 
 if __name__ == "__main__":
-    application.listen(8888)
+    http_server = tornado.httpserver.HTTPServer(application)
+    http_server.listen(8888)
     tornado.ioloop.IOLoop.instance().start()</code></pre>
   <p>See the <a href="/documentation">Tornado documentation</a> for a detailed walkthrough of the framework.</p>
 
