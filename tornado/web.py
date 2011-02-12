@@ -954,10 +954,12 @@ def removeslash(method):
         if self.request.path.endswith("/"):
             if self.request.method in ("GET", "HEAD"):
                 uri = self.request.path.rstrip("/")
-                if self.request.query: uri += "?" + self.request.query
-                self.redirect(uri)
-                return
-            raise HTTPError(404)
+                if uri:  # don't try to redirect '/' to ''
+                    if self.request.query: uri += "?" + self.request.query
+                    self.redirect(uri)
+                    return
+            else:
+                raise HTTPError(404)
         return method(self, *args, **kwargs)
     return wrapper
 
