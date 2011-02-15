@@ -22,7 +22,7 @@ import collections
 import errno
 import logging
 import socket
-from cStringIO import StringIO
+import sys
 
 from tornado import ioloop
 from tornado import stack_context
@@ -83,7 +83,7 @@ class IOStream(object):
         self.io_loop = io_loop or ioloop.IOLoop.instance()
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
-        self._read_buffer = StringIO()
+        self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
         self._read_delimiter = None
         self._read_bytes = None
@@ -292,8 +292,8 @@ class IOStream(object):
             raise
         if chunk is None:
             return 0
-        self._read_buffer.write(chunk)
-        if self._read_buffer.tell() >= self.max_buffer_size:
+        self._read_buffer.append(chunk)
+        if self._read_buffer_size() >= self.max_buffer_size:
             logging.error("Reached maximum read buffer size")
             self.close()
             raise IOError("Reached maximum read buffer size")
@@ -305,7 +305,7 @@ class IOStream(object):
         Returns True if the read was completed.
         """
         if self._read_bytes:
-            if self._read_buffer.tell() >= self._read_bytes:
+            if self._read_buffer_size() >= self._read_bytes:
                 num_bytes = self._read_bytes
                 callback = self._read_callback
                 self._read_callback = None
@@ -313,7 +313,8 @@ class IOStream(object):
                 self._run_callback(callback, self._consume(num_bytes))
                 return True
         elif self._read_delimiter:
-            loc = self._read_buffer.getvalue().find(self._read_delimiter)
+            _merge_prefix(self._read_buffer, sys.maxint)
+            loc = self._read_buffer[0].find(self._read_delimiter)
             if loc != -1:
                 callback = self._read_callback
                 delimiter_len = len(self._read_delimiter)
@@ -355,10 +356,8 @@ class IOStream(object):
             self._run_callback(callback)
 
     def _consume(self, loc):
-        buffered_string = self._read_buffer.getvalue()
-        self._read_buffer = StringIO()
-        self._read_buffer.write(buffered_string[loc:])
-        return buffered_string[:loc]
+        _merge_prefix(self._read_buffer, loc)
+        return self._read_buffer.popleft()
 
     def _check_closed(self):
         if not self.socket:
@@ -371,6 +370,9 @@ class IOStream(object):
         if not self._state & state:
             self._state = self._state | state
             self.io_loop.update_handler(self.socket.fileno(), self._state)
+
+    def _read_buffer_size(self):
+        return sum(len(chunk) for chunk in self._read_buffer)
 
 
 class SSLIOStream(IOStream):
