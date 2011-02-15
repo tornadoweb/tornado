@@ -85,6 +85,7 @@ class IOStream(object):
         self.read_chunk_size = read_chunk_size
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
+        self._write_buffer_frozen = False
         self._read_delimiter = None
         self._read_bytes = None
         self._read_callback = None
@@ -335,15 +336,28 @@ class IOStream(object):
     def _handle_write(self):
         while self._write_buffer:
             try:
-                # On windows, socket.send blows up if given a write buffer
-                # that's too large, instead of just returning the number
-                # of bytes it was able to process.
-                _merge_prefix(self._write_buffer, 128 * 1024)
+                if not self._write_buffer_frozen:
+                    # On windows, socket.send blows up if given a
+                    # write buffer that's too large, instead of just
+                    # returning the number of bytes it was able to
+                    # process.  Therefore we must not call socket.send
+                    # with more than 128KB at a time.
+                    _merge_prefix(self._write_buffer, 128 * 1024)
                 num_bytes = self.socket.send(self._write_buffer[0])
+                self._write_buffer_frozen = False
                 _merge_prefix(self._write_buffer, num_bytes)
                 self._write_buffer.popleft()
             except socket.error, e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                    # With OpenSSL, after send returns EWOULDBLOCK,
+                    # the very same string object must be used on the
+                    # next call to send.  Therefore we suppress
+                    # merging the write buffer after an EWOULDBLOCK.
+                    # A cleaner solution would be to set
+                    # SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, but this is
+                    # not yet accessible from python
+                    # (http://bugs.python.org/issue8240)
+                    self._write_buffer_frozen = True
                     break
                 else:
                     logging.warning("Write error on %d: %s",
