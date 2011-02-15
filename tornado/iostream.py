@@ -84,7 +84,7 @@ class IOStream(object):
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
         self._read_buffer = StringIO()
-        self._write_buffer = StringIO()
+        self._write_buffer = collections.deque()
         self._read_delimiter = None
         self._read_bytes = None
         self._read_callback = None
@@ -161,7 +161,7 @@ class IOStream(object):
         callback is simply overwritten with this new callback.
         """
         self._check_closed()
-        self._write_buffer.write(data)
+        self._write_buffer.append(data)
         self._add_io_state(self.io_loop.WRITE)
         self._write_callback = stack_context.wrap(callback)
 
@@ -184,7 +184,7 @@ class IOStream(object):
 
     def writing(self):
         """Returns true if we are currently writing to the stream."""
-        return self._write_buffer.tell() > 0
+        return bool(self._write_buffer)
 
     def closed(self):
         return self.socket is None
@@ -210,7 +210,7 @@ class IOStream(object):
             state = self.io_loop.ERROR
             if self._read_delimiter or self._read_bytes:
                 state |= self.io_loop.READ
-            if self._write_buffer.tell():
+            if self._write_buffer:
                 state |= self.io_loop.WRITE
             if state != self._state:
                 self._state = state
@@ -332,15 +332,15 @@ class IOStream(object):
         self._connecting = False
 
     def _handle_write(self):
-        while self._write_buffer.tell():
+        while self._write_buffer:
             try:
                 # On windows, socket.send blows up if given a write buffer
                 # that's too large, instead of just returning the number
                 # of bytes it was able to process.
-                buffered_string = self._write_buffer.getvalue()
-                num_bytes = self.socket.send(buffered_string[:128 * 1024])
-                self._write_buffer = StringIO()
-                self._write_buffer.write(buffered_string[num_bytes:])
+                _merge_prefix(self._write_buffer, 128 * 1024)
+                num_bytes = self.socket.send(self._write_buffer[0])
+                _merge_prefix(self._write_buffer, num_bytes)
+                self._write_buffer.popleft()
             except socket.error, e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     break
@@ -349,7 +349,7 @@ class IOStream(object):
                                     self.socket.fileno(), e)
                     self.close()
                     return
-        if not self._write_buffer.tell() and self._write_callback:
+        if not self._write_buffer and self._write_callback:
             callback = self._write_callback
             self._write_callback = None
             self._run_callback(callback)
