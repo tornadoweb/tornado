@@ -378,7 +378,8 @@ class HTTPRequest(object):
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
                  proxy_host=None, proxy_port=None, proxy_username=None,
-                 proxy_password='', allow_nonstandard_methods=False):
+                 proxy_password='', allow_nonstandard_methods=False,
+                 validate_cert=True, ca_certs=None):
         if headers is None:
             headers = httputil.HTTPHeaders()
         if if_modified_since:
@@ -420,6 +421,12 @@ class HTTPRequest(object):
         self.header_callback = header_callback
         self.prepare_curl_callback = prepare_curl_callback
         self.allow_nonstandard_methods = allow_nonstandard_methods
+        # SSL certificate validation:
+        # validate_cert: boolean, set to False to disable validation
+        # ca_certs: filename of CA certificates in PEM format, or
+        #     None to use defaults
+        self.validate_cert = validate_cert
+        self.ca_certs = ca_certs
         self.start_time = time.time()
 
 
@@ -556,6 +563,11 @@ def _curl_setup_request(curl, request, buffer, headers):
             curl.setopt(pycurl.PROXYUSERPWD, credentials)
     else:
         curl.setopt(pycurl.PROXY, '')
+    curl.setopt(pycurl.SSL_VERIFYPEER, request.validate_cert)
+    if request.ca_certs is not None:
+        curl.setopt(pycurl.CAINFO, request.ca_certs)
+    else:
+        curl.unsetopt(pycurl.CAINFO)
 
     # Set the request method through curl's retarded interface which makes
     # up names for almost every single method

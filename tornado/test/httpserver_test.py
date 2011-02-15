@@ -37,12 +37,9 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
                 keyfile=os.path.join(test_dir, 'test.key')))
 
     def fetch(self, path, **kwargs):
-        def disable_cert_check(curl):
-            # Our certificate was not signed by a CA, so don't check it
-            curl.setopt(pycurl.SSL_VERIFYPEER, 0)
         self.http_client.fetch(self.get_url(path).replace('http', 'https'),
                                self.stop,
-                               prepare_curl_callback=disable_cert_check,
+                               validate_cert=False,
                                **kwargs)
         return self.wait()
 

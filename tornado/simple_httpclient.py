@@ -143,10 +143,14 @@ class _HTTPConnection(object):
                 host = self.client.hostname_mapping.get(host, host)
 
             if parsed.scheme == "https":
-                ssl_options = dict(
-                    cert_reqs=ssl.CERT_REQUIRED,
-                    ca_certs=os.path.dirname(__file__) + '/ca-certificates.crt',
-                    )
+                ssl_options = {}
+                if request.validate_cert:
+                    ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
+                if request.ca_certs is not None:
+                    ssl_options["ca_certs"] = request.ca_certs
+                else:
+                    ssl_options["ca_certs"] = (os.path.dirname(__file__) + 
+                                               '/ca-certificates.crt')
                 self.stream = SSLIOStream(socket.socket(),
                                           io_loop=self.io_loop,
                                           ssl_options=ssl_options)
