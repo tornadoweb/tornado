@@ -182,6 +182,10 @@ class _HTTPConnection(object):
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
                 self._on_timeout)
+        if (self.request.validate_cert and
+            isinstance(self.stream, SSLIOStream)):
+            match_hostname(self.stream.socket.getpeercert(),
+                           parsed.netloc.partition(":")[0])
         if (self.request.method not in self._SUPPORTED_METHODS and
             not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
