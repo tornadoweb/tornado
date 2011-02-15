@@ -162,16 +162,17 @@ class _HTTPConnection(object):
                 self._connect_timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
                     self._on_timeout)
+            self.stream.set_close_callback(self._on_close)
             self.stream.connect((host, port),
                                 functools.partial(self._on_connect, parsed))
 
     def _on_timeout(self):
         self._timeout = None
-        self.stream.close()
         if self.callback is not None:
             self.callback(HTTPResponse(self.request, 599,
                                        error=HTTPError(599, "Timeout")))
             self.callback = None
+        self.stream.close()
 
     def _on_connect(self, parsed):
         if self._timeout is not None:
@@ -228,6 +229,13 @@ class _HTTPConnection(object):
             if self.callback is not None:
                 self.callback(HTTPResponse(self.request, 599, error=e))
                 self.callback = None
+
+    def _on_close(self):
+        if self.callback is not None:
+            self.callback(HTTPResponse(self.request, 599,
+                                       error=HTTPError(599, 
+                                                       "Connection closed")))
+            self.callback = None
 
     def _on_headers(self, data):
         first_line, _, header_data = data.partition("\r\n")
