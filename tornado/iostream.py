@@ -408,6 +408,7 @@ class SSLIOStream(IOStream):
                 return self.close()
         else:
             self._ssl_accepting = False
+            super(SSLIOStream, self)._handle_connect()
 
     def _handle_read(self):
         if self._ssl_accepting:
@@ -425,7 +426,10 @@ class SSLIOStream(IOStream):
         # TODO(bdarnell): cert verification, etc
         self.socket = ssl.wrap_socket(self.socket,
                                       do_handshake_on_connect=False)
-        super(SSLIOStream, self)._handle_connect()
+        # Don't call the superclass's _handle_connect (which is responsible
+        # for telling the application that the connection is complete)
+        # until we've completed the SSL handshake (so certificates are
+        # available, etc).
 
 
     def _read_from_socket(self):
