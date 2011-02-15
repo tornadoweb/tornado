@@ -18,6 +18,7 @@
 
 from __future__ import with_statement
 
+import collections
 import errno
 import logging
 import socket
@@ -462,3 +463,36 @@ class SSLIOStream(IOStream):
             self.close()
             return None
         return chunk
+
+def _merge_prefix(deque, size):
+    """Replace the first entries in a deque of strings with a single
+    string of up to size bytes.
+
+    >>> d = collections.deque(['abc', 'de', 'fghi', 'j'])
+    >>> _merge_prefix(d, 5); print d
+    deque(['abcde', 'fghi', 'j'])
+
+    Strings will be split as necessary to reach the desired size.
+    >>> _merge_prefix(d, 7); print d
+    deque(['abcdefg', 'hi', 'j'])
+
+    >>> _merge_prefix(d, 3); print d
+    deque(['abc', 'defg', 'hi', 'j'])
+
+    >>> _merge_prefix(d, 100); print d
+    deque(['abcdefghij'])
+    """
+    prefix = []
+    remaining = size
+    while deque and remaining > 0:
+        chunk = deque.popleft()
+        if len(chunk) > remaining:
+            deque.appendleft(chunk[remaining:])
+            chunk = chunk[:remaining]
+        prefix.append(chunk)
+        remaining -= len(chunk)
+    deque.appendleft(''.join(prefix))
+
+def doctests():
+    import doctest
+    return doctest.DocTestSuite()
