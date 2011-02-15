@@ -382,6 +382,12 @@ class SSLIOStream(IOStream):
     wrapped when IOStream.connect is finished.
     """
     def __init__(self, *args, **kwargs):
+        """Creates an SSLIOStream.
+
+        If a dictionary is provided as keyword argument ssl_options,
+        it will be used as additional keyword arguments to ssl.wrap_socket.
+        """
+        self._ssl_options = kwargs.pop('ssl_options', {})
         super(SSLIOStream, self).__init__(*args, **kwargs)
         self._ssl_accepting = True
 
@@ -423,9 +429,9 @@ class SSLIOStream(IOStream):
         super(SSLIOStream, self)._handle_write()
 
     def _handle_connect(self):
-        # TODO(bdarnell): cert verification, etc
         self.socket = ssl.wrap_socket(self.socket,
-                                      do_handshake_on_connect=False)
+                                      do_handshake_on_connect=False,
+                                      **self._ssl_options)
         # Don't call the superclass's _handle_connect (which is responsible
         # for telling the application that the connection is complete)
         # until we've completed the SSL handshake (so certificates are

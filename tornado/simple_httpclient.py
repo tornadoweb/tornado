@@ -13,6 +13,7 @@ import contextlib
 import errno
 import functools
 import logging
+import os.path
 import re
 import socket
 import time
@@ -142,9 +143,13 @@ class _HTTPConnection(object):
                 host = self.client.hostname_mapping.get(host, host)
 
             if parsed.scheme == "https":
-                # TODO: cert verification, etc
+                ssl_options = dict(
+                    cert_reqs=ssl.CERT_REQUIRED,
+                    ca_certs=os.path.dirname(__file__) + '/ca-certificates.crt',
+                    )
                 self.stream = SSLIOStream(socket.socket(),
-                                          io_loop=self.io_loop)
+                                          io_loop=self.io_loop,
+                                          ssl_options=ssl_options)
             else:
                 self.stream = IOStream(socket.socket(),
                                        io_loop=self.io_loop)
