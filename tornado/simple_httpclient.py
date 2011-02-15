@@ -10,6 +10,7 @@ from tornado import stack_context
 
 import collections
 import contextlib
+import copy
 import errno
 import functools
 import logging
@@ -279,8 +280,23 @@ class _HTTPConnection(object):
             buffer = StringIO()
         else:
             buffer = StringIO(data) # TODO: don't require one big string?
-        response = HTTPResponse(self.request, self.code, headers=self.headers,
-                                buffer=buffer)
+        original_request = getattr(self.request, "original_request",
+                                   self.request)
+        if (self.request.follow_redirects and
+            self.request.max_redirects > 0 and
+            self.code in (301, 302)):
+            new_request = copy.copy(self.request)
+            new_request.url = urlparse.urljoin(self.request.url,
+                                               self.headers["Location"])
+            new_request.max_redirects -= 1
+            new_request.original_request = original_request
+            self.client.fetch(new_request, self.callback)
+            self.callback = None
+            return
+        response = HTTPResponse(original_request,
+                                self.code, headers=self.headers,
+                                buffer=buffer,
+                                effective_url=self.request.url)
         self.callback(response)
         self.callback = None
 
