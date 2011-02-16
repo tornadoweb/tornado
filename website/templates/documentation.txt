@@ -433,11 +433,12 @@ include the application setting `xsrf_cookies`:
         (r"/login", LoginHandler),
     ], **settings)
 
-If `xsrf_cookies` is set, the Tornado web application will set the `_xsrf`
-cookie for all users and reject all `POST` requests that do not contain a
-correct `_xsrf` value. If you turn this setting on, you need to instrument
-all forms that submit via `POST` to contain this field. You can do this with
-the special function `xsrf_form_html()`, available in all templates:
+If `xsrf_cookies` is set, the Tornado web application will set the
+`_xsrf` cookie for all users and reject all `POST`, `PUT`, and
+`DELETE` requests that do not contain a correct `_xsrf` value. If you
+turn this setting on, you need to instrument all forms that submit via
+`POST` to contain this field. You can do this with the special
+function `xsrf_form_html()`, available in all templates:
 
     <form action="/new_message" method="post">
       {{ xsrf_form_html() }}
@@ -462,6 +463,10 @@ requests that automatically adds the `_xsrf` value to all requests:
             callback(eval("(" + response + ")"));
         }});
     };
+
+For `PUT` and `DELETE` requests (as well as `POST` requests that do not
+use form-encoded arguments), the XSRF token may also be passed via
+an HTTP header named `X-XSRFToken`.
 
 
 ### Static files and aggressive file caching
