@@ -119,6 +119,7 @@ class Template(object):
             "url_escape": escape.url_escape,
             "json_encode": escape.json_encode,
             "squeeze": escape.squeeze,
+            "linkify": escape.linkify,
             "datetime": datetime,
         }
         namespace.update(kwargs)

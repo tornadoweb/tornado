@@ -270,6 +270,7 @@ not present).
  * `url_escape`: alias for `tornado.escape.url_escape`
  * `json_encode`: alias for `tornado.escape.json_encode`
  * `squeeze`: alias for `tornado.escape.squeeze`
+ * `linkify`: alias for `tornado.escape.linkify`
  * `datetime`: the Python `datetime` module
  * `handler`: the current `RequestHandler` object
  * `request`: alias for `handler.request`
