@@ -30,22 +30,28 @@ except ImportError:
 class SimpleAsyncHTTPClient(object):
     """Non-blocking HTTP client with no external dependencies.
 
-    WARNING:  This class is still in development and not yet recommended
-    for production use.
-
     This class implements an HTTP 1.1 client on top of Tornado's IOStreams.
     It does not currently implement all applicable parts of the HTTP
     specification, but it does enough to work with major web service APIs
     (mostly tested against the Twitter API so far).
 
-    Many features found in the curl-based AsyncHTTPClient are not yet
-    implemented.  The currently-supported set of parameters to HTTPRequest
-    are url, method, headers, body, streaming_callback, and header_callback.
-    Connections are not reused, and no attempt is made to limit the number
-    of outstanding requests.
+    This class has not been tested extensively in production and
+    should be considered somewhat experimental as of the release of
+    tornado 1.2.  It is intended to become the default AsyncHTTPClient
+    implementation in a future release.  It may either be used
+    directly, or to facilitate testing of this class with an existing
+    application, setting the environment variable
+    USE_SIMPLE_HTTPCLIENT=1 will cause this class to transparently
+    replace tornado.httpclient.AsyncHTTPClient.
+
+    Some features found in the curl-based AsyncHTTPClient are not yet
+    supported.  In particular, proxies are not supported, connections
+    are not reused, and callers cannot select the network interface to be 
+    used.
 
     Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
     should use the curl-based AsyncHTTPClient if HTTPS support is required.
+
     """
     _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
 
@@ -190,9 +196,11 @@ class _HTTPConnection(object):
         if (self.request.method not in self._SUPPORTED_METHODS and
             not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
-        if self.request.network_interface:
-            raise NotImplementedError(
-                "network interface selection not supported")
+        for key in ('network_interface',
+                    'proxy_host', 'proxy_port',
+                    'proxy_username', 'proxy_password'):
+            if getattr(self.request, key, None):
+                raise NotImplementedError('%s not supported' % key)
         if "Host" not in self.request.headers:
             self.request.headers["Host"] = parsed.netloc
         if self.request.auth_username:
