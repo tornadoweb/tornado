@@ -209,9 +209,9 @@ class IOStream(object):
                 self.close()
                 return
             state = self.io_loop.ERROR
-            if self._read_delimiter or self._read_bytes:
+            if self.reading():
                 state |= self.io_loop.READ
-            if self._write_buffer:
+            if self.writing():
                 state |= self.io_loop.WRITE
             if state != self._state:
                 self._state = state
@@ -407,17 +407,27 @@ class SSLIOStream(IOStream):
         self._ssl_options = kwargs.pop('ssl_options', {})
         super(SSLIOStream, self).__init__(*args, **kwargs)
         self._ssl_accepting = True
+        self._handshake_reading = False
+        self._handshake_writing = False
+
+    def reading(self):
+        return self._handshake_reading or super(SSLIOStream, self).reading()
+
+    def writing(self):
+        return self._handshake_writing or super(SSLIOStream, self).writing()
 
     def _do_ssl_handshake(self):
         # Based on code from test_ssl.py in the python stdlib
         try:
+            self._handshake_reading = False
+            self._handshake_writing = False
             self.socket.do_handshake()
         except ssl.SSLError, err:
             if err.args[0] == ssl.SSL_ERROR_WANT_READ:
-                self._add_io_state(self.io_loop.READ)
+                self._handshake_reading = True
                 return
             elif err.args[0] == ssl.SSL_ERROR_WANT_WRITE:
-                self._add_io_state(self.io_loop.WRITE)
+                self._handshake_writing = True
                 return
             elif err.args[0] in (ssl.SSL_ERROR_EOF,
                                  ssl.SSL_ERROR_ZERO_RETURN):
