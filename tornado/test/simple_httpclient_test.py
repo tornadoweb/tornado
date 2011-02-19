@@ -140,6 +140,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         with closing(socket.socket()) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(('', port))
+            sock.listen(1)
             self.http_client.fetch("http://localhost:%d/" % port,
                                    self.stop,
                                    connect_timeout=0.1)
