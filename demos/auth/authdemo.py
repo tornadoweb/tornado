@@ -31,6 +31,7 @@ class Application(tornado.web.Application):
         handlers = [
             (r"/", MainHandler),
             (r"/auth/login", AuthHandler),
+            (r"/auth/logout", LogoutHandler),
         ]
         settings = dict(
             cookie_secret="32oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
@@ -51,6 +52,7 @@ class MainHandler(BaseHandler):
     def get(self):
         name = tornado.escape.xhtml_escape(self.current_user["name"])
         self.write("Hello, " + name)
+        self.write("<br><br><a href=\"/auth/logout\">Log out</a>")
 
 
 class AuthHandler(BaseHandler, tornado.auth.GoogleMixin):
@@ -67,6 +69,10 @@ class AuthHandler(BaseHandler, tornado.auth.GoogleMixin):
         self.set_secure_cookie("user", tornado.escape.json_encode(user))
         self.redirect("/")
 
+class LogoutHandler(BaseHandler):
+    def get(self):
+        self.clear_cookie("user")
+        self.redirect("/")
 
 def main():
     tornado.options.parse_command_line()
