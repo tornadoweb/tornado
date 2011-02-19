@@ -298,6 +298,7 @@ class _HTTPConnection(object):
             new_request.url = urlparse.urljoin(self.request.url,
                                                self.headers["Location"])
             new_request.max_redirects -= 1
+            del new_request.headers["Host"]
             new_request.original_request = original_request
             self.client.fetch(new_request, self.callback)
             self.callback = None
