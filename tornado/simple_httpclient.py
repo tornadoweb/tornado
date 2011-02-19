@@ -394,6 +394,9 @@ def match_hostname(cert, hostname):
 
 def main():
     from tornado.options import define, options, parse_command_line
+    define("print_headers", type=bool, default=False)
+    define("print_body", type=bool, default=True)
+    define("follow_redirects", type=bool, default=True)
     args = parse_command_line()
     client = SimpleAsyncHTTPClient()
     io_loop = IOLoop.instance()
@@ -401,8 +404,11 @@ def main():
         def callback(response):
             io_loop.stop()
             response.rethrow()
-            print response.body
-        client.fetch(arg, callback)
+            if options.print_headers:
+                print response.headers
+            if options.print_body:
+                print response.body
+        client.fetch(arg, callback, follow_redirects=options.follow_redirects)
         io_loop.start()
 
 if __name__ == "__main__":
