@@ -568,7 +568,12 @@ def _curl_setup_request(curl, request, buffer, headers):
             curl.setopt(pycurl.PROXYUSERPWD, credentials)
     else:
         curl.setopt(pycurl.PROXY, '')
-    curl.setopt(pycurl.SSL_VERIFYPEER, request.validate_cert)
+    if request.validate_cert:
+        curl.setopt(pycurl.SSL_VERIFYPEER, 1)
+        curl.setopt(pycurl.SSL_VERIFYHOST, 2)
+    else:
+        curl.setopt(pycurl.SSL_VERIFYPEER, 0)
+        curl.setopt(pycurl.SSL_VERIFYHOST, 0)
     if request.ca_certs is not None:
         curl.setopt(pycurl.CAINFO, request.ca_certs)
     else:
