@@ -240,15 +240,16 @@ class _HTTPConnection(object):
         except Exception, e:
             logging.warning("uncaught exception", exc_info=True)
             if self.callback is not None:
-                self.callback(HTTPResponse(self.request, 599, error=e))
+                callback = self.callback
                 self.callback = None
+                callback(HTTPResponse(self.request, 599, error=e))
 
     def _on_close(self):
         if self.callback is not None:
-            self.callback(HTTPResponse(self.request, 599,
-                                       error=HTTPError(599, 
-                                                       "Connection closed")))
+            callback = self.callback
             self.callback = None
+            callback(HTTPResponse(self.request, 599,
+                                  error=HTTPError(599, "Connection closed")))
 
     def _on_headers(self, data):
         first_line, _, header_data = data.partition("\r\n")
