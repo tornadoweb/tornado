@@ -425,6 +425,11 @@ class HTTPRequest(object):
         # validate_cert: boolean, set to False to disable validation
         # ca_certs: filename of CA certificates in PEM format, or
         #     None to use defaults
+        # Note that in the curl-based HTTP client, if any request
+        # uses a custom ca_certs file, they all must (they don't have to
+        # all use the same ca_certs, but it's not possible to mix requests
+        # with ca_certs and requests that use the defaults).
+        # SimpleAsyncHTTPClient does not have this limitation.
         self.validate_cert = validate_cert
         self.ca_certs = ca_certs
         self.start_time = time.time()
@@ -567,7 +572,13 @@ def _curl_setup_request(curl, request, buffer, headers):
     if request.ca_certs is not None:
         curl.setopt(pycurl.CAINFO, request.ca_certs)
     else:
-        curl.unsetopt(pycurl.CAINFO)
+        # There is no way to restore pycurl.CAINFO to its default value
+        # (Using unsetopt makes it reject all certificates).
+        # I don't see any way to read the default value from python so it
+        # can be restored later.  We'll have to just leave CAINFO untouched
+        # if no ca_certs file was specified, and require that if any
+        # request uses a custom ca_certs file, they all must.
+        pass
 
     # Set the request method through curl's retarded interface which makes
     # up names for almost every single method
