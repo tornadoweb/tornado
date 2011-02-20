@@ -46,39 +46,27 @@ modules, so you should (theoretically) be able to use any of the modules
 independently in your project without using the whole package.
 
 
-Download
---------
-Download the most recent version of Tornado from GitHub:
+Download and install
+--------------------
+  <p><b>Automatic installation:</b> Tornado is listed in <a href="http://pypi.python.org/pypi/tornado">PyPI</a> and can be installed with <code>pip</code> or <code>easy_install</code>.  If you do not already have libcurl installed you may need to install it separately; see the prerequisites section below.  Note that the source distribution includes demo applications that are not present when Tornado is installed using <code>pip</code> or <code>easy_install</code></p>
 
-> [tornado-1.1.1.tar.gz](http://github.com/downloads/facebook/tornado/tornado-1.1.1.tar.gz)
+  <p><b>Manual installation:</b> Download <a href="http://github.com/downloads/facebook/tornado/tornado-1.1.1.tar.gz">tornado-1.1.1.tar.gz</a></p>
+  <pre><code>tar xvzf tornado-1.1.1.tar.gz
+cd tornado-1.1.1
+python setup.py build
+sudo python setup.py install</code></pre>
+  <p>The Tornado source code is <a href="http://github.com/facebook/tornado">hosted on GitHub</a>.  On Python 2.6+, it is also possible to simply add the tornado directory to your <code>PYTHONPATH</code> instead of building with <code>setup.py</code>, since the standard library includes <code>epoll</code> support.</p>
 
-You can also [browse the source](http://github.com/facebook/tornado) on GitHub. To install Tornado:
+  <h3>Prerequisites</h3>
+  <p>Tornado has been tested on Python 2.5, 2.6, and 2.7. To use all of the features of Tornado, you need to have <a href="http://pycurl.sourceforge.net/">PycURL</a> (version 7.18.2 or higher) and (for Python 2.5 only) <a href="http://pypi.python.org/pypi/simplejson/">simplejson</a> installed (Python 2.6 includes JSON support in the standard library so simplejson is not needed). Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.</p>
+  <p style="font-weight:bold">Mac OS X 10.6 (Python 2.6+)</p>
+  <pre><code>sudo easy_install setuptools pycurl</code></pre>
 
-    tar xvzf tornado-1.1.1.tar.gz
-    cd tornado-1.1.1
-    python setup.py build
-    sudo python setup.py install
+  <p style="font-weight:bold">Ubuntu Linux (Python 2.6+)</p>
+  <pre><code>sudo apt-get install python-pycurl</code></pre>
 
-After installation, you should be able to run any of the demos in the `demos`
-directory included with the Tornado package.
-
-    ./demos/helloworld/helloworld.py
-
-### Prerequisites
-
-Tornado has been tested on Python 2.5 and 2.6. To use all of the features of Tornado, you need to have [PycURL](http://pycurl.sourceforge.net/) (version 7.18.2 or higher) and (for Python 2.5 only) [simplejson](http://pypi.python.org/pypi/simplejson/) installed (Python 2.6 includes JSON support in the standard library so simplejson is not needed). Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.
-
-**Mac OS X 10.6 (Python 2.6)**
-
-    sudo easy_install pycurl
-
-**Ubuntu Linux (Python 2.6)**
-
-    sudo apt-get install python-pycurl
-
-**Ubuntu Linux (Python 2.5)**
-
-    sudo apt-get install python-dev python-pycurl python-simplejson
+  <p style="font-weight:bold">Ubuntu Linux (Python 2.5)</p>
+  <pre><code>sudo apt-get install python-dev python-pycurl python-simplejson</code></pre>
 
 
 Module index
