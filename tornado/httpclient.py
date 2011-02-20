@@ -59,8 +59,9 @@ class HTTPClient(object):
     fetch() can take a string URL or an HTTPRequest instance, which offers
     more options, like executing POST/PUT/DELETE requests.
     """
-    def __init__(self, max_simultaneous_connections=None):
+    def __init__(self, max_simultaneous_connections=None, quiet=False):
         self._curl = _curl_create(max_simultaneous_connections)
+        self._quiet = quiet
 
     def __del__(self):
         self._curl.close()
@@ -75,7 +76,8 @@ class HTTPClient(object):
         buffer = cStringIO.StringIO()
         headers = httputil.HTTPHeaders()
         try:
-            _curl_setup_request(self._curl, request, buffer, headers)
+            _curl_setup_request(self._curl, request, buffer, headers,
+                                self._quiet)
             self._curl.perform()
             code = self._curl.getinfo(pycurl.HTTP_CODE)
             effective_url = self._curl.getinfo(pycurl.EFFECTIVE_URL)
@@ -119,7 +121,8 @@ class AsyncHTTPClient(object):
     _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
 
     def __new__(cls, io_loop=None, max_clients=10,
-                max_simultaneous_connections=None):
+                max_simultaneous_connections=None,
+                quiet=False):
         # There is one client per IOLoop since they share curl instances
         io_loop = io_loop or ioloop.IOLoop.instance()
         if io_loop in cls._ASYNC_CLIENTS:
@@ -138,6 +141,7 @@ class AsyncHTTPClient(object):
             instance._requests = collections.deque()
             instance._fds = {}
             instance._timeout = None
+            instance._quiet = quiet
             cls._ASYNC_CLIENTS[io_loop] = instance
 
             try:
@@ -315,7 +319,7 @@ class AsyncHTTPClient(object):
                     if pycurl.version_info()[2] <= 0x71500:  # 7.21.0
                         curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)
                     _curl_setup_request(curl, request, curl.info["buffer"],
-                                        curl.info["headers"])
+                                        curl.info["headers"], self._quiet)
                     self._multi.add_handle(curl)
 
                 if not started:
@@ -522,7 +526,7 @@ def _curl_create(max_simultaneous_connections=None):
     return curl
 
 
-def _curl_setup_request(curl, request, buffer, headers):
+def _curl_setup_request(curl, request, buffer, headers, quiet):
     curl.setopt(pycurl.URL, request.url)
     # Request headers may be either a regular dict or HTTPHeaders object
     if isinstance(request.headers, httputil.HTTPHeaders):
@@ -605,11 +609,13 @@ def _curl_setup_request(curl, request, buffer, headers):
         userpwd = "%s:%s" % (request.auth_username, request.auth_password)
         curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
         curl.setopt(pycurl.USERPWD, userpwd)
-        logging.info("%s %s (username: %r)", request.method, request.url,
-                     request.auth_username)
+        if not quiet:
+            logging.info("%s %s (username: %r)", request.method, request.url,
+                         request.auth_username)
     else:
         curl.unsetopt(pycurl.USERPWD)
-        logging.info("%s %s", request.method, request.url)
+        if not quiet:
+            logging.info("%s %s", request.method, request.url)
     if threading.activeCount() > 1:
         # libcurl/pycurl is not thread-safe by default.  When multiple threads
         # are used, signals should be disabled.  This has the side effect
