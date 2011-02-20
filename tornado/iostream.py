@@ -35,11 +35,13 @@ except ImportError:
 class IOStream(object):
     """A utility class to write to and read from a non-blocking socket.
 
-    We support three methods: write(), read_until(), and read_bytes().
-    All of the methods take callbacks (since writing and reading are
-    non-blocking and asynchronous). read_until() reads the socket until
-    a given delimiter, and read_bytes() reads until a specified number
-    of bytes have been read from the socket.
+    We support four methods: write(), read_until(), read_bytes(), and
+    read_stream().  All of the methods take callbacks (since writing and
+    reading are non-blocking and asynchronous). read_until() reads the
+    socket until a given delimiter, read_bytes() reads until a specified
+    number of bytes have been read from the socket, and read_stream()
+    keeps reading the socket and calling a given callback for every given
+    delimiter.
 
     The socket parameter may either be connected or unconnected.  For
     server operations the socket is the result of calling socket.accept().
@@ -88,6 +90,7 @@ class IOStream(object):
         self._write_buffer_frozen = False
         self._read_delimiter = None
         self._read_bytes = None
+        self._read_stream = False
         self._read_callback = None
         self._write_callback = None
         self._close_callback = None
@@ -152,6 +155,11 @@ class IOStream(object):
             if self._read_to_buffer() == 0:
                 break
         self._add_io_state(self.io_loop.READ)
+
+    def read_stream(self, delimiter, callback):
+        """Keep calling callback when we read the given delimiter."""
+        self._read_stream = True
+        self.read_until(delimiter, callback)
 
     def write(self, data, callback=None):
         """Write the given data to this stream.
@@ -303,7 +311,7 @@ class IOStream(object):
     def _read_from_buffer(self):
         """Attempts to complete the currently-pending read from the buffer.
 
-        Returns True if the read was completed.
+        Returns True if the read was completed except for stream.
         """
         if self._read_bytes:
             if self._read_buffer_size() >= self._read_bytes:
@@ -313,6 +321,15 @@ class IOStream(object):
                 self._read_bytes = None
                 self._run_callback(callback, self._consume(num_bytes))
                 return True
+        elif self._read_stream:
+            _merge_prefix(self._read_buffer, sys.maxint)
+            while len(self._read_buffer):
+                loc = self._read_buffer[0].find(self._read_delimiter)
+                if loc == -1: break
+                callback = self._read_callback
+                delimiter_len = len(self._read_delimiter)
+                self._run_callback(callback,
+                                   self._consume(loc + delimiter_len))
         elif self._read_delimiter:
             _merge_prefix(self._read_buffer, sys.maxint)
             loc = self._read_buffer[0].find(self._read_delimiter)
