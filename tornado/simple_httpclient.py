@@ -27,6 +27,8 @@ try:
 except ImportError:
     ssl = None
 
+_DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
+
 class SimpleAsyncHTTPClient(object):
     """Non-blocking HTTP client with no external dependencies.
 
@@ -156,8 +158,7 @@ class _HTTPConnection(object):
                 if request.ca_certs is not None:
                     ssl_options["ca_certs"] = request.ca_certs
                 else:
-                    ssl_options["ca_certs"] = (os.path.dirname(__file__) + 
-                                               '/ca-certificates.crt')
+                    ssl_options["ca_certs"] = _DEFAULT_CA_CERTS
                 self.stream = SSLIOStream(socket.socket(),
                                           io_loop=self.io_loop,
                                           ssl_options=ssl_options)

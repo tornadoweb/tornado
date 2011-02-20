@@ -9,7 +9,7 @@ import socket
 
 from contextlib import closing
 from tornado.ioloop import IOLoop
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
 from tornado.web import Application, RequestHandler, asynchronous, url
 
@@ -205,4 +205,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.request.url.endswith("/countdown/5"))
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
+
+    def test_default_certificates_exist(self):
+        open(_DEFAULT_CA_CERTS)
 
