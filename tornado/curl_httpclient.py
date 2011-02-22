@@ -44,54 +44,7 @@ from tornado import ioloop
 from tornado import stack_context
 
 from tornado.escape import utf8
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError
-
-class HTTPClient(object):
-    """A blocking HTTP client backed with pycurl.
-
-    Typical usage looks like this:
-
-        http_client = httpclient.HTTPClient()
-        try:
-            response = http_client.fetch("http://www.google.com/")
-            print response.body
-        except httpclient.HTTPError, e:
-            print "Error:", e
-
-    fetch() can take a string URL or an HTTPRequest instance, which offers
-    more options, like executing POST/PUT/DELETE requests.
-    """
-    def __init__(self, max_simultaneous_connections=None):
-        self._curl = _curl_create(max_simultaneous_connections)
-
-    def __del__(self):
-        self._curl.close()
-
-    def fetch(self, request, **kwargs):
-        """Executes an HTTPRequest, returning an HTTPResponse.
-
-        If an error occurs during the fetch, we raise an HTTPError.
-        """
-        if not isinstance(request, HTTPRequest):
-            request = HTTPRequest(url=request, **kwargs)
-        buffer = cStringIO.StringIO()
-        headers = httputil.HTTPHeaders()
-        try:
-            _curl_setup_request(self._curl, request, buffer, headers)
-            self._curl.perform()
-            code = self._curl.getinfo(pycurl.HTTP_CODE)
-            effective_url = self._curl.getinfo(pycurl.EFFECTIVE_URL)
-            buffer.seek(0)
-            response = HTTPResponse(
-                request=request, code=code, headers=headers,
-                buffer=buffer, effective_url=effective_url)
-            if code < 200 or code >= 300:
-                raise HTTPError(code, response=response)
-            return response
-        except pycurl.error, e:
-            buffer.close()
-            raise CurlError(*e)
-
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, main
 
 class AsyncHTTPClient(object):
     """An non-blocking HTTP client backed with pycurl.
@@ -521,26 +474,6 @@ def _curl_debug(debug_type, debug_msg):
         logging.debug('%s %r', debug_types[debug_type], debug_msg)
 
 
-def main():
-    from tornado.options import define, options, parse_command_line
-    define("print_headers", type=bool, default=False)
-    define("print_body", type=bool, default=True)
-    define("follow_redirects", type=bool, default=True)
-    args = parse_command_line()
-    client = HTTPClient()
-    for arg in args:
-        try:
-            response = client.fetch(arg,
-                                    follow_redirects=options.follow_redirects)
-        except HTTPError, e:
-            if e.response is not None:
-                response = e.response
-            else:
-                raise
-        if options.print_headers:
-            print response.headers
-        if options.print_body:
-            print response.body
 
 # If the environment variable USE_SIMPLE_HTTPCLIENT is set to a non-empty
 # string, use SimpleAsyncHTTPClient instead of AsyncHTTPClient.

@@ -3,6 +3,45 @@ import time
 
 from tornado.escape import utf8
 from tornado import httputil
+from tornado.ioloop import IOLoop
+
+class HTTPClient(object):
+    """A blocking HTTP client.
+
+    Typical usage looks like this:
+
+        http_client = httpclient.HTTPClient()
+        try:
+            response = http_client.fetch("http://www.google.com/")
+            print response.body
+        except httpclient.HTTPError, e:
+            print "Error:", e
+
+    fetch() can take a string URL or an HTTPRequest instance, which offers
+    more options, like executing POST/PUT/DELETE requests.
+    """
+    def __init__(self):
+        self._io_loop = IOLoop()
+        self._async_client = AsyncHTTPClient(self._io_loop)
+        self._response = None
+
+    def __del__(self):
+        self._async_client.close()
+
+    def fetch(self, request, **kwargs):
+        """Executes an HTTPRequest, returning an HTTPResponse.
+
+        If an error occurs during the fetch, we raise an HTTPError.
+        """
+        def callback(response):
+            self._response = response
+            self._io_loop.stop()
+        self._async_client.fetch(request, callback, **kwargs)
+        self._io_loop.start()
+        response = self._response
+        self._response = None
+        response.rethrow()
+        return response
 
 class HTTPRequest(object):
     def __init__(self, url, method="GET", headers=None, body=None,
@@ -147,4 +186,28 @@ class HTTPError(Exception):
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
 
 
-from tornado.curl_httpclient import AsyncHTTPClient, HTTPClient
+def main():
+    from tornado.options import define, options, parse_command_line
+    define("print_headers", type=bool, default=False)
+    define("print_body", type=bool, default=True)
+    define("follow_redirects", type=bool, default=True)
+    args = parse_command_line()
+    client = HTTPClient()
+    for arg in args:
+        try:
+            response = client.fetch(arg,
+                                    follow_redirects=options.follow_redirects)
+        except HTTPError, e:
+            if e.response is not None:
+                response = e.response
+            else:
+                raise
+        if options.print_headers:
+            print response.headers
+        if options.print_body:
+            print response.body
+
+from tornado.curl_httpclient import AsyncHTTPClient
+
+if __name__ == "__main__":
+    main()
