@@ -112,7 +112,8 @@ class HTTPRequest(object):
             if key.startswith("HTTP_"):
                 self.headers[key[5:].replace("_", "-")] = environ[key]
         if self.headers.get("Content-Length"):
-            self.body = environ["wsgi.input"].read()
+            self.body = environ["wsgi.input"].read(
+                self.headers["Content-Length"])
         else:
             self.body = ""
         self.protocol = environ["wsgi.url_scheme"]
