@@ -1,4 +1,5 @@
 import httplib
+import os
 import time
 
 from tornado.escape import utf8
@@ -207,7 +208,15 @@ def main():
         if options.print_body:
             print response.body
 
-from tornado.curl_httpclient import AsyncHTTPClient
+# If the environment variable USE_SIMPLE_HTTPCLIENT is set to a non-empty
+# string, use simple_httpclient instead of curl_httpclient.
+# This is provided as a convenience for testing simple_httpclient,
+# and may be removed or replaced with a better way of specifying the preferred
+# HTTPClient implementation before the next release.
+if os.environ.get("USE_SIMPLE_HTTPCLIENT"):
+    from tornado.simple_httpclient import AsyncHTTPClient
+else:
+    from tornado.curl_httpclient import AsyncHTTPClient
 
 if __name__ == "__main__":
     main()

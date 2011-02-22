@@ -26,14 +26,7 @@ import errno
 import httplib
 import logging
 import os
-try:
-    import pycurl
-except ImportError:
-    # See the other check for this variable at end of file
-    if os.environ.get('USE_SIMPLE_HTTPCLIENT'):
-        pycurl = None
-    else:
-        raise
+import pycurl
 import sys
 import threading
 import time
@@ -472,16 +465,6 @@ def _curl_debug(debug_type, debug_msg):
             logging.debug('%s %s', debug_types[debug_type], line)
     elif debug_type == 4:
         logging.debug('%s %r', debug_types[debug_type], debug_msg)
-
-
-
-# If the environment variable USE_SIMPLE_HTTPCLIENT is set to a non-empty
-# string, use SimpleAsyncHTTPClient instead of AsyncHTTPClient.
-# This is provided as a convenience for testing SimpleAsyncHTTPClient,
-# and may be removed or replaced with a better way of specifying the preferred
-# HTTPClient implementation before the next release.
-if os.environ.get('USE_SIMPLE_HTTPCLIENT'):
-    from tornado.simple_httpclient import SimpleAsyncHTTPClient as AsyncHTTPClient
 
 if __name__ == "__main__":
     main()

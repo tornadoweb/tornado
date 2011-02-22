@@ -29,7 +29,7 @@ except ImportError:
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
 
-class SimpleAsyncHTTPClient(object):
+class AsyncHTTPClient(object):
     """Non-blocking HTTP client with no external dependencies.
 
     This class implements an HTTP 1.1 client on top of Tornado's IOStreams.
@@ -61,9 +61,9 @@ class SimpleAsyncHTTPClient(object):
                 max_simultaneous_connections=None,
                 force_instance=False,
                 hostname_mapping=None):
-        """Creates a SimpleAsyncHTTPClient.
+        """Creates a AsyncHTTPClient.
 
-        Only a single SimpleAsyncHTTPClient instance exists per IOLoop
+        Only a single AsyncHTTPClient instance exists per IOLoop
         in order to provide limitations on the number of pending connections.
         force_instance=True may be used to suppress this behavior.
 
@@ -82,7 +82,7 @@ class SimpleAsyncHTTPClient(object):
         if io_loop in cls._ASYNC_CLIENTS and not force_instance:
             return cls._ASYNC_CLIENTS[io_loop]
         else:
-            instance = super(SimpleAsyncHTTPClient, cls).__new__(cls)
+            instance = super(AsyncHTTPClient, cls).__new__(cls)
             instance.io_loop = io_loop
             instance.max_clients = max_clients
             instance.queue = collections.deque()
@@ -393,6 +393,8 @@ def match_hostname(cert, hostname):
         raise CertificateError("no appropriate commonName or "
             "subjectAltName fields were found")
 
+# Alias for backwards compatibility
+SimpleAsyncHTTPClient = AsyncHTTPClient
 
 def main():
     from tornado.options import define, options, parse_command_line
@@ -400,7 +402,7 @@ def main():
     define("print_body", type=bool, default=True)
     define("follow_redirects", type=bool, default=True)
     args = parse_command_line()
-    client = SimpleAsyncHTTPClient()
+    client = AsyncHTTPClient()
     io_loop = IOLoop.instance()
     for arg in args:
         def callback(response):
