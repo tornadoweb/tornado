@@ -39,10 +39,11 @@ import threading
 import time
 import weakref
 
-from tornado import escape
 from tornado import httputil
 from tornado import ioloop
 from tornado import stack_context
+
+from tornado.escape import utf8
 
 class HTTPClient(object):
     """A blocking HTTP client backed with pycurl.
@@ -404,12 +405,12 @@ class HTTPRequest(object):
         # value is the official way to disable this)
         if "Expect" not in headers:
             headers["Expect"] = ""
-        self.url = _utf8(url)
+        self.url = utf8(url)
         self.method = method
         self.headers = headers
         self.body = body
-        self.auth_username = _utf8(auth_username)
-        self.auth_password = _utf8(auth_password)
+        self.auth_username = utf8(auth_username)
+        self.auth_password = utf8(auth_password)
         self.connect_timeout = connect_timeout
         self.request_timeout = request_timeout
         self.follow_redirects = follow_redirects
@@ -532,10 +533,10 @@ def _curl_setup_request(curl, request, buffer, headers):
     # Request headers may be either a regular dict or HTTPHeaders object
     if isinstance(request.headers, httputil.HTTPHeaders):
         curl.setopt(pycurl.HTTPHEADER,
-                    [_utf8("%s: %s" % i) for i in request.headers.get_all()])
+                    [utf8("%s: %s" % i) for i in request.headers.get_all()])
     else:
         curl.setopt(pycurl.HTTPHEADER,
-                    [_utf8("%s: %s" % i) for i in request.headers.iteritems()])
+                    [utf8("%s: %s" % i) for i in request.headers.iteritems()])
     if request.header_callback:
         curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
     else:
@@ -550,7 +551,7 @@ def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.CONNECTTIMEOUT, int(request.connect_timeout))
     curl.setopt(pycurl.TIMEOUT, int(request.request_timeout))
     if request.user_agent:
-        curl.setopt(pycurl.USERAGENT, _utf8(request.user_agent))
+        curl.setopt(pycurl.USERAGENT, utf8(request.user_agent))
     else:
         curl.setopt(pycurl.USERAGENT, "Mozilla/5.0 (compatible; pycurl)")
     if request.network_interface:
@@ -606,7 +607,7 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     # Handle curl's cryptic options for every individual HTTP method
     if request.method in ("POST", "PUT"):
-        request_buffer =  cStringIO.StringIO(escape.utf8(request.body))
+        request_buffer =  cStringIO.StringIO(utf8(request.body))
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
         if request.method == "POST":
             def ioctl(cmd):
@@ -660,14 +661,6 @@ def _curl_debug(debug_type, debug_msg):
     elif debug_type == 4:
         logging.debug('%s %r', debug_types[debug_type], debug_msg)
 
-
-def _utf8(value):
-    if value is None:
-        return value
-    if isinstance(value, unicode):
-        return value.encode("utf-8")
-    assert isinstance(value, str)
-    return value
 
 def main():
     from tornado.options import define, options, parse_command_line

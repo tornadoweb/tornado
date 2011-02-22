@@ -89,6 +89,8 @@ def url_unescape(value):
 
 
 def utf8(value):
+    if value is None:
+        return None
     if isinstance(value, unicode):
         return value.encode("utf-8")
     assert isinstance(value, str)
