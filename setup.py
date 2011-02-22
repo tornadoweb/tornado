@@ -23,16 +23,10 @@ try:
 except ImportError:
     pass
 
-major, minor = sys.version_info[:2]
-python_26 = (major > 2 or (major == 2 and minor >= 6))
-
-requirements = ["pycurl"]
-if not python_26:
-    # Python 2.6 includes a json module in the standard library
-    requirements.append("simplejson")
-
 # Build the epoll extension for Linux systems with Python < 2.6
 extensions = []
+major, minor = sys.version_info[:2]
+python_26 = (major > 2 or (major == 2 and minor >= 6))
 if "linux" in sys.platform.lower() and not python_26:
     extensions.append(distutils.core.Extension(
         "tornado.epoll", ["tornado/epoll.c"]))
@@ -48,7 +42,6 @@ distutils.core.setup(
         "tornado.test": ["README", "test.crt", "test.key"],
         },
     ext_modules = extensions,
-    install_requires = requirements,
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
