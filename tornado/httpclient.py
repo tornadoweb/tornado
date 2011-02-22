@@ -1,4 +1,8 @@
+import httplib
+import time
+
 from tornado.escape import utf8
+from tornado import httputil
 
 class HTTPRequest(object):
     def __init__(self, url, method="GET", headers=None, body=None,
@@ -143,4 +147,4 @@ class HTTPError(Exception):
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
 
 
-from tornado.curl_httpclient import *
+from tornado.curl_httpclient import AsyncHTTPClient, HTTPClient
