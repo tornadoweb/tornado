@@ -323,7 +323,13 @@ def main():
     from tornado.options import define, options, parse_command_line
 
     define('autoreload', type=bool, default=False)
+    define('httpclient', type=str, default=None)
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
+
+    if options.httpclient:
+        from tornado.httpclient import AsyncHTTPClient
+        AsyncHTTPClient.configure(options.httpclient)
+
     if __name__ == '__main__' and len(argv) == 1:
         print >> sys.stderr, "No tests specified"
         sys.exit(1)

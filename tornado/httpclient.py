@@ -6,6 +6,7 @@ import weakref
 from tornado.escape import utf8
 from tornado import httputil
 from tornado.ioloop import IOLoop
+from tornado.util import import_object
 
 class HTTPClient(object):
     """A blocking HTTP client.
@@ -66,24 +67,51 @@ class AsyncHTTPClient(object):
     fetch() can take a string URL or an HTTPRequest instance, which offers
     more options, like executing POST/PUT/DELETE requests.
 
-    The keyword argument max_clients to the AsyncHTTPClient constructor
-    determines the maximum number of simultaneous fetch() operations that
-    can execute in parallel on each IOLoop.
+    The constructor for this class is magic in several respects:  It actually
+    creates an instance of an implementation-specific subclass, and instances
+    are reused as a kind of pseudo-singleton (one per IOLoop).  The keyword
+    argument force_instance=True can be used to suppress this singleton
+    behavior.  Constructor arguments other than io_loop and force_instance
+    are deprecated.  The implementation subclass as well as arguments to
+    its constructor can be set with the static method configure()
     """
-    _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
+    _async_clients = weakref.WeakKeyDictionary()
+    _impl_class = None
+    _impl_kwargs = None
 
     def __new__(cls, io_loop=None, max_clients=10, force_instance=False, 
                 **kwargs):
         io_loop = io_loop or IOLoop.instance()
-        if io_loop in cls._ASYNC_CLIENTS and not force_instance:
-            return cls._ASYNC_CLIENTS[io_loop]
+        if io_loop in cls._async_clients and not force_instance:
+            return cls._async_clients[io_loop]
         else:
             if cls is AsyncHTTPClient:
-                cls = AsyncImpl
-            instance = super(AsyncHTTPClient, cls).__new__(cls)
-            instance.initialize(io_loop, max_clients, **kwargs)
+                if cls._impl_class is None:
+                    # If the environment variable
+                    # USE_SIMPLE_HTTPCLIENT is set to a non-empty
+                    # string, use simple_httpclient instead of
+                    # curl_httpclient.  This is provided as a
+                    # convenience for testing simple_httpclient, and
+                    # may be removed or replaced with a better way of
+                    # specifying the preferred HTTPClient
+                    # implementation before the next release.
+                    if os.environ.get("USE_SIMPLE_HTTPCLIENT"):
+                        from tornado.simple_httpclient import SimpleAsyncHTTPClient
+                        AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
+                    else:
+                        from tornado.curl_httpclient import CurlAsyncHTTPClient
+                        AsyncHTTPClient._impl_class = CurlAsyncHTTPClient
+                impl = cls._impl_class
+            else:
+                impl = cls
+            instance = super(AsyncHTTPClient, cls).__new__(impl)
+            args = {}
+            if cls._impl_kwargs:
+                args.update(cls._impl_kwargs)
+            args.update(kwargs)
+            instance.initialize(io_loop, max_clients, **args)
             if not force_instance:
-                cls._ASYNC_CLIENTS[io_loop] = instance
+                cls._async_clients[io_loop] = instance
             return instance
 
     def close(self):
@@ -92,8 +120,8 @@ class AsyncHTTPClient(object):
         create and destroy http clients.  No other methods may be called
         on the AsyncHTTPClient after close().
         """
-        if self._ASYNC_CLIENTS[self.io_loop] is self:
-            del self._ASYNC_CLIENTS[self.io_loop]
+        if self._async_clients[self.io_loop] is self:
+            del self._async_clients[self.io_loop]
 
     def fetch(self, request, callback, **kwargs):
         """Executes an HTTPRequest, calling callback with an HTTPResponse.
@@ -104,6 +132,29 @@ class AsyncHTTPClient(object):
         throw the exception (if any) in the callback.
         """
         raise NotImplementedError()
+
+    @staticmethod
+    def configure(impl, **kwargs):
+        """Configures the AsyncHTTPClient subclass to use.
+
+        AsyncHTTPClient() actually creates an instance of a subclass.
+        This method may be called with either a class object or the
+        fully-qualified name of such a class (or None to use the default,
+        SimpleAsyncHTTPClient)
+
+        If additional keyword arguments are given, they will be passed
+        to the constructor of each subclass instance created.  The
+        keyword argument max_clients determines the maximum number of
+        simultaneous fetch() operations that can execute in parallel
+        on each IOLoop.  Additional arguments may be supported depending
+        on the implementation class in use.
+        """
+        if isinstance(impl, basestring):
+            impl = import_object(impl)
+        if impl is not None and not issubclass(impl, AsyncHTTPClient):
+            raise ValueError("Invalid AsyncHTTPClient implementation")
+        AsyncHTTPClient._impl_class = impl
+        AsyncHTTPClient._impl_kwargs = kwargs
 
 class HTTPRequest(object):
     def __init__(self, url, method="GET", headers=None, body=None,
@@ -268,16 +319,6 @@ def main():
             print response.headers
         if options.print_body:
             print response.body
-
-# If the environment variable USE_SIMPLE_HTTPCLIENT is set to a non-empty
-# string, use simple_httpclient instead of curl_httpclient.
-# This is provided as a convenience for testing simple_httpclient,
-# and may be removed or replaced with a better way of specifying the preferred
-# HTTPClient implementation before the next release.
-if os.environ.get("USE_SIMPLE_HTTPCLIENT"):
-    from tornado.simple_httpclient import SimpleAsyncHTTPClient as AsyncImpl
-else:
-    from tornado.curl_httpclient import CurlAsyncHTTPClient as AsyncImpl
 
 if __name__ == "__main__":
     main()
