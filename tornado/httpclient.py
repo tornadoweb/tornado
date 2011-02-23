@@ -87,20 +87,8 @@ class AsyncHTTPClient(object):
         else:
             if cls is AsyncHTTPClient:
                 if cls._impl_class is None:
-                    # If the environment variable
-                    # USE_SIMPLE_HTTPCLIENT is set to a non-empty
-                    # string, use simple_httpclient instead of
-                    # curl_httpclient.  This is provided as a
-                    # convenience for testing simple_httpclient, and
-                    # may be removed or replaced with a better way of
-                    # specifying the preferred HTTPClient
-                    # implementation before the next release.
-                    if os.environ.get("USE_SIMPLE_HTTPCLIENT"):
-                        from tornado.simple_httpclient import SimpleAsyncHTTPClient
-                        AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
-                    else:
-                        from tornado.curl_httpclient import CurlAsyncHTTPClient
-                        AsyncHTTPClient._impl_class = CurlAsyncHTTPClient
+                    from tornado.simple_httpclient import SimpleAsyncHTTPClient
+                    AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
                 impl = cls._impl_class
             else:
                 impl = cls
