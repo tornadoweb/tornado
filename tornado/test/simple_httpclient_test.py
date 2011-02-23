@@ -76,7 +76,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def setUp(self):
         super(SimpleHTTPClientTestCase, self).setUp()
         # replace the client defined in the parent class
-        self.http_client = SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        self.http_client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
+                                                 force_instance=True)
 
     def test_hello_world(self):
         response = self.fetch("/hello")

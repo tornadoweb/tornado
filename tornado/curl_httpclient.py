@@ -30,107 +30,57 @@ import pycurl
 import sys
 import threading
 import time
-import weakref
 
 from tornado import httputil
 from tornado import ioloop
 from tornado import stack_context
 
 from tornado.escape import utf8
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, main
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 
-class AsyncHTTPClient(object):
-    """An non-blocking HTTP client backed with pycurl.
+class CurlAsyncHTTPClient(AsyncHTTPClient):
+    def initialize(self, io_loop=None, max_clients=10,
+                   max_simultaneous_connections=None):
+        self.io_loop = io_loop
+        self._multi = pycurl.CurlMulti()
+        self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
+        self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
+        self._curls = [_curl_create(max_simultaneous_connections)
+                       for i in xrange(max_clients)]
+        self._free_list = self._curls[:]
+        self._requests = collections.deque()
+        self._fds = {}
+        self._timeout = None
 
-    Example usage:
+        try:
+            self._socket_action = self._multi.socket_action
+        except AttributeError:
+            # socket_action is found in pycurl since 7.18.2 (it's been
+            # in libcurl longer than that but wasn't accessible to
+            # python).
+            logging.warning("socket_action method missing from pycurl; "
+                            "falling back to socket_all. Upgrading "
+                            "libcurl and pycurl will improve performance")
+            self._socket_action = \
+                lambda fd, action: self._multi.socket_all()
 
-        import ioloop
-
-        def handle_request(response):
-            if response.error:
-                print "Error:", response.error
-            else:
-                print response.body
-            ioloop.IOLoop.instance().stop()
-
-        http_client = httpclient.AsyncHTTPClient()
-        http_client.fetch("http://www.google.com/", handle_request)
-        ioloop.IOLoop.instance().start()
-
-    fetch() can take a string URL or an HTTPRequest instance, which offers
-    more options, like executing POST/PUT/DELETE requests.
-
-    The keyword argument max_clients to the AsyncHTTPClient constructor
-    determines the maximum number of simultaneous fetch() operations that
-    can execute in parallel on each IOLoop.
-    """
-    _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
-
-    def __new__(cls, io_loop=None, max_clients=10,
-                max_simultaneous_connections=None):
-        # There is one client per IOLoop since they share curl instances
-        io_loop = io_loop or ioloop.IOLoop.instance()
-        if io_loop in cls._ASYNC_CLIENTS:
-            return cls._ASYNC_CLIENTS[io_loop]
-        else:
-            instance = super(AsyncHTTPClient, cls).__new__(cls)
-            instance.io_loop = io_loop
-            instance._multi = pycurl.CurlMulti()
-            instance._multi.setopt(pycurl.M_TIMERFUNCTION,
-                                   instance._set_timeout)
-            instance._multi.setopt(pycurl.M_SOCKETFUNCTION,
-                                   instance._handle_socket)
-            instance._curls = [_curl_create(max_simultaneous_connections)
-                               for i in xrange(max_clients)]
-            instance._free_list = instance._curls[:]
-            instance._requests = collections.deque()
-            instance._fds = {}
-            instance._timeout = None
-            cls._ASYNC_CLIENTS[io_loop] = instance
-
-            try:
-                instance._socket_action = instance._multi.socket_action
-            except AttributeError:
-                # socket_action is found in pycurl since 7.18.2 (it's been
-                # in libcurl longer than that but wasn't accessible to
-                # python).
-                logging.warning("socket_action method missing from pycurl; "
-                                "falling back to socket_all. Upgrading "
-                                "libcurl and pycurl will improve performance")
-                instance._socket_action = \
-                    lambda fd, action: instance._multi.socket_all()
-
-            # libcurl has bugs that sometimes cause it to not report all
-            # relevant file descriptors and timeouts to TIMERFUNCTION/
-            # SOCKETFUNCTION.  Mitigate the effects of such bugs by
-            # forcing a periodic scan of all active requests.
-            instance._force_timeout_callback = ioloop.PeriodicCallback(
-                instance._handle_force_timeout, 1000, io_loop=io_loop)
-            instance._force_timeout_callback.start()
-
-            return instance
+        # libcurl has bugs that sometimes cause it to not report all
+        # relevant file descriptors and timeouts to TIMERFUNCTION/
+        # SOCKETFUNCTION.  Mitigate the effects of such bugs by
+        # forcing a periodic scan of all active requests.
+        self._force_timeout_callback = ioloop.PeriodicCallback(
+            self._handle_force_timeout, 1000, io_loop=io_loop)
+        self._force_timeout_callback.start()
 
     def close(self):
-        """Destroys this http client, freeing any file descriptors used.
-        Not needed in normal use, but may be helpful in unittests that
-        create and destroy http clients.  No other methods may be called
-        on the AsyncHTTPClient after close().
-        """
-        del AsyncHTTPClient._ASYNC_CLIENTS[self.io_loop]
         self._force_timeout_callback.stop()
         for curl in self._curls:
             curl.close()
         self._multi.close()
         self._closed = True
+        super(CurlAsyncHTTPClient, self).close()
 
     def fetch(self, request, callback, **kwargs):
-        """Executes an HTTPRequest, calling callback with an HTTPResponse.
-
-        If an error occurs during the fetch, the HTTPResponse given to the
-        callback has a non-None error attribute that contains the exception
-        encountered during the request. You can call response.rethrow() to
-        throw the exception (if any) in the callback.
-        """
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
         self._requests.append((request, stack_context.wrap(callback)))
@@ -311,11 +261,6 @@ class AsyncHTTPClient(object):
 
     def handle_callback_exception(self, callback):
         self.io_loop.handle_callback_exception(callback)
-
-# For backwards compatibility: Tornado 1.0 included a new implementation of
-# AsyncHTTPClient that has since replaced the original.  Define an alias
-# so anything that used AsyncHTTPClient2 still works
-AsyncHTTPClient2 = AsyncHTTPClient
 
 
 class CurlError(HTTPError):

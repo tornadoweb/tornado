@@ -2,7 +2,7 @@
 from __future__ import with_statement
 
 from cStringIO import StringIO
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
@@ -19,7 +19,6 @@ import re
 import socket
 import time
 import urlparse
-import weakref
 import zlib
 
 try:
@@ -29,7 +28,7 @@ except ImportError:
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
 
-class AsyncHTTPClient(object):
+class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
 
     This class implements an HTTP 1.1 client on top of Tornado's IOStreams.
@@ -55,12 +54,9 @@ class AsyncHTTPClient(object):
     should use the curl-based AsyncHTTPClient if HTTPS support is required.
 
     """
-    _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
-
-    def __new__(cls, io_loop=None, max_clients=10,
-                max_simultaneous_connections=None,
-                force_instance=False,
-                hostname_mapping=None):
+    def initialize(self, io_loop=None, max_clients=10,
+                   max_simultaneous_connections=None,
+                   hostname_mapping=None):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -78,22 +74,11 @@ class AsyncHTTPClient(object):
         settings like /etc/hosts is not possible or desirable (e.g. in
         unittests).
         """
-        io_loop = io_loop or IOLoop.instance()
-        if io_loop in cls._ASYNC_CLIENTS and not force_instance:
-            return cls._ASYNC_CLIENTS[io_loop]
-        else:
-            instance = super(AsyncHTTPClient, cls).__new__(cls)
-            instance.io_loop = io_loop
-            instance.max_clients = max_clients
-            instance.queue = collections.deque()
-            instance.active = {}
-            instance.hostname_mapping = hostname_mapping
-            if not force_instance:
-                cls._ASYNC_CLIENTS[io_loop] = instance
-            return instance
-
-    def close(self):
-        pass
+        self.io_loop = io_loop
+        self.max_clients = max_clients
+        self.queue = collections.deque()
+        self.active = {}
+        self.hostname_mapping = hostname_mapping
 
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
@@ -393,16 +378,13 @@ def match_hostname(cert, hostname):
         raise CertificateError("no appropriate commonName or "
             "subjectAltName fields were found")
 
-# Alias for backwards compatibility
-SimpleAsyncHTTPClient = AsyncHTTPClient
-
 def main():
     from tornado.options import define, options, parse_command_line
     define("print_headers", type=bool, default=False)
     define("print_body", type=bool, default=True)
     define("follow_redirects", type=bool, default=True)
     args = parse_command_line()
-    client = AsyncHTTPClient()
+    client = SimpleAsyncHTTPClient()
     io_loop = IOLoop.instance()
     for arg in args:
         def callback(response):

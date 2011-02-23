@@ -1,6 +1,7 @@
 import httplib
 import os
 import time
+import weakref
 
 from tornado.escape import utf8
 from tornado import httputil
@@ -43,6 +44,66 @@ class HTTPClient(object):
         self._response = None
         response.rethrow()
         return response
+
+class AsyncHTTPClient(object):
+    """An non-blocking HTTP client.
+
+    Example usage:
+
+        import ioloop
+
+        def handle_request(response):
+            if response.error:
+                print "Error:", response.error
+            else:
+                print response.body
+            ioloop.IOLoop.instance().stop()
+
+        http_client = httpclient.AsyncHTTPClient()
+        http_client.fetch("http://www.google.com/", handle_request)
+        ioloop.IOLoop.instance().start()
+
+    fetch() can take a string URL or an HTTPRequest instance, which offers
+    more options, like executing POST/PUT/DELETE requests.
+
+    The keyword argument max_clients to the AsyncHTTPClient constructor
+    determines the maximum number of simultaneous fetch() operations that
+    can execute in parallel on each IOLoop.
+    """
+    _ASYNC_CLIENTS = weakref.WeakKeyDictionary()
+
+    def __new__(cls, io_loop=None, max_clients=10, force_instance=False, 
+                **kwargs):
+        io_loop = io_loop or IOLoop.instance()
+        if io_loop in cls._ASYNC_CLIENTS and not force_instance:
+            return cls._ASYNC_CLIENTS[io_loop]
+        else:
+            if cls is AsyncHTTPClient:
+                cls = AsyncImpl
+            instance = super(AsyncHTTPClient, cls).__new__(cls)
+            instance.initialize(io_loop, max_clients, **kwargs)
+            if not force_instance:
+                cls._ASYNC_CLIENTS[io_loop] = instance
+            return instance
+
+    def close(self):
+        """Destroys this http client, freeing any file descriptors used.
+        Not needed in normal use, but may be helpful in unittests that
+        create and destroy http clients.  No other methods may be called
+        on the AsyncHTTPClient after close().
+        """
+        if self._ASYNC_CLIENTS[self.io_loop] is self:
+            del self._ASYNC_CLIENTS[self.io_loop]
+
+    def fetch(self, request, callback, **kwargs):
+        """Executes an HTTPRequest, calling callback with an HTTPResponse.
+
+        If an error occurs during the fetch, the HTTPResponse given to the
+        callback has a non-None error attribute that contains the exception
+        encountered during the request. You can call response.rethrow() to
+        throw the exception (if any) in the callback.
+        """
+        raise NotImplementedError()
 
 class HTTPRequest(object):
     def __init__(self, url, method="GET", headers=None, body=None,
@@ -214,9 +275,9 @@ def main():
 # and may be removed or replaced with a better way of specifying the preferred
 # HTTPClient implementation before the next release.
 if os.environ.get("USE_SIMPLE_HTTPCLIENT"):
-    from tornado.simple_httpclient import AsyncHTTPClient
+    from tornado.simple_httpclient import SimpleAsyncHTTPClient as AsyncImpl
 else:
-    from tornado.curl_httpclient import AsyncHTTPClient
+    from tornado.curl_httpclient import CurlAsyncHTTPClient as AsyncImpl
 
 if __name__ == "__main__":
     main()
