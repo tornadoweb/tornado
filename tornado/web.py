@@ -853,7 +853,7 @@ class RequestHandler(object):
                 raise HTTPError(405)
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
-            if self.request.method not in ("GET", "HEAD") and \
+            if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
                self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
             self.prepare()
