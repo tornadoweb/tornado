@@ -185,8 +185,15 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.triggers.popleft()()
         self.wait(condition=lambda: (len(self.triggers) == 2 and
                                      len(seen) == 2))
-        self.assertEqual(seen, [0, 1])
+        self.assertEqual(set(seen), set([0, 1]))
         self.assertEqual(len(client.queue), 0)
+
+        # Finish all the pending requests
+        self.triggers.popleft()()
+        self.triggers.popleft()()
+        self.wait(condition=lambda: len(seen) == 4)
+        self.assertEqual(set(seen), set([0, 1, 2, 3]))
+        self.assertEqual(len(self.triggers), 0)
 
     def test_follow_redirect(self):
         response = self.fetch("/countdown/2", follow_redirects=False)
