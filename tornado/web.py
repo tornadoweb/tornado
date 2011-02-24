@@ -81,6 +81,7 @@ from tornado import escape
 from tornado import locale
 from tornado import stack_context
 from tornado import template
+from tornado.escape import utf8
 
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
@@ -206,7 +207,7 @@ class RequestHandler(object):
         elif isinstance(value, int) or isinstance(value, long):
             value = str(value)
         else:
-            value = _utf8(value)
+            value = utf8(value)
             # If \n is allowed into the header, it is possible to inject
             # additional headers or split the request. Also cap length to
             # prevent obviously erroneous values.
@@ -277,8 +278,8 @@ class RequestHandler(object):
         See http://docs.python.org/library/cookie.html#morsel-objects
         for available attributes.
         """
-        name = _utf8(name)
-        value = _utf8(value)
+        name = utf8(name)
+        value = utf8(value)
         if re.search(r"[\x00-\x20]", name + value):
             # Don't let us accidentally inject bad stuff
             raise ValueError("Invalid cookie %r: %r" % (name, value))
@@ -390,7 +391,7 @@ class RequestHandler(object):
             raise Exception("Cannot redirect after headers have been written")
         self.set_status(301 if permanent else 302)
         # Remove whitespace
-        url = re.sub(r"[\x00-\x20]+", "", _utf8(url))
+        url = re.sub(r"[\x00-\x20]+", "", utf8(url))
         self.set_header("Location", urlparse.urljoin(self.request.uri, url))
         self.finish()
 
@@ -411,7 +412,7 @@ class RequestHandler(object):
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "text/javascript; charset=UTF-8")
-        chunk = _utf8(chunk)
+        chunk = utf8(chunk)
         self._write_buffer.append(chunk)
 
     def render(self, template_name, **kwargs):
@@ -427,7 +428,7 @@ class RequestHandler(object):
         html_bodies = []
         for module in getattr(self, "_active_modules", {}).itervalues():
             embed_part = module.embedded_javascript()
-            if embed_part: js_embed.append(_utf8(embed_part))
+            if embed_part: js_embed.append(utf8(embed_part))
             file_part = module.javascript_files()
             if file_part:
                 if isinstance(file_part, basestring):
@@ -435,7 +436,7 @@ class RequestHandler(object):
                 else:
                     js_files.extend(file_part)
             embed_part = module.embedded_css()
-            if embed_part: css_embed.append(_utf8(embed_part))
+            if embed_part: css_embed.append(utf8(embed_part))
             file_part = module.css_files()
             if file_part:
                 if isinstance(file_part, basestring):
@@ -443,9 +444,9 @@ class RequestHandler(object):
                 else:
                     css_files.extend(file_part)
             head_part = module.html_head()
-            if head_part: html_heads.append(_utf8(head_part))
+            if head_part: html_heads.append(utf8(head_part))
             body_part = module.html_body()
-            if body_part: html_bodies.append(_utf8(body_part))
+            if body_part: html_bodies.append(utf8(body_part))
         if js_files:
             # Maintain order of JavaScript files given by modules
             paths = []
@@ -1603,12 +1604,6 @@ class URLSpec(object):
         return self._path % tuple([str(a) for a in args])
 
 url = URLSpec
-
-def _utf8(s):
-    if isinstance(s, unicode):
-        return s.encode("utf-8")
-    assert isinstance(s, str)
-    return s
 
 
 def _unicode(s):
