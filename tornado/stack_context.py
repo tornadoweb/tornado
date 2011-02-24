@@ -52,6 +52,7 @@ import contextlib
 import functools
 import itertools
 import logging
+import sys
 import threading
 
 class _State(threading.local):
@@ -164,7 +165,7 @@ def wrap(fn):
             new_contexts = [cls(arg)
                             for (cls, arg) in contexts[len(_state.contexts):]]
         if len(new_contexts) > 1:
-            with contextlib.nested(*new_contexts):
+            with _nested(*new_contexts):
                 callback(*args, **kwargs)
         elif new_contexts:
             with new_contexts[0]:
@@ -177,4 +178,39 @@ def wrap(fn):
     result = functools.partial(wrapped, fn, contexts)
     result.stack_context_wrapped = True
     return result
+
+@contextlib.contextmanager
+def _nested(*managers):
+    """Support multiple context managers in a single with-statement.
+
+    Copied from the python 2.6 standard library.  It's no longer present
+    in python 3 because the with statement natively supports multiple
+    context managers, but that doesn't help if the list of context
+    managers is not known until runtime.
+    """
+    exits = []
+    vars = []
+    exc = (None, None, None)
+    try:
+        for mgr in managers:
+            exit = mgr.__exit__
+            enter = mgr.__enter__
+            vars.append(enter())
+            exits.append(exit)
+        yield vars
+    except:
+        exc = sys.exc_info()
+    finally:
+        while exits:
+            exit = exits.pop()
+            try:
+                if exit(*exc):
+                    exc = (None, None, None)
+            except:
+                exc = sys.exc_info()
+        if exc != (None, None, None):
+            # Don't rely on sys.exc_info() still containing
+            # the right information. Another exception may
+            # have been raised and caught by an exit method
+            raise exc[0], exc[1], exc[2]
 
