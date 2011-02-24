@@ -335,14 +335,23 @@ class _LogFormatter(logging.Formatter):
         logging.Formatter.__init__(self, *args, **kwargs)
         self._color = color
         if color:
-            fg_color = curses.tigetstr("setaf") or curses.tigetstr("setf") or ""
+            # The curses module has some str/bytes confusion in python3.
+            # Most methods return bytes, but only accept strings.
+            # The explict calls to unicode() below are harmless in python2,
+            # but will do the right conversion in python3.
+            fg_color = unicode(curses.tigetstr("setaf") or 
+                               curses.tigetstr("setf") or "", "ascii")
             self._colors = {
-                logging.DEBUG: curses.tparm(fg_color, 4), # Blue
-                logging.INFO: curses.tparm(fg_color, 2), # Green
-                logging.WARNING: curses.tparm(fg_color, 3), # Yellow
-                logging.ERROR: curses.tparm(fg_color, 1), # Red
+                logging.DEBUG: unicode(curses.tparm(fg_color, 4), # Blue
+                                       "ascii"),
+                logging.INFO: unicode(curses.tparm(fg_color, 2), # Green
+                                      "ascii"),
+                logging.WARNING: unicode(curses.tparm(fg_color, 3), # Yellow
+                                         "ascii"),
+                logging.ERROR: unicode(curses.tparm(fg_color, 1), # Red
+                                       "ascii"),
             }
-            self._normal = curses.tigetstr("sgr0")
+            self._normal = unicode(curses.tigetstr("sgr0"), "ascii")
 
     def format(self, record):
         try:
