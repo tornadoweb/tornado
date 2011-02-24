@@ -1627,8 +1627,12 @@ def _time_independent_equals(a, b):
     if len(a) != len(b):
         return False
     result = 0
-    for x, y in zip(a, b):
-        result |= ord(x) ^ ord(y)
+    if type(a[0]) is int:  # python3 byte strings
+        for x, y in zip(a,b):
+            result |= x ^ y
+    else:  # python2
+        for x, y in zip(a, b):
+            result |= ord(x) ^ ord(y)
     return result == 0
 
 
