@@ -21,6 +21,10 @@ import re
 import xml.sax.saxutils
 import urllib
 
+# Python3 compatibility:  On python2.5, introduce the bytes alias from 2.6
+try: bytes
+except: bytes = str
+
 # json module is in the standard library as of python 2.6; fall back to
 # simplejson if present for older versions.
 try:
@@ -93,7 +97,7 @@ def utf8(value):
         return None
     if isinstance(value, unicode):
         return value.encode("utf-8")
-    assert isinstance(value, str)
+    assert isinstance(value, bytes)
     return value
 
 
@@ -185,7 +189,7 @@ def linkify(text, shorten=False, extra_params="",
 
 
 def _unicode(value):
-    if isinstance(value, str):
+    if isinstance(value, bytes):
         return value.decode("utf-8")
     assert isinstance(value, unicode)
     return value
