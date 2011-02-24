@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from __future__ import with_statement
 
-from cStringIO import StringIO
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
@@ -23,6 +22,11 @@ import socket
 import time
 import urlparse
 import zlib
+
+try:
+    from io import BytesIO  # python 3
+except ImportError:
+    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import ssl # python 2.6+
@@ -275,9 +279,9 @@ class _HTTPConnection(object):
                 # if chunks is not None, we already called streaming_callback
                 # in _on_chunk_data
                 self.request.streaming_callback(data)
-            buffer = StringIO()
+            buffer = BytesIO()
         else:
-            buffer = StringIO(data) # TODO: don't require one big string?
+            buffer = BytesIO(data) # TODO: don't require one big string?
         original_request = getattr(self.request, "original_request",
                                    self.request)
         if (self.request.follow_redirects and

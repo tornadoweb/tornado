@@ -54,7 +54,6 @@ from __future__ import with_statement
 import Cookie
 import base64
 import binascii
-import cStringIO
 import calendar
 import contextlib
 import datetime
@@ -83,6 +82,11 @@ from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8
 from tornado.util import b, bytes_type
+
+try:
+    from io import BytesIO  # python 3
+except ImportError:
+    from cStringIO import StringIO as BytesIO  # python 2
 
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
@@ -1430,7 +1434,7 @@ class GZipContentEncoding(OutputTransform):
                 ("Content-Encoding" not in headers)
         if self._gzipping:
             headers["Content-Encoding"] = "gzip"
-            self._gzip_value = cStringIO.StringIO()
+            self._gzip_value = BytesIO()
             self._gzip_file = gzip.GzipFile(mode="w", fileobj=self._gzip_value)
             self._gzip_pos = 0
             chunk = self.transform_chunk(chunk, finishing)
