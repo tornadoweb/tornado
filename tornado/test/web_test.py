@@ -1,8 +1,10 @@
-from tornado.escape import json_decode
+from tornado.escape import json_decode, utf8
 from tornado.iostream import IOStream
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
+from tornado.util import b
 from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous
 
+import binascii
 import logging
 import re
 import socket
@@ -24,15 +26,15 @@ class CookieTestRequestHandler(RequestHandler):
 class SecureCookieTest(LogTrapTestCase):
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
-        handler.set_secure_cookie('foo', 'bar')
-        self.assertEquals(handler.get_secure_cookie('foo'), 'bar')
+        handler.set_secure_cookie('foo', b('bar'))
+        self.assertEquals(handler.get_secure_cookie('foo'), b('bar'))
 
     def test_cookie_tampering_future_timestamp(self):
         handler = CookieTestRequestHandler()
         # this string base64-encodes to '12345678'
-        handler.set_secure_cookie('foo', '\xd7m\xf8\xe7\xae\xfc')
+        handler.set_secure_cookie('foo', binascii.a2b_hex(b('d76df8e7aefc')))
         cookie = handler._cookies['foo']
-        match = re.match(r'12345678\|([0-9]+)\|([0-9a-f]+)', cookie)
+        match = re.match(b(r'12345678\|([0-9]+)\|([0-9a-f]+)'), cookie)
         assert match
         timestamp = match.group(1)
         sig = match.group(2)
@@ -41,10 +43,11 @@ class SecureCookieTest(LogTrapTestCase):
         # shifting digits from payload to timestamp doesn't alter signature
         # (this is not desirable behavior, just confirming that that's how it
         # works)
-        self.assertEqual(handler._cookie_signature('foo', '1234',
-                                                   '5678' + timestamp), sig)
+        self.assertEqual(
+            handler._cookie_signature('foo', '1234', b('5678') + timestamp),
+            sig)
         # tamper with the cookie
-        handler._cookies['foo'] = '1234|5678%s|%s' % (timestamp, sig)
+        handler._cookies['foo'] = utf8('1234|5678%s|%s' % (timestamp, sig))
         # it gets rejected
         assert handler.get_secure_cookie('foo') is None
 
@@ -104,7 +107,7 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("localhost", self.get_http_port()))
         self.stream = IOStream(s, io_loop=self.io_loop)
-        self.stream.write("GET / HTTP/1.0\r\n\r\n")
+        self.stream.write(b("GET / HTTP/1.0\r\n\r\n"))
         self.wait()
 
     def on_handler_waiting(self):

@@ -82,6 +82,7 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8
+from tornado.util import b, bytes_type
 
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
@@ -211,7 +212,7 @@ class RequestHandler(object):
             # If \n is allowed into the header, it is possible to inject
             # additional headers or split the request. Also cap length to
             # prevent obviously erroneous values.
-            safe_value = re.sub(r"[\x00-\x1f]", " ", value)[:4000]
+            safe_value = re.sub(b(r"[\x00-\x1f]"), b(" "), value)[:4000]
             if safe_value != value:
                 raise ValueError("Unsafe header value %r", value)
         self._headers[name] = value
@@ -244,8 +245,8 @@ class RequestHandler(object):
         """
         values = self.request.arguments.get(name, [])
         # Get rid of any weird control chars
-        values = [re.sub(r"[\x00-\x08\x0e-\x1f]", " ", x) for x in values]
-        values = [_unicode(x) for x in values]
+        values = [re.sub(r"[\x00-\x08\x0e-\x1f]", " ", _unicode(x)) 
+                  for x in values]
         if strip:
             values = [x.strip() for x in values]
         return values
@@ -332,10 +333,10 @@ class RequestHandler(object):
         method for non-cookie uses.  To decode a value not stored
         as a cookie use the optional value argument to get_secure_cookie.
         """
-        timestamp = str(int(time.time()))
-        value = base64.b64encode(value)
+        timestamp = utf8(str(int(time.time())))
+        value = base64.b64encode(utf8(value))
         signature = self._cookie_signature(name, value, timestamp)
-        value = "|".join([value, timestamp, signature])
+        value = b("|").join([value, timestamp, signature])
         return value
 
     def get_secure_cookie(self, name, include_name=True, value=None):
@@ -350,7 +351,7 @@ class RequestHandler(object):
         """
         if value is None: value = self.get_cookie(name)
         if not value: return None
-        parts = value.split("|")
+        parts = value.split(b("|"))
         if len(parts) != 3: return None
         if include_name:
             signature = self._cookie_signature(name, parts[0], parts[1])
@@ -371,7 +372,7 @@ class RequestHandler(object):
             # here instead of modifying _cookie_signature.
             logging.warning("Cookie timestamp in future; possible tampering %r", value)
             return None
-        if parts[1].startswith("0"):
+        if parts[1].startswith(b("0")):
             logging.warning("Tampered cookie %r", value)
         try:
             return base64.b64decode(parts[0])
@@ -380,10 +381,10 @@ class RequestHandler(object):
 
     def _cookie_signature(self, *parts):
         self.require_setting("cookie_secret", "secure cookies")
-        hash = hmac.new(self.application.settings["cookie_secret"],
+        hash = hmac.new(utf8(self.application.settings["cookie_secret"]),
                         digestmod=hashlib.sha1)
-        for part in parts: hash.update(part)
-        return hash.hexdigest()
+        for part in parts: hash.update(utf8(part))
+        return utf8(hash.hexdigest())
 
     def redirect(self, url, permanent=False):
         """Sends a redirect to the given (optionally relative) URL."""
@@ -391,8 +392,9 @@ class RequestHandler(object):
             raise Exception("Cannot redirect after headers have been written")
         self.set_status(301 if permanent else 302)
         # Remove whitespace
-        url = re.sub(r"[\x00-\x20]+", "", utf8(url))
-        self.set_header("Location", urlparse.urljoin(self.request.uri, url))
+        url = re.sub(b(r"[\x00-\x20]+"), "", utf8(url))
+        self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
+                                                     url))
         self.finish()
 
     def write(self, chunk):
@@ -534,7 +536,7 @@ class RequestHandler(object):
         if self.application._wsgi:
             raise Exception("WSGI applications do not support flush()")
 
-        chunk = "".join(self._write_buffer)
+        chunk = b("").join(self._write_buffer)
         self._write_buffer = []
         if not self._headers_written:
             self._headers_written = True
@@ -545,7 +547,7 @@ class RequestHandler(object):
         else:
             for transform in self._transforms:
                 chunk = transform.transform_chunk(chunk, include_footers)
-            headers = ""
+            headers = b("")
 
         # Ignore the chunk and only write the headers for HEAD requests
         if self.request.method == "HEAD":
@@ -864,13 +866,14 @@ class RequestHandler(object):
                     self.finish()
 
     def _generate_headers(self):
-        lines = [self.request.version + " " + str(self._status_code) + " " +
-                 httplib.responses[self._status_code]]
-        lines.extend(["%s: %s" % (n, v) for n, v in self._headers.iteritems()])
+        lines = [utf8(self.request.version + " " +
+                      str(self._status_code) +
+                      " " + httplib.responses[self._status_code])]
+        lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in self._headers.iteritems()])
         for cookie_dict in getattr(self, "_new_cookies", []):
             for cookie in cookie_dict.values():
-                lines.append("Set-Cookie: " + cookie.OutputString(None))
-        return "\r\n".join(lines) + "\r\n\r\n"
+                lines.append(b("Set-Cookie: ") + cookie.OutputString(None))
+        return b("\r\n").join(lines) + b("\r\n\r\n")
 
     def _log(self):
         """Logs the current request.
@@ -882,8 +885,8 @@ class RequestHandler(object):
         self.application.log_request(self)
 
     def _request_summary(self):
-        return self.request.method + " " + self.request.uri + " (" + \
-            self.request.remote_ip + ")"
+        return utf8(self.request.method) + b(" ") + utf8(self.request.uri) + \
+            b(" (") + utf8(self.request.remote_ip) + b(")")
 
     def _handle_request_exception(self, e):
         if isinstance(e, HTTPError):
@@ -1472,9 +1475,9 @@ class ChunkedTransferEncoding(OutputTransform):
             # Don't write out empty chunks because that means END-OF-STREAM
             # with chunked encoding
             if block:
-                block = ("%x" % len(block)) + "\r\n" + block + "\r\n"
+                block = utf8("%x" % len(block)) + b("\r\n") + block + b("\r\n")
             if finishing:
-                block += "0\r\n\r\n"
+                block += b("0\r\n\r\n")
         return block
 
 
@@ -1607,7 +1610,7 @@ url = URLSpec
 
 
 def _unicode(s):
-    if isinstance(s, str):
+    if isinstance(s, bytes_type):
         try:
             return s.decode("utf-8")
         except UnicodeDecodeError:

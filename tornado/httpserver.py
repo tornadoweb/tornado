@@ -28,6 +28,7 @@ from tornado import httputil
 from tornado import ioloop
 from tornado import iostream
 from tornado import stack_context
+from tornado.util import b, bytes_type
 
 try:
     import fcntl
@@ -289,7 +290,7 @@ class HTTPConnection(object):
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
-        self.stream.read_until("\r\n\r\n", self._header_callback)
+        self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
     def write(self, chunk):
         assert self._request, "Request closed"
@@ -323,11 +324,11 @@ class HTTPConnection(object):
         if disconnect:
             self.stream.close()
             return
-        self.stream.read_until("\r\n\r\n", self._header_callback)
+        self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
     def _on_headers(self, data):
         try:
-            eol = data.find("\r\n")
+            eol = data.find(b("\r\n"))
             start_line = data[:eol]
             try:
                 method, uri, version = start_line.split(" ")
@@ -487,7 +488,7 @@ class HTTPRequest(object):
 
     def write(self, chunk):
         """Writes the given chunk to the response stream."""
-        assert isinstance(chunk, str)
+        assert isinstance(chunk, bytes_type)
         self.connection.write(chunk)
 
     def finish(self):
