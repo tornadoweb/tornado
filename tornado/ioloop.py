@@ -25,6 +25,7 @@ import time
 import traceback
 
 from tornado import stack_context
+from tornado.escape import utf8
 
 try:
     import signal
@@ -335,7 +336,7 @@ class IOLoop(object):
 
     def _wake(self):
         try:
-            self._waker_writer.write("x")
+            self._waker_writer.write(utf8("x"))
         except IOError:
             pass
 
@@ -362,7 +363,8 @@ class IOLoop(object):
     def _read_waker(self, fd, events):
         try:
             while True:
-                self._waker_reader.read()
+                result = self._waker_reader.read()
+                if not result: break
         except IOError:
             pass
 
@@ -385,9 +387,9 @@ class _Timeout(object):
         self.deadline = deadline
         self.callback = callback
 
-    def __cmp__(self, other):
-        return cmp((self.deadline, id(self.callback)),
-                   (other.deadline, id(other.callback)))
+    def __lt__(self, other):
+        return ((self.deadline, id(self.callback)) <
+                (other.deadline, id(other.callback)))
 
 
 class PeriodicCallback(object):
