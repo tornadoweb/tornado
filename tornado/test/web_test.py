@@ -128,8 +128,8 @@ class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_question_mark(self):
         # Ensure that url-encoded question marks are handled properly
-        self.assertEqual(json_decode(self.fetch('/%3F').body.decode('utf8')),
+        self.assertEqual(json_decode(self.fetch('/%3F').body),
                          dict(path='?', args={}))
-        self.assertEqual(json_decode(self.fetch('/%3F?%3F=%3F').body.decode('utf8')),
+        self.assertEqual(json_decode(self.fetch('/%3F?%3F=%3F').body),
                          dict(path='?', args={'?': ['?']}))
 

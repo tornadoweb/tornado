@@ -74,7 +74,7 @@ def json_encode(value):
 
 def json_decode(value):
     """Returns Python objects for the given JSON string."""
-    return _json_decode(value)
+    return _json_decode(_unicode(value))
 
 
 def squeeze(value):
