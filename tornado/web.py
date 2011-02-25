@@ -889,8 +889,8 @@ class RequestHandler(object):
         self.application.log_request(self)
 
     def _request_summary(self):
-        return utf8(self.request.method) + b(" ") + utf8(self.request.uri) + \
-            b(" (") + utf8(self.request.remote_ip) + b(")")
+        return self.request.method + " " + self.request.uri + \
+            " (" + self.request.remote_ip + ")"
 
     def _handle_request_exception(self, e):
         if isinstance(e, HTTPError):
