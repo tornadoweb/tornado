@@ -797,7 +797,7 @@ class RequestHandler(object):
                                 path)
         if abs_path not in hashes:
             try:
-                f = open(abs_path)
+                f = open(abs_path, "rb")
                 hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
                 f.close()
             except:
