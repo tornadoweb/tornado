@@ -328,7 +328,8 @@ class HTTPConnection(object):
 
     def _on_headers(self, data):
         try:
-            eol = data.find(b("\r\n"))
+            data = data.decode('latin1')
+            eol = data.find("\r\n")
             start_line = data[:eol]
             try:
                 method, uri, version = start_line.split(" ")
@@ -365,6 +366,7 @@ class HTTPConnection(object):
             if content_type.startswith("application/x-www-form-urlencoded"):
                 arguments = cgi.parse_qs(self._request.body)
                 for name, values in arguments.iteritems():
+                    name = name.decode('utf-8')
                     values = [v for v in values if v]
                     if values:
                         self._request.arguments.setdefault(name, []).extend(
@@ -413,7 +415,7 @@ class HTTPConnection(object):
             if not name_values.get("name"):
                 logging.warning("multipart/form-data value missing name")
                 continue
-            name = name_values["name"]
+            name = name_values["name"].decode("utf-8")
             if name_values.get("filename"):
                 ctype = headers.get("Content-Type", "application/unknown")
                 self._request.files.setdefault(name, []).append(dict(

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from __future__ import with_statement
 
-from tornado.escape import utf8
+from tornado.escape import utf8, _unicode
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
@@ -133,7 +133,7 @@ class _HTTPConnection(object):
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None
         with stack_context.StackContext(self.cleanup):
-            parsed = urlparse.urlsplit(self.request.url)
+            parsed = urlparse.urlsplit(_unicode(self.request.url))
             if ":" in parsed.netloc:
                 host, _, port = parsed.netloc.partition(":")
                 port = int(port)
@@ -245,6 +245,7 @@ class _HTTPConnection(object):
                                   error=HTTPError(599, "Connection closed")))
 
     def _on_headers(self, data):
+        data = data.decode("latin1")
         first_line, _, header_data = data.partition("\r\n")
         match = re.match("HTTP/1.[01] ([0-9]+) .*", first_line)
         assert match

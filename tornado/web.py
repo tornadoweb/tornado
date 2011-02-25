@@ -1427,7 +1427,7 @@ class GZipContentEncoding(OutputTransform):
 
     def transform_first_chunk(self, headers, chunk, finishing):
         if self._gzipping:
-            ctype = headers.get("Content-Type", "").split(";")[0]
+            ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = (ctype in self.CONTENT_TYPES) and \
                 (not finishing or len(chunk) >= self.MIN_LENGTH) and \
                 (finishing or "Content-Length" not in headers) and \
