@@ -355,7 +355,7 @@ class RequestHandler(object):
         """
         if value is None: value = self.get_cookie(name)
         if not value: return None
-        parts = value.split(b("|"))
+        parts = utf8(value).split(b("|"))
         if len(parts) != 3: return None
         if include_name:
             signature = self._cookie_signature(name, parts[0], parts[1])
