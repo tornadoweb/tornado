@@ -1,29 +1,15 @@
 <div class="post">
   <div class="picture">
-    <a href="{{ actor["url"] }}"><img src="{{ actor["pic_square"] }}"/></a>
+    {% set author_url="http://www.facebook.com/profile.php?id=" + escape(post["from"]["id"]) %}
+    <a href="{{ author_url }}"><img src="//graph.facebook.com/{{ escape(post["from"]["id"]) }}/picture?type=square"/></a>
   </div>
   <div class="body">
-    <a href="{{ actor["url"] }}" class="actor">{{ escape(actor["name"]) }}</a>
+    <a href="{{ author_url }}" class="actor">{{ escape(post["from"]["name"]) }}</a>
     {% if post["message"] %}
       <span class="message">{{ escape(post["message"]) }}</span>
     {% end %}
-    {% if post["attachment"] %}
-      <div class="attachment">
-        {% if post["attachment"].get("name") %}
-          <div class="name"><a href="{{ post["attachment"]["href"] }}">{{ escape(post["attachment"]["name"]) }}</a></div>
-        {% end %}
-        {% if post["attachment"].get("description") %}
-          <div class="description">{{ post["attachment"]["description"] }}</div>
-        {% end %}
-        {% for media in filter(lambda m: m.get("src") and m["type"] in ("photo", "link"), post["attachment"].get("media", [])) %}
-          <span class="media">
-            <a href="{{ media["href"] }}"><img src="{{ media["src"] }}" alt="{{ escape(media.get("alt", "")) }}"/></a>
-          </span>
-        {% end %}
-      </div>
-    {% end %}
     <div class="meta">
-      <a href="{{ post["permalink"] }}" class="permalink">{{ locale.format_date(post["created_time"]) }}</a>
+      <a href="{{ escape(post["actions"][0]["link"]) }}" class="permalink">{{ locale.format_date(datetime.datetime.strptime(post["created_time"], "%Y-%m-%dT%H:%M:%S+0000")) }}</a>
     </div>
   </div>
 </div>
