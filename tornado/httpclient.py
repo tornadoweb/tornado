@@ -169,16 +169,6 @@ class HTTPRequest(object):
         self.proxy_port = proxy_port
         self.proxy_username = proxy_username
         self.proxy_password = proxy_password
-        # libcurl's magic "Expect: 100-continue" behavior causes delays
-        # with servers that don't support it (which include, among others,
-        # Google's OpenID endpoint).  Additionally, this behavior has
-        # a bug in conjunction with the curl_multi_socket_action API
-        # (https://sourceforge.net/tracker/?func=detail&atid=100976&aid=3039744&group_id=976),
-        # which increases the delays.  It's more trouble than it's worth,
-        # so just turn off the feature (yes, setting Expect: to an empty
-        # value is the official way to disable this)
-        if "Expect" not in headers:
-            headers["Expect"] = ""
         self.url = utf8(url)
         self.method = method
         self.headers = headers
