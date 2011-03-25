@@ -94,6 +94,9 @@ def load_translations(directory):
     For strings with no verbs that would change on translation, simply
     use "unknown" or the empty string (or don't include the column at all).
 
+    The file is read using the csv module in the default "excel" dialect.
+    In this format there should not be spaces after the commas.
+
     Example translation es_LA.csv:
 
         "I love you","Te amo"
