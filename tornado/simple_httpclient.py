@@ -144,6 +144,9 @@ class _HTTPConnection(object):
                     ssl_options["ca_certs"] = request.ca_certs
                 else:
                     ssl_options["ca_certs"] = _DEFAULT_CA_CERTS
+                if request.ssl_client_keys:
+                    ssl_options["keyfile"] = request.ssl_client_keys[0]
+                    ssl_options["certfile"] = request.ssl_client_keys[1]
                 self.stream = SSLIOStream(socket.socket(),
                                           io_loop=self.io_loop,
                                           ssl_options=ssl_options)
