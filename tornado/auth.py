@@ -56,9 +56,8 @@ import urllib
 import urlparse
 import uuid
 
-from tornado import httpclient
+from tornado import httpclient, httputil
 from tornado import escape
-from tornado.ioloop import IOLoop
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -270,7 +269,7 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
+            oauth_version=self._oauth_version_to_send()
         )
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
             if callback_uri:
@@ -306,7 +305,7 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
+            oauth_version=self._oauth_version_to_send()
         )
         if "verifier" in request_token:
           args["oauth_verifier"]=request_token["verifier"]
@@ -328,7 +327,7 @@ class OAuthMixin(object):
             return
 
         access_token = _oauth_parse_response(response.body)
-        user = self._oauth_get_user(access_token, self.async_callback(
+        self._oauth_get_user(access_token, self.async_callback(
              self._on_oauth_get_user, access_token, callback))
 
     def _oauth_get_user(self, access_token, callback):
@@ -355,7 +354,7 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
-            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
+            oauth_version=self._oauth_version_to_send(),
         )
         args = {}
         args.update(base_args)
@@ -368,6 +367,11 @@ class OAuthMixin(object):
                                          access_token)
         base_args["oauth_signature"] = signature
         return base_args
+
+    def _oauth_version_to_send(self):
+        v = getattr(self, "_OAUTH_VERSION", "1.0")
+        if v == "1.0a": v = "1.0"
+        return v
 
 class OAuth2Mixin(object):
     """Abstract implementation of OAuth v 2."""
@@ -498,7 +502,6 @@ class TwitterMixin(OAuthMixin):
             all_args = {}
             all_args.update(args)
             all_args.update(post_args or {})
-            consumer_token = self._oauth_consumer_token()
             method = "POST" if post_args is not None else "GET"
             oauth = self._oauth_request_parameters(
                 url, access_token, all_args, method=method)
@@ -572,7 +575,6 @@ class FriendFeedMixin(OAuthMixin):
     it is required to make requests on behalf of the user later with
     friendfeed_request().
     """
-    _OAUTH_VERSION = "1.0"
     _OAUTH_REQUEST_TOKEN_URL = "https://friendfeed.com/account/oauth/request_token"
     _OAUTH_ACCESS_TOKEN_URL = "https://friendfeed.com/account/oauth/access_token"
     _OAUTH_AUTHORIZE_URL = "https://friendfeed.com/account/oauth/authorize"
@@ -621,7 +623,6 @@ class FriendFeedMixin(OAuthMixin):
             all_args = {}
             all_args.update(args)
             all_args.update(post_args or {})
-            consumer_token = self._oauth_consumer_token()
             method = "POST" if post_args is not None else "GET"
             oauth = self._oauth_request_parameters(
                 url, access_token, all_args, method=method)
@@ -684,8 +685,10 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "Google auth failed")
-            # Save the user with, e.g., set_secure_cookie()
-
+            else:
+                # Save the user with, e.g., set_secure_cookie()
+                self.finish("got user: <pre>%s</pre>" % pprint.pformat(user))
+            
     """
     _OPENID_ENDPOINT = "https://www.google.com/accounts/o8/ud"
     _OAUTH_ACCESS_TOKEN_URL = "https://www.google.com/accounts/OAuthGetAccessToken"
@@ -1076,6 +1079,106 @@ def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
 
     hash = hmac.new(key, base_string, hashlib.sha1)
     return binascii.b2a_base64(hash.digest())[:-1]
+
+class LinkedInMixin(OAuthMixin):
+    """
+    LinkedIn oauth implementation.  To use, set two settings in your tornado application:
+
+    app_settings = {
+        'linkedin_consumer_key'    : 'abc123',
+        'linkedin_consumer_secret' : 'zzzzzzz'
+    }
+    application = tornado.web.Application([
+        (r"/login", handlers.LoginHandler)
+    ], **app_settings)
+
+    Then in your handler:
+
+    class LoginHandler(tornado.web.RequestHandler, auth.LinkedInMixin):
+
+        @tornado.web.asynchronous
+        def get(self):
+            # you can optionally change the fields set on the user after login
+            # see LinkedIn's docs for field list:
+            #
+            #  http://developer.linkedin.com/docs/DOC-1002
+            #
+            #self._DEFAULT_USER_FIELDS = "(id,first-name,last-name, headline,summary)"
+            if self.get_argument("oauth_token", None):
+                self.get_authenticated_user(self.async_callback(self._on_auth))
+                return
+            self.authorize_redirect(callback_uri=self.request.uri)
+
+        def _on_auth(self, user):
+            if not user:
+                raise tornado.web.HTTPError(500, "LinkedIn auth failed")
+            else:
+                # Save the user using, e.g., set_secure_cookie()
+                self.finish("got user: <pre>%s</pre>" % pprint.pformat(user))
+    
+    """
+    _OAUTH_REQUEST_TOKEN_URL = "https://api.linkedin.com/uas/oauth/requestToken"
+    _OAUTH_ACCESS_TOKEN_URL  = "https://api.linkedin.com/uas/oauth/accessToken"
+    _OAUTH_AUTHORIZE_URL     = "https://www.linkedin.com/uas/oauth/authorize"
+    _OAUTH_AUTHENTICATE_URL  = "https://www.linkedin.com/uas/oauth/authenticate"
+    _OAUTH_VERSION           = "1.0a"
+    _OAUTH_NO_CALLBACKS      = False
+    _DEFAULT_USER_FIELDS     = "(id,first-name,last-name,headline,industry," + \
+         "positions,educations,summary,picture-url)"
+
+    def authenticate_redirect(self):
+        """Just like authorize_redirect(), but auto-redirects if authorized.
+
+        This is generally the right interface to use if you are using
+        LinkedIn for single-sign on.
+        """
+        http = httpclient.AsyncHTTPClient()
+        http.fetch(self._oauth_request_token_url(), self.async_callback(
+            self._on_request_token, self._OAUTH_AUTHENTICATE_URL, None))
+
+    def linkedin_request(self, path, callback, access_token=None, post_args=None, **args):
+        url = "http://api.linkedin.com" + path
+        if access_token:
+            all_args = {}
+            all_args.update(args)
+            all_args.update(post_args or {})
+            method = "POST" if post_args is not None else "GET"
+            oauth = self._oauth_request_parameters(
+                url, access_token, all_args, method=method)
+            args.update(oauth)
+        if args: url += "?" + urllib.urlencode(args)
+        callback = self.async_callback(self._on_linkedin_request, callback)
+        http = httpclient.AsyncHTTPClient()
+        # ask linkedin to send us JSON on all API calls (not xml)
+        headers = httputil.HTTPHeaders({"x-li-format":"json"})
+        if post_args is not None:
+            http.fetch(url, method="POST", headers=headers, body=urllib.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, headers=headers, callback=callback)
+
+    def _parse_user_response(self, callback, user):
+        callback(user)
+
+    def _on_linkedin_request(self, callback, response):
+        if response.error:
+            logging.warning("Error response %s fetching %s", response.error,
+                            response.request.url)
+            callback(None)
+        else:
+            callback(escape.json_decode(response.body))
+
+    def _oauth_consumer_token(self):
+        self.require_setting("linkedin_consumer_key", "LinkedIn OAuth")
+        self.require_setting("linkedin_consumer_secret", "LinkedIn OAuth")
+        return dict(
+            key=self.settings["linkedin_consumer_key"],
+            secret=self.settings["linkedin_consumer_secret"])
+
+    def _oauth_get_user(self, access_token, callback):
+        callback = self.async_callback(self._parse_user_response, callback)
+        self.linkedin_request("/v1/people/~:%s" % self._DEFAULT_USER_FIELDS,
+            access_token=access_token, callback=callback)
 
 def _oauth10a_signature(consumer_token, method, url, parameters={}, token=None):
     """Calculates the HMAC-SHA1 OAuth 1.0a signature for the given request.
