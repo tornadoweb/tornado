@@ -297,7 +297,7 @@ def _curl_setup_request(curl, request, buffer, headers):
     # so just turn off the feature (yes, setting Expect: to an empty
     # value is the official way to disable this)
     if "Expect" not in request.headers:
-        curl.setopt(pycurl.HTTPHEADER, utf8("Expect: "))
+        curl.setopt(pycurl.HTTPHEADER, [utf8("Expect: ")])
 
     if request.header_callback:
         curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
