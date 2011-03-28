@@ -110,7 +110,8 @@ _URL_RE = re.compile(ur"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;
 
 
 def linkify(text, shorten=False, extra_params="",
-            require_protocol=False, permitted_protocols=["http", "https"]):
+            require_protocol=False, permitted_protocols=["http", "https"],
+            html_escape=True):
     """Converts plain text into HTML with links.
 
     For example: linkify("Hello http://tornadoweb.org!") would return
@@ -184,7 +185,8 @@ def linkify(text, shorten=False, extra_params="",
     # First HTML-escape so that our strings are all safe.
     # The regex is modified to avoid character entites other than &amp; so
     # that we won't pick up &quot;, etc.
-    text = _unicode(xhtml_escape(text))
+    if html_escape:
+        text = _unicode(xhtml_escape(text))
     return _URL_RE.sub(make_link, text)
 
 
