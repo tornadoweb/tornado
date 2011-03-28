@@ -280,13 +280,6 @@ def _curl_create(max_simultaneous_connections=None):
 
 def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.URL, request.url)
-    # Request headers may be either a regular dict or HTTPHeaders object
-    if isinstance(request.headers, httputil.HTTPHeaders):
-        curl.setopt(pycurl.HTTPHEADER,
-                    [utf8("%s: %s" % i) for i in request.headers.get_all()])
-    else:
-        curl.setopt(pycurl.HTTPHEADER,
-                    [utf8("%s: %s" % i) for i in request.headers.iteritems()])
 
     # libcurl's magic "Expect: 100-continue" behavior causes delays
     # with servers that don't support it (which include, among others,
@@ -297,7 +290,15 @@ def _curl_setup_request(curl, request, buffer, headers):
     # so just turn off the feature (yes, setting Expect: to an empty
     # value is the official way to disable this)
     if "Expect" not in request.headers:
-        curl.setopt(pycurl.HTTPHEADER, [utf8("Expect: ")])
+        request.headers["Expect"] = ""
+
+    # Request headers may be either a regular dict or HTTPHeaders object
+    if isinstance(request.headers, httputil.HTTPHeaders):
+        curl.setopt(pycurl.HTTPHEADER,
+                    [utf8("%s: %s" % i) for i in request.headers.get_all()])
+    else:
+        curl.setopt(pycurl.HTTPHEADER,
+                    [utf8("%s: %s" % i) for i in request.headers.iteritems()])
 
     if request.header_callback:
         curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
