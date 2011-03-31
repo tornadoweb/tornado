@@ -161,8 +161,6 @@ class HTTPRequest(object):
             timestamp = calendar.timegm(if_modified_since.utctimetuple())
             headers["If-Modified-Since"] = email.utils.formatdate(
                 timestamp, localtime=False, usegmt=True)
-        if "Pragma" not in headers:
-            headers["Pragma"] = ""
         # Proxy support: proxy_host and proxy_port must be set to connect via
         # proxy.  The username and password credentials are optional.
         self.proxy_host = proxy_host

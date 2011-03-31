@@ -292,6 +292,10 @@ def _curl_setup_request(curl, request, buffer, headers):
     if "Expect" not in request.headers:
         request.headers["Expect"] = ""
 
+    # libcurl adds Pragma: no-cache by default; disable that too
+    if "Pragma" not in request.headers:
+        request.headers["Pragma"] = ""
+
     # Request headers may be either a regular dict or HTTPHeaders object
     if isinstance(request.headers, httputil.HTTPHeaders):
         curl.setopt(pycurl.HTTPHEADER,
