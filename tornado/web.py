@@ -1196,7 +1196,7 @@ class Application(object):
                     if kwargs:
                         args = []
                     else:
-                        args = [unquote(s) for s in match.groups()]
+                        args = [unquote(s) for s in match.groups() if s]
                     break
             if not handler:
                 handler = ErrorHandler(self, request, status_code=404)
