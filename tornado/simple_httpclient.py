@@ -197,7 +197,7 @@ class _HTTPConnection(object):
         if username is not None:
             auth = "%s:%s" % (username, password)
             self.request.headers["Authorization"] = ("Basic %s" %
-                                                     auth.encode("base64"))
+                                                     auth.encode("base64").strip())
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
         has_body = self.request.method in ("POST", "PUT")
