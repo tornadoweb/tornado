@@ -8,6 +8,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado import stack_context
 
+import base64
 import collections
 import contextlib
 import copy
@@ -197,7 +198,7 @@ class _HTTPConnection(object):
         if username is not None:
             auth = "%s:%s" % (username, password)
             self.request.headers["Authorization"] = ("Basic %s" %
-                                                     auth.encode("base64"))
+                                                     base64.b64encode(auth))
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
         has_body = self.request.method in ("POST", "PUT")
@@ -217,7 +218,10 @@ class _HTTPConnection(object):
         request_lines = ["%s %s HTTP/1.1" % (self.request.method,
                                              req_path)]
         for k, v in self.request.headers.get_all():
-            request_lines.append("%s: %s" % (k, v))
+            line = "%s: %s" % (k, v)
+            if '\n' in line:
+                raise ValueError('Newline in header: ' + repr(line))
+            request_lines.append(line)
         self.stream.write("\r\n".join(request_lines) + "\r\n\r\n")
         if has_body:
             self.stream.write(self.request.body)
