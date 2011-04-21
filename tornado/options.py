@@ -90,6 +90,8 @@ def define(name, default=None, type=str, help=None, metavar=None,
     options_file = frame.f_code.co_filename
     file_name = frame.f_back.f_code.co_filename
     if file_name == options_file: file_name = ""
+    if type is str and default is not None:
+        type = default.__class__
     options[name] = _Option(name, file_name=file_name, default=default,
                             type=type, help=help, metavar=metavar,
                             multiple=multiple)
