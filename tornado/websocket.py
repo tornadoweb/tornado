@@ -66,8 +66,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     This script pops up an alert box that says "You said: Hello, world".
     """
-    def __init__(self, application, request):
-        tornado.web.RequestHandler.__init__(self, application, request)
+    def __init__(self, application, request, **kwargs):
+        tornado.web.RequestHandler.__init__(self, application, request, **kwargs)
         self.stream = request.connection.stream
         self.client_terminated = False
         self._waiting = None
