@@ -5,7 +5,7 @@
   </div>
   <div class="body">
     <a href="{{ author_url }}" class="actor">{{ escape(post["from"]["name"]) }}</a>
-    {% if post["message"] %}
+    {% if "message" in post %}
       <span class="message">{{ escape(post["message"]) }}</span>
     {% end %}
     <div class="meta">
