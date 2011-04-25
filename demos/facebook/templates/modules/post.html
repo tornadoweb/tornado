@@ -9,7 +9,9 @@
       <span class="message">{{ escape(post["message"]) }}</span>
     {% end %}
     <div class="meta">
-      <a href="{{ escape(post["actions"][0]["link"]) }}" class="permalink">{{ locale.format_date(datetime.datetime.strptime(post["created_time"], "%Y-%m-%dT%H:%M:%S+0000")) }}</a>
+      {% if "actions" in post %}
+        <a href="{{ escape(post["actions"][0]["link"]) }}" class="permalink">{{ locale.format_date(datetime.datetime.strptime(post["created_time"], "%Y-%m-%dT%H:%M:%S+0000")) }}</a>
+      {% end %}
     </div>
   </div>
 </div>
