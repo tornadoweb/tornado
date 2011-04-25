@@ -157,6 +157,7 @@ def load_gettext_translations(directory, domain):
     global _use_gettext
     _translations = {}
     for lang in os.listdir(directory):
+        if lang.startswith('.'): continue  # skip .svn, etc
         if os.path.isfile(os.path.join(directory, lang)): continue
         try:
             os.stat(os.path.join(directory, lang, "LC_MESSAGES", domain+".mo"))
