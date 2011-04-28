@@ -220,7 +220,7 @@ class RequestHandler(object):
         """Returns the value of the argument with the given name.
 
         If default is not provided, the argument is considered to be
-        required, and we throw an HTTP 404 exception if it is missing.
+        required, and we throw an HTTP 400 exception if it is missing.
 
         If the argument appears in the url more than once, we return the
         last value.
@@ -230,7 +230,7 @@ class RequestHandler(object):
         args = self.get_arguments(name, strip=strip)
         if not args:
             if default is self._ARG_DEFAULT:
-                raise HTTPError(404, "Missing argument %s" % name)
+                raise HTTPError(400, "Missing argument %s" % name)
             return default
         return args[-1]
 
