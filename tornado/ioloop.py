@@ -397,8 +397,16 @@ class _Timeout(object):
         self.deadline = deadline
         self.callback = callback
 
+    # Comparison methods to sort by deadline, with object id as a tiebreaker
+    # to guarantee a consistent ordering.  The heapq module uses __le__
+    # in python2.5, and __lt__ in 2.6+ (sort() and most other comparisons
+    # use __lt__).  
     def __lt__(self, other):
         return ((self.deadline, id(self)) <
+                (other.deadline, id(other)))
+
+    def __le__(self, other):
+        return ((self.deadline, id(self)) <=
                 (other.deadline, id(other)))
 
 
