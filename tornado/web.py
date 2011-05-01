@@ -451,7 +451,7 @@ class RequestHandler(object):
             paths = []
             unique_paths = set()
             for path in js_files:
-                if not path.startswith("/") and not path.startswith("http:"):
+                if not path.startswith("/") and not path.startswith("http:") and not path.startswith("https:"):
                     path = self.static_url(path)
                 if path not in unique_paths:
                     paths.append(path)
