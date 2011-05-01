@@ -446,12 +446,14 @@ class RequestHandler(object):
             if head_part: html_heads.append(_utf8(head_part))
             body_part = module.html_body()
             if body_part: html_bodies.append(_utf8(body_part))
+        def is_absolute(path):
+            return any(path.startswith(x) for x in ["/", "http:", "https:"])
         if js_files:
             # Maintain order of JavaScript files given by modules
             paths = []
             unique_paths = set()
             for path in js_files:
-                if not path.startswith("/") and not path.startswith("http:"):
+                if not is_absolute(path):
                     path = self.static_url(path)
                 if path not in unique_paths:
                     paths.append(path)
@@ -470,7 +472,7 @@ class RequestHandler(object):
             paths = []
             unique_paths = set()
             for path in css_files:
-                if not path.startswith("/") and not path.startswith("http:"):
+                if not is_absolute(path):
                     path = self.static_url(path)
                 if path not in unique_paths:
                     paths.append(path)
