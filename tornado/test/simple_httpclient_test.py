@@ -223,6 +223,6 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
         self.http_client.fetch(url, self.stop)
         response = self.wait()
-        self.assertEqual("Basic " + base64.b64encode("me:secret"),
+        self.assertEqual(b("Basic ") + base64.b64encode(b("me:secret")),
                          response.body)
 
