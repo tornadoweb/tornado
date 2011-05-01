@@ -456,6 +456,14 @@ For `PUT` and `DELETE` requests (as well as `POST` requests that do not
 use form-encoded arguments), the XSRF token may also be passed via
 an HTTP header named `X-XSRFToken`.
 
+If you need to customize XSRF behavior on a per-handler basis, you can
+override `RequestHandler.check_xsrf_cookie()`.  For example, if you have
+an API whose authentication does not use cookies, you may want to disable
+XSRF protection by making `check_xsrf_cookie()` do nothing.  However, if
+you support both cookie and non-cookie-based authentication, it is important
+that XSRF protection be used whenever the current request is authenticated
+with a cookie.
+
 
 ### Static files and aggressive file caching
 
