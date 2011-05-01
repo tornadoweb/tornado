@@ -955,15 +955,16 @@ class FacebookGraphMixin(OAuth2Mixin):
         "client_secret": client_secret,
       }
 
-      if extra_fields and not isinstance(extra_fields, (set, frozenset)):
-          extra_fields = set(extra_fields)
+      fields = set(['id', 'name', 'first_name', 'last_name',
+                    'locale', 'picture', 'link'])
+      if extra_fields: fields.update(extra_fields)
 
       http.fetch(self._oauth_request_token_url(**args),
           self.async_callback(self._on_access_token, redirect_uri, client_id,
-                              client_secret, callback, extra_fields))
+                              client_secret, callback, fields))
 
     def _on_access_token(self, redirect_uri, client_id, client_secret,
-                        callback, extra_fields, response):
+                        callback, fields, response):
       if response.error:
           logging.warning('Facebook auth error: %s' % str(response))
           callback(None)
@@ -977,19 +978,16 @@ class FacebookGraphMixin(OAuth2Mixin):
       self.facebook_request(
           path="/me",
           callback=self.async_callback(
-              self._on_get_user_info, callback, session, extra_fields),
+              self._on_get_user_info, callback, session, fields),
           access_token=session["access_token"],
-          fields="picture" # This one's exceptional in that it appends to fields returned
+          fields=",".join(fields)
           )
 
 
-    def _on_get_user_info(self, callback, session, extra_fields, user):
+    def _on_get_user_info(self, callback, session, fields, user):
         if user is None:
             callback(None)
             return
-
-        fields = set(['id', 'name', 'first_name', 'last_name', 'locale', 'picture', 'link'])
-        if extra_fields: fields.update(extra_fields)
 
         fieldmap = {}
         for field in fields:

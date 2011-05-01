@@ -94,6 +94,9 @@ def load_translations(directory):
     For strings with no verbs that would change on translation, simply
     use "unknown" or the empty string (or don't include the column at all).
 
+    The file is read using the csv module in the default "excel" dialect.
+    In this format there should not be spaces after the commas.
+
     Example translation es_LA.csv:
 
         "I love you","Te amo"
@@ -154,6 +157,7 @@ def load_gettext_translations(directory, domain):
     global _use_gettext
     _translations = {}
     for lang in os.listdir(directory):
+        if lang.startswith('.'): continue  # skip .svn, etc
         if os.path.isfile(os.path.join(directory, lang)): continue
         try:
             os.stat(os.path.join(directory, lang, "LC_MESSAGES", domain+".mo"))

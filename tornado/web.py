@@ -226,7 +226,7 @@ class RequestHandler(object):
         """Returns the value of the argument with the given name.
 
         If default is not provided, the argument is considered to be
-        required, and we throw an HTTP 404 exception if it is missing.
+        required, and we throw an HTTP 400 exception if it is missing.
 
         If the argument appears in the url more than once, we return the
         last value.
@@ -236,7 +236,7 @@ class RequestHandler(object):
         args = self.get_arguments(name, strip=strip)
         if not args:
             if default is self._ARG_DEFAULT:
-                raise HTTPError(404, "Missing argument %s" % name)
+                raise HTTPError(400, "Missing argument %s" % name)
             return default
         return args[-1]
 
@@ -453,12 +453,14 @@ class RequestHandler(object):
             if head_part: html_heads.append(utf8(head_part))
             body_part = module.html_body()
             if body_part: html_bodies.append(utf8(body_part))
+        def is_absolute(path):
+            return any(path.startswith(x) for x in ["/", "http:", "https:"])
         if js_files:
             # Maintain order of JavaScript files given by modules
             paths = []
             unique_paths = set()
             for path in js_files:
-                if not path.startswith("/") and not path.startswith("http:"):
+                if not is_absolute(path):
                     path = self.static_url(path)
                 if path not in unique_paths:
                     paths.append(path)
@@ -477,7 +479,7 @@ class RequestHandler(object):
             paths = []
             unique_paths = set()
             for path in css_files:
-                if not path.startswith("/") and not path.startswith("http:"):
+                if not is_absolute(path):
                     path = self.static_url(path)
                 if path not in unique_paths:
                     paths.append(path)
@@ -619,6 +621,11 @@ class RequestHandler(object):
     def get_error_html(self, status_code, **kwargs):
         """Override to implement custom error pages.
 
+        get_error_html() should return a string containing the error page,
+        and should not produce output via self.write().  If you use a
+        Tornado template for the error page, you must use
+        "return self.render_string(...)" instead of "self.render()".
+
         If this error was caused by an uncaught exception, the
         exception object can be found in kwargs e.g. kwargs['exception']
         """
@@ -647,7 +654,10 @@ class RequestHandler(object):
     def get_user_locale(self):
         """Override to determine the locale from the authenticated user.
 
-        If None is returned, we use the Accept-Language header.
+        If None is returned, we fall back to get_browser_locale().
+
+        This method should return a tornado.locale.Locale object,
+        most likely obtained via a call like tornado.locale.get("en")
         """
         return None
 

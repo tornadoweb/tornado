@@ -112,6 +112,7 @@ class AsyncTestCase(unittest.TestCase):
                     logging.debug("error closing fd %d", fd, exc_info=True)
             self.io_loop._waker_reader.close()
             self.io_loop._waker_writer.close()
+        super(AsyncTestCase, self).tearDown()
 
     def get_new_ioloop(self):
         '''Creates a new IOLoop for this test.  May be overridden in

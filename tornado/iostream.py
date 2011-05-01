@@ -20,6 +20,7 @@ from __future__ import with_statement
 
 import collections
 import errno
+import functools
 import logging
 import socket
 import sys
@@ -224,23 +225,30 @@ class IOStream(object):
             self.close()
             raise
 
-    def _run_callback(self, callback, *args, **kwargs):
-        try:
-            # Use a NullContext to ensure that all StackContexts are run
-            # inside our blanket exception handler rather than outside.
-            with stack_context.NullContext():
-                callback(*args, **kwargs)
-        except:
-            logging.error("Uncaught exception, closing connection.",
-                          exc_info=True)
-            # Close the socket on an uncaught exception from a user callback
-            # (It would eventually get closed when the socket object is
-            # gc'd, but we don't want to rely on gc happening before we
-            # run out of file descriptors)
-            self.close()
-            # Re-raise the exception so that IOLoop.handle_callback_exception
-            # can see it and log the error
-            raise
+    def _run_callback(self, callback, *args):
+        def wrapper():
+            try:
+                callback(*args)
+            except:
+                logging.error("Uncaught exception, closing connection.",
+                              exc_info=True)
+                # Close the socket on an uncaught exception from a user callback
+                # (It would eventually get closed when the socket object is
+                # gc'd, but we don't want to rely on gc happening before we
+                # run out of file descriptors)
+                self.close()
+                # Re-raise the exception so that IOLoop.handle_callback_exception
+                # can see it and log the error
+                raise
+        # We schedule callbacks to be run on the next IOLoop iteration
+        # rather than running them directly for several reasons:
+        # * Prevents unbounded stack growth when a callback calls an
+        #   IOLoop operation that immediately runs another callback
+        # * Provides a predictable execution context for e.g.
+        #   non-reentrant mutexes
+        # * Ensures that the try/except in wrapper() is run outside
+        #   of the application's StackContexts
+        self.io_loop.add_callback(wrapper)
 
     def _handle_read(self):
         while True:

@@ -2,6 +2,7 @@
 
 from __future__ import with_statement
 
+import base64
 import collections
 import gzip
 import logging
@@ -217,4 +218,11 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_default_certificates_exist(self):
         open(_DEFAULT_CA_CERTS)
+
+    def test_credentials_in_url(self):
+        url = self.get_url("/auth").replace("http://", "http://me:secret@")
+        self.http_client.fetch(url, self.stop)
+        response = self.wait()
+        self.assertEqual("Basic " + base64.b64encode("me:secret"),
+                         response.body)
 

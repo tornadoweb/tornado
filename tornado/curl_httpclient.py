@@ -280,6 +280,22 @@ def _curl_create(max_simultaneous_connections=None):
 
 def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.URL, request.url)
+
+    # libcurl's magic "Expect: 100-continue" behavior causes delays
+    # with servers that don't support it (which include, among others,
+    # Google's OpenID endpoint).  Additionally, this behavior has
+    # a bug in conjunction with the curl_multi_socket_action API
+    # (https://sourceforge.net/tracker/?func=detail&atid=100976&aid=3039744&group_id=976),
+    # which increases the delays.  It's more trouble than it's worth,
+    # so just turn off the feature (yes, setting Expect: to an empty
+    # value is the official way to disable this)
+    if "Expect" not in request.headers:
+        request.headers["Expect"] = ""
+
+    # libcurl adds Pragma: no-cache by default; disable that too
+    if "Pragma" not in request.headers:
+        request.headers["Pragma"] = ""
+
     # Request headers may be either a regular dict or HTTPHeaders object
     if isinstance(request.headers, httputil.HTTPHeaders):
         curl.setopt(pycurl.HTTPHEADER,
@@ -287,6 +303,7 @@ def _curl_setup_request(curl, request, buffer, headers):
     else:
         curl.setopt(pycurl.HTTPHEADER,
                     [utf8("%s: %s" % i) for i in request.headers.iteritems()])
+
     if request.header_callback:
         curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
     else:

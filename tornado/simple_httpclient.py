@@ -134,12 +134,11 @@ class _HTTPConnection(object):
         self._timeout = None
         with stack_context.StackContext(self.cleanup):
             parsed = urlparse.urlsplit(_unicode(self.request.url))
-            if ":" in parsed.netloc:
-                host, _, port = parsed.netloc.partition(":")
-                port = int(port)
-            else:
-                host = parsed.netloc
+            host = parsed.hostname
+            if parsed.port is None:
                 port = 443 if parsed.scheme == "https" else 80
+            else:
+                port = parsed.port
             if self.client.hostname_mapping is not None:
                 host = self.client.hostname_mapping.get(host, host)
 
@@ -185,7 +184,7 @@ class _HTTPConnection(object):
         if (self.request.validate_cert and
             isinstance(self.stream, SSLIOStream)):
             match_hostname(self.stream.socket.getpeercert(),
-                           parsed.netloc.partition(":")[0])
+                           parsed.hostname)
         if (self.request.method not in self._SUPPORTED_METHODS and
             not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
@@ -196,11 +195,16 @@ class _HTTPConnection(object):
                 raise NotImplementedError('%s not supported' % key)
         if "Host" not in self.request.headers:
             self.request.headers["Host"] = parsed.netloc
-        if self.request.auth_username:
-            auth = utf8(self.request.auth_username) + b(":") + \
-                utf8(self.request.auth_password)
-            self.request.headers["Authorization"] = \
-                b("Basic ") + base64.b64encode(auth)
+        username, password = None, None
+        if parsed.username is not None:
+            username, password = parsed.username, parsed.password
+        elif self.request.auth_username is not None:
+            username = self.request.auth_username
+            password = self.request.auth_password
+        if username is not None:
+            auth = utf8(username) + b(":") + utf8(password)
+            self.request.headers["Authorization"] = (b("Basic ") +
+                                                     base64.b64encode(auth))
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
         has_body = self.request.method in ("POST", "PUT")
@@ -220,7 +224,10 @@ class _HTTPConnection(object):
         request_lines = [utf8("%s %s HTTP/1.1" % (self.request.method,
                                                   req_path))]
         for k, v in self.request.headers.get_all():
-            request_lines.append(utf8(k) + b(": ") + utf8(v))
+            line = utf8(k) + b(": ") + utf8(v)
+            if b('\n') in line:
+                raise ValueError('Newline in header: ' + repr(line))
+            request_lines.append(line)
         self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
         if has_body:
             self.stream.write(utf8(self.request.body))

@@ -101,7 +101,7 @@ class Template(object):
         if compress_whitespace is None:
             compress_whitespace = name.endswith(".html") or \
                 name.endswith(".js")
-        reader = _TemplateReader(name, template_string)
+        reader = _TemplateReader(name, escape.utf8(template_string))
         self.file = _File(_parse(reader))
         self.code = self._generate_python(loader, compress_whitespace)
         try:
