@@ -191,6 +191,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         if not self.client_terminated:
             self.async_callback(self.on_message)(
                     frame[:-1].decode("utf-8", "replace"))
+        if not self.client_terminated:
             self._receive_message()
 
     def _on_length_indicator(self, byte):
