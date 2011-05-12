@@ -205,6 +205,23 @@ Other methods designed for overriding include:
  * `get_template_path(self)` - returns location of template files (default is
    in `Application` settings)
 
+### Redirection
+
+You can use `self.redirect` within a
+`RequestHandler` to redirect users elsewhere. 
+There is also an optional 
+parameter `permanent` which you can use to indicate
+that the redirection is considered permanent.  
+
+This triggers a `301 Moved Permanently` 
+HTTP status, which is useful for e.g.
+redirecting to a canonical URL for a page in an SEO-friendly manner.
+
+The default value of `permanent` is `False`, which is apt for things like redirecting
+users on successful POST requests.
+
+	self.redirect('/some-canonical-page', permanent=True)
+
 ### Templates
 
 You can use any template language supported by Python, but Tornado ships
