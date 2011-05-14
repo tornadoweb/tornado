@@ -48,14 +48,14 @@ Example usage:
 
 from __future__ import with_statement
 
-from types import NoneType
-
 import contextlib
 import functools
 import itertools
 import logging
 import sys
 import threading
+
+NoneType = type(None)
 
 class _State(threading.local):
     def __init__(self):
