@@ -46,7 +46,7 @@ class HTTPStackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_stack_context(self):
         self.http_client.fetch(self.get_url('/'), self.handle_response)
         self.wait()
-        self.assertEquals(self.response.code, 500)
+        self.assertEqual(self.response.code, 500)
         self.assertTrue(b('got expected exception') in self.response.body)
 
     def handle_response(self, response):

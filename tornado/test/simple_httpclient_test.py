@@ -217,7 +217,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
     def test_default_certificates_exist(self):
-        open(_DEFAULT_CA_CERTS)
+        open(_DEFAULT_CA_CERTS).close()
 
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")

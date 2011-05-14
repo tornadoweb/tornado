@@ -27,7 +27,7 @@ class SecureCookieTest(LogTrapTestCase):
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
         handler.set_secure_cookie('foo', b('bar'))
-        self.assertEquals(handler.get_secure_cookie('foo'), b('bar'))
+        self.assertEqual(handler.get_secure_cookie('foo'), b('bar'))
 
     def test_cookie_tampering_future_timestamp(self):
         handler = CookieTestRequestHandler()
