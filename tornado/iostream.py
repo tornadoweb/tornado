@@ -357,19 +357,22 @@ class IOStream(object):
                     # with more than 128KB at a time.
                     _merge_prefix(self._write_buffer, 128 * 1024)
                 num_bytes = self.socket.send(self._write_buffer[0])
+                if num_bytes == 0:
+                    # With OpenSSL, if we couldn't write the entire buffer,
+                    # the very same string object must be used on the
+                    # next call to send.  Therefore we suppress
+                    # merging the write buffer after an incomplete send.
+                    # A cleaner solution would be to set
+                    # SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, but this is
+                    # not yet accessible from python
+                    # (http://bugs.python.org/issue8240)
+                    self._write_buffer_frozen = True
+                    break
                 self._write_buffer_frozen = False
                 _merge_prefix(self._write_buffer, num_bytes)
                 self._write_buffer.popleft()
             except socket.error, e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
-                    # With OpenSSL, after send returns EWOULDBLOCK,
-                    # the very same string object must be used on the
-                    # next call to send.  Therefore we suppress
-                    # merging the write buffer after an EWOULDBLOCK.
-                    # A cleaner solution would be to set
-                    # SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, but this is
-                    # not yet accessible from python
-                    # (http://bugs.python.org/issue8240)
                     self._write_buffer_frozen = True
                     break
                 else:
