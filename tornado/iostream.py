@@ -251,7 +251,13 @@ class IOStream(object):
         #   non-reentrant mutexes
         # * Ensures that the try/except in wrapper() is run outside
         #   of the application's StackContexts
-        self.io_loop.add_callback(wrapper)
+        with stack_context.NullContext():
+            # stack_context was already captured in callback, we don't need to
+            # capture it again for IOStream's wrapper.  This is especially
+            # important if the callback was pre-wrapped before entry to
+            # IOStream (as in HTTPConnection._header_callback), as we could
+            # capture and leak the wrong context here.
+            self.io_loop.add_callback(wrapper)
 
     def _handle_read(self):
         while True:
