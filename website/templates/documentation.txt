@@ -521,6 +521,7 @@ setting in your application:
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/login", LoginHandler),
+        (r"/(apple-touch-icon(?:-precomposed)?\.png)", tornado.web.StaticFileHandler,
     ], **settings)
 
 This setting will automatically make all requests that start with `/static/`
@@ -528,6 +529,12 @@ serve from that static directory, e.g., [http://localhost:8888/static/foo.png](h
 will serve the file `foo.png` from the specified static directory. We
 also automatically serve `/robots.txt` and `/favicon.ico` from the static
 directory (even though they don't start with the `/static/` prefix).
+
+In the above settings, we have explicitly configured Tornado to serve `apple-touch-icon.png`
+“from” the root with the `StaticFileHandler`, though it is physically in the static file directory.
+You could do the same thing to serve e.g. `sitemap.xml` from the site root.
+Of course, you can also avoid faking a root `apple-touche-icon.png`
+by using the appropriate `<link />` tag in your HTML.
 
 To improve performance, it is generally a good idea for browsers to
 cache static resources aggressively so browsers won't send unnecessary
