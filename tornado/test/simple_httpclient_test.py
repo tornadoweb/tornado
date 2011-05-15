@@ -3,6 +3,7 @@
 from __future__ import with_statement
 
 import base64
+import binascii
 import collections
 import gzip
 import logging
@@ -233,16 +234,26 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
                          response.body)
 
     def test_body_encoding(self):
+        unicode_body = u"\xe9"
+        byte_body = binascii.a2b_hex(b("e9"))
+
         # unicode string in body gets converted to utf8
-        response = self.fetch("/echopost", method="POST", body=u"\xe9")
-        self.assertEqual(response.body, utf8(u"\xe9"))
+        response = self.fetch("/echopost", method="POST", body=unicode_body,
+                              headers={"Content-Type": "application/blah"})
+        self.assertEqual(response.headers["Content-Length"], "2")
+        self.assertEqual(response.body, utf8(unicode_body))
 
         # byte strings pass through directly
-        response = self.fetch("/echopost", method="POST", body="\xe9")
-        self.assertEqual(response.body, "\xe9")
+        response = self.fetch("/echopost", method="POST",
+                              body=byte_body,
+                              headers={"Content-Type": "application/blah"})
+        self.assertEqual(response.headers["Content-Length"], "1")
+        self.assertEqual(response.body, byte_body)
 
         # Mixing unicode in headers and byte string bodies shouldn't
         # break anything
-        response = self.fetch("/echopost", method="POST", body="\xe9",
+        response = self.fetch("/echopost", method="POST", body=byte_body,
+                              headers={"Content-Type": "application/blah"},
                               user_agent=u"foo")
-        self.assertEqual(response.body, "\xe9")
+        self.assertEqual(response.headers["Content-Length"], "1")
+        self.assertEqual(response.body, byte_body)
