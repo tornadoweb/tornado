@@ -55,8 +55,6 @@ import logging
 import sys
 import threading
 
-NoneType = type(None)
-
 class _State(threading.local):
     def __init__(self):
         self.contexts = ()
@@ -149,6 +147,8 @@ def wrap(fn):
     different execution context (either in a different thread or
     asynchronously in the same thread).
     '''
+    if fn is None or fn.__class__ is _StackContextWrapper:
+        return fn
     # functools.wraps doesn't appear to work on functools.partial objects
     #@functools.wraps(fn)
     def wrapped(callback, contexts, *args, **kwargs):
@@ -180,8 +180,6 @@ def wrap(fn):
                 callback(*args, **kwargs)
         else:
             callback(*args, **kwargs)
-    if isinstance(fn, (_StackContextWrapper, NoneType)):
-        return fn
     return _StackContextWrapper(wrapped, fn, _state.contexts)
 
 @contextlib.contextmanager

@@ -206,12 +206,7 @@ class RequestHandler(object):
         HTTP specification. If the value is not a string, we convert it to
         a string. All header values are then encoded as UTF-8.
         """
-        if isinstance(value, datetime.datetime):
-            t = calendar.timegm(value.utctimetuple())
-            value = email.utils.formatdate(t, localtime=False, usegmt=True)
-        elif isinstance(value, int) or isinstance(value, long):
-            value = str(value)
-        else:
+        if isinstance(value, basestring):
             value = utf8(value)
             # If \n is allowed into the header, it is possible to inject
             # additional headers or split the request. Also cap length to
@@ -219,6 +214,13 @@ class RequestHandler(object):
             safe_value = re.sub(b(r"[\x00-\x1f]"), b(" "), value)[:4000]
             if safe_value != value:
                 raise ValueError("Unsafe header value %r", value)
+        elif isinstance(value, datetime.datetime):
+            t = calendar.timegm(value.utctimetuple())
+            value = email.utils.formatdate(t, localtime=False, usegmt=True)
+        elif isinstance(value, int) or isinstance(value, long):
+            value = str(value)
+        else:
+            raise TypeError("Unsupported header value %r" % value)
         self._headers[name] = value
 
     _ARG_DEFAULT = []

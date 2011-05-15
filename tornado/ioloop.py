@@ -341,8 +341,9 @@ class IOLoop(object):
         from that IOLoop's thread.  add_callback() may be used to transfer
         control from other threads to the IOLoop's thread.
         """
+        if not self._callbacks:
+            self._wake()
         self._callbacks.append(stack_context.wrap(callback))
-        self._wake()
 
     def _wake(self):
         try:
