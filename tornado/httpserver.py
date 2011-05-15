@@ -16,7 +16,6 @@
 
 """A non-blocking, single-threaded HTTP server."""
 
-import cgi
 import errno
 import logging
 import os
@@ -28,6 +27,12 @@ from tornado import httputil
 from tornado import ioloop
 from tornado import iostream
 from tornado import stack_context
+from tornado.util import b, bytes_type
+
+try:
+    from urlparse import parse_qs  # Python 2.6+
+except ImportError:
+    from cgi import parse_qs
 
 try:
     import fcntl
@@ -289,7 +294,7 @@ class HTTPConnection(object):
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
-        self.stream.read_until("\r\n\r\n", self._header_callback)
+        self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
     def write(self, chunk):
         assert self._request, "Request closed"
@@ -323,10 +328,11 @@ class HTTPConnection(object):
         if disconnect:
             self.stream.close()
             return
-        self.stream.read_until("\r\n\r\n", self._header_callback)
+        self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
     def _on_headers(self, data):
         try:
+            data = data.decode('latin1')
             eol = data.find("\r\n")
             start_line = data[:eol]
             try:
@@ -362,8 +368,9 @@ class HTTPConnection(object):
         content_type = self._request.headers.get("Content-Type", "")
         if self._request.method in ("POST", "PUT"):
             if content_type.startswith("application/x-www-form-urlencoded"):
-                arguments = cgi.parse_qs(self._request.body)
+                arguments = parse_qs(self._request.body)
                 for name, values in arguments.iteritems():
+                    name = name.decode('utf-8')
                     values = [v for v in values if v]
                     if values:
                         self._request.arguments.setdefault(name, []).extend(
@@ -412,7 +419,7 @@ class HTTPConnection(object):
             if not name_values.get("name"):
                 logging.warning("multipart/form-data value missing name")
                 continue
-            name = name_values["name"]
+            name = name_values["name"].decode("utf-8")
             if name_values.get("filename"):
                 ctype = headers.get("Content-Type", "application/unknown")
                 self._request.files.setdefault(name, []).append(dict(
@@ -475,7 +482,7 @@ class HTTPRequest(object):
         scheme, netloc, path, query, fragment = urlparse.urlsplit(uri)
         self.path = path
         self.query = query
-        arguments = cgi.parse_qs(query)
+        arguments = parse_qs(query)
         self.arguments = {}
         for name, values in arguments.iteritems():
             values = [v for v in values if v]
@@ -487,7 +494,7 @@ class HTTPRequest(object):
 
     def write(self, chunk):
         """Writes the given chunk to the response stream."""
-        assert isinstance(chunk, str)
+        assert isinstance(chunk, bytes_type)
         self.connection.write(chunk)
 
     def finish(self):

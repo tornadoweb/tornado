@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 from __future__ import with_statement
 
-from cStringIO import StringIO
+from tornado.escape import utf8, _unicode
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado import stack_context
+from tornado.util import b
 
 import base64
 import collections
@@ -21,6 +22,11 @@ import socket
 import time
 import urlparse
 import zlib
+
+try:
+    from io import BytesIO  # python 3
+except ImportError:
+    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import ssl # python 2.6+
@@ -127,7 +133,7 @@ class _HTTPConnection(object):
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None
         with stack_context.StackContext(self.cleanup):
-            parsed = urlparse.urlsplit(self.request.url)
+            parsed = urlparse.urlsplit(_unicode(self.request.url))
             host = parsed.hostname
             if parsed.port is None:
                 port = 443 if parsed.scheme == "https" else 80
@@ -196,16 +202,16 @@ class _HTTPConnection(object):
             username = self.request.auth_username
             password = self.request.auth_password
         if username is not None:
-            auth = "%s:%s" % (username, password)
-            self.request.headers["Authorization"] = ("Basic %s" %
+            auth = utf8(username) + b(":") + utf8(password)
+            self.request.headers["Authorization"] = (b("Basic ") +
                                                      base64.b64encode(auth))
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
         has_body = self.request.method in ("POST", "PUT")
         if has_body:
             assert self.request.body is not None
-            self.request.headers["Content-Length"] = len(
-                self.request.body)
+            self.request.headers["Content-Length"] = str(len(
+                self.request.body))
         else:
             assert self.request.body is None
         if (self.request.method == "POST" and
@@ -215,17 +221,17 @@ class _HTTPConnection(object):
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((parsed.path or '/') +
                 (('?' + parsed.query) if parsed.query else ''))
-        request_lines = ["%s %s HTTP/1.1" % (self.request.method,
-                                             req_path)]
+        request_lines = [utf8("%s %s HTTP/1.1" % (self.request.method,
+                                                  req_path))]
         for k, v in self.request.headers.get_all():
-            line = "%s: %s" % (k, v)
-            if '\n' in line:
+            line = utf8(k) + b(": ") + utf8(v)
+            if b('\n') in line:
                 raise ValueError('Newline in header: ' + repr(line))
             request_lines.append(line)
-        self.stream.write("\r\n".join(request_lines) + "\r\n\r\n")
+        self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
         if has_body:
-            self.stream.write(self.request.body)
-        self.stream.read_until("\r\n\r\n", self._on_headers)
+            self.stream.write(utf8(self.request.body))
+        self.stream.read_until(b("\r\n\r\n"), self._on_headers)
 
     @contextlib.contextmanager
     def cleanup(self):
@@ -246,6 +252,7 @@ class _HTTPConnection(object):
                                   error=HTTPError(599, "Connection closed")))
 
     def _on_headers(self, data):
+        data = data.decode("latin1")
         first_line, _, header_data = data.partition("\r\n")
         match = re.match("HTTP/1.[01] ([0-9]+) .*", first_line)
         assert match
@@ -261,7 +268,7 @@ class _HTTPConnection(object):
             self._decompressor = zlib.decompressobj(16+zlib.MAX_WBITS)
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
-            self.stream.read_until("\r\n", self._on_chunk_length)
+            self.stream.read_until(b("\r\n"), self._on_chunk_length)
         elif "Content-Length" in self.headers:
             self.stream.read_bytes(int(self.headers["Content-Length"]),
                                    self._on_body)
@@ -280,9 +287,9 @@ class _HTTPConnection(object):
                 # if chunks is not None, we already called streaming_callback
                 # in _on_chunk_data
                 self.request.streaming_callback(data)
-            buffer = StringIO()
+            buffer = BytesIO()
         else:
-            buffer = StringIO(data) # TODO: don't require one big string?
+            buffer = BytesIO(data) # TODO: don't require one big string?
         original_request = getattr(self.request, "original_request",
                                    self.request)
         if (self.request.follow_redirects and
@@ -290,7 +297,7 @@ class _HTTPConnection(object):
             self.code in (301, 302)):
             new_request = copy.copy(self.request)
             new_request.url = urlparse.urljoin(self.request.url,
-                                               self.headers["Location"])
+                                               utf8(self.headers["Location"]))
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
             new_request.original_request = original_request
@@ -311,13 +318,13 @@ class _HTTPConnection(object):
             # all the data has been decompressed, so we don't need to
             # decompress again in _on_body
             self._decompressor = None
-            self._on_body(''.join(self.chunks))
+            self._on_body(b('').join(self.chunks))
         else:
             self.stream.read_bytes(length + 2,  # chunk ends with \r\n
                               self._on_chunk_data)
 
     def _on_chunk_data(self, data):
-        assert data[-2:] == "\r\n"
+        assert data[-2:] == b("\r\n")
         chunk = data[:-2]
         if self._decompressor:
             chunk = self._decompressor.decompress(chunk)
@@ -325,7 +332,7 @@ class _HTTPConnection(object):
             self.request.streaming_callback(chunk)
         else:
             self.chunks.append(chunk)
-        self.stream.read_until("\r\n", self._on_chunk_length)
+        self.stream.read_until(b("\r\n"), self._on_chunk_length)
 
 
 # match_hostname was added to the standard library ssl module in python 3.2.

@@ -74,7 +74,7 @@ def json_encode(value):
 
 def json_decode(value):
     """Returns Python objects for the given JSON string."""
-    return _json_decode(value)
+    return _json_decode(_unicode(value))
 
 
 def squeeze(value):
@@ -92,13 +92,12 @@ def url_unescape(value):
     return _unicode(urllib.unquote_plus(value))
 
 
+_UTF8_TYPES = (bytes, type(None))
 def utf8(value):
-    if value is None:
-        return None
-    if isinstance(value, unicode):
-        return value.encode("utf-8")
-    assert isinstance(value, bytes)
-    return value
+    if isinstance(value, _UTF8_TYPES):
+        return value
+    assert isinstance(value, unicode)
+    return value.encode("utf-8")
 
 
 # I originally used the regex from 

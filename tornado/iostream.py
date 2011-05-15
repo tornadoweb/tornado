@@ -27,6 +27,7 @@ import sys
 
 from tornado import ioloop
 from tornado import stack_context
+from tornado.util import b, bytes_type
 
 try:
     import ssl # Python 2.6+
@@ -142,7 +143,7 @@ class IOStream(object):
         """Call callback when we read the given number of bytes."""
         assert not self._read_callback, "Already reading"
         if num_bytes == 0:
-            callback("")
+            callback(b(""))
             return
         self._read_bytes = num_bytes
         self._read_callback = stack_context.wrap(callback)
@@ -162,6 +163,7 @@ class IOStream(object):
         previously buffered write data and an old write callback, that
         callback is simply overwritten with this new callback.
         """
+        assert isinstance(data, bytes_type)
         self._check_closed()
         self._write_buffer.append(data)
         self._add_io_state(self.io_loop.WRITE)
@@ -527,7 +529,13 @@ def _merge_prefix(deque, size):
             chunk = chunk[:remaining]
         prefix.append(chunk)
         remaining -= len(chunk)
-    deque.appendleft(''.join(prefix))
+    # This data structure normally just contains byte strings, but
+    # the unittest gets messy if it doesn't use the default str() type,
+    # so do the merge based on the type of data that's actually present.
+    if prefix:
+        deque.appendleft(type(prefix[0])().join(prefix))
+    if not deque:
+        deque.appendleft(b(""))
 
 def doctests():
     import doctest

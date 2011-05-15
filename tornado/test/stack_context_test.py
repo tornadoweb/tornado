@@ -3,6 +3,7 @@ from __future__ import with_statement
 
 from tornado.stack_context import StackContext, wrap
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.util import b
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
@@ -45,8 +46,8 @@ class HTTPStackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_stack_context(self):
         self.http_client.fetch(self.get_url('/'), self.handle_response)
         self.wait()
-        self.assertEquals(self.response.code, 500)
-        self.assertTrue('got expected exception' in self.response.body)
+        self.assertEqual(self.response.code, 500)
+        self.assertTrue(b('got expected exception') in self.response.body)
 
     def handle_response(self, response):
         self.response = response
