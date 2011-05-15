@@ -94,10 +94,38 @@ def url_unescape(value):
 
 _UTF8_TYPES = (bytes, type(None))
 def utf8(value):
+    """Converts a string argument to a byte string.
+
+    If the argument is already a byte string or None, it is returned unchanged.
+    Otherwise it must be a unicode string and is encoded as utf8.
+    """
     if isinstance(value, _UTF8_TYPES):
         return value
     assert isinstance(value, unicode)
     return value.encode("utf-8")
+
+_TO_UNICODE_TYPES = (unicode, type(None))
+def to_unicode(value):
+    """Converts a string argument to a unicode string.
+
+    If the argument is already a unicode string or None, it is returned
+    unchanged.  Otherwise it must be a byte string and is decoded as utf8.
+    """
+    if isinstance(value, _TO_UNICODE_TYPES):
+        return value
+    assert isinstance(value, bytes)
+    return value.decode("utf-8")
+
+# to_unicode was previously named _unicode not because it was private,
+# but to avoid conflicts with the built-in unicode() function/type
+_unicode = to_unicode
+
+# When dealing with the standard library across python 2 and 3 it is
+# sometimes useful to have a direct conversion to the native string type
+if str is unicode:
+    native_str = to_unicode
+else:
+    native_str = utf8
 
 
 # I originally used the regex from 
@@ -185,13 +213,6 @@ def linkify(text, shorten=False, extra_params="",
     # that we won't pick up &quot;, etc.
     text = _unicode(xhtml_escape(text))
     return _URL_RE.sub(make_link, text)
-
-
-def _unicode(value):
-    if isinstance(value, bytes):
-        return value.decode("utf-8")
-    assert isinstance(value, unicode)
-    return value
 
 
 def _convert_entity(m):
