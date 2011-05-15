@@ -20,6 +20,9 @@ import subprocess
 
 
 define("port", type=int, default=8888)
+define("n", type=int, default=10000)
+define("c", type=int, default=25)
+define("keepalive", type=bool, default=False)
 
 class RootHandler(RequestHandler):
     def get(self):
@@ -36,9 +39,13 @@ def main():
     app = Application([("/", RootHandler)])
     app.listen(options.port)
     signal.signal(signal.SIGCHLD, handle_sigchld)
-    proc = subprocess.Popen(
-        "ab -n 10000 -c 25 http://127.0.0.1:%d/" % options.port,
-        shell=True)
+    args = ["ab"]
+    args.extend(["-n", str(options.n)])
+    args.extend(["-c", str(options.c)])
+    if options.keepalive:
+        args.append("-k")
+    args.append("http://127.0.0.1:%d/" % options.port)
+    proc = subprocess.Popen(args)
     IOLoop.instance().start()
 
 if __name__ == '__main__':
