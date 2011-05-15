@@ -6,7 +6,7 @@ import weakref
 from tornado.escape import utf8
 from tornado import httputil
 from tornado.ioloop import IOLoop
-from tornado.util import import_object
+from tornado.util import import_object, bytes_type
 
 class HTTPClient(object):
     """A blocking HTTP client.
@@ -137,7 +137,7 @@ class AsyncHTTPClient(object):
         on each IOLoop.  Additional arguments may be supported depending
         on the implementation class in use.
         """
-        if isinstance(impl, basestring):
+        if isinstance(impl, (unicode, bytes_type)):
             impl = import_object(impl)
         if impl is not None and not issubclass(impl, AsyncHTTPClient):
             raise ValueError("Invalid AsyncHTTPClient implementation")

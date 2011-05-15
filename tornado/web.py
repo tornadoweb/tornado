@@ -206,7 +206,7 @@ class RequestHandler(object):
         HTTP specification. If the value is not a string, we convert it to
         a string. All header values are then encoded as UTF-8.
         """
-        if isinstance(value, basestring):
+        if isinstance(value, (unicode, bytes_type)):
             value = utf8(value)
             # If \n is allowed into the header, it is possible to inject
             # additional headers or split the request. Also cap length to
@@ -439,7 +439,7 @@ class RequestHandler(object):
             if embed_part: js_embed.append(utf8(embed_part))
             file_part = module.javascript_files()
             if file_part:
-                if isinstance(file_part, basestring):
+                if isinstance(file_part, (unicode, bytes_type)):
                     js_files.append(file_part)
                 else:
                     js_files.extend(file_part)
@@ -447,7 +447,7 @@ class RequestHandler(object):
             if embed_part: css_embed.append(utf8(embed_part))
             file_part = module.css_files()
             if file_part:
-                if isinstance(file_part, basestring):
+                if isinstance(file_part, (unicode, bytes_type)):
                     css_files.append(file_part)
                 else:
                     css_files.extend(file_part)

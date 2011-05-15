@@ -59,6 +59,7 @@ import uuid
 from tornado import httpclient
 from tornado import escape
 from tornado.ioloop import IOLoop
+from tornado.util import bytes_type
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -784,7 +785,7 @@ class FacebookMixin(object):
             args["cancel_url"] = urlparse.urljoin(
                 self.request.full_url(), cancel_uri)
         if extended_permissions:
-            if isinstance(extended_permissions, basestring):
+            if isinstance(extended_permissions, (unicode, bytes_type)):
                 extended_permissions = [extended_permissions]
             args["req_perms"] = ",".join(extended_permissions)
         self.redirect("http://www.facebook.com/login.php?" +
