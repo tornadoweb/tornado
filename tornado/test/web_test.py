@@ -51,6 +51,34 @@ class SecureCookieTest(LogTrapTestCase):
         # it gets rejected
         assert handler.get_secure_cookie('foo') is None
 
+class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        class SetCookieHandler(RequestHandler):
+            def get(self):
+                # Try setting cookies with different argument types
+                # to ensure that everything gets encoded correctly
+                self.set_cookie("str", "asdf")
+                self.set_cookie("unicode", u"qwer")
+                self.set_cookie("bytes", b("zxcv"))
+
+        class GetCookieHandler(RequestHandler):
+            def get(self):
+                self.write(self.get_cookie("foo"))
+
+        return Application([
+                ("/set", SetCookieHandler),
+                ("/get", GetCookieHandler)])
+
+    def test_set_cookie(self):
+        response = self.fetch("/set")
+        self.assertEqual(response.headers.get_list("Set-Cookie"),
+                         ["str=asdf; Path=/",
+                          "unicode=qwer; Path=/",
+                          "bytes=zxcv; Path=/"])
+
+    def test_get_cookie(self):
+        response = self.fetch("/get", headers={"Cookie": "foo=bar"})
+        self.assertEqual(response.body, b("bar"))
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):

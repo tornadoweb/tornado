@@ -265,7 +265,8 @@ class RequestHandler(object):
             self._cookies = Cookie.BaseCookie()
             if "Cookie" in self.request.headers:
                 try:
-                    self._cookies.load(self.request.headers["Cookie"])
+                    self._cookies.load(
+                        escape.native_str(self.request.headers["Cookie"]))
                 except:
                     self.clear_all_cookies()
         return self._cookies
@@ -285,8 +286,9 @@ class RequestHandler(object):
         See http://docs.python.org/library/cookie.html#morsel-objects
         for available attributes.
         """
-        name = utf8(name)
-        value = utf8(value)
+        # The cookie library only accepts type str, in both python 2 and 3
+        name = escape.native_str(name)
+        value = escape.native_str(value)
         if re.search(r"[\x00-\x20]", name + value):
             # Don't let us accidentally inject bad stuff
             raise ValueError("Invalid cookie %r: %r" % (name, value))
@@ -888,7 +890,7 @@ class RequestHandler(object):
         lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in self._headers.iteritems()])
         for cookie_dict in getattr(self, "_new_cookies", []):
             for cookie in cookie_dict.values():
-                lines.append(b("Set-Cookie: ") + cookie.OutputString(None))
+                lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))
         return b("\r\n").join(lines) + b("\r\n\r\n")
 
     def _log(self):
