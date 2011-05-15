@@ -179,7 +179,12 @@ class AsyncTestCase(unittest.TestCase):
         assert self.__stopped
         self.__stopped = False
         if self.__failure is not None:
-            raise self.__failure[0], self.__failure[1], self.__failure[2]
+            # 2to3 isn't smart enough to convert three-argument raise
+            # statements correctly in some cases.
+            if isinstance(self.__failure[1], self.__failure[0]):
+                raise self.__failure[1], None, self.__failure[2]
+            else:
+                raise self.__failure[0], self.__failure[1], self.__failure[2]
         result = self.__stop_args
         self.__stop_args = None
         return result
