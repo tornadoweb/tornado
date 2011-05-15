@@ -23,6 +23,8 @@ try:
 except ImportError:
     pass
 
+kwargs = {}
+
 # Build the epoll extension for Linux systems with Python < 2.6
 extensions = []
 major, minor = sys.version_info[:2]
@@ -32,6 +34,10 @@ if "linux" in sys.platform.lower() and not python_26:
         "tornado.epoll", ["tornado/epoll.c"]))
 
 version = "1.2.1"
+
+if major >= 3:
+    import setuptools  # setuptools is required for use_2to3
+    kwargs["use_2to3"] = True
 
 distutils.core.setup(
     name="tornado",
@@ -48,4 +54,5 @@ distutils.core.setup(
     download_url="http://github.com/downloads/facebook/tornado/tornado-%s.tar.gz" % version,
     license="http://www.apache.org/licenses/LICENSE-2.0",
     description="Tornado is an open source version of the scalable, non-blocking web server and and tools that power FriendFeed",
+    **kwargs
 )
