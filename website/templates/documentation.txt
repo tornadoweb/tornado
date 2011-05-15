@@ -484,7 +484,7 @@ setting in your application:
 This setting will automatically make all requests that start with `/static/`
 serve from that static directory, e.g., [http://localhost:8888/static/foo.png](http://localhost:8888/static/foo.png)
 will serve the file `foo.png` from the specified static directory. We
-also automatically serve `/robots.txt` and `/favicon.ico` from the static
+also automatically serve `/robots.txt`, `/favicon.ico`, and `/apple-touch-icon.png` from the static
 directory (even though they don't start with the `/static/` prefix).
 
 To improve performance, it is generally a good idea for browsers to
@@ -873,6 +873,9 @@ are running on ports 8000 - 8003:
             }
             location = /robots.txt {
                 rewrite (.*) /static/robots.txt;
+            }
+            location = /apple-touch-icon.png {
+                rewrite (.*) /static/apple-touch-icon.png;
             }
 
             location / {
