@@ -230,7 +230,7 @@ class _HTTPConnection(object):
             request_lines.append(line)
         self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
         if has_body:
-            self.stream.write(utf8(self.request.body))
+            self.stream.write(self.request.body)
         self.stream.read_until(b("\r\n\r\n"), self._on_headers)
 
     @contextlib.contextmanager

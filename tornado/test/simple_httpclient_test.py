@@ -9,6 +9,7 @@ import logging
 import socket
 
 from contextlib import closing
+from tornado.escape import utf8
 from tornado.ioloop import IOLoop
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
@@ -60,6 +61,10 @@ class CountdownHandler(RequestHandler):
         else:
             self.write("Zero")
 
+class EchoPostHandler(RequestHandler):
+    def post(self):
+        self.write(self.request.body)
+
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -73,6 +78,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/trigger", TriggerHandler, dict(queue=self.triggers,
                                                  wake_callback=self.stop)),
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
+            url("/echopost", EchoPostHandler),
             ], gzip=True)
 
     def setUp(self):
@@ -226,3 +232,17 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(b("Basic ") + base64.b64encode(b("me:secret")),
                          response.body)
 
+    def test_body_encoding(self):
+        # unicode string in body gets converted to utf8
+        response = self.fetch("/echopost", method="POST", body=u"\xe9")
+        self.assertEqual(response.body, utf8(u"\xe9"))
+
+        # byte strings pass through directly
+        response = self.fetch("/echopost", method="POST", body="\xe9")
+        self.assertEqual(response.body, "\xe9")
+
+        # Mixing unicode in headers and byte string bodies shouldn't
+        # break anything
+        response = self.fetch("/echopost", method="POST", body="\xe9",
+                              user_agent=u"foo")
+        self.assertEqual(response.body, "\xe9")

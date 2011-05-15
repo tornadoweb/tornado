@@ -170,7 +170,7 @@ class HTTPRequest(object):
         self.url = utf8(url)
         self.method = method
         self.headers = headers
-        self.body = body
+        self.body = utf8(body)
         self.auth_username = utf8(auth_username)
         self.auth_password = utf8(auth_password)
         self.connect_timeout = connect_timeout
