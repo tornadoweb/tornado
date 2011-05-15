@@ -47,3 +47,12 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         self.wait()
         self.assertFalse(self.connect_called)
 
+    def test_connection_closed(self):
+        # When a server sends a response and then closes the connection,
+        # the client must be allowed to read the data before the IOStream
+        # closes itself.  Epoll reports closed connections with a separate
+        # EPOLLRDHUP event delivered at the same time as the read event,
+        # while kqueue reports them as a second read/write event with an EOF
+        # flag.
+        response = self.fetch("/", headers={"Connection": "close"})
+        response.rethrow()
