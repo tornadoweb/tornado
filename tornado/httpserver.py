@@ -145,7 +145,7 @@ class HTTPServer(object):
         self.io_loop = io_loop
         self.xheaders = xheaders
         self.ssl_options = ssl_options
-        self._socket = None
+        self._sockets = {}  # fd -> socket object
         self._started = False
 
     def listen(self, port, address=""):
@@ -160,22 +160,47 @@ class HTTPServer(object):
         self.bind(port, address)
         self.start(1)
 
-    def bind(self, port, address=""):
-        """Binds this server to the given port on the given IP address.
+    def bind(self, port, address=None, family=socket.AF_UNSPEC):
+        """Binds this server to the given port on the given address.
 
         To start the server, call start(). If you want to run this server
         in a single process, you can call listen() as a shortcut to the
         sequence of bind() and start() calls.
+
+        Address may be either an IP address or hostname.  If it's a hostname,
+        the server will listen on all IP addresses associated with the
+        name.  Address may be an empty string or None to listen on all
+        available interfaces.  Family may be set to either socket.AF_INET
+        or socket.AF_INET6 to restrict to ipv4 or ipv6 addresses, otherwise
+        both will be used if available.
+
+        This method may be called multiple times prior to start() to listen
+        on multiple ports or interfaces.
         """
-        assert not self._socket
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        flags = fcntl.fcntl(self._socket.fileno(), fcntl.F_GETFD)
-        flags |= fcntl.FD_CLOEXEC
-        fcntl.fcntl(self._socket.fileno(), fcntl.F_SETFD, flags)
-        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._socket.setblocking(0)
-        self._socket.bind((address, port))
-        self._socket.listen(128)
+        if address == "":
+            address = None
+        success = 0
+        for res in socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
+                                      0, socket.AI_PASSIVE):
+            af, socktype, proto, canonname, sockaddr = res
+            sock = socket.socket(af, socktype, proto)
+            flags = fcntl.fcntl(sock.fileno(), fcntl.F_GETFD)
+            flags |= fcntl.FD_CLOEXEC
+            fcntl.fcntl(sock.fileno(), fcntl.F_SETFD, flags)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if af == socket.AF_INET6:
+                # On linux, ipv6 sockets accept ipv4 too by default,
+                # but this makes it impossible to bind to both
+                # 0.0.0.0 in ipv4 and :: in ipv6.  On other systems,
+                # separate sockets *must* be used to listen for both ipv4
+                # and ipv6.  For consistency, always disable ipv4 on our
+                # ipv6 sockets and use a separate ipv4 socket when needed.
+                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            sock.setblocking(0)
+            sock.bind(sockaddr)
+            sock.listen(128)
+            self._sockets[sock.fileno()] = sock
+            success += 1
 
     def start(self, num_processes=1):
         """Starts this server in the IOLoop.
@@ -221,26 +246,27 @@ class HTTPServer(object):
                         seed(int(time.time() * 1000) ^ os.getpid())
                     random.seed(seed)
                     self.io_loop = ioloop.IOLoop.instance()
-                    self.io_loop.add_handler(
-                        self._socket.fileno(), self._handle_events,
-                        ioloop.IOLoop.READ)
+                    for fd in self._sockets.keys():
+                        self.io_loop.add_handler(fd, self._handle_events,
+                                                 ioloop.IOLoop.READ)
                     return
             os.waitpid(-1, 0)
         else:
             if not self.io_loop:
                 self.io_loop = ioloop.IOLoop.instance()
-            self.io_loop.add_handler(self._socket.fileno(),
-                                     self._handle_events,
-                                     ioloop.IOLoop.READ)
+            for fd in self._sockets.keys():
+                self.io_loop.add_handler(fd, self._handle_events,
+                                         ioloop.IOLoop.READ)
 
     def stop(self):
-        self.io_loop.remove_handler(self._socket.fileno())
-        self._socket.close()
+        for fd, sock in self._sockets.iteritems():
+            self.io_loop.remove_handler(fd)
+            sock.close()
 
     def _handle_events(self, fd, events):
         while True:
             try:
-                connection, address = self._socket.accept()
+                connection, address = self._sockets[fd].accept()
             except socket.error, e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     return
