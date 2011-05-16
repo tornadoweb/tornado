@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.util import b
 from tornado.web import Application, RequestHandler
 import os
-try:
-    import pycurl
-except ImportError:
-    pycurl = None
 import re
 import unittest
 import urllib
@@ -25,6 +23,14 @@ class HelloWorldRequestHandler(RequestHandler):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
 class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def setUp(self):
+        super(SSLTest, self).setUp()
+        # Replace the client defined in the parent class.
+        # Some versions of libcurl have deadlock bugs with ssl,
+        # so always run these tests with SimpleAsyncHTTPClient.
+        self.http_client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
+                                                 force_instance=True)
+
     def get_app(self):
         return Application([('/', HelloWorldRequestHandler)])
 
@@ -45,13 +51,13 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_ssl(self):
         response = self.fetch('/')
-        self.assertEqual(response.body, "Hello world")
+        self.assertEqual(response.body, b("Hello world"))
 
     def test_large_post(self):
         response = self.fetch('/',
                               method='POST',
                               body='A'*5000)
-        self.assertEqual(response.body, "Got 5000 bytes in POST")
+        self.assertEqual(response.body, b("Got 5000 bytes in POST"))
 
     def test_non_ssl_request(self):
         # Make sure the server closes the connection when it gets a non-ssl
@@ -63,13 +69,5 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.wait()
         self.assertEqual(response.code, 599)
 
-if (ssl is None or pycurl is None or
-    (pycurl.version_info()[5].startswith('GnuTLS') and
-     pycurl.version_info()[2] < 0x71400)):
-    # Don't try to run ssl tests if we don't have the ssl module (python 2.5).
-    # Additionally, when libcurl (< 7.21.0) is compiled against gnutls
-    # instead of openssl (which is the default on at least some versions of
-    # ubuntu), libcurl does the ssl handshake in blocking mode.  That will
-    # cause this test to deadlock as the blocking network ops happen in
-    # the same IOLoop as the server.
+if ssl is None:
     del SSLTest
