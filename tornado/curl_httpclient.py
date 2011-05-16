@@ -353,6 +353,12 @@ def _curl_setup_request(curl, request, buffer, headers):
         # request uses a custom ca_certs file, they all must.
         pass
 
+    if request.allow_ipv6 is False:
+        # Curl behaves reasonably when DNS resolution gives an ipv6 address
+        # that we can't reach, so allow ipv6 unless the user asks to disable.
+        # (but see version check in _process_queue above)
+        curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)
+
     # Set the request method through curl's retarded interface which makes
     # up names for almost every single method
     curl_options = {

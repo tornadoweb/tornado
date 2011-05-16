@@ -154,7 +154,8 @@ class HTTPRequest(object):
                  header_callback=None, prepare_curl_callback=None,
                  proxy_host=None, proxy_port=None, proxy_username=None,
                  proxy_password='', allow_nonstandard_methods=False,
-                 validate_cert=True, ca_certs=None):
+                 validate_cert=True, ca_certs=None,
+                 allow_ipv6=None):
         if headers is None:
             headers = httputil.HTTPHeaders()
         if if_modified_since:
@@ -195,6 +196,9 @@ class HTTPRequest(object):
         # SimpleAsyncHTTPClient does not have this limitation.
         self.validate_cert = validate_cert
         self.ca_certs = ca_certs
+        # allow_ipv6 may be True, False, or None for default behavior
+        # that varies by httpclient implementation.
+        self.allow_ipv6 = allow_ipv6
         self.start_time = time.time()
 
 

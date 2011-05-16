@@ -134,13 +134,34 @@ class _HTTPConnection(object):
         self._timeout = None
         with stack_context.StackContext(self.cleanup):
             parsed = urlparse.urlsplit(_unicode(self.request.url))
-            host = parsed.hostname
-            if parsed.port is None:
-                port = 443 if parsed.scheme == "https" else 80
+            # urlsplit results have hostname and port results, but they
+            # didn't support ipv6 literals until python 2.7.
+            netloc = parsed.netloc
+            if "@" in netloc:
+                userpass, _, netloc = netloc.rpartition("@")
+            match = re.match(r'^(.+):(\d+)$', netloc)
+            if match:
+                host = match.group(1)
+                port = int(match.group(2))
             else:
-                port = parsed.port
+                host = netloc
+                port = 443 if parsed.scheme == "https" else 80
+            if re.match(r'^\[.*\]$', host):
+                # raw ipv6 addresses in urls are enclosed in brackets
+                host = host[1:-1]
             if self.client.hostname_mapping is not None:
                 host = self.client.hostname_mapping.get(host, host)
+
+            if request.allow_ipv6:
+                af = socket.AF_UNSPEC
+            else:
+                # We only try the first IP we get from getaddrinfo,
+                # so restrict to ipv4 by default.
+                af = socket.AF_INET
+
+            addrinfo = socket.getaddrinfo(host, port, af, socket.SOCK_STREAM,
+                                          0, 0)
+            af, socktype, proto, canonname, sockaddr = addrinfo[0]
 
             if parsed.scheme == "https":
                 ssl_options = {}
@@ -150,11 +171,11 @@ class _HTTPConnection(object):
                     ssl_options["ca_certs"] = request.ca_certs
                 else:
                     ssl_options["ca_certs"] = _DEFAULT_CA_CERTS
-                self.stream = SSLIOStream(socket.socket(),
+                self.stream = SSLIOStream(socket.socket(af, socktype, proto),
                                           io_loop=self.io_loop,
                                           ssl_options=ssl_options)
             else:
-                self.stream = IOStream(socket.socket(),
+                self.stream = IOStream(socket.socket(af, socktype, proto),
                                        io_loop=self.io_loop)
             timeout = min(request.connect_timeout, request.request_timeout)
             if timeout:
@@ -162,7 +183,7 @@ class _HTTPConnection(object):
                     self.start_time + timeout,
                     self._on_timeout)
             self.stream.set_close_callback(self._on_close)
-            self.stream.connect((host, port),
+            self.stream.connect(sockaddr,
                                 functools.partial(self._on_connect, parsed))
 
     def _on_timeout(self):

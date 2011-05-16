@@ -257,3 +257,15 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
                               user_agent=u"foo")
         self.assertEqual(response.headers["Content-Length"], "1")
         self.assertEqual(response.body, byte_body)
+
+    def test_ipv6(self):
+        url = self.get_url("/hello").replace("localhost", "[::1]")
+
+        # ipv6 is currently disabled by default and must be explicitly requested
+        self.http_client.fetch(url, self.stop)
+        response = self.wait()
+        self.assertEqual(response.code, 599)
+
+        self.http_client.fetch(url, self.stop, allow_ipv6=True)
+        response = self.wait()
+        self.assertEqual(response.body, b("Hello world!"))
