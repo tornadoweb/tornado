@@ -104,6 +104,12 @@ class RequestHandler(object):
         self._finished = False
         self._auto_finish = True
         self._transforms = None  # will be set in _execute
+        
+        if "auto_etag" in application.settings:
+            self.auto_etag = application.settings["auto_etag"]
+        else:
+            self.auto_etag = True
+        
         self.ui = _O((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
         self.ui["modules"] = _O((n, self._ui_module(n, m)) for n, m in
@@ -575,7 +581,7 @@ class RequestHandler(object):
         # Automatically support ETags and add the Content-Length header if
         # we have not flushed any content yet.
         if not self._headers_written:
-            if (self._status_code == 200 and
+            if (self.auto_etag and self._status_code == 200 and
                 self.request.method in ("GET", "HEAD") and
                 "Etag" not in self._headers):
                 hasher = hashlib.sha1()
