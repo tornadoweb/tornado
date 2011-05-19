@@ -405,7 +405,7 @@ class RequestHandler(object):
                                                      url))
         self.finish()
 
-    def write(self, chunk):
+    def write(self, chunk, header={"Content-Type":"text/html; charset=UTF-8"}):
         """Writes the given chunk to the output buffer.
 
         To write the output to the network, use the flush() method below.
@@ -421,8 +421,9 @@ class RequestHandler(object):
         assert not self._finished
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
-            self.set_header("Content-Type", "text/javascript; charset=UTF-8")
         chunk = utf8(chunk)
+        for key in header:
+          self.set_header(key, header[key])
         self._write_buffer.append(chunk)
 
     def render(self, template_name, **kwargs):
