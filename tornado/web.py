@@ -411,7 +411,9 @@ class RequestHandler(object):
         To write the output to the network, use the flush() method below.
 
         If the given chunk is a dictionary, we write it as JSON and set
-        the Content-Type of the response to be text/javascript.
+        the Content-Type of the response to be application/json.
+        (if you want to send JSON as a different Content-Type, call
+        set_header *after* calling write()).
 
         Note that lists are not converted to JSON because of a potential
         cross-site security vulnerability.  All JSON output should be
@@ -421,7 +423,7 @@ class RequestHandler(object):
         assert not self._finished
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
-            self.set_header("Content-Type", "text/javascript; charset=UTF-8")
+            self.set_header("Content-Type", "application/json; charset=UTF-8")
         chunk = utf8(chunk)
         self._write_buffer.append(chunk)
 
