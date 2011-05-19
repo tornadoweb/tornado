@@ -205,6 +205,48 @@ Other methods designed for overriding include:
  * `get_template_path(self)` - returns location of template files (default is
    in `Application` settings)
 
+### Redirection
+
+There are two main ways you can redirect requests in Tornado:
+`self.redirect` and with the `RedirectHandler`.
+
+You can use `self.redirect` within a
+`RequestHandler` method (like `get`) to redirect users elsewhere. 
+There is also an optional 
+parameter `permanent` which you can use to indicate
+that the redirection is considered permanent.  
+
+This triggers a `301 Moved Permanently` 
+HTTP status, which is useful for e.g.
+redirecting to a canonical URL for a page in an SEO-friendly manner.
+
+The default value of `permanent` is `False`, which is apt for things like redirecting
+users on successful POST requests.
+
+	self.redirect('/some-canonical-page', permanent=True)
+
+`RedirectHandler` is available for your use when you initialize `Application`.
+
+For example, notice how we redirect to a longer download URL on this website:
+
+    application = tornado.wsgi.WSGIApplication([
+        (r"/([a-z]*)", ContentHandler),
+        (r"/static/tornado-0.2.tar.gz", tornado.web.RedirectHandler,
+         dict(url="http://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz")),
+    ], **settings)
+
+The default `RedirectHandler` status code is `301 Moved Permanently`, but to use
+`302 Found` instead, set `permanent` to `False`.
+
+    application = tornado.wsgi.WSGIApplication([
+        (r"/foo", tornado.web.RedirectHandler, {"url":"/bar", "permanent":False}),
+    ], **settings)
+
+Note that the default value of `permanent` is different in `self.redirect` than in `RedirectHandler`.
+This should make some sense if you consider that `self.redirect` is used in your methods
+and is probably invoked by logic involving environment, authentication, or form submission,
+but `RedirectHandler` patterns are going to fire 100% of the time they match the request URL.
+
 ### Templates
 
 You can use any template language supported by Python, but Tornado ships
@@ -479,6 +521,7 @@ setting in your application:
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/login", LoginHandler),
+        (r"/(apple-touch-icon\.png)", tornado.web.StaticFileHandler, dict(path=settings['static_path'])),
     ], **settings)
 
 This setting will automatically make all requests that start with `/static/`
@@ -486,6 +529,15 @@ serve from that static directory, e.g., [http://localhost:8888/static/foo.png](h
 will serve the file `foo.png` from the specified static directory. We
 also automatically serve `/robots.txt` and `/favicon.ico` from the static
 directory (even though they don't start with the `/static/` prefix).
+
+In the above settings, we have explicitly configured Tornado to serve `apple-touch-icon.png`
+“from” the root with the `StaticFileHandler`, though it is physically in the static file directory.
+(The capturing group in that regular expression is necessary to tell
+`StaticFileHandler` the requested filename; capturing groups are passed
+to handlers as method arguments.)
+You could do the same thing to serve e.g. `sitemap.xml` from the site root.
+Of course, you can also avoid faking a root `apple-touch-icon.png`
+by using the appropriate `<link />` tag in your HTML.
 
 To improve performance, it is generally a good idea for browsers to
 cache static resources aggressively so browsers won't send unnecessary
