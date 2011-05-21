@@ -3,6 +3,9 @@
 import tornado.escape
 import unittest
 
+from tornado.escape import utf8, xhtml_escape, xhtml_unescape
+from tornado.util import b
+
 linkify_tests = [
     # (input, linkify_kwargs, expected_output)
 
@@ -125,3 +128,15 @@ class EscapeTestCase(unittest.TestCase):
             linked = tornado.escape.linkify(text, **kwargs)
             self.assertEqual(linked, html)
 
+    def test_xhtml_escape(self):
+        tests = [
+            ("<foo>", "&lt;foo&gt;"),
+            (u"<foo>", u"&lt;foo&gt;"),
+            (b("<foo>"), b("&lt;foo&gt;")),
+
+            ("<>&\"", "&lt;&gt;&amp;&quot;"),
+            ("&amp;", "&amp;amp;"),
+            ]
+        for unescaped, escaped in tests:
+            self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
+            self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
