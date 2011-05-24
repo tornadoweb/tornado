@@ -388,7 +388,7 @@ class OAuth2Mixin(object):
           "client_id": client_id
         }
         if extra_params: args.update(extra_params)
-        self.redirect(self._OAUTH_AUTHORIZE_URL +
+        self.redirect(self._OAUTH_AUTHORIZE_URL + '?' +
               urllib.urlencode(args))
 
     def _oauth_request_token_url(self, redirect_uri= None, client_id = None,
@@ -402,7 +402,7 @@ class OAuth2Mixin(object):
             client_secret=client_secret,
             )
         if extra_params: args.update(extra_params)
-        return url + urllib.urlencode(args)
+        return url + '?' + urllib.urlencode(args)
 
 class TwitterMixin(OAuthMixin):
     """Twitter OAuth authentication.
