@@ -23,6 +23,7 @@ import socket
 import time
 import urlparse
 
+from tornado.escape import utf8
 from tornado import httputil
 from tornado import ioloop
 from tornado import iostream
@@ -406,7 +407,7 @@ class HTTPConnection(object):
                 for field in fields:
                     k, sep, v = field.strip().partition("=")
                     if k == "boundary" and v:
-                        self._parse_mime_body(v, data)
+                        self._parse_mime_body(utf8(v), data)
                         break
                 else:
                     logging.warning("Invalid multipart/form-data")
@@ -418,34 +419,34 @@ class HTTPConnection(object):
         # xmpp).  I think we're also supposed to handle backslash-escapes
         # here but I'll save that until we see a client that uses them
         # in the wild.
-        if boundary.startswith('"') and boundary.endswith('"'):
+        if boundary.startswith(b('"')) and boundary.endswith(b('"')):
             boundary = boundary[1:-1]
-        if data.endswith("\r\n"):
+        if data.endswith(b("\r\n")):
             footer_length = len(boundary) + 6
         else:
             footer_length = len(boundary) + 4
-        parts = data[:-footer_length].split("--" + boundary + "\r\n")
+        parts = data[:-footer_length].split(b("--") + boundary + b("\r\n"))
         for part in parts:
             if not part: continue
-            eoh = part.find("\r\n\r\n")
+            eoh = part.find(b("\r\n\r\n"))
             if eoh == -1:
                 logging.warning("multipart/form-data missing headers")
                 continue
-            headers = httputil.HTTPHeaders.parse(part[:eoh])
+            headers = httputil.HTTPHeaders.parse(part[:eoh].decode("latin1"))
             name_header = headers.get("Content-Disposition", "")
             if not name_header.startswith("form-data;") or \
-               not part.endswith("\r\n"):
+               not part.endswith(b("\r\n")):
                 logging.warning("Invalid multipart/form-data")
                 continue
             value = part[eoh + 4:-2]
             name_values = {}
             for name_part in name_header[10:].split(";"):
                 name, name_value = name_part.strip().split("=", 1)
-                name_values[name] = name_value.strip('"').decode("utf-8")
+                name_values[name] = name_value.strip('"')
             if not name_values.get("name"):
                 logging.warning("multipart/form-data value missing name")
                 continue
-            name = name_values["name"].decode("utf-8")
+            name = name_values["name"]
             if name_values.get("filename"):
                 ctype = headers.get("Content-Type", "application/unknown")
                 self._request.files.setdefault(name, []).append(dict(
