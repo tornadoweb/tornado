@@ -123,7 +123,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
                     b(""),
                     u"\u00e1".encode("utf-8"),
                     b("--1234567890"),
-                    u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode("latin1"),
+                    u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode("utf8"),
                     b(""),
                     u"\u00fa".encode("utf-8"),
                     b("--1234567890"),

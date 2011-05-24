@@ -432,7 +432,7 @@ class HTTPConnection(object):
             if eoh == -1:
                 logging.warning("multipart/form-data missing headers")
                 continue
-            headers = httputil.HTTPHeaders.parse(part[:eoh].decode("latin1"))
+            headers = httputil.HTTPHeaders.parse(part[:eoh].decode("utf-8"))
             name_header = headers.get("Content-Disposition", "")
             if not name_header.startswith("form-data;") or \
                not part.endswith(b("\r\n")):
