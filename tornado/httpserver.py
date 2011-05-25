@@ -23,7 +23,7 @@ import socket
 import time
 import urlparse
 
-from tornado.escape import utf8
+from tornado.escape import utf8, native_str
 from tornado import httputil
 from tornado import ioloop
 from tornado import iostream
@@ -506,7 +506,7 @@ class HTTPRequest(object):
         self._start_time = time.time()
         self._finish_time = None
 
-        scheme, netloc, path, query, fragment = urlparse.urlsplit(uri)
+        scheme, netloc, path, query, fragment = urlparse.urlsplit(native_str(uri))
         self.path = path
         self.query = query
         arguments = parse_qs(query)

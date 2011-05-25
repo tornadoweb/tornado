@@ -135,4 +135,16 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(u"\u00e1", data["argument"])
         self.assertEqual(u"\u00f3", data["filename"])
         self.assertEqual(u"\u00fa", data["filebody"])
-        
+
+class EchoHandler(RequestHandler):
+    def get(self):
+        self.write(self.request.arguments)
+
+class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        return Application([("/echo", EchoHandler)])
+
+    def test_query_string_encoding(self):
+        response = self.fetch("/echo?foo=%C3%A9")
+        data = json_decode(response.body)
+        self.assertEqual(data, {u"foo": [u"\u00e9"]})
