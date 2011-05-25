@@ -390,7 +390,7 @@ class OAuth2Mixin(object):
         if extra_params: args.update(extra_params)
         self.redirect("%s%s%s" % (
                 self._OAUTH_AUTHORIZE_URL,
-                '' if self._OAUTH_AUTHORIZE_URL.endswith('?') else '?',
+                '' if self._OAUTH_AUTHORIZE_URL.find('?') != -1 else '?',
                 urllib.urlencode(args)
               ) )
 
@@ -407,7 +407,7 @@ class OAuth2Mixin(object):
         if extra_params: args.update(extra_params)
         return "%s%s%s" % (
                 url,
-                '' if url.endswith('?') else '?',
+                '' if url.find('?') != -1 else '?',
                 urllib.urlencode(args)
                 )
 
