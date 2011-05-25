@@ -26,8 +26,21 @@ class TestMixinQueryParts(unittest.TestCase):
         self.oa2.redirect = self._mock_redirect
         self.fb.redirect = self._mock_redirect
 
+        self.oa2_q = OAuth2Mixin()
+        self.oa2_q._OAUTH_ACCESS_TOKEN_URL = "https://localhost/access_token?x&"
+        self.oa2_q._OAUTH_AUTHORIZE_URL = "https://localhost/authorize?x&"
+        self.oa2_q.redirect = self._mock_redirect
+
     def _mock_redirect(self,url):
         self._redirected_to = url
+
+    def test_oa2_q_oauth_request_token_url_has_query_parts(self):
+        url = self.oa2_q._oauth_request_token_url()
+        self._test_query_parts(url, self.expected_tok_args)
+
+    def test_oa2_q_authorize_redirect_has_query_parts(self):
+        self.oa2_q.authorize_redirect()
+        self._test_query_parts(self._redirected_to, self.expected_auth_args)
 
     def test_oa2_oauth_request_token_url_has_query_parts(self):
         url = self.oa2._oauth_request_token_url()
