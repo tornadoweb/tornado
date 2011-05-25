@@ -59,7 +59,7 @@ import uuid
 from tornado import httpclient
 from tornado import escape
 from tornado.ioloop import IOLoop
-from tornado.util import bytes_type
+from tornado.util import bytes_type, url_concat
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -388,11 +388,8 @@ class OAuth2Mixin(object):
           "client_id": client_id
         }
         if extra_params: args.update(extra_params)
-        self.redirect("%s%s%s" % (
-                self._OAUTH_AUTHORIZE_URL,
-                '' if self._OAUTH_AUTHORIZE_URL.find('?') != -1 else '?',
-                urllib.urlencode(args)
-              ) )
+        self.redirect(
+                url_concat(self._OAUTH_AUTHORIZE_URL, args))
 
     def _oauth_request_token_url(self, redirect_uri= None, client_id = None,
                                  client_secret=None, code=None,
@@ -405,11 +402,7 @@ class OAuth2Mixin(object):
             client_secret=client_secret,
             )
         if extra_params: args.update(extra_params)
-        return "%s%s%s" % (
-                url,
-                '' if url.find('?') != -1 else '?',
-                urllib.urlencode(args)
-                )
+        return url_concat(url, args)
 
 class TwitterMixin(OAuthMixin):
     """Twitter OAuth authentication.
