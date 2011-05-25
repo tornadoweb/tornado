@@ -393,7 +393,7 @@ class HTTPConnection(object):
     def _on_request_body(self, data):
         self._request.body = data
         content_type = self._request.headers.get("Content-Type", "")
-        if self._request.method in ("POST", "PUT"):
+        if self._request.method in ("POST", "PUT", "DELETE"):
             if content_type.startswith("application/x-www-form-urlencoded"):
                 arguments = parse_qs(self._request.body)
                 for name, values in arguments.iteritems():
