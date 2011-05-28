@@ -1202,7 +1202,7 @@ class Application(object):
                     # unmatched optional groups correctly
                     def unquote(s):
                         if s is None: return s
-                        return urllib.unquote(s)
+                        return _unicode(urllib.unquote(s))
                     handler = spec.handler_class(self, request, **spec.kwargs)
                     # Pass matched groups to the handler.  Since
                     # match.groups() includes both named and unnamed groups,

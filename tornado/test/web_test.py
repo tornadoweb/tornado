@@ -148,7 +148,18 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
 
 class EchoHandler(RequestHandler):
     def get(self, path):
-        self.write(dict(path=path, args=self.request.arguments))
+        # Type checks:  web.py interfaces convert arguments to unicode
+        # strings.  In httpserver.py (i.e. self.request.arguments),
+        # they're left as the native str type.
+        for key in self.request.arguments:
+            assert type(key) == type(""), repr(key)
+            for value in self.request.arguments[key]:
+                assert type(value) == type(""), repr(value)
+            for value in self.get_arguments(key):
+                assert type(value) == unicode, repr(value)
+        assert type(path) == unicode, repr(path)
+        self.write(dict(path=path,
+                        args=self.request.arguments))
 
 class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
@@ -161,3 +172,8 @@ class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(json_decode(self.fetch('/%3F?%3F=%3F').body),
                          dict(path='?', args={'?': ['?']}))
 
+    def test_path_encoding(self):
+        # Path components and query arguments should be decoded the same way
+        self.assertEqual(json_decode(self.fetch('/%C3%A9?arg=%C3%A9').body),
+                         {u"path":u"\u00e9",
+                          u"args": {u"arg": [u"\u00e9"]}})
