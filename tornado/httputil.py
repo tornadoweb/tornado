@@ -16,6 +16,7 @@
 
 """HTTP utility code shared by clients and servers."""
 
+import urllib
 import re
 
 class HTTPHeaders(dict):
@@ -146,6 +147,18 @@ class HTTPHeaders(dict):
                 normalized = "-".join([w.capitalize() for w in name.split("-")])
             HTTPHeaders._normalized_headers[name] = normalized
             return normalized
+
+
+def url_concat(url, args):
+    """Concatenate url and argument dictionary regardless of whether
+    url has existing query parameters.
+
+    >>> url_concat("http://example.com/foo?a=b", dict(c="d"))
+    'http://example.com/foo?a=b&c=d'
+    """
+    if url[-1] not in ('?', '&'):
+        url += '&' if ('?' in url) else '?'
+    return url + urllib.urlencode(args)
 
 
 def doctests():
