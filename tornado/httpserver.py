@@ -196,7 +196,10 @@ class HTTPServer(object):
                 # separate sockets *must* be used to listen for both ipv4
                 # and ipv6.  For consistency, always disable ipv4 on our
                 # ipv6 sockets and use a separate ipv4 socket when needed.
-                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                #
+                # Python 2.x on windows doesn't have IPPROTO_IPV6.
+                if hasattr(socket, "IPPROTO_IPV6"):
+                    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
             sock.setblocking(0)
             sock.bind(sockaddr)
             sock.listen(128)
