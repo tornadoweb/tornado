@@ -342,9 +342,14 @@ def main():
     try:
         # In order to be able to run tests by their fully-qualified name
         # on the command line without importing all tests here,
-        # module must be set to None (in which case the defaultTest must
-        # also be fully-qualified
-        unittest.main(module=None, defaultTest='__main__.all', argv=argv)
+        # module must be set to None.  Python 3.2's unittest.main ignores
+        # defaultTest if no module is given (it tries to do its own
+        # test discovery, which is incompatible with auto2to3), so don't
+        # set module if we're not asking for a specific test.
+        if len(argv) > 1:
+            unittest.main(module=None, argv=argv)
+        else:
+            unittest.main(defaultTest="all", argv=argv)
     except SystemExit, e:
         if e.code == 0:
             logging.info('PASS')
