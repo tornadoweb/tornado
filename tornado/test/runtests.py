@@ -13,6 +13,7 @@ TEST_MODULES = [
     'tornado.test.iostream_test',
     'tornado.test.simple_httpclient_test',
     'tornado.test.stack_context_test',
+    'tornado.test.template_test',
     'tornado.test.testing_test',
     'tornado.test.web_test',
 ]
