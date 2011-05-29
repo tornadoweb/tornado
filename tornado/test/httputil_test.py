@@ -47,3 +47,10 @@ class TestUrlConcat(unittest.TestCase):
                 {'y':'y', 'z':'z'},
                 )
         self.assertEqual(url, "https://localhost/path?a=1&b=2&y=y&z=z")
+
+    def test_url_concat_no_params(self):
+        url = url_concat(
+            "https://localhost/path?r=1&t=2",
+            {},
+            )
+        self.assertEqual(url, "https://localhost/path?r=1&t=2")

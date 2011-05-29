@@ -156,6 +156,7 @@ def url_concat(url, args):
     >>> url_concat("http://example.com/foo?a=b", dict(c="d"))
     'http://example.com/foo?a=b&c=d'
     """
+    if not args: return url
     if url[-1] not in ('?', '&'):
         url += '&' if ('?' in url) else '?'
     return url + urllib.urlencode(args)
