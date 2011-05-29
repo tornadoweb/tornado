@@ -61,6 +61,7 @@ import urllib
 from tornado import escape
 from tornado import httputil
 from tornado import web
+from tornado.escape import native_str
 from tornado.util import b
 
 try:
@@ -87,7 +88,8 @@ class WSGIApplication(web.Application):
         for cookie_dict in getattr(handler, "_new_cookies", []):
             for cookie in cookie_dict.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))
-        start_response(status, headers)
+        start_response(status,
+                       [(native_str(k), native_str(v)) for (k,v) in headers])
         return handler._write_buffer
 
 
