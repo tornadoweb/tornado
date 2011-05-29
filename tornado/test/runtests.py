@@ -16,6 +16,7 @@ TEST_MODULES = [
     'tornado.test.template_test',
     'tornado.test.testing_test',
     'tornado.test.web_test',
+    'tornado.test.wsgi_test',
 ]
 
 def all():

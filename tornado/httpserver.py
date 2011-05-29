@@ -362,7 +362,7 @@ class HTTPConnection(object):
 
     def _on_headers(self, data):
         try:
-            data = data.decode('latin1')
+            data = native_str(data.decode('latin1'))
             eol = data.find("\r\n")
             start_line = data[:eol]
             try:
