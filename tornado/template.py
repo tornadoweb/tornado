@@ -195,6 +195,22 @@ class Loader(object):
         return self.templates[name]
 
 
+class DictLoader(object):
+    """A template loader that loads from a dictionary."""
+    def __init__(self, dict):
+        self.dict = dict
+        self.templates = {}
+
+    def reset(self):
+        self.templates = {}
+
+    def load(self, name, parent_path=None):
+        if name not in self.templates:
+            self.templates[name] = Template(self.dict[name], name=name,
+                                            loader=self)
+        return self.templates[name]
+
+
 class _Node(object):
     def each_child(self):
         return ()
