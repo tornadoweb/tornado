@@ -182,7 +182,7 @@ class HTTPServer(object):
             address = None
         success = 0
         for res in socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                      0, socket.AI_PASSIVE):
+                                      0, socket.AI_PASSIVE | socket.AI_ADDRCONFIG):
             af, socktype, proto, canonname, sockaddr = res
             sock = socket.socket(af, socktype, proto)
             flags = fcntl.fcntl(sock.fileno(), fcntl.F_GETFD)
