@@ -249,14 +249,32 @@ class RequestHandler(object):
 
         The returned values are always unicode.
         """
-        values = self.request.arguments.get(name, [])
-        # Get rid of any weird control chars
-        values = [re.sub(r"[\x00-\x08\x0e-\x1f]", " ", _unicode(x)) 
-                  for x in values]
-        if strip:
-            values = [x.strip() for x in values]
+        values = []
+        for v in self.request.arguments.get(name, []):
+            v = self.decode_argument(v, name=name)
+            if isinstance(v, unicode):
+                # Get rid of any weird control chars (unless decoding gave
+                # us bytes, in which case leave it alone)
+                v = re.sub(r"[\x00-\x08\x0e-\x1f]", " ", v)
+            if strip:
+                v = v.strip()
+            values.append(v)
         return values
 
+    def decode_argument(self, value, name=None):
+        """Decodes an argument from the request.
+
+        The argument has been percent-decoded and is now a byte string.
+        By default, this method decodes the argument as utf-8 and returns
+        a unicode string, but this may be overridden in subclasses.
+
+        This method is used as a filter for both get_argument() and for
+        values extracted from the url and passed to get()/post()/etc.
+
+        The name of the argument is provided if known, but may be None
+        (e.g. for unnamed groups in the url regex).
+        """
+        return _unicode(value)
 
     @property
     def cookies(self):
@@ -881,6 +899,9 @@ class RequestHandler(object):
                 self.check_xsrf_cookie()
             self.prepare()
             if not self._finished:
+                args = [self.decode_argument(arg) for arg in args]
+                kwargs = dict((k, self.decode_argument(v, name=k))
+                              for (k,v) in kwargs.iteritems())
                 getattr(self, self.request.method.lower())(*args, **kwargs)
                 if self._auto_finish and not self._finished:
                     self.finish()
@@ -1198,15 +1219,17 @@ class Application(object):
             for spec in handlers:
                 match = spec.regex.match(request.path)
                 if match:
-                    # None-safe wrapper around urllib.unquote to handle
+                    # None-safe wrapper around url_unescape to handle
                     # unmatched optional groups correctly
                     def unquote(s):
                         if s is None: return s
-                        return _unicode(urllib.unquote(s))
+                        return escape.url_unescape(s, encoding=None)
                     handler = spec.handler_class(self, request, **spec.kwargs)
                     # Pass matched groups to the handler.  Since
                     # match.groups() includes both named and unnamed groups,
                     # we want to use either groups or groupdict but not both.
+                    # Note that args are passed as bytes so the handler can
+                    # decide what encoding to use.
                     kwargs = dict((k, unquote(v))
                                   for (k, v) in match.groupdict().iteritems())
                     if kwargs:

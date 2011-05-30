@@ -1,4 +1,4 @@
-from tornado.escape import json_decode, utf8
+from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
 from tornado.iostream import IOStream
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type
@@ -148,18 +148,19 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
 
 class EchoHandler(RequestHandler):
     def get(self, path):
-        # Type checks:  web.py interfaces convert arguments to unicode
-        # strings.  In httpserver.py (i.e. self.request.arguments),
-        # they're left as the native str type.
+        # Type checks: web.py interfaces convert argument values to
+        # unicode strings (by default, but see also decode_argument).
+        # In httpserver.py (i.e. self.request.arguments), they're left
+        # as bytes.  Keys are always native strings.
         for key in self.request.arguments:
-            assert type(key) == type(""), repr(key)
+            assert type(key) == str, repr(key)
             for value in self.request.arguments[key]:
-                assert type(value) == type(""), repr(value)
+                assert type(value) == bytes_type, repr(value)
             for value in self.get_arguments(key):
                 assert type(value) == unicode, repr(value)
         assert type(path) == unicode, repr(path)
         self.write(dict(path=path,
-                        args=self.request.arguments))
+                        args=recursive_unicode(self.request.arguments)))
 
 class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
@@ -215,9 +216,33 @@ class TypeCheckHandler(RequestHandler):
             self.errors[name] = "expected %s, got %s" % (expected_type,
                                                          actual_type)
 
+class DecodeArgHandler(RequestHandler):
+    def decode_argument(self, value, name=None):
+        assert type(value) == bytes_type, repr(value)
+        # use self.request.arguments directly to avoid recursion
+        if 'encoding' in self.request.arguments:
+            return value.decode(to_unicode(self.request.arguments['encoding'][0]))
+        else:
+            return value
+
+    def get(self, arg):
+        def describe(s):
+            if type(s) == bytes_type:
+                return ["bytes", native_str(binascii.b2a_hex(s))]
+            elif type(s) == unicode:
+                return ["unicode", s]
+            raise Exception("unknown type")
+        self.write({'path': describe(arg),
+                    'query': describe(self.get_argument("foo")),
+                    })
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
-        return Application([url("/typecheck/(.*)", TypeCheckHandler, name='typecheck')])
+        return Application([
+                url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
+                url("/decode_arg/(.*)", DecodeArgHandler),
+                url("/decode_arg_kw/(?P<arg>.*)", DecodeArgHandler),
+                ])
 
     def test_types(self):
         response = self.fetch("/typecheck/asdf?foo=bar",
@@ -228,3 +253,24 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/typecheck/asdf?foo=bar", method="POST",
                               headers={"Cookie": "cook=ie"},
                               body="foo=bar")
+
+    def test_decode_argument(self):
+        # These urls all decode to the same thing
+        urls = ["/decode_arg/%C3%A9?foo=%C3%A9&encoding=utf-8",
+                "/decode_arg/%E9?foo=%E9&encoding=latin1",
+                "/decode_arg_kw/%E9?foo=%E9&encoding=latin1",
+                ]
+        for url in urls:
+            response = self.fetch(url)
+            response.rethrow()
+            data = json_decode(response.body)
+            self.assertEqual(data, {u'path': [u'unicode', u'\u00e9'],
+                                    u'query': [u'unicode', u'\u00e9'],
+                                    })
+
+        response = self.fetch("/decode_arg/%C3%A9?foo=%C3%A9")
+        response.rethrow()
+        data = json_decode(response.body)
+        self.assertEqual(data, {u'path': [u'bytes', u'c3a9'],
+                                u'query': [u'bytes', u'c3a9'],
+                                })

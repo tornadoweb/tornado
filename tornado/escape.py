@@ -26,6 +26,11 @@ import urllib
 try: bytes
 except: bytes = str
 
+try:
+    from urlparse import parse_qs  # Python 2.6+
+except ImportError:
+    from cgi import parse_qs
+
 # json module is in the standard library as of python 2.6; fall back to
 # simplejson if present for older versions.
 try:
@@ -88,7 +93,8 @@ def url_escape(value):
     return urllib.quote_plus(utf8(value))
 
 # python 3 changed things around enough that we need two separate
-# implementations of url_unescape
+# implementations of url_unescape.  We also need our own implementation
+# of parse_qs since python 3's version insists on decoding everything.
 if sys.version_info[0] < 3:
     def url_unescape(value, encoding='utf-8'):
         """Decodes the given value from a URL.
@@ -102,6 +108,8 @@ if sys.version_info[0] < 3:
             return urllib.unquote_plus(utf8(value))
         else:
             return unicode(urllib.unquote_plus(utf8(value)), encoding)
+
+    parse_qs_bytes = parse_qs
 else:
     def url_unescape(value, encoding='utf-8'):
         """Decodes the given value from a URL.
@@ -115,6 +123,24 @@ else:
             return urllib.parse.unquote_to_bytes(value)
         else:
             return urllib.unquote_plus(native_str(value), encoding=encoding)
+
+    def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
+        """Parses a query string like urlparse.parse_qs, but returns the
+        values as byte strings.
+
+        Keys still become type str (interpreted as latin1 in python3!)
+        because it's too painful to keep them as byte strings in
+        python3 and in practice they're nearly always ascii anyway.
+        """
+        # This is gross, but python3 doesn't give us another way.
+        # Latin1 is the universal donor of character encodings.
+        result = parse_qs(qs, keep_blank_values, strict_parsing,
+                          encoding='latin1', errors='strict')
+        encoded = {}
+        for k,v in result.iteritems():
+            encoded[k] = [i.encode('latin1') for i in v]
+        return encoded
+        
 
 
 _UTF8_TYPES = (bytes, type(None))
@@ -152,6 +178,22 @@ if str is unicode:
 else:
     native_str = utf8
 
+
+def recursive_unicode(obj):
+    """Walks a simple data structure, converting byte strings to unicode.
+
+    Supports lists, tuples, and dictionaries.
+    """
+    if isinstance(obj, dict):
+        return dict((recursive_unicode(k), recursive_unicode(v)) for (k,v) in obj.iteritems())
+    elif isinstance(obj, list):
+        return list(recursive_unicode(i) for i in obj)
+    elif isinstance(obj, tuple):
+        return tuple(recursive_unicode(i) for i in obj)
+    elif isinstance(obj, bytes):
+        return to_unicode(obj)
+    else:
+        return obj
 
 # I originally used the regex from 
 # http://daringfireball.net/2010/07/improved_regex_for_matching_urls

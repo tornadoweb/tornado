@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from tornado import httpclient, simple_httpclient
-from tornado.escape import json_decode, utf8, _unicode
+from tornado.escape import json_decode, utf8, _unicode, recursive_unicode
 from tornado.iostream import IOStream
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
@@ -138,7 +138,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
 
 class EchoHandler(RequestHandler):
     def get(self):
-        self.write(self.request.arguments)
+        self.write(recursive_unicode(self.request.arguments))
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
@@ -160,7 +160,7 @@ class TypeCheckHandler(RequestHandler):
         self.check_type('header_value', self.request.headers.values()[0], str)
 
         self.check_type('arg_key', self.request.arguments.keys()[0], str)
-        self.check_type('arg_value', self.request.arguments.values()[0][0], str)
+        self.check_type('arg_value', self.request.arguments.values()[0][0], bytes_type)
 
     def post(self):
         self.check_type('body', self.request.body, bytes_type)

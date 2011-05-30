@@ -23,17 +23,12 @@ import socket
 import time
 import urlparse
 
-from tornado.escape import utf8, native_str
+from tornado.escape import utf8, native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import ioloop
 from tornado import iostream
 from tornado import stack_context
 from tornado.util import b, bytes_type
-
-try:
-    from urlparse import parse_qs  # Python 2.6+
-except ImportError:
-    from cgi import parse_qs
 
 try:
     import fcntl
@@ -398,7 +393,7 @@ class HTTPConnection(object):
         content_type = self._request.headers.get("Content-Type", "")
         if self._request.method in ("POST", "PUT"):
             if content_type.startswith("application/x-www-form-urlencoded"):
-                arguments = parse_qs(native_str(self._request.body))
+                arguments = parse_qs_bytes(native_str(self._request.body))
                 for name, values in arguments.iteritems():
                     values = [v for v in values if v]
                     if values:
@@ -511,7 +506,7 @@ class HTTPRequest(object):
         scheme, netloc, path, query, fragment = urlparse.urlsplit(native_str(uri))
         self.path = path
         self.query = query
-        arguments = parse_qs(query)
+        arguments = parse_qs_bytes(query)
         self.arguments = {}
         for name, values in arguments.iteritems():
             values = [v for v in values if v]
