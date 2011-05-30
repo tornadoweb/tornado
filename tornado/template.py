@@ -163,13 +163,7 @@ class Template(object):
         return ancestors
 
 
-class Loader(object):
-    """A template loader that loads from a single root directory.
-
-    You must use a template loader to use template constructs like
-    {% extends %} and {% include %}. Loader caches all templates after
-    they are loaded the first time.
-    """
+class BaseLoader(object):
     def __init__(self, root_directory):
         self.root = os.path.abspath(root_directory)
         self.templates = {}
@@ -191,27 +185,35 @@ class Loader(object):
     def load(self, name, parent_path=None):
         name = self.resolve_path(name, parent_path=parent_path)
         if name not in self.templates:
-            path = os.path.join(self.root, name)
-            f = open(path, "r")
-            self.templates[name] = Template(f.read(), name=name, loader=self)
-            f.close()
+            self.templates[name] = self._create_template(name)
         return self.templates[name]
 
+    def _create_template(self, name):
+        raise NotImplementedError()
 
-class DictLoader(object):
+class Loader(BaseLoader):
+    """A template loader that loads from a single root directory.
+
+    You must use a template loader to use template constructs like
+    {% extends %} and {% include %}. Loader caches all templates after
+    they are loaded the first time.
+    """
+    def _create_template(self, name):
+        path = os.path.join(self.root, name)
+        f = open(path, "r")
+        template = Template(f.read(), name=name, loader=self)
+        f.close()
+        return template
+
+
+class DictLoader(BaseLoader):
     """A template loader that loads from a dictionary."""
     def __init__(self, dict):
+        super(DictLoader, self).__init__("")
         self.dict = dict
-        self.templates = {}
 
-    def reset(self):
-        self.templates = {}
-
-    def load(self, name, parent_path=None):
-        if name not in self.templates:
-            self.templates[name] = Template(self.dict[name], name=name,
-                                            loader=self)
-        return self.templates[name]
+    def _create_template(self, name):
+        return Template(self.dict[name], name=name, loader=self)
 
 
 class _Node(object):

@@ -40,3 +40,12 @@ class TemplateTest(LogTrapTestCase):
                 })
         self.assertEqual(loader.load("page.html").generate(),
                          b("<title>page title</title>\n<body>page body</body>\n"))
+
+    def test_relative_load(self):
+        loader = DictLoader({
+                "a/1.html": "{% include '2.html' %}",
+                "a/2.html": "{% include '../b/3.html' %}",
+                "b/3.html": "ok",
+                })
+        self.assertEqual(loader.load("a/1.html").generate(),
+                         b("ok"))
