@@ -1,8 +1,8 @@
 from tornado.escape import json_decode, utf8
 from tornado.iostream import IOStream
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
-from tornado.util import b
-from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous
+from tornado.util import b, bytes_type
+from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url
 
 import binascii
 import logging
@@ -177,3 +177,54 @@ class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(json_decode(self.fetch('/%C3%A9?arg=%C3%A9').body),
                          {u"path":u"\u00e9",
                           u"args": {u"arg": [u"\u00e9"]}})
+
+class TypeCheckHandler(RequestHandler):
+    def prepare(self):
+        self.errors = {}
+
+        self.check_type('status', self.get_status(), int)
+
+        # get_argument is an exception from the general rule of using
+        # type str for non-body data mainly for historical reasons.
+        self.check_type('argument', self.get_argument('foo'), unicode)
+
+        self.check_type('cookie_key', self.cookies.keys()[0], str)
+        self.check_type('cookie_value', self.cookies.values()[0].value, str)
+        # secure cookies
+    
+        self.check_type('xsrf_token', self.xsrf_token, bytes_type)
+        self.check_type('xsrf_form_html', self.xsrf_form_html(), str)
+
+        self.check_type('reverse_url', self.reverse_url('typecheck', 'foo'), str)
+
+        self.check_type('request_summary', self._request_summary(), str)
+
+    def get(self, path_component):
+        # path_component uses type unicode instead of str for consistency
+        # with get_argument()
+        self.check_type('path_component', path_component, unicode)
+        self.write(self.errors)
+
+    def post(self, path_component):
+        self.check_type('path_component', path_component, unicode)
+        self.write(self.errors)
+
+    def check_type(self, name, obj, expected_type):
+        actual_type = type(obj)
+        if expected_type != actual_type:
+            self.errors[name] = "expected %s, got %s" % (expected_type,
+                                                         actual_type)
+
+class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        return Application([url("/typecheck/(.*)", TypeCheckHandler, name='typecheck')])
+
+    def test_types(self):
+        response = self.fetch("/typecheck/asdf?foo=bar",
+                              headers={"Cookie": "cook=ie"})
+        data = json_decode(response.body)
+        self.assertEqual(data, {})
+
+        response = self.fetch("/typecheck/asdf?foo=bar", method="POST",
+                              headers={"Cookie": "cook=ie"},
+                              body="foo=bar")

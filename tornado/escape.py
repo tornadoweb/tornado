@@ -53,7 +53,7 @@ except:
 
 def xhtml_escape(value):
     """Escapes a string so it is valid within XML or XHTML."""
-    return xml.sax.saxutils.escape(_unicode(value), {'"': "&quot;"})
+    return xml.sax.saxutils.escape(native_str(value), {'"': "&quot;"})
 
 
 def xhtml_unescape(value):
@@ -74,7 +74,7 @@ def json_encode(value):
 
 def json_decode(value):
     """Returns Python objects for the given JSON string."""
-    return _json_decode(_unicode(value))
+    return _json_decode(native_str(value))
 
 
 def squeeze(value):
