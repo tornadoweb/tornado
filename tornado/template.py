@@ -88,6 +88,7 @@ import os.path
 import re
 
 from tornado import escape
+from tornado.util import bytes_type
 
 class Template(object):
     """A compiled template.
@@ -121,6 +122,8 @@ class Template(object):
             "squeeze": escape.squeeze,
             "linkify": escape.linkify,
             "datetime": datetime,
+            "_utf8": escape.utf8,  # for internal use
+            "_string_types": (unicode, bytes_type),
         }
         namespace.update(kwargs)
         exec self.compiled in namespace
@@ -232,7 +235,7 @@ class _File(_Node):
         with writer.indent():
             writer.write_line("_buffer = []")
             self.body.generate(writer)
-            writer.write_line("return ''.join(_buffer)")
+            writer.write_line("return _utf8('').join(_buffer)")
 
     def each_child(self):
         return (self.body,)
@@ -304,7 +307,7 @@ class _ApplyBlock(_Node):
         with writer.indent():
             writer.write_line("_buffer = []")
             self.body.generate(writer)
-            writer.write_line("return ''.join(_buffer)")
+            writer.write_line("return _utf8('').join(_buffer)")
         writer.write_line("_buffer.append(%s(%s()))" % (
             self.method, method_name))
 
@@ -345,10 +348,9 @@ class _Expression(_Node):
 
     def generate(self, writer):
         writer.write_line("_tmp = %s" % self.expression)
-        writer.write_line("if isinstance(_tmp, str): _buffer.append(_tmp)")
-        writer.write_line("elif isinstance(_tmp, unicode): "
-                          "_buffer.append(_tmp.encode('utf-8'))")
-        writer.write_line("else: _buffer.append(str(_tmp))")
+        writer.write_line("if isinstance(_tmp, _string_types):"
+                          " _buffer.append(_utf8(_tmp))")
+        writer.write_line("else: _buffer.append(_utf8(str(_tmp)))")
 
 
 class _Text(_Node):
@@ -366,7 +368,7 @@ class _Text(_Node):
             value = re.sub(r"(\s*\n\s*)", "\n", value)
 
         if value:
-            writer.write_line('_buffer.append(%r)' % value)
+            writer.write_line('_buffer.append(%r)' % escape.utf8(value))
 
 
 class ParseError(Exception):

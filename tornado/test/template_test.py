@@ -1,11 +1,22 @@
+from tornado.escape import utf8
 from tornado.template import Template, DictLoader
 from tornado.testing import LogTrapTestCase
+from tornado.util import b
 
 class TemplateTest(LogTrapTestCase):
     def test_simple(self):
         template = Template("Hello {{ name }}!")
         self.assertEqual(template.generate(name="Ben"),
-                         "Hello Ben!")
+                         b("Hello Ben!"))
+
+    def test_bytes(self):
+        template = Template("Hello {{ name }}!")
+        self.assertEqual(template.generate(name=utf8("Ben")),
+                         b("Hello Ben!"))
+
+    def test_expressions(self):
+        template = Template("2 + 2 = {{ 2 + 2 }}")
+        self.assertEqual(template.generate(), b("2 + 2 = 4"))
 
     def test_include(self):
         loader = DictLoader({
@@ -13,7 +24,7 @@ class TemplateTest(LogTrapTestCase):
                 "header.html": "header text",
                 })
         self.assertEqual(loader.load("index.html").generate(),
-                         "header text\nbody text")
+                         b("header text\nbody text"))
 
     def test_extends(self):
         loader = DictLoader({
@@ -28,4 +39,4 @@ class TemplateTest(LogTrapTestCase):
 """,
                 })
         self.assertEqual(loader.load("page.html").generate(),
-                         "<title>page title</title>\n<body>page body</body>\n")
+                         b("<title>page title</title>\n<body>page body</body>\n"))
