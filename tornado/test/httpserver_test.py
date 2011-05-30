@@ -5,7 +5,7 @@ from tornado.escape import json_decode, utf8, _unicode
 from tornado.iostream import IOStream
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
-from tornado.util import b
+from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler
 import logging
 import os
@@ -140,11 +140,58 @@ class EchoHandler(RequestHandler):
     def get(self):
         self.write(self.request.arguments)
 
+class TypeCheckHandler(RequestHandler):
+    def prepare(self):
+        self.errors = {}
+        fields = [
+            ('method', str),
+            ('uri', str),
+            ('version', str),
+            ('remote_ip', str),
+            ('protocol', str),
+            ('host', str),
+            ('path', str),
+            ('query', str),
+            ]
+        for field, expected_type in fields:
+            self.check_type(field, getattr(self.request, field), expected_type)
+
+        self.check_type('header_key', self.request.headers.keys()[0], str)
+        self.check_type('header_value', self.request.headers.values()[0], str)
+
+        self.check_type('arg_key', self.request.arguments.keys()[0], str)
+        self.check_type('arg_value', self.request.arguments.values()[0][0], str)
+
+    def post(self):
+        self.check_type('body', self.request.body, bytes_type)
+        self.write(self.errors)
+
+    def get(self):
+        self.write(self.errors)
+
+    def check_type(self, name, obj, expected_type):
+        actual_type = type(obj)
+        if expected_type != actual_type:
+            self.errors[name] = "expected %s, got %s" % (expected_type, 
+                                                         actual_type)
+
 class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
-        return Application([("/echo", EchoHandler)])
+        return Application([("/echo", EchoHandler),
+                            ("/typecheck", TypeCheckHandler),
+                            ])
 
     def test_query_string_encoding(self):
         response = self.fetch("/echo?foo=%C3%A9")
         data = json_decode(response.body)
         self.assertEqual(data, {u"foo": [u"\u00e9"]})
+
+    def test_types(self):
+        response = self.fetch("/typecheck?foo=bar")
+        data = json_decode(response.body)
+        self.assertEqual(data, {})
+
+        response = self.fetch("/typecheck", method="POST", body="foo=bar")
+        data = json_decode(response.body)
+        self.assertEqual(data, {})
+

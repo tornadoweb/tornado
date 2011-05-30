@@ -398,9 +398,8 @@ class HTTPConnection(object):
         content_type = self._request.headers.get("Content-Type", "")
         if self._request.method in ("POST", "PUT"):
             if content_type.startswith("application/x-www-form-urlencoded"):
-                arguments = parse_qs(self._request.body)
+                arguments = parse_qs(native_str(self._request.body))
                 for name, values in arguments.iteritems():
-                    name = name.decode('utf-8')
                     values = [v for v in values if v]
                     if values:
                         self._request.arguments.setdefault(name, []).extend(
