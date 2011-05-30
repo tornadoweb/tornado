@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from __future__ import with_statement
 
-from tornado.escape import utf8, _unicode
+from tornado.escape import utf8, _unicode, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
@@ -273,7 +273,7 @@ class _HTTPConnection(object):
                                   error=HTTPError(599, "Connection closed")))
 
     def _on_headers(self, data):
-        data = data.decode("latin1")
+        data = native_str(data.decode("latin1"))
         first_line, _, header_data = data.partition("\r\n")
         match = re.match("HTTP/1.[01] ([0-9]+)", first_line)
         assert match
@@ -318,7 +318,7 @@ class _HTTPConnection(object):
             self.code in (301, 302)):
             new_request = copy.copy(self.request)
             new_request.url = urlparse.urljoin(self.request.url,
-                                               utf8(self.headers["Location"]))
+                                               self.headers["Location"])
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
             new_request.original_request = original_request

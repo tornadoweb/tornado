@@ -12,7 +12,7 @@ from contextlib import closing
 from tornado.escape import utf8
 from tornado.httpclient import AsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
-from tornado.util import b
+from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler, asynchronous, url
 
 class HelloWorldHandler(RequestHandler):
@@ -159,7 +159,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
 
         response = self.fetch("/countdown/2")
         self.assertEqual(200, response.code)
-        self.assertTrue(response.effective_url.endswith(b("/countdown/0")))
+        self.assertTrue(response.effective_url.endswith("/countdown/0"))
         self.assertEqual(b("Zero"), response.body)
 
     def test_max_redirects(self):
@@ -167,8 +167,8 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(302, response.code)
         # We requested 5, followed three redirects for 4, 3, 2, then the last
         # unfollowed redirect is to 1.
-        self.assertTrue(response.request.url.endswith(b("/countdown/5")))
-        self.assertTrue(response.effective_url.endswith(b("/countdown/2")))
+        self.assertTrue(response.request.url.endswith("/countdown/5"))
+        self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
     def test_credentials_in_url(self):
@@ -214,3 +214,10 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.http_client.fetch(url, self.stop, allow_ipv6=True)
         response = self.wait()
         self.assertEqual(response.body, b("Hello world!"))
+
+    def test_types(self):
+        response = self.fetch("/hello")
+        self.assertEqual(type(response.body), bytes_type)
+        self.assertEqual(type(response.headers["Content-Type"]), str)
+        self.assertEqual(type(response.code), int)
+        self.assertEqual(type(response.effective_url), str)
