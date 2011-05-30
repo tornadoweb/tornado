@@ -598,16 +598,14 @@ class RequestHandler(object):
             if (self._status_code == 200 and
                 self.request.method in ("GET", "HEAD") and
                 "Etag" not in self._headers):
-                hasher = hashlib.sha1()
-                for part in self._write_buffer:
-                    hasher.update(part)
-                etag = '"%s"' % hasher.hexdigest()
-                inm = self.request.headers.get("If-None-Match")
-                if inm and inm.find(etag) != -1:
-                    self._write_buffer = []
-                    self.set_status(304)
-                else:
-                    self.set_header("Etag", etag)
+                etag = self.compute_etag()
+                if etag is not None:
+                    inm = self.request.headers.get("If-None-Match")
+                    if inm and inm.find(etag) != -1:
+                        self._write_buffer = []
+                        self.set_status(304)
+                    else:
+                        self.set_header("Etag", etag)
             if "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
                 self.set_header("Content-Length", content_length)
@@ -873,6 +871,17 @@ class RequestHandler(object):
 
     def reverse_url(self, name, *args):
         return self.application.reverse_url(name, *args)
+
+    def compute_etag(self):
+        """Computes the etag header to be used for this request.
+
+        May be overridden to provide custom etag implementations,
+        or may return None to disable tornado's default etag support.
+        """
+        hasher = hashlib.sha1()
+        for part in self._write_buffer:
+            hasher.update(part)
+        return '"%s"' % hasher.hexdigest()
 
     def _stack_context_handle_exception(self, type, value, traceback):
         try:
