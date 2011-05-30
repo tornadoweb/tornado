@@ -49,3 +49,92 @@ class TemplateTest(LogTrapTestCase):
                 })
         self.assertEqual(loader.load("a/1.html").generate(),
                          b("ok"))
+
+class AutoEscapeTest(LogTrapTestCase):
+    def setUp(self):
+        self.templates = {
+            "escaped.html": "{% autoescape xhtml_escape %}{{ name }}",
+            "unescaped.html": "{% autoescape None %}{{ name }}",
+            "default.html": "{{ name }}",
+
+            "include.html": """\
+escaped: {% include 'escaped.html' %}
+unescaped: {% include 'unescaped.html' %}
+default: {% include 'default.html' %}
+""",
+
+            "escaped_block.html": """\
+{% autoescape xhtml_escape %}\
+{% block name %}base: {{ name }}{% end %}""",
+            "unescaped_block.html": """\
+{% autoescape None %}\
+{% block name %}base: {{ name }}{% end %}""",
+
+            # Extend a base template with different autoescape policy,
+            # with and without overriding the base's blocks
+            "escaped_extends_unescaped.html": """\
+{% autoescape xhtml_escape %}\
+{% extends "unescaped_block.html" %}""",
+            "escaped_overrides_unescaped.html": """\
+{% autoescape xhtml_escape %}\
+{% extends "unescaped_block.html" %}\
+{% block name %}extended: {{ name }}{% end %}""",
+            "unescaped_extends_escaped.html": """\
+{% autoescape None %}\
+{% extends "escaped_block.html" %}""",
+            "unescaped_overrides_escaped.html": """\
+{% autoescape None %}\
+{% extends "escaped_block.html" %}\
+{% block name %}extended: {{ name }}{% end %}""",
+            }
+    
+    def test_default_off(self):
+        loader = DictLoader(self.templates, autoescape=None)
+        name = "Bobby <table>s"
+        self.assertEqual(loader.load("escaped.html").generate(name=name),
+                         b("Bobby &lt;table&gt;s"))
+        self.assertEqual(loader.load("unescaped.html").generate(name=name),
+                         b("Bobby <table>s"))
+        self.assertEqual(loader.load("default.html").generate(name=name),
+                         b("Bobby <table>s"))
+
+        self.assertEqual(loader.load("include.html").generate(name=name),
+                         b("escaped: Bobby &lt;table&gt;s\n"
+                           "unescaped: Bobby <table>s\n"
+                           "default: Bobby <table>s\n"))
+        
+    def test_default_on(self):
+        loader = DictLoader(self.templates, autoescape="xhtml_escape")
+        name = "Bobby <table>s"
+        self.assertEqual(loader.load("escaped.html").generate(name=name),
+                         b("Bobby &lt;table&gt;s"))
+        self.assertEqual(loader.load("unescaped.html").generate(name=name),
+                         b("Bobby <table>s"))
+        self.assertEqual(loader.load("default.html").generate(name=name),
+                         b("Bobby &lt;table&gt;s"))
+        
+        self.assertEqual(loader.load("include.html").generate(name=name),
+                         b("escaped: Bobby &lt;table&gt;s\n"
+                           "unescaped: Bobby <table>s\n"
+                           "default: Bobby &lt;table&gt;s\n"))
+
+    def test_unextended_block(self):
+        loader = DictLoader(self.templates)
+        name = "<script>"
+        self.assertEqual(loader.load("escaped_block.html").generate(name=name),
+                         b("base: &lt;script&gt;"))
+        self.assertEqual(loader.load("unescaped_block.html").generate(name=name),
+                         b("base: <script>"))
+
+    def test_extended_block(self):
+        loader = DictLoader(self.templates)
+        def render(name): return loader.load(name).generate(name="<script>")
+        self.assertEqual(render("escaped_extends_unescaped.html"),
+                         b("base: <script>"))
+        self.assertEqual(render("escaped_overrides_unescaped.html"),
+                         b("extended: &lt;script&gt;"))
+
+        self.assertEqual(render("unescaped_extends_escaped.html"),
+                         b("base: &lt;script&gt;"))
+        self.assertEqual(render("unescaped_overrides_escaped.html"),
+                         b("extended: <script>"))
