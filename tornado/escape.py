@@ -18,6 +18,7 @@
 
 import htmlentitydefs
 import re
+import sys
 import xml.sax.saxutils
 import urllib
 
@@ -86,10 +87,34 @@ def url_escape(value):
     """Returns a valid URL-encoded version of the given value."""
     return urllib.quote_plus(utf8(value))
 
+# python 3 changed things around enough that we need two separate
+# implementations of url_unescape
+if sys.version_info[0] < 3:
+    def url_unescape(value, encoding='utf-8'):
+        """Decodes the given value from a URL.
 
-def url_unescape(value):
-    """Decodes the given value from a URL."""
-    return _unicode(urllib.unquote_plus(value))
+        The argument may be either a byte or unicode string.
+
+        If encoding is None, the result will be a byte string.  Otherwise,
+        the result is a unicode string in the specified encoding.
+        """
+        if encoding is None:
+            return urllib.unquote_plus(utf8(value))
+        else:
+            return unicode(urllib.unquote_plus(utf8(value)), encoding)
+else:
+    def url_unescape(value, encoding='utf-8'):
+        """Decodes the given value from a URL.
+
+        The argument may be either a byte or unicode string.
+
+        If encoding is None, the result will be a byte string.  Otherwise,
+        the result is a unicode string in the specified encoding.
+        """
+        if encoding is None:
+            return urllib.parse.unquote_to_bytes(value)
+        else:
+            return urllib.unquote_plus(native_str(value), encoding=encoding)
 
 
 _UTF8_TYPES = (bytes, type(None))

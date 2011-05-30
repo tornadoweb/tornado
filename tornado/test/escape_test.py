@@ -3,7 +3,7 @@
 import tornado.escape
 import unittest
 
-from tornado.escape import utf8, xhtml_escape, xhtml_unescape
+from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode
 from tornado.util import b
 
 linkify_tests = [
@@ -140,3 +140,28 @@ class EscapeTestCase(unittest.TestCase):
         for unescaped, escaped in tests:
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
+
+    def test_url_escape(self):
+        tests = [
+            # byte strings are passed through as-is
+            (u'\u00e9'.encode('utf8'), '%C3%A9'),
+            (u'\u00e9'.encode('latin1'), '%E9'),
+
+            # unicode strings become utf8
+            (u'\u00e9', '%C3%A9'),
+            ]
+        for unescaped, escaped in tests:
+            self.assertEqual(url_escape(unescaped), escaped)
+
+    def test_url_unescape(self):
+        tests = [
+            ('%C3%A9', u'\u00e9', 'utf8'),
+            ('%C3%A9', u'\u00c3\u00a9', 'latin1'),
+            ('%C3%A9', utf8(u'\u00e9'), None),
+            ]
+        for escaped, unescaped, encoding in tests:
+            # input strings to url_unescape should only contain ascii
+            # characters, but make sure the function accepts both byte
+            # and unicode strings.
+            self.assertEqual(url_unescape(to_unicode(escaped), encoding), unescaped)
+            self.assertEqual(url_unescape(utf8(escaped), encoding), unescaped)
