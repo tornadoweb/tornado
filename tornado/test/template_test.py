@@ -86,6 +86,11 @@ default: {% include 'default.html' %}
 {% autoescape None %}\
 {% extends "escaped_block.html" %}\
 {% block name %}extended: {{ name }}{% end %}""",
+
+            "raw_expression.html": """\
+{% autoescape xhtml_escape %}\
+expr: {{ name }}
+raw: {% raw name %}""",
             }
     
     def test_default_off(self):
@@ -138,3 +143,10 @@ default: {% include 'default.html' %}
                          b("base: &lt;script&gt;"))
         self.assertEqual(render("unescaped_overrides_escaped.html"),
                          b("extended: <script>"))
+
+    def test_raw_expression(self):
+        loader = DictLoader(self.templates)
+        def render(name): return loader.load(name).generate(name='<>&"')
+        self.assertEqual(render("raw_expression.html"),
+                         b("expr: &lt;&gt;&amp;&quot;\n"
+                           "raw: <>&\""))

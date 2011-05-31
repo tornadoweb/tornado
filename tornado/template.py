@@ -372,15 +372,16 @@ class _Statement(_Node):
 
 
 class _Expression(_Node):
-    def __init__(self, expression):
+    def __init__(self, expression, raw=False):
         self.expression = expression
+        self.raw = raw
 
     def generate(self, writer):
         writer.write_line("_tmp = %s" % self.expression)
         writer.write_line("if isinstance(_tmp, _string_types):"
                           " _tmp = _utf8(_tmp)")
         writer.write_line("else: _tmp = _utf8(str(_tmp))")
-        if writer.current_template.autoescape is not None:
+        if not self.raw and writer.current_template.autoescape is not None:
             # In python3 functions like xhtml_escape return unicode,
             # so we have to convert to utf8 again.
             writer.write_line("_tmp = _utf8(%s(_tmp))" %
@@ -587,7 +588,7 @@ def _parse(reader, template, in_block=None):
             return body
 
         elif operator in ("extends", "include", "set", "import", "from",
-                          "comment", "autoescape"):
+                          "comment", "autoescape", "raw"):
             if operator == "comment":
                 continue
             if operator == "extends":
@@ -613,6 +614,8 @@ def _parse(reader, template, in_block=None):
                 if fn == "None": fn = None
                 template.autoescape = fn
                 continue
+            elif operator == "raw":
+                block = _Expression(suffix, raw=True)
             body.chunks.append(block)
             continue
 
