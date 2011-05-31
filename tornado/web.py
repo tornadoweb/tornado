@@ -543,8 +543,7 @@ class RequestHandler(object):
         if not getattr(RequestHandler, "_templates", None):
             RequestHandler._templates = {}
         if template_path not in RequestHandler._templates:
-            loader = self.application.settings.get("template_loader") or\
-              template.Loader(template_path)
+            loader = self.create_template_loader(template_path)
             RequestHandler._templates[template_path] = loader
         t = RequestHandler._templates[template_path].load(template_name)
         args = dict(
@@ -560,6 +559,18 @@ class RequestHandler(object):
         args.update(self.ui)
         args.update(kwargs)
         return t.generate(**args)
+
+    def create_template_loader(self, template_path):
+        settings = self.application.settings
+        if "template_loader" in settings:
+            return settings["template_loader"]
+        kwargs = {}
+        if "autoescape" in settings:
+            # autoescape=None means "no escaping", so we have to be sure
+            # to only pass this kwarg if the user asked for it.
+            kwargs["autoescape"] = settings["autoescape"]
+        return template.Loader(template_path, **kwargs)
+
 
     def flush(self, include_footers=False):
         """Flushes the current output buffer to the network."""
