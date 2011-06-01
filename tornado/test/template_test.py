@@ -1,7 +1,7 @@
-from tornado.escape import utf8
+from tornado.escape import utf8, native_str
 from tornado.template import Template, DictLoader
 from tornado.testing import LogTrapTestCase
-from tornado.util import b
+from tornado.util import b, bytes_type
 
 class TemplateTest(LogTrapTestCase):
     def test_simple(self):
@@ -150,3 +150,19 @@ raw: {% raw name %}""",
         self.assertEqual(render("raw_expression.html"),
                          b("expr: &lt;&gt;&amp;&quot;\n"
                            "raw: <>&\""))
+
+    def test_custom_escape(self):
+        loader = DictLoader({"foo.py": 
+                             "{% autoescape py_escape %}s = {{ name }}\n"})
+        def py_escape(s):
+            self.assertEqual(type(s), bytes_type)
+            return repr(native_str(s))
+        def render(template, name):
+            return loader.load(template).generate(py_escape=py_escape, 
+                                                  name=name)
+        self.assertEqual(render("foo.py", "<html>"),
+                         b("s = '<html>'\n"))
+        self.assertEqual(render("foo.py", "';sys.exit()"),
+                         b("""s = "';sys.exit()"\n"""))
+        self.assertEqual(render("foo.py", ["not a string"]),
+                         b("""s = "['not a string']"\n"""))
