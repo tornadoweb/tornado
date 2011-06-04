@@ -683,7 +683,7 @@ a Python module for your UI modules, e.g., `uimodules.py`:
     class Entry(tornado.web.UIModule):
         def render(self, entry, show_comments=False):
             return self.render_string(
-                "module-entry.html", show_comments=show_comments)
+                "module-entry.html", entry=entry, show_comments=show_comments)
 
 Tell Tornado to use `uimodules.py` using the `ui_modules` setting in your
 application:
