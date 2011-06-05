@@ -13,7 +13,7 @@
     <div id="body">
       <div id="inbox">
         {% for message in messages %}
-          {% include "message.html" %}
+          {% module Template("message.html", message=message) %}
         {% end %}
       </div>
       <div id="input">

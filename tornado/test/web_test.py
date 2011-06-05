@@ -241,16 +241,30 @@ class LinkifyHandler(RequestHandler):
     def get(self):
         self.render("linkify.html", message="http://example.com")
 
+class UIModuleResourceHandler(RequestHandler):
+    def get(self):
+        self.render("page.html", entries=[1,2])
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         loader = DictLoader({
-                "linkify.html": "{% module linkify(message) %}"
+                "linkify.html": "{% module linkify(message) %}",
+                "page.html": """\
+<html><head></head><body>
+{% for e in entries %}
+{% module Template("entry.html", entry=e) %}
+{% end %}
+</body></html>""",
+                "entry.html": """\
+{{ set_resources(embedded_css=".entry { margin-bottom: 1em; }", embedded_javascript="js_embed()", css_files=["/base.css", "/foo.css"], javascript_files="/common.js", html_head="<meta>", html_body='<script src="/analytics.js"/>') }}
+<div class="entry">...</div>""",
                 })
         urls = [
             url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
             url("/decode_arg/(.*)", DecodeArgHandler),
             url("/decode_arg_kw/(?P<arg>.*)", DecodeArgHandler),
             url("/linkify", LinkifyHandler),
+            url("/uimodule_resources", UIModuleResourceHandler),
             ]
         return Application(urls,
                            template_loader=loader,
@@ -291,3 +305,28 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/linkify")
         self.assertEqual(response.body,
                          b("<a href=\"http://example.com\">http://example.com</a>"))
+
+    def test_uimodule_resources(self):
+        response = self.fetch("/uimodule_resources")
+        self.assertEqual(response.body, b("""\
+<html><head><link href="/base.css" type="text/css" rel="stylesheet"/><link href="/foo.css" type="text/css" rel="stylesheet"/>
+<style type="text/css">
+.entry { margin-bottom: 1em; }
+</style>
+<meta>
+</head><body>
+
+
+<div class="entry">...</div>
+
+
+<div class="entry">...</div>
+
+<script src="/common.js" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+js_embed()
+//]]>
+</script>
+<script src="/analytics.js"/>
+</body></html>"""))
