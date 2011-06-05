@@ -13,7 +13,6 @@ import base64
 import collections
 import contextlib
 import copy
-import errno
 import functools
 import logging
 import os.path

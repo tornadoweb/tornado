@@ -19,15 +19,9 @@
 from __future__ import with_statement
 
 import cStringIO
-import calendar
 import collections
-import email.utils
-import errno
-import httplib
 import logging
-import os
 import pycurl
-import sys
 import threading
 import time
 

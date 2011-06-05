@@ -14,7 +14,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import logging
 import os.path
 import tornado.auth
 import tornado.escape
@@ -22,7 +21,6 @@ import tornado.httpserver
 import tornado.ioloop
 import tornado.options
 import tornado.web
-import uimodules
 
 from tornado.options import define, options
 
@@ -76,7 +74,6 @@ class MainHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
         self.render("stream.html", stream=stream)
 
 
-import logging
 class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
     @tornado.web.asynchronous
     def get(self):

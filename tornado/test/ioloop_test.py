@@ -3,7 +3,6 @@
 import unittest
 import time
 
-from tornado import ioloop
 from tornado.testing import AsyncTestCase, LogTrapTestCase
 
 class TestIOLoop(AsyncTestCase, LogTrapTestCase):

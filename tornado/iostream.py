@@ -20,7 +20,6 @@ from __future__ import with_statement
 
 import collections
 import errno
-import functools
 import logging
 import socket
 import sys

@@ -5,7 +5,6 @@ from __future__ import with_statement
 import base64
 import binascii
 import gzip
-import logging
 import socket
 
 from contextlib import closing

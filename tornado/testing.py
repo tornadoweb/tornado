@@ -22,13 +22,11 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.stack_context import StackContext, NullContext
 import contextlib
-import functools
 import logging
 import os
 import sys
 import time
 import tornado.ioloop
-import traceback
 import unittest
 
 _next_port = 10000

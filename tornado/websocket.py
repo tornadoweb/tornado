@@ -16,7 +16,6 @@
 import functools
 import hashlib
 import logging
-import re
 import struct
 import time
 import tornado.escape

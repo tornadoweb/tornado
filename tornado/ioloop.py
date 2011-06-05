@@ -507,7 +507,6 @@ class _KQueue(object):
         events = {}
         for kevent in kevents:
             fd = kevent.ident
-            flags = 0
             if kevent.filter == select.KQ_FILTER_READ:
                 events[fd] = events.get(fd, 0) | IOLoop.READ
             if kevent.filter == select.KQ_FILTER_WRITE:

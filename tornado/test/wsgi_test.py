@@ -1,6 +1,5 @@
 from wsgiref.validate import validator
 
-from tornado.escape import json_encode
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.util import b
 from tornado.web import RequestHandler

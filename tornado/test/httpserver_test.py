@@ -2,17 +2,11 @@
 
 from tornado import httpclient, simple_httpclient
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode
-from tornado.iostream import IOStream
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler
-import logging
 import os
-import re
-import socket
-import unittest
-import urllib
 
 try:
     import ssl

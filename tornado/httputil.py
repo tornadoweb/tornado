@@ -16,6 +16,7 @@
 
 """HTTP utility code shared by clients and servers."""
 
+import logging
 import urllib
 import re
 

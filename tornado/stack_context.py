@@ -51,7 +51,6 @@ from __future__ import with_statement
 import contextlib
 import functools
 import itertools
-import logging
 import sys
 import threading
 

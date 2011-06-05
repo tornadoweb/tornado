@@ -9,7 +9,6 @@ import binascii
 import logging
 import re
 import socket
-import tornado.ioloop
 
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work

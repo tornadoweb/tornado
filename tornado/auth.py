@@ -59,7 +59,6 @@ import uuid
 from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
-from tornado.ioloop import IOLoop
 from tornado.util import bytes_type
 
 class OpenIdMixin(object):

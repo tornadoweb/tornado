@@ -55,7 +55,6 @@ import Cookie
 import base64
 import binascii
 import calendar
-import contextlib
 import datetime
 import email.utils
 import functools
