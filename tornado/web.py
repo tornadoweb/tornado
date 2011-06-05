@@ -1101,7 +1101,8 @@ class Application(object):
         self.named_handlers = {}
         self.default_host = default_host
         self.settings = settings
-        self.ui_modules = {}
+        self.ui_modules = {'linkify': _linkify,
+                           'xsrf_form_html': _xsrf_form_html}
         self.ui_methods = {}
         self._wsgi = wsgi
         self._load_ui_modules(settings.get("ui_modules", {}))
@@ -1608,6 +1609,14 @@ class UIModule(object):
 
     def render_string(self, path, **kwargs):
         return self.handler.render_string(path, **kwargs)
+
+class _linkify(UIModule):
+    def render(self, text, **kwargs):
+        return escape.linkify(text, **kwargs)
+
+class _xsrf_form_html(UIModule):
+    def render(self):
+        return self.handler.xsrf_form_html()
 
 class URLSpec(object):
     """Specifies mappings between URLs and handlers."""

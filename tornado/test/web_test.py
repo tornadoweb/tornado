@@ -1,5 +1,6 @@
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
 from tornado.iostream import IOStream
+from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type
 from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url
@@ -236,13 +237,24 @@ class DecodeArgHandler(RequestHandler):
                     'query': describe(self.get_argument("foo")),
                     })
 
+class LinkifyHandler(RequestHandler):
+    def get(self):
+        self.render("linkify.html", message="http://example.com")
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
-        return Application([
-                url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
-                url("/decode_arg/(.*)", DecodeArgHandler),
-                url("/decode_arg_kw/(?P<arg>.*)", DecodeArgHandler),
-                ])
+        loader = DictLoader({
+                "linkify.html": "{% module linkify(message) %}"
+                })
+        urls = [
+            url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
+            url("/decode_arg/(.*)", DecodeArgHandler),
+            url("/decode_arg_kw/(?P<arg>.*)", DecodeArgHandler),
+            url("/linkify", LinkifyHandler),
+            ]
+        return Application(urls,
+                           template_loader=loader,
+                           autoescape="xhtml_escape")
 
     def test_types(self):
         response = self.fetch("/typecheck/asdf?foo=bar",
@@ -274,3 +286,8 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(data, {u'path': [u'bytes', u'c3a9'],
                                 u'query': [u'bytes', u'c3a9'],
                                 })
+
+    def test_uimodule_unescaped(self):
+        response = self.fetch("/linkify")
+        self.assertEqual(response.body,
+                         b("<a href=\"http://example.com\">http://example.com</a>"))

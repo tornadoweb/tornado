@@ -388,6 +388,10 @@ class _Expression(_Node):
                               writer.current_template.autoescape)
         writer.write_line("_buffer.append(_tmp)")
 
+class _Module(_Expression):
+    def __init__(self, expression):
+        super(_Module, self).__init__("modules." + expression,
+                                      raw=True)
 
 class _Text(_Node):
     def __init__(self, value):
@@ -588,7 +592,7 @@ def _parse(reader, template, in_block=None):
             return body
 
         elif operator in ("extends", "include", "set", "import", "from",
-                          "comment", "autoescape", "raw"):
+                          "comment", "autoescape", "raw", "module"):
             if operator == "comment":
                 continue
             if operator == "extends":
@@ -616,6 +620,8 @@ def _parse(reader, template, in_block=None):
                 continue
             elif operator == "raw":
                 block = _Expression(suffix, raw=True)
+            elif operator == "module":
+                block = _Module(suffix)
             body.chunks.append(block)
             continue
 
