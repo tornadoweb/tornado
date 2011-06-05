@@ -1,5 +1,6 @@
 from wsgiref.validate import validator
 
+from tornado.escape import json_encode
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.util import b
 from tornado.web import RequestHandler
@@ -35,3 +36,15 @@ class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_simple(self):
         response = self.fetch("/")
         self.assertEqual(response.body, b("Hello world!"))
+
+# This is kind of hacky, but run some of the HTTPServer tests through
+# WSGIContainer and WSGIApplication to make sure everything survives
+# repeated disassembly and reassembly.
+from tornado.test.httpserver_test import HTTPConnectionTest, MultipartTestHandler
+
+class WSGIConnectionTest(HTTPConnectionTest):
+    def get_app(self):
+        return WSGIContainer(validator(WSGIApplication([
+                        ("/multipart", MultipartTestHandler)])))
+
+del HTTPConnectionTest
