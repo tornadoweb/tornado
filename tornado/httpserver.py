@@ -175,7 +175,6 @@ class HTTPServer(object):
         """
         if address == "":
             address = None
-        success = 0
         for res in socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                       0, socket.AI_PASSIVE | socket.AI_ADDRCONFIG):
             af, socktype, proto, canonname, sockaddr = res
@@ -199,7 +198,9 @@ class HTTPServer(object):
             sock.bind(sockaddr)
             sock.listen(128)
             self._sockets[sock.fileno()] = sock
-            success += 1
+            if self._started:
+                self.io_loop.add_handler(sock.fileno(), self._handle_events,
+                                         ioloop.IOLoop.READ)
 
     def start(self, num_processes=1):
         """Starts this server in the IOLoop.
