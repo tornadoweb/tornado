@@ -405,53 +405,14 @@ class HTTPConnection(object):
                 for field in fields:
                     k, sep, v = field.strip().partition("=")
                     if k == "boundary" and v:
-                        self._parse_mime_body(utf8(v), data)
+                        httputil.parse_multipart_form_data(
+                            utf8(v), data,
+                            self._request.arguments,
+                            self._request.files)
                         break
                 else:
                     logging.warning("Invalid multipart/form-data")
         self.request_callback(self._request)
-
-    def _parse_mime_body(self, boundary, data):
-        # The standard allows for the boundary to be quoted in the header,
-        # although it's rare (it happens at least for google app engine
-        # xmpp).  I think we're also supposed to handle backslash-escapes
-        # here but I'll save that until we see a client that uses them
-        # in the wild.
-        if boundary.startswith(b('"')) and boundary.endswith(b('"')):
-            boundary = boundary[1:-1]
-        if data.endswith(b("\r\n")):
-            footer_length = len(boundary) + 6
-        else:
-            footer_length = len(boundary) + 4
-        parts = data[:-footer_length].split(b("--") + boundary + b("\r\n"))
-        for part in parts:
-            if not part: continue
-            eoh = part.find(b("\r\n\r\n"))
-            if eoh == -1:
-                logging.warning("multipart/form-data missing headers")
-                continue
-            headers = httputil.HTTPHeaders.parse(part[:eoh].decode("utf-8"))
-            name_header = headers.get("Content-Disposition", "")
-            if not name_header.startswith("form-data;") or \
-               not part.endswith(b("\r\n")):
-                logging.warning("Invalid multipart/form-data")
-                continue
-            value = part[eoh + 4:-2]
-            name_values = {}
-            for name_part in name_header[10:].split(";"):
-                name, name_value = name_part.strip().split("=", 1)
-                name_values[name] = name_value.strip('"')
-            if not name_values.get("name"):
-                logging.warning("multipart/form-data value missing name")
-                continue
-            name = name_values["name"]
-            if name_values.get("filename"):
-                ctype = headers.get("Content-Type", "application/unknown")
-                self._request.files.setdefault(name, []).append(dict(
-                    filename=name_values["filename"], body=value,
-                    content_type=ctype))
-            else:
-                self._request.arguments.setdefault(name, []).append(value)
 
 
 class HTTPRequest(object):

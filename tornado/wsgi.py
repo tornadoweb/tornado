@@ -139,7 +139,9 @@ class HTTPRequest(object):
         elif content_type.startswith("multipart/form-data"):
             if 'boundary=' in content_type:
                 boundary = content_type.split('boundary=',1)[1]
-                if boundary: self._parse_mime_body(utf8(boundary))
+                if boundary:
+                    httputil.parse_multipart_form_data(
+                        utf8(boundary), self.body, self.arguments, self.files)
             else:
                 logging.warning("Invalid multipart/form-data")
 
@@ -160,43 +162,6 @@ class HTTPRequest(object):
             return time.time() - self._start_time
         else:
             return self._finish_time - self._start_time
-
-    def _parse_mime_body(self, boundary):
-        if boundary.startswith(b('"')) and boundary.endswith(b('"')):
-            boundary = boundary[1:-1]
-        if self.body.endswith(b("\r\n")):
-            footer_length = len(boundary) + 6
-        else:
-            footer_length = len(boundary) + 4
-        parts = self.body[:-footer_length].split(b("--") + boundary + b("\r\n"))
-        for part in parts:
-            if not part: continue
-            eoh = part.find(b("\r\n\r\n"))
-            if eoh == -1:
-                logging.warning("multipart/form-data missing headers")
-                continue
-            headers = httputil.HTTPHeaders.parse(part[:eoh].decode("utf-8"))
-            name_header = headers.get("Content-Disposition", "")
-            if not name_header.startswith("form-data;") or \
-               not part.endswith(b("\r\n")):
-                logging.warning("Invalid multipart/form-data")
-                continue
-            value = part[eoh + 4:-2]
-            name_values = {}
-            for name_part in name_header[10:].split(";"):
-                name, name_value = name_part.strip().split("=", 1)
-                name_values[name] = name_value.strip('"')
-            if not name_values.get("name"):
-                logging.warning("multipart/form-data value missing name")
-                continue
-            name = name_values["name"]
-            if name_values.get("filename"):
-                ctype = headers.get("Content-Type", "application/unknown")
-                self.files.setdefault(name, []).append(dict(
-                    filename=name_values["filename"], body=value,
-                    content_type=ctype))
-            else:
-                self.arguments.setdefault(name, []).append(value)
 
 
 class WSGIContainer(object):
