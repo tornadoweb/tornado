@@ -1,5 +1,5 @@
 from tornado.escape import utf8, native_str
-from tornado.template import Template, DictLoader
+from tornado.template import Template, DictLoader, ParseError
 from tornado.testing import LogTrapTestCase
 from tornado.util import b, bytes_type
 
@@ -49,6 +49,15 @@ class TemplateTest(LogTrapTestCase):
                 })
         self.assertEqual(loader.load("a/1.html").generate(),
                          b("ok"))
+
+    def test_escaping(self):
+        self.assertRaises(ParseError, lambda: Template("{{"))
+        self.assertRaises(ParseError, lambda: Template("{%"))
+        self.assertEqual(Template("{{!").generate(), b("{{"))
+        self.assertEqual(Template("{%!").generate(), b("{%"))
+        self.assertEqual(Template("{{ 'expr' }} {{!jquery expr}}").generate(),
+                         b("expr {{jquery expr}}"))
+        
 
 class AutoEscapeTest(LogTrapTestCase):
     def setUp(self):

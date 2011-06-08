@@ -543,6 +543,15 @@ def _parse(reader, template, in_block=None):
         start_brace = reader.consume(2)
         line = reader.line
 
+        # Template directives may be escaped as "{{!" or "{%!".
+        # In this case output the braces and consume the "!".
+        # This is especially useful in conjunction with jquery templates,
+        # which also use double braces.
+        if reader.remaining() and reader[0] == "!":
+            reader.consume(1)
+            body.chunks.append(_Text(start_brace))
+            continue
+
         # Expression
         if start_brace == "{{":
             end = reader.find("}}")
