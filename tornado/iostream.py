@@ -86,6 +86,7 @@ class IOStream(object):
         self.read_chunk_size = read_chunk_size
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
+        self._read_buffer_size = 0
         self._write_buffer_frozen = False
         self._read_delimiter = None
         self._read_bytes = None
@@ -312,7 +313,8 @@ class IOStream(object):
         if chunk is None:
             return 0
         self._read_buffer.append(chunk)
-        if self._read_buffer_size() >= self.max_buffer_size:
+        self._read_buffer_size += len(chunk)
+        if self._read_buffer_size >= self.max_buffer_size:
             logging.error("Reached maximum read buffer size")
             self.close()
             raise IOError("Reached maximum read buffer size")
@@ -324,7 +326,7 @@ class IOStream(object):
         Returns True if the read was completed.
         """
         if self._read_bytes:
-            if self._read_buffer_size() >= self._read_bytes:
+            if self._read_buffer_size >= self._read_bytes:
                 num_bytes = self._read_bytes
                 callback = self._read_callback
                 self._read_callback = None
@@ -392,6 +394,7 @@ class IOStream(object):
 
     def _consume(self, loc):
         _merge_prefix(self._read_buffer, loc)
+        self._read_buffer_size -= loc
         return self._read_buffer.popleft()
 
     def _check_closed(self):
@@ -405,9 +408,6 @@ class IOStream(object):
         if not self._state & state:
             self._state = self._state | state
             self.io_loop.update_handler(self.socket.fileno(), self._state)
-
-    def _read_buffer_size(self):
-        return sum(len(chunk) for chunk in self._read_buffer)
 
 
 class SSLIOStream(IOStream):
