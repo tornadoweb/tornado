@@ -78,7 +78,7 @@ def set_default_locale(code):
 
 
 def load_translations(directory):
-    """Loads translations from CSV files in a directory.
+    u"""Loads translations from CSV files in a directory.
 
     Translations are strings with optional Python-style named placeholders
     (e.g., "My name is %(name)s") and their associated translations.
@@ -100,8 +100,8 @@ def load_translations(directory):
     Example translation es_LA.csv:
 
         "I love you","Te amo"
-        "%(name)s liked this","A %(name)s les gust\xf3 esto","plural"
-        "%(name)s liked this","A %(name)s le gust\xf3 esto","singular"
+        "%(name)s liked this","A %(name)s les gust\u00f3 esto","plural"
+        "%(name)s liked this","A %(name)s le gust\u00f3 esto","singular"
 
     """
     global _translations
