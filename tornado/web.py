@@ -14,14 +14,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""The Tornado web framework.
-
+"""
 The Tornado web framework looks a bit like web.py (http://webpy.org/) or
 Google's webapp (http://code.google.com/appengine/docs/python/tools/webapp/),
 but with additional tools and optimizations to take advantage of the
 Tornado non-blocking web server and tools.
 
-Here is the canonical "Hello, world" example app:
+Here is the canonical "Hello, world" example app::
 
     import tornado.ioloop
     import tornado.web
@@ -40,7 +39,8 @@ Here is the canonical "Hello, world" example app:
 See the Tornado walkthrough on http://tornadoweb.org for more details
 and a good getting started guide.
 
-Thread-safety notes:
+Thread-safety notes
+-------------------
 
 In general, methods on RequestHandler and elsewhere in tornado are not
 thread-safe.  In particular, methods such as write(), finish(), and
@@ -120,7 +120,7 @@ class RequestHandler(object):
         A dictionary passed as the third argument of a url spec will be
         supplied as keyword arguments to initialize().
 
-        Example:
+        Example::
             class ProfileHandler(RequestHandler):
                 def initialize(self, database):
                     self.database = database
@@ -984,7 +984,7 @@ def asynchronous(method):
     If this decorator is given, the response is not finished when the
     method returns. It is up to the request handler to call self.finish()
     to finish the HTTP request. Without this decorator, the request is
-    automatically finished when the get() or post() method returns.
+    automatically finished when the get() or post() method returns. ::
 
        class MyRequestHandler(web.RequestHandler):
            @web.asynchronous
@@ -1009,9 +1009,9 @@ def asynchronous(method):
 def removeslash(method):
     """Use this decorator to remove trailing slashes from the request path.
 
-    For example, a request to '/foo/' would redirect to '/foo' with this
+    For example, a request to ``'/foo/'`` would redirect to ``'/foo'`` with this
     decorator. Your request handler mapping should use a regular expression
-    like r'/foo/*' in conjunction with using the decorator.
+    like ``r'/foo/*'`` in conjunction with using the decorator.
     """
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
@@ -1052,7 +1052,7 @@ class Application(object):
     """A collection of request handlers that make up a web application.
 
     Instances of this class are callable and can be passed directly to
-    HTTPServer to serve the application:
+    HTTPServer to serve the application::
 
         application = web.Application([
             (r"/", MainPageHandler),
@@ -1069,14 +1069,14 @@ class Application(object):
     Each tuple can contain an optional third element, which should be a
     dictionary if it is present. That dictionary is passed as keyword
     arguments to the contructor of the handler. This pattern is used
-    for the StaticFileHandler below:
+    for the StaticFileHandler below::
 
         application = web.Application([
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
         ])
 
     We support virtual hosts with the add_handlers method, which takes in
-    a host regular expression as the first argument:
+    a host regular expression as the first argument::
 
         application.add_handlers(r"www\.myhost\.com", [
             (r"/article/([0-9]+)", ArticleHandler),
@@ -1333,7 +1333,7 @@ class ErrorHandler(RequestHandler):
 class RedirectHandler(RequestHandler):
     """Redirects the client to the given URL for all GET requests.
 
-    You should provide the keyword argument "url" to the handler, e.g.:
+    You should provide the keyword argument "url" to the handler, e.g.::
 
         application = web.Application([
             (r"/oldpath", web.RedirectHandler, {"url": "/newpath"}),
@@ -1351,7 +1351,7 @@ class StaticFileHandler(RequestHandler):
     """A simple handler that can serve static content from a directory.
 
     To map a path to this handler for a static data directory /var/www,
-    you would add a line to your application like:
+    you would add a line to your application like::
 
         application = web.Application([
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
@@ -1438,7 +1438,8 @@ class FallbackHandler(RequestHandler):
     The fallback is a callable object that accepts an HTTPRequest,
     such as an Application or tornado.wsgi.WSGIContainer.  This is most
     useful to use both tornado RequestHandlers and WSGI in the same server.
-    Typical usage:
+    Typical usage::
+
         wsgi_app = tornado.wsgi.WSGIContainer(
             django.core.handlers.wsgi.WSGIHandler())
         application = tornado.web.Application([
