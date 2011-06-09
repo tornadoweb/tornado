@@ -2,12 +2,10 @@
 ===============
 
 .. automodule:: tornado.web
-   :exclude-members: RequestHandler, Application, asynchronous, addslash, removeslash, URLSpec, url
 
    Request handlers
    ----------------
    .. autoclass:: RequestHandler
-      :exclude-members: initialize, prepare, get, post, put, delete, head, options, get_argument, get_arguments, decode_argument, set_status, set_header, write, flush, finish, render, render_string, send_error, get_error_html, cookies, get_cookie, set_cookie, clear_cookie, clear_all_cookies, get_secure_cookie, set_secure_cookie, create_signed_value
 
       **Entry points**
       
@@ -39,8 +37,11 @@
       .. automethod:: finish
       .. automethod:: render
       .. automethod:: render_string
+      .. automethod:: redirect
       .. automethod:: send_error
       .. automethod:: get_error_html
+      .. automethod:: clear
+
 
       **Cookies**
 
@@ -55,11 +56,26 @@
 
       **Other**
 
+      .. automethod:: async_callback
+      .. automethod:: check_xsrf_cookie
+      .. automethod:: compute_etag
+      .. automethod:: get_browser_locale
+      .. automethod:: get_current_user
+      .. automethod:: get_login_url
+      .. automethod:: get_status
+      .. automethod:: get_template_path
+      .. automethod:: get_user_locale
+      .. automethod:: on_connection_close
+      .. automethod:: require_setting
+      .. automethod:: static_url
+      .. automethod:: xsrf_form_html
+
 
 
    Application configuration
    -----------------------------
    .. autoclass:: Application
+      :members:
 
    .. autoclass:: URLSpec
 
@@ -74,3 +90,12 @@
 
    Everything else
    ---------------
+   .. autoexception:: HTTPError
+   .. autoclass:: UIModule
+      :members:
+
+   .. autoclass:: ErrorHandler
+   .. autoclass:: FallbackHandler
+   .. autoclass:: RedirectHandler
+   .. autoclass:: StaticFileHandler
+      :members:
