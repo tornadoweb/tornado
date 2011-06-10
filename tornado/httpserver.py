@@ -64,14 +64,14 @@ def _cpu_count():
 
 
 class HTTPServer(object):
-    """A non-blocking, single-threaded HTTP server.
+    r"""A non-blocking, single-threaded HTTP server.
 
     A server is defined by a request callback that takes an HTTPRequest
     instance as an argument and writes a valid HTTP response with
     request.write(). request.finish() finishes the request (but does not
     necessarily close the connection in the case of HTTP/1.1 keep-alive
     requests). A simple example server that echoes back the URI you
-    requested:
+    requested::
 
         import httpserver
         import ioloop
@@ -105,7 +105,7 @@ class HTTPServer(object):
     HTTPServer can serve HTTPS (SSL) traffic with Python 2.6+ and OpenSSL.
     To make this server serve SSL traffic, send the ssl_options dictionary
     argument with the arguments required for the ssl.wrap_socket() method,
-    including "certfile" and "keyfile":
+    including "certfile" and "keyfile"::
 
        HTTPServer(applicaton, ssl_options={
            "certfile": os.path.join(data_dir, "mydomain.crt"),
@@ -114,7 +114,7 @@ class HTTPServer(object):
 
     By default, listen() runs in a single thread in a single process. You
     can utilize all available CPUs on this machine by calling bind() and
-    start() instead of listen():
+    start() instead of listen()::
 
         http_server = httpserver.HTTPServer(handle_request)
         http_server.bind(8888)
@@ -503,7 +503,8 @@ class HTTPRequest(object):
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer must have been constructed
-        with cert_reqs set in ssl_options, e.g.:
+        with cert_reqs set in ssl_options, e.g.::
+
             server = HTTPServer(app,
                 ssl_options=dict(
                     certfile="foo.crt",

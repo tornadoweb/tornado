@@ -16,14 +16,14 @@
 
 """Translation methods for generating localized strings.
 
-To load a locale and generate a translated string:
+To load a locale and generate a translated string::
 
     user_locale = locale.get("es_LA")
     print user_locale.translate("Sign out")
 
 locale.get() returns the closest matching locale, not necessarily the
 specific locale you requested. You can support pluralization with
-additional arguments to translate(), e.g.:
+additional arguments to translate(), e.g.::
 
     people = [...]
     message = user_locale.translate(

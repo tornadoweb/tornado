@@ -34,7 +34,7 @@ except ImportError:
     ssl = None
 
 class IOStream(object):
-    """A utility class to write to and read from a non-blocking socket.
+    r"""A utility class to write to and read from a non-blocking socket.
 
     We support three methods: write(), read_until(), and read_bytes().
     All of the methods take callbacks (since writing and reading are
@@ -48,7 +48,7 @@ class IOStream(object):
     and may either be connected before passing it to the IOStream or
     connected with IOStream.connect.
 
-    A very simple (and broken) HTTP client using this class:
+    A very simple (and broken) HTTP client using this class::
 
         from tornado import ioloop
         from tornado import iostream

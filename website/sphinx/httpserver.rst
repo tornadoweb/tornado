@@ -2,3 +2,4 @@
 ======================
 
 .. automodule:: tornado.httpserver
+   :members:
