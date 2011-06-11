@@ -115,7 +115,8 @@ class Template(object):
         self.file = _File(_parse(reader, self))
         self.code = self._generate_python(loader, compress_whitespace)
         try:
-            self.compiled = compile(self.code, self.name, "exec")
+            self.compiled = compile(self.code, "<template %s>" % self.name,
+                                    "exec")
         except:
             formatted_code = _format_code(self.code).rstrip()
             logging.error("%s code:\n%s", self.name, formatted_code)
