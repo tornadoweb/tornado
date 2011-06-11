@@ -22,7 +22,7 @@ non-blocking requests properly). If you call self.flush() or other
 asynchronous methods in your request handlers running in a WSGIApplication,
 we throw an exception.
 
-Example usage:
+Example usage::
 
     import tornado.web
     import tornado.wsgi
@@ -165,10 +165,10 @@ class HTTPRequest(object):
 
 
 class WSGIContainer(object):
-    """Makes a WSGI-compatible function runnable on Tornado's HTTP server.
+    r"""Makes a WSGI-compatible function runnable on Tornado's HTTP server.
 
     Wrap a WSGI function in a WSGIContainer and pass it to HTTPServer to
-    run it. For example:
+    run it. For example::
 
         def simple_app(environ, start_response):
             status = "200 OK"

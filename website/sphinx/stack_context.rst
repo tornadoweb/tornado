@@ -2,3 +2,4 @@
 =========================
 
 .. automodule:: tornado.stack_context
+   :members:

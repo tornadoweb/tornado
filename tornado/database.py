@@ -28,7 +28,7 @@ class Connection(object):
     """A lightweight wrapper around MySQLdb DB-API connections.
 
     The main value we provide is wrapping rows in a dict/object so that
-    columns can be accessed by name. Typical usage:
+    columns can be accessed by name. Typical usage::
 
         db = database.Connection("localhost", "mydatabase")
         for article in db.query("SELECT * FROM articles"):

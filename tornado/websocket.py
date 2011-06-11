@@ -33,7 +33,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-76.
 
     Here is an example Web Socket handler that echos back all received messages
-    back to the client:
+    back to the client::
 
       class EchoWebSocket(websocket.WebSocketHandler):
           def open(self):
@@ -53,7 +53,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     implement open() method rather than get() or post().
 
     If you map the handler above to "/websocket" in your application, you can
-    invoke it in JavaScript with:
+    invoke it in JavaScript with::
 
       var ws = new WebSocket("ws://localhost:8888/websocket");
       ws.onopen = function() {

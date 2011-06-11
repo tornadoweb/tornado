@@ -2,10 +2,13 @@
 """Support classes for automated testing.
 
 This module contains three parts:
+
 * AsyncTestCase/AsyncHTTPTestCase:  Subclasses of unittest.TestCase
   with additional support for testing asynchronous (IOLoop-based) code.
+
 * LogTrapTestCase:  Subclass of unittest.TestCase that discards log output
   from tests that pass and only produces output for failing tests.
+
 * main(): A simple test runner (wrapper around unittest.main()) with support
   for the tornado.autoreload module to rerun the tests when code changes.
 
@@ -56,7 +59,8 @@ class AsyncTestCase(unittest.TestCase):
     returned from self.wait.  It is possible to have multiple
     wait/stop cycles in the same test.
 
-    Example:
+    Example::
+
         # This test uses an asynchronous style similar to most async
         # application code.
         class MyTestCase(AsyncTestCase):
@@ -196,7 +200,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
     Tests will typically use the provided self.http_client to fetch
     URLs from this server.
 
-    Example:
+    Example::
+
         class MyHTTPTest(AsyncHTTPTestCase):
             def get_app(self):
                 return Application([('/', MyHandler)...])
@@ -303,8 +308,10 @@ class LogTrapTestCase(unittest.TestCase):
 def main():
     """A simple test runner with autoreload support.
 
-    The easiest way to run a test is via the command line:
+    The easiest way to run a test is via the command line::
+
         python -m tornado.testing --autoreload tornado.test.stack_context_test
+
     See the standard library unittest module for ways in which tests can
     be specified.
 
@@ -312,7 +319,8 @@ def main():
     tornado/test/runtests.py.  This script should define a method all()
     which returns a test suite and then call tornado.testing.main().
     Note that even when a test script is used, the all() test suite may
-    be overridden by naming a single test on the command line.
+    be overridden by naming a single test on the command line::
+
         # Runs all tests
         tornado/test/runtests.py --autoreload
         # Runs one test
