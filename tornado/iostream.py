@@ -414,8 +414,10 @@ class SSLIOStream(IOStream):
     """A utility class to write to and read from a non-blocking socket.
 
     If the socket passed to the constructor is already connected,
-    it should be wrapped with
+    it should be wrapped with::
+
         ssl.wrap_socket(sock, do_handshake_on_connect=False, **kwargs)
+
     before constructing the SSLIOStream.  Unconnected sockets will be
     wrapped when IOStream.connect is finished.
     """
