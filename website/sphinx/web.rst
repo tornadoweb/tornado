@@ -7,68 +7,73 @@
    ----------------
    .. autoclass:: RequestHandler
 
-      **Entry points**
-      
-      .. automethod:: initialize
-      .. automethod:: prepare
+   Entry points
+   ^^^^^^^^^^^^
+   
+   .. automethod:: RequestHandler.initialize
+   .. automethod:: RequestHandler.prepare
 
-      Implement any of the following methods to handle the corresponding
-      HTTP method.
+   Implement any of the following methods to handle the corresponding
+   HTTP method.
 
-      .. automethod:: get
-      .. automethod:: post
-      .. automethod:: put
-      .. automethod:: delete
-      .. automethod:: head
-      .. automethod:: options
+   .. automethod:: RequestHandler.get
+   .. automethod:: RequestHandler.post
+   .. automethod:: RequestHandler.put
+   .. automethod:: RequestHandler.delete
+   .. automethod:: RequestHandler.head
+   .. automethod:: RequestHandler.options
 
-      **Input**
+   Input
+   ^^^^^
 
-      .. automethod:: get_argument
-      .. automethod:: get_arguments
-      .. automethod:: decode_argument
+   .. automethod:: RequestHandler.get_argument
+   .. automethod:: RequestHandler.get_arguments
+   .. automethod:: RequestHandler.decode_argument
 
-      **Output**
+   Output
+   ^^^^^^
 
-      .. automethod:: set_status
-      .. automethod:: set_header
-      .. automethod:: write
-      .. automethod:: flush
-      .. automethod:: finish
-      .. automethod:: render
-      .. automethod:: render_string
-      .. automethod:: redirect
-      .. automethod:: send_error
-      .. automethod:: get_error_html
-      .. automethod:: clear
+   .. automethod:: RequestHandler.set_status
+   .. automethod:: RequestHandler.set_header
+   .. automethod:: RequestHandler.write
+   .. automethod:: RequestHandler.flush
+   .. automethod:: RequestHandler.finish
+   .. automethod:: RequestHandler.render
+   .. automethod:: RequestHandler.render_string
+   .. automethod:: RequestHandler.redirect
+   .. automethod:: RequestHandler.send_error
+   .. automethod:: RequestHandler.get_error_html
+   .. automethod:: RequestHandler.clear
 
 
-      **Cookies**
+   Cookies
+   ^^^^^^^
 
-      .. autoattribute:: cookies
-      .. automethod:: get_cookie
-      .. automethod:: set_cookie
-      .. automethod:: clear_cookie
-      .. automethod:: clear_all_cookies
-      .. automethod:: get_secure_cookie
-      .. automethod:: set_secure_cookie
-      .. automethod:: create_signed_value
+   .. autoattribute:: RequestHandler.cookies
+   .. automethod:: RequestHandler.get_cookie
+   .. automethod:: RequestHandler.set_cookie
+   .. automethod:: RequestHandler.clear_cookie
+   .. automethod:: RequestHandler.clear_all_cookies
+   .. automethod:: RequestHandler.get_secure_cookie
+   .. automethod:: RequestHandler.set_secure_cookie
+   .. automethod:: RequestHandler.create_signed_value
 
-      **Other**
+   Other
+   ^^^^^
 
-      .. automethod:: async_callback
-      .. automethod:: check_xsrf_cookie
-      .. automethod:: compute_etag
-      .. automethod:: get_browser_locale
-      .. automethod:: get_current_user
-      .. automethod:: get_login_url
-      .. automethod:: get_status
-      .. automethod:: get_template_path
-      .. automethod:: get_user_locale
-      .. automethod:: on_connection_close
-      .. automethod:: require_setting
-      .. automethod:: static_url
-      .. automethod:: xsrf_form_html
+   .. automethod:: RequestHandler.async_callback
+   .. automethod:: RequestHandler.check_xsrf_cookie
+   .. automethod:: RequestHandler.compute_etag
+   .. automethod:: RequestHandler.get_browser_locale
+   .. automethod:: RequestHandler.get_current_user
+   .. automethod:: RequestHandler.get_login_url
+   .. automethod:: RequestHandler.get_status
+   .. automethod:: RequestHandler.get_template_path
+   .. automethod:: RequestHandler.get_user_locale
+   .. automethod:: RequestHandler.on_connection_close
+   .. automethod:: RequestHandler.require_setting
+   .. automethod:: RequestHandler.static_url
+   .. automethod:: RequestHandler.xsrf_form_html
 
 
 
