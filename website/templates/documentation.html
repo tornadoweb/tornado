@@ -1,9 +1,0 @@
-{% extends "base.html" %}
-
-{% block title %}Tornado Web Server Documentation{% end %}
-
-{% block headertitle %}<h1>documentation</h1>{% end %}
-
-{% block body %}
-  {{ markdown("documentation.txt", toc=True) }}
-{% end %}

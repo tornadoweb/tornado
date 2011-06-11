@@ -16,14 +16,14 @@
 
 """Translation methods for generating localized strings.
 
-To load a locale and generate a translated string:
+To load a locale and generate a translated string::
 
     user_locale = locale.get("es_LA")
     print user_locale.translate("Sign out")
 
 locale.get() returns the closest matching locale, not necessarily the
 specific locale you requested. You can support pluralization with
-additional arguments to translate(), e.g.:
+additional arguments to translate(), e.g.::
 
     people = [...]
     message = user_locale.translate(
@@ -78,7 +78,7 @@ def set_default_locale(code):
 
 
 def load_translations(directory):
-    """Loads translations from CSV files in a directory.
+    u"""Loads translations from CSV files in a directory.
 
     Translations are strings with optional Python-style named placeholders
     (e.g., "My name is %(name)s") and their associated translations.
@@ -100,8 +100,8 @@ def load_translations(directory):
     Example translation es_LA.csv:
 
         "I love you","Te amo"
-        "%(name)s liked this","A %(name)s les gust\xf3 esto","plural"
-        "%(name)s liked this","A %(name)s le gust\xf3 esto","singular"
+        "%(name)s liked this","A %(name)s les gust\u00f3 esto","plural"
+        "%(name)s liked this","A %(name)s le gust\u00f3 esto","singular"
 
     """
     global _translations

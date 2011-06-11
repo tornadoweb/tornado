@@ -211,11 +211,15 @@ def linkify(text, shorten=False, extra_params="",
     Hello <a href="http://tornadoweb.org">http://tornadoweb.org</a>!
 
     Parameters:
+
     shorten: Long urls will be shortened for display.
+
     extra_params: Extra text to include in the link tag,
         e.g. linkify(text, extra_params='rel="nofollow" class="external"')
+
     require_protocol: Only linkify urls which include a protocol. If this is
         False, urls such as www.facebook.com will also be linkified.
+
     permitted_protocols: List (or set) of protocols which should be linkified,
         e.g. linkify(text, permitted_protocols=["http", "ftp", "mailto"]).
         It is very unsafe to include protocols such as "javascript".

@@ -24,9 +24,8 @@ import wsgiref.handlers
 
 
 class ContentHandler(tornado.web.RequestHandler):
-    def get(self, path):
-        paths = ("documentation", "index")
-        if not path: path = "index"
+    def get(self, path="index"):
+        paths = ("overview", "index")
         if path not in paths:
             raise tornado.web.HTTPError(404)
         self.render(path + ".html", markdown=self.markdown)
@@ -51,11 +50,18 @@ settings = {
     "debug": os.environ.get("SERVER_SOFTWARE", "").startswith("Development/"),
 }
 application = tornado.wsgi.WSGIApplication([
-    (r"/([a-z]*)", ContentHandler),
+    (r"/", ContentHandler),
+    (r"/(index)", ContentHandler),
+    (r"/documentation/(overview)", ContentHandler),
     (r"/static/tornado-0.1.tar.gz", tornado.web.RedirectHandler,
      dict(url="http://github.com/downloads/facebook/tornado/tornado-0.1.tar.gz")),
     (r"/static/tornado-0.2.tar.gz", tornado.web.RedirectHandler,
      dict(url="http://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz")),
+
+    (r"/documentation/?", tornado.web.RedirectHandler,
+     dict(url="/documentation/overview")),
+    (r"/documentation/reference/?", tornado.web.RedirectHandler,
+     dict(url="/documentation/reference/index.html")),
 
 ], **settings)
 

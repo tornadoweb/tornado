@@ -49,7 +49,7 @@ class IOLoop(object):
     connections, you should use Linux and either compile our epoll module or
     use Python 2.6+ to get epoll support.
 
-    Example usage for a simple TCP server:
+    Example usage for a simple TCP server::
 
         import errno
         import functools
@@ -132,7 +132,7 @@ class IOLoop(object):
 
         A common pattern for classes that depend on IOLoops is to use
         a default argument to enable programs with multiple IOLoops
-        but not require the argument for simpler applications:
+        but not require the argument for simpler applications::
 
             class MyClass(object):
                 def __init__(self, io_loop=None):
@@ -296,10 +296,12 @@ class IOLoop(object):
         will return immediately.
 
         To use asynchronous methods from otherwise-synchronous code (such as
-        unit tests), you can start and stop the event loop like this:
+        unit tests), you can start and stop the event loop like this::
+
           ioloop = IOLoop()
           async_method(ioloop=ioloop, callback=ioloop.stop)
           ioloop.start()
+
         ioloop.start() will return after async_method has run its callback,
         whether that callback was invoked before or after ioloop.start.
         """

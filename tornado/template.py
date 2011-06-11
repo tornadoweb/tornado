@@ -16,19 +16,19 @@
 
 """A simple template system that compiles templates to Python code.
 
-Basic usage looks like:
+Basic usage looks like::
 
     t = template.Template("<html>{{ myvalue }}</html>")
     print t.generate(myvalue="XXX")
 
 Loader is a class that loads templates from a root directory and caches
-the compiled templates:
+the compiled templates::
 
     loader = template.Loader("/home/btaylor")
     print loader.load("test.html").generate(myvalue="XXX")
 
 We compile all templates to raw Python. Error-reporting is currently... uh,
-interesting. Syntax for the templates
+interesting. Syntax for the templates::
 
     ### base.html
     <html>
@@ -57,7 +57,7 @@ interesting. Syntax for the templates
 
 Unlike most other template systems, we do not put any restrictions on the
 expressions you can include in your statements. if and for blocks get
-translated exactly into Python, do you can do complex expressions like:
+translated exactly into Python, do you can do complex expressions like::
 
    {% for student in [p for p in people if p.student and p.age > 23] %}
      <li>{{ escape(student.name) }}</li>
@@ -65,7 +65,7 @@ translated exactly into Python, do you can do complex expressions like:
 
 Translating directly to Python means you can apply functions to expressions
 easily, like the escape() function in the examples above. You can pass
-functions in to your template just like any other variable:
+functions in to your template just like any other variable::
 
    ### Python code
    def add(x, y):

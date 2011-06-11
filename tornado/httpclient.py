@@ -13,7 +13,7 @@ from tornado.util import import_object, bytes_type
 class HTTPClient(object):
     """A blocking HTTP client.
 
-    Typical usage looks like this:
+    Typical usage looks like this::
 
         http_client = httpclient.HTTPClient()
         try:
@@ -51,7 +51,7 @@ class HTTPClient(object):
 class AsyncHTTPClient(object):
     """An non-blocking HTTP client.
 
-    Example usage:
+    Example usage::
 
         import ioloop
 
@@ -208,13 +208,21 @@ class HTTPResponse(object):
     """HTTP Response object.
 
     Attributes:
+
     * request: HTTPRequest object
+
     * code: numeric HTTP status code, e.g. 200 or 404
+
     * headers: httputil.HTTPHeaders object
+
     * buffer: cStringIO object for response body
+
     * body: respose body as string (created on demand from self.buffer)
+
     * error: Exception object, if any
+
     * request_time: seconds from request start to finish
+
     * time_info: dictionary of diagnostic timing information from the request.
         Available data are subject to change, but currently uses timings
         available from http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html,
@@ -266,8 +274,10 @@ class HTTPError(Exception):
     """Exception thrown for an unsuccessful HTTP request.
 
     Attributes:
+
     code - HTTP error integer error code, e.g. 404.  Error code 599 is
            used when no HTTP response was received, e.g. for a timeout.
+
     response - HTTPResponse object, if any.
 
     Note that if follow_redirects is False, redirects become HTTPErrors,

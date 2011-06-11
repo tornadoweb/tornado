@@ -29,7 +29,8 @@ wrapping each AsyncHTTPClient callback in async_callback) to the mechanisms
 that transfer control from one context to another (e.g. AsyncHTTPClient
 itself, IOLoop, thread pools, etc).
 
-Example usage:
+Example usage::
+
     @contextlib.contextmanager
     def die_on_error():
         try:
@@ -65,9 +66,12 @@ class StackContext(object):
 
         Note that the parameter is a callable that returns a context
         manager, not the context itself.  That is, where for a
-        non-transferable context manager you would say
+        non-transferable context manager you would say::
+
           with my_context():
-        StackContext takes the function itself rather than its result:
+
+        StackContext takes the function itself rather than its result::
+
           with StackContext(my_context):
         '''
         self.context_factory = context_factory
