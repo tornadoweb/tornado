@@ -30,3 +30,28 @@ coverage_ignore_classes = [
     "url",
     ]
     
+html_static_path = [os.path.abspath("../static")]
+html_style = "sphinx.css"
+highlight_language = "none"
+html_theme_options = dict(
+    footerbgcolor="#fff",
+    footertextcolor="#000",
+    sidebarbgcolor="#fff",
+    #sidebarbtncolor
+    sidebartextcolor="#4d8cbf",
+    sidebarlinkcolor="#216093",
+    relbarbgcolor="#fff",
+    relbartextcolor="#000",
+    relbarlinkcolor="#216093",
+    bgcolor="#fff",
+    textcolor="#000",
+    linkcolor="#216093",
+    visitedlinkcolor="#216093",
+    headbgcolor="#fff",
+    headtextcolor="#4d8cbf",
+    codebgcolor="#fff",
+    codetextcolor="#060",
+    bodyfont="Georgia, serif",
+    headfont="Calibri, sans-serif",
+    stickysidebar=True,
+    )

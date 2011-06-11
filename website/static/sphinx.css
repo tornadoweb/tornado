@@ -1,0 +1,28 @@
+@import url("default.css");
+
+div.body h1,
+div.body h2,
+div.body h3,
+div.body h4,
+div.body h5,
+div.body h6,
+div.sphinxsidebar h3,
+div.sphinxsidebar h4 {
+    font-weight: bold;
+}
+
+pre {
+    line-height: 14pt;
+    margin: 17pt;
+    padding-left: 1em;
+    border: none;
+    border-left: 1px solid #ccc;
+}
+
+div.body p, div.body dd, div.body li {
+    text-align: left;
+}
+
+.highlight {
+    background: #fff !important;
+}
