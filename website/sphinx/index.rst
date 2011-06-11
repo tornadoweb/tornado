@@ -1,7 +1,10 @@
 Tornado API Reference
 =====================
 
-Contents:
+The following documents are automatically generated from docstrings
+in the source code.  A separate 
+`overview <http://tornadoweb.org/documentation/overview>`_ document is also 
+available.
 
 .. toctree::
    :maxdepth: 2

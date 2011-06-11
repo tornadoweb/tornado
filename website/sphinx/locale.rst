@@ -1,5 +1,5 @@
-``tornado.locale``
-======================
+``tornado.locale`` --- Internationalization support
+===================================================
 
 .. automodule:: tornado.locale
    :members:

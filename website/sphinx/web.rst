@@ -1,5 +1,5 @@
-``tornado.web``
-===============
+``tornado.web`` --- ``RequestHandler`` and ``Application`` classes
+==================================================================
 
 .. automodule:: tornado.web
 
