@@ -809,6 +809,24 @@ the Google credentials in a cookie for later access:
 See the `auth` module documentation for more details.
 
 
+### Debug mode and automatic reloading
+
+If you pass `debug=True` to the `Application` constructor, the app will be run
+in debug mode.  In this mode, templates will not be cached and the app will
+watch for changes to its source files and reload itself when anything changes.
+This reduces the need to manually restart the server during development.
+However, certain failures (such as syntax errors at import time) can still
+take the server down in a way that debug mode cannot currently recover from.
+
+Debug mode is not compatible with `HTTPServer`'s multi-process mode.  You
+must not give `HTTPServer.start` an argument greater than 1 if you are using
+debug mode.  
+
+The automatic reloading feature of debug mode is available as a
+standalone module in `tornado.autoreload`, and is optionally used by
+the test runner in `tornado.testing.main`.
+
+
 Performance
 -----------
 Web application performance is generally bound by architecture, not frontend
