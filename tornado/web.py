@@ -1695,12 +1695,16 @@ class URLSpec(object):
         """Creates a URLSpec.
 
         Parameters:
+
         pattern: Regular expression to be matched.  Any groups in the regex
             will be passed in to the handler's get/post/etc methods as
             arguments.
+
         handler_class: RequestHandler subclass to be invoked.
+
         kwargs (optional): A dictionary of additional arguments to be passed
             to the handler's constructor.
+
         name (optional): A name for this handler.  Used by
             Application.reverse_url.
         """

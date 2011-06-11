@@ -18,6 +18,7 @@ version = release = tornado.version
 extensions = ["sphinx.ext.autodoc", "sphinx_coverage"]
 
 autodoc_member_order = "bysource"
+autoclass_content = "both"
 
 coverage_skip_undoc_in_source = True
 # I wish this could go in a per-module file...
