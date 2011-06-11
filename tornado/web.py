@@ -79,7 +79,7 @@ from tornado import escape
 from tornado import locale
 from tornado import stack_context
 from tornado import template
-from tornado.escape import utf8
+from tornado.escape import utf8, _unicode
 from tornado.util import b, bytes_type
 
 try:
@@ -1749,16 +1749,6 @@ class URLSpec(object):
         return self._path % tuple([str(a) for a in args])
 
 url = URLSpec
-
-
-def _unicode(s):
-    if isinstance(s, bytes_type):
-        try:
-            return s.decode("utf-8")
-        except UnicodeDecodeError:
-            raise HTTPError(400, "Non-utf8 argument")
-    assert isinstance(s, unicode)
-    return s
 
 
 def _time_independent_equals(a, b):

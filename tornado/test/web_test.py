@@ -244,6 +244,10 @@ class UIModuleResourceHandler(RequestHandler):
     def get(self):
         self.render("page.html", entries=[1,2])
 
+class OptionalPathHandler(RequestHandler):
+    def get(self, path):
+        self.write({"path": path})
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         loader = DictLoader({
@@ -264,10 +268,16 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/decode_arg_kw/(?P<arg>.*)", DecodeArgHandler),
             url("/linkify", LinkifyHandler),
             url("/uimodule_resources", UIModuleResourceHandler),
+            url("/optional_path/(.+)?", OptionalPathHandler),
             ]
         return Application(urls,
                            template_loader=loader,
                            autoescape="xhtml_escape")
+
+    def fetch_json(self, *args, **kwargs):
+        response = self.fetch(*args, **kwargs)
+        response.rethrow()
+        return json_decode(response.body)
 
     def test_types(self):
         response = self.fetch("/typecheck/asdf?foo=bar",
@@ -329,3 +339,9 @@ js_embed()
 </script>
 <script src="/analytics.js"/>
 </body></html>"""))
+
+    def test_optional_path(self):
+        self.assertEqual(self.fetch_json("/optional_path/foo"),
+                         {u"path": u"foo"})
+        self.assertEqual(self.fetch_json("/optional_path/"),
+                         {u"path": None})
