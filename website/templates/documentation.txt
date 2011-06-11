@@ -92,9 +92,6 @@ walkthrough of the `web` package.
   * [`iostream`](http://github.com/facebook/tornado/blob/master/tornado/iostream.py) - A simple wrapper around non-blocking sockets to aide common reading and writing patterns
   * [`ioloop`](http://github.com/facebook/tornado/blob/master/tornado/ioloop.py) - Core I/O loop
 
-### Random modules
-  * [`s3server`](http://github.com/facebook/tornado/blob/master/tornado/s3server.py) - A web server that implements most of the [Amazon S3](http://aws.amazon.com/s3/) interface, backed by local file storage
-
 
 Tornado walkthrough
 -------------------
