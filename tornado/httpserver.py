@@ -263,6 +263,11 @@ class HTTPServer(object):
             self.io_loop.remove_handler(fd)
             sock.close()
 
+    def handle_stream(self, stream, address):
+        """Handle a stream/address pair."""
+        conn = HTTPConnection(stream, address, self.request_callback, self.no_keep_alive, self.xheaders)
+        conn.start()
+
     def _handle_events(self, fd, events):
         while True:
             try:
@@ -293,8 +298,7 @@ class HTTPServer(object):
                     stream = iostream.SSLIOStream(connection, io_loop=self.io_loop)
                 else:
                     stream = iostream.IOStream(connection, io_loop=self.io_loop)
-                HTTPConnection(stream, address, self.request_callback,
-                               self.no_keep_alive, self.xheaders)
+                self.handle_stream(stream, address)
             except:
                 logging.error("Error in connection callback", exc_info=True)
 
@@ -320,6 +324,8 @@ class HTTPConnection(object):
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
+
+    def start(self):
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
     def write(self, chunk):
