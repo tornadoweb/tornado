@@ -1,7 +1,6 @@
 import calendar
 import email.utils
 import httplib
-import os
 import time
 import weakref
 
