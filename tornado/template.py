@@ -90,7 +90,7 @@ import re
 from tornado import escape
 from tornado.util import bytes_type
 
-_DEFAULT_AUTOESCAPE = None
+_DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()
 
 class Template(object):

@@ -46,8 +46,9 @@ class Application(tornado.web.Application):
             xsrf_cookies=True,
             facebook_api_key=options.facebook_api_key,
             facebook_secret=options.facebook_secret,
-            ui_modules= {"Post": PostModule},
+            ui_modules={"Post": PostModule},
             debug=True,
+            autoescape=None,
         )
         tornado.web.Application.__init__(self, handlers, **settings)
 
