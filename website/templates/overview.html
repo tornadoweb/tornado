@@ -5,5 +5,5 @@
 {% block headertitle %}<h1>overview</h1>{% end %}
 
 {% block body %}
-  {{ markdown("overview.txt", toc=True) }}
+  {% raw markdown("overview.txt", toc=True) %}
 {% end %}

@@ -324,6 +324,14 @@ the flexibility that other, stricter templating systems prevent.
 Consequently, if you write random stuff inside of your template expressions,
 you will get random Python errors when you execute the template.
 
+All template output is escaped by default, using the 
+`tornado.escape.xhtml_escape` function.  This behavior can be changed globally
+by passing `autoescape=None` to the `Application` or `TemplateLoader`
+constructors, for a template file with the `{% autoescape None %}`
+directive, or for a single expression by replacing `{{ ... }}` with 
+`{% raw ...%}`.  Additionally, in each of these places the name of an
+alternative escaping function may be used instead of `None`.
+
 
 ### Cookies and secure cookies
 
@@ -708,13 +716,13 @@ Within `home.html`, you reference the `Entry` module rather than printing
 the HTML directly:
 
     {% for entry in entries %}
-      {{ modules.Entry(entry) }}
+      {% module Entry(entry) %}
     {% end %}
 
 Within `entry.html`, you reference the `Entry` module with the
 `show_comments` argument to show the expanded form of the entry:
 
-    {{ modules.Entry(entry, show_comments=True) }}
+    {% module Entry(entry, show_comments=True) %}
 
 Modules can include custom CSS and JavaScript functions by overriding
 the `embedded_css`, `embedded_javascript`, `javascript_files`, or
@@ -732,6 +740,23 @@ Module CSS and JavaScript will be included once no matter how many times
 a module is used on a page. CSS is always included in the `<head>` of the
 page, and JavaScript is always included just before the `</body>` tag
 at the end of the page.
+
+When additional Python code is not required, a template file itself may
+be used as a module.  For example, the preceding example could be
+rewritten to put the following in `module-entry.html`:
+
+    {{ set_resources(embedded_css=".entry { margin-bottom: 1em; }") }}
+    <!-- more template html... -->
+
+This revised template module would be invoked with
+
+    {% module Template("module-entry.html", show_comments=True) %}
+
+The `set_resources` function is only available in templates invoked via
+`{% module Template(...) %}`.  Unlike the `{% include ... %}` directive,
+template modules have a distinct namespace from their containing template -
+they can only see the global template namespace and their own keyword
+arguments.
 
 
 ### Non-blocking, asynchronous requests
@@ -778,6 +803,26 @@ application, which implements an AJAX chat room using
 Users of long polling may want to override `on_connection_close()` to clean
 up after the client closes the connection (but see that method's docstring
 for caveats).
+
+
+### Asynchronous HTTP clients
+
+Tornado includes two non-blocking HTTP client implementations:
+`SimpleAsyncHTTPClient` and `CurlAsyncHTTPClient`.  The simple client
+has no external dependencies because it is implemented directly on top
+of Tornado's `IOLoop`.  The Curl client requires that `libcurl` and
+`pycurl` be installed (and a recent version of each is highly
+recommended to avoid bugs in older version's asynchronous interfaces),
+but is more likely to be compatible with sites that exercise
+little-used parts of the HTTP specification.
+
+Each of these clients is available in its own module 
+(`tornado.simple_httpclient` and `tornado.curl_httpclient`), as well as
+via a configurable alias in `tornado.httpclient`.  `SimpleAsyncHTTPClient`
+is the default, but to use a different implementation call the
+`AsyncHTTPClient.configure` method at startup:
+
+    AsyncHTTPClient.configure('tornado.curl_httpclient.CurlAsyncHTTPClient')
 
 
 ### Third party authentication
