@@ -50,7 +50,6 @@ __author__ = "Trent Mick"
 
 import os
 import sys
-from pprint import pprint
 import re
 import logging
 try:
@@ -66,7 +65,6 @@ import codecs
 #---- Python version compat
 
 if sys.version_info[:2] < (2,4):
-    from sets import Set as set
     def reversed(sequence):
         for i in sequence[::-1]:
             yield i
@@ -485,11 +483,11 @@ class Markdown(object):
                 # Delimiters for next comment block.
                 try:
                     start_idx = text.index("<!--", start)
-                except ValueError, ex:
+                except ValueError:
                     break
                 try:
                     end_idx = text.index("-->", start_idx) + 3
-                except ValueError, ex:
+                except ValueError:
                     break
 
                 # Start position for next comment block search.
@@ -1130,7 +1128,6 @@ class Markdown(object):
     def _list_item_sub(self, match):
         item = match.group(4)
         leading_line = match.group(1)
-        leading_space = match.group(2)
         if leading_line or "\n\n" in item or self._last_li_endswith_two_eols:
             item = self._run_block_gamut(self._outdent(item))
         else:
@@ -1591,7 +1588,6 @@ def _dedentlines(lines, tabsize=8, skip_first_line=False):
     if DEBUG: 
         print "dedent: dedent(..., tabsize=%d, skip_first_line=%r)"\
               % (tabsize, skip_first_line)
-    indents = []
     margin = None
     for i, line in enumerate(lines):
         if i == 0 and skip_first_line: continue

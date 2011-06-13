@@ -215,7 +215,6 @@ class HtmlPattern (Pattern):
     """ Store raw inline html and return a placeholder. """
     def handleMatch (self, m):
         rawhtml = m.group(2)
-        inline = True
         place_holder = self.markdown.htmlStash.store(rawhtml)
         return place_holder
 

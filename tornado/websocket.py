@@ -163,7 +163,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         def wrapper(*args, **kwargs):
             try:
                 return callback(*args, **kwargs)
-            except Exception, e:
+            except Exception:
                 logging.error("Uncaught exception in %s",
                               self.request.path, exc_info=True)
                 self._abort()
