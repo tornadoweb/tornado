@@ -92,7 +92,7 @@ class IOStream(object):
         self._read_bytes = None
         self._read_callback = None
         self._write_callback = None
-        self._close_callback = None
+        self._close_callbacks = []
         self._connect_callback = None
         self._connecting = False
         self._state = self.io_loop.ERROR
@@ -171,7 +171,7 @@ class IOStream(object):
 
     def set_close_callback(self, callback):
         """Call the given callback when the stream is closed."""
-        self._close_callback = stack_context.wrap(callback)
+        self._close_callbacks.append(stack_context.wrap(callback))
 
     def close(self):
         """Close this stream."""
@@ -179,8 +179,8 @@ class IOStream(object):
             self.io_loop.remove_handler(self.socket.fileno())
             self.socket.close()
             self.socket = None
-            if self._close_callback:
-                self._run_callback(self._close_callback)
+            for callback in self._close_callbacks:
+                self._run_callback(callback)
 
     def reading(self):
         """Returns true if we are currently reading from the stream."""

@@ -263,6 +263,11 @@ class HTTPServer(object):
             self.io_loop.remove_handler(fd)
             sock.close()
 
+    def handle_stream(self, stream, address):
+        """Handle a stream/address pair."""
+        conn = HTTPConnection(stream, address, self.request_callback, self.no_keep_alive, self.xheaders)
+        conn.start()
+
     def _handle_events(self, fd, events):
         while True:
             try:
@@ -293,8 +298,7 @@ class HTTPServer(object):
                     stream = iostream.SSLIOStream(connection, io_loop=self.io_loop)
                 else:
                     stream = iostream.IOStream(connection, io_loop=self.io_loop)
-                HTTPConnection(stream, address, self.request_callback,
-                               self.no_keep_alive, self.xheaders)
+                self.handle_stream(stream, address)
             except:
                 logging.error("Error in connection callback", exc_info=True)
 
@@ -320,6 +324,8 @@ class HTTPConnection(object):
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
+
+    def start(self):
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
     def write(self, chunk):
@@ -332,6 +338,21 @@ class HTTPConnection(object):
         self._request_finished = True
         if not self.stream.writing():
             self._finish_request()
+
+    def on_headers(self, start_line, headers):
+        """Hook for users who wish to subclass HTTPConnection and add additional
+        logic to the HTTP request header phase. This will be run immediately
+        before self.request_callback; note also that self._request will be
+        available to this callback.
+        """
+        pass
+
+    def on_finish(self, disconnect):
+        """Hook for users who with to add additional logic to the request finish
+        phase. The parameter `disconnect' is True if the underlying IOStream is
+        about to be closed, False otherwise.
+        """
+        pass
 
     def _on_write_complete(self):
         if self._request_finished:
@@ -351,6 +372,7 @@ class HTTPConnection(object):
                 disconnect = True
         self._request = None
         self._request_finished = False
+        self.on_finish(disconnect)
         if disconnect:
             self.stream.close()
             return
@@ -382,6 +404,7 @@ class HTTPConnection(object):
                 self.stream.read_bytes(content_length, self._on_request_body)
                 return
 
+            self.on_headers(start_line, headers)
             self.request_callback(self._request)
         except _BadRequestException, e:
             logging.info("Malformed HTTP request from %s: %s",
