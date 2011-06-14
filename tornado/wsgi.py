@@ -235,7 +235,7 @@ class WSGIContainer(object):
         environ = {
             "REQUEST_METHOD": request.method,
             "SCRIPT_NAME": "",
-            "PATH_INFO": request.path,
+            "PATH_INFO": urllib.unquote(request.path),
             "QUERY_STRING": request.query,
             "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,
