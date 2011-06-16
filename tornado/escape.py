@@ -59,7 +59,7 @@ except:
 
 def xhtml_escape(value):
     """Escapes a string so it is valid within XML or XHTML."""
-    return xml.sax.saxutils.escape(native_str(value), {'"': "&quot;"})
+    return xml.sax.saxutils.escape(to_basestring(value), {'"': "&quot;"})
 
 
 def xhtml_unescape(value):
@@ -80,7 +80,7 @@ def json_encode(value):
 
 def json_decode(value):
     """Returns Python objects for the given JSON string."""
-    return _json_decode(native_str(value))
+    return _json_decode(to_basestring(value))
 
 
 def squeeze(value):
@@ -122,7 +122,7 @@ else:
         if encoding is None:
             return urllib.parse.unquote_to_bytes(value)
         else:
-            return urllib.unquote_plus(native_str(value), encoding=encoding)
+            return urllib.unquote_plus(to_basestring(value), encoding=encoding)
 
     def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
         """Parses a query string like urlparse.parse_qs, but returns the
@@ -178,6 +178,20 @@ if str is unicode:
 else:
     native_str = utf8
 
+_BASESTRING_TYPES = (basestring, type(None))
+def to_basestring(value):
+    """Converts a string argument to a subclass of basestring.
+
+    In python2, byte and unicode strings are mostly interchangeable,
+    so functions that deal with a user-supplied argument in combination
+    with ascii string constants can use either and should return the type
+    the user supplied.  In python3, the two types are not interchangeable,
+    so this method is needed to convert byte strings to unicode.
+    """
+    if isinstance(value, _BASESTRING_TYPES):
+        return value
+    assert isinstance(value, bytes)
+    return value.decode("utf-8")
 
 def recursive_unicode(obj):
     """Walks a simple data structure, converting byte strings to unicode.
