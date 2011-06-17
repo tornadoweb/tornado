@@ -26,3 +26,7 @@ div.body p, div.body dd, div.body li {
 .highlight {
     background: #fff !important;
 }
+
+th.field-name {
+    background: #fff;
+}

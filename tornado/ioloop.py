@@ -14,7 +14,17 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""A level-triggered I/O loop for non-blocking sockets."""
+"""An I/O event loop for non-blocking sockets.
+
+Typical applications will use a single `IOLoop` object, in the
+`IOLoop.instance` singleton.  The `IOLoop.start` method should usually
+be called at the end of the ``main()`` function.  Atypical applications may
+use more than one `IOLoop`, such as one `IOLoop` per thread, or per `unittest`
+case.
+
+In addition to I/O events, the `IOLoop` can also schedule time-based events.
+`IOLoop.add_timeout` is a non-blocking alternative to `time.sleep`.
+"""
 
 import errno
 import heapq
@@ -44,10 +54,11 @@ except ImportError:
 class IOLoop(object):
     """A level-triggered I/O loop.
 
-    We use epoll if it is available, or else we fall back on select(). If
-    you are implementing a system that needs to handle 1000s of simultaneous
-    connections, you should use Linux and either compile our epoll module or
-    use Python 2.6+ to get epoll support.
+    We use epoll (Linux) or kqueue (BSD and Mac OS X; requires python
+    2.6+) if they are available, or else we fall back on select(). If
+    you are implementing a system that needs to handle thousands of
+    simultaneous connections, you should use a system that supports either
+    epoll or queue.
 
     Example usage for a simple TCP server::
 

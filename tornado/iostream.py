@@ -411,7 +411,7 @@ class IOStream(object):
 
 
 class SSLIOStream(IOStream):
-    """A utility class to write to and read from a non-blocking socket.
+    """A utility class to write to and read from a non-blocking SSL socket.
 
     If the socket passed to the constructor is already connected,
     it should be wrapped with::
