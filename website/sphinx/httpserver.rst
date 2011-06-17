@@ -2,4 +2,13 @@
 ===================================================
 
 .. automodule:: tornado.httpserver
-   :members:
+
+   ``HTTPRequest`` objects
+   -----------------------
+   .. autoclass:: HTTPRequest
+      :members:
+
+   HTTP Server
+   -----------
+   .. autoclass:: HTTPServer
+   .. autoclass:: HTTPConnection

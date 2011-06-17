@@ -77,6 +77,11 @@ functions in to your template just like any other variable::
 
 We provide the functions escape(), url_escape(), json_encode(), and squeeze()
 to all templates by default.
+
+Typical applications do not create `Template` or `Loader` instances by
+hand, but instead use the `render` and `render_string` methods of
+`tornado.web.RequestHandler`, which load templates automatically based
+on the ``template_path`` `Application` setting.
 """
 
 from __future__ import with_statement

@@ -15,7 +15,10 @@ copyright = "2011, Facebook"
 
 version = release = tornado.version
 
-extensions = ["sphinx.ext.autodoc", "sphinx_coverage"]
+extensions = ["sphinx.ext.autodoc", "sphinx_coverage", "sphinx.ext.viewcode"]
+
+primary_domain = 'py'
+default_role = 'py:obj'
 
 autodoc_member_order = "bysource"
 autoclass_content = "both"

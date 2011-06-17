@@ -14,7 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Escaping/unescaping methods for HTML, JSON, URLs, and others."""
+"""Escaping/unescaping methods for HTML, JSON, URLs, and others.
+
+Also includes a few other miscellaneous string manipulation functions that
+have crept in over time.
+"""
 
 import htmlentitydefs
 import re
@@ -221,8 +225,8 @@ def linkify(text, shorten=False, extra_params="",
             require_protocol=False, permitted_protocols=["http", "https"]):
     """Converts plain text into HTML with links.
 
-    For example: linkify("Hello http://tornadoweb.org!") would return
-    Hello <a href="http://tornadoweb.org">http://tornadoweb.org</a>!
+    For example: ``linkify("Hello http://tornadoweb.org!")`` would return
+    ``Hello <a href="http://tornadoweb.org">http://tornadoweb.org</a>!``
 
     Parameters:
 

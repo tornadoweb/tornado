@@ -14,7 +14,15 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""A non-blocking, single-threaded HTTP server."""
+"""A non-blocking, single-threaded HTTP server.
+
+Typical applications have little direct interaction with the `HTTPServer`
+class except to start a server at the beginning of the process
+(and even that is often done indirectly via `tornado.web.Application.listen`).
+
+This module also defines the `HTTPRequest` class which is exposed via
+`tornado.web.RequestHandler.request`.
+"""
 
 import errno
 import logging
@@ -418,20 +426,72 @@ class HTTPConnection(object):
 class HTTPRequest(object):
     """A single HTTP request.
 
-    GET/POST arguments are available in the arguments property, which
-    maps arguments names to lists of values (to support multiple values
-    for individual names). Names and values are both unicode always.
+    .. attribute:: method
 
-    File uploads are available in the files property, which maps file
-    names to list of files. Each file is a dictionary of the form
-    {"filename":..., "content_type":..., "body":...}. The content_type
-    comes from the provided HTTP header and should not be trusted
-    outright given that it can be easily forged.
+       HTTP request method, e.g. "GET" or "POST"
 
-    An HTTP request is attached to a single HTTP connection, which can
-    be accessed through the "connection" attribute. Since connections
-    are typically kept open in HTTP/1.1, multiple requests can be handled
-    sequentially on a single connection.
+    .. attribute:: uri
+
+       The requested uri.
+
+    .. attribute:: path
+
+       The path portion of `uri`
+
+    .. attribute:: query
+
+       The query portion of `uri`
+
+    .. attribute:: version
+
+       HTTP version specified in request, e.g. "HTTP/1.1"
+
+    .. attribute:: headers
+
+       `HTTPHeader` dictionary-like object for request headers.  Acts like
+       a case-insensitive dictionary with additional methods for repeated
+       headers.
+
+    .. attribute:: body
+
+       Request body, if present.
+
+    .. attribute:: remote_ip
+
+       Client's IP address as a string.  If `HTTPServer.xheaders` is set,
+       will pass along the real IP address provided by a load balancer
+       in the ``X-Real-Ip`` header
+
+    .. attribute:: protocol
+
+       The protocol used, either "http" or "https".  If `HTTPServer.xheaders`
+       is seet, will pass along the protocol used by a load balancer if
+       reported via an ``X-Scheme`` header.
+
+    .. attribute:: host
+
+       The requested hostname, usually taken from the ``Host`` header.
+
+    .. attribute:: arguments
+
+       GET/POST arguments are available in the arguments property, which
+       maps arguments names to lists of values (to support multiple values
+       for individual names). Names and values are both unicode always.
+
+    .. attribute:: files
+
+       File uploads are available in the files property, which maps file
+       names to list of files. Each file is a dictionary of the form
+       {"filename":..., "content_type":..., "body":...}. The content_type
+       comes from the provided HTTP header and should not be trusted
+       outright given that it can be easily forged.
+
+    .. attribute:: connection
+
+       An HTTP request is attached to a single HTTP connection, which can
+       be accessed through the "connection" attribute. Since connections
+       are typically kept open in HTTP/1.1, multiple requests can be handled
+       sequentially on a single connection.
     """
     def __init__(self, method, uri, version="HTTP/1.0", headers=None,
                  body=None, remote_ip=None, protocol=None, host=None,

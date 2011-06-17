@@ -121,6 +121,7 @@ class RequestHandler(object):
         supplied as keyword arguments to initialize().
 
         Example::
+
             class ProfileHandler(RequestHandler):
                 def initialize(self, database):
                     self.database = database
@@ -136,6 +137,7 @@ class RequestHandler(object):
 
     @property
     def settings(self):
+        """An alias for `self.application.settings`."""
         return self.application.settings
 
     def head(self, *args, **kwargs):
@@ -1086,6 +1088,12 @@ class Application(object):
     keyword argument. We will serve those files from the /static/ URI
     (this is configurable with the static_url_prefix setting),
     and we will serve /favicon.ico and /robots.txt from the same directory.
+
+    .. attribute:: settings
+
+       Additonal keyword arguments passed to the constructor are saved in the
+       `settings` dictionary, and are often referred to in documentation as
+       "application settings".
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
                  wsgi=False, **settings):

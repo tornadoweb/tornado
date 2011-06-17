@@ -29,6 +29,10 @@
    .. automethod:: RequestHandler.get_argument
    .. automethod:: RequestHandler.get_arguments
    .. automethod:: RequestHandler.decode_argument
+   .. attribute:: RequestHandler.request
+
+      The `tornado.httpserver.HTTPRequest` object containing additional
+      request parameters including e.g. headers and body data.
 
    Output
    ^^^^^^
@@ -61,6 +65,10 @@
    Other
    ^^^^^
 
+   .. attribute:: RequestHandler.application
+
+      The `Application` object serving this request
+
    .. automethod:: RequestHandler.async_callback
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
@@ -72,6 +80,7 @@
    .. automethod:: RequestHandler.get_user_locale
    .. automethod:: RequestHandler.on_connection_close
    .. automethod:: RequestHandler.require_setting
+   .. autoattribute:: RequestHandler.settings
    .. automethod:: RequestHandler.static_url
    .. automethod:: RequestHandler.xsrf_form_html
 
