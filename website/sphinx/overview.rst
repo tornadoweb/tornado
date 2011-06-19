@@ -14,13 +14,15 @@ version of this web server and some of the tools we use most often at
 FriendFeed. The framework is distinct from most mainstream web server
 frameworks (and certainly most Python frameworks) because it is
 non-blocking and reasonably fast. Because it is non-blocking and uses
-`epoll <http://www.kernel.org/doc/man-pages/online/pages/man4/epoll.4.html>`_,
-it can handle 1000s of simultaneous standing connections, which means
-the framework is ideal for real-time web services. We built the web
-server specifically to handle FriendFeed's real-time features — every
-active user of FriendFeed maintains an open connection to the FriendFeed
-servers. (For more information on scaling servers to support thousands
-of clients, see `The C10K problem <http://www.kegel.com/c10k.html>`_.)
+`epoll
+<http://www.kernel.org/doc/man-pages/online/pages/man4/epoll.4.html>`_
+or kqueue, it can handle thousands of simultaneous standing
+connections, which means the framework is ideal for real-time web
+services. We built the web server specifically to handle FriendFeed's
+real-time features — every active user of FriendFeed maintains an open
+connection to the FriendFeed servers. (For more information on scaling
+servers to support thousands of clients, see `The C10K problem
+<http://www.kegel.com/c10k.html>`_.)
 
 Here is the canonical "Hello, world" example app:
 
@@ -41,9 +43,6 @@ Here is the canonical "Hello, world" example app:
         application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
 
-See `Tornado walkthrough <#tornado-walkthrough>`_ below for a detailed
-walkthrough of the ``tornado.web`` package.
-
 We attempted to clean up the code base to reduce interdependencies
 between modules, so you should (theoretically) be able to use any of the
 modules independently in your project without using the whole package.
@@ -52,7 +51,7 @@ Request handlers and request arguments
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A Tornado web application maps URLs or URL patterns to subclasses of
-``tornado.web.RequestHandler``. Those classes define ``get()`` or
+`tornado.web.RequestHandler`. Those classes define ``get()`` or
 ``post()`` methods to handle HTTP ``GET`` or ``POST`` requests to that
 URL.
 
@@ -114,7 +113,7 @@ number of useful attributes, including:
 -  ``path`` - the request path (everything before the ``?``)
 -  ``headers`` - the request headers
 
-See the class definition for ``HTTPRequest`` in ``httpserver`` for a
+See the class definition for `tornado.httpserver.HTTPRequest` for a
 complete list of attributes.
 
 Overriding RequestHandler methods
@@ -436,7 +435,7 @@ and the user is not logged in, the server will send a ``403`` response.
 
 Tornado comes with built-in support for third-party authentication
 schemes like Google OAuth. See the `tornado.auth`
-for more details. Check out the Tornado Blog example application for a
+for more details. Check out the `Tornado Blog example application <https://github.com/facebook/tornado/tree/master/demos/blog>`_ for a
 complete example that uses authentication (and stores user data in a
 MySQL database).
 
@@ -848,10 +847,12 @@ client eventually calls ``on_response()``, the request is still open,
 and the response is finally flushed to the client with the call to
 ``self.finish()``.
 
-For a more advanced asynchronous example, take a look at the ``chat``
-example application, which implements an AJAX chat room using `long
-polling <http://en.wikipedia.org/wiki/Push_technology#Long_polling>`_.
-Users of long polling may want to override ``on_connection_close()`` to
+For a more advanced asynchronous example, take a look at the `chat
+example application
+<https://github.com/facebook/tornado/tree/master/demos/chat>`_, which
+implements an AJAX chat room using `long polling
+<http://en.wikipedia.org/wiki/Push_technology#Long_polling>`_.  Users
+of long polling may want to override ``on_connection_close()`` to
 clean up after the client closes the connection (but see that method's
 docstring for caveats).
 
@@ -882,7 +883,7 @@ Third party authentication
 
 Tornado's ``auth`` module implements the authentication and
 authorization protocols for a number of the most popular sites on the
-web, including Google/Gmail, Facebook, Twitter, Yahoo, and FriendFeed.
+web, including Google/Gmail, Facebook, Twitter, and FriendFeed.
 The module includes methods to log users in via these sites and, where
 applicable, methods to authorize access to the service so you can, e.g.,
 download a user's address book or publish a Twitter message on their
@@ -907,7 +908,7 @@ the Google credentials in a cookie for later access:
                 return
             # Save the user with, e.g., set_secure_cookie()
 
-See the ``auth`` module documentation for more details.
+See the `tornado.auth` module documentation for more details.
 
 Debug mode and automatic reloading
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -927,53 +928,6 @@ are using debug mode.
 The automatic reloading feature of debug mode is available as a
 standalone module in ``tornado.autoreload``, and is optionally used by
 the test runner in ``tornado.testing.main``.
-
-Performance
-~~~~~~~~~~~
-
-Web application performance is generally bound by architecture, not
-frontend performance. That said, Tornado is pretty fast relative to most
-popular Python web frameworks.
-
-We ran a few remedial load tests on a simple "Hello, world" application
-in each of the most popular Python web frameworks
-(`Django <http://www.djangoproject.com/>`_,
-`web.py <http://webpy.org/>`_, and
-`CherryPy <http://www.cherrypy.org/>`_) to get the baseline performance
-of each relative to Tornado. We used Apache/mod\_wsgi for Django and
-web.py and ran CherryPy as a standalone server, which was our impression
-of how each framework is typically run in production environments. We
-ran 4 single-threaded Tornado frontends behind an
-`nginx <http://nginx.net/>`_ reverse proxy, which is how we recommend
-running Tornado in production (our load test machine had four cores, and
-we recommend 1 frontend per core).
-
-We load tested each with Apache Benchmark (``ab``) on the a separate
-machine with the command
-
-::
-
-    ab -n 100000 -c 25 http://10.0.1.x/
-
-The results (requests per second) on a 2.4GHz AMD Opteron processor with
-4 cores:
-
-.. raw:: html
-
-   <div style="text-align:center;margin-top:2em;margin-bottom:2em">
-
-.. raw:: html
-
-   </div>
-
-In our tests, Tornado consistently had 4X the throughput of the next
-fastest framework, and even a single standalone Tornado frontend got 33%
-more throughput even though it only used one of the four cores.
-
-Not very scientific, but at a high level, it should give you a sense
-that we have cared about performance as we built Tornado, and it
-shouldn't add too much latency to your apps relative to most Python web
-development frameworks.
 
 Running Tornado in production
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1101,8 +1055,9 @@ AppEngine <http://code.google.com/appengine/>`_ application:
         ])
         wsgiref.handlers.CGIHandler().run(application)
 
-See the ``appengine`` example application for a full-featured AppEngine
-app built on Tornado.
+See the `appengine example application
+<https://github.com/facebook/tornado/tree/master/demos/appengine>`_ for a
+full-featured AppEngine app built on Tornado.
 
 Caveats and support
 ~~~~~~~~~~~~~~~~~~~
