@@ -33,6 +33,12 @@ coverage_ignore_classes = [
     "TemplateModule",
     "url",
     ]
+
+coverage_ignore_functions = [
+    # various modules
+    "doctests",
+    "main",
+]
     
 html_static_path = [os.path.abspath("../static")]
 html_style = "sphinx.css"

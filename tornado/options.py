@@ -306,6 +306,7 @@ class _Option(object):
 
 
 class Error(Exception):
+    """Exception raised by errors in the options module."""
     pass
 
 

@@ -882,6 +882,7 @@ class RequestHandler(object):
                             "application to use %s" % (name, feature))
 
     def reverse_url(self, name, *args):
+        """Alias for `Application.reverse_url`."""
         return self.application.reverse_url(name, *args)
 
     def compute_etag(self):
@@ -1591,6 +1592,7 @@ class UIModule(object):
         self.locale = handler.locale
 
     def render(self, *args, **kwargs):
+        """Overridden in subclasses to return this module's output."""
         raise NotImplementedError()
 
     def embedded_javascript(self):
@@ -1618,6 +1620,7 @@ class UIModule(object):
         return None
 
     def render_string(self, path, **kwargs):
+        """Renders a template and returns it as a string."""
         return self.handler.render_string(path, **kwargs)
 
 class _linkify(UIModule):

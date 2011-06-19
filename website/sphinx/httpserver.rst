@@ -11,4 +11,7 @@
    HTTP Server
    -----------
    .. autoclass:: HTTPServer
+      :members:
+
    .. autoclass:: HTTPConnection
+      :members:

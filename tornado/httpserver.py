@@ -267,6 +267,11 @@ class HTTPServer(object):
                                          ioloop.IOLoop.READ)
 
     def stop(self):
+        """Stops listening for new connections.
+
+        Requests currently in progress may still continue after the
+        server is stopped.
+        """
         for fd, sock in self._sockets.iteritems():
             self.io_loop.remove_handler(fd)
             sock.close()
@@ -331,11 +336,13 @@ class HTTPConnection(object):
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
     def write(self, chunk):
+        """Writes a chunk of output to the stream."""
         assert self._request, "Request closed"
         if not self.stream.closed():
             self.stream.write(chunk, self._on_write_complete)
 
     def finish(self):
+        """Finishes the request."""
         assert self._request, "Request closed"
         self._request_finished = True
         if not self.stream.writing():

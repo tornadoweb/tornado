@@ -191,6 +191,7 @@ class IOStream(object):
         return bool(self._write_buffer)
 
     def closed(self):
+        """Returns true if the stream has been closed."""
         return self.socket is None
 
     def _handle_events(self, fd, events):

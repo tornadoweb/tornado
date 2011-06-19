@@ -22,3 +22,8 @@
    -----------
 
    .. autofunction:: main
+
+   Helper functions
+   ----------------
+
+   .. autofunction:: get_unused_port

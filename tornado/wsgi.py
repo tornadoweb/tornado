@@ -235,6 +235,8 @@ class WSGIContainer(object):
 
     @staticmethod
     def environ(request):
+        """Converts a `tornado.httpserver.HTTPRequest` to a WSGI environment.
+        """
         hostport = request.host.split(":")
         if len(hostport) == 2:
             host = hostport[0]

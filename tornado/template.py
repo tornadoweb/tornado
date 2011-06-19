@@ -180,6 +180,7 @@ class Template(object):
 
 
 class BaseLoader(object):
+    """Base class for template loaders."""
     def __init__(self, root_directory, autoescape=_DEFAULT_AUTOESCAPE):
         """Creates a template loader.
 
@@ -194,9 +195,11 @@ class BaseLoader(object):
         self.templates = {}
 
     def reset(self):
+        """Resets the cache of compiled templates."""
         self.templates = {}
 
     def resolve_path(self, name, parent_path=None):
+        """Converts a possibly-relative path to absolute (used internally)."""
         if parent_path and not parent_path.startswith("<") and \
            not parent_path.startswith("/") and \
            not name.startswith("/"):
@@ -208,6 +211,7 @@ class BaseLoader(object):
         return name
 
     def load(self, name, parent_path=None):
+        """Loads a template."""
         name = self.resolve_path(name, parent_path=parent_path)
         if name not in self.templates:
             self.templates[name] = self._create_template(name)

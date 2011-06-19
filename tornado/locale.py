@@ -177,6 +177,11 @@ def get_supported_locales(cls):
 
 
 class Locale(object):
+    """Object representing a locale.
+
+    After calling one of `load_translations` or `load_gettext_translations`,
+    call `get` or `get_closest` to get a Locale object.
+    """
     @classmethod
     def get_closest(cls, *locale_codes):
         """Returns the closest match for the given locale code."""
@@ -235,6 +240,12 @@ class Locale(object):
             _("Friday"), _("Saturday"), _("Sunday")]
 
     def translate(self, message, plural_message=None, count=None):
+        """Returns the translation for the given message for this locale.
+
+        If plural_message is given, you must also provide count. We return
+        plural_message when count != 1, and we return the singular form
+        for the given message when count == 1.
+        """
         raise NotImplementedError()
 
     def format_date(self, date, gmt_offset=0, relative=True, shorter=False,
@@ -374,12 +385,6 @@ class Locale(object):
 class CSVLocale(Locale):
     """Locale implementation using tornado's CSV translation format."""
     def translate(self, message, plural_message=None, count=None):
-        """Returns the translation for the given message for this locale.
-
-        If plural_message is given, you must also provide count. We return
-        plural_message when count != 1, and we return the singular form
-        for the given message when count == 1.
-        """
         if plural_message is not None:
             assert count is not None
             if count != 1:

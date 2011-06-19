@@ -155,6 +155,7 @@ class IOLoop(object):
 
     @classmethod
     def initialized(cls):
+        """Returns true if the singleton instance has been created."""
         return hasattr(cls, "_instance")
 
     def add_handler(self, fd, handler, events):
@@ -428,6 +429,8 @@ class PeriodicCallback(object):
     """Schedules the given callback to be called periodically.
 
     The callback is called every callback_time milliseconds.
+
+    `start` must be called after the PeriodicCallback is created.
     """
     def __init__(self, callback, callback_time, io_loop=None):
         self.callback = callback
@@ -436,11 +439,13 @@ class PeriodicCallback(object):
         self._running = False
 
     def start(self):
+        """Starts the timer."""
         self._running = True
         timeout = time.time() + self.callback_time / 1000.0
         self.io_loop.add_timeout(timeout, self._run)
 
     def stop(self):
+        """Stops the timer."""
         self._running = False
 
     def _run(self):

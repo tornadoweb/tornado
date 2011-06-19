@@ -80,6 +80,7 @@
    .. automethod:: RequestHandler.get_user_locale
    .. automethod:: RequestHandler.on_connection_close
    .. automethod:: RequestHandler.require_setting
+   .. automethod:: RequestHandler.reverse_url
    .. autoattribute:: RequestHandler.settings
    .. automethod:: RequestHandler.static_url
    .. automethod:: RequestHandler.xsrf_form_html

@@ -12,6 +12,7 @@
    ^^^^^^^^^^^^^^^^^
 
    .. automethod:: IOLoop.instance
+   .. automethod:: IOLoop.initialized
    .. automethod:: IOLoop.start
    .. automethod:: IOLoop.stop
    .. automethod:: IOLoop.running
@@ -30,6 +31,7 @@
    .. automethod:: IOLoop.add_timeout
    .. automethod:: IOLoop.remove_timeout
    .. autoclass:: PeriodicCallback
+      :members:
 
    Debugging and error handling
    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
