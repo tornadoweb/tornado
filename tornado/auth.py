@@ -697,9 +697,9 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
 
         Some of the available resources are:
 
-           Gmail Contacts - http://www.google.com/m8/feeds/
-           Calendar - http://www.google.com/calendar/feeds/
-           Finance - http://finance.google.com/finance/feeds/
+        * Gmail Contacts - http://www.google.com/m8/feeds/
+        * Calendar - http://www.google.com/calendar/feeds/
+        * Finance - http://finance.google.com/finance/feeds/
 
         You can authorize multiple resources by separating the resource
         URLs with a space.
@@ -739,6 +739,9 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
 
 class FacebookMixin(object):
     """Facebook Connect authentication.
+
+    New applications should consider using `FacebookGraphMixin` below instead
+    of this class.
 
     To authenticate with Facebook, register your application with
     Facebook at http://www.facebook.com/developers/apps.php. Then
@@ -799,10 +802,10 @@ class FacebookMixin(object):
         http://wiki.developers.facebook.com/index.php/Extended_permission.
         The most common resource types include:
 
-            publish_stream
-            read_stream
-            email
-            sms
+        * publish_stream
+        * read_stream
+        * email
+        * sms
 
         extended_permissions can be a single permission name or a list of
         names. To get the session secret and session key, call
@@ -918,13 +921,14 @@ class FacebookMixin(object):
         return hashlib.md5(body).hexdigest()
 
 class FacebookGraphMixin(OAuth2Mixin):
+    """Facebook authentication using the new Graph API and OAuth2."""
     _OAUTH_ACCESS_TOKEN_URL = "https://graph.facebook.com/oauth/access_token?"
     _OAUTH_AUTHORIZE_URL = "https://graph.facebook.com/oauth/authorize?"
     _OAUTH_NO_CALLBACKS = False
 
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
                               code, callback, extra_fields=None):
-      """ Handles the login for the Facebook user, returning a user object.
+      """Handles the login for the Facebook user, returning a user object.
 
       Example usage::
 

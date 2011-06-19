@@ -1,17 +1,16 @@
+"""Server-side implementation of the WebSocket protocol.
+
+`WebSockets <http://dev.w3.org/html5/websockets/>`_ allow for bidirectional
+communication between the browser and server.
+
+.. warning::
+
+   The WebSocket protocol is still in development.  This module currently
+   implements the "draft76" version of the protocol, which is supported
+   only by Chrome and Safari.  See this `browser compatibility table 
+   <http://en.wikipedia.org/wiki/WebSockets#Browser_support>`_ on Wikipedia.
+"""
 # Author: Jacob Kristhammar, 2010
-#
-# Updated version of websocket.py[1] that implements latest[2] stable version
-# of the websocket protocol.
-#
-# NB. It's no longer possible to manually select which callback that should
-#     be invoked upon message reception. Instead you must override the
-#     on_message(message) method to handle incoming messsages.
-#     This also means that you don't have to explicitly invoke
-#     receive_message, in fact you shouldn't.
-#
-# [1] http://github.com/facebook/tornado/blob/
-#     2c89b89536bbfa081745336bb5ab5465c448cb8a/tornado/websocket.py
-# [2] http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-76
 
 import functools
 import hashlib

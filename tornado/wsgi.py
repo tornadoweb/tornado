@@ -16,38 +16,17 @@
 
 """WSGI support for the Tornado web framework.
 
-We export WSGIApplication, which is very similar to web.Application, except
-no asynchronous methods are supported (since WSGI does not support
-non-blocking requests properly). If you call self.flush() or other
-asynchronous methods in your request handlers running in a WSGIApplication,
-we throw an exception.
+WSGI is the Python standard for web servers, and allows for interoperability
+between Tornado and other Python web frameworks and servers.  This module
+provides WSGI support in two ways:
 
-Example usage::
-
-    import tornado.web
-    import tornado.wsgi
-    import wsgiref.simple_server
-
-    class MainHandler(tornado.web.RequestHandler):
-        def get(self):
-            self.write("Hello, world")
-
-    if __name__ == "__main__":
-        application = tornado.wsgi.WSGIApplication([
-            (r"/", MainHandler),
-        ])
-        server = wsgiref.simple_server.make_server('', 8888, application)
-        server.serve_forever()
-
-See the 'appengine' demo for an example of using this module to run
-a Tornado app on Google AppEngine.
-
-Since no asynchronous methods are available for WSGI applications, the
-httpclient and auth modules are both not available for WSGI applications.
-
-We also export WSGIContainer, which lets you run other WSGI-compatible
-frameworks on the Tornado HTTP server and I/O loop. See WSGIContainer for
-details and documentation.
+* `WSGIApplication` is a version of `tornado.web.Application` that can run 
+  inside a WSGI server.  This is useful for running a Tornado app on another
+  HTTP server, such as Google App Engine.  See the `WSGIApplication` class
+  documentation for limitations that apply.
+* `WSGIContainer` lets you run other WSGI applications and frameworks on the
+  Tornado HTTP server.  For example, with this class you can mix Django
+  and Tornado handlers in a single server.
 """
 
 import cgi
@@ -70,10 +49,38 @@ except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
 
 class WSGIApplication(web.Application):
-    """A WSGI-equivalent of web.Application.
+    """A WSGI equivalent of `tornado.web.Application`.
 
+    WSGIApplication is very similar to web.Application, except no
+    asynchronous methods are supported (since WSGI does not support
+    non-blocking requests properly). If you call self.flush() or other
+    asynchronous methods in your request handlers running in a
+    WSGIApplication, we throw an exception.
+
+    Example usage::
+
+        import tornado.web
+        import tornado.wsgi
+        import wsgiref.simple_server
+
+        class MainHandler(tornado.web.RequestHandler):
+            def get(self):
+                self.write("Hello, world")
+
+        if __name__ == "__main__":
+            application = tornado.wsgi.WSGIApplication([
+                (r"/", MainHandler),
+            ])
+            server = wsgiref.simple_server.make_server('', 8888, application)
+            server.serve_forever()
+
+    See the 'appengine' demo for an example of using this module to run
+    a Tornado app on Google AppEngine.
+
+    Since no asynchronous methods are available for WSGI applications, the
+    httpclient and auth modules are both not available for WSGI applications.
     We support the same interface, but handlers running in a WSGIApplication
-    do not support flush() or asynchronous methods.
+    do not support flush() or asynchronous methods. 
     """
     def __init__(self, handlers=None, default_host="", **settings):
         web.Application.__init__(self, handlers, default_host, transforms=[],
@@ -94,7 +101,7 @@ class WSGIApplication(web.Application):
 
 
 class HTTPRequest(object):
-    """Mimics httpserver.HTTPRequest for WSGI applications."""
+    """Mimics `tornado.httpserver.HTTPRequest` for WSGI applications."""
     def __init__(self, environ):
         """Parses the given WSGI environ to construct the request."""
         self.method = environ["REQUEST_METHOD"]
@@ -182,8 +189,11 @@ class WSGIContainer(object):
         tornado.ioloop.IOLoop.instance().start()
 
     This class is intended to let other frameworks (Django, web.py, etc)
-    run on the Tornado HTTP server and I/O loop. It has not yet been
-    thoroughly tested in production.
+    run on the Tornado HTTP server and I/O loop.
+
+    The `tornado.web.FallbackHandler` class is often useful for mixing
+    Tornado and WSGI apps in the same server.  See
+    https://github.com/bdarnell/django-tornado-demo for a complete example.
     """
     def __init__(self, wsgi_application):
         self.wsgi_application = wsgi_application

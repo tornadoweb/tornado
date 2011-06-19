@@ -310,7 +310,10 @@ class Error(Exception):
 
 
 def enable_pretty_logging():
-    """Turns on formatted logging output as configured."""
+    """Turns on formatted logging output as configured.
+    
+    This is called automatically by `parse_command_line`.
+    """
     root_logger = logging.getLogger()
     if options.log_file_prefix:
         channel = logging.handlers.RotatingFileHandler(

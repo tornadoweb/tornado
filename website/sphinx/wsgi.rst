@@ -2,4 +2,18 @@
 ==============================================================================
 
 .. automodule:: tornado.wsgi
-   :members:
+
+   WSGIApplication
+   ---------------
+
+   .. autoclass:: WSGIApplication
+      :members:
+
+   .. autoclass:: HTTPRequest
+      :members:
+
+   WSGIContainer
+   -------------
+  
+   .. autoclass:: WSGIContainer
+      :members:

@@ -2,4 +2,23 @@
 ==================================================================
 
 .. automodule:: tornado.testing
-   :members:
+
+   Asynchronous test cases
+   -----------------------
+
+   .. autoclass:: AsyncTestCase
+      :members:
+
+   .. autoclass:: AsyncHTTPTestCase
+      :members:
+   
+   Controlling log output
+   ----------------------
+
+   .. autoclass:: LogTrapTestCase
+      :members:
+
+   Test runner
+   -----------
+
+   .. autofunction:: main

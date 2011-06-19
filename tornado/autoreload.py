@@ -16,8 +16,14 @@
 
 """A module to automatically restart the server when a module is modified.
 
+Most applications should not call this module directly.  Instead, pass the
+keyword argument ``debug=True`` to the `tornado.web.Application` constructor.
+This will enable autoreload mode as well as checking for changes to templates
+and static resources.
+
 This module depends on IOLoop, so it will not work in WSGI applications
-and Google AppEngine.
+and Google AppEngine.  It also will not work correctly when HTTPServer's
+multi-process mode is used.
 """
 
 import functools

@@ -3,13 +3,13 @@
 
 This module contains three parts:
 
-* AsyncTestCase/AsyncHTTPTestCase:  Subclasses of unittest.TestCase
+* `AsyncTestCase`/`AsyncHTTPTestCase`:  Subclasses of unittest.TestCase
   with additional support for testing asynchronous (IOLoop-based) code.
 
-* LogTrapTestCase:  Subclass of unittest.TestCase that discards log output
+* `LogTrapTestCase`:  Subclass of unittest.TestCase that discards log output
   from tests that pass and only produces output for failing tests.
 
-* main(): A simple test runner (wrapper around unittest.main()) with support
+* `main()`: A simple test runner (wrapper around unittest.main()) with support
   for the tornado.autoreload module to rerun the tests when code changes.
 
 These components may be used together or independently.  In particular,
