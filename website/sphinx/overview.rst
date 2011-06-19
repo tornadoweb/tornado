@@ -1,7 +1,7 @@
 Overview
---------
+========
 
-`FriendFeed <http://friendfeed.com/>`_'s web server is a relatively
+`FriendFeed's <http://friendfeed.com/>`_ web server is a relatively
 simple, non-blocking web server written in Python. The FriendFeed
 application is written using a web framework that looks a bit like
 `web.py <http://webpy.org/>`_ or Google's
@@ -144,48 +144,38 @@ Ubuntu Linux (Python 2.5)
 Module index
 ------------
 
-The most important module is
-```web`` <http://github.com/facebook/tornado/blob/master/tornado/web.py>`_,
+The most important module is `tornado.web`
 which is the web framework that includes most of the meat of the Tornado
-package. The other modules are tools that make ``web`` more useful. See
+package. The other modules are tools that make `tornado.web` more useful. See
 `Tornado walkthrough <#tornado-walkthrough>`_ below for a detailed
-walkthrough of the ``web`` package.
+walkthrough of the `~tornado.web` package.
 
 Main modules
 ~~~~~~~~~~~~
 
--  ```web`` <http://github.com/facebook/tornado/blob/master/tornado/web.py>`_
-   - The web framework on which FriendFeed is built. ``web``
+-  `tornado.web` - The web framework on which FriendFeed is built. `web`
    incorporates most of the important features of Tornado
--  ```escape`` <http://github.com/facebook/tornado/blob/master/tornado/escape.py>`_
-   - XHTML, JSON, and URL encoding/decoding methods
--  ```database`` <http://github.com/facebook/tornado/blob/master/tornado/database.py>`_
-   - A simple wrapper around ``MySQLdb`` to make MySQL easier to use
--  ```template`` <http://github.com/facebook/tornado/blob/master/tornado/template.py>`_
-   - A Python-based web templating language
--  ```httpclient`` <http://github.com/facebook/tornado/blob/master/tornado/httpclient.py>`_
-   - A non-blocking HTTP client designed to work with ``web`` and
-   ``httpserver``
--  ```auth`` <http://github.com/facebook/tornado/blob/master/tornado/auth.py>`_
-   - Implementation of third party authentication and authorization
-   schemes (Google OpenID/OAuth, Facebook Platform, Yahoo BBAuth,
+-  `tornado.escape` - XHTML, JSON, and URL encoding/decoding methods
+-  `tornado.database` - A simple wrapper around ``MySQLdb`` to make MySQL
+   easier to use
+-  `tornado.template` - A Python-based web templating language
+-  `tornado.httpclient` - A non-blocking HTTP client designed to work 
+   with ``web`` and ``httpserver``
+-  `tornado.auth` - Implementation of third party authentication and 
+   authorization schemes (Google OpenID/OAuth, Facebook Platform, Yahoo BBAuth,
    FriendFeed OpenID/OAuth, Twitter OAuth)
--  ```locale`` <http://github.com/facebook/tornado/blob/master/tornado/locale.py>`_
-   - Localization/translation support
--  ```options`` <http://github.com/facebook/tornado/blob/master/tornado/options.py>`_
-   - Command line and config file parsing, optimized for server
-   environments
+-  `tornado.locale` - Localization/translation support
+-  `tornado.options` - Command line and config file parsing, optimized for 
+   server environments
 
 Low-level modules
 ~~~~~~~~~~~~~~~~~
 
--  ```httpserver`` <http://github.com/facebook/tornado/blob/master/tornado/httpserver.py>`_
-   - A very simple HTTP server built on which ``web`` is built
--  ```iostream`` <http://github.com/facebook/tornado/blob/master/tornado/iostream.py>`_
-   - A simple wrapper around non-blocking sockets to aide common reading
-   and writing patterns
--  ```ioloop`` <http://github.com/facebook/tornado/blob/master/tornado/ioloop.py>`_
-   - Core I/O loop
+-  `tornado.httpserver` - A very simple HTTP server built on which ``web`` is
+   built
+-  `tornado.iostream` - A simple wrapper around non-blocking sockets to aide 
+   common reading and writing patterns
+-  `tornado.ioloop` - Core I/O loop
 
 Tornado walkthrough
 -------------------
@@ -369,8 +359,7 @@ Templates
 You can use any template language supported by Python, but Tornado ships
 with its own templating language that is a lot faster and more flexible
 than many of the most popular templating systems out there. See the
-```template`` <http://github.com/facebook/tornado/blob/master/tornado/template.py>`_
-module documentation for complete documentation.
+`tornado.template` module documentation for complete documentation.
 
 A Tornado template is just HTML (or any other text-based format) with
 Python control sequences and expressions embedded within the markup:
@@ -409,8 +398,7 @@ Control statements more or less map exactly to Python statements. We
 support ``if``, ``for``, ``while``, and ``try``, all of which are
 terminated with ``{% end %}``. We also support *template inheritance*
 using the ``extends`` and ``block`` statements, which are described in
-detail in the documentation for the ```template``
-module <http://github.com/facebook/tornado/blob/master/tornado/template.py>`_.
+detail in the documentation for the `tornado.template`.
 
 Expressions can be any Python expression, including function calls.
 Template code is executed in a namespace that includes the following
@@ -440,8 +428,7 @@ these entries are not present).
 
 When you are building a real application, you are going to want to use
 all of the features of Tornado templates, especially template
-inheritance. Read all about those features in the ```template``
-module <http://github.com/facebook/tornado/blob/master/tornado/template.py>`_
+inheritance. Read all about those features in the `tornado.template`
 section (some features, including ``UIModules`` are implemented in the
 ``web`` module)
 
@@ -580,8 +567,7 @@ If you decorate ``post()`` methods with the ``authenticated`` decorator,
 and the user is not logged in, the server will send a ``403`` response.
 
 Tornado comes with built-in support for third-party authentication
-schemes like Google OAuth. See the ```auth``
-module <http://github.com/facebook/tornado/blob/master/tornado/auth.py>`_
+schemes like Google OAuth. See the `tornado.auth`
 for more details. Check out the Tornado Blog example application for a
 complete example that uses authentication (and stores user data in a
 MySQL database).
@@ -682,7 +668,8 @@ You can serve static files from Tornado by specifying the
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/login", LoginHandler),
-        (r"/(apple-touch-icon\.png)", tornado.web.StaticFileHandler, dict(path=settings['static_path'])),
+        (r"/(apple-touch-icon\.png)", tornado.web.StaticFileHandler,
+         dict(path=settings['static_path'])),
     ], **settings)
 
 This setting will automatically make all requests that start with
@@ -769,7 +756,8 @@ which translates the string directly based on the current locale, and
 
 ::
 
-    _("A person liked this", "%(num)d people liked this", len(people)) % {"num": len(people)}
+    _("A person liked this", "%(num)d people liked this",
+      len(people)) % {"num": len(people)}
 
 which translates a string that can be singular or plural based on the
 value of the third argument. In the example above, a translation of the
@@ -843,8 +831,7 @@ the user's locale is ``es_GT``, and the ``es`` locale is supported,
 ``self.locale`` will be ``es`` for that request. We fall back on
 ``en_US`` if no close match can be found.
 
-See the ```locale``
-module <http://github.com/facebook/tornado/blob/master/tornado/locale.py>`_
+See the `tornado.locale`
 documentation for detailed information on the CSV format and other
 localization methods.
 
