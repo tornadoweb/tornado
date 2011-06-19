@@ -48,138 +48,6 @@ We attempted to clean up the code base to reduce interdependencies
 between modules, so you should (theoretically) be able to use any of the
 modules independently in your project without using the whole package.
 
-Download and install
---------------------
-
-.. raw:: html
-
-   <p>
-
-Automatic installation: Tornado is listed in PyPI and can be installed
-with pip or easy\_install. If you do not already have libcurl installed
-you may need to install it separately; see the prerequisites section
-below. Note that the source distribution includes demo applications that
-are not present when Tornado is installed using pip or easy\_install
-
-.. raw:: html
-
-   </p>
-
-.. raw:: html
-
-   <p>
-
-Manual installation: Download tornado-1.2.1.tar.gz
-
-.. raw:: html
-
-   </p>
-     <pre><code>tar xvzf tornado-1.2.1.tar.gz
-   cd tornado-1.2.1
-   python setup.py build
-   sudo python setup.py install</code></pre>
-     <p>
-
-The Tornado source code is hosted on GitHub. On Python 2.6+, it is also
-possible to simply add the tornado directory to your PYTHONPATH instead
-of building with setup.py, since the standard library includes epoll
-support.
-
-.. raw:: html
-
-   </p>
-
-.. raw:: html
-
-   <h3>
-
-Prerequisites
-
-.. raw:: html
-
-   </h3>
-     <p>
-
-Tornado has been tested on Python 2.5, 2.6, and 2.7. To use all of the
-features of Tornado, you need to have PycURL (version 7.18.2 or higher)
-and (for Python 2.5 only) simplejson installed (Python 2.6 includes JSON
-support in the standard library so simplejson is not needed). Complete
-installation instructions for Mac OS X and Ubuntu are included below for
-convenience.
-
-.. raw:: html
-
-   </p>
-     <p style="font-weight:bold">
-
-Mac OS X 10.6 (Python 2.6+)
-
-.. raw:: html
-
-   </p>
-     <pre><code>sudo easy_install setuptools pycurl</code></pre>
-
-.. raw:: html
-
-   <p style="font-weight:bold">
-
-Ubuntu Linux (Python 2.6+)
-
-.. raw:: html
-
-   </p>
-     <pre><code>sudo apt-get install python-pycurl</code></pre>
-
-.. raw:: html
-
-   <p style="font-weight:bold">
-
-Ubuntu Linux (Python 2.5)
-
-.. raw:: html
-
-   </p>
-     <pre><code>sudo apt-get install python-dev python-pycurl python-simplejson</code></pre>
-
-Module index
-------------
-
-The most important module is `tornado.web`
-which is the web framework that includes most of the meat of the Tornado
-package. The other modules are tools that make `tornado.web` more useful. See
-`Tornado walkthrough <#tornado-walkthrough>`_ below for a detailed
-walkthrough of the `~tornado.web` package.
-
-Main modules
-~~~~~~~~~~~~
-
--  `tornado.web` - The web framework on which FriendFeed is built. `web`
-   incorporates most of the important features of Tornado
--  `tornado.escape` - XHTML, JSON, and URL encoding/decoding methods
--  `tornado.database` - A simple wrapper around ``MySQLdb`` to make MySQL
-   easier to use
--  `tornado.template` - A Python-based web templating language
--  `tornado.httpclient` - A non-blocking HTTP client designed to work 
-   with ``web`` and ``httpserver``
--  `tornado.auth` - Implementation of third party authentication and 
-   authorization schemes (Google OpenID/OAuth, Facebook Platform, Yahoo BBAuth,
-   FriendFeed OpenID/OAuth, Twitter OAuth)
--  `tornado.locale` - Localization/translation support
--  `tornado.options` - Command line and config file parsing, optimized for 
-   server environments
-
-Low-level modules
-~~~~~~~~~~~~~~~~~
-
--  `tornado.httpserver` - A very simple HTTP server built on which ``web`` is
-   built
--  `tornado.iostream` - A simple wrapper around non-blocking sockets to aide 
-   common reading and writing patterns
--  `tornado.ioloop` - Core I/O loop
-
-Tornado walkthrough
--------------------
-
 Request handlers and request arguments
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1061,7 +929,7 @@ standalone module in ``tornado.autoreload``, and is optionally used by
 the test runner in ``tornado.testing.main``.
 
 Performance
------------
+~~~~~~~~~~~
 
 Web application performance is generally bound by architecture, not
 frontend performance. That said, Tornado is pretty fast relative to most
@@ -1108,7 +976,7 @@ shouldn't add too much latency to your apps relative to most Python web
 development frameworks.
 
 Running Tornado in production
------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 At FriendFeed, we use `nginx <http://nginx.net/>`_ as a load balancer
 and static file server. We run multiple instances of the Tornado web
@@ -1201,7 +1069,7 @@ running on ports 8000 - 8003:
     }
 
 WSGI and Google AppEngine
--------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Tornado comes with limited support for `WSGI <http://wsgi.org/>`_.
 However, since WSGI does not support non-blocking requests, you cannot
@@ -1237,7 +1105,7 @@ See the ``appengine`` example application for a full-featured AppEngine
 app built on Tornado.
 
 Caveats and support
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Because FriendFeed and other large users of Tornado run `behind
 nginx <#running-tornado-in-production>`_ or Apache proxies, Tornado's

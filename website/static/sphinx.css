@@ -46,6 +46,8 @@ div.related {
 div.body {
     top: 30px;
     bottom: 0;
+    right: 0;
+    left: 230px;
     margin: 0;
     position: fixed;
     overflow: auto;
