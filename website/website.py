@@ -27,7 +27,7 @@ class ContentHandler(tornado.web.RequestHandler):
         paths = ("index",)
         if path not in paths:
             raise tornado.web.HTTPError(404)
-        self.render(path + ".html")
+        self.render(path + ".html", version=tornado.version)
 
 
 settings = {

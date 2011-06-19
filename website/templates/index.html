@@ -2,29 +2,17 @@
 
 {% block body %}
   <p><a href="http://www.tornadoweb.org/">Tornado</a> is an open source version of the scalable, non-blocking web server and tools that power <a href="http://friendfeed.com/">FriendFeed</a>. The FriendFeed application is written using a web framework that looks a bit like <a href="http://webpy.org/">web.py</a> or <a href="http://code.google.com/appengine/docs/python/tools/webapp/">Google's webapp</a>, but with additional tools and optimizations to take advantage of the underlying non-blocking infrastructure.</p>
-  <p>The framework is distinct from most mainstream web server frameworks (and certainly most Python frameworks) because it is non-blocking and reasonably fast. Because it is non-blocking and uses <a href="http://www.kernel.org/doc/man-pages/online/pages/man4/epoll.4.html">epoll</a>, it can handle thousands of simultaneous standing connections, which means it is ideal for real-time web services. We built the web server specifically to handle FriendFeed's real-time features &mdash; every active user of FriendFeed maintains an open connection to the FriendFeed servers. (For more information on scaling servers to support thousands of clients, see The <a href="http://www.kegel.com/c10k.html">C10K problem</a>.)</p>
-  <p>See the <a href="/documentation">Tornado documentation</a> for a detailed walkthrough of the framework.</p>
+  <p>The framework is distinct from most mainstream web server frameworks (and certainly most Python frameworks) because it is non-blocking and reasonably fast. Because it is non-blocking and uses <a href="http://www.kernel.org/doc/man-pages/online/pages/man4/epoll.4.html"><code>epoll</code></a> or <code>kqueue</code>, it can handle thousands of simultaneous standing connections, which means it is ideal for real-time web services. We built the web server specifically to handle FriendFeed's real-time features &mdash; every active user of FriendFeed maintains an open connection to the FriendFeed servers. (For more information on scaling servers to support thousands of clients, see The <a href="http://www.kegel.com/c10k.html">C10K problem</a>.)</p>
 
-  <h2>Download and install</h2>
-  <p><b>Automatic installation:</b> Tornado is listed in <a href="http://pypi.python.org/pypi/tornado">PyPI</a> and can be installed with <code>pip</code> or <code>easy_install</code>.  If you do not already have libcurl installed you may need to install it separately; see the prerequisites section below.  Note that the source distribution includes demo applications that are not present when Tornado is installed using <code>pip</code> or <code>easy_install</code></p>
+  <h2>Quick links</h2>
 
-  <p><b>Manual installation:</b> Download <a href="http://github.com/downloads/facebook/tornado/tornado-1.2.1.tar.gz">tornado-1.2.1.tar.gz</a></p>
-  <pre><code>tar xvzf tornado-1.2.1.tar.gz
-cd tornado-1.2.1
-python setup.py build
-sudo python setup.py install</code></pre>
-  <p>The Tornado source code is <a href="http://github.com/facebook/tornado">hosted on GitHub</a>.  On Python 2.6+, it is also possible to simply add the tornado directory to your <code>PYTHONPATH</code> instead of building with <code>setup.py</code>, since the standard library includes <code>epoll</code> support.</p>
-
-  <h3>Prerequisites</h3>
-  <p>Tornado has been tested on Python 2.5, 2.6, and 2.7. To use all of the features of Tornado, you need to have <a href="http://pycurl.sourceforge.net/">PycURL</a> (version 7.18.2 or higher) and (for Python 2.5 only) <a href="http://pypi.python.org/pypi/simplejson/">simplejson</a> installed (Python 2.6 includes JSON support in the standard library so simplejson is not needed). Complete installation instructions for Mac OS X and Ubuntu are included below for convenience.</p>
-  <p style="font-weight:bold">Mac OS X 10.6 (Python 2.6+)</p>
-  <pre><code>sudo easy_install setuptools pycurl</code></pre>
-
-  <p style="font-weight:bold">Ubuntu Linux (Python 2.6+)</p>
-  <pre><code>sudo apt-get install python-pycurl</code></pre>
-
-  <p style="font-weight:bold">Ubuntu Linux (Python 2.5)</p>
-  <pre><code>sudo apt-get install python-dev python-pycurl python-simplejson</code></pre>
+  <ul>
+    <li><a href="/documentation/index.html">Documentation</a></li>
+    <li><a href="https://github.com/downloads/facebook/tornado/tornado-{{version}}.tar.gz">Download version {{version}}</a> (<a href="/documentation/releases.html">release notes</a>)</li>
+    <li><a href="https://github.com/facebook/tornado">Source (github)</a></li>
+    <li><a href="http://groups.google.com/group/python-tornado">Mailing list</a></li>
+    <li><a href="http://github.com/facebook/tornado/wiki/Links">Wiki</a></li>
+  </ul>
 
   <h2>Hello, world</h2>
   <p>Here is the canonical &quot;Hello, world&quot; example app for Tornado:</p>
@@ -42,7 +30,29 @@ application = tornado.web.Application([
 if __name__ == "__main__":
     application.listen(8888)
     tornado.ioloop.IOLoop.instance().start()</code></pre>
-  <p>See the <a href="/documentation">Tornado documentation</a> for a detailed walkthrough of the framework.</p>
+  <p>See the <a href="/documentation/index.html">Tornado documentation</a> for a detailed walkthrough of the framework.</p>
+
+  <h2>Installation</h2>
+
+  <p><b>Automatic installation:</b> Tornado is listed in <a href="http://pypi.python.org/pypi/tornado">PyPI</a> and can be installed with <code>pip</code> or <code>easy_install</code>.  Note that the source distribution includes demo applications that are not present when Tornado is installed in this way, so you may wish to download a copy of the source tarball as well.</p>
+
+  <p><b>Manual installation:</b> Download <a href="http://github.com/downloads/facebook/tornado/tornado-{{version}}.tar.gz">tornado-{{version}}.tar.gz</a></p>
+  <pre><code>tar xvzf tornado-{{version}}.tar.gz
+cd tornado-{{version}}
+python setup.py build
+sudo python setup.py install</code></pre>
+  <p>The Tornado source code is <a href="http://github.com/facebook/tornado">hosted on GitHub</a>.  On Python 2.6 and 2.7, it is also possible to simply add the tornado directory to your <code>PYTHONPATH</code> instead of building with <code>setup.py</code>, since the standard library includes <code>epoll</code> support.</p>
+
+  <p><b>Prerequisites:</b> Tornado runs on Python 2.5, 2.6, 2.7 and 3.2.
+  <ul>
+    <li>On Python 2.6 and 2.7, there are no dependencies outside the Python standard library, although <a href="http://pycurl.sourceforge.net/">PycURL</a> (version 7.18.2 or higher required; version 7.21.1 or higher recommended) may be used if desired.</li>
+    <li>On Python 2.5, PycURL is required, along with <a href="http://pypi.python.org/pypi/simplejson/">simplejson</a> and the Python development headers (typically obtained by installing a package named something like <code>python-dev</code> from your operating system).</li>
+    <li>On Python 3.2, the <a href="http://pypi.python.org/pypi/distribute">distribute</a> package is required.</li>
+  </ul></p>
+
+  <p><b>Platforms:</b> Tornado should run on any Unix-like platform, although
+    for the best performance and scalability only Linux and BSD (including
+    BSD derivatives like Mac OS X) are recommended.</p>
 
   <h2>Discussion and support</h2>
   <p>You can discuss Tornado and report bugs on <a href="http://groups.google.com/group/python-tornado">the Tornado developer mailing list</a>.  Links to additional resources can be found on the <a href="http://github.com/facebook/tornado/wiki/Links">Tornado wiki</a>.
