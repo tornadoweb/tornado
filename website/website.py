@@ -14,7 +14,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import markdown
 import os
 import os.path
 import time
@@ -25,23 +24,10 @@ import wsgiref.handlers
 
 class ContentHandler(tornado.web.RequestHandler):
     def get(self, path="index"):
-        paths = ("overview", "index")
+        paths = ("index",)
         if path not in paths:
             raise tornado.web.HTTPError(404)
-        self.render(path + ".html", markdown=self.markdown)
-
-    def markdown(self, path, toc=False):
-        if not hasattr(ContentHandler, "_md") or self.settings.get("debug"):
-            ContentHandler._md = {}
-        if path not in ContentHandler._md:
-            full_path = os.path.join(self.settings["template_path"], path)
-            f = open(full_path, "r")
-            contents = f.read().decode("utf-8")
-            f.close()
-            if toc: contents = u"[TOC]\n\n" + contents
-            md = markdown.Markdown(extensions=["toc"] if toc else [])
-            ContentHandler._md[path] = md.convert(contents).encode("utf-8")
-        return ContentHandler._md[path]
+        self.render(path + ".html")
 
 
 settings = {
@@ -52,16 +38,13 @@ settings = {
 application = tornado.wsgi.WSGIApplication([
     (r"/", ContentHandler),
     (r"/(index)", ContentHandler),
-    (r"/documentation/(overview)", ContentHandler),
     (r"/static/tornado-0.1.tar.gz", tornado.web.RedirectHandler,
      dict(url="http://github.com/downloads/facebook/tornado/tornado-0.1.tar.gz")),
     (r"/static/tornado-0.2.tar.gz", tornado.web.RedirectHandler,
      dict(url="http://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz")),
 
     (r"/documentation/?", tornado.web.RedirectHandler,
-     dict(url="/documentation/overview")),
-    (r"/documentation/reference/?", tornado.web.RedirectHandler,
-     dict(url="/documentation/reference/index.html")),
+     dict(url="/documentation/index.html")),
 
 ], **settings)
 
