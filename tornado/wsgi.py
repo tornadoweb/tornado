@@ -125,9 +125,9 @@ class HTTPRequest(object):
         for key in environ:
             if key.startswith("HTTP_"):
                 self.headers[key[5:].replace("_", "-")] = environ[key]
-        if self.headers.get("Content-Length"):
-            self.body = environ["wsgi.input"].read(
-                int(self.headers["Content-Length"]))
+        content_length = self.headers.get("Content-Length")
+        if content_length:
+            self.body = environ["wsgi.input"].read(int(content_length))
         else:
             self.body = ""
         self.protocol = environ["wsgi.url_scheme"]
