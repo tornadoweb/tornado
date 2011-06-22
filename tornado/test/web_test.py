@@ -65,9 +65,18 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
             def get(self):
                 self.write(self.get_cookie("foo"))
 
+        class SetCookieDomainHandler(RequestHandler):
+            def get(self):
+                # unicode domain and path arguments shouldn't break things
+                # either (see bug #285)
+                self.set_cookie("unicode_args", "blah", domain=u"foo.com",
+                                path=u"/foo")
+
+
         return Application([
                 ("/set", SetCookieHandler),
-                ("/get", GetCookieHandler)])
+                ("/get", GetCookieHandler),
+                ("/set_domain", SetCookieDomainHandler)])
 
     def test_set_cookie(self):
         response = self.fetch("/set")
@@ -79,6 +88,11 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_get_cookie(self):
         response = self.fetch("/get", headers={"Cookie": "foo=bar"})
         self.assertEqual(response.body, b("bar"))
+
+    def test_set_cookie_domain(self):
+        response = self.fetch("/set_domain")
+        self.assertEqual(response.headers.get_list("Set-Cookie"),
+                         ["unicode_args=blah; Domain=foo.com; Path=/foo"])
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
