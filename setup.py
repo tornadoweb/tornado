@@ -33,7 +33,7 @@ if "linux" in sys.platform.lower() and not python_26:
     extensions.append(distutils.core.Extension(
         "tornado.epoll", ["tornado/epoll.c"]))
 
-version = "2.0rc1"
+version = "2.0"
 
 if major >= 3:
     import setuptools  # setuptools is required for use_2to3
