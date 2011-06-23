@@ -70,6 +70,7 @@ import stat
 import sys
 import time
 import tornado
+import traceback
 import types
 import urllib
 import urlparse
@@ -663,11 +664,16 @@ class RequestHandler(object):
         If this error was caused by an uncaught exception, the
         exception object can be found in kwargs e.g. kwargs['exception']
         """
-        return "<html><title>%(code)d: %(message)s</title>" \
-               "<body>%(code)d: %(message)s</body></html>" % {
-            "code": status_code,
-            "message": httplib.responses[status_code],
-        }
+        if self.settings.get("debug"):
+            # in debug mode, try to send a traceback
+            self.set_header('Content-Type', 'text/plain')
+            return traceback.format_exc()
+        else:
+            return "<html><title>%(code)d: %(message)s</title>" \
+                   "<body>%(code)d: %(message)s</body></html>" % {
+                "code": status_code,
+                "message": httplib.responses[status_code],
+            }
 
     @property
     def locale(self):
