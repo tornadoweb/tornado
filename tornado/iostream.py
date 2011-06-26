@@ -142,9 +142,6 @@ class IOStream(object):
     def read_bytes(self, num_bytes, callback):
         """Call callback when we read the given number of bytes."""
         assert not self._read_callback, "Already reading"
-        if num_bytes == 0:
-            callback(b(""))
-            return
         self._read_bytes = num_bytes
         self._read_callback = stack_context.wrap(callback)
         while True:
@@ -326,7 +323,7 @@ class IOStream(object):
 
         Returns True if the read was completed.
         """
-        if self._read_bytes:
+        if self._read_bytes is not None:
             if self._read_buffer_size >= self._read_bytes:
                 num_bytes = self._read_bytes
                 callback = self._read_callback
@@ -334,7 +331,7 @@ class IOStream(object):
                 self._read_bytes = None
                 self._run_callback(callback, self._consume(num_bytes))
                 return True
-        elif self._read_delimiter:
+        elif self._read_delimiter is not None:
             _merge_prefix(self._read_buffer, sys.maxint)
             loc = self._read_buffer[0].find(self._read_delimiter)
             if loc != -1:
@@ -394,6 +391,8 @@ class IOStream(object):
             self._run_callback(callback)
 
     def _consume(self, loc):
+        if loc == 0:
+            return b("")
         _merge_prefix(self._read_buffer, loc)
         self._read_buffer_size -= loc
         return self._read_buffer.popleft()
