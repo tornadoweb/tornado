@@ -110,7 +110,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.raw_fetch([
                 b("POST /multipart HTTP/1.0"),
                 b("Content-Type: multipart/form-data; boundary=1234567890"),
-                u"X-Header-encoding-test: \u00e9".encode("latin1"),
+                b("X-Header-encoding-test: \xe9"),
                 ],
                                   b("\r\n").join([
                     b("Content-Disposition: form-data; name=argument"),
