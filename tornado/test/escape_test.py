@@ -3,7 +3,7 @@
 import tornado.escape
 import unittest
 
-from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode
+from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode
 from tornado.util import b
 
 linkify_tests = [
@@ -180,3 +180,10 @@ class EscapeTestCase(unittest.TestCase):
 
         # Non-ascii bytes are interpreted as utf8
         self.assertEqual(json_decode(utf8(u'"\u00e9"')), u"\u00e9")
+
+    def test_json_encode(self):
+        # json deals with strings, not bytes, but our encoding function should
+        # accept bytes as well as long as they are utf8.
+        self.assertEqual(json_decode(json_encode(u"\u00e9")), u"\u00e9")
+        self.assertEqual(json_decode(json_encode(utf8(u"\u00e9"))), u"\u00e9")
+        self.assertRaises(UnicodeDecodeError, json_encode, b("\xe9"))
