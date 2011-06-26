@@ -8,6 +8,9 @@ New features
 ~~~~~~~~~~~~
 
 * New method `tornado.iostream.IOStream.read_until_close`
+* `tornado.ioloop.IOLoop` and `tornado.httpclient.HTTPClient` now have
+  ``close()`` methods that should be used in applications that create
+  and destroy many of these objects.
 
 Bug fixes
 ~~~~~~~~~

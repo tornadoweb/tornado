@@ -158,6 +158,28 @@ class IOLoop(object):
         """Returns true if the singleton instance has been created."""
         return hasattr(cls, "_instance")
 
+    def close(self, all_fds=False):
+        """Closes the IOLoop, freeing any resources used.
+        
+        If ``all_fds`` is true, all file descriptors registered on the
+        IOLoop will be closed (not just the ones created by the IOLoop itself.
+        """
+        if all_fds:
+            for fd in self._handlers.keys()[:]:
+                if fd in (self._waker_reader.fileno(),
+                          self._waker_writer.fileno()):
+                    # Close these through the file objects that wrap them,
+                    # or else the destructor will try to close them later
+                    # and log a warning
+                    continue
+                try:
+                    os.close(fd)
+                except Exception:
+                    logging.debug("error closing fd %d", fd, exc_info=True)
+        self._waker_reader.close()
+        self._waker_writer.close()
+        self._impl.close()
+
     def add_handler(self, fd, handler, events):
         """Registers the given handler to receive the given events for fd."""
         self._handlers[fd] = stack_context.wrap(handler)
@@ -472,6 +494,9 @@ class _EPoll(object):
     def fileno(self):
         return self._epoll_fd
 
+    def close(self):
+        os.close(self._epoll_fd)
+
     def register(self, fd, events):
         epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_ADD, fd, events)
 
@@ -493,6 +518,9 @@ class _KQueue(object):
 
     def fileno(self):
         return self._kqueue.fileno()
+
+    def close(self):
+        self._kqueue.close()
 
     def register(self, fd, events):
         self._control(fd, events, select.KQ_EV_ADD)
@@ -551,6 +579,9 @@ class _Select(object):
         self.write_fds = set()
         self.error_fds = set()
         self.fd_sets = (self.read_fds, self.write_fds, self.error_fds)
+
+    def close(self):
+        pass
 
     def register(self, fd, events):
         if events & IOLoop.READ: self.read_fds.add(fd)

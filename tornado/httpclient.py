@@ -54,9 +54,17 @@ class HTTPClient(object):
         self._io_loop = IOLoop()
         self._async_client = AsyncHTTPClient(self._io_loop)
         self._response = None
+        self._closed = False
 
     def __del__(self):
-        self._async_client.close()
+        self.close()
+
+    def close(self):
+        """Closes the HTTPClient, freeing any resources used."""
+        if not self._closed:
+            self._async_client.close()
+            self._io_loop.close()
+            self._closed = True
 
     def fetch(self, request, **kwargs):
         """Executes a request, returning an `HTTPResponse`.
@@ -136,7 +144,7 @@ class AsyncHTTPClient(object):
         create and destroy http clients.  No other methods may be called
         on the AsyncHTTPClient after close().
         """
-        if self._async_clients[self.io_loop] is self:
+        if self._async_clients.get(self.io_loop) is self:
             del self._async_clients[self.io_loop]
 
     def fetch(self, request, callback, **kwargs):
@@ -383,6 +391,7 @@ def main():
             print response.headers
         if options.print_body:
             print response.body
+    client.close()
 
 if __name__ == "__main__":
     main()
