@@ -133,6 +133,12 @@ class _HTTPConnection(object):
         self._timeout = None
         with stack_context.StackContext(self.cleanup):
             parsed = urlparse.urlsplit(_unicode(self.request.url))
+            if ssl is None and parsed.scheme == "https":
+                raise ValueError("HTTPS requires either python2.6+ or "
+                                 "curl_httpclient")
+            if parsed.scheme not in ("http", "https"):
+                raise ValueError("Unsupported url scheme: %s" %
+                                 self.request.url)
             # urlsplit results have hostname and port results, but they
             # didn't support ipv6 literals until python 2.7.
             netloc = parsed.netloc
