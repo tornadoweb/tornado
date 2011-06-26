@@ -20,6 +20,7 @@ import time
 import tornado.escape
 import tornado.web
 
+from tornado.util import bytes_type, b
 
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
@@ -109,7 +110,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self._write_response(challenge_response)
 
     def _write_response(self, challenge):
-        self.stream.write("%s" % challenge)
+        self.stream.write(challenge)
         self.async_callback(self.open)(*self.open_args, **self.open_kwargs)
         self._receive_message()
 
@@ -119,8 +120,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
             message = tornado.escape.json_encode(message)
         if isinstance(message, unicode):
             message = message.encode("utf-8")
-        assert isinstance(message, str)
-        self.stream.write("\x00" + message + "\xff")
+        assert isinstance(message, bytes_type)
+        self.stream.write(b("\x00") + message + b("\xff"))
 
     def open(self, *args, **kwargs):
         """Invoked when a new WebSocket is opened."""
@@ -179,7 +180,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def _on_frame_type(self, byte):
         frame_type = ord(byte)
         if frame_type == 0x00:
-            self.stream.read_until("\xff", self._on_end_delimiter)
+            self.stream.read_until(b("\xff"), self._on_end_delimiter)
         elif frame_type == 0xff:
             self.stream.read_bytes(1, self._on_length_indicator)
         else:
@@ -260,7 +261,7 @@ class WebSocketRequest(object):
         number = int(''.join(c for c in key if c.isdigit()))
         spaces = len([c for c in key if c.isspace()])
         try:
-            key_number = number / spaces
+            key_number = number // spaces
         except (ValueError, ZeroDivisionError):
             raise ValueError
         return struct.pack(">I", key_number)
