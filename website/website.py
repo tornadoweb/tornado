@@ -16,7 +16,6 @@
 
 import os
 import os.path
-import time
 import tornado.web
 import tornado.wsgi
 import wsgiref.handlers

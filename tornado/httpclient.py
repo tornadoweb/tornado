@@ -28,7 +28,6 @@ supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
 import calendar
 import email.utils
 import httplib
-import os
 import time
 import weakref
 
