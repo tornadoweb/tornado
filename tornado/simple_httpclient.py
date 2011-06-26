@@ -2,7 +2,7 @@
 from __future__ import with_statement
 
 from tornado.escape import utf8, _unicode, native_str
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
@@ -418,24 +418,6 @@ def match_hostname(cert, hostname):
         raise CertificateError("no appropriate commonName or "
             "subjectAltName fields were found")
 
-def main():
-    from tornado.options import define, options, parse_command_line
-    define("print_headers", type=bool, default=False)
-    define("print_body", type=bool, default=True)
-    define("follow_redirects", type=bool, default=True)
-    args = parse_command_line()
-    client = SimpleAsyncHTTPClient()
-    io_loop = IOLoop.instance()
-    for arg in args:
-        def callback(response):
-            io_loop.stop()
-            response.rethrow()
-            if options.print_headers:
-                print response.headers
-            if options.print_body:
-                print response.body
-        client.fetch(arg, callback, follow_redirects=options.follow_redirects)
-        io_loop.start()
-
 if __name__ == "__main__":
+    AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
     main()

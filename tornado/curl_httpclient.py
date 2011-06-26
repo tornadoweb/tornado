@@ -429,4 +429,5 @@ def _curl_debug(debug_type, debug_msg):
         logging.debug('%s %r', debug_types[debug_type], debug_msg)
 
 if __name__ == "__main__":
+    AsyncHTTPClient.configure(CurlAsyncHTTPClient)
     main()
