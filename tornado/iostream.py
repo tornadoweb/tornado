@@ -90,6 +90,7 @@ class IOStream(object):
         self._write_buffer_frozen = False
         self._read_delimiter = None
         self._read_bytes = None
+        self._read_until_close = False
         self._read_callback = None
         self._write_callback = None
         self._close_callback = None
@@ -152,6 +153,19 @@ class IOStream(object):
                 break
         self._add_io_state(self.io_loop.READ)
 
+    def read_until_close(self, callback):
+        """Reads all data from the socket until it is closed.
+
+        Subject to ``max_buffer_size`` limit from `IOStream` constructor.
+        """
+        assert not self._read_callback, "Already reading"
+        if self.closed():
+            self._run_callback(callback, self._consume(self._read_buffer_size))
+            return
+        self._read_until_close = True
+        self._read_callback = stack_context.wrap(callback)
+        self._add_io_state(self.io_loop.READ)
+
     def write(self, data, callback=None):
         """Write the given data to this stream.
 
@@ -173,6 +187,12 @@ class IOStream(object):
     def close(self):
         """Close this stream."""
         if self.socket is not None:
+            if self._read_until_close:
+                callback = self._read_callback
+                self._read_callback = None
+                self._read_until_close = False
+                self._run_callback(callback,
+                                   self._consume(self._read_buffer_size))
             self.io_loop.remove_handler(self.socket.fileno())
             self.socket.close()
             self.socket = None

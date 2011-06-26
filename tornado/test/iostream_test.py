@@ -56,3 +56,14 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         # flag.
         response = self.fetch("/", headers={"Connection": "close"})
         response.rethrow()
+
+    def test_read_until_close(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        s.connect(("localhost", self.get_http_port()))
+        stream = IOStream(s, io_loop=self.io_loop)
+        stream.write(b("GET / HTTP/1.0\r\n\r\n"))
+        
+        stream.read_until_close(self.stop)
+        data = self.wait()
+        self.assertTrue(data.startswith(b("HTTP/1.0 200")))
+        self.assertTrue(data.endswith(b("Hello")))

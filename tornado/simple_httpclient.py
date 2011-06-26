@@ -299,8 +299,7 @@ class _HTTPConnection(object):
             self.stream.read_bytes(int(self.headers["Content-Length"]),
                                    self._on_body)
         else:
-            raise Exception("No Content-length or chunked encoding, "
-                            "don't know how to read %s", self.request.url)
+            self.stream.read_until_close(self._on_body)
 
     def _on_body(self, data):
         if self._timeout is not None:
