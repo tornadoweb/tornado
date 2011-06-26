@@ -294,11 +294,15 @@ class LogTrapTestCase(unittest.TestCase):
             handler.stream = old_stream
 
 def main():
-    """A simple test runner with autoreload support.
+    """A simple test runner.
+
+    This test runner is essentially equivalent to `unittest.main` from
+    the standard library, but adds support for tornado-style option
+    parsing and log formatting.
 
     The easiest way to run a test is via the command line::
 
-        python -m tornado.testing --autoreload tornado.test.stack_context_test
+        python -m tornado.testing tornado.test.stack_context_test
 
     See the standard library unittest module for ways in which tests can
     be specified.
@@ -310,19 +314,15 @@ def main():
     be overridden by naming a single test on the command line::
 
         # Runs all tests
-        tornado/test/runtests.py --autoreload
+        tornado/test/runtests.py
         # Runs one test
-        tornado/test/runtests.py --autoreload tornado.test.stack_context_test
+        tornado/test/runtests.py tornado.test.stack_context_test
 
-    If --autoreload is specified, the process will continue running
-    after the tests finish, and when any source file changes the tests
-    will be rerun.  Without --autoreload, the process will exit
-    once the tests finish (with an exit status of 0 for success and
-    non-zero for failures).
     """
     from tornado.options import define, options, parse_command_line
 
-    define('autoreload', type=bool, default=False)
+    define('autoreload', type=bool, default=False,
+           help="DEPRECATED: use tornado.autoreload.main instead")
     define('httpclient', type=str, default=None)
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
 
@@ -353,10 +353,7 @@ def main():
             raise
     if options.autoreload:
         import tornado.autoreload
-        import tornado.ioloop
-        ioloop = tornado.ioloop.IOLoop()
-        tornado.autoreload.start(ioloop)
-        ioloop.start()
+        tornado.autoreload.wait()
 
 if __name__ == '__main__':
     main()

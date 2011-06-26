@@ -26,6 +26,8 @@ and Google AppEngine.  It also will not work correctly when HTTPServer's
 multi-process mode is used.
 """
 
+from __future__ import with_statement
+
 import functools
 import logging
 import os
@@ -51,6 +53,25 @@ def start(io_loop=None, check_time=500):
     scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
     scheduler.start()
 
+def wait():
+    """Wait for a watched file to change, then restart the process.
+
+    Intended to be used at the end of scripts like unit test runners,
+    to run the tests again after any source file changes (but see also
+    the command-line interface in `main`)
+    """
+    io_loop = ioloop.IOLoop()
+    start(io_loop)
+    io_loop.start()
+
+_watched_files = set()
+
+def watch(filename):
+    """Add a file to the watch list.
+
+    All imported modules are watched by default.
+    """
+    _watched_files.add(filename)
 
 _reload_attempted = False
 
@@ -69,13 +90,18 @@ def _reload_on_update(io_loop, modify_times):
         if not path: continue
         if path.endswith(".pyc") or path.endswith(".pyo"):
             path = path[:-1]
+        _check_file(io_loop, modify_times, path)
+    for path in _watched_files:
+        _check_file(io_loop, modify_times, path)
+
+def _check_file(io_loop, modify_times, path):
         try:
             modified = os.stat(path).st_mtime
         except:
-            continue
+            return
         if path not in modify_times:
             modify_times[path] = modified
-            continue
+            return
         if modify_times[path] != modified:
             logging.info("%s modified; restarting server", path)
             _reload_attempted = True
@@ -106,3 +132,61 @@ def _reload_on_update(io_loop, modify_times):
                 os.spawnv(os.P_NOWAIT, sys.executable,
                           [sys.executable] + sys.argv)
                 sys.exit(0)
+
+_USAGE = """\
+Usage:
+  python -m tornado.autoreload -m module.to.run [args...]
+  python -m tornado.autoreload path/to/script.py [args...]
+"""
+def main():
+    """Command-line wrapper to re-run a script whenever its source changes.
+    
+    Scripts may be specified by filename or module name::
+
+        python -m tornado.autoreload -m tornado.test.runtests
+        python -m tornado.autoreload tornado/test/runtests.py
+
+    Running a script with this wrapper is similar to calling
+    `tornado.autoreload.wait` at the end of the script, but this wrapper
+    can catch import-time problems like syntax errors that would otherwise
+    prevent the script from reaching its call to `wait`.
+    """
+    original_argv = sys.argv
+    sys.argv = sys.argv[:]
+    if len(sys.argv) >= 3 and sys.argv[1] == "-m":
+        mode = "module"
+        module = sys.argv[2]
+        del sys.argv[1:3]
+    elif len(sys.argv) >= 2:
+        mode = "script"
+        script = sys.argv[1]
+        sys.argv = sys.argv[1:]
+    else:
+        print >>sys.stderr, _USAGE
+        sys.exit(1)
+
+    try:
+        if mode == "module":
+            import runpy
+            runpy.run_module(module, run_name="__main__", alter_sys=True)
+        elif mode == "script":
+            with open(script) as f:
+                global __file__
+                __file__ = script
+                # Use globals as our "locals" dictionary so that
+                # something that tries to import __main__ (e.g. the unittest
+                # module) will see the right things.
+                exec f.read() in globals(), globals()
+                print "exec done"
+    except SystemExit, e:
+        logging.info("Script exited with status %s", e.code)
+    except Exception, e:
+        logging.warning("Script exited with uncaught exception", exc_info=True)
+        if isinstance(e, SyntaxError):
+            watch(e.filename)
+    sys.argv = original_argv
+    wait()
+    
+
+if __name__ == "__main__":
+    main()
