@@ -183,8 +183,15 @@ class HTTPServer(object):
         """
         if address == "":
             address = None
+        flags = socket.AI_PASSIVE
+        if hasattr(socket, "AI_ADDRCONFIG"):
+            # AI_ADDRCONFIG ensures that we only try to bind on ipv6
+            # if the system is configured for it, but the flag doesn't
+            # exist on some platforms (specifically WinXP, although
+            # newer versions of windows have it)
+            flags |= socket.AI_ADDRCONFIG
         for res in socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                      0, socket.AI_PASSIVE | socket.AI_ADDRCONFIG):
+                                      0, flags):
             af, socktype, proto, canonname, sockaddr = res
             sock = socket.socket(af, socktype, proto)
             flags = fcntl.fcntl(sock.fileno(), fcntl.F_GETFD)
