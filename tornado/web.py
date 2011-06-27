@@ -366,7 +366,7 @@ class RequestHandler(object):
         value = b("|").join([value, timestamp, signature])
         return value
 
-    def get_secure_cookie(self, name, include_name=True, value=None):
+    def get_secure_cookie(self, name, include_name=True, value=None, max_age=31*86400):
         """Returns the given signed cookie if it validates, or None.
 
         In older versions of Tornado (0.1 and 0.2), we did not include the
@@ -388,7 +388,7 @@ class RequestHandler(object):
             logging.warning("Invalid cookie signature %r", value)
             return None
         timestamp = int(parts[1])
-        if timestamp < time.time() - 31 * 86400:
+        if timestamp < time.time() - max_age:
             logging.warning("Expired cookie %r", value)
             return None
         if timestamp > time.time() + 31 * 86400:
