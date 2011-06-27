@@ -403,6 +403,18 @@ class _Module(_Expression):
         super(_Module, self).__init__("modules." + expression,
                                       raw=True)
 
+class _EscapedExpression(_Node):
+    def __init__(self, expression):
+        self.expression = expression
+
+    def generate(self, writer):
+        writer.write_line("_tmp = %s" % self.expression)
+        writer.write_line("if isinstance(_tmp, str): _buffer.append(escape(_tmp))")
+        writer.write_line("elif isinstance(_tmp, unicode): "
+                          "_buffer.append(escape(_tmp.encode('utf-8')))")
+        writer.write_line("else: _buffer.append(escape(str(_tmp)))")
+
+
 class _Text(_Node):
     def __init__(self, value):
         self.value = value
@@ -534,7 +546,7 @@ def _parse(reader, template, in_block=None):
                 return body
             # If the first curly brace is not the start of a special token,
             # start searching from the character after it
-            if reader[curly + 1] not in ("{", "%"):
+            if reader[curly + 1] not in ("{", "[", "%"):
                 curly += 1
                 continue
             # When there are more than 2 curlies in a row, use the
@@ -572,6 +584,18 @@ def _parse(reader, template, in_block=None):
             if not contents:
                 raise ParseError("Empty expression on line %d" % line)
             body.chunks.append(_Expression(contents))
+            continue
+
+        # Escaped Expression
+        if start_brace == "{[":
+            end = reader.find("]}")
+            if end == -1 or reader.find("\n", 0, end) != -1:
+                raise ParseError("Missing end expression ]} on line %d" % line)
+            contents = reader.consume(end).strip()
+            reader.consume(2)
+            if not contents:
+                raise ParseError("Empty escaped expression on line %d" % line)
+            body.chunks.append(_EscapedExpression(contents))
             continue
 
         # Block
