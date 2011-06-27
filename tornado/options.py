@@ -60,7 +60,7 @@ from tornado.escape import _unicode
 # For pretty log messages, if available
 try:
     import curses
-except:
+except ImportError:
     curses = None
 
 
@@ -295,7 +295,7 @@ class _Option(object):
                 sum += datetime.timedelta(**{units: num})
                 start = m.end()
             return sum
-        except:
+        except Exception:
             raise
 
     def _parse_bool(self, value):
@@ -333,7 +333,7 @@ def enable_pretty_logging():
                 curses.setupterm()
                 if curses.tigetnum("colors") > 0:
                     color = True
-            except:
+            except Exception:
                 pass
         channel = logging.StreamHandler()
         channel.setFormatter(_LogFormatter(color=color))

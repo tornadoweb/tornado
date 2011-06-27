@@ -115,7 +115,7 @@ class AsyncTestCase(unittest.TestCase):
     def _stack_context(self):
         try:
             yield
-        except:
+        except Exception:
             self.__failure = sys.exc_info()
             self.stop()
 
@@ -152,7 +152,7 @@ class AsyncTestCase(unittest.TestCase):
                         raise self.failureException(
                           'Async operation timed out after %d seconds' %
                           timeout)
-                    except:
+                    except Exception:
                         self.__failure = sys.exc_info()
                     self.stop()
                 self.io_loop.add_timeout(time.time() + timeout, timeout_func)

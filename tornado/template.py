@@ -122,7 +122,7 @@ class Template(object):
         try:
             self.compiled = compile(self.code, "<template %s>" % self.name,
                                     "exec")
-        except:
+        except Exception:
             formatted_code = _format_code(self.code).rstrip()
             logging.error("%s code:\n%s", self.name, formatted_code)
             raise
@@ -145,7 +145,7 @@ class Template(object):
         execute = namespace["_execute"]
         try:
             return execute()
-        except:
+        except Exception:
             formatted_code = _format_code(self.code).rstrip()
             logging.error("%s code:\n%s", self.name, formatted_code)
             raise

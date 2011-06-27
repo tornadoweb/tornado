@@ -35,7 +35,7 @@ Example usage::
     def die_on_error():
         try:
             yield
-        except:
+        except Exception:
             logging.error("exception in asynchronous operation",exc_info=True)
             sys.exit(1)
 

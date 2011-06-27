@@ -97,7 +97,7 @@ def _reload_on_update(io_loop, modify_times):
 def _check_file(io_loop, modify_times, path):
         try:
             modified = os.stat(path).st_mtime
-        except:
+        except Exception:
             return
         if path not in modify_times:
             modify_times[path] = modified
@@ -108,7 +108,7 @@ def _check_file(io_loop, modify_times, path):
             for fd in io_loop._handlers.keys():
                 try:
                     os.close(fd)
-                except:
+                except Exception:
                     pass
             if hasattr(signal, "setitimer"):
                 # Clear the alarm signal set by

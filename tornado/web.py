@@ -286,7 +286,7 @@ class RequestHandler(object):
                 try:
                     self._cookies.load(
                         escape.native_str(self.request.headers["Cookie"]))
-                except:
+                except Exception:
                     self.clear_all_cookies()
         return self._cookies
 
@@ -396,7 +396,7 @@ class RequestHandler(object):
             logging.warning("Tampered cookie %r", value)
         try:
             return base64.b64decode(parts[0])
-        except:
+        except Exception:
             return None
 
     def _cookie_signature(self, *parts):
@@ -837,7 +837,7 @@ class RequestHandler(object):
                 f = open(abs_path, "rb")
                 hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
                 f.close()
-            except:
+            except Exception:
                 logging.error("Could not open static file %r", path)
                 hashes[abs_path] = None
         base = self.request.protocol + "://" + self.request.host \
@@ -896,7 +896,7 @@ class RequestHandler(object):
             # so re-raise the exception to ensure that it's in
             # sys.exc_info()
             raise type, value, traceback
-        except:
+        except Exception:
             self._handle_request_exception(value)
         return True
 

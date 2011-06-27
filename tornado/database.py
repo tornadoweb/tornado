@@ -72,7 +72,7 @@ class Connection(object):
         self._last_use_time = time.time()
         try:
             self.reconnect()
-        except:
+        except Exception:
             logging.error("Cannot connect to MySQL on %s", self.host,
                           exc_info=True)
 

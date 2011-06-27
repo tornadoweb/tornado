@@ -247,9 +247,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 buffer=buffer, effective_url=effective_url, error=error,
                 request_time=time.time() - info["curl_start_time"],
                 time_info=time_info))
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
+        except Exception:
             self.handle_callback_exception(info["callback"])
 
 

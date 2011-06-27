@@ -240,7 +240,7 @@ class IOStream(object):
             if state != self._state:
                 self._state = state
                 self.io_loop.update_handler(self.socket.fileno(), self._state)
-        except:
+        except Exception:
             logging.error("Uncaught exception, closing connection.",
                           exc_info=True)
             self.close()
@@ -250,7 +250,7 @@ class IOStream(object):
         def wrapper():
             try:
                 callback(*args)
-            except:
+            except Exception:
                 logging.error("Uncaught exception, closing connection.",
                               exc_info=True)
                 # Close the socket on an uncaught exception from a user callback

@@ -28,7 +28,7 @@ import urllib
 
 # Python3 compatibility:  On python2.5, introduce the bytes alias from 2.6
 try: bytes
-except: bytes = str
+except Exception: bytes = str
 
 try:
     from urlparse import parse_qs  # Python 2.6+
@@ -42,7 +42,7 @@ try:
     assert hasattr(json, "loads") and hasattr(json, "dumps")
     _json_decode = json.loads
     _json_encode = json.dumps
-except:
+except Exception:
     try:
         import simplejson
         _json_decode = lambda s: simplejson.loads(_unicode(s))

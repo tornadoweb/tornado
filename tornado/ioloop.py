@@ -307,8 +307,6 @@ class IOLoop(object):
                 fd, events = self._events.popitem()
                 try:
                     self._handlers[fd](fd, events)
-                except (KeyboardInterrupt, SystemExit):
-                    raise
                 except (OSError, IOError), e:
                     if e.args[0] == errno.EPIPE:
                         # Happens when the client closes the connection
@@ -316,7 +314,7 @@ class IOLoop(object):
                     else:
                         logging.error("Exception in I/O handler for fd %d",
                                       fd, exc_info=True)
-                except:
+                except Exception:
                     logging.error("Exception in I/O handler for fd %d",
                                   fd, exc_info=True)
         # reset the stopped flag so another start/stop pair can be issued
@@ -390,9 +388,7 @@ class IOLoop(object):
     def _run_callback(self, callback):
         try:
             callback()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
+        except Exception:
             self.handle_callback_exception(callback)
 
     def handle_callback_exception(self, callback):
@@ -474,9 +470,7 @@ class PeriodicCallback(object):
         if not self._running: return
         try:
             self.callback()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
+        except Exception:
             logging.error("Error in periodic callback", exc_info=True)
         if self._running:
             self.start()
@@ -628,7 +622,7 @@ else:
         # Linux systems with our C module installed
         import epoll
         _poll = _EPoll
-    except:
+    except Exception:
         # All other systems
         import sys
         if "linux" in sys.platform:
