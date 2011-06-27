@@ -177,13 +177,15 @@ def main():
                 # something that tries to import __main__ (e.g. the unittest
                 # module) will see the right things.
                 exec f.read() in globals(), globals()
-                print "exec done"
     except SystemExit, e:
         logging.info("Script exited with status %s", e.code)
     except Exception, e:
         logging.warning("Script exited with uncaught exception", exc_info=True)
         if isinstance(e, SyntaxError):
             watch(e.filename)
+    else:
+        logging.info("Script exited normally")
+    # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
     wait()
     
