@@ -4,6 +4,13 @@ What's new in the next release of Tornado
 In progress
 -----------
 
+Backwards-incompatible changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Support for secure cookies written by pre-1.0 releases of Tornado has
+  been removed.  The `RequestHandler.get_secure_cookie` method no longer
+  takes an ``include_name`` parameter.
+
 New features
 ~~~~~~~~~~~~
 
