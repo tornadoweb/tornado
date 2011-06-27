@@ -13,6 +13,8 @@ New features
   `tornado.testing.main` and is more robust against syntax errors.
 * `tornado.autoreload.watch` can be used to watch files other than
   the sources of imported modules.
+* `tornado.web.RequestHandler.get_secure_cookie` now has a ``max_age_days``
+  parameter to allow applications to override the default one-month expiration.
 * `tornado.ioloop.IOLoop` and `tornado.httpclient.HTTPClient` now have
   ``close()`` methods that should be used in applications that create
   and destroy many of these objects.

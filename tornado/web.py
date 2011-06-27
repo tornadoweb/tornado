@@ -344,11 +344,15 @@ class RequestHandler(object):
     def set_secure_cookie(self, name, value, expires_days=30, **kwargs):
         """Signs and timestamps a cookie so it cannot be forged.
 
-        You must specify the 'cookie_secret' setting in your Application
+        You must specify the ``cookie_secret`` setting in your Application
         to use this method. It should be a long, random sequence of bytes
         to be used as the HMAC secret for the signature.
 
-        To read a cookie set with this method, use get_secure_cookie().
+        To read a cookie set with this method, use `get_secure_cookie()`.
+
+        Note that the ``expires_days`` parameter sets the lifetime of the
+        cookie in the browser, but is independent of the ``max_age_days``
+        parameter to `get_secure_cookie`.
         """
         self.set_cookie(name, self.create_signed_value(name, value),
                         expires_days=expires_days, **kwargs)
@@ -366,7 +370,8 @@ class RequestHandler(object):
         value = b("|").join([value, timestamp, signature])
         return value
 
-    def get_secure_cookie(self, name, include_name=True, value=None):
+    def get_secure_cookie(self, name, include_name=True, value=None,
+                          max_age_days=31):
         """Returns the given signed cookie if it validates, or None.
 
         In older versions of Tornado (0.1 and 0.2), we did not include the
@@ -388,7 +393,7 @@ class RequestHandler(object):
             logging.warning("Invalid cookie signature %r", value)
             return None
         timestamp = int(parts[1])
-        if timestamp < time.time() - 31 * 86400:
+        if timestamp < time.time() - max_age_days * 86400:
             logging.warning("Expired cookie %r", value)
             return None
         if timestamp > time.time() + 31 * 86400:
