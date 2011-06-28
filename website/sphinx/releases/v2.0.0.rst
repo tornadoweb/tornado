@@ -17,6 +17,8 @@ Jun 21, 2011
       a previous release of Tornado must either disable autoescaping or adapt
       their templates to work with it.  For most applications, the simplest
       way to do this is to pass autoescape=None to the Application constructor.
+      Note that this affects certain built-in methods, e.g. xsrf_form_html
+      and linkify, which must now be called with {% raw %} instead of {}
     * Applications that wish to continue using curl_httpclient instead of
       simple_httpclient may do so by calling
         AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
