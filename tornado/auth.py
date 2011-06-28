@@ -59,7 +59,7 @@ import uuid
 from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
-from tornado.util import bytes_type
+from tornado.util import bytes_type, b
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -147,7 +147,7 @@ class OpenIdMixin(object):
         return args
 
     def _on_authentication_verified(self, callback, response):
-        if response.error or u"is_valid:true" not in response.body:
+        if response.error or b("is_valid:true") not in response.body:
             logging.warning("Invalid OpenID response: %s", response.error or
                             response.body)
             callback(None)
@@ -155,17 +155,17 @@ class OpenIdMixin(object):
 
         # Make sure we got back at least an email from attribute exchange
         ax_ns = None
-        for name, values in self.request.arguments.iteritems():
+        for name in self.request.arguments.iterkeys():
             if name.startswith("openid.ns.") and \
-               values[-1] == u"http://openid.net/srv/ax/1.0":
+               self.get_argument(name) == u"http://openid.net/srv/ax/1.0":
                 ax_ns = name[10:]
                 break
         def get_ax_arg(uri):
             if not ax_ns: return u""
             prefix = "openid." + ax_ns + ".type."
             ax_name = None
-            for name, values in self.request.arguments.iteritems():
-                if values[-1] == uri and name.startswith(prefix):
+            for name in self.request.arguments.iterkeys():
+                if self.get_argument(name) == uri and name.startswith(prefix):
                     part = name[len(prefix):]
                     ax_name = "openid." + ax_ns + ".value." + part
                     break
@@ -976,9 +976,10 @@ class FacebookGraphMixin(OAuth2Mixin):
           callback(None)
           return
 
+      args = escape.parse_qs_bytes(escape.native_str(response.body))
       session = {
-          "access_token": cgi.parse_qs(response.body)["access_token"][-1],
-          "expires": cgi.parse_qs(response.body).get("expires")
+          "access_token": args["access_token"][-1],
+          "expires": args.get("expires")
       }
 
       self.facebook_request(
