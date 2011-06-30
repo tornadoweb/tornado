@@ -257,9 +257,6 @@ class IOLoop(object):
             for callback in callbacks:
                 self._run_callback(callback)
 
-            if self._callbacks:
-                poll_timeout = 0.0
-
             if self._timeouts:
                 now = time.time()
                 while self._timeouts:
@@ -273,6 +270,11 @@ class IOLoop(object):
                         milliseconds = self._timeouts[0].deadline - now
                         poll_timeout = min(milliseconds, poll_timeout)
                         break
+
+            if self._callbacks:
+                # If any callbacks or timeouts called add_callback,
+                # we don't want to wait in poll() before we run them.
+                poll_timeout = 0.0
 
             if not self._running:
                 break
