@@ -203,7 +203,13 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.body, byte_body)
 
     def test_ipv6(self):
-        self.http_server.bind(self.get_http_port(), address='::1')
+        try:
+            self.http_server.bind(self.get_http_port(), address='::1')
+        except socket.gaierror, e:
+            if e.errno == socket.EAI_ADDRFAMILY:
+                # ipv6 is not configured on this system, so skip this test
+                return
+            raise
         url = self.get_url("/hello").replace("localhost", "[::1]")
 
         # ipv6 is currently disabled by default and must be explicitly requested
