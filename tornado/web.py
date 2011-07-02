@@ -80,7 +80,7 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type
+from tornado.util import b, bytes_type, import_object
 
 try:
     from io import BytesIO  # python 3
@@ -1175,14 +1175,9 @@ class Application(object):
                 handler = spec[1]
 
                 if isinstance(handler, str):
-                    # Lazy load the Module and instantiate the class
+                    # import the Module and instantiate the class
                     # Must be a fully qualified name (module.ClassName)
-                    parts = handler.split('.')
-                    handler = ".".join(parts[:-1]) # create module name 
-                    handler = __import__(handler) # import the module
-                    for part in parts[1:]:
-                        handler = getattr(handler, part)
-                    # The class has now been loaded and we can continue
+                    handler = import_object(handler)
 
                 if len(spec) == 3:
                     kwargs = spec[2]
