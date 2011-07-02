@@ -1173,6 +1173,17 @@ class Application(object):
                 assert len(spec) in (2, 3)
                 pattern = spec[0]
                 handler = spec[1]
+
+                if isinstance(handler, str):
+                    # Lazy load the Module and instantiate the class
+                    # Must be a fully qualified name (module.ClassName)
+                    parts = handler.split('.')
+                    handler = ".".join(parts[:-1]) # create module name 
+                    handler = __import__(handler) # import the module
+                    for part in parts[1:]:
+                        handler = getattr(handler, part)
+                    # The class has now been loaded and we can continue
+
                 if len(spec) == 3:
                     kwargs = spec[2]
                 else:
