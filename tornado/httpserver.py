@@ -164,7 +164,7 @@ class HTTPServer(object):
         self.bind(port, address)
         self.start(1)
 
-    def bind(self, port, address=None, family=socket.AF_UNSPEC):
+    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128):
         """Binds this server to the given port on the given address.
 
         To start the server, call start(). If you want to run this server
@@ -177,6 +177,9 @@ class HTTPServer(object):
         available interfaces.  Family may be set to either socket.AF_INET
         or socket.AF_INET6 to restrict to ipv4 or ipv6 addresses, otherwise
         both will be used if available.
+
+        The ``backlog`` argument has the same meaning as for 
+        ``socket.listen()``.
 
         This method may be called multiple times prior to start() to listen
         on multiple ports or interfaces.
@@ -211,7 +214,7 @@ class HTTPServer(object):
                     sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
             sock.setblocking(0)
             sock.bind(sockaddr)
-            sock.listen(128)
+            sock.listen(backlog)
             self._sockets[sock.fileno()] = sock
             if self._started:
                 self.io_loop.add_handler(sock.fileno(), self._handle_events,
