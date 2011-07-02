@@ -87,7 +87,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # need to see the Upgrade headers before passing through the
         # non-HTTP traffic that follows.
         self.stream.write(tornado.escape.utf8(
-            "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
+            "HTTP/1.1 101 WebSocket Protocol Handshake\r\n"
             "Upgrade: WebSocket\r\n"
             "Connection: Upgrade\r\n"
             "Server: TornadoServer/%(version)s\r\n"
