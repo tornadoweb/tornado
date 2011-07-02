@@ -136,7 +136,7 @@ class HTTPServer(object):
     auto-detection.
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None):
+                 xheaders=False, ssl_options=None, backlog=128):
         """Initializes the server with the given request callback.
 
         If you use pre-forking/start() instead of the listen() method to
@@ -151,6 +151,7 @@ class HTTPServer(object):
         self.ssl_options = ssl_options
         self._sockets = {}  # fd -> socket object
         self._started = False
+        self._backlog = backlog
 
     def listen(self, port, address=""):
         """Binds to the given port and starts the server in a single process.
@@ -211,7 +212,7 @@ class HTTPServer(object):
                     sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
             sock.setblocking(0)
             sock.bind(sockaddr)
-            sock.listen(128)
+            sock.listen(self._backlog)
             self._sockets[sock.fileno()] = sock
             if self._started:
                 self.io_loop.add_handler(sock.fileno(), self._handle_events,
