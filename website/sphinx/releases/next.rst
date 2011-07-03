@@ -25,6 +25,15 @@ New features
 * `tornado.ioloop.IOLoop` and `tornado.httpclient.HTTPClient` now have
   ``close()`` methods that should be used in applications that create
   and destroy many of these objects.
+* `tornado.simple_httpclient` now supports client SSL certificates with the
+  ``client_key`` and ``client_cert`` parameters to
+  `tornado.httpclient.HTTPRequest`
+* `tornado.httpserver.HTTPServer.bind` now takes a backlog argument with the
+  same meaning as ``socket.listen``.
+* In `tornado.web.Application`, handlers may be specified by
+  (fully-qualified) name instead of importing and passing the class object
+  itself.
+
 
 Bug fixes
 ~~~~~~~~~
@@ -34,3 +43,5 @@ Bug fixes
 * `tornado.websocket`: now works on Python 3
 * `SimpleAsyncHTTPClient`: now works with HTTP 1.0 servers that don't send
   a Content-Length header
+* `tornado.iostream.IOStream` should now always call the close callback
+  instead of the connect callback on a connection error.
