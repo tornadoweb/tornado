@@ -10,6 +10,9 @@ Backwards-incompatible changes
 * Support for secure cookies written by pre-1.0 releases of Tornado has
   been removed.  The `RequestHandler.get_secure_cookie` method no longer
   takes an ``include_name`` parameter.
+* The ``debug`` application setting now causes stack traces to be displayed
+  in the browser on uncaught exceptions.  Since this may leak sensitive
+  information, debug mode is not recommended for public-facing servers.
 
 New features
 ~~~~~~~~~~~~

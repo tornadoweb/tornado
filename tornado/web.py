@@ -657,7 +657,7 @@ class RequestHandler(object):
         If this error was caused by an uncaught exception, the
         exception object can be found in kwargs e.g. kwargs['exception']
         """
-        if self.settings.get("debug"):
+        if self.settings.get("debug") and "exception" in kwargs:
             # in debug mode, try to send a traceback
             self.set_header('Content-Type', 'text/plain')
             return traceback.format_exc()
