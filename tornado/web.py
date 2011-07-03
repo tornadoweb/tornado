@@ -80,7 +80,7 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type
+from tornado.util import b, bytes_type, import_object
 
 try:
     from io import BytesIO  # python 3
@@ -1173,6 +1173,12 @@ class Application(object):
                 assert len(spec) in (2, 3)
                 pattern = spec[0]
                 handler = spec[1]
+
+                if isinstance(handler, str):
+                    # import the Module and instantiate the class
+                    # Must be a fully qualified name (module.ClassName)
+                    handler = import_object(handler)
+
                 if len(spec) == 3:
                     kwargs = spec[2]
                 else:
