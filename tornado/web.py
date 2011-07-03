@@ -909,8 +909,7 @@ class RequestHandler(object):
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
         self._transforms = transforms
-        with stack_context.ExceptionStackContext(
-            self._stack_context_handle_exception):
+        try:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
             # If XSRF cookies are turned on, reject form submissions without
@@ -926,6 +925,8 @@ class RequestHandler(object):
                 getattr(self, self.request.method.lower())(*args, **kwargs)
                 if self._auto_finish and not self._finished:
                     self.finish()
+        except Exception, e:
+            self._handle_request_exception(e)
 
     def _generate_headers(self):
         lines = [utf8(self.request.version + " " +
@@ -1004,7 +1005,9 @@ def asynchronous(method):
         if self.application._wsgi:
             raise Exception("@asynchronous is not supported for WSGI apps")
         self._auto_finish = False
-        return method(self, *args, **kwargs)
+        with stack_context.ExceptionStackContext(
+            self._stack_context_handle_exception):
+            return method(self, *args, **kwargs)
     return wrapper
 
 

@@ -183,7 +183,10 @@ def wrap(fn):
                 callback(*args, **kwargs)
         else:
             callback(*args, **kwargs)
-    return _StackContextWrapper(wrapped, fn, _state.contexts)
+    if _state.contexts:
+        return _StackContextWrapper(wrapped, fn, _state.contexts)
+    else:
+        return _StackContextWrapper(fn)
 
 @contextlib.contextmanager
 def _nested(*managers):
