@@ -176,6 +176,10 @@ class _HTTPConnection(object):
                     ssl_options["ca_certs"] = request.ca_certs
                 else:
                     ssl_options["ca_certs"] = _DEFAULT_CA_CERTS
+                if request.client_key is not None:
+                    ssl_options["keyfile"] = request.client_key
+                if request.client_cert is not None:
+                    ssl_options["certfile"] = request.client_cert
                 self.stream = SSLIOStream(socket.socket(af, socktype, proto),
                                           io_loop=self.io_loop,
                                           ssl_options=ssl_options)

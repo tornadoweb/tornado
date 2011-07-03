@@ -392,6 +392,10 @@ def _curl_setup_request(curl, request, buffer, headers):
     else:
         curl.unsetopt(pycurl.USERPWD)
         logging.debug("%s %s", request.method, request.url)
+
+    if request.client_key is not None or request.client_cert is not None:
+        raise ValueError("Client certificate not supported with curl_httpclient")
+
     if threading.activeCount() > 1:
         # libcurl/pycurl is not thread-safe by default.  When multiple threads
         # are used, signals should be disabled.  This has the side effect

@@ -200,7 +200,8 @@ class HTTPRequest(object):
                  proxy_host=None, proxy_port=None, proxy_username=None,
                  proxy_password='', allow_nonstandard_methods=False,
                  validate_cert=True, ca_certs=None,
-                 allow_ipv6=None):
+                 allow_ipv6=None,
+                 client_key=None, client_cert=None):
         """Creates an `HTTPRequest`.
 
         All parameters except `url` are optional.
@@ -249,6 +250,8 @@ class HTTPRequest(object):
            to mix requests with ca_certs and requests that use the defaults.
         :arg bool allow_ipv6: Use IPv6 when available?  Default is false in 
            `simple_httpclient` and true in `curl_httpclient`
+        :arg string client_key: Filename for client SSL key, if any
+        :arg string client_cert: Filename for client SSL certificate, if any
         """
         if headers is None:
             headers = httputil.HTTPHeaders()
@@ -280,6 +283,8 @@ class HTTPRequest(object):
         self.validate_cert = validate_cert
         self.ca_certs = ca_certs
         self.allow_ipv6 = allow_ipv6
+        self.client_key = client_key
+        self.client_cert = client_cert
         self.start_time = time.time()
 
 
