@@ -444,7 +444,10 @@ class RequestHandler(object):
         wrapped in a dictionary.  More details at
         http://haacked.com/archive/2008/11/20/anatomy-of-a-subtle-json-vulnerability.aspx
         """
-        assert not self._finished
+        if self._finished:
+            raise RuntimeError("Cannot write() after finish().  May be caused "
+                               "by using async operations without the "
+                               "@asynchronous decorator.")
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
@@ -606,7 +609,11 @@ class RequestHandler(object):
 
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
-        assert not self._finished
+        if self._finished:
+            raise RuntimeError("finish() called twice.  May be caused "
+                               "by using async operations without the "
+                               "@asynchronous decorator.")
+
         if chunk is not None: self.write(chunk)
 
         # Automatically support ETags and add the Content-Length header if
