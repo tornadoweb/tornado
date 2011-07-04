@@ -166,6 +166,8 @@ Other methods designed for overriding include:
    ``@authenticated`` decorator (default is in ``Application`` settings)
 -  ``get_template_path(self)`` - returns location of template files
    (default is in ``Application`` settings)
+-  ``set_default_headers(self)`` - may be used to set additional headers
+   on the response (such as a custom ``Server`` header)
 
 Redirection
 ~~~~~~~~~~~

@@ -36,6 +36,8 @@ New features
 * In `tornado.web.Application`, handlers may be specified by
   (fully-qualified) name instead of importing and passing the class object
   itself.
+* `tornado.web.RequestHandler.set_default_headers` may be overridden to set
+  headers in a way that does not get reset during error handling.
 
 
 Bug fixes

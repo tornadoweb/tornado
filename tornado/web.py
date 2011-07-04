@@ -186,11 +186,22 @@ class RequestHandler(object):
             "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
         }
+        self.set_default_headers()
         if not self.request.supports_http_1_1():
             if self.request.headers.get("Connection") == "Keep-Alive":
                 self.set_header("Connection", "Keep-Alive")
         self._write_buffer = []
         self._status_code = 200
+
+    def set_default_headers(self):
+        """Override this to set HTTP headers at the beginning of the request.
+
+        For example, this is the place to set a custom ``Server`` header.
+        Note that setting such headers in the normal flow of request
+        processing may not do what you want, since headers may be reset
+        during error handling.
+        """
+        pass
 
     def set_status(self, status_code):
         """Sets the status code for our response."""
