@@ -36,6 +36,7 @@ from tornado import httputil
 from tornado import ioloop
 from tornado import iostream
 from tornado import netutil
+from tornado import process
 from tornado import stack_context
 from tornado.util import b, bytes_type
 
@@ -51,25 +52,6 @@ try:
     import ssl # Python 2.6+
 except ImportError:
     ssl = None
-
-try:
-    import multiprocessing # Python 2.6+
-except ImportError:
-    multiprocessing = None
-
-def _cpu_count():
-    if multiprocessing is not None:
-        try:
-            return multiprocessing.cpu_count()
-        except NotImplementedError:
-            pass
-    try:
-        return os.sysconf("SC_NPROCESSORS_CONF")
-    except ValueError:
-        pass
-    logging.error("Could not detect number of processors; "
-                  "running with one process")
-    return 1
 
 
 class HTTPServer(object):
@@ -214,40 +196,13 @@ class HTTPServer(object):
         """
         assert not self._started
         self._started = True
-        if num_processes is None or num_processes <= 0:
-            num_processes = _cpu_count()
-        if num_processes > 1 and ioloop.IOLoop.initialized():
-            logging.error("Cannot run in multiple processes: IOLoop instance "
-                          "has already been initialized. You cannot call "
-                          "IOLoop.instance() before calling start()")
-            num_processes = 1
-        if num_processes > 1:
-            logging.info("Pre-forking %d server processes", num_processes)
-            for i in range(num_processes):
-                if os.fork() == 0:
-                    import random
-                    from binascii import hexlify
-                    try:
-                        # If available, use the same method as
-                        # random.py
-                        seed = long(hexlify(os.urandom(16)), 16)
-                    except NotImplementedError:
-                        # Include the pid to avoid initializing two
-                        # processes to the same value
-                        seed(int(time.time() * 1000) ^ os.getpid())
-                    random.seed(seed)
-                    self.io_loop = ioloop.IOLoop.instance()
-                    for fd in self._sockets.keys():
-                        self.io_loop.add_handler(fd, self._handle_events,
-                                                 ioloop.IOLoop.READ)
-                    return
-            os.waitpid(-1, 0)
-        else:
-            if not self.io_loop:
-                self.io_loop = ioloop.IOLoop.instance()
-            for fd in self._sockets.keys():
-                self.io_loop.add_handler(fd, self._handle_events,
-                                         ioloop.IOLoop.READ)
+        if num_processes != 1:
+            process.fork_processes(num_processes)
+        if not self.io_loop:
+            self.io_loop = ioloop.IOLoop.instance()
+        for fd in self._sockets.keys():
+            self.io_loop.add_handler(fd, self._handle_events,
+                                     ioloop.IOLoop.READ)
 
     def stop(self):
         """Stops listening for new connections.

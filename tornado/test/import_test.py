@@ -18,6 +18,7 @@ class ImportTest(unittest.TestCase):
         import tornado.locale
         import tornado.options
         import tornado.netutil
+        import tornado.process
         import tornado.simple_httpclient
         import tornado.stack_context
         import tornado.template
