@@ -6,3 +6,4 @@ Asynchronous networking
    ioloop
    iostream
    httpclient
+   netutil

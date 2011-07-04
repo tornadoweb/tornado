@@ -35,6 +35,7 @@ from tornado.escape import utf8, native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import ioloop
 from tornado import iostream
+from tornado import netutil
 from tornado import stack_context
 from tornado.util import b, bytes_type
 
@@ -184,37 +185,9 @@ class HTTPServer(object):
         This method may be called multiple times prior to start() to listen
         on multiple ports or interfaces.
         """
-        if address == "":
-            address = None
-        flags = socket.AI_PASSIVE
-        if hasattr(socket, "AI_ADDRCONFIG"):
-            # AI_ADDRCONFIG ensures that we only try to bind on ipv6
-            # if the system is configured for it, but the flag doesn't
-            # exist on some platforms (specifically WinXP, although
-            # newer versions of windows have it)
-            flags |= socket.AI_ADDRCONFIG
-        for res in socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                      0, flags):
-            af, socktype, proto, canonname, sockaddr = res
-            sock = socket.socket(af, socktype, proto)
-            flags = fcntl.fcntl(sock.fileno(), fcntl.F_GETFD)
-            flags |= fcntl.FD_CLOEXEC
-            fcntl.fcntl(sock.fileno(), fcntl.F_SETFD, flags)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if af == socket.AF_INET6:
-                # On linux, ipv6 sockets accept ipv4 too by default,
-                # but this makes it impossible to bind to both
-                # 0.0.0.0 in ipv4 and :: in ipv6.  On other systems,
-                # separate sockets *must* be used to listen for both ipv4
-                # and ipv6.  For consistency, always disable ipv4 on our
-                # ipv6 sockets and use a separate ipv4 socket when needed.
-                #
-                # Python 2.x on windows doesn't have IPPROTO_IPV6.
-                if hasattr(socket, "IPPROTO_IPV6"):
-                    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-            sock.setblocking(0)
-            sock.bind(sockaddr)
-            sock.listen(backlog)
+        sockets = netutil.bind_sockets(port, address=address,
+                                       family=family, backlog=backlog)
+        for sock in sockets:
             self._sockets[sock.fileno()] = sock
             if self._started:
                 self.io_loop.add_handler(sock.fileno(), self._handle_events,
