@@ -1,3 +1,5 @@
+.. currentmodule:: tornado.web
+
 Overview
 ========
 
@@ -156,8 +158,8 @@ Here is an example demonstrating the ``initialize()`` method:
 
 Other methods designed for overriding include:
 
--  ``get_error_html(self, status_code, exception=None, **kwargs)`` -
-   returns HTML (as a string) for use on error pages.
+-  ``write_error(self, status_code, exc_info=None, **kwargs)`` -
+   outputs HTML for use on error pages.
 -  ``get_current_user(self)`` - see `User
    Authentication <#user-authentication>`_ below
 -  ``get_user_locale(self)`` - returns ``locale`` object to use for the
@@ -168,6 +170,38 @@ Other methods designed for overriding include:
    (default is in ``Application`` settings)
 -  ``set_default_headers(self)`` - may be used to set additional headers
    on the response (such as a custom ``Server`` header)
+
+Error Handling
+~~~~~~~~~~~~~~
+
+There are three ways to return an error from a `RequestHandler`:
+
+1. Manually call `~tornado.web.RequestHandler.set_status` and output the
+   response body normally.
+2. Call `~RequestHandler.send_error`.  This discards
+   any pending unflushed output and calls `~RequestHandler.write_error` to
+   generate an error page.
+3. Raise an exception.  `tornado.web.HTTPError` can be used to generate
+   a specified status code; all other exceptions return a 500 status.
+   The exception handler uses `~RequestHandler.send_error` and
+   `~RequestHandler.write_error` to generate the error page.
+
+The default error page includes a stack trace in debug mode and a one-line
+description of the error (e.g. "500: Internal Server Error") otherwise.
+To produce a custom error page, override `RequestHandler.write_error`.
+This method may produce output normally via methods such as 
+`~RequestHandler.write` and `~RequestHandler.render`.  If the error was
+caused by an exception, an ``exc_info`` triple will be passed as a keyword
+argument (note that this exception is not guaranteed to be the current
+exception in ``sys.exc_info``, so ``write_error`` must use e.g.
+`traceback.format_exception` instead of `traceback.format_exc`).
+
+In Tornado 2.0 and earlier, custom error pages were implemented by overriding
+``RequestHandler.get_error_html``, which returned the error page as a string
+instead of calling the normal output methods (and had slightly different
+semantics for exceptions).  This method is still supported, but it is
+deprecated and applications are encouraged to switch to 
+`RequestHandler.write_error`.
 
 Redirection
 ~~~~~~~~~~~

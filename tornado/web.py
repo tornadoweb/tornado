@@ -643,9 +643,13 @@ class RequestHandler(object):
     def send_error(self, status_code=500, **kwargs):
         """Sends the given HTTP error code to the browser.
 
-        We also send the error HTML for the given error code as returned by
-        get_error_html. Override that method if you want custom error pages
-        for your application.
+        If `flush()` has already been called, it is not possible to send
+        an error, so this method will simply terminate the response.
+        If output has been written but not yet flushed, it will be discarded
+        and replaced with the error page.
+
+        Override `write_error()` to customize the error page that is returned.
+        Additional keyword arguments are passed through to `write_error`.
         """
         if self._headers_written:
             logging.error("Cannot send error response after headers written")
@@ -654,30 +658,55 @@ class RequestHandler(object):
             return
         self.clear()
         self.set_status(status_code)
-        message = self.get_error_html(status_code, **kwargs)
-        self.finish(message)
+        try:
+            self.write_error(status_code, **kwargs)
+        except Exception:
+            logging.error("Uncaught exception in write_error", exc_info=True)
+        if not self._finished:
+            self.finish()
 
-    def get_error_html(self, status_code, **kwargs):
+    def write_error(self, status_code, **kwargs):
         """Override to implement custom error pages.
 
-        get_error_html() should return a string containing the error page,
-        and should not produce output via self.write().  If you use a
-        Tornado template for the error page, you must use
-        "return self.render_string(...)" instead of "self.render()".
+        ``write_error`` may call `write`, `render`, `set_header`, etc
+        to produce output as usual.
 
-        If this error was caused by an uncaught exception, the
-        exception object can be found in kwargs e.g. kwargs['exception']
+        If this error was caused by an uncaught exception, an ``exc_info``
+        triple will be available as ``kwargs["exc_info"]``.  Note that this
+        exception may not be the "current" exception for purposes of
+        methods like ``sys.exc_info()`` or ``traceback.format_exc``.
+
+        For historical reasons, if a method ``get_error_html`` exists,
+        it will be used instead of the default ``write_error`` implementation.
+        ``get_error_html`` returned a string instead of producing output
+        normally, and had different semantics for exception handling.
+        Users of ``get_error_html`` are encouraged to convert their code
+        to override ``write_error`` instead.
         """
-        if self.settings.get("debug") and "exception" in kwargs:
+        if hasattr(self, 'get_error_html'):
+            if 'exc_info' in kwargs:
+                exc_info = kwargs.pop('exc_info')
+                kwargs['exception'] = exc_info[1]
+                try:
+                    # Put the traceback into sys.exc_info()
+                    raise exc_info[0], exc_info[1], exc_info[2]
+                except Exception:
+                    self.finish(self.get_error_html(status_code, **kwargs))
+            else:
+                self.finish(self.get_error_html(status_code, **kwargs))
+            return
+        if self.settings.get("debug") and "exc_info" in kwargs:
             # in debug mode, try to send a traceback
             self.set_header('Content-Type', 'text/plain')
-            return traceback.format_exc()
+            for line in traceback.format_exception(*kwargs["exc_info"]):
+                self.write(line)
+            self.finish()
         else:
-            return "<html><title>%(code)d: %(message)s</title>" \
-                   "<body>%(code)d: %(message)s</body></html>" % {
-                "code": status_code,
-                "message": httplib.responses[status_code],
-            }
+            self.finish("<html><title>%(code)d: %(message)s</title>" 
+                        "<body>%(code)d: %(message)s</body></html>" % {
+                    "code": status_code,
+                    "message": httplib.responses[status_code],
+                    })
 
     @property
     def locale(self):
@@ -970,13 +999,13 @@ class RequestHandler(object):
                 logging.warning(format, *args)
             if e.status_code not in httplib.responses:
                 logging.error("Bad HTTP status code: %d", e.status_code)
-                self.send_error(500, exception=e)
+                self.send_error(500, exc_info=sys.exc_info())
             else:
-                self.send_error(e.status_code, exception=e)
+                self.send_error(e.status_code, exc_info=sys.exc_info())
         else:
             logging.error("Uncaught exception %s\n%r", self._request_summary(),
                           self.request, exc_info=True)
-            self.send_error(500, exception=e)
+            self.send_error(500, exc_info=sys.exc_info())
 
     def _ui_module(self, name, module):
         def render(*args, **kwargs):

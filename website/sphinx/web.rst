@@ -47,7 +47,7 @@
    .. automethod:: RequestHandler.render_string
    .. automethod:: RequestHandler.redirect
    .. automethod:: RequestHandler.send_error
-   .. automethod:: RequestHandler.get_error_html
+   .. automethod:: RequestHandler.write_error
    .. automethod:: RequestHandler.clear
 
 

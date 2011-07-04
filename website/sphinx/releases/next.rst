@@ -38,6 +38,9 @@ New features
   itself.
 * `tornado.web.RequestHandler.set_default_headers` may be overridden to set
   headers in a way that does not get reset during error handling.
+* `tornado.web.RequestHandler.write_error` replaces ``get_error_html`` as the
+  preferred way to generate custom error pages (``get_error_html`` is still
+  supported, but deprecated)
 
 
 Bug fixes

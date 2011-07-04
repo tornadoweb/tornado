@@ -3,12 +3,13 @@ from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type
-from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url
+from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError
 
 import binascii
 import logging
 import re
 import socket
+import sys
 
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
@@ -359,3 +360,87 @@ js_embed()
                          {u"path": u"foo"})
         self.assertEqual(self.fetch_json("/optional_path/"),
                          {u"path": None})
+
+
+class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        class DefaultHandler(RequestHandler):
+            def get(self):
+                if self.get_argument("status", None):
+                    raise HTTPError(int(self.get_argument("status")))
+                1/0
+
+        class WriteErrorHandler(RequestHandler):
+            def get(self):
+                if self.get_argument("status", None):
+                    self.send_error(int(self.get_argument("status")))
+                else:
+                    1/0
+
+            def write_error(self, status_code, **kwargs):
+                self.set_header("Content-Type", "text/plain")
+                if "exc_info" in kwargs:
+                    self.write("Exception: %s" % kwargs["exc_info"][0].__name__)
+                else:
+                    self.write("Status: %d" % status_code)
+
+        class GetErrorHtmlHandler(RequestHandler):
+            def get(self):
+                if self.get_argument("status", None):
+                    self.send_error(int(self.get_argument("status")))
+                else:
+                    1/0
+
+            def get_error_html(self, status_code, **kwargs):
+                self.set_header("Content-Type", "text/plain")
+                if "exception" in kwargs:
+                    self.write("Exception: %s" % sys.exc_info()[0].__name__)
+                else:
+                    self.write("Status: %d" % status_code)
+
+        class FailedWriteErrorHandler(RequestHandler):
+            def get(self):
+                1/0
+
+            def write_error(self, status_code, **kwargs):
+                raise Exception("exception in write_error")
+
+
+        return Application([
+                url("/default", DefaultHandler),
+                url("/write_error", WriteErrorHandler),
+                url("/get_error_html", GetErrorHtmlHandler),
+                url("/failed_write_error", FailedWriteErrorHandler),
+                ])
+
+    def test_default(self):
+        response = self.fetch("/default")
+        self.assertEqual(response.code, 500)
+        self.assertTrue(b("500: Internal Server Error") in response.body)
+
+        response = self.fetch("/default?status=503")
+        self.assertEqual(response.code, 503)
+        self.assertTrue(b("503: Service Unavailable") in response.body)
+
+    def test_write_error(self):
+        response = self.fetch("/write_error")
+        self.assertEqual(response.code, 500)
+        self.assertEqual(b("Exception: ZeroDivisionError"), response.body)
+
+        response = self.fetch("/write_error?status=503")
+        self.assertEqual(response.code, 503)
+        self.assertEqual(b("Status: 503"), response.body)
+
+    def test_get_error_html(self):
+        response = self.fetch("/get_error_html")
+        self.assertEqual(response.code, 500)
+        self.assertEqual(b("Exception: ZeroDivisionError"), response.body)
+
+        response = self.fetch("/get_error_html?status=503")
+        self.assertEqual(response.code, 503)
+        self.assertEqual(b("Status: 503"), response.body)
+
+    def test_failed_write_error(self):
+        response = self.fetch("/failed_write_error")
+        self.assertEqual(response.code, 500)
+        self.assertEqual(b(""), response.body)
