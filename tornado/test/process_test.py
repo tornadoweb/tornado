@@ -96,3 +96,6 @@ class ProcessTest(LogTrapTestCase):
             os._exit(0)
             
 
+if os.name != 'posix':
+    # All sorts of unixisms here
+    del ProcessTest
