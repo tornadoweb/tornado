@@ -29,8 +29,9 @@ import logging
 import os
 import sys
 import time
-import tornado.ioloop
 import unittest
+
+from tornado.ioloop import IOLoop
 
 _next_port = 10000
 def get_unused_port():
@@ -96,7 +97,8 @@ class AsyncTestCase(unittest.TestCase):
         self.io_loop = self.get_new_ioloop()
 
     def tearDown(self):
-        if self.io_loop is not tornado.ioloop.IOLoop.instance():
+        if (not IOLoop.initialized() or
+            self.io_loop is not IOLoop.instance()):
             # Try to clean up any file descriptors left open in the ioloop.
             # This avoids leaks, especially when tests are run repeatedly
             # in the same process with autoreload (because curl does not
@@ -109,7 +111,7 @@ class AsyncTestCase(unittest.TestCase):
         subclasses for tests that require a specific IOLoop (usually
         the singleton).
         '''
-        return tornado.ioloop.IOLoop()
+        return IOLoop()
 
     @contextlib.contextmanager
     def _stack_context(self):
