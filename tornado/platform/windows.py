@@ -6,6 +6,9 @@ import ctypes.wintypes
 import socket
 import errno
 
+from tornado.platform import interface
+from tornado.util import b
+
 # See: http://msdn.microsoft.com/en-us/library/ms724935(VS.85).aspx
 SetHandleInformation = ctypes.windll.kernel32.SetHandleInformation
 SetHandleInformation.argtypes = (ctypes.wintypes.HANDLE, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)
@@ -20,7 +23,7 @@ def set_close_exec(fd):
         raise ctypes.GetLastError()
 
 
-class Pipe(object):
+class Waker(interface.Waker):
     """Create an OS independent asynchronous pipe"""
     def __init__(self):
         # Based on Zope async.py: http://svn.zope.org/zc.ngi/trunk/src/zc/ngi/async.py
@@ -72,15 +75,23 @@ class Pipe(object):
         a.close()
         self.reader_fd = self.reader.fileno()
 
-    def read(self):
-        """Emulate a file descriptors read method"""
-        try:
-            return self.reader.recv(1)
-        except socket.error, ex:
-            if ex.args[0] == errno.EWOULDBLOCK:
-                raise IOError
-            raise
+    def fileno(self):
+        return self.reader.fileno()
 
-    def write(self, data):
-        """Emulate a file descriptors write method"""
-        return self.writer.send(data)
+    def wake(self):
+        try:
+            self.writer.send(b("x"))
+        except IOError:
+            pass
+
+    def consume(self):
+        try:
+            while True:
+                result = self.reader.recv(1024)
+                if not result: break
+        except IOError:
+            pass
+
+    def close(self):
+        self.reader.close()
+        self.writer.close()

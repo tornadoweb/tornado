@@ -36,23 +36,13 @@ import time
 import traceback
 
 from tornado import stack_context
-from tornado.escape import utf8
 
 try:
     import signal
 except ImportError:
     signal = None
 
-from tornado.platform.auto import set_close_exec
-
-try:
-    import fcntl
-except ImportError:
-    if os.name == 'nt':
-        from tornado.platform import windows
-    else:
-        raise
-    
+from tornado.platform.auto import set_close_exec, Waker
 
 
 class IOLoop(object):
@@ -125,18 +115,10 @@ class IOLoop(object):
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
-        if os.name != 'nt':
-            r, w = os.pipe()
-            self._set_nonblocking(r)
-            self._set_nonblocking(w)
-            set_close_exec(r)
-            set_close_exec(w)
-            self._waker_reader = os.fdopen(r, "rb", 0)
-            self._waker_writer = os.fdopen(w, "wb", 0)
-        else:
-            self._waker_reader = self._waker_writer = windows.Pipe()
-            r = self._waker_writer.reader_fd
-        self.add_handler(r, self._read_waker, self.READ)
+        self._waker = Waker()
+        self.add_handler(self._waker.fileno(),
+                         lambda fd, events: self._waker.consume(),
+                         self.READ)
 
     @classmethod
     def instance(cls):
@@ -169,20 +151,14 @@ class IOLoop(object):
         If ``all_fds`` is true, all file descriptors registered on the
         IOLoop will be closed (not just the ones created by the IOLoop itself.
         """
+        self.remove_handler(self._waker.fileno())
         if all_fds:
             for fd in self._handlers.keys()[:]:
-                if fd in (self._waker_reader.fileno(),
-                          self._waker_writer.fileno()):
-                    # Close these through the file objects that wrap them,
-                    # or else the destructor will try to close them later
-                    # and log a warning
-                    continue
                 try:
                     os.close(fd)
                 except Exception:
                     logging.debug("error closing fd %d", fd, exc_info=True)
-        self._waker_reader.close()
-        self._waker_writer.close()
+        self._waker.close()
         self._impl.close()
 
     def add_handler(self, fd, handler, events):
@@ -347,7 +323,7 @@ class IOLoop(object):
         """
         self._running = False
         self._stopped = True
-        self._wake()
+        self._waker.wake()
 
     def running(self):
         """Returns true if this IOLoop is currently running."""
@@ -384,14 +360,8 @@ class IOLoop(object):
         control from other threads to the IOLoop's thread.
         """
         if not self._callbacks and thread.get_ident() != self._thread_ident:
-            self._wake()
+            self._waker.wake()
         self._callbacks.append(stack_context.wrap(callback))
-
-    def _wake(self):
-        try:
-            self._waker_writer.write(utf8("x"))
-        except IOError:
-            pass
 
     def _run_callback(self, callback):
         try:
@@ -410,18 +380,6 @@ class IOLoop(object):
         in sys.exc_info.
         """
         logging.error("Exception in callback %r", callback, exc_info=True)
-
-    def _read_waker(self, fd, events):
-        try:
-            while True:
-                result = self._waker_reader.read()
-                if not result: break
-        except IOError:
-            pass
-
-    def _set_nonblocking(self, fd):
-        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
 
 class _Timeout(object):
