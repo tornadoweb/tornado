@@ -43,14 +43,17 @@ try:
 except ImportError:
     signal = None
 
+from tornado.platform.auto import set_close_exec
+
 try:
     import fcntl
 except ImportError:
     if os.name == 'nt':
         from tornado.platform import windows
-        from tornado.platform import windows as fcntl
     else:
         raise
+    
+
 
 class IOLoop(object):
     """A level-triggered I/O loop.
@@ -110,7 +113,7 @@ class IOLoop(object):
     def __init__(self, impl=None):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
-            self._set_close_exec(self._impl.fileno())
+            set_close_exec(self._impl.fileno())
         self._handlers = {}
         self._events = {}
         self._callbacks = []
@@ -126,8 +129,8 @@ class IOLoop(object):
             r, w = os.pipe()
             self._set_nonblocking(r)
             self._set_nonblocking(w)
-            self._set_close_exec(r)
-            self._set_close_exec(w)
+            set_close_exec(r)
+            set_close_exec(w)
             self._waker_reader = os.fdopen(r, "rb", 0)
             self._waker_writer = os.fdopen(w, "wb", 0)
         else:
@@ -419,10 +422,6 @@ class IOLoop(object):
     def _set_nonblocking(self, fd):
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-
-    def _set_close_exec(self, fd):
-        flags = fcntl.fcntl(fd, fcntl.F_GETFD)
-        fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
 
 class _Timeout(object):

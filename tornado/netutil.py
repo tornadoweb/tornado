@@ -16,16 +16,9 @@
 
 """Miscellaneous network utility code."""
 
-import os
 import socket
 
-try:
-    import fcntl
-except ImportError:
-    if os.name == 'nt':
-        from tornado.platform import windows as fcntl
-    else:
-        raise
+from tornado.platform.auto import set_close_exec
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
     """Creates listening sockets bound to the given port and address.
@@ -58,9 +51,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
                                   0, flags):
         af, socktype, proto, canonname, sockaddr = res
         sock = socket.socket(af, socktype, proto)
-        flags = fcntl.fcntl(sock.fileno(), fcntl.F_GETFD)
-        flags |= fcntl.FD_CLOEXEC
-        fcntl.fcntl(sock.fileno(), fcntl.F_SETFD, flags)
+        set_close_exec(sock.fileno())
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if af == socket.AF_INET6:
             # On linux, ipv6 sockets accept ipv4 too by default,
