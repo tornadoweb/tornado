@@ -204,7 +204,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_ipv6(self):
         try:
-            self.http_server.bind(self.get_http_port(), address='::1')
+            self.http_server.listen(self.get_http_port(), address='::1')
         except socket.gaierror, e:
             if e.errno == socket.EAI_ADDRFAMILY:
                 # ipv6 is not configured on this system, so skip this test

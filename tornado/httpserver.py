@@ -133,19 +133,35 @@ class HTTPServer(object):
         self.xheaders = xheaders
         self.ssl_options = ssl_options
         self._sockets = {}  # fd -> socket object
+        self._pending_sockets = []
         self._started = False
 
     def listen(self, port, address=""):
-        """Binds to the given port and starts the server in a single process.
+        """Starts accepting connections on the given port.
 
-        This method is a shortcut for:
-
-            server.bind(port, address)
-            server.start(1)
-
+        This method may be called more than once to listen on multiple ports.
+        ``listen`` takes effect immediately; it is not necessary to call
+        `HTTPServer.start` afterwards.  It is, however, necessary to start
+        the ``IOLoop``.
         """
-        self.bind(port, address)
-        self.start(1)
+        sockets = netutil.bind_sockets(port, address=address)
+        self.add_sockets(sockets)
+
+    def add_sockets(self, sockets):
+        """Makes this server start accepting connections on the given sockets.
+
+        The ``sockets`` parameter is a list of socket objects such as
+        those returned by `tornado.netutil.bind_sockets`.
+        ``add_sockets`` is typically used in combination with that
+        method and `tornado.process.fork_processes` to provide greater
+        control over the initialization of a multi-process server.
+        """
+        if self.io_loop is None:
+            self.io_loop = ioloop.IOLoop.instance()
+        for sock in sockets:
+            self._sockets[sock.fileno()] = sock
+            self.io_loop.add_handler(sock.fileno(), self._handle_events,
+                                     ioloop.IOLoop.READ)
 
     def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128):
         """Binds this server to the given port on the given address.
@@ -169,11 +185,10 @@ class HTTPServer(object):
         """
         sockets = netutil.bind_sockets(port, address=address,
                                        family=family, backlog=backlog)
-        for sock in sockets:
-            self._sockets[sock.fileno()] = sock
-            if self._started:
-                self.io_loop.add_handler(sock.fileno(), self._handle_events,
-                                         ioloop.IOLoop.READ)
+        if self._started:
+            self.add_sockets(sockets)
+        else:
+            self._pending_sockets.extend(sockets)
 
     def start(self, num_processes=1):
         """Starts this server in the IOLoop.
@@ -198,11 +213,9 @@ class HTTPServer(object):
         self._started = True
         if num_processes != 1:
             process.fork_processes(num_processes)
-        if not self.io_loop:
-            self.io_loop = ioloop.IOLoop.instance()
-        for fd in self._sockets.keys():
-            self.io_loop.add_handler(fd, self._handle_events,
-                                     ioloop.IOLoop.READ)
+        sockets = self._pending_sockets
+        self._pending_sockets = []
+        self.add_sockets(sockets)
 
     def stop(self):
         """Stops listening for new connections.
