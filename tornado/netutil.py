@@ -17,6 +17,7 @@
 """Miscellaneous network utility code."""
 
 import socket
+import os
 
 from tornado.platform.auto import set_close_exec
 
@@ -34,7 +35,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
     or socket.AF_INET6 to restrict to ipv4 or ipv6 addresses, otherwise
     both will be used if available.
 
-    The ``backlog`` argument has the same meaning as for 
+    The ``backlog`` argument has the same meaning as for
     ``socket.listen()``.
     """
     sockets = []
@@ -47,8 +48,14 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
         # exist on some platforms (specifically WinXP, although
         # newer versions of windows have it)
         flags |= socket.AI_ADDRCONFIG
-    for res in socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                  0, flags):
+
+    unix_socket = isinstance(port, basestring)
+    if unix_socket:
+        items = [[socket.AF_UNIX, socket.SOCK_STREAM, 0, '', port]]
+    else:
+        items = socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
+                                   0, flags)
+    for res in items:
         af, socktype, proto, canonname, sockaddr = res
         sock = socket.socket(af, socktype, proto)
         set_close_exec(sock.fileno())
@@ -65,6 +72,16 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
             if hasattr(socket, "IPPROTO_IPV6"):
                 sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
         sock.setblocking(0)
+        if unix_socket:
+            try:
+                os.remove(sockaddr)
+            except OSError:
+                pass
+            # ...so that everyone can access the socket
+            try:
+                os.chmod(sockaddr, 0777)
+            except OSError:
+                pass
         sock.bind(sockaddr)
         sock.listen(backlog)
         sockets.append(sock)

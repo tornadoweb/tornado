@@ -107,7 +107,7 @@ class HTTPServer(object):
        the need to explicitly create the ``HTTPServer``.
 
     2. `bind`/`start`: simple multi-process::
-   
+
             server = HTTPServer(app)
             server.bind(8888)
             server.start(0)  # Forks multiple sub-processes
@@ -129,7 +129,7 @@ class HTTPServer(object):
        used with `tornado.process.fork_processes` to give you more
        flexibility in when the fork happens.  ``add_sockets`` can
        also be used in single-process servers if you want to create
-       your listening sockets in some way other than 
+       your listening sockets in some way other than
        `tornado.netutil.bind_sockets`.
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
@@ -184,7 +184,7 @@ class HTTPServer(object):
         or socket.AF_INET6 to restrict to ipv4 or ipv6 addresses, otherwise
         both will be used if available.
 
-        The ``backlog`` argument has the same meaning as for 
+        The ``backlog`` argument has the same meaning as for
         ``socket.listen()``.
 
         This method may be called multiple times prior to start() to listen
@@ -264,6 +264,9 @@ class HTTPServer(object):
                     stream = iostream.SSLIOStream(connection, io_loop=self.io_loop)
                 else:
                     stream = iostream.IOStream(connection, io_loop=self.io_loop)
+                if isinstance(connection.getsockname(), basestring):
+                    # UNIX socket; fake the remote address
+                    address = ('0.0.0.0', 0)
                 HTTPConnection(stream, address, self.request_callback,
                                self.no_keep_alive, self.xheaders)
             except Exception:
@@ -479,7 +482,7 @@ class HTTPRequest(object):
             self.remote_ip = remote_ip
             if protocol:
                 self.protocol = protocol
-            elif connection and isinstance(connection.stream, 
+            elif connection and isinstance(connection.stream,
                                            iostream.SSLIOStream):
                 self.protocol = "https"
             else:
