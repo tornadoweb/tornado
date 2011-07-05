@@ -35,6 +35,7 @@ import sys
 import types
 
 from tornado import ioloop
+from tornado import process
 
 try:
     import signal
@@ -79,6 +80,11 @@ def _reload_on_update(io_loop, modify_times):
     global _reload_attempted
     if _reload_attempted:
         # We already tried to reload and it didn't work, so don't try again.
+        return
+    if process.task_id() is not None:
+        # We're in a child process created by fork_processes.  If child
+        # processes restarted themselves, they'd all restart and then
+        # all call fork_processes again.
         return
     for module in sys.modules.values():
         # Some modules play games with sys.modules (e.g. email/__init__.py
