@@ -26,5 +26,4 @@ class ImportTest(unittest.TestCase):
         import tornado.util
         import tornado.web
         import tornado.websocket
-        # import tornado.win32_support  # depends on windows
         import tornado.wsgi

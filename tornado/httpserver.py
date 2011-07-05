@@ -41,14 +41,6 @@ from tornado import stack_context
 from tornado.util import b, bytes_type
 
 try:
-    import fcntl
-except ImportError:
-    if os.name == 'nt':
-        from tornado import win32_support as fcntl
-    else:
-        raise
-
-try:
     import ssl # Python 2.6+
 except ImportError:
     ssl = None

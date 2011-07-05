@@ -47,8 +47,8 @@ try:
     import fcntl
 except ImportError:
     if os.name == 'nt':
-        from tornado import win32_support
-        from tornado import win32_support as fcntl
+        from tornado.platform import windows
+        from tornado.platform import windows as fcntl
     else:
         raise
 
@@ -131,7 +131,7 @@ class IOLoop(object):
             self._waker_reader = os.fdopen(r, "rb", 0)
             self._waker_writer = os.fdopen(w, "wb", 0)
         else:
-            self._waker_reader = self._waker_writer = win32_support.Pipe()
+            self._waker_reader = self._waker_writer = windows.Pipe()
             r = self._waker_writer.reader_fd
         self.add_handler(r, self._read_waker, self.READ)
 
