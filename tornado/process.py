@@ -18,7 +18,10 @@
 
 import logging
 import os
+import sys
 import time
+
+from binascii import hexlify
 
 from tornado import ioloop
 
@@ -40,6 +43,20 @@ def cpu_count():
         pass
     logging.error("Could not detect number of processors; assuming 1")
     return 1
+
+def _reseed_random():
+    if 'random' not in sys.modules:
+        return
+    import random
+    # If os.urandom is available, this method does the same thing as
+    # random.seed (at least as of python 2.6).  If os.urandom is not
+    # available, we mix in the pid in addition to a timestamp.
+    try:
+        seed = long(hexlify(os.urandom(16)), 16)
+    except NotImplementedError:
+        seed(int(time.time() * 1000) ^ os.getpid())
+    random.seed(seed)
+
 
 _processes_forked = False
 
@@ -71,16 +88,6 @@ def fork_processes(num_processes):
     logging.info("Starting %d server processes", num_processes)
     for i in range(num_processes):
         if os.fork() == 0:
-            import random
-            from binascii import hexlify
-            try:
-                # If available, use the same method as
-                # random.py
-                seed = long(hexlify(os.urandom(16)), 16)
-            except NotImplementedError:
-                # Include the pid to avoid initializing two
-                # processes to the same value
-                seed(int(time.time() * 1000) ^ os.getpid())
-            random.seed(seed)
+            _reseed_random()
             return
     os.waitpid(-1, 0)
