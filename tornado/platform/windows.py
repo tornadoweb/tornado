@@ -39,7 +39,7 @@ def fcntl(fd, op, arg=0):
     elif op == F_SETFD:
         # Check that the flag is CLOEXEC and translate
         if arg == FD_CLOEXEC:
-            success = SetHandleInformation(fd, HANDLE_FLAG_INHERIT, arg)
+            success = SetHandleInformation(fd, HANDLE_FLAG_INHERIT, 0)
             if not success:
                 raise ctypes.GetLastError()
         else:
