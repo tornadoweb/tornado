@@ -103,30 +103,45 @@ class HTTPServer(object):
            "keyfile": os.path.join(data_dir, "mydomain.key"),
        })
 
-    By default, listen() runs in a single thread in a single process. You
-    can utilize all available CPUs on this machine by calling bind() and
-    start() instead of listen()::
+    HTTPServer initialization follows one of three patterns:
 
-        http_server = httpserver.HTTPServer(handle_request)
-        http_server.bind(8888)
-        http_server.start(0) # Forks multiple sub-processes
-        ioloop.IOLoop.instance().start()
+    1. `listen`: simple single-process::
 
-    start(0) detects the number of CPUs on this machine and "pre-forks" that
-    number of child processes so that we have one Tornado process per CPU,
-    all with their own IOLoop. You can also pass in the specific number of
-    child processes you want to run with if you want to override this
-    auto-detection.
+            server = HTTPServer(app)
+            server.listen(8888)
+            IOLoop.instance().start()
+
+       In many cases, `tornado.web.Application.listen` can be used to avoid
+       the need to explicitly create the ``HTTPServer``.
+
+    2. `bind`/`start`: simple multi-process::
+   
+            server = HTTPServer(app)
+            server.bind(8888)
+            server.start(0)  # Forks multiple sub-processes
+            IOLoop.instance().start()
+
+       When using this interface, an ``IOLoop`` must *not* be passed
+       to the ``HTTPServer`` constructor.  `start` will always start
+       the server on the default singleton ``IOLoop``.
+
+    3. `add_sockets`: advanced multi-process::
+
+            sockets = tornado.netutil.bind_sockets(8888)
+            tornado.process.fork_processes(0)
+            server = HTTPServer(app)
+            server.add_sockets(sockets)
+            IOLoop.instance().start()
+
+       The `add_sockets` interface is more complicated, but it can be
+       used with `tornado.process.fork_processes` to give you more
+       flexibility in when the fork happens.  ``add_sockets`` can
+       also be used in single-process servers if you want to create
+       your listening sockets in some way other than 
+       `tornado.netutil.bind_sockets`.
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
                  xheaders=False, ssl_options=None):
-        """Initializes the server with the given request callback.
-
-        If you use pre-forking/start() instead of the listen() method to
-        start your server, you should not pass an IOLoop instance to this
-        constructor. Each pre-forked child process will create its own
-        IOLoop instance after the forking process.
-        """
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.io_loop = io_loop
