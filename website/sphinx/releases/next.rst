@@ -41,6 +41,13 @@ New features
 * `tornado.web.RequestHandler.write_error` replaces ``get_error_html`` as the
   preferred way to generate custom error pages (``get_error_html`` is still
   supported, but deprecated)
+* Multi-process mode has been improved, and can now restart crashed child
+  processes.  A new entry point has been added at 
+  `tornado.process.fork_processes`, although
+  `tornado.httpserver.HTTPServer.start` is still supported.
+* To facilitate some advanced multi-process scenarios, ``HTTPServer`` has a
+  new method ``add_sockets``, and socket-opening code is available separately
+  as `tornado.netutil.bind_sockets`.
 
 
 Bug fixes
