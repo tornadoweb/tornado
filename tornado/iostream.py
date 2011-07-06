@@ -174,8 +174,15 @@ class IOStream(object):
         assert isinstance(data, bytes_type)
         self._check_closed()
         self._write_buffer.append(data)
-        self._add_io_state(self.io_loop.WRITE)
         self._write_callback = stack_context.wrap(callback)
+        self._handle_write()
+        if self._write_buffer:
+            self._add_io_state(self.io_loop.WRITE)
+        elif callback is None and self._state is None:
+            # if callback is not None and we just completed the write
+            # in the fast path, _add_io_state will be called from
+            # _run_callback (see comments there for why)
+            self._add_io_state(0)
 
     def set_close_callback(self, callback):
         """Call the given callback when the stream is closed."""
