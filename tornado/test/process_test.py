@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-import functools
+import logging
 import os
 import signal
-from tornado.httpclient import HTTPClient
+from tornado.httpclient import HTTPClient, HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.netutil import bind_sockets
@@ -12,6 +12,8 @@ from tornado.testing import LogTrapTestCase, get_unused_port
 from tornado.web import RequestHandler, Application
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
+# Logging is tricky here so you may want to replace LogTrapTestCase
+# with unittest.TestCase when debugging.
 class ProcessTest(LogTrapTestCase):
     def get_app(self):
         class ProcessHandler(RequestHandler):
@@ -19,12 +21,10 @@ class ProcessTest(LogTrapTestCase):
                 if self.get_argument("exit", None):
                     # must use os._exit instead of sys.exit so unittest's
                     # exception handler doesn't catch it
-                    IOLoop.instance().add_callback(functools.partial(
-                            os._exit, int(self.get_argument("exit"))))
+                    os._exit(int(self.get_argument("exit")))
                 if self.get_argument("signal", None):
-                    IOLoop.instance().add_callback(functools.partial(
-                            os.kill, os.getpid(),
-                            int(self.get_argument("signal"))))
+                    os.kill(os.getpid(),
+                            int(self.get_argument("signal")))
                 self.write(str(os.getpid()))
         return Application([("/", ProcessHandler)])
 
@@ -36,6 +36,8 @@ class ProcessTest(LogTrapTestCase):
             # Exit now so the parent process will restart the child
             # (since we don't have a clean way to signal failure to
             # the parent that won't restart)
+            logging.error("aborting child process from tearDown")
+            logging.shutdown()
             os._exit(1)
         super(ProcessTest, self).tearDown()
 
@@ -55,45 +57,56 @@ class ProcessTest(LogTrapTestCase):
             signal.alarm(0)
             return
         signal.alarm(5)  # child process
-        if id in (0, 1):
-            signal.alarm(5)
-            self.assertEqual(id, task_id())
-            server = HTTPServer(self.get_app())
-            server.add_sockets(sockets)
-            IOLoop.instance().start()
-        elif id == 2:
-            signal.alarm(5)
-            self.assertEqual(id, task_id())
-            for sock in sockets: sock.close()
-            client = HTTPClient()
+        try:
+            if id in (0, 1):
+                signal.alarm(5)
+                self.assertEqual(id, task_id())
+                server = HTTPServer(self.get_app())
+                server.add_sockets(sockets)
+                IOLoop.instance().start()
+            elif id == 2:
+                signal.alarm(5)
+                self.assertEqual(id, task_id())
+                for sock in sockets: sock.close()
+                client = HTTPClient()
 
-            # Make both processes exit abnormally
-            client.fetch(get_url("/?exit=2"))
-            client.fetch(get_url("/?exit=3"))
+                def fetch(url, fail_ok=False):
+                    try:
+                        return client.fetch(get_url(url))
+                    except HTTPError, e:
+                        if not (fail_ok and e.code == 599):
+                            raise
 
-            # They've been restarted, so a new fetch will work
-            int(client.fetch(get_url("/")).body)
-            
-            # Now the same with signals
-            # Disabled because on the mac a process dying with a signal
-            # can trigger an "Application exited abnormally; send error
-            # report to Apple?" prompt.
-            #client.fetch(get_url("/?signal=%d" % signal.SIGTERM))
-            #client.fetch(get_url("/?signal=%d" % signal.SIGABRT))
-            #int(client.fetch(get_url("/")).body)
+                # Make two processes exit abnormally
+                fetch("/?exit=2", fail_ok=True)
+                fetch("/?exit=3", fail_ok=True)
 
-            # Now kill them normally so they won't be restarted
-            client.fetch(get_url("/?exit=0"))
-            # One process left; watch it's pid change
-            pid = int(client.fetch(get_url("/")).body)
-            client.fetch(get_url("/?exit=1"))
-            pid2 = int(client.fetch(get_url("/")).body)
-            self.assertNotEqual(pid, pid2)
+                # They've been restarted, so a new fetch will work
+                int(fetch("/").body)
 
-            # Kill the last one so we shut down cleanly
-            client.fetch(get_url("/?exit=0"))
-            
-            os._exit(0)
+                # Now the same with signals
+                # Disabled because on the mac a process dying with a signal
+                # can trigger an "Application exited abnormally; send error
+                # report to Apple?" prompt.
+                #fetch("/?signal=%d" % signal.SIGTERM, fail_ok=True)
+                #fetch("/?signal=%d" % signal.SIGABRT, fail_ok=True)
+                #int(fetch("/").body)
+
+                # Now kill them normally so they won't be restarted
+                fetch("/?exit=0", fail_ok=True)
+                # One process left; watch it's pid change
+                pid = int(fetch("/").body)
+                fetch("/?exit=4", fail_ok=True)
+                pid2 = int(fetch("/").body)
+                self.assertNotEqual(pid, pid2)
+
+                # Kill the last one so we shut down cleanly
+                fetch("/?exit=0", fail_ok=True)
+
+                os._exit(0)
+        except Exception:
+            logging.error("exception in child process %d", id, exc_info=True)
+            raise
             
 
 if os.name != 'posix':
