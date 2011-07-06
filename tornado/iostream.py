@@ -96,10 +96,7 @@ class IOStream(object):
         self._close_callback = None
         self._connect_callback = None
         self._connecting = False
-        self._state = self.io_loop.ERROR
-        with stack_context.NullContext():
-            self.io_loop.add_handler(
-                self.socket.fileno(), self._handle_events, self._state)
+        self._state = None
 
     def connect(self, address, callback=None):
         """Connects the socket to a remote address without blocking.
@@ -193,7 +190,8 @@ class IOStream(object):
                 self._read_until_close = False
                 self._run_callback(callback,
                                    self._consume(self._read_buffer_size))
-            self.io_loop.remove_handler(self.socket.fileno())
+            if self._state is not None:
+                self.io_loop.remove_handler(self.socket.fileno())
             self.socket.close()
             self.socket = None
             if self._close_callback:
@@ -238,6 +236,8 @@ class IOStream(object):
             if self.writing():
                 state |= self.io_loop.WRITE
             if state != self._state:
+                assert self._state is not None, \
+                    "shouldn't happen: _handle_events without self._state"
                 self._state = state
                 self.io_loop.update_handler(self.socket.fileno(), self._state)
         except Exception:
@@ -261,6 +261,14 @@ class IOStream(object):
                 # Re-raise the exception so that IOLoop.handle_callback_exception
                 # can see it and log the error
                 raise
+            if self._state is None:
+                # If we got here with no self._state, this callback must
+                # have been triggered by a fast-path read or write
+                # (and the callback we just executed did not start a
+                # slow-path operation).  If we've never done a slow-path
+                # op, we can't tell if the connection is closed out from
+                # under us, so we must add the IOLoop callback here.
+                self._add_io_state(0)
         # We schedule callbacks to be run on the next IOLoop iteration
         # rather than running them directly for several reasons:
         # * Prevents unbounded stack growth when a callback calls an
@@ -435,7 +443,12 @@ class IOStream(object):
         if self.socket is None:
             # connection has been closed, so there can be no future events
             return
-        if not self._state & state:
+        if self._state is None:
+            self._state = ioloop.IOLoop.ERROR | state
+            with stack_context.NullContext():
+                self.io_loop.add_handler(
+                    self.socket.fileno(), self._handle_events, self._state)
+        elif not self._state & state:
             self._state = self._state | state
             self.io_loop.update_handler(self.socket.fileno(), self._state)
 
