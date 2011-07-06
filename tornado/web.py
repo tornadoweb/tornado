@@ -1305,23 +1305,25 @@ class Application(object):
             for spec in handlers:
                 match = spec.regex.match(request.path)
                 if match:
-                    # None-safe wrapper around url_unescape to handle
-                    # unmatched optional groups correctly
-                    def unquote(s):
-                        if s is None: return s
-                        return escape.url_unescape(s, encoding=None)
                     handler = spec.handler_class(self, request, **spec.kwargs)
-                    # Pass matched groups to the handler.  Since
-                    # match.groups() includes both named and unnamed groups,
-                    # we want to use either groups or groupdict but not both.
-                    # Note that args are passed as bytes so the handler can
-                    # decide what encoding to use.
-                    kwargs = dict((k, unquote(v))
-                                  for (k, v) in match.groupdict().iteritems())
-                    if kwargs:
-                        args = []
-                    else:
-                        args = [unquote(s) for s in match.groups()]
+                    if spec.regex.groups:
+                        # None-safe wrapper around url_unescape to handle
+                        # unmatched optional groups correctly
+                        def unquote(s):
+                            if s is None: return s
+                            return escape.url_unescape(s, encoding=None)
+                        # Pass matched groups to the handler.  Since
+                        # match.groups() includes both named and unnamed groups,
+                        # we want to use either groups or groupdict but not both.
+                        # Note that args are passed as bytes so the handler can
+                        # decide what encoding to use.
+
+                        if spec.regex.groupindex:
+                            kwargs = dict(
+                                (k, unquote(v))
+                                for (k, v) in match.groupdict().iteritems())
+                        else:
+                            args = [unquote(s) for s in match.groups()]
                     break
             if not handler:
                 handler = ErrorHandler(self, request, status_code=404)
@@ -1775,6 +1777,8 @@ class URLSpec(object):
         if not pattern.endswith('$'):
             pattern += '$'
         self.regex = re.compile(pattern)
+        assert len(self.regex.groupindex) in (0, self.regex.groups), \
+            "groups in url regexes must either be all named or all positional"
         self.handler_class = handler_class
         self.kwargs = kwargs
         self.name = name
