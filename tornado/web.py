@@ -1562,7 +1562,6 @@ class GZipContentEncoding(OutputTransform):
             headers["Content-Encoding"] = "gzip"
             self._gzip_value = BytesIO()
             self._gzip_file = gzip.GzipFile(mode="w", fileobj=self._gzip_value)
-            self._gzip_pos = 0
             chunk = self.transform_chunk(chunk, finishing)
             if "Content-Length" in headers:
                 headers["Content-Length"] = str(len(chunk))
@@ -1576,9 +1575,8 @@ class GZipContentEncoding(OutputTransform):
             else:
                 self._gzip_file.flush()
             chunk = self._gzip_value.getvalue()
-            if self._gzip_pos > 0:
-                chunk = chunk[self._gzip_pos:]
-            self._gzip_pos += len(chunk)
+            self._gzip_value.truncate(0)
+            self._gzip_value.seek(0)
         return chunk
 
 
