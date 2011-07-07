@@ -154,6 +154,12 @@ class HTTPServer(object):
         sockets = netutil.bind_sockets(port, address=address)
         self.add_sockets(sockets)
 
+    if hasattr(socket, 'AF_UNIX'):
+        def listen_unix(self, file, mode=0600):
+            """Same as listen() method but listen on a UNIX socket instead."""
+            sockets = netutil.bind_unix_socket(file, mode)
+            self.add_sockets(sockets)
+
     def add_sockets(self, sockets):
         """Makes this server start accepting connections on the given sockets.
 
@@ -264,7 +270,7 @@ class HTTPServer(object):
                     stream = iostream.SSLIOStream(connection, io_loop=self.io_loop)
                 else:
                     stream = iostream.IOStream(connection, io_loop=self.io_loop)
-                if isinstance(connection.getsockname(), basestring):
+                if connection.family == getattr(socket, "AF_UNIX", -1):
                     # UNIX socket; fake the remote address
                     address = ('0.0.0.0', 0)
                 HTTPConnection(stream, address, self.request_callback,

@@ -75,6 +75,7 @@ import types
 import urllib
 import urlparse
 import uuid
+import socket
 
 from tornado import escape
 from tornado import locale
@@ -709,7 +710,7 @@ class RequestHandler(object):
                 self.write(line)
             self.finish()
         else:
-            self.finish("<html><title>%(code)d: %(message)s</title>" 
+            self.finish("<html><title>%(code)d: %(message)s</title>"
                         "<body>%(code)d: %(message)s</body></html>" % {
                     "code": status_code,
                     "message": httplib.responses[status_code],
@@ -1202,6 +1203,17 @@ class Application(object):
         from tornado.httpserver import HTTPServer
         server = HTTPServer(self, **kwargs)
         server.listen(port, address)
+
+    if hasattr(socket, 'AF_UNIX'):
+        def listen_unix(self, file, mode=0600, **kwargs):
+            """Starts an HTTP server for this application on the given
+            unix file.
+            """
+            # import is here rather than top level because HTTPServer
+            # is not importable on appengine
+            from tornado.httpserver import HTTPServer
+            server = HTTPServer(self, **kwargs)
+            server.listen_unix(file, mode)
 
     def add_handlers(self, host_pattern, host_handlers):
         """Appends the given handlers to our handler list.
@@ -1698,7 +1710,7 @@ class TemplateModule(UIModule):
     inside the template and give it keyword arguments corresponding to
     the methods on UIModule: {{ set_resources(js_files=static_url("my.js")) }}
     Note that these resources are output once per template file, not once
-    per instantiation of the template, so they must not depend on 
+    per instantiation of the template, so they must not depend on
     any arguments to the template.
     """
     def __init__(self, handler):

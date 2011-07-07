@@ -18,8 +18,11 @@
 
 import socket
 import os
+import stat
+import errno
 
 from tornado.platform.auto import set_close_exec
+
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
     """Creates listening sockets bound to the given port and address.
@@ -49,13 +52,8 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
         # newer versions of windows have it)
         flags |= socket.AI_ADDRCONFIG
 
-    unix_socket = isinstance(port, basestring)
-    if unix_socket:
-        items = [[socket.AF_UNIX, socket.SOCK_STREAM, 0, '', port]]
-    else:
-        items = socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                   0, flags)
-    for res in items:
+    for res in socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
+                                  0, flags):
         af, socktype, proto, canonname, sockaddr = res
         sock = socket.socket(af, socktype, proto)
         set_close_exec(sock.fileno())
@@ -72,17 +70,29 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
             if hasattr(socket, "IPPROTO_IPV6"):
                 sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
         sock.setblocking(0)
-        if unix_socket:
-            try:
-                os.remove(sockaddr)
-            except OSError:
-                pass
-            # ...so that everyone can access the socket
-            try:
-                os.chmod(sockaddr, 0777)
-            except OSError:
-                pass
         sock.bind(sockaddr)
         sock.listen(backlog)
         sockets.append(sock)
     return sockets
+
+if hasattr(socket, 'AF_UNIX'):
+    def bind_unix_socket(file, mode=0600, backlog=128):
+        """Binds a UNIX socket.
+        Return a list within the binded UNIX socket object.
+        """
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        set_close_exec(sock.fileno())
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setblocking(0)
+        try:
+            st = os.stat(file)
+        except OSError, err:
+            if err.errno != errno.ENOENT:
+                raise
+        else:
+            if stat.S_ISSOCK(st.st_mode):
+                os.remove(file)
+        sock.bind(file)
+        sock.listen(backlog)
+        os.chmod(file, mode)
+        return [sock]
