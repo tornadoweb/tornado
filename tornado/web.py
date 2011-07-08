@@ -1463,12 +1463,14 @@ class StaticFileHandler(RequestHandler):
         modified = datetime.datetime.fromtimestamp(stat_result[stat.ST_MTIME])
 
         self.set_header("Last-Modified", modified)
-        if "v" in self.request.arguments:
+
+        if self.enable_aggressive_caching(path):
             self.set_header("Expires", datetime.datetime.utcnow() + \
                                        datetime.timedelta(days=365*10))
             self.set_header("Cache-Control", "max-age=" + str(86400*365*10))
         else:
             self.set_header("Cache-Control", "public")
+
         mime_type, encoding = mimetypes.guess_type(abspath)
         if mime_type:
             self.set_header("Content-Type", mime_type)
@@ -1496,6 +1498,10 @@ class StaticFileHandler(RequestHandler):
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
         pass
+
+    def enable_aggressive_caching(self, path):
+        """Override to customize cache control behavior."""
+        return "v" in self.request.arguments
 
 
 class FallbackHandler(RequestHandler):
