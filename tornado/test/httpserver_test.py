@@ -1,12 +1,18 @@
 #!/usr/bin/env python
 
-from tornado import httpclient, simple_httpclient
+from tornado import httpclient, simple_httpclient, netutil
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode
+from tornado.httpserver import HTTPServer
+from tornado.httputil import HTTPHeaders
+from tornado.iostream import IOStream
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, AsyncTestCase
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler
 import os
+import shutil
+import socket
+import tempfile
 
 try:
     import ssl
@@ -14,8 +20,11 @@ except ImportError:
     ssl = None
 
 class HelloWorldRequestHandler(RequestHandler):
+    def initialize(self, protocol="http"):
+        self.expected_protocol = protocol
+
     def get(self):
-        assert self.request.protocol == "https"
+        assert self.request.protocol == self.expected_protocol
         self.finish("Hello world")
 
     def post(self):
@@ -31,7 +40,8 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
                                                  force_instance=True)
 
     def get_app(self):
-        return Application([('/', HelloWorldRequestHandler)])
+        return Application([('/', HelloWorldRequestHandler, 
+                             dict(protocol="https"))])
 
     def get_httpserver_options(self):
         # Testing keys were generated with:
@@ -189,3 +199,39 @@ class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
         data = json_decode(response.body)
         self.assertEqual(data, {})
 
+class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
+    """HTTPServers can listen on Unix sockets too.
+
+    Why would you want to do this?  Nginx can proxy to backends listening
+    on unix sockets, for one thing (and managing a namespace for unix
+    sockets can be easier than managing a bunch of TCP port numbers).
+
+    Unfortunately, there's no way to specify a unix socket in a url for
+    an HTTP client, so we have to test this by hand.
+    """
+    def setUp(self):
+        super(UnixSocketTest, self).setUp()
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+        super(UnixSocketTest, self).tearDown()
+
+    def test_unix_socket(self):
+        sockfile = os.path.join(self.tmpdir, "test.sock")
+        sock = netutil.bind_unix_socket(sockfile)
+        app = Application([("/hello", HelloWorldRequestHandler)])
+        server = HTTPServer(app, io_loop=self.io_loop)
+        server.add_socket(sock)
+        stream = IOStream(socket.socket(socket.AF_UNIX), io_loop=self.io_loop)
+        stream.connect(sockfile, self.stop)
+        self.wait()
+        stream.write(b("GET /hello HTTP/1.0\r\n\r\n"))
+        stream.read_until(b("\r\n"), self.stop)
+        response = self.wait()
+        self.assertEqual(response, b("HTTP/1.0 200 OK\r\n"))
+        stream.read_until(b("\r\n\r\n"), self.stop)
+        headers = HTTPHeaders.parse(self.wait().decode('latin1'))
+        stream.read_bytes(int(headers["Content-Length"]), self.stop)
+        body = self.wait()
+        self.assertEqual(body, b("Hello world"))

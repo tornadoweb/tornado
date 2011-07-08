@@ -141,6 +141,7 @@ class IOStream(object):
     def read_bytes(self, num_bytes, callback):
         """Call callback when we read the given number of bytes."""
         assert not self._read_callback, "Already reading"
+        assert isinstance(num_bytes, int)
         self._read_bytes = num_bytes
         self._read_callback = stack_context.wrap(callback)
         while True:
