@@ -510,6 +510,10 @@ class HTTPRequest(object):
         """Returns True if this request supports HTTP/1.1 semantics"""
         return self.version == "HTTP/1.1"
 
+    def requested_with_xhr(self):
+        """Returns True if requested with XMLHttpRequest object."""
+        return self.headers.get("X-Requested-With") == "XMLHttpRequest"
+
     def write(self, chunk):
         """Writes the given chunk to the response stream."""
         assert isinstance(chunk, bytes_type)
