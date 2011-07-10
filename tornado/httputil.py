@@ -54,6 +54,7 @@ class HTTPHeaders(dict):
         # our __setitem__
         dict.__init__(self)
         self._as_list = {}
+        self._last_key = None
         self.update(*args, **kwargs)
 
     # new public methods
@@ -61,6 +62,7 @@ class HTTPHeaders(dict):
     def add(self, name, value):
         """Adds a new value for the given key."""
         norm_name = HTTPHeaders._normalize_name(name)
+        self._last_key = norm_name
         if norm_name in self:
             # bypass our override of __setitem__ since it modifies _as_list
             dict.__setitem__(self, norm_name, self[norm_name] + ',' + value)
@@ -91,8 +93,15 @@ class HTTPHeaders(dict):
         >>> h.get('content-type')
         'text/html'
         """
-        name, value = line.split(":", 1)
-        self.add(name, value.strip())
+        if line[0].isspace():
+            # continuation of a multi-line header
+            new_part = ' ' + line.lstrip()
+            self._as_list[self._last_key][-1] += new_part
+            dict.__setitem__(self, self._last_key,
+                             self[self._last_key] + new_part)
+        else:
+            name, value = line.split(":", 1)
+            self.add(name, value.strip())
 
     @classmethod
     def parse(cls, headers):

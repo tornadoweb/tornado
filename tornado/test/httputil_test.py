@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from tornado.httputil import url_concat, parse_multipart_form_data
+from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders
 from tornado.escape import utf8
 from tornado.testing import LogTrapTestCase
 from tornado.util import b
@@ -113,3 +113,28 @@ Foo
             file = files["files"][0]
             self.assertEqual(file["filename"], filename)
             self.assertEqual(file["body"], b("Foo"))
+
+class HTTPHeadersTest(unittest.TestCase):
+    def test_multi_line(self):
+        # Lines beginning with whitespace are appended to the previous line
+        # with any leading whitespace replaced by a single space.
+        # Note that while multi-line headers are a part of the HTTP spec,
+        # their use is strongly discouraged.
+        data = """\
+Foo: bar
+ baz
+Asdf: qwer
+\tzxcv
+Foo: even
+     more
+     lines
+""".replace("\n", "\r\n")
+        headers = HTTPHeaders.parse(data)
+        self.assertEqual(headers["asdf"], "qwer zxcv")
+        self.assertEqual(headers.get_list("asdf"), ["qwer zxcv"])
+        self.assertEqual(headers["Foo"], "bar baz,even more lines")
+        self.assertEqual(headers.get_list("foo"), ["bar baz", "even more lines"])
+        self.assertEqual(sorted(list(headers.get_all())),
+                         [("Asdf", "qwer zxcv"),
+                          ("Foo", "bar baz"),
+                          ("Foo", "even more lines")])
