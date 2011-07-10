@@ -130,8 +130,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
                     u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode("utf8"),
                     b(""),
                     u"\u00fa".encode("utf-8"),
-                    b("--1234567890"),
-                    b(""),
+                    b("--1234567890--"),
                     b(""),
                     ]))
         data = json_decode(response.body)
