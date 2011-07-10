@@ -237,13 +237,14 @@ class _HTTPConnection(object):
                                                      base64.b64encode(auth))
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
-        has_body = self.request.method in ("POST", "PUT")
-        if has_body:
-            assert self.request.body is not None
+        if not self.request.allow_nonstandard_methods:
+            if self.request.method in ("POST", "PUT"):
+                assert self.request.body is not None
+            else:
+                assert self.request.body is None
+        if self.request.body is not None:
             self.request.headers["Content-Length"] = str(len(
-                self.request.body))
-        else:
-            assert self.request.body is None
+                    self.request.body))
         if (self.request.method == "POST" and
             "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
@@ -259,7 +260,7 @@ class _HTTPConnection(object):
                 raise ValueError('Newline in header: ' + repr(line))
             request_lines.append(line)
         self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
-        if has_body:
+        if self.request.body is not None:
             self.stream.write(self.request.body)
         self.stream.read_until(b("\r\n\r\n"), self._on_headers)
 
