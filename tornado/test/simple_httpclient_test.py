@@ -77,6 +77,6 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(set(seen), set([0, 1, 2, 3]))
         self.assertEqual(len(self.triggers), 0)
 
-    def xxx_test_default_certificates_exist(self):
+    def test_default_certificates_exist(self):
         open(_DEFAULT_CA_CERTS).close()
 
