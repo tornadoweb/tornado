@@ -26,12 +26,15 @@ In addition to I/O events, the `IOLoop` can also schedule time-based events.
 `IOLoop.add_timeout` is a non-blocking alternative to `time.sleep`.
 """
 
+from __future__ import with_statement
+
 import errno
 import heapq
 import os
 import logging
 import select
 import thread
+import threading
 import time
 import traceback
 
@@ -107,6 +110,7 @@ class IOLoop(object):
         self._handlers = {}
         self._events = {}
         self._callbacks = []
+        self._callback_lock = threading.Lock()
         self._timeouts = []
         self._running = False
         self._stopped = False
@@ -231,8 +235,9 @@ class IOLoop(object):
 
             # Prevent IO event starvation by delaying new callbacks
             # to the next iteration of the event loop.
-            callbacks = self._callbacks
-            self._callbacks = []
+            with self._callback_lock:
+                callbacks = self._callbacks
+                self._callbacks = []
             for callback in callbacks:
                 self._run_callback(callback)
 
@@ -359,9 +364,17 @@ class IOLoop(object):
         from that IOLoop's thread.  add_callback() may be used to transfer
         control from other threads to the IOLoop's thread.
         """
-        if not self._callbacks and thread.get_ident() != self._thread_ident:
+        with self._callback_lock:
+            list_empty = not self._callbacks
+            self._callbacks.append(stack_context.wrap(callback))
+        if list_empty and thread.get_ident() != self._thread_ident:
+            # If we're in the IOLoop's thread, we know it's not currently
+            # polling.  If we're not, and we added the first callback to an
+            # empty list, we may need to wake it up (it may wake up on its
+            # own, but an occasional extra wake is harmless).  Waking
+            # up a polling IOLoop is relatively expensive, so we try to
+            # avoid it when we can.
             self._waker.wake()
-        self._callbacks.append(stack_context.wrap(callback))
 
     def _run_callback(self, callback):
         try:
