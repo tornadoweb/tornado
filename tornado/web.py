@@ -1778,7 +1778,8 @@ class URLSpec(object):
             pattern += '$'
         self.regex = re.compile(pattern)
         assert len(self.regex.groupindex) in (0, self.regex.groups), \
-            "groups in url regexes must either be all named or all positional"
+            ("groups in url regexes must either be all named or all "
+             "positional: %r" % self.regex.pattern)
         self.handler_class = handler_class
         self.kwargs = kwargs
         self.name = name
