@@ -23,14 +23,11 @@ import sys
 import thread
 import unittest
 
-import tornado.twisted.reactor
-tornado.twisted.reactor.install()
-from twisted.internet import reactor
-
 from twisted.internet.interfaces import IReadDescriptor, IWriteDescriptor
 from twisted.python import log
 from tornado.platform.auto import Waker
 
+from tornado.ioloop import IOLoop
 from tornado.twisted.reactor import TornadoReactor
 from tornado.testing import AsyncTestCase, LogTrapTestCase
 
@@ -40,7 +37,7 @@ log.startLogging(sys.stdout)
 
 class ReactorWhenRunningTest(unittest.TestCase):
     def setUp(self):
-        self._reactor = TornadoReactor()
+        self._reactor = TornadoReactor(IOLoop())
 
     def test_whenRunning(self):
         self._whenRunningCalled = False
@@ -60,7 +57,7 @@ class ReactorWhenRunningTest(unittest.TestCase):
 
 class ReactorCallLaterTest(unittest.TestCase):
     def setUp(self):
-        self._reactor = TornadoReactor()
+        self._reactor = TornadoReactor(IOLoop())
 
     def test_callLater(self):
         self._laterCalled = False
@@ -80,7 +77,7 @@ class ReactorCallLaterTest(unittest.TestCase):
 
 class ReactorTwoCallLaterTest(unittest.TestCase):
     def setUp(self):
-        self._reactor = TornadoReactor()
+        self._reactor = TornadoReactor(IOLoop())
 
     def test_callLater(self):
         self._later1Called = False
@@ -110,7 +107,7 @@ class ReactorTwoCallLaterTest(unittest.TestCase):
 
 class ReactorCallFromThreadTest(unittest.TestCase):
     def setUp(self):
-        self._reactor = TornadoReactor()
+        self._reactor = TornadoReactor(IOLoop())
         self._mainThread = thread.get_ident()
 
     def _newThreadRun(self, a, b):
@@ -130,7 +127,7 @@ class ReactorCallFromThreadTest(unittest.TestCase):
 
 class ReactorCallInThread(unittest.TestCase):
     def setUp(self):
-        self._reactor = TornadoReactor()
+        self._reactor = TornadoReactor(IOLoop())
         self._mainThread = thread.get_ident()
 
     def _fnCalledInThread(self, *args, **kwargs):
@@ -190,7 +187,7 @@ class ReactorReaderWriterTest(unittest.TestCase):
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
     def setUp(self):
-        self._reactor = TornadoReactor()
+        self._reactor = TornadoReactor(IOLoop())
         r, w = os.pipe()
         self._set_nonblocking(r)
         self._set_nonblocking(w)
@@ -205,7 +202,7 @@ class ReactorReaderWriterTest(unittest.TestCase):
         reads it, check the value and ends the test.
         """
         def checkReadInput(fd):
-            self.assertEqual(fd.read(), 'x')
+            self.assertTrue(fd.read().startswith('x'))
             self._reactor.stop()
         self._reader = Reader(self._p1, checkReadInput)
         self._writer = Writer(self._p2, lambda fd: fd.write('x'))

@@ -88,7 +88,9 @@ class TornadoReactor(PosixReactorBase):
     """
     implements(IReactorTime, IReactorFDSet)
 
-    def __init__(self, ioloop=tornado.ioloop.IOLoop.instance()):
+    def __init__(self, ioloop):
+        if not ioloop:
+            ioloop = tornado.ioloop.IOLoop.instance()
         self._ioloop = ioloop
         self._readers = {}
         self._writers = {}
@@ -241,10 +243,12 @@ class TornadoReactor(PosixReactorBase):
         self.running = True
         self._ioloop.start()
 
-def install(ioloop=tornado.ioloop.IOLoop.instance()):
+def install(ioloop=None):
     """
     Install the Tornado reactor.
     """
+    if not ioloop:
+        ioloop = tornado.ioloop.IOLoop.instance()
     reactor = TornadoReactor(ioloop)
     from twisted.internet.main import installReactor
     installReactor(reactor)
