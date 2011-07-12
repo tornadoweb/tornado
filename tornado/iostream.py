@@ -36,11 +36,12 @@ except ImportError:
 class IOStream(object):
     r"""A utility class to write to and read from a non-blocking socket.
 
-    We support three methods: write(), read_until(), and read_bytes().
-    All of the methods take callbacks (since writing and reading are
-    non-blocking and asynchronous). read_until() reads the socket until
-    a given delimiter, and read_bytes() reads until a specified number
-    of bytes have been read from the socket.
+    We support four methods: write(), read_until(), read_bytes(), and
+    read_some(). All of the methods take callbacks (since writing and
+    reading are non-blocking and asynchronous). read_until() reads the
+    socket until a given delimiter, read_bytes() reads until a specified
+    number of bytes have been read from the socket, and read_some() reads
+    until one or more bytes are available.
 
     The socket parameter may either be connected or unconnected.  For
     server operations the socket is the result of calling socket.accept().
