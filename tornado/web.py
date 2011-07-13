@@ -115,7 +115,7 @@ class RequestHandler(object):
                 self.on_connection_close)
         self.initialize(**kwargs)
 
-    def initialize(self):
+    def initialize(self, **kwargs):
         """Hook for subclass initialization.
 
         A dictionary passed as the third argument of a url spec will be
@@ -134,7 +134,8 @@ class RequestHandler(object):
                 (r'/user/(.*)', ProfileHandler, dict(database=database)),
                 ])
         """
-        pass
+        if kwargs:
+            logging.warning("Unused keywords passed to initialize(): %r", kwargs.keys())
 
     @property
     def settings(self):
