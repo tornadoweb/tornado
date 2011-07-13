@@ -1429,8 +1429,11 @@ class StaticFileHandler(RequestHandler):
     To support aggressive browser caching, if the argument "v" is given
     with the path, we set an infinite HTTP expiration header. So, if you
     want browsers to cache a file indefinitely, send them to, e.g.,
-    /static/images/myimage.png?v=xxx.
+    /static/images/myimage.png?v=xxx. Override ``get_cache_time`` method for
+    more fine-grained cache control.
     """
+    CACHE_MAX_AGE = 86400*365*10 #10 years
+
     def initialize(self, path, default_filename=None):
         self.root = os.path.abspath(path) + os.path.sep
         self.default_filename = default_filename
@@ -1464,18 +1467,20 @@ class StaticFileHandler(RequestHandler):
 
         self.set_header("Last-Modified", modified)
 
-        if self.enable_aggressive_caching(path):
-            self.set_header("Expires", datetime.datetime.utcnow() + \
-                                       datetime.timedelta(days=365*10))
-            self.set_header("Cache-Control", "max-age=" + str(86400*365*10))
-        else:
-            self.set_header("Cache-Control", "public")
-
         mime_type, encoding = mimetypes.guess_type(abspath)
         if mime_type:
             self.set_header("Content-Type", mime_type)
 
-        self.set_extra_headers(path)
+        cache_time = self.get_cache_time(path, modified, mime_type)
+
+        if cache_time > 0:
+            self.set_header("Expires", datetime.datetime.utcnow() + \
+                                       datetime.timedelta(seconds=cache_time))
+            self.set_header("Cache-Control", "max-age=" + str(cache_time))
+        else:
+            self.set_header("Cache-Control", "public")
+
+        self.set_extra_headers(path, modified, mime_type)
 
         # Check the If-Modified-Since, and don't send the result if the
         # content has not been modified
@@ -1495,13 +1500,20 @@ class StaticFileHandler(RequestHandler):
         finally:
             file.close()
 
-    def set_extra_headers(self, path):
+    def set_extra_headers(self, path, modified, mime_type):
         """For subclass to add extra headers to the response"""
         pass
 
-    def enable_aggressive_caching(self, path):
-        """Override to customize cache control behavior."""
-        return "v" in self.request.arguments
+    def get_cache_time(self, path, modified, mime_type):
+        """Override to customize cache control behavior.
+
+        Return a positive number of seconds to trigger aggressive caching or 0
+        to mark resource as cacheable, only.
+
+        By default returns cache expiry of 10 years for resources requested
+        with "v" argument.
+        """
+        return self.CACHE_MAX_AGE if "v" in self.request.arguments else 0
 
 
 class FallbackHandler(RequestHandler):
