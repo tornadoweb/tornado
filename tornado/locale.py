@@ -43,6 +43,7 @@ import csv
 import datetime
 import logging
 import os
+import re
 
 _default_locale = "en_US"
 _translations = {}
@@ -110,7 +111,7 @@ def load_translations(directory):
     for path in os.listdir(directory):
         if not path.endswith(".csv"): continue
         locale, extension = path.split(".")
-        if locale not in LOCALE_NAMES:
+        if not re.match("[a-z]+(_[A-Z]+)?$", locale):
             logging.error("Unrecognized locale %r (path: %s)", locale,
                           os.path.join(directory, path))
             continue

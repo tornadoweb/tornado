@@ -48,6 +48,12 @@ New features
 * To facilitate some advanced multi-process scenarios, ``HTTPServer`` has a
   new method ``add_sockets``, and socket-opening code is available separately
   as `tornado.netutil.bind_sockets`.
+* Windows support has been improved.  Windows is still not an officially
+  supported platform, but the test suite now passes.
+* `~tornado.iostream.IOStream` performance has been improved, especially for
+  small synchronous requests.
+* `~tornado.httpserver.HTTPServer` can now be run on a unix socket as well
+  as TCP.
 
 
 Bug fixes
@@ -60,3 +66,11 @@ Bug fixes
   a Content-Length header
 * `tornado.iostream.IOStream` should now always call the close callback
   instead of the connect callback on a connection error.
+* The ``allow_nonstandard_methods`` flag on HTTP client requests now
+  permits methods other than ``POST`` and ``PUT`` to contain bodies.
+* `tornado.locale.load_translations` now accepts any properly-formatted
+  locale name, not just those in the predefined ``LOCALE_NAMES`` list.
+* Uploading files whose names contain special characters will now work.
+* Cookie values containing special characters are now properly quoted
+  and unquoted.
+* Multi-line headers are now supported.

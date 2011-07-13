@@ -54,6 +54,7 @@ class HTTPHeaders(dict):
         # our __setitem__
         dict.__init__(self)
         self._as_list = {}
+        self._last_key = None
         self.update(*args, **kwargs)
 
     # new public methods
@@ -61,6 +62,7 @@ class HTTPHeaders(dict):
     def add(self, name, value):
         """Adds a new value for the given key."""
         norm_name = HTTPHeaders._normalize_name(name)
+        self._last_key = norm_name
         if norm_name in self:
             # bypass our override of __setitem__ since it modifies _as_list
             dict.__setitem__(self, norm_name, self[norm_name] + ',' + value)
@@ -91,8 +93,15 @@ class HTTPHeaders(dict):
         >>> h.get('content-type')
         'text/html'
         """
-        name, value = line.split(":", 1)
-        self.add(name, value.strip())
+        if line[0].isspace():
+            # continuation of a multi-line header
+            new_part = ' ' + line.lstrip()
+            self._as_list[self._last_key][-1] += new_part
+            dict.__setitem__(self, self._last_key,
+                             self[self._last_key] + new_part)
+        else:
+            name, value = line.split(":", 1)
+            self.add(name, value.strip())
 
     @classmethod
     def parse(cls, headers):
@@ -190,27 +199,59 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             logging.warning("multipart/form-data missing headers")
             continue
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
-        name_header = headers.get("Content-Disposition", "")
-        if not name_header.startswith("form-data;") or \
-           not part.endswith(b("\r\n")):
+        disp_header = headers.get("Content-Disposition", "")
+        disposition, disp_params = _parse_header(disp_header)
+        if disposition != "form-data" or not part.endswith(b("\r\n")):
             logging.warning("Invalid multipart/form-data")
             continue
         value = part[eoh + 4:-2]
-        name_values = {}
-        for name_part in name_header[10:].split(";"):
-            name, name_value = name_part.strip().split("=", 1)
-            name_values[name] = name_value.strip('"')
-        if not name_values.get("name"):
+        if not disp_params.get("name"):
             logging.warning("multipart/form-data value missing name")
             continue
-        name = name_values["name"]
-        if name_values.get("filename"):
+        name = disp_params["name"]
+        if disp_params.get("filename"):
             ctype = headers.get("Content-Type", "application/unknown")
             files.setdefault(name, []).append(dict(
-                filename=name_values["filename"], body=value,
+                filename=disp_params["filename"], body=value,
                 content_type=ctype))
         else:
             arguments.setdefault(name, []).append(value)
+
+
+# _parseparam and _parse_header are copied and modified from python2.7's cgi.py
+# The original 2.7 version of this code did not correctly support some
+# combinations of semicolons and double quotes.
+def _parseparam(s):
+    while s[:1] == ';':
+        s = s[1:]
+        end = s.find(';')
+        while end > 0 and (s.count('"', 0, end) - s.count('\\"', 0, end)) % 2:
+            end = s.find(';', end + 1)
+        if end < 0:
+            end = len(s)
+        f = s[:end]
+        yield f.strip()
+        s = s[end:]
+
+def _parse_header(line):
+    """Parse a Content-type like header.
+
+    Return the main content-type and a dictionary of options.
+
+    """
+    parts = _parseparam(';' + line)
+    key = parts.next()
+    pdict = {}
+    for p in parts:
+        i = p.find('=')
+        if i >= 0:
+            name = p[:i].strip().lower()
+            value = p[i+1:].strip()
+            if len(value) >= 2 and value[0] == value[-1] == '"':
+                value = value[1:-1]
+                value = value.replace('\\\\', '\\').replace('\\"', '"')
+            pdict[name] = value
+    return key, pdict
 
 
 def doctests():

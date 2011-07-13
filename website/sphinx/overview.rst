@@ -1095,13 +1095,3 @@ See the `appengine example application
 <https://github.com/facebook/tornado/tree/master/demos/appengine>`_ for a
 full-featured AppEngine app built on Tornado.
 
-Caveats and support
-~~~~~~~~~~~~~~~~~~~
-
-Because FriendFeed and other large users of Tornado run `behind
-nginx <#running-tornado-in-production>`_ or Apache proxies, Tornado's
-HTTP server currently does not attempt to handle multi-line headers and
-some types of malformed input.
-
-You can discuss Tornado and report bugs on `the Tornado developer
-mailing list <http://groups.google.com/group/python-tornado>`_.

@@ -293,7 +293,7 @@ class RequestHandler(object):
     def cookies(self):
         """A dictionary of Cookie.Morsel objects."""
         if not hasattr(self, "_cookies"):
-            self._cookies = Cookie.BaseCookie()
+            self._cookies = Cookie.SimpleCookie()
             if "Cookie" in self.request.headers:
                 try:
                     self._cookies.load(
@@ -325,7 +325,7 @@ class RequestHandler(object):
             raise ValueError("Invalid cookie %r: %r" % (name, value))
         if not hasattr(self, "_new_cookies"):
             self._new_cookies = []
-        new_cookie = Cookie.BaseCookie()
+        new_cookie = Cookie.SimpleCookie()
         self._new_cookies.append(new_cookie)
         new_cookie[name] = value
         if domain:
@@ -1796,7 +1796,8 @@ class URLSpec(object):
             pattern += '$'
         self.regex = re.compile(pattern)
         assert len(self.regex.groupindex) in (0, self.regex.groups), \
-            "groups in url regexes must either be all named or all positional"
+            ("groups in url regexes must either be all named or all "
+             "positional: %r" % self.regex.pattern)
         self.handler_class = handler_class
         self.kwargs = kwargs
         self.name = name

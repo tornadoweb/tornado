@@ -73,11 +73,19 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
                 self.set_cookie("unicode_args", "blah", domain=u"foo.com",
                                 path=u"/foo")
 
+        class SetCookieSpecialCharHandler(RequestHandler):
+            def get(self):
+                self.set_cookie("equals", "a=b")
+                self.set_cookie("semicolon", "a;b")
+                self.set_cookie("quote", 'a"b')
+
 
         return Application([
                 ("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
-                ("/set_domain", SetCookieDomainHandler)])
+                ("/set_domain", SetCookieDomainHandler),
+                ("/special_char", SetCookieSpecialCharHandler),
+                ])
 
     def test_set_cookie(self):
         response = self.fetch("/set")
@@ -90,10 +98,36 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/get", headers={"Cookie": "foo=bar"})
         self.assertEqual(response.body, b("bar"))
 
+        response = self.fetch("/get", headers={"Cookie": 'foo="bar"'})
+        self.assertEqual(response.body, b("bar"))
+
     def test_set_cookie_domain(self):
         response = self.fetch("/set_domain")
         self.assertEqual(response.headers.get_list("Set-Cookie"),
                          ["unicode_args=blah; Domain=foo.com; Path=/foo"])
+
+    def test_cookie_special_char(self):
+        response = self.fetch("/special_char")
+        headers = response.headers.get_list("Set-Cookie")
+        self.assertEqual(len(headers), 3)
+        self.assertEqual(headers[0], 'equals="a=b"; Path=/')
+        # python 2.7 octal-escapes the semicolon; older versions leave it alone
+        self.assertTrue(headers[1] in ('semicolon="a;b"; Path=/',
+                                       'semicolon="a\\073b"; Path=/'),
+                        headers[1])
+        self.assertEqual(headers[2], 'quote="a\\"b"; Path=/')
+
+        data = [('foo=a=b', 'a=b'),
+                ('foo="a=b"', 'a=b'),
+                ('foo="a;b"', 'a;b'),
+                #('foo=a\\073b', 'a;b'),  # even encoded, ";" is a delimiter
+                ('foo="a\\073b"', 'a;b'),
+                ('foo="a\\"b"', 'a"b'),
+                ]
+        for header, expected in data:
+            logging.info("trying %r", header)
+            response = self.fetch("/get", headers={"Cookie": header})
+            self.assertEqual(response.body, utf8(expected))
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):

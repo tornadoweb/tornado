@@ -21,6 +21,7 @@ import os
 import socket
 import stat
 
+from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
@@ -102,3 +103,25 @@ if hasattr(socket, 'AF_UNIX'):
         os.chmod(file, mode)
         sock.listen(backlog)
         return sock
+
+def add_accept_handler(sock, callback, io_loop=None):
+    """Adds an ``IOLoop`` event handler to accept new connections on ``sock``.
+
+    When a connection is accepted, ``callback(connection, address)`` will
+    be run (``connection`` is a socket object, and ``address`` is the
+    address of the other end of the connection).  Note that this signature
+    is different from the ``callback(fd, events)`` signature used for
+    ``IOLoop`` handlers.
+    """
+    if io_loop is None:
+        io_loop = IOLoop.instance()
+    def accept_handler(fd, events):
+        while True:
+            try:
+                connection, address = sock.accept()
+            except socket.error, e:
+                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                    return
+                raise
+            callback(connection, address)
+    io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
