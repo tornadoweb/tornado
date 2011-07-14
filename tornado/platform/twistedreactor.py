@@ -18,12 +18,14 @@ A twisted-style reactor for the Tornado IOLoop.
 
 To use it, add the following to your twisted application:
 
-import tornado.twisted.reactor
-tornado.twisted.reactor.install()
+import tornado.platform.twistedreactor
+tornado.platform.twistedreactor.install()
 from twisted.internet import reactor
 """
 
-import errno, functools, sys
+import functools
+import logging
+import sys
 import time
 
 from twisted.internet.base import DelayedCall
@@ -35,6 +37,7 @@ from zope.interface import implements
 
 import tornado
 import tornado.ioloop
+from tornado.stack_context import NullContext
 from tornado.ioloop import IOLoop
 
 class TornadoDelayedCall(object):
@@ -57,7 +60,7 @@ class TornadoDelayedCall(object):
         try:
             self._func()
         except:
-            print "reactor.py _called caught exception: %s" % sys.exc_info()[0]
+            logging.error("_called caught exception", exc_info=True)
 
     def getTime(self):
         return self._time
@@ -96,7 +99,7 @@ class TornadoReactor(PosixReactorBase):
         self._writers = {}
         self._fds = {} # a map of fd to a (reader, writer) tuple
         self._delayedCalls = {}
-        # self._waker = None
+        self._running = False
         PosixReactorBase.__init__(self)
 
     # IReactorTime
@@ -144,6 +147,9 @@ class TornadoReactor(PosixReactorBase):
         """
         Add a FileDescriptor for notification of data available to read.
         """
+        if reader in self._readers:
+            # Don't add the reader if it's already there
+            return
         self._readers[reader] = True
         fd = reader.fileno()
         if fd in self._fds:
@@ -154,13 +160,17 @@ class TornadoReactor(PosixReactorBase):
                 # update it for read events as well.
                 self._ioloop.update_handler(fd, IOLoop.READ | IOLoop.WRITE)
         else:
-            self._fds[fd] = (reader, None)
-            self._ioloop.add_handler(fd, self._invoke_callback, IOLoop.READ)
+            with NullContext():
+                self._fds[fd] = (reader, None)
+                self._ioloop.add_handler(fd, self._invoke_callback,
+                                         IOLoop.READ)
 
     def addWriter(self, writer):
         """
         Add a FileDescriptor for notification of data available to write.
         """
+        if writer in self._writers:
+            return
         self._writers[writer] = True
         fd = writer.fileno()
         if fd in self._fds:
@@ -171,8 +181,10 @@ class TornadoReactor(PosixReactorBase):
                 # update it for write events as well.
                 self._ioloop.update_handler(fd, IOLoop.READ | IOLoop.WRITE)
         else:
-            self._fds[fd] = (None, writer)
-            self._ioloop.add_handler(fd, self._invoke_callback, IOLoop.WRITE)
+            with NullContext():
+                self._fds[fd] = (None, writer)
+                self._ioloop.add_handler(fd, self._invoke_callback,
+                                         IOLoop.WRITE)
 
     def removeReader(self, reader):
         """
@@ -227,21 +239,38 @@ class TornadoReactor(PosixReactorBase):
         """
         Implement L{IReactorCore.stop}.
         """
+        self._running = False
         PosixReactorBase.stop(self)
         self.runUntilCurrent()
-        self._ioloop.stop()
+        try:
+            self._ioloop.stop()
+            self._ioloop.close()
+        except:
+            # Ignore any exceptions thrown by IOLoop
+            pass
 
     def crash(self):
+        if not self._running:
+            return
+        self._running = False
         PosixReactorBase.crash(self)
         self.runUntilCurrent()
-        self._ioloop.stop()
+        try:
+            self._ioloop.stop()
+            self._ioloop.close()
+        except:
+            # Ignore any exceptions thrown by IOLoop
+            pass
 
     def doIteration(self, delay):
         raise NotImplementedError("doIteration")
 
     def mainLoop(self):
-        self.running = True
+        self._running = True
         self._ioloop.start()
+
+    def run(self):
+        PosixReactorBase.run(self, installSignalHandlers=False)
 
 def install(ioloop=None):
     """
