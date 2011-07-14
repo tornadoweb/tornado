@@ -581,8 +581,15 @@ class RequestHandler(object):
         return template.Loader(template_path, **kwargs)
 
 
-    def flush(self, include_footers=False):
-        """Flushes the current output buffer to the network."""
+    def flush(self, include_footers=False, callback=None):
+        """Flushes the current output buffer to the network.
+        
+        The ``callback`` argument, if given, can be used for flow control:
+        it will be run when all flushed data has been written to the socket.
+        Note that only one flush callback can be outstanding at a time;
+        if another flush occurs before the previous flush's callback
+        has been run, the previous callback will be discarded.
+        """
         if self.application._wsgi:
             raise Exception("WSGI applications do not support flush()")
 
@@ -601,11 +608,11 @@ class RequestHandler(object):
 
         # Ignore the chunk and only write the headers for HEAD requests
         if self.request.method == "HEAD":
-            if headers: self.request.write(headers)
+            if headers: self.request.write(headers, callback=callback)
             return
 
         if headers or chunk:
-            self.request.write(headers + chunk)
+            self.request.write(headers + chunk, callback=callback)
 
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
