@@ -156,11 +156,14 @@ class Reader:
 
     def logPrefix(self): return "Reader"
 
+    def close(self):
+        self._fd.close()
+
     def fileno(self):
         return self._fd.fileno()
 
     def connectionLost(self, reason):
-        self._fd.close()
+        self.close()
 
     def doRead(self):
         self._callback(self._fd)
@@ -174,11 +177,14 @@ class Writer:
 
     def logPrefix(self): return "Writer"
 
+    def close(self):
+        self._fd.close()
+
     def fileno(self):
         return self._fd.fileno()
 
     def connectionLost(self, reason):
-        self._fd.close()
+        self.close()
 
     def doWrite(self):
         self._callback(self._fd)
@@ -214,20 +220,48 @@ class ReactorReaderWriterTest(unittest.TestCase):
         self._reader = Reader(self._p1, checkReadInput)
         self._writer = Writer(self._p2, writeOnce)
 
-        # Test that adding and removing the writer doesn't cause
-        # unintended effects.
-        self._reactor.addWriter(self._writer)
-        self._reactor.removeWriter(self._writer)
         self._reactor.addWriter(self._writer)
 
-        # Test that adding and removing the reader doesn't cause
-        # unintended effects.
+        # Test that adding the reader twice adds it only once to
+        # IOLoop.
         self._reactor.addReader(self._reader)
-        self._reactor.removeReader(self._reader)
         self._reactor.addReader(self._reader)
 
     def testReadWrite(self):
         self._reactor.callWhenRunning(self._testReadWrite)
+        self._reactor.run()
+
+    def _testNoWriter(self):
+        """
+        In this test we have no writer. Make sure the reader doesn't
+        read anything.
+        """
+        def checkReadInput(fd):
+            self.fail("Must not be called.")
+
+        def stopTest():
+            # Close the writer here since the IOLoop doesn't know
+            # about it.
+            self._writer.close()
+            self._reactor.stop()
+        self._reader = Reader(self._p1, checkReadInput)
+
+        # We create a writer, but it should never be invoked.
+        self._writer = Writer(self._p2, lambda fd: fd.write('x'))
+
+        # Test that adding and removing the writer leaves us with no writer.
+        self._reactor.addWriter(self._writer)
+        self._reactor.removeWriter(self._writer)
+
+        # Test that adding and removing the reader doesn't cause
+        # unintended effects.
+        self._reactor.addReader(self._reader)
+
+        # Wake up after a moment and stop the test
+        self._reactor.callLater(0.001, stopTest)
+
+    def testNoWriter(self):
+        self._reactor.callWhenRunning(self._testNoWriter)
         self._reactor.run()
 
 if twisted is None:
