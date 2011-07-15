@@ -1494,11 +1494,9 @@ class StaticFileHandler(RequestHandler):
 
         if not include_body:
             return
-        file = open(abspath, "rb")
-        try:
+
+        with open(abspath, "rb") as file:
             self.write(file.read())
-        finally:
-            file.close()
 
     def set_extra_headers(self, path, modified, mime_type):
         """For subclass to add extra headers to the response"""
