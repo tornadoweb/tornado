@@ -269,9 +269,6 @@ class TornadoReactor(PosixReactorBase):
         self._running = True
         self._ioloop.start()
 
-    def run(self):
-        PosixReactorBase.run(self, installSignalHandlers=False)
-
 def install(ioloop=None):
     """
     Install the Tornado reactor.
