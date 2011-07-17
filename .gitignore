@@ -6,3 +6,4 @@ dist/
 MANIFEST
 tornado.egg-info
 _auto2to3*
+.tox

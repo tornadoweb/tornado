@@ -1,2 +1,7 @@
 recursive-include demos *.py *.yaml *.html *.css *.js *.xml *.sql README
 include tornado/epoll.c
+include tornado/ca-certificates.crt
+include tornado/test/README
+include tornado/test/test.crt
+include tornado/test/test.key
+global-exclude _auto2to3*
