@@ -581,8 +581,15 @@ class RequestHandler(object):
         return template.Loader(template_path, **kwargs)
 
 
-    def flush(self, include_footers=False):
-        """Flushes the current output buffer to the network."""
+    def flush(self, include_footers=False, callback=None):
+        """Flushes the current output buffer to the network.
+        
+        The ``callback`` argument, if given, can be used for flow control:
+        it will be run when all flushed data has been written to the socket.
+        Note that only one flush callback can be outstanding at a time;
+        if another flush occurs before the previous flush's callback
+        has been run, the previous callback will be discarded.
+        """
         if self.application._wsgi:
             raise Exception("WSGI applications do not support flush()")
 
@@ -601,11 +608,11 @@ class RequestHandler(object):
 
         # Ignore the chunk and only write the headers for HEAD requests
         if self.request.method == "HEAD":
-            if headers: self.request.write(headers)
+            if headers: self.request.write(headers, callback=callback)
             return
 
         if headers or chunk:
-            self.request.write(headers + chunk)
+            self.request.write(headers + chunk, callback=callback)
 
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
@@ -1429,8 +1436,11 @@ class StaticFileHandler(RequestHandler):
     To support aggressive browser caching, if the argument "v" is given
     with the path, we set an infinite HTTP expiration header. So, if you
     want browsers to cache a file indefinitely, send them to, e.g.,
-    /static/images/myimage.png?v=xxx.
+    /static/images/myimage.png?v=xxx. Override ``get_cache_time`` method for
+    more fine-grained cache control.
     """
+    CACHE_MAX_AGE = 86400*365*10 #10 years
+
     def initialize(self, path, default_filename=None):
         self.root = os.path.abspath(path) + os.path.sep
         self.default_filename = default_filename
@@ -1463,15 +1473,19 @@ class StaticFileHandler(RequestHandler):
         modified = datetime.datetime.fromtimestamp(stat_result[stat.ST_MTIME])
 
         self.set_header("Last-Modified", modified)
-        if "v" in self.request.arguments:
-            self.set_header("Expires", datetime.datetime.utcnow() + \
-                                       datetime.timedelta(days=365*10))
-            self.set_header("Cache-Control", "max-age=" + str(86400*365*10))
-        else:
-            self.set_header("Cache-Control", "public")
+
         mime_type, encoding = mimetypes.guess_type(abspath)
         if mime_type:
             self.set_header("Content-Type", mime_type)
+
+        cache_time = self.get_cache_time(path, modified, mime_type)
+
+        if cache_time > 0:
+            self.set_header("Expires", datetime.datetime.utcnow() + \
+                                       datetime.timedelta(seconds=cache_time))
+            self.set_header("Cache-Control", "max-age=" + str(cache_time))
+        else:
+            self.set_header("Cache-Control", "public")
 
         self.set_extra_headers(path)
 
@@ -1496,6 +1510,17 @@ class StaticFileHandler(RequestHandler):
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
         pass
+
+    def get_cache_time(self, path, modified, mime_type):
+        """Override to customize cache control behavior.
+
+        Return a positive number of seconds to trigger aggressive caching or 0
+        to mark resource as cacheable, only.
+
+        By default returns cache expiry of 10 years for resources requested
+        with "v" argument.
+        """
+        return self.CACHE_MAX_AGE if "v" in self.request.arguments else 0
 
 
 class FallbackHandler(RequestHandler):

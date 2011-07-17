@@ -297,6 +297,22 @@ class OptionalPathHandler(RequestHandler):
     def get(self, path):
         self.write({"path": path})
 
+class FlowControlHandler(RequestHandler):
+    # These writes are too small to demonstrate real flow control,
+    # but at least it shows that the callbacks get run.
+    @asynchronous
+    def get(self):
+        self.write("1")
+        self.flush(callback=self.step2)
+
+    def step2(self):
+        self.write("2")
+        self.flush(callback=self.step3)
+
+    def step3(self):
+        self.write("3")
+        self.finish()
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         loader = DictLoader({
@@ -318,6 +334,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/linkify", LinkifyHandler),
             url("/uimodule_resources", UIModuleResourceHandler),
             url("/optional_path/(.+)?", OptionalPathHandler),
+            url("/flow_control", FlowControlHandler),
             ]
         return Application(urls,
                            template_loader=loader,
@@ -394,6 +411,9 @@ js_embed()
                          {u"path": u"foo"})
         self.assertEqual(self.fetch_json("/optional_path/"),
                          {u"path": None})
+
+    def test_flow_control(self):
+        self.assertEqual(self.fetch("/flow_control").body, b("123"))
 
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):

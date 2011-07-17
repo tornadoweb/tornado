@@ -292,11 +292,13 @@ class HTTPConnection(object):
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
+        self._write_callback = None
 
-    def write(self, chunk):
+    def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
         assert self._request, "Request closed"
         if not self.stream.closed():
+            self._write_callback = stack_context.wrap(callback)
             self.stream.write(chunk, self._on_write_complete)
 
     def finish(self):
@@ -307,6 +309,10 @@ class HTTPConnection(object):
             self._finish_request()
 
     def _on_write_complete(self):
+        if self._write_callback is not None:
+            callback = self._write_callback
+            self._write_callback = None
+            callback()            
         if self._request_finished:
             self._finish_request()
 
@@ -503,10 +509,10 @@ class HTTPRequest(object):
         """Returns True if this request supports HTTP/1.1 semantics"""
         return self.version == "HTTP/1.1"
 
-    def write(self, chunk):
+    def write(self, chunk, callback=None):
         """Writes the given chunk to the response stream."""
         assert isinstance(chunk, bytes_type)
-        self.connection.write(chunk)
+        self.connection.write(chunk, callback=callback)
 
     def finish(self):
         """Finishes this HTTP request on the open connection."""

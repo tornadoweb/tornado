@@ -50,7 +50,11 @@ var updater = {
     socket: null,
 
     start: function() {
-	updater.socket = new WebSocket("ws://localhost:8888/chatsocket");
+        if ("WebSocket" in window) {
+	    updater.socket = new WebSocket("ws://localhost:8888/chatsocket");
+        } else {
+            updater.socket = new MozWebSocket("ws://localhost:8888/chatsocket");
+        }
 	updater.socket.onmessage = function(event) {
 	    updater.showMessage(JSON.parse(event.data));
 	}
