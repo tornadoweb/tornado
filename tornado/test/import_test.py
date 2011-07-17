@@ -9,7 +9,6 @@ class ImportTest(unittest.TestCase):
         import tornado.autoreload
         # import tornado.curl_httpclient  # depends on pycurl
         # import tornado.database  # depends on MySQLdb
-        # import tornado.platform.twistedreactor # depends on twisted
         import tornado.escape
         import tornado.httpclient
         import tornado.httpserver
@@ -19,6 +18,7 @@ class ImportTest(unittest.TestCase):
         import tornado.locale
         import tornado.options
         import tornado.netutil
+        # import tornado.platform.twisted # depends on twisted
         import tornado.process
         import tornado.simple_httpclient
         import tornado.stack_context

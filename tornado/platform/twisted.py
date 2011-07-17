@@ -18,8 +18,8 @@ A twisted-style reactor for the Tornado IOLoop.
 
 To use it, add the following to your twisted application:
 
-import tornado.platform.twistedreactor
-tornado.platform.twistedreactor.install()
+import tornado.platform.twisted
+tornado.platform.twisted.install()
 from twisted.internet import reactor
 """
 

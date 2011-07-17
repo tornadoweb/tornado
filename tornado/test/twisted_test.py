@@ -27,7 +27,7 @@ import unittest
 try:
     import twisted
     from twisted.internet.interfaces import IReadDescriptor, IWriteDescriptor
-    from tornado.platform.twistedreactor import TornadoReactor
+    from tornado.platform.twisted import TornadoReactor
     from zope.interface import implements
 except ImportError:
     twisted = None
@@ -304,7 +304,7 @@ else:
         except (ImportError, AttributeError):
             continue
         class TornadoTest(test):
-            _reactors = ["tornado.platform.twistedreactor._TestReactor"]
+            _reactors = ["tornado.platform.twisted._TestReactor"]
         TornadoTest.__name__ = test.__name__
         globals().update(TornadoTest.makeTestCaseClasses())
 
