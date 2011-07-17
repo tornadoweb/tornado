@@ -116,7 +116,9 @@ class ReactorCallFromThreadTest(unittest.TestCase):
         self._thread.join()
 
     def _newThreadRun(self):
-        self.assertEqual(self._thread.ident, thread.get_ident())
+        self.assertNotEqual(self._mainThread, thread.get_ident())
+        if hasattr(self._thread, 'ident'):  # new in python 2.6
+            self.assertEqual(self._thread.ident, thread.get_ident())
         self._reactor.callFromThread(self._fnCalledFromThread)
 
     def _fnCalledFromThread(self):

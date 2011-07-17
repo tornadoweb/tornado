@@ -23,6 +23,8 @@ tornado.platform.twistedreactor.install()
 from twisted.internet import reactor
 """
 
+from __future__ import with_statement, absolute_import
+
 import functools
 import logging
 import sys
