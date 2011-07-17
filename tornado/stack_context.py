@@ -82,7 +82,7 @@ class StackContext(object):
     def __enter__(self):
         self.old_contexts = _state.contexts
         # _state.contexts is a tuple of (class, arg) pairs
-        _state.contexts = (self.old_contexts + 
+        _state.contexts = (self.old_contexts +
                            ((StackContext, self.context_factory),))
         try:
             self.context = self.context_factory()
@@ -143,7 +143,7 @@ class _StackContextWrapper(functools.partial):
     pass
 
 def wrap(fn):
-    '''Returns a callable object that will resore the current StackContext
+    '''Returns a callable object that will restore the current StackContext
     when executed.
 
     Use this whenever saving a callback to be executed later in a
