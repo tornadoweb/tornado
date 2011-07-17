@@ -382,7 +382,7 @@ class WebSocketProtocol8(WebSocketProtocol):
 
     def _write_frame(self, fin, opcode, data):
         if fin:
-            finbit = 0b10000000
+            finbit = 0x80
         else:
             finbit = 0
         frame = struct.pack("B", finbit | opcode)
@@ -414,12 +414,12 @@ class WebSocketProtocol8(WebSocketProtocol):
 
     def _on_frame_start(self, data):
         header, payloadlen = struct.unpack("BB", data)
-        self._final_frame = header & 0b10000000
-        self._frame_opcode = header & 0b1111
-        if not (payloadlen & 0b10000000):
+        self._final_frame = header & 0x80
+        self._frame_opcode = header & 0xf
+        if not (payloadlen & 0x80):
             # Unmasked frame -> abort connection
             self._abort()
-        payloadlen = payloadlen & 0b1111111
+        payloadlen = payloadlen & 0x7f
         if payloadlen < 126:
             self._frame_length = payloadlen
             self.stream.read_bytes(4, self._on_masking_key)
