@@ -480,7 +480,7 @@ class WebSocketProtocol8(WebSocketProtocol):
             self.stream.close()
         elif opcode == 0x9:
             # Ping
-            self._write_frame(True, 0xA, b(""))
+            self._write_frame(True, 0xA, data)
         elif opcode == 0xA:
             # Pong
             pass
