@@ -36,6 +36,7 @@ except ImportError:
 
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
+from tornado.util import import_object
 
 class ReactorWhenRunningTest(unittest.TestCase):
     def setUp(self):
@@ -273,6 +274,39 @@ if twisted is None:
     del ReactorCallFromThreadTest
     del ReactorCallInThread
     del ReactorReaderWriterTest
+else:
+    # Import and run as much of twisted's test suite as possible.
+    # This is unfortunately rather dependent on implementation details,
+    # but there doesn't appear to be a clean all-in-one conformance test
+    # suite for reactors.
+    # This is a list of all test suites using the ReactorBuilder
+    # available in Twisted 11.0.0.  Tests that do not currently pass
+    # with the TornadoReactor are commented out.
+    twisted_tests = [
+        'twisted.internet.test.test_core.ObjectModelIntegrationTest',
+        #'twisted.internet.test.test_core.SystemEventTestsBuilder',
+        'twisted.internet.test.test_fdset.ReactorFDSetTestsBuilder',
+        #'twisted.internet.test.test_process.ProcessTestsBuilder',
+        #'twisted.internet.test.test_process.PTYProcessTestsBuilder',
+        #'twisted.internet.test.test_tcp.TCPClientTestsBuilder',
+        'twisted.internet.test.test_tcp.TCPPortTestsBuilder',
+        'twisted.internet.test.test_tcp.TCPConnectionTestsBuilder',
+        'twisted.internet.test.test_threads.ThreadTestsBuilder',
+        'twisted.internet.test.test_time.TimeTestsBuilder',
+        #'twisted.internet.test.test_tls.SSLClientTestsMixin',
+        'twisted.internet.test.test_udp.UDPServerTestsBuilder',
+        #'twisted.internet.test.test_unix.UNIXTestsBuilder',
+        #'twisted.internet.test.test_unix.UNIXDatagramTestsBuilder',
+        ]
+    for test_name in twisted_tests:
+        try:
+            test = import_object(test_name)
+        except (ImportError, AttributeError):
+            continue
+        class TornadoTest(test):
+            _reactors = ["tornado.platform.twistedreactor._TestReactor"]
+        TornadoTest.__name__ = test.__name__
+        globals().update(TornadoTest.makeTestCaseClasses())
 
 if __name__ == "__main__":
     unittest.main()

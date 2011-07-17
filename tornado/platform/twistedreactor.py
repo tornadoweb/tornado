@@ -93,7 +93,7 @@ class TornadoReactor(PosixReactorBase):
     """
     implements(IReactorTime, IReactorFDSet)
 
-    def __init__(self, ioloop):
+    def __init__(self, ioloop=None):
         if not ioloop:
             ioloop = tornado.ioloop.IOLoop.instance()
         self._ioloop = ioloop
@@ -102,6 +102,7 @@ class TornadoReactor(PosixReactorBase):
         self._fds = {} # a map of fd to a (reader, writer) tuple
         self._delayedCalls = {}
         self._running = False
+        self._closed = False
         PosixReactorBase.__init__(self)
 
     # IReactorTime
@@ -195,6 +196,7 @@ class TornadoReactor(PosixReactorBase):
         fd = reader.fileno()
         if reader in self._readers:
             del self._readers[reader]
+            if self._closed: return
             (_, writer) = self._fds[fd]
             if writer:
                 # We have a writer so we need to update the IOLoop for
@@ -215,6 +217,7 @@ class TornadoReactor(PosixReactorBase):
         fd = writer.fileno()
         if writer in self._writers:
             del self._writers[writer]
+            if self._closed: return
             (reader, _) = self._fds[fd]
             if reader:
                 # We have a reader so we need to update the IOLoop for
@@ -250,6 +253,7 @@ class TornadoReactor(PosixReactorBase):
         except:
             # Ignore any exceptions thrown by IOLoop
             pass
+        self._closed = True
 
     def crash(self):
         if not self._running:
@@ -263,6 +267,7 @@ class TornadoReactor(PosixReactorBase):
         except:
             # Ignore any exceptions thrown by IOLoop
             pass
+        self._closed = True
 
     def doIteration(self, delay):
         raise NotImplementedError("doIteration")
@@ -270,6 +275,25 @@ class TornadoReactor(PosixReactorBase):
     def mainLoop(self):
         self._running = True
         self._ioloop.start()
+
+class _TestReactor(TornadoReactor):
+    """Subclass of TornadoReactor for use in unittests.
+
+    This can't go in the test.py file because of import-order dependencies
+    with the twisted reactor test builder.
+    """
+    def __init__(self):
+        # always use a new ioloop
+        super(_TestReactor, self).__init__(IOLoop())
+
+    def listenTCP(self, port, factory, backlog=50, interface=''):
+        # default to localhost to avoid firewall prompts on the mac
+        if not interface:
+            interface = '127.0.0.1'
+        return super(_TestReactor, self).listenTCP(
+            port, factory, backlog=backlog, interface=interface)
+
+
 
 def install(ioloop=None):
     """
