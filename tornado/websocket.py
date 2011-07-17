@@ -70,6 +70,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         tornado.web.RequestHandler.__init__(self, application, request,
                                             **kwargs)
         self.stream = request.connection.stream
+        self.ws_connection = None
 
     def _execute(self, transforms, *args, **kwargs):
         self.open_args = args
@@ -127,8 +128,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
         raise Exception("Method not supported for Web Sockets")
 
     def on_connection_close(self):
-        self.ws_connection.client_terminated = True
-        self.on_close()
+        if self.ws_connection:
+            self.ws_connection.client_terminated = True
+            self.on_close()
 
     def _set_client_terminated(self, value):
         self.ws_connection.client_terminated = value
