@@ -1487,7 +1487,7 @@ class StaticFileHandler(RequestHandler):
         else:
             self.set_header("Cache-Control", "public")
 
-        self.set_extra_headers(path, modified, mime_type)
+        self.set_extra_headers(path)
 
         # Check the If-Modified-Since, and don't send the result if the
         # content has not been modified
@@ -1507,7 +1507,7 @@ class StaticFileHandler(RequestHandler):
         finally:
             file.close()
 
-    def set_extra_headers(self, path, modified, mime_type):
+    def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
         pass
 
