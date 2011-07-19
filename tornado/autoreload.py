@@ -197,4 +197,12 @@ def main():
     
 
 if __name__ == "__main__":
+    # If this module is run with "python -m tornado.autoreload", the current
+    # directory is automatically prepended to sys.path, but not if it is
+    # run as "path/to/tornado/autoreload.py".  The processing for "-m" rewrites
+    # the former to the latter, so subsequent executions won't have the same
+    # path as the original.  Modify os.environ here to ensure that the
+    # re-executed process will have the same path.
+    if sys.path[0] == '':
+        os.environ["PYTHONPATH"] = ".:" + os.environ.get("PYTHONPATH", "")
     main()
