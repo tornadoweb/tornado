@@ -111,23 +111,29 @@ class AsyncHTTPClient(object):
     are deprecated.  The implementation subclass as well as arguments to
     its constructor can be set with the static method configure()
     """
-    _async_clients = weakref.WeakKeyDictionary()
     _impl_class = None
     _impl_kwargs = None
+
+    @classmethod
+    def _async_clients(cls):
+        assert cls is not AsyncHTTPClient, "should only be called on subclasses"
+        if not hasattr(cls, '_async_client_dict'):
+            cls._async_client_dict = weakref.WeakKeyDictionary()
+        return cls._async_client_dict
 
     def __new__(cls, io_loop=None, max_clients=10, force_instance=False, 
                 **kwargs):
         io_loop = io_loop or IOLoop.instance()
-        if io_loop in cls._async_clients and not force_instance:
-            return cls._async_clients[io_loop]
+        if cls is AsyncHTTPClient:
+            if cls._impl_class is None:
+                from tornado.simple_httpclient import SimpleAsyncHTTPClient
+                AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
+            impl = AsyncHTTPClient._impl_class
         else:
-            if cls is AsyncHTTPClient:
-                if cls._impl_class is None:
-                    from tornado.simple_httpclient import SimpleAsyncHTTPClient
-                    AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
-                impl = cls._impl_class
-            else:
-                impl = cls
+            impl = cls
+        if io_loop in impl._async_clients() and not force_instance:
+            return impl._async_clients()[io_loop]
+        else:
             instance = super(AsyncHTTPClient, cls).__new__(impl)
             args = {}
             if cls._impl_kwargs:
@@ -135,7 +141,7 @@ class AsyncHTTPClient(object):
             args.update(kwargs)
             instance.initialize(io_loop, max_clients, **args)
             if not force_instance:
-                cls._async_clients[io_loop] = instance
+                impl._async_clients()[io_loop] = instance
             return instance
 
     def close(self):
@@ -144,8 +150,8 @@ class AsyncHTTPClient(object):
         create and destroy http clients.  No other methods may be called
         on the AsyncHTTPClient after close().
         """
-        if self._async_clients.get(self.io_loop) is self:
-            del self._async_clients[self.io_loop]
+        if self._async_clients().get(self.io_loop) is self:
+            del self._async_clients()[self.io_loop]
 
     def fetch(self, request, callback, **kwargs):
         """Executes a request, calling callback with an `HTTPResponse`.

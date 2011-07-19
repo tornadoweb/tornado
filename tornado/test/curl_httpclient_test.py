@@ -10,7 +10,10 @@ if pycurl is not None:
 
 class CurlHTTPClientCommonTestCase(HTTPClientCommonTestCase):
     def get_http_client(self):
-        return CurlAsyncHTTPClient(io_loop=self.io_loop)
+        client = CurlAsyncHTTPClient(io_loop=self.io_loop)
+        # make sure AsyncHTTPClient magic doesn't give us the wrong class
+        self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
+        return client
 
 # Remove the base class from our namespace so the unittest module doesn't
 # try to run it again.

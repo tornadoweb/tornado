@@ -9,8 +9,10 @@ from tornado.web import RequestHandler, Application, asynchronous, url
 
 class SimpleHTTPClientCommonTestCase(HTTPClientCommonTestCase):
     def get_http_client(self):
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop,
-                                     force_instance=True)
+        client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
+                                       force_instance=True)
+        self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
+        return client
 
 # Remove the base class from our namespace so the unittest module doesn't
 # try to run it again.
