@@ -7,7 +7,9 @@ import binascii
 
 from tornado.escape import utf8
 from tornado.httpclient import AsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.iostream import IOStream
+from tornado import netutil
+from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler, url
 
@@ -100,6 +102,33 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
                               streaming_callback=chunks.append)
         self.assertEqual(chunks, [b("asdf"), b("qwer")])
         self.assertFalse(response.body)
+
+    def test_chunked_close(self):
+        # test case in which chunks spread read-callback processing
+        # over several ioloop iterations, but the connection is already closed.
+        port = get_unused_port()
+        (sock,) = netutil.bind_sockets(port, address="127.0.0.1")
+        def accept_callback(conn, address):
+            # fake an HTTP server using chunked encoding where the final chunks
+            # and connection close all happen at once
+            stream = IOStream(conn, io_loop=self.io_loop)
+            stream.write(b("""\
+HTTP/1.1 200 OK
+Transfer-Encoding: chunked
+
+1
+1
+1
+2
+0
+
+""").replace(b("\n"), b("\r\n")), callback=stream.close)
+        netutil.add_accept_handler(sock, accept_callback, self.io_loop)
+        self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
+        resp = self.wait()
+        resp.rethrow()
+        self.assertEqual(resp.body, b("12"))
+        
 
     def test_basic_auth(self):
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",

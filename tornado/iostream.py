@@ -199,8 +199,12 @@ class IOStream(object):
                 self.io_loop.remove_handler(self.socket.fileno())
             self.socket.close()
             self.socket = None
-            if self._close_callback:
-                self._run_callback(self._close_callback)
+            if self._close_callback and self._pending_callbacks == 0:
+                # if there are pending callbacks, don't run the close callback
+                # until they're done (see _maybe_add_error_handler)
+                cb = self._close_callback
+                self._close_callback = None
+                self._run_callback(cb)
 
     def reading(self):
         """Returns true if we are currently reading from the stream."""
@@ -441,7 +445,13 @@ class IOStream(object):
 
     def _maybe_add_error_listener(self):
         if self._state is None and self._pending_callbacks == 0:
-            self._add_io_state(0)
+            if self.socket is None:
+                cb = self._close_callback
+                if cb is not None:
+                    self._close_callback = None
+                    self._run_callback(cb)
+            else:
+                self._add_io_state(0)
 
     def _add_io_state(self, state):
         """Adds `state` (IOLoop.{READ,WRITE} flags) to our event handler.
