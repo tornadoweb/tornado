@@ -264,23 +264,24 @@ class _HTTPConnection(object):
             self.stream.write(self.request.body)
         self.stream.read_until(b("\r\n\r\n"), self._on_headers)
 
+    def _run_callback(self, response):
+        if self.callback is not None:
+            callback = self.callback
+            self.callback = None
+            callback(response)
+
     @contextlib.contextmanager
     def cleanup(self):
         try:
             yield
         except Exception, e:
             logging.warning("uncaught exception", exc_info=True)
-            if self.callback is not None:
-                callback = self.callback
-                self.callback = None
-                callback(HTTPResponse(self.request, 599, error=e))
+            self._run_callback(HTTPResponse(self.request, 599, error=e))
 
     def _on_close(self):
-        if self.callback is not None:
-            callback = self.callback
-            self.callback = None
-            callback(HTTPResponse(self.request, 599,
-                                  error=HTTPError(599, "Connection closed")))
+        self._run_callback(HTTPResponse(
+                self.request, 599,
+                error=HTTPError(599, "Connection closed")))
 
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
@@ -338,9 +339,8 @@ class _HTTPConnection(object):
                                 self.code, headers=self.headers,
                                 buffer=buffer,
                                 effective_url=self.request.url)
-        self.callback(response)
+        self._run_callback(response)
         self.stream.close()
-        self.callback = None
 
     def _on_chunk_length(self, data):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
