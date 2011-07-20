@@ -339,6 +339,7 @@ class _HTTPConnection(object):
                                 buffer=buffer,
                                 effective_url=self.request.url)
         self.callback(response)
+        self.stream.close()
         self.callback = None
 
     def _on_chunk_length(self, data):
