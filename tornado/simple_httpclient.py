@@ -62,7 +62,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """
     def initialize(self, io_loop=None, max_clients=10,
                    max_simultaneous_connections=None,
-                   hostname_mapping=None):
+                   hostname_mapping=None, max_buffer_size=104857600):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -79,12 +79,16 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         It can be used to make local DNS changes when modifying system-wide
         settings like /etc/hosts is not possible or desirable (e.g. in
         unittests).
+
+        max_buffer_size is the number of bytes that can be read by IOStream. It
+        defaults to 100mb.
         """
         self.io_loop = io_loop
         self.max_clients = max_clients
         self.queue = collections.deque()
         self.active = {}
         self.hostname_mapping = hostname_mapping
+        self.max_buffer_size = max_buffer_size
 
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
@@ -107,7 +111,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 self.active[key] = (request, callback)
                 _HTTPConnection(self.io_loop, self, request,
                                 functools.partial(self._on_fetch_complete,
-                                                  key, callback))
+                                                  key, callback),
+                                self.max_buffer_size)
 
     def _on_fetch_complete(self, key, callback, response):
         del self.active[key]
@@ -119,7 +124,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 class _HTTPConnection(object):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
 
-    def __init__(self, io_loop, client, request, callback):
+    def __init__(self, io_loop, client, request, callback, max_buffer_size):
         self.start_time = time.time()
         self.io_loop = io_loop
         self.client = client
@@ -182,10 +187,12 @@ class _HTTPConnection(object):
                     ssl_options["certfile"] = request.client_cert
                 self.stream = SSLIOStream(socket.socket(af, socktype, proto),
                                           io_loop=self.io_loop,
-                                          ssl_options=ssl_options)
+                                          ssl_options=ssl_options,
+                                          max_buffer_size=max_buffer_size)
             else:
                 self.stream = IOStream(socket.socket(af, socktype, proto),
-                                       io_loop=self.io_loop)
+                                       io_loop=self.io_loop,
+                                       max_buffer_size=max_buffer_size)
             timeout = min(request.connect_timeout, request.request_timeout)
             if timeout:
                 self._connect_timeout = self.io_loop.add_timeout(
