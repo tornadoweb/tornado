@@ -309,6 +309,15 @@ class _HTTPConnection(object):
             self.chunks = []
             self.stream.read_until(b("\r\n"), self._on_chunk_length)
         elif "Content-Length" in self.headers:
+            if "," in self.headers["Content-Length"]:
+                # Proxies sometimes cause Content-Length headers to get
+                # duplicated.  If all the values are identical then we can
+                # use them but if they differ it's an error.
+                pieces = re.split(r',\s*', self.headers["Content-Length"])
+                if any(i != pieces[0] for i in pieces):
+                    raise ValueError("Multiple unequal Content-Lengths: %r" % 
+                                     self.headers["Content-Length"])
+                self.headers["Content-Length"] = pieces[0]
             self.stream.read_bytes(int(self.headers["Content-Length"]),
                                    self._on_body)
         else:

@@ -40,6 +40,11 @@ class HangHandler(RequestHandler):
     def get(self):
         pass
 
+class ContentLengthHandler(RequestHandler):
+    def get(self):
+        self.set_header("Content-Length", self.get_argument("value"))
+        self.write("ok")
+
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -51,6 +56,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
             url("/hang", HangHandler),
             url("/hello", HelloWorldHandler),
+            url("/content_length", ContentLengthHandler),
             ], gzip=True)
 
     def test_singleton(self):
@@ -161,3 +167,13 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.wait()
         self.assertEqual(response.body, b("Hello world!"))
 
+    def test_multiple_content_length_accepted(self):
+        response = self.fetch("/content_length?value=2,2")
+        self.assertEqual(response.body, b("ok"))
+        response = self.fetch("/content_length?value=2,%202,2")
+        self.assertEqual(response.body, b("ok"))
+
+        response = self.fetch("/content_length?value=2,4")
+        self.assertEqual(response.code, 599)
+        response = self.fetch("/content_length?value=2,%202,3")
+        self.assertEqual(response.code, 599)
