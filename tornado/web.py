@@ -1154,6 +1154,14 @@ class Application(object):
     keyword argument. We will serve those files from the /static/ URI
     (this is configurable with the static_url_prefix setting),
     and we will serve /favicon.ico and /robots.txt from the same directory.
+    You can change the RequestHandler used to server static files by sending
+    the static_handler setting as a RequestHandler subclass (you must also
+    send the static_path argument), as follows:
+    
+        application = web.Application([
+            (r"/", MainPageHandler),
+        ], static_path="/var/www", static_handler=web.StaticFileHandler)
+
 
     .. attribute:: settings
 
@@ -1185,20 +1193,29 @@ class Application(object):
         
         if self.settings.get("static_path"):
             handlers = list(handlers or [])
+            # create static_file_finders setting so `static_url` will still work
             finders = self.settings.get("static_file_finders")
             if not finders:
-                finders = [static.FileSystemFinder(self.settings["static_path"])]
+                finders = [static.FileSystemFinder(
+                                self.settings["static_path"])]
                 if self.settings.get("ui_modules"):
                     finders.append(static.UIModuleFinder(
-                        self.settings["ui_modules"]))
+                                self.settings["ui_modules"]))
                 self.settings["static_file_finders"] = finders
+            
             static_url_prefix = settings.get("static_url_prefix",
                                              "/static/")
+            static_handler = self.settings.get("static_handler")
+            if not static_handler:
+                static_handler = (StaticFileFinderHandler, 
+                                  dict(finders=finders))
+            elif not isinstance(static_handler, (list,tuple)):
+                static_handler = (static_handler,)
+            
             handlers = [
-                (re.escape(static_url_prefix) + r"(.*)", StaticFileFinderHandler, 
-                 dict(finders=finders)),
-                (r"/(favicon\.ico)", StaticFileFinderHandler, dict(finders=finders)),
-                (r"/(robots\.txt)", StaticFileFinderHandler, dict(finders=finders)),
+                (re.escape(static_url_prefix) + r"(.*)",) + static_handler,
+                (r"/(favicon\.ico)",) + static_handler,
+                (r"/(robots\.txt)",) + static_handler
             ] + handlers
         if handlers: self.add_handlers(".*$", handlers)
 
