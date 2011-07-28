@@ -3,12 +3,14 @@
 # A simple benchmark of tornado template rendering, based on
 # https://github.com/mitsuhiko/jinja2/blob/master/examples/bench.py
 
+import sys
 from timeit import Timer
 
 from tornado.options import options, define, parse_command_line
 from tornado.template import Template
 
 define('num', default=100, help='number of iterations')
+define('dump', default=False, help='print template generated code and exit')
 
 context = {
     'page_title': 'mitsuhiko\'s benchmark',
@@ -54,6 +56,9 @@ def render():
 
 def main():
     parse_command_line()
+    if options.dump:
+        print tmpl.code
+        sys.exit(0)
     t = Timer(render)
     results = t.timeit(options.num) / options.num
     print '%0.3f ms per iteration' % (results*1000)
