@@ -204,10 +204,8 @@ class _HTTPConnection(object):
 
     def _on_timeout(self):
         self._timeout = None
-        if self.callback is not None:
-            self.callback(HTTPResponse(self.request, 599,
-                                       error=HTTPError(599, "Timeout")))
-            self.callback = None
+        self._run_callback(HTTPResponse(self.request, 599,
+                                        error=HTTPError(599, "Timeout")))
         self.stream.close()
 
     def _on_connect(self, parsed):
@@ -348,8 +346,9 @@ class _HTTPConnection(object):
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
             new_request.original_request = original_request
-            self.client.fetch(new_request, self.callback)
+            callback = self.callback
             self.callback = None
+            self.client.fetch(new_request, callback)
             return
         response = HTTPResponse(original_request,
                                 self.code, headers=self.headers,
