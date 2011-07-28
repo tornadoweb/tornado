@@ -23,7 +23,6 @@ have crept in over time.
 import htmlentitydefs
 import re
 import sys
-import xml.sax.saxutils
 import urllib
 
 # Python3 compatibility:  On python2.5, introduce the bytes alias from 2.6
@@ -61,9 +60,12 @@ except Exception:
             _json_encode = _json_decode
 
 
+_XHTML_ESCAPE_RE = re.compile('[&<>"]')
+_XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}
 def xhtml_escape(value):
     """Escapes a string so it is valid within XML or XHTML."""
-    return xml.sax.saxutils.escape(to_basestring(value), {'"': "&quot;"})
+    return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)],
+                                to_basestring(value))
 
 
 def xhtml_unescape(value):
