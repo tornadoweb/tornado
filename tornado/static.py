@@ -62,12 +62,16 @@ class UIModuleFinder(FileSystemFinder):
     Note: the order of search cannot be guaranteed, so use unique names for
     assets in your UIModules.
     """
-    def __init__(self, modules):
+    def __init__(self, modules, static_folder='static'):
         self.ui_modules = []
         self._load_ui_modules(modules)
         ui_modules = set([cls.__module__ for cls in self.ui_modules])
-        self.roots = list(set([os.path.dirname(sys.modules[module].__file__) 
-            for module in ui_modules]))
+        self.roots = []
+        for module in ui_modules:
+            path = os.path.join(os.path.dirname(sys.modules[module].__file__), 
+                                static_folder)
+            if path not in self.roots:
+                self.roots.append(path)
         
     def _load_ui_modules(self, modules):
         if type(modules) is types.ModuleType:
