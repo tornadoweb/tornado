@@ -199,7 +199,8 @@ class HTTPRequest(object):
     def __init__(self, url, method="GET", headers=None, body=None,
                  auth_username=None, auth_password=None,
                  connect_timeout=20.0, request_timeout=20.0,
-                 if_modified_since=None, follow_redirects=True,
+                 if_modified_since=None, if_none_match=None,
+                 follow_redirects=True,
                  max_redirects=5, user_agent=None, use_gzip=True,
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
@@ -222,6 +223,7 @@ class HTTPRequest(object):
         :arg float request_timeout: Timeout for entire request in seconds
         :arg datetime if_modified_since: Timestamp for ``If-Modified-Since``
            header
+        :arg string if_none_match: String for ``If-None-Match`` header
         :arg bool follow_redirects: Should redirects be followed automatically
            or return the 3xx response?
         :arg int max_redirects: Limit for `follow_redirects`
@@ -265,6 +267,8 @@ class HTTPRequest(object):
             timestamp = calendar.timegm(if_modified_since.utctimetuple())
             headers["If-Modified-Since"] = email.utils.formatdate(
                 timestamp, localtime=False, usegmt=True)
+        if if_none_match is not None:
+            headers['If-None-Match'] = if_none_match
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
         self.proxy_username = proxy_username
