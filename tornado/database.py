@@ -180,14 +180,14 @@ class Row(dict):
 # Fix the access conversions to properly recognize unicode/binary
 FIELD_TYPE = MySQLdb.constants.FIELD_TYPE
 FLAG = MySQLdb.constants.FLAG
-CONVERSIONS = copy.deepcopy(MySQLdb.converters.conversions)
+CONVERSIONS = copy.copy(MySQLdb.converters.conversions)
 
 field_types = [FIELD_TYPE.BLOB, FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING]
 if 'VARCHAR' in vars(FIELD_TYPE):
     field_types.append(FIELD_TYPE.VARCHAR)
 
 for field_type in field_types:
-    CONVERSIONS[field_type].insert(0, (FLAG.BINARY, str))
+    CONVERSIONS[field_type] = [(FLAG.BINARY, str)] + CONVERSIONS[field_type]
 
 
 # Alias some common MySQL exceptions
