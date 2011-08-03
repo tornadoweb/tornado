@@ -106,8 +106,14 @@ class RequestHandler(object):
         self._transforms = None  # will be set in _execute
         self.ui = _O((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
-        self.ui["modules"] = self.ui["_modules"] = _O((n, self._ui_module(n, m)) for n, m in
-                                                      application.ui_modules.iteritems())
+        # UIModules are available as both `modules` and `_modules` in the
+        # template namespace.  Historically only `modules` was available
+        # but could be clobbered by user additions to the namespace.
+        # The template {% module %} directive looks in `_modules` to avoid
+        # possible conflicts.
+        self.ui["_modules"] = _O((n, self._ui_module(n, m)) for n, m in
+                                 application.ui_modules.iteritems())
+        self.ui["modules"] = self.ui["_modules"]
         self.clear()
         # Check since connection is not available in WSGI
         if hasattr(self.request, "connection"):
