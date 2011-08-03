@@ -579,7 +579,7 @@ def _parse(reader, template, in_block=None):
         # Expression
         if start_brace == "{{":
             end = reader.find("}}")
-            if end == -1 or reader.find("\n", 0, end) != -1:
+            if end == -1:
                 raise ParseError("Missing end expression }} on line %d" % line)
             contents = reader.consume(end).strip()
             reader.consume(2)
@@ -591,7 +591,7 @@ def _parse(reader, template, in_block=None):
         # Block
         assert start_brace == "{%", start_brace
         end = reader.find("%}")
-        if end == -1 or reader.find("\n", 0, end) != -1:
+        if end == -1:
             raise ParseError("Missing end block %%} on line %d" % line)
         contents = reader.consume(end).strip()
         reader.consume(2)
