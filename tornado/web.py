@@ -106,8 +106,8 @@ class RequestHandler(object):
         self._transforms = None  # will be set in _execute
         self.ui = _O((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
-        self.ui["modules"] = _O((n, self._ui_module(n, m)) for n, m in
-                                application.ui_modules.iteritems())
+        self.ui["modules"] = self.ui["_modules"] = _O((n, self._ui_module(n, m)) for n, m in
+                                                      application.ui_modules.iteritems())
         self.clear()
         # Check since connection is not available in WSGI
         if hasattr(self.request, "connection"):
