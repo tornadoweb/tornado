@@ -444,8 +444,8 @@ class PeriodicCallback(object):
     def start(self):
         """Starts the timer."""
         self._running = True
-        timeout = time.time() + self.callback_time / 1000.0
-        self.io_loop.add_timeout(timeout, self._run)
+        self._next_timeout = time.time()
+        self._schedule_next()
 
     def stop(self):
         """Stops the timer."""
@@ -457,8 +457,12 @@ class PeriodicCallback(object):
             self.callback()
         except Exception:
             logging.error("Error in periodic callback", exc_info=True)
+        self._schedule_next()
+
+    def _schedule_next(self):
         if self._running:
-            self.start()
+            self._next_timeout += self.callback_time / 1000.0
+            self.io_loop.add_timeout(self._next_timeout, self._run)
 
 
 class _EPoll(object):
