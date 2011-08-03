@@ -414,7 +414,7 @@ class _Expression(_Node):
 
 class _Module(_Expression):
     def __init__(self, expression):
-        super(_Module, self).__init__("modules." + expression,
+        super(_Module, self).__init__("_modules." + expression,
                                       raw=True)
 
 class _Text(_Node):
