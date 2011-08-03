@@ -124,8 +124,8 @@ class IOLoop(object):
                          lambda fd, events: self._waker.consume(),
                          self.READ)
 
-    @classmethod
-    def instance(cls):
+    @staticmethod
+    def instance():
         """Returns a global IOLoop instance.
 
         Most single-threaded applications have a single, global IOLoop.
@@ -140,14 +140,24 @@ class IOLoop(object):
                 def __init__(self, io_loop=None):
                     self.io_loop = io_loop or IOLoop.instance()
         """
-        if not hasattr(cls, "_instance"):
-            cls._instance = cls()
-        return cls._instance
+        if not hasattr(IOLoop, "_instance"):
+            IOLoop._instance = IOLoop()
+        return IOLoop._instance
 
-    @classmethod
-    def initialized(cls):
+    @staticmethod
+    def initialized():
         """Returns true if the singleton instance has been created."""
-        return hasattr(cls, "_instance")
+        return hasattr(IOLoop, "_instance")
+
+    def install(self):
+        """Installs this IOloop object as the singleton instance.
+
+        This is normally not necessary as `instance()` will create
+        an IOLoop on demand, but you may want to call `install` to use
+        a custom subclass of IOLoop.
+        """
+        assert not IOLoop.initialized()
+        IOLoop._instance = self
 
     def close(self, all_fds=False):
         """Closes the IOLoop, freeing any resources used.
