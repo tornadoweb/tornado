@@ -139,7 +139,7 @@ class _HTTPConnection(object):
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None
         self._connect_timeout = None
-        if self.request.headers.get('Connection') == 'close'
+        if self.request.headers.get('Connection') == 'close':
             self.keep_alive = False 
         else:
             self.keep_alive = True
@@ -178,7 +178,7 @@ class _HTTPConnection(object):
             # Ignore keep_alive logic if explicitly requesting non-presistent connections
             if self.keep_alive:
                 self.stream_key = (host, port, parsed.scheme)
-                if self.client.stream_map.has_key(self.stream_key)
+                if self.client.stream_map.has_key(self.stream_key):
                     while not self.client.stream_map[self.stream_key].empty():
                         self.stream = self.client.stream_map[self.stream_key].get_nowait()
                         # Ditch closed streams and get a new one
@@ -191,7 +191,7 @@ class _HTTPConnection(object):
                                 self.stream.set_close_callback(self._on_close)
                                 self._on_connect(parsed)
                                 return
-               else:
+                else:
                     self.client.stream_map[self.stream_key]  = Queue.Queue()
 
             addrinfo = socket.getaddrinfo(host, port, af, socket.SOCK_STREAM,
