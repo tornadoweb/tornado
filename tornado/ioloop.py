@@ -36,6 +36,7 @@ import select
 import thread
 import threading
 import time
+import datetime
 import traceback
 
 from tornado import stack_context
@@ -347,6 +348,8 @@ class IOLoop(object):
     def add_timeout(self, deadline, callback):
         """Calls the given callback at the time deadline from the I/O loop.
 
+        The deadline argument can either be a unix timestamp
+        with microsecond precision (float) or a datetime.timedelta object.
         Returns a handle that may be passed to remove_timeout to cancel.
         """
         timeout = _Timeout(deadline, stack_context.wrap(callback))
@@ -406,14 +409,21 @@ class IOLoop(object):
 
 
 class _Timeout(object):
-    """An IOLoop timeout, a UNIX timestamp and a callback"""
+    """An IOLoop timeout, a UNIX timestamp (float) and a callback"""
 
     # Reduce memory overhead when there are lots of pending callbacks
     __slots__ = ['deadline', 'callback']
 
     def __init__(self, deadline, callback):
-        self.deadline = deadline
+        """ deadline can either be a unix timestamp with microsecond precision or a timedelta object """
+        self.deadline = self.convert_to_float_if_necessary(deadline)
         self.callback = callback
+
+    def convert_to_float_if_necessary(self, float_or_timedelta):
+        if not isinstance(float_or_timedelta, datetime.timedelta):
+            return float_or_timedelta
+        deadline_datetime = datetime.datetime.now() + float_or_timedelta
+        return time.mktime(deadline_datetime.timetuple()) + deadline_datetime.microsecond/1000000.0
 
     # Comparison methods to sort by deadline, with object id as a tiebreaker
     # to guarantee a consistent ordering.  The heapq module uses __le__
