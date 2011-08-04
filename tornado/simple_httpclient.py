@@ -139,7 +139,10 @@ class _HTTPConnection(object):
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None
         self._connect_timeout = None
-        self.keep_alive = False
+        if self.request.headers.get('Connection') == 'close'
+            self.keep_alive = False 
+        else:
+            self.keep_alive = True
         with stack_context.StackContext(self.cleanup):
             parsed = urlparse.urlsplit(_unicode(self.request.url))
             if ssl is None and parsed.scheme == "https":
@@ -172,22 +175,24 @@ class _HTTPConnection(object):
                 # We only try the first IP we get from getaddrinfo,
                 # so restrict to ipv4 by default.
                 af = socket.AF_INET
-            self.stream_key = (host, port, parsed.scheme)
-            if self.client.stream_map.has_key(self.stream_key)
-                while not self.client.stream_map[self.stream_key].empty():
-                    self.stream = self.client.stream_map[self.stream_key].get_nowait()
-                    # Ditch closed streams and get a new one
-                    if self.stream.closed():
-                        continue
-                    # Double check the stream isn't in use
-                    # Don't put back in the queue because if it's in use whoever's using it will,
-                    # or if it's closed it shouldn't be there
-                    if not (self.stream.reading() or self.stream.writing()):
-                            self.stream.set_close_callback(self._on_close)
-                            self._on_connect(parsed)
-                            return
-           else:
-                self.client.stream_map[self.stream_key]  = Queue.Queue()
+            # Ignore keep_alive logic if explicitly requesting non-presistent connections
+            if self.keep_alive:
+                self.stream_key = (host, port, parsed.scheme)
+                if self.client.stream_map.has_key(self.stream_key)
+                    while not self.client.stream_map[self.stream_key].empty():
+                        self.stream = self.client.stream_map[self.stream_key].get_nowait()
+                        # Ditch closed streams and get a new one
+                        if self.stream.closed():
+                            continue
+                        # Double check the stream isn't in use
+                        # Don't put back in the queue because if it's in use whoever's using it will,
+                        # or if it's closed it shouldn't be there
+                        if not (self.stream.reading() or self.stream.writing()):
+                                self.stream.set_close_callback(self._on_close)
+                                self._on_connect(parsed)
+                                return
+               else:
+                    self.client.stream_map[self.stream_key]  = Queue.Queue()
 
             addrinfo = socket.getaddrinfo(host, port, af, socket.SOCK_STREAM,
                                           0, 0)
@@ -320,6 +325,8 @@ class _HTTPConnection(object):
         self.headers = HTTPHeaders.parse(header_data)
         if self.headers.get('Connection') == 'keep-alive':
             self.keep_alive = True
+        elif self.headers.get('Connection') == 'close':
+            self.keep_alive = False
         if self.request.header_callback is not None:
             for k, v in self.headers.get_all():
                 self.request.header_callback("%s: %s\r\n" % (k, v))
