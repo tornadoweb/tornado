@@ -28,6 +28,7 @@ In addition to I/O events, the `IOLoop` can also schedule time-based events.
 
 from __future__ import with_statement
 
+import datetime
 import errno
 import heapq
 import os
@@ -348,6 +349,10 @@ class IOLoop(object):
         """Calls the given callback at the time deadline from the I/O loop.
 
         Returns a handle that may be passed to remove_timeout to cancel.
+
+        ``deadline`` may be a number denoting a unix timestamp (as returned
+        by ``time.time()`` or a ``datetime.timedelta`` object for a deadline
+        relative to the current time.
         """
         timeout = _Timeout(deadline, stack_context.wrap(callback))
         heapq.heappush(self._timeouts, timeout)
@@ -412,7 +417,12 @@ class _Timeout(object):
     __slots__ = ['deadline', 'callback']
 
     def __init__(self, deadline, callback):
-        self.deadline = deadline
+        if isinstance(deadline, (int, long, float)):
+            self.deadline = deadline
+        elif isinstance(deadline, datetime.timedelta):
+            self.deadline = time.time() + deadline.total_seconds()
+        else:
+            raise TypeError("Unsupported deadline %r" % deadline)
         self.callback = callback
 
     # Comparison methods to sort by deadline, with object id as a tiebreaker
