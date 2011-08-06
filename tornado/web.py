@@ -243,21 +243,23 @@ class RequestHandler(object):
         self._list_headers.append((name, self._convert_header_value(value)))
 
     def _convert_header_value(self, value):
-        if isinstance(value, (unicode, bytes_type)):
-            value = utf8(value)
-            # If \n is allowed into the header, it is possible to inject
-            # additional headers or split the request. Also cap length to
-            # prevent obviously erroneous values.
-            safe_value = re.sub(b(r"[\x00-\x1f]"), b(" "), value)[:4000]
-            if safe_value != value:
-                raise ValueError("Unsafe header value %r", value)
+        if isinstance(value, bytes_type):
+            pass
+        elif isinstance(value, unicode):
+            value = value.encode('utf-8')
+        elif isinstance(value, (int, long)):
+            # return immediately since we know the converted value will be safe
+            return str(value)
         elif isinstance(value, datetime.datetime):
             t = calendar.timegm(value.utctimetuple())
-            value = email.utils.formatdate(t, localtime=False, usegmt=True)
-        elif isinstance(value, int) or isinstance(value, long):
-            value = str(value)
+            return email.utils.formatdate(t, localtime=False, usegmt=True)
         else:
             raise TypeError("Unsupported header value %r" % value)
+        # If \n is allowed into the header, it is possible to inject
+        # additional headers or split the request. Also cap length to
+        # prevent obviously erroneous values.
+        if len(value) > 4000 or re.match(b(r"[\x00-\x1f]"), value):
+            raise ValueError("Unsafe header value %r", value)
         return value
 
 
