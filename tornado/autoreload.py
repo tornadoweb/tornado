@@ -74,6 +74,18 @@ def watch(filename):
     """
     _watched_files.add(filename)
 
+_reload_hooks = []
+
+def add_reload_hook(fn):
+    """Add a function to be called before reloading the process.
+
+    Note that for open file and socket handles it is generally
+    preferable to set the ``FD_CLOEXEC`` flag (using `fcntl` or
+    `tornado.platform.auto.set_close_exec`) instead of using a reload
+    hook to close them.
+    """
+    _reload_hooks.append(fn)
+
 _reload_attempted = False
 
 def _reload_on_update(io_loop, modify_times):
@@ -116,6 +128,8 @@ def _check_file(io_loop, modify_times, path):
                     os.close(fd)
                 except Exception:
                     pass
+            for fn in _reload_hooks:
+                fn()
             if hasattr(signal, "setitimer"):
                 # Clear the alarm signal set by
                 # ioloop.set_blocking_log_threshold so it doesn't fire
