@@ -126,7 +126,8 @@ class SimpleAsyncHTTPClient(object):
 
 
 class _HTTPConnection(object):
-    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
+    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE",
+        "OPTIONS", "TRACE", "PURGE"])
 
     def __init__(self, io_loop, client, request, callback):
         self.start_time = time.time()

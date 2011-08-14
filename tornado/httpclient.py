@@ -593,7 +593,7 @@ def _curl_setup_request(curl, request, buffer, headers):
         "PUT": pycurl.UPLOAD,
         "HEAD": pycurl.NOBODY,
     }
-    custom_methods = set(["DELETE"])
+    custom_methods = set(["DELETE", "OPTIONS", "TRACE", "PURGE"])
     for o in curl_options.values():
         curl.setopt(o, False)
     if request.method in curl_options:
