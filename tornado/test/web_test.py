@@ -7,6 +7,7 @@ from tornado.web import RequestHandler, _O, authenticated, Application, asynchro
 
 import binascii
 import logging
+import os
 import re
 import socket
 import sys
@@ -511,3 +512,23 @@ class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/failed_write_error")
         self.assertEqual(response.code, 500)
         self.assertEqual(b(""), response.body)
+
+class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        class StaticUrlHandler(RequestHandler):
+            def get(self, path):
+                self.write(self.static_url(path))
+
+        return Application([('/static_url/(.*)', StaticUrlHandler)],
+                           static_path=os.path.join(os.path.dirname(__file__), 'static'))
+
+    def test_static_files(self):
+        response = self.fetch('/robots.txt')
+        assert b("Disallow: /") in response.body
+
+        response = self.fetch('/static/robots.txt')
+        assert b("Disallow: /") in response.body
+
+    def test_static_url(self):
+        response = self.fetch("/static_url/robots.txt")
+        self.assertEqual(response.body, b("/static/robots.txt?v=f71d2"))
