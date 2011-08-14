@@ -77,6 +77,7 @@ import urllib
 import urlparse
 import uuid
 
+from tornado import static
 from tornado import escape
 from tornado import locale
 from tornado import stack_context
@@ -899,9 +900,10 @@ class RequestHandler(object):
     def static_url(self, path):
         """Returns a static URL for the given relative static file path.
 
-        This method requires you set the 'static_path' setting in your
-        application (which specifies the root directory of your static
-        files).
+        This method requires you have the static_file_finders setting in your
+        application (for backwards compatibility, this will be created 
+        automatically if you set the 'static_path' setting which specifies the
+        root directory of your static files).
 
         We append ?v=<signature> to the returned URL, which makes our
         static file handler set an infinite expiration header on the
@@ -913,12 +915,19 @@ class RequestHandler(object):
         this attribute for handlers whose output needs non-relative static
         path names.
         """
-        self.require_setting("static_path", "static_url")
+        self.require_setting("static_file_finders", "static_url")
         if not hasattr(RequestHandler, "_static_hashes"):
             RequestHandler._static_hashes = {}
         hashes = RequestHandler._static_hashes
-        abs_path = os.path.join(self.application.settings["static_path"],
-                                path)
+        
+        abs_path = None
+        for finder in self.application.settings["static_file_finders"]:
+            abs_path = finder.find(path)
+            if abs_path:
+                break
+        # fall back to just using the provided path
+        # TODO: could this be a security risk if an absolute path is given?
+        abs_path = abs_path or path
         if abs_path not in hashes:
             try:
                 f = open(abs_path, "rb")
@@ -1173,6 +1182,14 @@ class Application(object):
     keyword argument. We will serve those files from the /static/ URI
     (this is configurable with the static_url_prefix setting),
     and we will serve /favicon.ico and /robots.txt from the same directory.
+    You can change the RequestHandler used to server static files by sending
+    the static_handler setting as a RequestHandler subclass (you must also
+    send the static_path argument), as follows:
+    
+        application = web.Application([
+            (r"/", MainPageHandler),
+        ], static_path="/var/www", static_handler=web.StaticFileHandler)
+
 
     .. attribute:: settings
 
@@ -1201,16 +1218,32 @@ class Application(object):
         self._wsgi = wsgi
         self._load_ui_modules(settings.get("ui_modules", {}))
         self._load_ui_methods(settings.get("ui_methods", {}))
+        
         if self.settings.get("static_path"):
-            path = self.settings["static_path"]
             handlers = list(handlers or [])
+            # create static_file_finders setting so `static_url` will still work
+            finders = self.settings.get("static_file_finders")
+            if not finders:
+                finders = [static.FileSystemFinder(
+                                self.settings["static_path"])]
+                if self.settings.get("ui_modules"):
+                    finders.append(static.UIModuleFinder(
+                                self.settings["ui_modules"]))
+                self.settings["static_file_finders"] = finders
+            
             static_url_prefix = settings.get("static_url_prefix",
                                              "/static/")
+            static_handler = self.settings.get("static_handler")
+            if not static_handler:
+                static_handler = (StaticFileFinderHandler, 
+                                  dict(finders=finders))
+            elif not isinstance(static_handler, (list,tuple)):
+                static_handler = (static_handler,)
+            
             handlers = [
-                (re.escape(static_url_prefix) + r"(.*)", StaticFileHandler,
-                 dict(path=path)),
-                (r"/(favicon\.ico)", StaticFileHandler, dict(path=path)),
-                (r"/(robots\.txt)", StaticFileHandler, dict(path=path)),
+                (re.escape(static_url_prefix) + r"(.*)",) + static_handler,
+                (r"/(favicon\.ico)",) + static_handler,
+                (r"/(robots\.txt)",) + static_handler
             ] + handlers
         if handlers: self.add_handlers(".*$", handlers)
 
@@ -1448,19 +1481,8 @@ class RedirectHandler(RequestHandler):
         self.redirect(self._url, permanent=self._permanent)
 
 
-class StaticFileHandler(RequestHandler):
-    """A simple handler that can serve static content from a directory.
-
-    To map a path to this handler for a static data directory /var/www,
-    you would add a line to your application like::
-
-        application = web.Application([
-            (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
-        ])
-
-    The local root directory of the content should be passed as the "path"
-    argument to the handler.
-
+class BaseStaticFileHandler(RequestHandler):
+    """
     To support aggressive browser caching, if the argument "v" is given
     with the path, we set an infinite HTTP expiration header. So, if you
     want browsers to cache a file indefinitely, send them to, e.g.,
@@ -1469,8 +1491,7 @@ class StaticFileHandler(RequestHandler):
     """
     CACHE_MAX_AGE = 86400*365*10 #10 years
 
-    def initialize(self, path, default_filename=None):
-        self.root = os.path.abspath(path) + os.path.sep
+    def initialize(self, default_filename=None):
         self.default_filename = default_filename
 
     def head(self, path):
@@ -1479,11 +1500,11 @@ class StaticFileHandler(RequestHandler):
     def get(self, path, include_body=True):
         if os.path.sep != "/":
             path = path.replace("/", os.path.sep)
-        abspath = os.path.abspath(os.path.join(self.root, path))
-        # os.path.abspath strips a trailing /
-        # it needs to be temporarily added back for requests to root/
-        if not (abspath + os.path.sep).startswith(self.root):
-            raise HTTPError(403, "%s is not in root static directory", path)
+        if path.startswith(os.path.sep):
+            raise HTTPError(403)
+        abspath = self.get_absolute_path(path)
+        if not abspath:
+            raise HTTPError(404)
         if os.path.isdir(abspath) and self.default_filename is not None:
             # need to look at the request.path here for when path is empty
             # but there is some prefix to the path that was already
@@ -1534,7 +1555,11 @@ class StaticFileHandler(RequestHandler):
             self.write(file.read())
         finally:
             file.close()
-
+    
+    def get_absolute_path(self, path):
+        """Override to provide function"""
+        raise NotImplementedError
+    
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
         pass
@@ -1549,6 +1574,52 @@ class StaticFileHandler(RequestHandler):
         with "v" argument.
         """
         return self.CACHE_MAX_AGE if "v" in self.request.arguments else 0
+
+
+class StaticFileHandler(BaseStaticFileHandler):
+    """A simple handler that can serve static content from a directory.
+
+    To map a path to this handler for a static data directory /var/www,
+    you would add a line to your application like::
+
+        application = web.Application([
+            (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
+        ])
+
+    The local root directory of the content should be passed as the "path"
+    argument to the handler.
+    """
+    def initialize(self, path, default_filename=None):
+        self.root = os.path.abspath(path) + os.path.sep
+        self.default_filename = default_filename
+
+    def get_absolute_path(self, path):
+        return os.path.abspath(os.path.join(self.root, path))
+
+
+class StaticFileFinderHandler(BaseStaticFileHandler):
+    """A StaticFileHandler that uses an array of `StaticFileFinder`s to find
+    the absolute path of a static file
+    
+    An array of `StaticFileFinder`s should be passed as the finders argument to 
+    the Handler, which will use them, in supplied order, to find the file.
+
+        application = web.Application([
+            (r"/static/(.*)", web.StaticFileHandler, 
+                {"finders": [
+                    FileSystemFinder(["/var/www"])
+                ]}),
+        ])
+    """
+    def initialize(self, finders, default_filename=None):
+        self.finders = finders
+        self.default_filename = default_filename
+    
+    def get_absolute_path(self, path):
+        for finder in self.finders:
+            abspath = finder.find(path)
+            if abspath:
+                return abspath
 
 
 class FallbackHandler(RequestHandler):
