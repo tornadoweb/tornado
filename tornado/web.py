@@ -914,26 +914,13 @@ class RequestHandler(object):
         path names.
         """
         self.require_setting("static_path", "static_url")
-        if not hasattr(RequestHandler, "_static_hashes"):
-            RequestHandler._static_hashes = {}
-        hashes = RequestHandler._static_hashes
-        abs_path = os.path.join(self.application.settings["static_path"],
-                                path)
-        if abs_path not in hashes:
-            try:
-                f = open(abs_path, "rb")
-                hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
-                f.close()
-            except Exception:
-                logging.error("Could not open static file %r", path)
-                hashes[abs_path] = None
-        base = self.request.protocol + "://" + self.request.host \
-            if getattr(self, "include_host", False) else ""
-        static_url_prefix = self.settings.get('static_url_prefix', '/static/')
-        if hashes.get(abs_path):
-            return base + static_url_prefix + path + "?v=" + hashes[abs_path][:5]
+        static_handler_class = self.settings.get(
+            "static_handler_class", StaticFileHandler)
+        if getattr(self, "include_host", False):
+            base = self.request.protocol + "://" + self.request.host
         else:
-            return base + static_url_prefix + path
+            base = ""
+        return base + static_handler_class.make_static_url(self.settings, path)
 
     def async_callback(self, callback, *args, **kwargs):
         """Obsolete - catches exceptions from the wrapped function.
@@ -1156,7 +1143,9 @@ class Application(object):
     Each tuple can contain an optional third element, which should be a
     dictionary if it is present. That dictionary is passed as keyword
     arguments to the contructor of the handler. This pattern is used
-    for the StaticFileHandler below::
+    for the StaticFileHandler below (note that a StaticFileHandler
+    can be installed automatically with the static_path setting described
+    below)::
 
         application = web.Application([
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
@@ -1173,6 +1162,8 @@ class Application(object):
     keyword argument. We will serve those files from the /static/ URI
     (this is configurable with the static_url_prefix setting),
     and we will serve /favicon.ico and /robots.txt from the same directory.
+    A custom subclass of StaticFileHandler can be specified with the
+    static_handler_class setting.
 
     .. attribute:: settings
 
@@ -1206,11 +1197,13 @@ class Application(object):
             handlers = list(handlers or [])
             static_url_prefix = settings.get("static_url_prefix",
                                              "/static/")
+            static_handler_class = settings.get("static_handler_class",
+                                                StaticFileHandler)
             handlers = [
-                (re.escape(static_url_prefix) + r"(.*)", StaticFileHandler,
+                (re.escape(static_url_prefix) + r"(.*)", static_handler_class,
                  dict(path=path)),
-                (r"/(favicon\.ico)", StaticFileHandler, dict(path=path)),
-                (r"/(robots\.txt)", StaticFileHandler, dict(path=path)),
+                (r"/(favicon\.ico)", static_handler_class, dict(path=path)),
+                (r"/(robots\.txt)", static_handler_class, dict(path=path)),
             ] + handlers
         if handlers: self.add_handlers(".*$", handlers)
 
@@ -1469,6 +1462,8 @@ class StaticFileHandler(RequestHandler):
     """
     CACHE_MAX_AGE = 86400*365*10 #10 years
 
+    _static_hashes = {}
+
     def initialize(self, path, default_filename=None):
         self.root = os.path.abspath(path) + os.path.sep
         self.default_filename = default_filename
@@ -1549,6 +1544,33 @@ class StaticFileHandler(RequestHandler):
         with "v" argument.
         """
         return self.CACHE_MAX_AGE if "v" in self.request.arguments else 0
+
+    @classmethod
+    def make_static_url(cls, settings, path):
+        """Constructs a versioned url for the given path.
+
+        This method may be overridden in subclasses (but note that it is
+        a class method rather than an instance method).
+        
+        ``settings`` is the `Application.settings` dictionary.  ``path``
+        is the static path being requested.  The url returned should be
+        relative to the current host.
+        """
+        hashes = cls._static_hashes
+        abs_path = os.path.join(settings["static_path"], path)
+        if abs_path not in hashes:
+            try:
+                f = open(abs_path, "rb")
+                hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
+                f.close()
+            except Exception:
+                logging.error("Could not open static file %r", path)
+                hashes[abs_path] = None
+        static_url_prefix = settings.get('static_url_prefix', '/static/')
+        if hashes.get(abs_path):
+            return static_url_prefix + path + "?v=" + hashes[abs_path][:5]
+        else:
+            return static_url_prefix + path
 
 
 class FallbackHandler(RequestHandler):

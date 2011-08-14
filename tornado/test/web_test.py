@@ -3,7 +3,7 @@ from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type
-from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError
+from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler
 
 import binascii
 import logging
@@ -519,7 +519,13 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
             def get(self, path):
                 self.write(self.static_url(path))
 
-        return Application([('/static_url/(.*)', StaticUrlHandler)],
+        class AbsoluteStaticUrlHandler(RequestHandler):
+            include_host = True
+            def get(self, path):
+                self.write(self.static_url(path))
+
+        return Application([('/static_url/(.*)', StaticUrlHandler),
+                            ('/abs_static_url/(.*)', AbsoluteStaticUrlHandler)],
                            static_path=os.path.join(os.path.dirname(__file__), 'static'))
 
     def test_static_files(self):
@@ -532,3 +538,35 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_static_url(self):
         response = self.fetch("/static_url/robots.txt")
         self.assertEqual(response.body, b("/static/robots.txt?v=f71d2"))
+
+    def test_absolute_static_url(self):
+        response = self.fetch("/abs_static_url/robots.txt")
+        self.assertEqual(response.body,
+                         utf8(self.get_url("/") + "static/robots.txt?v=f71d2"))
+
+class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        class MyStaticFileHandler(StaticFileHandler):
+            def get(self, path):
+                assert path == "foo.txt"
+                self.write("bar")
+
+            @classmethod
+            def make_static_url(cls, settings, path):
+                return "/static/%s?v=42" % path
+
+        class StaticUrlHandler(RequestHandler):
+            def get(self, path):
+                self.write(self.static_url(path))
+
+        return Application([("/static_url/(.*)", StaticUrlHandler)],
+                           static_path="dummy",
+                           static_handler_class=MyStaticFileHandler)
+
+    def test_serve(self):
+        response = self.fetch("/static/foo.txt")
+        self.assertEqual(response.body, b("bar"))
+
+    def test_static_url(self):
+        response = self.fetch("/static_url/foo.txt")
+        self.assertEqual(response.body, b("/static/foo.txt?v=42"))

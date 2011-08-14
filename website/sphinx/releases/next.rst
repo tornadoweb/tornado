@@ -71,6 +71,9 @@ New features
   appear multiple times in the response.
 * `IOLoop.add_timeout` now accepts `datetime.timedelta` objects in addition
   to absolute timestamps.
+* It is now possible to use a custom subclass of ``StaticFileHandler``
+  with the ``static_handler_class`` application setting, and this subclass
+  can override the behavior of the ``static_url`` method.
 
 Bug fixes
 ~~~~~~~~~
