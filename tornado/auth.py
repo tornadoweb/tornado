@@ -107,7 +107,7 @@ class OpenIdMixin(object):
             "openid.identity":
                 "http://specs.openid.net/auth/2.0/identifier_select",
             "openid.return_to": url,
-            "openid.realm": self.request.protocol + "://" + self.request.host + "/",
+            "openid.realm": urlparse.urljoin(url, '/'),
             "openid.mode": "checkid_setup",
         }
         if ax_attrs:

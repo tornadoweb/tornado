@@ -101,3 +101,5 @@ Bug fixes
   instead of creeping later due to accumulated errors.
 * The template ``{% module %}`` directive now works even if applications
   use a template variable named ``modules``.
+* `~tornado.auth.OpenIDMixin` now uses the correct realm when the
+  callback URI is on a different domain.
