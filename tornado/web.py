@@ -1708,7 +1708,7 @@ def authenticated(method):
 
 
 def https_only(method):
-        """Decorate methods with this to ensure request will be sent only via HTTPS."""
+    """Decorate methods with this to ensure request will be sent only via HTTPS."""
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if self.request.protocol != "https":
