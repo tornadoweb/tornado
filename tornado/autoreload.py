@@ -49,8 +49,9 @@ def start(io_loop=None, check_time=500):
     so will terminate any pending requests.
     """
     io_loop = io_loop or ioloop.IOLoop.instance()
+    add_reload_hook(functools.partial(_close_all_fds, io_loop))
     modify_times = {}
-    callback = functools.partial(_reload_on_update, io_loop, modify_times)
+    callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
     scheduler.start()
 
@@ -74,10 +75,28 @@ def watch(filename):
     """
     _watched_files.add(filename)
 
+_reload_hooks = []
+
+def add_reload_hook(fn):
+    """Add a function to be called before reloading the process.
+
+    Note that for open file and socket handles it is generally
+    preferable to set the ``FD_CLOEXEC`` flag (using `fcntl` or
+    `tornado.platform.auto.set_close_exec`) instead of using a reload
+    hook to close them.
+    """
+    _reload_hooks.append(fn)
+
+def _close_all_fds(io_loop):
+    for fd in io_loop._handlers.keys():
+        try:
+            os.close(fd)
+        except Exception:
+            pass
+
 _reload_attempted = False
 
-def _reload_on_update(io_loop, modify_times):
-    global _reload_attempted
+def _reload_on_update(modify_times):
     if _reload_attempted:
         # We already tried to reload and it didn't work, so don't try again.
         return
@@ -96,48 +115,49 @@ def _reload_on_update(io_loop, modify_times):
         if not path: continue
         if path.endswith(".pyc") or path.endswith(".pyo"):
             path = path[:-1]
-        _check_file(io_loop, modify_times, path)
+        _check_file(modify_times, path)
     for path in _watched_files:
-        _check_file(io_loop, modify_times, path)
+        _check_file(modify_times, path)
 
-def _check_file(io_loop, modify_times, path):
-        try:
-            modified = os.stat(path).st_mtime
-        except Exception:
-            return
-        if path not in modify_times:
-            modify_times[path] = modified
-            return
-        if modify_times[path] != modified:
-            logging.info("%s modified; restarting server", path)
-            _reload_attempted = True
-            for fd in io_loop._handlers.keys():
-                try:
-                    os.close(fd)
-                except Exception:
-                    pass
-            if hasattr(signal, "setitimer"):
-                # Clear the alarm signal set by
-                # ioloop.set_blocking_log_threshold so it doesn't fire
-                # after the exec.
-                signal.setitimer(signal.ITIMER_REAL, 0, 0)
-            try:
-                os.execv(sys.executable, [sys.executable] + sys.argv)
-            except OSError:
-                # Mac OS X versions prior to 10.6 do not support execv in
-                # a process that contains multiple threads.  Instead of
-                # re-executing in the current process, start a new one
-                # and cause the current process to exit.  This isn't
-                # ideal since the new process is detached from the parent
-                # terminal and thus cannot easily be killed with ctrl-C,
-                # but it's better than not being able to autoreload at
-                # all.
-                # Unfortunately the errno returned in this case does not
-                # appear to be consistent, so we can't easily check for
-                # this error specifically.
-                os.spawnv(os.P_NOWAIT, sys.executable,
-                          [sys.executable] + sys.argv)
-                sys.exit(0)
+def _check_file(modify_times, path):
+    try:
+        modified = os.stat(path).st_mtime
+    except Exception:
+        return
+    if path not in modify_times:
+        modify_times[path] = modified
+        return
+    if modify_times[path] != modified:
+        logging.info("%s modified; restarting server", path)
+        _reload()
+
+def _reload():
+    global _reload_attempted
+    _reload_attempted = True
+    for fn in _reload_hooks:
+        fn()
+    if hasattr(signal, "setitimer"):
+        # Clear the alarm signal set by
+        # ioloop.set_blocking_log_threshold so it doesn't fire
+        # after the exec.
+        signal.setitimer(signal.ITIMER_REAL, 0, 0)
+    try:
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    except OSError:
+        # Mac OS X versions prior to 10.6 do not support execv in
+        # a process that contains multiple threads.  Instead of
+        # re-executing in the current process, start a new one
+        # and cause the current process to exit.  This isn't
+        # ideal since the new process is detached from the parent
+        # terminal and thus cannot easily be killed with ctrl-C,
+        # but it's better than not being able to autoreload at
+        # all.
+        # Unfortunately the errno returned in this case does not
+        # appear to be consistent, so we can't easily check for
+        # this error specifically.
+        os.spawnv(os.P_NOWAIT, sys.executable,
+                  [sys.executable] + sys.argv)
+        sys.exit(0)
 
 _USAGE = """\
 Usage:
@@ -203,6 +223,12 @@ if __name__ == "__main__":
     # the former to the latter, so subsequent executions won't have the same
     # path as the original.  Modify os.environ here to ensure that the
     # re-executed process will have the same path.
-    if sys.path[0] == '':
+    # Conversely, when run as path/to/tornado/autoreload.py, the directory
+    # containing autoreload.py gets added to the path, but we don't want
+    # tornado modules importable at top level, so remove it.
+    if (sys.path[0] == '' and
+        not os.environ.get("PYTHONPATH", "").startswith(".:")):
         os.environ["PYTHONPATH"] = ".:" + os.environ.get("PYTHONPATH", "")
+    elif sys.path[0] == os.path.dirname(__file__):
+        del sys.path[0]
     main()

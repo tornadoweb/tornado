@@ -3,10 +3,11 @@ from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type
-from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError
+from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler
 
 import binascii
 import logging
+import os
 import re
 import socket
 import sys
@@ -313,6 +314,13 @@ class FlowControlHandler(RequestHandler):
         self.write("3")
         self.finish()
 
+class MultiHeaderHandler(RequestHandler):
+    def get(self):
+        self.set_header("x-overwrite", "1")
+        self.set_header("x-overwrite", 2)
+        self.add_header("x-multi", 3)
+        self.add_header("x-multi", "4")
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         loader = DictLoader({
@@ -335,6 +343,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/uimodule_resources", UIModuleResourceHandler),
             url("/optional_path/(.+)?", OptionalPathHandler),
             url("/flow_control", FlowControlHandler),
+            url("/multi_header", MultiHeaderHandler),
             ]
         return Application(urls,
                            template_loader=loader,
@@ -414,6 +423,11 @@ js_embed()
 
     def test_flow_control(self):
         self.assertEqual(self.fetch("/flow_control").body, b("123"))
+
+    def test_multi_header(self):
+        response = self.fetch("/multi_header")
+        self.assertEqual(response.headers["x-overwrite"], "2")
+        self.assertEqual(response.headers.get_list("x-multi"), ["3", "4"])
 
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
@@ -498,3 +512,61 @@ class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/failed_write_error")
         self.assertEqual(response.code, 500)
         self.assertEqual(b(""), response.body)
+
+class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        class StaticUrlHandler(RequestHandler):
+            def get(self, path):
+                self.write(self.static_url(path))
+
+        class AbsoluteStaticUrlHandler(RequestHandler):
+            include_host = True
+            def get(self, path):
+                self.write(self.static_url(path))
+
+        return Application([('/static_url/(.*)', StaticUrlHandler),
+                            ('/abs_static_url/(.*)', AbsoluteStaticUrlHandler)],
+                           static_path=os.path.join(os.path.dirname(__file__), 'static'))
+
+    def test_static_files(self):
+        response = self.fetch('/robots.txt')
+        assert b("Disallow: /") in response.body
+
+        response = self.fetch('/static/robots.txt')
+        assert b("Disallow: /") in response.body
+
+    def test_static_url(self):
+        response = self.fetch("/static_url/robots.txt")
+        self.assertEqual(response.body, b("/static/robots.txt?v=f71d2"))
+
+    def test_absolute_static_url(self):
+        response = self.fetch("/abs_static_url/robots.txt")
+        self.assertEqual(response.body,
+                         utf8(self.get_url("/") + "static/robots.txt?v=f71d2"))
+
+class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        class MyStaticFileHandler(StaticFileHandler):
+            def get(self, path):
+                assert path == "foo.txt"
+                self.write("bar")
+
+            @classmethod
+            def make_static_url(cls, settings, path):
+                return "/static/%s?v=42" % path
+
+        class StaticUrlHandler(RequestHandler):
+            def get(self, path):
+                self.write(self.static_url(path))
+
+        return Application([("/static_url/(.*)", StaticUrlHandler)],
+                           static_path="dummy",
+                           static_handler_class=MyStaticFileHandler)
+
+    def test_serve(self):
+        response = self.fetch("/static/foo.txt")
+        self.assertEqual(response.body, b("bar"))
+
+    def test_static_url(self):
+        response = self.fetch("/static_url/foo.txt")
+        self.assertEqual(response.body, b("/static/foo.txt?v=42"))

@@ -62,6 +62,7 @@ import gzip
 import hashlib
 import hmac
 import httplib
+import itertools
 import logging
 import mimetypes
 import os.path
@@ -106,8 +107,14 @@ class RequestHandler(object):
         self._transforms = None  # will be set in _execute
         self.ui = _O((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
-        self.ui["modules"] = _O((n, self._ui_module(n, m)) for n, m in
-                                application.ui_modules.iteritems())
+        # UIModules are available as both `modules` and `_modules` in the
+        # template namespace.  Historically only `modules` was available
+        # but could be clobbered by user additions to the namespace.
+        # The template {% module %} directive looks in `_modules` to avoid
+        # possible conflicts.
+        self.ui["_modules"] = _O((n, self._ui_module(n, m)) for n, m in
+                                 application.ui_modules.iteritems())
+        self.ui["modules"] = self.ui["_modules"]
         self.clear()
         # Check since connection is not available in WSGI
         if hasattr(self.request, "connection"):
@@ -182,10 +189,16 @@ class RequestHandler(object):
 
     def clear(self):
         """Resets all headers and content for this response."""
+        # The performance cost of tornado.httputil.HTTPHeaders is significant
+        # (slowing down a benchmark with a trivial handler by more than 10%),
+        # and its case-normalization is not generally necessary for 
+        # headers we generate on the server side, so use a plain dict
+        # and list instead.
         self._headers = {
             "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
         }
+        self._list_headers = []
         self.set_default_headers()
         if not self.request.supports_http_1_1():
             if self.request.headers.get("Connection") == "Keep-Alive":
@@ -219,22 +232,36 @@ class RequestHandler(object):
         HTTP specification. If the value is not a string, we convert it to
         a string. All header values are then encoded as UTF-8.
         """
-        if isinstance(value, (unicode, bytes_type)):
-            value = utf8(value)
-            # If \n is allowed into the header, it is possible to inject
-            # additional headers or split the request. Also cap length to
-            # prevent obviously erroneous values.
-            safe_value = re.sub(b(r"[\x00-\x1f]"), b(" "), value)[:4000]
-            if safe_value != value:
-                raise ValueError("Unsafe header value %r", value)
+        self._headers[name] = self._convert_header_value(value)
+
+    def add_header(self, name, value):
+        """Adds the given response header and value.
+
+        Unlike `set_header`, `add_header` may be called multiple times
+        to return multiple values for the same header.
+        """
+        self._list_headers.append((name, self._convert_header_value(value)))
+
+    def _convert_header_value(self, value):
+        if isinstance(value, bytes_type):
+            pass
+        elif isinstance(value, unicode):
+            value = value.encode('utf-8')
+        elif isinstance(value, (int, long)):
+            # return immediately since we know the converted value will be safe
+            return str(value)
         elif isinstance(value, datetime.datetime):
             t = calendar.timegm(value.utctimetuple())
-            value = email.utils.formatdate(t, localtime=False, usegmt=True)
-        elif isinstance(value, int) or isinstance(value, long):
-            value = str(value)
+            return email.utils.formatdate(t, localtime=False, usegmt=True)
         else:
             raise TypeError("Unsupported header value %r" % value)
-        self._headers[name] = value
+        # If \n is allowed into the header, it is possible to inject
+        # additional headers or split the request. Also cap length to
+        # prevent obviously erroneous values.
+        if len(value) > 4000 or re.match(b(r"[\x00-\x1f]"), value):
+            raise ValueError("Unsafe header value %r", value)
+        return value
+
 
     _ARG_DEFAULT = []
     def get_argument(self, name, default=_ARG_DEFAULT, strip=True):
@@ -887,26 +914,13 @@ class RequestHandler(object):
         path names.
         """
         self.require_setting("static_path", "static_url")
-        if not hasattr(RequestHandler, "_static_hashes"):
-            RequestHandler._static_hashes = {}
-        hashes = RequestHandler._static_hashes
-        abs_path = os.path.join(self.application.settings["static_path"],
-                                path)
-        if abs_path not in hashes:
-            try:
-                f = open(abs_path, "rb")
-                hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
-                f.close()
-            except Exception:
-                logging.error("Could not open static file %r", path)
-                hashes[abs_path] = None
-        base = self.request.protocol + "://" + self.request.host \
-            if getattr(self, "include_host", False) else ""
-        static_url_prefix = self.settings.get('static_url_prefix', '/static/')
-        if hashes.get(abs_path):
-            return base + static_url_prefix + path + "?v=" + hashes[abs_path][:5]
+        static_handler_class = self.settings.get(
+            "static_handler_class", StaticFileHandler)
+        if getattr(self, "include_host", False):
+            base = self.request.protocol + "://" + self.request.host
         else:
-            return base + static_url_prefix + path
+            base = ""
+        return base + static_handler_class.make_static_url(self.settings, path)
 
     def async_callback(self, callback, *args, **kwargs):
         """Obsolete - catches exceptions from the wrapped function.
@@ -986,7 +1000,8 @@ class RequestHandler(object):
         lines = [utf8(self.request.version + " " +
                       str(self._status_code) +
                       " " + httplib.responses[self._status_code])]
-        lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in self._headers.iteritems()])
+        lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in 
+                      itertools.chain(self._headers.iteritems(), self._list_headers)])
         for cookie_dict in getattr(self, "_new_cookies", []):
             for cookie in cookie_dict.values():
                 lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))
@@ -1128,7 +1143,9 @@ class Application(object):
     Each tuple can contain an optional third element, which should be a
     dictionary if it is present. That dictionary is passed as keyword
     arguments to the contructor of the handler. This pattern is used
-    for the StaticFileHandler below::
+    for the StaticFileHandler below (note that a StaticFileHandler
+    can be installed automatically with the static_path setting described
+    below)::
 
         application = web.Application([
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
@@ -1145,6 +1162,8 @@ class Application(object):
     keyword argument. We will serve those files from the /static/ URI
     (this is configurable with the static_url_prefix setting),
     and we will serve /favicon.ico and /robots.txt from the same directory.
+    A custom subclass of StaticFileHandler can be specified with the
+    static_handler_class setting.
 
     .. attribute:: settings
 
@@ -1178,11 +1197,13 @@ class Application(object):
             handlers = list(handlers or [])
             static_url_prefix = settings.get("static_url_prefix",
                                              "/static/")
+            static_handler_class = settings.get("static_handler_class",
+                                                StaticFileHandler)
             handlers = [
-                (re.escape(static_url_prefix) + r"(.*)", StaticFileHandler,
+                (re.escape(static_url_prefix) + r"(.*)", static_handler_class,
                  dict(path=path)),
-                (r"/(favicon\.ico)", StaticFileHandler, dict(path=path)),
-                (r"/(robots\.txt)", StaticFileHandler, dict(path=path)),
+                (r"/(favicon\.ico)", static_handler_class, dict(path=path)),
+                (r"/(robots\.txt)", static_handler_class, dict(path=path)),
             ] + handlers
         if handlers: self.add_handlers(".*$", handlers)
 
@@ -1441,6 +1462,8 @@ class StaticFileHandler(RequestHandler):
     """
     CACHE_MAX_AGE = 86400*365*10 #10 years
 
+    _static_hashes = {}
+
     def initialize(self, path, default_filename=None):
         self.root = os.path.abspath(path) + os.path.sep
         self.default_filename = default_filename
@@ -1521,6 +1544,33 @@ class StaticFileHandler(RequestHandler):
         with "v" argument.
         """
         return self.CACHE_MAX_AGE if "v" in self.request.arguments else 0
+
+    @classmethod
+    def make_static_url(cls, settings, path):
+        """Constructs a versioned url for the given path.
+
+        This method may be overridden in subclasses (but note that it is
+        a class method rather than an instance method).
+        
+        ``settings`` is the `Application.settings` dictionary.  ``path``
+        is the static path being requested.  The url returned should be
+        relative to the current host.
+        """
+        hashes = cls._static_hashes
+        abs_path = os.path.join(settings["static_path"], path)
+        if abs_path not in hashes:
+            try:
+                f = open(abs_path, "rb")
+                hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
+                f.close()
+            except Exception:
+                logging.error("Could not open static file %r", path)
+                hashes[abs_path] = None
+        static_url_prefix = settings.get('static_url_prefix', '/static/')
+        if hashes.get(abs_path):
+            return static_url_prefix + path + "?v=" + hashes[abs_path][:5]
+        else:
+            return static_url_prefix + path
 
 
 class FallbackHandler(RequestHandler):

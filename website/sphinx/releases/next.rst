@@ -54,7 +54,26 @@ New features
   small synchronous requests.
 * `~tornado.httpserver.HTTPServer` can now be run on a unix socket as well
   as TCP.
-
+* `~tornado.web.StaticFileHandler` subclasses can now override 
+  ``get_cache_time`` to customize cache control behavior.
+* `tornado.websocket` now supports the latest ("hybi-10") version of the
+  protocol (the old version, "hixie-76" is still supported; the correct
+  version is detected automatically).
+* New module `tornado.platform.twisted` contains a bridge between the
+  Tornado IOLoop and the Twisted Reactor, allowing code written for Twisted
+  to be run on Tornado.
+* `RequestHandler.flush` can now take a callback for flow control.
+* `SimpleAsyncHTTPClient` now takes a maximum buffer size, to allow reading
+  files larger than 100MB
+* `IOLoop.install` can now be used to use a custom subclass of IOLoop
+  as the singleton without monkey-patching.
+* `RequestHandler.add_header` can now be used to set a header that can
+  appear multiple times in the response.
+* `IOLoop.add_timeout` now accepts `datetime.timedelta` objects in addition
+  to absolute timestamps.
+* It is now possible to use a custom subclass of ``StaticFileHandler``
+  with the ``static_handler_class`` application setting, and this subclass
+  can override the behavior of the ``static_url`` method.
 
 Bug fixes
 ~~~~~~~~~
@@ -74,3 +93,16 @@ Bug fixes
 * Cookie values containing special characters are now properly quoted
   and unquoted.
 * Multi-line headers are now supported.
+* The `IOStream` close callback will no longer be called while there
+  are pending read callbacks that can be satisfied with buffered data.
+* Fixed file descriptor leaks and multiple callback invocations in
+  `SimpleAsyncHTTPClient`
+* Repeated Content-Length headers (which may be added by certain proxies)
+  are now supported in `HTTPServer`.
+* Unicode string literals now work in template expressions.
+* `~tornado.ioloop.PeriodicCallback` now sticks to the specified period
+  instead of creeping later due to accumulated errors.
+* The template ``{% module %}`` directive now works even if applications
+  use a template variable named ``modules``.
+* `~tornado.auth.OpenIDMixin` now uses the correct realm when the
+  callback URI is on a different domain.

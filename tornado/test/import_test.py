@@ -28,3 +28,30 @@ class ImportTest(unittest.TestCase):
         import tornado.web
         import tornado.websocket
         import tornado.wsgi
+
+    # for modules with dependencies, if those dependencies can be loaded,
+    # load them too.
+
+    def test_import_pycurl(self):
+        try:
+            import pycurl
+        except ImportError:
+            pass
+        else:
+            import tornado.curl_httpclient
+
+    def test_import_mysqldb(self):
+        try:
+            import MySQLdb
+        except ImportError:
+            pass
+        else:
+            import tornado.database
+
+    def test_import_twisted(self):
+        try:
+            import twisted
+        except ImportError:
+            pass
+        else:
+            import tornado.platform.twisted

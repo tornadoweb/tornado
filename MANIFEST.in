@@ -4,4 +4,5 @@ include tornado/ca-certificates.crt
 include tornado/test/README
 include tornado/test/test.crt
 include tornado/test/test.key
+include tornado/test/static/robots.txt
 global-exclude _auto2to3*

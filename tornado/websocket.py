@@ -6,8 +6,8 @@ communication between the browser and server.
 .. warning::
 
    The WebSocket protocol is still in development.  This module currently
-   implements the "draft76" version of the protocol, which is supported
-   only by Chrome and Safari.  See this `browser compatibility table 
+   implements the "hixie-76" and "hybi-10" versions of the protocol.  
+   See this `browser compatibility table 
    <http://en.wikipedia.org/wiki/WebSockets#Browser_support>`_ on Wikipedia.
 """
 # Author: Jacob Kristhammar, 2010
@@ -29,9 +29,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
     Override on_message to handle incoming messages. You can also override
     open and on_close to handle opened and closed connections.
 
-    See http://www.w3.org/TR/2009/WD-websockets-20091222/ for details on the
+    See http://dev.w3.org/html5/websockets/ for details on the
     JavaScript interface. This implement the protocol as specified at
+    http://tools.ietf.org/html/draft-ietf-hybi-thewebsocketprotocol-10
+    The older protocol version specified at
     http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-76.
+    is also supported.
 
     Here is an example Web Socket handler that echos back all received messages
     back to the client::
