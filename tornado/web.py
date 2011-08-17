@@ -1199,12 +1199,12 @@ class Application(object):
                                              "/static/")
             static_handler_class = settings.get("static_handler_class",
                                                 StaticFileHandler)
-            handlers = [
-                (re.escape(static_url_prefix) + r"(.*)", static_handler_class,
-                 dict(path=path)),
-                (r"/(favicon\.ico)", static_handler_class, dict(path=path)),
-                (r"/(robots\.txt)", static_handler_class, dict(path=path)),
-            ] + handlers
+            static_handler_args = settings.get("static_handler_args", {})
+            static_handler_args['path'] = path
+            for pattern in [re.escape(static_url_prefix) + r"(.*)",
+                            r"/(favicon\.ico)", r"/(robots\.txt)"]:
+                handlers.insert(0, (pattern, static_handler_class,
+                                    static_handler_args))
         if handlers: self.add_handlers(".*$", handlers)
 
         # Automatically reload modified modules
