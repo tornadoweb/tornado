@@ -132,6 +132,15 @@ class Connection(object):
         finally:
             cursor.close()
 
+    def executerowcount(self, query, *parameters):
+        """Executes the given query, returning the number of rows affected from the query."""
+        cursor = self._cursor()
+        try:
+            self._execute(cursor, query, parameters)
+            return cursor.rowcount
+        finally:
+            cursor.close()
+
     def executemany(self, query, parameters):
         """Executes the given query against all the given param sequences.
 
