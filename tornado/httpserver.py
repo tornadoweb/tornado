@@ -24,6 +24,7 @@ This module also defines the `HTTPRequest` class which is exposed via
 `tornado.web.RequestHandler.request`.
 """
 
+import Cookie
 import errno
 import logging
 import os
@@ -508,6 +509,19 @@ class HTTPRequest(object):
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""
         return self.version == "HTTP/1.1"
+
+    @property
+    def cookies(self):
+        """A dictionary of Cookie.Morsel objects."""
+        if not hasattr(self, "_cookies"):
+            self._cookies = Cookie.SimpleCookie()
+            if "Cookie" in self.headers:
+                try:
+                    self._cookies.load(
+                        native_str(self.headers["Cookie"]))
+                except Exception:
+                    self._cookies = None
+        return self._cookies
 
     def write(self, chunk, callback=None):
         """Writes the given chunk to the response stream."""

@@ -239,10 +239,6 @@ class TypeCheckHandler(RequestHandler):
         # type str for non-body data mainly for historical reasons.
         self.check_type('argument', self.get_argument('foo'), unicode)
 
-        self.check_type('cookie_key', self.cookies.keys()[0], str)
-        self.check_type('cookie_value', self.cookies.values()[0].value, str)
-        # secure cookies
-    
         self.check_type('xsrf_token', self.xsrf_token, bytes_type)
         self.check_type('xsrf_form_html', self.xsrf_form_html(), str)
 
