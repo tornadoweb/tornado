@@ -52,7 +52,6 @@ back to the main thread before finishing the request.
 from __future__ import with_statement
 
 import Cookie
-import base64
 import binascii
 import calendar
 import datetime
@@ -60,7 +59,6 @@ import email.utils
 import functools
 import gzip
 import hashlib
-import hmac
 import httplib
 import itertools
 import logging
@@ -82,6 +80,7 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
+from tornado.httputil import create_signed_value, decode_signed_value
 from tornado.util import b, bytes_type, import_object
 
 try:
@@ -403,47 +402,16 @@ class RequestHandler(object):
         method for non-cookie uses.  To decode a value not stored
         as a cookie use the optional value argument to get_secure_cookie.
         """
-        timestamp = utf8(str(int(time.time())))
-        value = base64.b64encode(utf8(value))
-        signature = self._cookie_signature(name, value, timestamp)
-        value = b("|").join([value, timestamp, signature])
-        return value
+        self.require_setting("cookie_secret", "secure cookies")
+        return create_signed_value(self.application.settings["cookie_secret"], name, value)
 
     def get_secure_cookie(self, name, value=None, max_age_days=31):
         """Returns the given signed cookie if it validates, or None."""
+        self.require_setting("cookie_secret", "secure cookies")
         if value is None: value = self.get_cookie(name)
         if not value: return None
-        parts = utf8(value).split(b("|"))
-        if len(parts) != 3: return None
-        signature = self._cookie_signature(name, parts[0], parts[1])
-        if not _time_independent_equals(parts[2], signature):
-            logging.warning("Invalid cookie signature %r", value)
-            return None
-        timestamp = int(parts[1])
-        if timestamp < time.time() - max_age_days * 86400:
-            logging.warning("Expired cookie %r", value)
-            return None
-        if timestamp > time.time() + 31 * 86400:
-            # _cookie_signature does not hash a delimiter between the
-            # parts of the cookie, so an attacker could transfer trailing
-            # digits from the payload to the timestamp without altering the
-            # signature.  For backwards compatibility, sanity-check timestamp
-            # here instead of modifying _cookie_signature.
-            logging.warning("Cookie timestamp in future; possible tampering %r", value)
-            return None
-        if parts[1].startswith(b("0")):
-            logging.warning("Tampered cookie %r", value)
-        try:
-            return base64.b64decode(parts[0])
-        except Exception:
-            return None
-
-    def _cookie_signature(self, *parts):
-        self.require_setting("cookie_secret", "secure cookies")
-        hash = hmac.new(utf8(self.application.settings["cookie_secret"]),
-                        digestmod=hashlib.sha1)
-        for part in parts: hash.update(utf8(part))
-        return utf8(hash.hexdigest())
+        return decode_signed_value(self.application.settings["cookie_secret"],
+                                   name, value, max_age=max_age_days*86400)
 
     def redirect(self, url, permanent=False):
         """Sends a redirect to the given (optionally relative) URL."""
@@ -1898,19 +1866,6 @@ class URLSpec(object):
         return self._path % tuple([str(a) for a in args])
 
 url = URLSpec
-
-
-def _time_independent_equals(a, b):
-    if len(a) != len(b):
-        return False
-    result = 0
-    if type(a[0]) is int:  # python3 byte strings
-        for x, y in zip(a,b):
-            result |= x ^ y
-    else:  # python2
-        for x, y in zip(a, b):
-            result |= ord(x) ^ ord(y)
-    return result == 0
 
 
 class _O(dict):
