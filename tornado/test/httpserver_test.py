@@ -105,7 +105,8 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
     def raw_fetch(self, headers, body):
         conn = RawRequestHTTPConnection(self.io_loop, self.http_client,
                                         httpclient.HTTPRequest(self.get_url("/")),
-                                        self.stop, 1024*1024)
+                                        None, self.stop,
+                                        1024*1024)
         conn.set_request(
             b("\r\n").join(headers +
                            [utf8("Content-Length: %d\r\n" % len(body))]) +

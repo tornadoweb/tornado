@@ -110,13 +110,12 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 key = object()
                 self.active[key] = (request, callback)
                 _HTTPConnection(self.io_loop, self, request,
-                                functools.partial(self._on_fetch_complete,
-                                                  key, callback),
+                                functools.partial(self._release_fetch, key),
+                                callback,
                                 self.max_buffer_size)
 
-    def _on_fetch_complete(self, key, callback, response):
+    def _release_fetch(self, key):
         del self.active[key]
-        callback(response)
         self._process_queue()
 
 
@@ -124,12 +123,14 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 class _HTTPConnection(object):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
 
-    def __init__(self, io_loop, client, request, callback, max_buffer_size):
+    def __init__(self, io_loop, client, request, release_callback,
+                 final_callback, max_buffer_size):
         self.start_time = time.time()
         self.io_loop = io_loop
         self.client = client
         self.request = request
-        self.callback = callback
+        self.release_callback = release_callback
+        self.final_callback = final_callback
         self.code = None
         self.headers = None
         self.chunks = None
@@ -269,11 +270,18 @@ class _HTTPConnection(object):
             self.stream.write(self.request.body)
         self.stream.read_until(b("\r\n\r\n"), self._on_headers)
 
+    def _release(self):
+        if self.release_callback is not None:
+            release_callback = self.release_callback
+            self.release_callback = None
+            release_callback()
+
     def _run_callback(self, response):
-        if self.callback is not None:
-            callback = self.callback
-            self.callback = None
-            callback(response)
+        self._release()
+        if self.final_callback is not None:
+            final_callback = self.final_callback
+            self.final_callback = None
+            final_callback(response)
 
     @contextlib.contextmanager
     def cleanup(self):
@@ -346,9 +354,11 @@ class _HTTPConnection(object):
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
             new_request.original_request = original_request
-            callback = self.callback
-            self.callback = None
-            self.client.fetch(new_request, callback)
+            final_callback = self.final_callback
+            self.final_callback = None
+            self._release()
+            self.client.fetch(new_request, final_callback)
+            self.stream.close()
             return
         response = HTTPResponse(original_request,
                                 self.code, headers=self.headers,

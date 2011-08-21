@@ -100,6 +100,15 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(set(seen), set([0, 1, 2, 3]))
         self.assertEqual(len(self.triggers), 0)
 
+    def test_redirect_connection_limit(self):
+        # following redirects should not consume additional connections
+        client = SimpleAsyncHTTPClient(self.io_loop, max_clients=1,
+                                       force_instance=True)
+        client.fetch(self.get_url('/countdown/3'), self.stop,
+                     max_redirects=3)
+        response = self.wait()
+        response.rethrow()
+
     def test_default_certificates_exist(self):
         open(_DEFAULT_CA_CERTS).close()
 
