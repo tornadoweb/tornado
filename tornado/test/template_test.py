@@ -74,7 +74,11 @@ class TemplateTest(LogTrapTestCase):
         else:
             template = Template(utf8(u'{{ u"\u00e9" }}'))
         self.assertEqual(template.generate(), utf8(u"\u00e9"))
-        
+
+    def test_custom_namespace(self):
+        loader = DictLoader({"test.html": "{{ inc(5) }}"}, namespace={"inc": lambda x: x+1})
+        self.assertEqual(loader.load("test.html").generate(), b("6"))
+
 
 class AutoEscapeTest(LogTrapTestCase):
     def setUp(self):

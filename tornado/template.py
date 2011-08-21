@@ -117,6 +117,7 @@ class Template(object):
             self.autoescape = loader.autoescape
         else:
             self.autoescape = _DEFAULT_AUTOESCAPE
+        self.namespace = loader.namespace if loader else {}
         reader = _TemplateReader(name, escape.native_str(template_string))
         self.file = _File(_parse(reader, self))
         self.code = self._generate_python(loader, compress_whitespace)
@@ -142,6 +143,7 @@ class Template(object):
             "_utf8": escape.utf8,  # for internal use
             "_string_types": (unicode, bytes_type),
         }
+        namespace.update(self.namespace)
         namespace.update(kwargs)
         exec self.compiled in namespace
         execute = namespace["_execute"]
@@ -183,7 +185,7 @@ class Template(object):
 
 class BaseLoader(object):
     """Base class for template loaders."""
-    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE):
+    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None):
         """Creates a template loader.
 
         root_directory may be the empty string if this loader does not
@@ -193,6 +195,7 @@ class BaseLoader(object):
         in the template namespace, such as "xhtml_escape".
         """
         self.autoescape = autoescape
+        self.namespace = namespace or {}
         self.templates = {}
 
     def reset(self):
@@ -223,7 +226,6 @@ class Loader(BaseLoader):
     def __init__(self, root_directory, **kwargs):
         super(Loader, self).__init__(**kwargs)
         self.root = os.path.abspath(root_directory)
-
 
     def resolve_path(self, name, parent_path=None):
         if parent_path and not parent_path.startswith("<") and \
