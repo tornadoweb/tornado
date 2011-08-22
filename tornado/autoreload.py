@@ -144,8 +144,8 @@ def _reload():
         signal.setitimer(signal.ITIMER_REAL, 0, 0)
     if sys.platform == 'win32':
         # os.execv is broken on Windows and can't properly parse command line
-        # arguments and executable name if they containt whitespaces. subprocess
-        # fixes thath behavior.
+        # arguments and executable name if they contain whitespaces. subprocess
+        # fixes that behavior.
         subprocess.Popen([sys.executable] + sys.argv)
         sys.exit(0)
     else:
