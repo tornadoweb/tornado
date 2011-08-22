@@ -252,7 +252,7 @@ class IOStream(object):
                 self._handle_write()
             if not self.socket:
                 return
-            if events & self.io_loop.ERROR:
+            if events & self._error_flags:
                 # We may have queued up a user callback in _handle_read or
                 # _handle_write, so don't close the IOStream until those
                 # callbacks have had a chance to run.
