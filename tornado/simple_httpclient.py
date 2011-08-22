@@ -268,7 +268,7 @@ class _HTTPConnection(object):
         self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
         if self.request.body is not None:
             self.stream.write(self.request.body)
-        self.stream.read_until(b("\r\n\r\n"), self._on_headers)
+        self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
 
     def _release(self):
         if self.release_callback is not None:
@@ -298,7 +298,7 @@ class _HTTPConnection(object):
 
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
-        first_line, _, header_data = data.partition("\r\n")
+        first_line, _, header_data = data.partition("\n")
         match = re.match("HTTP/1.[01] ([0-9]+)", first_line)
         assert match
         self.code = int(match.group(1))
