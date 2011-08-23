@@ -367,6 +367,7 @@ class RequestHandler(object):
         if path:
             new_cookie[name]["path"] = path
         for k, v in kwargs.iteritems():
+            if k == 'max_age': k = 'max-age'
             new_cookie[name][k] = v
 
     def clear_cookie(self, name, path="/", domain=None):
