@@ -79,12 +79,13 @@ class IOStream(object):
 
     """
     def __init__(self, socket, io_loop=None, max_buffer_size=104857600,
-                 read_chunk_size=4096):
+                 read_chunk_size=4096, ignore_hangup=True):
         self.socket = socket
         self.socket.setblocking(False)
         self.io_loop = io_loop or ioloop.IOLoop.instance()
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
+        self.ignore_hangup = ignore_hangup
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
         self._read_buffer_size = 0
@@ -100,6 +101,8 @@ class IOStream(object):
         self._connecting = False
         self._state = None
         self._pending_callbacks = 0
+        self._error_flags = ioloop.IOLoop.ERROR & ~ioloop.IOLoop._EPOLLRDHUP if\
+            ignore_hangup else ioloop.IOLoop.ERROR
 
     def connect(self, address, callback=None):
         """Connects the socket to a remote address without blocking.
@@ -255,7 +258,7 @@ class IOStream(object):
                 # callbacks have had a chance to run.
                 self.io_loop.add_callback(self.close)
                 return
-            state = self.io_loop.ERROR
+            state = self._error_flags
             if self.reading():
                 state |= self.io_loop.READ
             if self.writing():
@@ -503,7 +506,7 @@ class IOStream(object):
             # connection has been closed, so there can be no future events
             return
         if self._state is None:
-            self._state = ioloop.IOLoop.ERROR | state
+            self._state = self._error_flags | state
             with stack_context.NullContext():
                 self.io_loop.add_handler(
                     self.socket.fileno(), self._handle_events, self._state)
