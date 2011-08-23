@@ -16,5 +16,5 @@
 
 """The Tornado web server and tools."""
 
-version = "2.0git"
+version = "2.0git-cl"
 version_info = (2, 0, 0)
