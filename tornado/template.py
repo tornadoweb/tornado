@@ -57,7 +57,7 @@ interesting. Syntax for the templates::
 
 Unlike most other template systems, we do not put any restrictions on the
 expressions you can include in your statements. if and for blocks get
-translated exactly into Python, do you can do complex expressions like::
+translated exactly into Python, you can do complex expressions like::
 
    {% for student in [p for p in people if p.student and p.age > 23] %}
      <li>{{ escape(student.name) }}</li>
