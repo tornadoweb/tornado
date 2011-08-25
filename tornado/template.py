@@ -284,6 +284,7 @@ class _File(_Node):
         writer.write_line("def _execute():")
         with writer.indent():
             writer.write_line("_buffer = []")
+            writer.write_line("_append = _buffer.append")
             self.body.generate(writer)
             writer.write_line("return _utf8('').join(_buffer)")
 
@@ -361,9 +362,10 @@ class _ApplyBlock(_Node):
         writer.write_line("def %s():" % method_name)
         with writer.indent():
             writer.write_line("_buffer = []")
+            writer.write_line("_append = _buffer.append")
             self.body.generate(writer)
             writer.write_line("return _utf8('').join(_buffer)")
-        writer.write_line("_buffer.append(%s(%s()))" % (
+        writer.write_line("_append(%s(%s()))" % (
             self.method, method_name))
 
 
@@ -412,7 +414,7 @@ class _Expression(_Node):
             # so we have to convert to utf8 again.
             writer.write_line("_tmp = _utf8(%s(_tmp))" %
                               writer.current_template.autoescape)
-        writer.write_line("_buffer.append(_tmp)")
+        writer.write_line("_append(_tmp)")
 
 class _Module(_Expression):
     def __init__(self, expression):
@@ -434,7 +436,7 @@ class _Text(_Node):
             value = re.sub(r"(\s*\n\s*)", "\n", value)
 
         if value:
-            writer.write_line('_buffer.append(%r)' % escape.utf8(value))
+            writer.write_line('_append(%r)' % escape.utf8(value))
 
 
 class ParseError(Exception):
