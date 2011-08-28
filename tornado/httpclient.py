@@ -33,8 +33,8 @@ import weakref
 
 from tornado.escape import utf8
 from tornado import httputil
-from tornado.ioloop import IOLoop
 from tornado.util import import_object, bytes_type
+import tornado.ioloop
 
 class HTTPClient(object):
     """A blocking HTTP client.
@@ -51,7 +51,7 @@ class HTTPClient(object):
             print "Error:", e
     """
     def __init__(self):
-        self._io_loop = IOLoop()
+        self._io_loop = ioloop.IOLoop()
         self._async_client = AsyncHTTPClient(self._io_loop)
         self._response = None
         self._closed = False
@@ -123,7 +123,7 @@ class AsyncHTTPClient(object):
 
     def __new__(cls, io_loop=None, max_clients=10, force_instance=False, 
                 **kwargs):
-        io_loop = io_loop or IOLoop.instance()
+        io_loop = io_loop or ioloop.IOLoop.instance()
         if cls is AsyncHTTPClient:
             if cls._impl_class is None:
                 from tornado.simple_httpclient import SimpleAsyncHTTPClient
