@@ -316,6 +316,10 @@ class RequestHandler(object):
         """
         return _unicode(value)
 
+    @property
+    def cookies(self):
+        return self.request.cookies
+
     def get_cookie(self, name, default=None):
         """Gets the value of the cookie with the given name, else default."""
         if name in self.request.cookies:
