@@ -52,6 +52,7 @@ back to the main thread before finishing the request.
 from __future__ import with_statement
 
 import Cookie
+import base64
 import binascii
 import calendar
 import datetime
@@ -59,6 +60,7 @@ import email.utils
 import functools
 import gzip
 import hashlib
+import hmac
 import httplib
 import itertools
 import logging
@@ -80,7 +82,6 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.httputil import create_signed_value, decode_signed_value
 from tornado.util import b, bytes_type, import_object
 
 try:
@@ -1866,6 +1867,55 @@ class URLSpec(object):
         return self._path % tuple([str(a) for a in args])
 
 url = URLSpec
+
+
+def create_signed_value(secret, name, value):
+    timestamp = utf8(str(int(time.time())))
+    value = base64.b64encode(utf8(value))
+    signature = _create_signature(secret, name, value, timestamp)
+    return b("|").join([value, timestamp, signature])
+
+def decode_signed_value(secret, name, value, max_age=0):
+    parts = utf8(value).split(b("|"))
+    if len(parts) != 3: return None
+    value, timestamp, signature = parts
+    if not _time_independent_equals(signature,
+                                    _create_signature(secret, name, value,
+                                                      timestamp)):
+        return None
+    if timestamp.startswith(b("0")):
+        return None
+    timestamp = int(timestamp)
+    if max_age > 0 and timestamp < time.time() - max_age:
+        return None
+    if timestamp > time.time() + 31 * 86400:
+        # _create_signature does not hash a delimiter between the
+        # parts of the cookie, so an attacker could transfer trailing
+        # digits from the payload to the timestamp without altering the
+        # signature.  For backwards compatibility, sanity-check timestamp
+        # here instead of modifying _cookie_signature.
+        return None
+    try:
+        return base64.b64decode(value)
+    except Exception:
+        return None
+
+def _create_signature(secret, *parts):
+    hash = hmac.new(utf8(secret), digestmod=hashlib.sha1)
+    for part in parts: hash.update(utf8(part))
+    return utf8(hash.hexdigest())
+
+def _time_independent_equals(a, b):
+    if len(a) != len(b):
+        return False
+    result = 0
+    if type(a[0]) is int:  # python3 byte strings
+        for x, y in zip(a,b):
+            result |= x ^ y
+    else:  # python2
+        for x, y in zip(a, b):
+            result |= ord(x) ^ ord(y)
+    return result == 0
 
 
 class _O(dict):

@@ -1,10 +1,9 @@
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
-from tornado.httputil import _create_signature
 from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type
-from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler
+from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature
 
 import binascii
 import logging
