@@ -537,6 +537,17 @@ def _format_code(code):
 
 
 def _parse(reader, template, in_block=None):
+    # Skip everything if we're in a verbatim block
+    if in_block == "verbatim":
+        block_end = reader.find("{% end %}")
+        if block_end == -1 or block_end + 1 == reader.remaining():
+            raise ParseError("Missing {%% end %%} block for verbatim")
+        unparsed_text = reader.consume(block_end)
+        # Consume the end block
+        # NOTE: the magic number 9 comes from: len('{% end %}') == 9
+        reader.consume(9)
+        return unparsed_text
+
     body = _ChunkList([])
     while True:
         # Find next template directive
@@ -662,7 +673,7 @@ def _parse(reader, template, in_block=None):
             body.chunks.append(block)
             continue
 
-        elif operator in ("apply", "block", "try", "if", "for", "while"):
+        elif operator in ("apply", "block", "try", "if", "for", "while", "verbatim"):
             # parse inner body recursively
             block_body = _parse(reader, template, operator)
             if operator == "apply":
@@ -673,6 +684,8 @@ def _parse(reader, template, in_block=None):
                 if not suffix:
                     raise ParseError("block missing name on line %d" % line)
                 block = _NamedBlock(suffix, block_body, template)
+            elif operator == "verbatim":
+                block = _Text(block_body)
             else:
                 block = _ControlBlock(contents, block_body)
             body.chunks.append(block)
