@@ -153,7 +153,7 @@ def parse_config_file(path):
 
 def print_help(file=sys.stdout):
     """Prints all the command line options to stdout."""
-    print >> file, "Usage: %s [OPTIONS]" % sys.argv[0]
+    print >> file, _colormsg("Usage: %s [OPTIONS]" % sys.argv[0], 'red')
     print >> file, ""
     print >> file, "Options:"
     by_file = {}
@@ -164,11 +164,31 @@ def print_help(file=sys.stdout):
         if filename: print >> file, filename
         o.sort(key=lambda option: option.name)
         for option in o:
-            prefix = option.name
+            prefix = _colormsg(option.name, 'green')
             if option.metavar:
-                prefix += "=" + option.metavar
+                prefix += "=" + _colormsg(option.metavar, 'yellow')
             print >> file, "  --%-30s %s" % (prefix, option.help or "")
     print >> file
+
+# ANSI codes to print pretty output.
+_COLORS = dict(
+    # dictionary to be used in _colormsg
+    black  ="[30m",
+    red    ="[31m",
+    green  ="[32m",
+    yellow ="[33m",
+    blue   ="[34m",
+    purple ="[35m",
+    cyan   ="[36m",
+    white  ="[37m",
+)
+_RESET = '[0m'
+
+def _colormsg(msg, color):
+    """Wrap the given message with ANSI codes to print it colored in console."""
+    if not color:
+        return msg
+    return '\033' + _COLORS[color] + msg + '\033' + _RESET
 
 
 class _Options(dict):
