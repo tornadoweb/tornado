@@ -206,6 +206,7 @@ class _HTTPConnection(object):
     def _on_timeout(self):
         self._timeout = None
         self._run_callback(HTTPResponse(self.request, 599,
+                                        request_time=time.time() - self.start_time,
                                         error=HTTPError(599, "Timeout")))
         self.stream.close()
 
@@ -289,11 +290,14 @@ class _HTTPConnection(object):
             yield
         except Exception, e:
             logging.warning("uncaught exception", exc_info=True)
-            self._run_callback(HTTPResponse(self.request, 599, error=e))
+            self._run_callback(HTTPResponse(self.request, 599, error=e, 
+                                request_time=time.time() - self.start_time,
+                                ))
 
     def _on_close(self):
         self._run_callback(HTTPResponse(
                 self.request, 599,
+                request_time=time.time() - self.start_time,
                 error=HTTPError(599, "Connection closed")))
 
     def _on_headers(self, data):
@@ -362,6 +366,7 @@ class _HTTPConnection(object):
             return
         response = HTTPResponse(original_request,
                                 self.code, headers=self.headers,
+                                request_time=time.time() - self.start_time,
                                 buffer=buffer,
                                 effective_url=self.request.url)
         self._run_callback(response)
