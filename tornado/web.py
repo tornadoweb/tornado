@@ -316,23 +316,10 @@ class RequestHandler(object):
         """
         return _unicode(value)
 
-    @property
-    def cookies(self):
-        """A dictionary of Cookie.Morsel objects."""
-        if not hasattr(self, "_cookies"):
-            self._cookies = Cookie.SimpleCookie()
-            if "Cookie" in self.request.headers:
-                try:
-                    self._cookies.load(
-                        escape.native_str(self.request.headers["Cookie"]))
-                except Exception:
-                    self.clear_all_cookies()
-        return self._cookies
-
     def get_cookie(self, name, default=None):
         """Gets the value of the cookie with the given name, else default."""
-        if name in self.cookies:
-            return self.cookies[name].value
+        if name in self.request.cookies:
+            return self.request.cookies[name].value
         return default
 
     def set_cookie(self, name, value, domain=None, expires=None, path="/",
@@ -378,7 +365,7 @@ class RequestHandler(object):
 
     def clear_all_cookies(self):
         """Deletes all the cookies the user sent with this request."""
-        for name in self.cookies.iterkeys():
+        for name in self.request.cookies.iterkeys():
             self.clear_cookie(name)
 
     def set_secure_cookie(self, name, value, expires_days=30, **kwargs):

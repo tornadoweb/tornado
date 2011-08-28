@@ -163,6 +163,10 @@ class TypeCheckHandler(RequestHandler):
         self.check_type('header_key', self.request.headers.keys()[0], str)
         self.check_type('header_value', self.request.headers.values()[0], str)
 
+        self.check_type('cookie_key', self.request.cookies.keys()[0], str)
+        self.check_type('cookie_value', self.request.cookies.values()[0].value, str)
+        # secure cookies
+
         self.check_type('arg_key', self.request.arguments.keys()[0], str)
         self.check_type('arg_value', self.request.arguments.values()[0][0], bytes_type)
 
@@ -191,11 +195,12 @@ class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(data, {u"foo": [u"\u00e9"]})
 
     def test_types(self):
-        response = self.fetch("/typecheck?foo=bar")
+        headers = {"Cookie": "foo=bar"}
+        response = self.fetch("/typecheck?foo=bar", headers=headers)
         data = json_decode(response.body)
         self.assertEqual(data, {})
 
-        response = self.fetch("/typecheck", method="POST", body="foo=bar")
+        response = self.fetch("/typecheck", method="POST", body="foo=bar", headers=headers)
         data = json_decode(response.body)
         self.assertEqual(data, {})
 
