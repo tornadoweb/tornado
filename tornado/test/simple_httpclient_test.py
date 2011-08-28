@@ -150,11 +150,13 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
                                    connect_timeout=0.1)
             response = self.wait()
             self.assertEqual(response.code, 599)
+            self.assertEqual(int(response.request_time * 10), 1)
             self.assertEqual(str(response.error), "HTTP 599: Timeout")
 
     def test_request_timeout(self):
         response = self.fetch('/hang', request_timeout=0.1)
         self.assertEqual(response.code, 599)
+        self.assertEqual(int(response.request_time * 10), 1)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
 
     def test_ipv6(self):

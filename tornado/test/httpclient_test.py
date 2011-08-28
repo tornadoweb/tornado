@@ -74,6 +74,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["Content-Type"], "text/plain")
         self.assertEqual(response.body, b("Hello world!"))
+        self.assertEqual(int(response.request_time), 0)
 
         response = self.fetch("/hello?name=Ben")
         self.assertEqual(response.body, b("Hello Ben!"))
