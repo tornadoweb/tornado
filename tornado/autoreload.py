@@ -31,6 +31,7 @@ from __future__ import with_statement
 import functools
 import logging
 import os
+import pkgutil
 import sys
 import types
 import subprocess
@@ -221,6 +222,12 @@ def main():
         logging.info("Script exited normally")
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
+
+    if mode == 'module':
+        # runpy did a fake import of the module as __main__, but now it's
+        # no longer in sys.modules.  Figure out where it is and watch it.
+        watch(pkgutil.get_loader(module).get_filename())
+
     wait()
     
 
