@@ -65,7 +65,7 @@ except ImportError:
 
 
 def define(name, default=None, type=None, help=None, metavar=None,
-           multiple=False):
+           multiple=False, group=None):
     """Defines a new command line option.
 
     If type is given (one of str, float, int, datetime, or timedelta)
@@ -80,6 +80,9 @@ def define(name, default=None, type=None, help=None, metavar=None,
     command line help string. The help message is formatted like::
 
        --name=METAVAR      help string
+
+    group is used to group the defined options in logical groups. By default,
+    command line options are grouped by the defined file.
 
     Command line option names must be unique globally. They can be parsed
     from the command line with parse_command_line() or parsed from a
@@ -97,9 +100,13 @@ def define(name, default=None, type=None, help=None, metavar=None,
             type = default.__class__
         else:
             type = str
+    if group:
+        group_name = group
+    else:
+        group_name = file_name
     options[name] = _Option(name, file_name=file_name, default=default,
                             type=type, help=help, metavar=metavar,
-                            multiple=multiple)
+                            multiple=multiple, group_name=group_name)
 
 
 def parse_command_line(args=None):
@@ -156,11 +163,11 @@ def print_help(file=sys.stdout):
     print >> file, "Usage: %s [OPTIONS]" % sys.argv[0]
     print >> file, ""
     print >> file, "Options:"
-    by_file = {}
+    by_group = {}
     for option in options.itervalues():
-        by_file.setdefault(option.file_name, []).append(option)
+        by_group.setdefault(option.group_name, []).append(option)
 
-    for filename, o in sorted(by_file.items()):
+    for filename, o in sorted(by_group.items()):
         if filename: print >> file, filename
         o.sort(key=lambda option: option.name)
         for option in o:
@@ -187,7 +194,7 @@ class _Options(dict):
 
 class _Option(object):
     def __init__(self, name, default=None, type=str, help=None, metavar=None,
-                 multiple=False, file_name=None):
+                 multiple=False, file_name=None, group_name=None):
         if default is None and multiple:
             default = []
         self.name = name
@@ -196,6 +203,7 @@ class _Option(object):
         self.metavar = metavar
         self.multiple = multiple
         self.file_name = file_name
+        self.group_name = group_name
         self.default = default
         self._value = None
 
