@@ -29,6 +29,7 @@ provides WSGI support in two ways:
   and Tornado handlers in a single server.
 """
 
+import Cookie
 import cgi
 import httplib
 import logging
@@ -158,6 +159,19 @@ class HTTPRequest(object):
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""
         return self.version == "HTTP/1.1"
+
+    @property
+    def cookies(self):
+        """A dictionary of Cookie.Morsel objects."""
+        if not hasattr(self, "_cookies"):
+            self._cookies = Cookie.SimpleCookie()
+            if "Cookie" in self.headers:
+                try:
+                    self._cookies.load(
+                        native_str(self.headers["Cookie"]))
+                except Exception:
+                    self._cookies = None
+        return self._cookies
 
     def full_url(self):
         """Reconstructs the full URL for this request."""
