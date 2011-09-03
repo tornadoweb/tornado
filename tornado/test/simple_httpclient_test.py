@@ -138,7 +138,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def test_request_timeout(self):
         response = self.fetch('/hang', request_timeout=0.1)
         self.assertEqual(response.code, 599)
-        self.assertEqual(int(response.request_time * 10), 1)
+        self.assertTrue(0.099 < response.request_time < 0.11, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
 
     def test_ipv6(self):

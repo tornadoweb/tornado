@@ -3,6 +3,7 @@
 import logging
 import os
 import signal
+import sys
 from tornado.httpclient import HTTPClient, HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
@@ -109,6 +110,6 @@ class ProcessTest(LogTrapTestCase):
             raise
             
 
-if os.name != 'posix':
+if os.name != 'posix' or sys.platform == 'cygwin':
     # All sorts of unixisms here
     del ProcessTest
