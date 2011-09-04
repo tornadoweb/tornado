@@ -20,3 +20,4 @@
 
    .. autoclass:: Wait
 
+   .. autoclass:: WaitAll
