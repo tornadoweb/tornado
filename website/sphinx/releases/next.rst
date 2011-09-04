@@ -17,7 +17,8 @@ Backwards-incompatible changes
 New features
 ~~~~~~~~~~~~
 
-* New method `tornado.iostream.IOStream.read_until_close`
+* New methods `tornado.iostream.IOStream.read_until_close` and 
+  `tornado.iostream.IOStream.read_until_regex`
 * `tornado.autoreload` has a new command-line interface which can be used
   to wrap any script.  This replaces the ``--autoreload`` argument to
   `tornado.testing.main` and is more robust against syntax errors.
@@ -74,6 +75,20 @@ New features
 * It is now possible to use a custom subclass of ``StaticFileHandler``
   with the ``static_handler_class`` application setting, and this subclass
   can override the behavior of the ``static_url`` method.
+* The ``cookies`` property is now available on `tornado.httpserver.HTTPRequest`
+  (it is also available in its old location as a property of
+  `~tornado.web.RequestHandler`)
+* Template loaders now take a ``namespace`` constructor argument to add
+  entries to the template namespace.
+* `tornado.database.Connection` has new variants of ``execute`` and
+  ``executemany`` that return the number of rows affected instead of
+  the last inserted row id.
+* `tornado.autoreload` now works on Windows.
+* `tornado.options.define` now takes a ``group`` parameter to group options
+  in ``--help`` output.
+* New module `tornado.gen` is a generator-based interface to simplify
+  writing asynchronous functions.
+
 
 Bug fixes
 ~~~~~~~~~
@@ -106,3 +121,12 @@ Bug fixes
   use a template variable named ``modules``.
 * `~tornado.auth.OpenIDMixin` now uses the correct realm when the
   callback URI is on a different domain.
+* `SimpleAsyncHTTPClient` no longer consumes extra connection resources
+  when following redirects.
+* `SimpleAsyncHTTPClient` now works with buggy web servers that separate
+  headers with ``\n`` instead of ``\r\n\r\n``.
+* `tornado.web.RequestHandler.set_cookie` now accepts a ``max_age`` keyword
+  argument to set the ``max-age`` cookie attribute (note underscore vs dash)
+* `SimpleAsyncHTTPClient` now sets response.request_time correctly.
+* The ``application/json`` content type can now be gzipped.
+* Connect timeouts now work correctly in `SimpleAsyncHTTPClient`
