@@ -79,6 +79,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.open_args = args
         self.open_kwargs = kwargs
 
+        self.request.connection.remove_connection_timeout()
+
         if (self.request.headers.get("Sec-WebSocket-Version") == "8" or
             self.request.headers.get("Sec-WebSocket-Version") == "7"):
             self.ws_connection = WebSocketProtocol8(self)
