@@ -224,6 +224,7 @@ class IOStream(object):
                                    self._consume(self._read_buffer_size))
             if self._state is not None:
                 self.io_loop.remove_handler(self.socket.fileno())
+                self._state = None
             self.socket.close()
             self.socket = None
             if self._close_callback and self._pending_callbacks == 0:
