@@ -143,6 +143,26 @@ class Wait(YieldPoint):
     def get_result(self):
         return self.runner.pop_result(self.key)
 
+class WaitAll(YieldPoint):
+    """Returns the results of multiple previous `Callbacks`.
+
+    The argument is a sequence of `Callback` keys, and the result is
+    a list of results in the same order.
+    """
+    def __init__(self, keys):
+        assert isinstance(keys, list)
+        self.keys = keys
+
+    def start(self, runner):
+        self.runner = runner
+
+    def is_ready(self):
+        return all(self.runner.is_ready(key) for key in self.keys)
+        
+    def get_result(self):
+        return [self.runner.pop_result(key) for key in self.keys]
+            
+
 class Task(YieldPoint):
     """Runs a single asynchronous operation.
 

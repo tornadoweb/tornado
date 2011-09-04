@@ -115,6 +115,16 @@ class GenTest(AsyncTestCase):
             self.stop()
         self.run_gen(f)
 
+    def test_wait_all(self):
+        @gen.engine
+        def f():
+            (yield gen.Callback("k1"))("v1")
+            (yield gen.Callback("k2"))("v2")
+            results = yield gen.WaitAll(["k1", "k2"])
+            self.assertEqual(results, ["v1", "v2"])
+            self.stop()
+        self.run_gen(f)
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
