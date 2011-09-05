@@ -27,7 +27,6 @@ This module also defines the `HTTPRequest` class which is exposed via
 import Cookie
 import errno
 import logging
-import os
 import socket
 import time
 import urlparse

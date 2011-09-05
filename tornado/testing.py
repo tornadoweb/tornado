@@ -26,7 +26,6 @@ from tornado.httpserver import HTTPServer
 from tornado.stack_context import StackContext, NullContext
 import contextlib
 import logging
-import os
 import sys
 import time
 import unittest
