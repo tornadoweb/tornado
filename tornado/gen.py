@@ -89,7 +89,7 @@ class YieldPoint(object):
     def is_ready(self):
         """Called by the runner to determine whether to resume the generator.
 
-        May be called repeatedly until it returns True.
+        Returns a boolean; may be called more than once.
         """
         raise NotImplementedError()
 
@@ -150,7 +150,6 @@ class WaitAll(YieldPoint):
     a list of results in the same order.
     """
     def __init__(self, keys):
-        assert isinstance(keys, list)
         self.keys = keys
 
     def start(self, runner):
