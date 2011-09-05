@@ -135,28 +135,10 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
-    def test_connect_timeout(self):
-        # create a socket and bind it to a port, but don't
-        # call accept so the connection will timeout.
-        #get_unused_port()
-        port = get_unused_port()
-
-        with closing(socket.socket()) as sock:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind(('127.0.0.1', port))
-            sock.listen(1)
-            self.http_client.fetch("http://localhost:%d/" % port,
-                                   self.stop,
-                                   connect_timeout=0.1)
-            response = self.wait()
-            self.assertEqual(response.code, 599)
-            self.assertEqual(int(response.request_time * 10), 1)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout")
-
     def test_request_timeout(self):
         response = self.fetch('/hang', request_timeout=0.1)
         self.assertEqual(response.code, 599)
-        self.assertEqual(int(response.request_time * 10), 1)
+        self.assertTrue(0.099 < response.request_time < 0.11, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
 
     def test_ipv6(self):

@@ -241,9 +241,10 @@ if __name__ == "__main__":
     # Conversely, when run as path/to/tornado/autoreload.py, the directory
     # containing autoreload.py gets added to the path, but we don't want
     # tornado modules importable at top level, so remove it.
+    path_prefix = '.' + os.pathsep
     if (sys.path[0] == '' and
-        not os.environ.get("PYTHONPATH", "").startswith(".:")):
-        os.environ["PYTHONPATH"] = ".:" + os.environ.get("PYTHONPATH", "")
+        not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
+        os.environ["PYTHONPATH"] = path_prefix + os.environ.get("PYTHONPATH", "")
     elif sys.path[0] == os.path.dirname(__file__):
         del sys.path[0]
     main()

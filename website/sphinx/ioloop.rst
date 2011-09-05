@@ -13,9 +13,11 @@
 
    .. automethod:: IOLoop.instance
    .. automethod:: IOLoop.initialized
+   .. automethod:: IOLoop.install
    .. automethod:: IOLoop.start
-   .. automethod:: IOLoop.stop
    .. automethod:: IOLoop.running
+   .. automethod:: IOLoop.stop
+   .. automethod:: IOLoop.close
 
    I/O events
    ^^^^^^^^^^

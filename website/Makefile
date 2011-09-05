@@ -7,6 +7,7 @@ sphinx:
 .PHONY: coverage
 coverage:
 	sphinx-build -b coverage ${SPHINXOPTS} sphinx/build/coverage
+	cat sphinx/build/coverage/python.txt
 
 clean:
 	rm -rf sphinx/build

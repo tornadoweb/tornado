@@ -12,6 +12,7 @@ from tornado.web import Application, RequestHandler
 import os
 import shutil
 import socket
+import sys
 import tempfile
 
 try:
@@ -240,3 +241,6 @@ class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
         stream.read_bytes(int(headers["Content-Length"]), self.stop)
         body = self.wait()
         self.assertEqual(body, b("Hello world"))
+
+if not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin':
+    del UnixSocketTest

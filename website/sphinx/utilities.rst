@@ -4,6 +4,7 @@ Utilities
 .. toctree::
 
    autoreload
+   gen
    httputil
    options
    process
