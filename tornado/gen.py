@@ -49,6 +49,7 @@ operations have started.
 """
 
 import functools
+import sys
 import types
 
 class KeyReuseError(Exception): pass
@@ -215,8 +216,9 @@ class Runner(object):
         self.yield_point = _NullYieldPoint()
         self.pending_callbacks = set()
         self.results = {}
-        self.waiting = None
         self.running = False
+        self.finished = False
+        self.exc_info = None
 
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
@@ -244,26 +246,40 @@ class Runner(object):
         """Starts or resumes the generator, running until it reaches a
         yield point that is not ready.
         """
-        if self.running:
+        if self.running or self.finished:
             return
         try:
             self.running = True
             while True:
-                if not self.yield_point.is_ready():
-                    return
-                next = self.yield_point.get_result()
+                if self.exc_info is None:
+                    try:
+                        if not self.yield_point.is_ready():
+                            return
+                        next = self.yield_point.get_result()
+                    except Exception:
+                        self.exc_info = sys.exc_info()
                 try:
-                    yielded = self.gen.send(next)
+                    if self.exc_info is not None:
+                        exc_info = self.exc_info
+                        self.exc_info = None
+                        yielded = self.gen.throw(*exc_info)
+                    else:
+                        yielded = self.gen.send(next)
                 except StopIteration:
+                    self.finished = True
                     if self.pending_callbacks:
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
                     return
-                if not isinstance(yielded, YieldPoint):
-                    raise BadYieldError("yielded unknown object %r" % yielded)
-                self.yield_point = yielded
-                self.yield_point.start(self)
+                except Exception:
+                    self.finished = True
+                    raise
+                if isinstance(yielded, YieldPoint):
+                    self.yield_point = yielded
+                    self.yield_point.start(self)
+                else:
+                    self.exc_info = (BadYieldError("yielded unknown object %r" % yielded),)
         finally:
             self.running = False
 

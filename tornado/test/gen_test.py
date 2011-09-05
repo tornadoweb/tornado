@@ -125,6 +125,41 @@ class GenTest(AsyncTestCase):
             self.stop()
         self.run_gen(f)
 
+    def test_exception_in_yield(self):
+        @gen.engine
+        def f():
+            try:
+                yield gen.Wait("k1")
+                raise "did not get expected exception"
+            except gen.UnknownKeyError:
+                pass
+            self.stop()
+        self.run_gen(f)
+
+    def test_resume_after_exception_in_yield(self):
+        @gen.engine
+        def f():
+            try:
+                yield gen.Wait("k1")
+                raise "did not get expected exception"
+            except gen.UnknownKeyError:
+                pass
+            (yield gen.Callback("k2"))("v2")
+            self.assertEqual((yield gen.Wait("k2")), "v2")
+            self.stop()
+        self.run_gen(f)
+
+    def test_orphaned_callback(self):
+        @gen.engine
+        def f():
+            self.orphaned_callback = yield gen.Callback(1)
+        try:
+            self.run_gen(f)
+            raise "did not get expected exception"
+        except gen.LeakedCallbackError:
+            pass
+        self.orphaned_callback()
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
