@@ -24,6 +24,9 @@ autodoc_member_order = "bysource"
 autoclass_content = "both"
 
 coverage_skip_undoc_in_source = True
+coverage_ignore_modules = [
+    "tornado.platform.twisted",
+    ]
 # I wish this could go in a per-module file...
 coverage_ignore_classes = [
     # tornado.gen

@@ -27,10 +27,8 @@ from __future__ import with_statement, absolute_import
 
 import functools
 import logging
-import sys
 import time
 
-from twisted.internet.base import DelayedCall
 from twisted.internet.posixbase import PosixReactorBase
 from twisted.internet.interfaces import \
     IReactorFDSet, IDelayedCall, IReactorTime
@@ -52,8 +50,8 @@ class TornadoDelayedCall(object):
         self._reactor = reactor
         self._func = functools.partial(f, *args, **kw)
         self._time = self._reactor.seconds() + seconds
-        self._timeout = self._reactor._ioloop.add_timeout(self._time,
-                                                          self._called)
+        self._timeout = self._reactor._io_loop.add_timeout(self._time,
+                                                           self._called)
         self._active = True
 
     def _called(self):
@@ -69,20 +67,20 @@ class TornadoDelayedCall(object):
 
     def cancel(self):
         self._active = False
-        self._reactor._ioloop.remove_timeout(self._timeout)
+        self._reactor._io_loop.remove_timeout(self._timeout)
         self._reactor._removeDelayedCall(self)
 
     def delay(self, seconds):
-        self._reactor._ioloop.remove_timeout(self._timeout)
+        self._reactor._io_loop.remove_timeout(self._timeout)
         self._time += seconds
-        self._timeout = self._reactor._ioloop.add_timeout(self._time,
-                                                          self._called)
+        self._timeout = self._reactor._io_loop.add_timeout(self._time,
+                                                           self._called)
 
     def reset(self, seconds):
-        self._reactor._ioloop.remove_timeout(self._timeout)
+        self._reactor._io_loop.remove_timeout(self._timeout)
         self._time = self._reactor.seconds() + seconds
-        self._timeout = self._reactor._ioloop.add_timeout(self._time,
-                                                          self._called)
+        self._timeout = self._reactor._io_loop.add_timeout(self._time,
+                                                           self._called)
 
     def active(self):
         return self._active
@@ -93,10 +91,10 @@ class TornadoReactor(PosixReactorBase):
     """
     implements(IReactorTime, IReactorFDSet)
 
-    def __init__(self, ioloop=None):
-        if not ioloop:
-            ioloop = tornado.ioloop.IOLoop.instance()
-        self._ioloop = ioloop
+    def __init__(self, io_loop=None):
+        if not io_loop:
+            io_loop = tornado.ioloop.IOLoop.instance()
+        self._io_loop = io_loop
         self._readers = {}
         self._writers = {}
         self._fds = {} # a map of fd to a (reader, writer) tuple
@@ -128,7 +126,7 @@ class TornadoReactor(PosixReactorBase):
         """
         assert callable(f), "%s is not callable" % f
         p = functools.partial(f, *args, **kw)
-        self._ioloop.add_callback(p)
+        self._io_loop.add_callback(p)
 
     # We don't need the waker code from the super class, Tornado uses
     # its own waker.
@@ -161,11 +159,11 @@ class TornadoReactor(PosixReactorBase):
             if writer:
                 # We already registered this fd for write events,
                 # update it for read events as well.
-                self._ioloop.update_handler(fd, IOLoop.READ | IOLoop.WRITE)
+                self._io_loop.update_handler(fd, IOLoop.READ | IOLoop.WRITE)
         else:
             with NullContext():
                 self._fds[fd] = (reader, None)
-                self._ioloop.add_handler(fd, self._invoke_callback,
+                self._io_loop.add_handler(fd, self._invoke_callback,
                                          IOLoop.READ)
 
     def addWriter(self, writer):
@@ -182,11 +180,11 @@ class TornadoReactor(PosixReactorBase):
             if reader:
                 # We already registered this fd for read events,
                 # update it for write events as well.
-                self._ioloop.update_handler(fd, IOLoop.READ | IOLoop.WRITE)
+                self._io_loop.update_handler(fd, IOLoop.READ | IOLoop.WRITE)
         else:
             with NullContext():
                 self._fds[fd] = (None, writer)
-                self._ioloop.add_handler(fd, self._invoke_callback,
+                self._io_loop.add_handler(fd, self._invoke_callback,
                                          IOLoop.WRITE)
 
     def removeReader(self, reader):
@@ -202,13 +200,13 @@ class TornadoReactor(PosixReactorBase):
                 # We have a writer so we need to update the IOLoop for
                 # write events only.
                 self._fds[fd] = (None, writer)
-                self._ioloop.update_handler(fd, IOLoop.WRITE)
+                self._io_loop.update_handler(fd, IOLoop.WRITE)
             else:
                 # Since we have no writer registered, we remove the
                 # entry from _fds and unregister the handler from the
                 # IOLoop
                 del self._fds[fd]
-                self._ioloop.remove_handler(fd)
+                self._io_loop.remove_handler(fd)
 
     def removeWriter(self, writer):
         """
@@ -223,13 +221,13 @@ class TornadoReactor(PosixReactorBase):
                 # We have a reader so we need to update the IOLoop for
                 # read events only.
                 self._fds[fd] = (reader, None)
-                self._ioloop.update_handler(fd, IOLoop.READ)
+                self._io_loop.update_handler(fd, IOLoop.READ)
             else:
                 # Since we have no reader registered, we remove the
                 # entry from the _fds and unregister the handler from
                 # the IOLoop.
                 del self._fds[fd]
-                self._ioloop.remove_handler(fd)
+                self._io_loop.remove_handler(fd)
 
     def removeAll(self):
         return self._removeAll(self._readers, self._writers)
@@ -248,8 +246,8 @@ class TornadoReactor(PosixReactorBase):
         PosixReactorBase.stop(self)
         self.runUntilCurrent()
         try:
-            self._ioloop.stop()
-            self._ioloop.close()
+            self._io_loop.stop()
+            self._io_loop.close()
         except:
             # Ignore any exceptions thrown by IOLoop
             pass
@@ -262,8 +260,8 @@ class TornadoReactor(PosixReactorBase):
         PosixReactorBase.crash(self)
         self.runUntilCurrent()
         try:
-            self._ioloop.stop()
-            self._ioloop.close()
+            self._io_loop.stop()
+            self._io_loop.close()
         except:
             # Ignore any exceptions thrown by IOLoop
             pass
@@ -274,7 +272,7 @@ class TornadoReactor(PosixReactorBase):
 
     def mainLoop(self):
         self._running = True
-        self._ioloop.start()
+        self._io_loop.start()
 
 class _TestReactor(TornadoReactor):
     """Subclass of TornadoReactor for use in unittests.
@@ -295,13 +293,13 @@ class _TestReactor(TornadoReactor):
 
 
 
-def install(ioloop=None):
+def install(io_loop=None):
     """
     Install the Tornado reactor.
     """
-    if not ioloop:
-        ioloop = tornado.ioloop.IOLoop.instance()
-    reactor = TornadoReactor(ioloop)
+    if not io_loop:
+        io_loop = tornado.ioloop.IOLoop.instance()
+    reactor = TornadoReactor(io_loop)
     from twisted.internet.main import installReactor
     installReactor(reactor)
     return reactor

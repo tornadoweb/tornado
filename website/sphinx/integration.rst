@@ -5,5 +5,6 @@ Integration with other services
 
    auth
    database
+   twisted
    websocket
    wsgi
