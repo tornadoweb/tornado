@@ -49,11 +49,10 @@ class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
 # This is kind of hacky, but run some of the HTTPServer tests through
 # WSGIContainer and WSGIApplication to make sure everything survives
 # repeated disassembly and reassembly.
-from tornado.test.httpserver_test import HTTPConnectionTest, MultipartTestHandler
+from tornado.test.httpserver_test import HTTPConnectionTest
 
 class WSGIConnectionTest(HTTPConnectionTest):
     def get_app(self):
-        return WSGIContainer(validator(WSGIApplication([
-                        ("/multipart", MultipartTestHandler)])))
+        return WSGIContainer(validator(WSGIApplication(self.get_handlers())))
 
 del HTTPConnectionTest

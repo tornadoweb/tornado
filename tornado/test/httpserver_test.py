@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from tornado import httpclient, simple_httpclient, netutil
-from tornado.escape import json_decode, utf8, _unicode, recursive_unicode
+from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
@@ -99,9 +99,14 @@ class RawRequestHTTPConnection(simple_httpclient._HTTPConnection):
         self.__next_request = None
         self.stream.read_until(b("\r\n\r\n"), self._on_headers)
 
+# This test is also called from wsgi_test
 class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_handlers(self):
+        return [("/multipart", MultipartTestHandler),
+                ("/hello", HelloWorldRequestHandler)]
+
     def get_app(self):
-        return Application([("/multipart", MultipartTestHandler)])
+        return Application(self.get_handlers())
 
     def raw_fetch(self, headers, body):
         conn = RawRequestHTTPConnection(self.io_loop, self.http_client,
@@ -140,6 +145,32 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(u"\u00e1", data["argument"])
         self.assertEqual(u"\u00f3", data["filename"])
         self.assertEqual(u"\u00fa", data["filebody"])
+
+    def test_100_continue(self):
+        # Run through a 100-continue interaction by hand:
+        # When given Expect: 100-continue, we get a 100 response after the
+        # headers, and then the real response after the body.
+        stream = IOStream(socket.socket(), io_loop=self.io_loop)
+        stream.connect(("localhost", self.get_http_port()), callback=self.stop)
+        self.wait()
+        stream.write(b("\r\n").join([b("POST /hello HTTP/1.1"),
+                                  b("Content-Length: 1024"),
+                                  b("Expect: 100-continue"),
+                                  b("\r\n")]), callback=self.stop)
+        self.wait()
+        stream.read_until(b("\r\n\r\n"), self.stop)
+        data = self.wait()
+        self.assertTrue(data.startswith(b("HTTP/1.1 100 ")), data)
+        stream.write(b("a") * 1024)
+        stream.read_until(b("\r\n"), self.stop)
+        first_line = self.wait()
+        self.assertTrue(first_line.startswith(b("HTTP/1.1 200")), first_line)
+        stream.read_until(b("\r\n\r\n"), self.stop)
+        header_data = self.wait()
+        headers = HTTPHeaders.parse(native_str(header_data.decode('latin1')))
+        stream.read_bytes(int(headers["Content-Length"]), self.stop)
+        body = self.wait()
+        self.assertEqual(body, b("Got 1024 bytes in POST"))
 
 class EchoHandler(RequestHandler):
     def get(self):

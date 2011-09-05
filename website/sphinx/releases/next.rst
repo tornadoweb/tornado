@@ -147,4 +147,5 @@ Bug fixes
 * Unicode string literals now work in template expressions.
 * The template ``{% module %}`` directive now works even if applications
   use a template variable named ``modules``.
+* Requests with "Expect: 100-continue" now work on python 3
 
