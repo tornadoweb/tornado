@@ -17,9 +17,11 @@
 """HTTP utility code shared by clients and servers."""
 
 import logging
-import urllib
 import re
+import time
+import urllib
 
+from tornado.escape import utf8
 from tornado.util import b
 
 class HTTPHeaders(dict):

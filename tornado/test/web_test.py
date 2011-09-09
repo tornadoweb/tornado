@@ -3,7 +3,7 @@ from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type
-from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler
+from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature
 
 import binascii
 import logging
@@ -40,14 +40,15 @@ class SecureCookieTest(LogTrapTestCase):
         assert match
         timestamp = match.group(1)
         sig = match.group(2)
-        self.assertEqual(handler._cookie_signature('foo', '12345678',
-                                                   timestamp), sig)
+        self.assertEqual(_create_signature(
+                             handler.application.settings['cookie_secret'],
+                             'foo', '12345678', timestamp), sig)
         # shifting digits from payload to timestamp doesn't alter signature
         # (this is not desirable behavior, just confirming that that's how it
         # works)
-        self.assertEqual(
-            handler._cookie_signature('foo', '1234', b('5678') + timestamp),
-            sig)
+        self.assertEqual(_create_signature(
+                             handler.application.settings['cookie_secret'],
+                             'foo', '1234', b('5678') + timestamp), sig)
         # tamper with the cookie
         handler._cookies['foo'] = utf8('1234|5678%s|%s' % (timestamp, sig))
         # it gets rejected
