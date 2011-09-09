@@ -53,6 +53,12 @@ class BaseHandler(tornado.web.RequestHandler):
         user_json = self.get_secure_cookie("user")
         if not user_json: return None
         return tornado.escape.json_decode(user_json)
+        
+    def on_connection_close(self):
+        try:
+            MessageMixin.waiters.remove(self.callback)
+        except (AttributeError, ValueError):
+            pass
 
 
 class MainHandler(BaseHandler):
@@ -114,7 +120,8 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
     @tornado.web.asynchronous
     def post(self):
         cursor = self.get_argument("cursor", None)
-        self.wait_for_messages(self.async_callback(self.on_new_messages),
+        self.callback = self.async_callback(self.on_new_messages)
+        self.wait_for_messages(self.callback,
                                cursor=cursor)
 
     def on_new_messages(self, messages):
