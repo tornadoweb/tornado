@@ -37,11 +37,9 @@ except ImportError:
 class IOStream(object):
     r"""A utility class to write to and read from a non-blocking socket.
 
-    We support three methods: write(), read_until(), and read_bytes().
+    We support a non-blocking ``write()`` and a family of ``read_*()`` methods.
     All of the methods take callbacks (since writing and reading are
-    non-blocking and asynchronous). read_until() reads the socket until
-    a given delimiter, and read_bytes() reads until a specified number
-    of bytes have been read from the socket.
+    non-blocking and asynchronous). 
 
     The socket parameter may either be connected or unconnected.  For
     server operations the socket is the result of calling socket.accept().
@@ -94,6 +92,7 @@ class IOStream(object):
         self._read_bytes = None
         self._read_until_close = False
         self._read_callback = None
+        self._streaming_callback = None
         self._write_callback = None
         self._close_callback = None
         self._connect_callback = None
@@ -154,12 +153,18 @@ class IOStream(object):
                 break
         self._add_io_state(self.io_loop.READ)
 
-    def read_bytes(self, num_bytes, callback):
-        """Call callback when we read the given number of bytes."""
+    def read_bytes(self, num_bytes, callback, streaming_callback=None):
+        """Call callback when we read the given number of bytes.
+
+        If a ``streaming_callback`` is given, it will be called with chunks
+        of data as they become available, and the argument to the final
+        ``callback`` will be empty.
+        """
         assert not self._read_callback, "Already reading"
         assert isinstance(num_bytes, int)
         self._read_bytes = num_bytes
         self._read_callback = stack_context.wrap(callback)
+        self._streaming_callback = stack_context.wrap(streaming_callback)
         while True:
             if self._read_from_buffer():
                 return
@@ -168,10 +173,15 @@ class IOStream(object):
                 break
         self._add_io_state(self.io_loop.READ)
 
-    def read_until_close(self, callback):
+    def read_until_close(self, callback, streaming_callback=None):
         """Reads all data from the socket until it is closed.
 
-        Subject to ``max_buffer_size`` limit from `IOStream` constructor.
+        If a ``streaming_callback`` is given, it will be called with chunks
+        of data as they become available, and the argument to the final
+        ``callback`` will be empty.
+
+        Subject to ``max_buffer_size`` limit from `IOStream` constructor if
+        a ``streaming_callback`` is not used.
         """
         assert not self._read_callback, "Already reading"
         if self.closed():
@@ -179,6 +189,7 @@ class IOStream(object):
             return
         self._read_until_close = True
         self._read_callback = stack_context.wrap(callback)
+        self._streaming_callback = stack_context.wrap(streaming_callback)
         self._add_io_state(self.io_loop.READ)
 
     def write(self, data, callback=None):
@@ -372,10 +383,16 @@ class IOStream(object):
         Returns True if the read was completed.
         """
         if self._read_bytes is not None:
+            if self._streaming_callback is not None and self._read_buffer_size:
+                bytes_to_consume = min(self._read_bytes, self._read_buffer_size)
+                self._read_bytes -= bytes_to_consume
+                self._run_callback(self._streaming_callback,
+                                   self._consume(bytes_to_consume))
             if self._read_buffer_size >= self._read_bytes:
                 num_bytes = self._read_bytes
                 callback = self._read_callback
                 self._read_callback = None
+                self._streaming_callback = None
                 self._read_bytes = None
                 self._run_callback(callback, self._consume(num_bytes))
                 return True
@@ -386,6 +403,7 @@ class IOStream(object):
                 callback = self._read_callback
                 delimiter_len = len(self._read_delimiter)
                 self._read_callback = None
+                self._streaming_callback = None
                 self._read_delimiter = None
                 self._run_callback(callback,
                                    self._consume(loc + delimiter_len))
@@ -396,9 +414,14 @@ class IOStream(object):
             if m:
                 callback = self._read_callback
                 self._read_callback = None
+                self._streaming_callback = None
                 self._read_regex = None
                 self._run_callback(callback, self._consume(m.end()))
                 return True
+        elif self._read_until_close:
+            if self._streaming_callback is not None and self._read_buffer_size:
+                self._run_callback(self._streaming_callback,
+                                   self._consume(self._read_buffer_size))
         return False
 
     def _handle_connect(self):
