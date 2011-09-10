@@ -79,6 +79,20 @@ class TemplateTest(LogTrapTestCase):
         loader = DictLoader({"test.html": "{{ inc(5) }}"}, namespace={"inc": lambda x: x+1})
         self.assertEqual(loader.load("test.html").generate(), b("6"))
 
+    def test_apply(self):
+        def upper(s): return s.upper()
+        template = Template(utf8("{% apply upper %}foo{% end %}"))
+        self.assertEqual(template.generate(upper=upper), b("FOO"))
+
+    def test_if(self):
+        template = Template(utf8("{% if x > 4 %}yes{% else %}no{% end %}"))
+        self.assertEqual(template.generate(x=5), b("yes"))
+        self.assertEqual(template.generate(x=3), b("no"))
+
+    def test_comment(self):
+        template = Template(utf8("{% comment blah blah %}foo"))
+        self.assertEqual(template.generate(), b("foo"))
+
 
 class AutoEscapeTest(LogTrapTestCase):
     def setUp(self):
