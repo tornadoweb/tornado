@@ -86,7 +86,7 @@ class MultipartTestHandler(RequestHandler):
     def post(self):
         self.finish({"header": self.request.headers["X-Header-Encoding-Test"],
                      "argument": self.get_argument("argument"),
-                     "filename": self.request.files["files"][0]["filename"],
+                     "filename": self.request.files["files"][0].filename,
                      "filebody": _unicode(self.request.files["files"][0]["body"]),
                      })
 
