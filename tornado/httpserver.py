@@ -452,10 +452,7 @@ class HTTPRequest(object):
     .. attribute:: files
 
        File uploads are available in the files property, which maps file
-       names to list of files. Each file is a dictionary of the form
-       {"filename":..., "content_type":..., "body":...}. The content_type
-       comes from the provided HTTP header and should not be trusted
-       outright given that it can be easily forged.
+       names to lists of :class:`HTTPFile`.
 
     .. attribute:: connection
 
