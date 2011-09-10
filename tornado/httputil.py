@@ -20,7 +20,7 @@ import logging
 import urllib
 import re
 
-from tornado.util import b
+from tornado.util import b, ObjectDict
 
 class HTTPHeaders(dict):
     """A dictionary that maintains Http-Header-Case for all keys.

@@ -82,7 +82,7 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type, import_object
+from tornado.util import b, bytes_type, import_object, ObjectDict
 
 try:
     from io import BytesIO  # python 3
@@ -105,14 +105,14 @@ class RequestHandler(object):
         self._finished = False
         self._auto_finish = True
         self._transforms = None  # will be set in _execute
-        self.ui = _O((n, self._ui_method(m)) for n, m in
+        self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
         # UIModules are available as both `modules` and `_modules` in the
         # template namespace.  Historically only `modules` was available
         # but could be clobbered by user additions to the namespace.
         # The template {% module %} directive looks in `_modules` to avoid
         # possible conflicts.
-        self.ui["_modules"] = _O((n, self._ui_module(n, m)) for n, m in
+        self.ui["_modules"] = ObjectDict((n, self._ui_module(n, m)) for n, m in
                                  application.ui_modules.iteritems())
         self.ui["modules"] = self.ui["_modules"]
         self.clear()
@@ -1911,15 +1911,3 @@ def _create_signature(secret, *parts):
     hash = hmac.new(utf8(secret), digestmod=hashlib.sha1)
     for part in parts: hash.update(utf8(part))
     return utf8(hash.hexdigest())
-
-
-class _O(dict):
-    """Makes a dictionary behave like an object."""
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError:
-            raise AttributeError(name)
-
-    def __setattr__(self, name, value):
-        self[name] = value

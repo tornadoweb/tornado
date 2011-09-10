@@ -2,8 +2,8 @@ from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, nat
 from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
-from tornado.util import b, bytes_type
-from tornado.web import RequestHandler, _O, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature
+from tornado.util import b, bytes_type, ObjectDict
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature
 
 import binascii
 import logging
@@ -17,7 +17,7 @@ class CookieTestRequestHandler(RequestHandler):
     def __init__(self):
         # don't call super.__init__
         self._cookies = {}
-        self.application = _O(settings=dict(cookie_secret='0123456789'))
+        self.application = ObjectDict(settings=dict(cookie_secret='0123456789'))
 
     def get_cookie(self, name):
         return self._cookies.get(name)
