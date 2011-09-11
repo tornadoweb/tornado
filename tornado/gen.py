@@ -28,8 +28,17 @@ could be written with ``gen`` as::
             self.render("template.html")
 
 `Task` works with any function that takes a ``callback`` keyword argument
-(and runs that callback with zero or one arguments).  For more complicated
-interfaces, `Task` can be split into two parts: `Callback` and `Wait`::
+(and runs that callback with zero or one arguments).  You can also yield
+a list of ``Tasks``, which will be started at the same time and run in parallel;
+a list of results will be returned when they are all finished::
+
+    def get(self):
+        http_client = AsyncHTTPClient()
+        response1, response2 = yield [gen.Task(http_client.fetch, url1),
+                                      gen.Task(http_client.fetch, url2)]
+
+For more complicated interfaces, `Task` can be split into two parts:
+`Callback` and `Wait`::
 
     class GenAsyncHandler2(RequestHandler):
         @asynchronous
@@ -43,9 +52,9 @@ interfaces, `Task` can be split into two parts: `Callback` and `Wait`::
             self.render("template.html")
 
 The ``key`` argument to `Callback` and `Wait` allows for multiple
-asynchronous operations to proceed in parallel: yield several
-callbacks with different keys, then wait for them once all the async
-operations have started.
+asynchronous operations to be started at different times and proceed
+in parallel: yield several callbacks with different keys, then wait
+for them once all the async operations have started.
 """
 
 import functools
@@ -149,6 +158,8 @@ class WaitAll(YieldPoint):
 
     The argument is a sequence of `Callback` keys, and the result is
     a list of results in the same order.
+
+    `WaitAll` is equivalent to yielding a list of `Wait` objects.
     """
     def __init__(self, keys):
         self.keys = keys
@@ -197,6 +208,28 @@ class Task(YieldPoint):
 
     def callback(self, arg=None):
         self.runner.set_result(self.key, arg)
+
+class Multi(YieldPoint):
+    """Runs multiple asynchronous operations in parallel.
+
+    Takes a list of ``Tasks`` or other ``YieldPoints`` and returns a list of
+    their responses.  It is not necessary to call `Multi` explicitly,
+    since the engine will do so automatically when the generator yields
+    a list of ``YieldPoints``.
+    """
+    def __init__(self, children):
+        assert all(isinstance(i, YieldPoint) for i in children)
+        self.children = children
+    
+    def start(self, runner):
+        for i in self.children:
+            i.start(runner)
+
+    def is_ready(self):
+        return all(i.is_ready() for i in self.children)
+
+    def get_result(self):
+        return [i.get_result() for i in self.children]
 
 class _NullYieldPoint(YieldPoint):
     def start(self, runner):
@@ -275,6 +308,8 @@ class Runner(object):
                 except Exception:
                     self.finished = True
                     raise
+                if isinstance(yielded, list):
+                    yielded = Multi(yielded)
                 if isinstance(yielded, YieldPoint):
                     self.yield_point = yielded
                     self.yield_point.start(self)

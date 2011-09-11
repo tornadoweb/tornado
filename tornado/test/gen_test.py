@@ -1,3 +1,4 @@
+import functools
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
@@ -10,6 +11,14 @@ class GenTest(AsyncTestCase):
     def run_gen(self, f):
         f()
         self.wait()
+
+    def delay_callback(self, iterations, callback, arg):
+        """Runs callback(arg) after a number of IOLoop iterations."""
+        if iterations == 0:
+            callback(arg)
+        else:
+            self.io_loop.add_callback(functools.partial(
+                    self.delay_callback, iterations - 1, callback, arg))
 
     def test_no_yield(self):
         @gen.engine
@@ -159,6 +168,28 @@ class GenTest(AsyncTestCase):
         except gen.LeakedCallbackError:
             pass
         self.orphaned_callback()
+
+    def test_multi(self):
+        @gen.engine
+        def f():
+            (yield gen.Callback("k1"))("v1")
+            (yield gen.Callback("k2"))("v2")
+            results = yield [gen.Wait("k1"), gen.Wait("k2")]
+            self.assertEqual(results, ["v1", "v2"])
+            self.stop()
+        self.run_gen(f)
+
+    def test_multi_delayed(self):
+        @gen.engine
+        def f():
+            # callbacks run at different times
+            responses = yield [
+                gen.Task(self.delay_callback, 3, arg="v1"),
+                gen.Task(self.delay_callback, 1, arg="v2"),
+                ]
+            self.assertEqual(responses, ["v1", "v2"])
+            self.stop()
+        self.run_gen(f)
 
 
 class GenSequenceHandler(RequestHandler):
