@@ -27,10 +27,10 @@ could be written with ``gen`` as::
             do_something_with_response(response)
             self.render("template.html")
 
-`Task` works with any function that takes a ``callback`` keyword argument
-(and runs that callback with zero or one arguments).  You can also yield
-a list of ``Tasks``, which will be started at the same time and run in parallel;
-a list of results will be returned when they are all finished::
+`Task` works with any function that takes a ``callback`` keyword
+argument.  You can also yield a list of ``Tasks``, which will be
+started at the same time and run in parallel; a list of results will
+be returned when they are all finished::
 
     def get(self):
         http_client = AsyncHTTPClient()
@@ -55,9 +55,16 @@ The ``key`` argument to `Callback` and `Wait` allows for multiple
 asynchronous operations to be started at different times and proceed
 in parallel: yield several callbacks with different keys, then wait
 for them once all the async operations have started.
+
+The result of a `Wait` or `Task` yield expression depends on how the callback
+was run.  If it was called with no arguments, the result is ``None``.  If
+it was called with one argument, the result is that argument.  If it was
+called with more than one argument or any keyword arguments, the result
+is an `Arguments` object, which is a named tuple ``(args, kwargs)``.
 """
 
 import functools
+import operator
 import sys
 import types
 
@@ -134,10 +141,7 @@ class Callback(YieldPoint):
         return True
 
     def get_result(self):
-        return self.callback
-
-    def callback(self, arg=None):
-        self.runner.set_result(self.key, arg)
+        return self.runner.result_callback(self.key)
 
 class Wait(YieldPoint):
     """Returns the argument passed to the result of a previous `Callback`."""
@@ -191,23 +195,22 @@ class Task(YieldPoint):
     """
     def __init__(self, func, *args, **kwargs):
         assert "callback" not in kwargs
-        kwargs["callback"] = self.callback
-        self.func = functools.partial(func, *args, **kwargs)
+        self.args = args
+        self.kwargs = kwargs
+        self.func = func
 
     def start(self, runner):
         self.runner = runner
         self.key = object()
         runner.register_callback(self.key)
-        self.func()
+        self.kwargs["callback"] = runner.result_callback(self.key)
+        self.func(*self.args, **self.kwargs)
     
     def is_ready(self):
         return self.runner.is_ready(self.key)
 
     def get_result(self):
         return self.runner.pop_result(self.key)
-
-    def callback(self, arg=None):
-        self.runner.set_result(self.key, arg)
 
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
@@ -318,3 +321,29 @@ class Runner(object):
         finally:
             self.running = False
 
+    def result_callback(self, key):
+        def inner(*args, **kwargs):
+            if kwargs or len(args) > 1:
+                result = Arguments(args, kwargs)
+            elif args:
+                result = args[0]
+            else:
+                result = None
+            self.set_result(key, result)
+        return inner
+
+# in python 2.6+ this could be a collections.namedtuple
+class Arguments(tuple):
+    """The result of a yield expression whose callback had more than one
+    argument (or keyword arguments).
+
+    The `Arguments` object can be used as a tuple ``(args, kwargs)``
+    or an object with attributes ``args`` and ``kwargs``.
+    """
+    __slots__ = ()
+
+    def __new__(cls, args, kwargs):
+        return tuple.__new__(cls, (args, kwargs))
+
+    args = property(operator.itemgetter(0))
+    kwargs = property(operator.itemgetter(1))

@@ -191,6 +191,35 @@ class GenTest(AsyncTestCase):
             self.stop()
         self.run_gen(f)
 
+    def test_arguments(self):
+        @gen.engine
+        def f():
+            (yield gen.Callback("noargs"))()
+            self.assertEqual((yield gen.Wait("noargs")), None)
+            (yield gen.Callback("1arg"))(42)
+            self.assertEqual((yield gen.Wait("1arg")), 42)
+
+            (yield gen.Callback("kwargs"))(value=42)
+            result = yield gen.Wait("kwargs")
+            self.assertTrue(isinstance(result, gen.Arguments))
+            self.assertEqual(((), dict(value=42)), result)
+            self.assertEqual(dict(value=42), result.kwargs)
+
+            (yield gen.Callback("2args"))(42, 43)
+            result = yield gen.Wait("2args")
+            self.assertTrue(isinstance(result, gen.Arguments))
+            self.assertEqual(((42, 43), {}), result)
+            self.assertEqual((42, 43), result.args)
+
+            def task_func(callback):
+                callback(None, error="foo")
+            result = yield gen.Task(task_func)
+            self.assertTrue(isinstance(result, gen.Arguments))
+            self.assertEqual(((None,), dict(error="foo")), result)
+
+            self.stop()
+        self.run_gen(f)
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous

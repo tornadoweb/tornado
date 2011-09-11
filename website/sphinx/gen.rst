@@ -21,3 +21,8 @@
    .. autoclass:: Wait
 
    .. autoclass:: WaitAll
+
+   Other classes
+   -------------
+
+   .. autoclass:: Arguments
