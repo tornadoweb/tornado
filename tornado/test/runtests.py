@@ -5,6 +5,7 @@ TEST_MODULES = [
     'tornado.httputil.doctests',
     'tornado.iostream.doctests',
     'tornado.util.doctests',
+    'tornado.test.auth_test',
     'tornado.test.curl_httpclient_test',
     'tornado.test.escape_test',
     'tornado.test.gen_test',

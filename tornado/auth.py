@@ -50,7 +50,6 @@ Example usage for Google OpenID::
 
 import base64
 import binascii
-import cgi
 import hashlib
 import hmac
 import logging
@@ -85,7 +84,7 @@ class OpenIdMixin(object):
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs)
         self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))
 
-    def get_authenticated_user(self, callback):
+    def get_authenticated_user(self, callback, http_client=None):
         """Fetches the authenticated user data upon redirect.
 
         This method should be called by the handler that receives the
@@ -96,8 +95,8 @@ class OpenIdMixin(object):
         args = dict((k, v[-1]) for k, v in self.request.arguments.iteritems())
         args["openid.mode"] = u"check_authentication"
         url = self._OPENID_ENDPOINT
-        http = httpclient.AsyncHTTPClient()
-        http.fetch(url, self.async_callback(
+        if http_client is None: http_client = httpclient.AsyncHTTPClient()
+        http_client.fetch(url, self.async_callback(
             self._on_authentication_verified, callback),
             method="POST", body=urllib.urlencode(args))
 
@@ -207,7 +206,8 @@ class OAuthMixin(object):
     See TwitterMixin and FriendFeedMixin below for example implementations.
     """
 
-    def authorize_redirect(self, callback_uri=None, extra_params=None):
+    def authorize_redirect(self, callback_uri=None, extra_params=None,
+                           http_client=None):
         """Redirects the user to obtain OAuth authorization for this service.
 
         Twitter and FriendFeed both require that you register a Callback
@@ -222,20 +222,25 @@ class OAuthMixin(object):
         """
         if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
             raise Exception("This service does not support oauth_callback")
-        http = httpclient.AsyncHTTPClient()
+        if http_client is None:
+            http_client = httpclient.AsyncHTTPClient()
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
-            http.fetch(self._oauth_request_token_url(callback_uri=callback_uri,
-                extra_params=extra_params),
+            http_client.fetch(
+                self._oauth_request_token_url(callback_uri=callback_uri,
+                                              extra_params=extra_params),
                 self.async_callback(
                     self._on_request_token,
                     self._OAUTH_AUTHORIZE_URL,
                 callback_uri))
         else:
-            http.fetch(self._oauth_request_token_url(), self.async_callback(
-                self._on_request_token, self._OAUTH_AUTHORIZE_URL, callback_uri))
+            http_client.fetch(
+                self._oauth_request_token_url(),
+                self.async_callback(
+                    self._on_request_token, self._OAUTH_AUTHORIZE_URL,
+                    callback_uri))
 
 
-    def get_authenticated_user(self, callback):
+    def get_authenticated_user(self, callback, http_client=None):
         """Gets the OAuth authorized user and access token on callback.
 
         This method should be called from the handler for your registered
@@ -246,7 +251,7 @@ class OAuthMixin(object):
         to this service on behalf of the user.
 
         """
-        request_key = self.get_argument("oauth_token")
+        request_key = escape.utf8(self.get_argument("oauth_token"))
         oauth_verifier = self.get_argument("oauth_verifier", None)
         request_cookie = self.get_cookie("_oauth_request_token")
         if not request_cookie:
@@ -254,17 +259,19 @@ class OAuthMixin(object):
             callback(None)
             return
         self.clear_cookie("_oauth_request_token")
-        cookie_key, cookie_secret = [base64.b64decode(i) for i in request_cookie.split("|")]
+        cookie_key, cookie_secret = [base64.b64decode(escape.utf8(i)) for i in request_cookie.split("|")]
         if cookie_key != request_key:
+            logging.info((cookie_key, request_key, request_cookie))
             logging.warning("Request token does not match cookie")
             callback(None)
             return
         token = dict(key=cookie_key, secret=cookie_secret)
         if oauth_verifier:
-          token["verifier"] = oauth_verifier
-        http = httpclient.AsyncHTTPClient()
-        http.fetch(self._oauth_access_token_url(token), self.async_callback(
-            self._on_access_token, callback))
+            token["verifier"] = oauth_verifier
+        if http_client is None:
+            http_client = httpclient.AsyncHTTPClient()
+        http_client.fetch(self._oauth_access_token_url(token),
+                          self.async_callback(self._on_access_token, callback))
 
     def _oauth_request_token_url(self, callback_uri= None, extra_params=None):
         consumer_token = self._oauth_consumer_token()
@@ -292,8 +299,8 @@ class OAuthMixin(object):
         if response.error:
             raise Exception("Could not get request token")
         request_token = _oauth_parse_response(response.body)
-        data = "|".join([base64.b64encode(request_token["key"]),
-            base64.b64encode(request_token["secret"])])
+        data = (base64.b64encode(request_token["key"]) + b("|") +
+                base64.b64encode(request_token["secret"]))
         self.set_cookie("_oauth_request_token", data)
         args = dict(oauth_token=request_token["key"])
         if callback_uri:
@@ -1078,11 +1085,11 @@ def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
                                for k, v in sorted(parameters.items())))
     base_string =  "&".join(_oauth_escape(e) for e in base_elems)
 
-    key_elems = [consumer_token["secret"]]
-    key_elems.append(token["secret"] if token else "")
-    key = "&".join(key_elems)
+    key_elems = [escape.utf8(consumer_token["secret"])]
+    key_elems.append(escape.utf8(token["secret"] if token else ""))
+    key = b("&").join(key_elems)
 
-    hash = hmac.new(key, base_string, hashlib.sha1)
+    hash = hmac.new(key, escape.utf8(base_string), hashlib.sha1)
     return binascii.b2a_base64(hash.digest())[:-1]
 
 def _oauth10a_signature(consumer_token, method, url, parameters={}, token=None):
@@ -1101,11 +1108,11 @@ def _oauth10a_signature(consumer_token, method, url, parameters={}, token=None):
                                for k, v in sorted(parameters.items())))
 
     base_string =  "&".join(_oauth_escape(e) for e in base_elems)
-    key_elems = [urllib.quote(consumer_token["secret"], safe='~')]
-    key_elems.append(urllib.quote(token["secret"], safe='~') if token else "")
-    key = "&".join(key_elems)
+    key_elems = [escape.utf8(urllib.quote(consumer_token["secret"], safe='~'))]
+    key_elems.append(escape.utf8(urllib.quote(token["secret"], safe='~') if token else ""))
+    key = b("&").join(key_elems)
 
-    hash = hmac.new(key, base_string, hashlib.sha1)
+    hash = hmac.new(key, escape.utf8(base_string), hashlib.sha1)
     return binascii.b2a_base64(hash.digest())[:-1]
 
 def _oauth_escape(val):
@@ -1115,11 +1122,11 @@ def _oauth_escape(val):
 
 
 def _oauth_parse_response(body):
-    p = cgi.parse_qs(body, keep_blank_values=False)
-    token = dict(key=p["oauth_token"][0], secret=p["oauth_token_secret"][0])
+    p = escape.parse_qs(body, keep_blank_values=False)
+    token = dict(key=p[b("oauth_token")][0], secret=p[b("oauth_token_secret")][0])
 
     # Add the extra parameters the Provider included to the token
-    special = ("oauth_token", "oauth_token_secret")
+    special = (b("oauth_token"), b("oauth_token_secret"))
     token.update((k, p[k][0]) for k in p if k not in special)
     return token
 
