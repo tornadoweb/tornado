@@ -43,6 +43,9 @@ Example usage for Google OpenID::
                 raise tornado.web.HTTPError(500, "Google auth failed")
             # Save the user with, e.g., set_secure_cookie()
 
+.. note::
+
+   The ``tornado.auth`` module is not yet compatible with Python 3.
 """
 
 import base64

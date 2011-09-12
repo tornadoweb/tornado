@@ -397,6 +397,8 @@ class HTTPConnection(object):
 class HTTPRequest(object):
     """A single HTTP request.
 
+    All attributes are type `str` unless otherwise noted.
+
     .. attribute:: method
 
        HTTP request method, e.g. "GET" or "POST"
@@ -425,7 +427,7 @@ class HTTPRequest(object):
 
     .. attribute:: body
 
-       Request body, if present.
+       Request body, if present, as a byte string.
 
     .. attribute:: remote_ip
 
@@ -447,7 +449,10 @@ class HTTPRequest(object):
 
        GET/POST arguments are available in the arguments property, which
        maps arguments names to lists of values (to support multiple values
-       for individual names). Names and values are both unicode always.
+       for individual names). Names are of type `str`, while arguments
+       are byte strings.  Note that this is different from 
+       `RequestHandler.get_argument`, which returns argument values as 
+       unicode strings.
 
     .. attribute:: files
 

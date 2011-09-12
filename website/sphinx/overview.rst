@@ -353,6 +353,14 @@ replacing ``{{ ... }}`` with ``{% raw ...%}``. Additionally, in each of
 these places the name of an alternative escaping function may be used
 instead of ``None``.
 
+Note that while Tornado's automatic escaping is helpful in avoiding
+XSS vulnerabilities, it is not sufficient in all cases.  Expressions
+that appear in certain locations, such as in Javascript or CSS, may need
+additional escaping.  Additionally, either care must be taken to always
+use double quotes and ``xhtml_escape`` in HTML attributes that may contain
+untrusted content, or a separate escaping function must be used for
+attributes (see e.g. http://wonko.com/post/html-escaping)
+
 Cookies and secure cookies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
