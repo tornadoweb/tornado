@@ -18,6 +18,11 @@ class TemplateTest(LogTrapTestCase):
         template = Template("2 + 2 = {{ 2 + 2 }}")
         self.assertEqual(template.generate(), b("2 + 2 = 4"))
 
+    def test_comment(self):
+        template = Template("Hello{# TODO i18n #} {{ name }}!")
+        self.assertEqual(template.generate(name=utf8("Ben")),
+                         b("Hello Ben!"))
+
     def test_include(self):
         loader = DictLoader({
                 "index.html": '{% include "header.html" %}\nbody text',
@@ -89,7 +94,7 @@ class TemplateTest(LogTrapTestCase):
         self.assertEqual(template.generate(x=5), b("yes"))
         self.assertEqual(template.generate(x=3), b("no"))
 
-    def test_comment(self):
+    def test_comment_directive(self):
         template = Template(utf8("{% comment blah blah %}foo"))
         self.assertEqual(template.generate(), b("foo"))
 
