@@ -123,7 +123,7 @@ class RequestHandler(object):
         self.ui["modules"] = self.ui["_modules"]
         self.clear()
         # Check since connection is not available in WSGI
-        if getattr(self.request, "connection", None):
+        if self.request.connection is not None:
             self.request.connection.stream.set_close_callback(
                 self.on_connection_close)
         self.initialize(**kwargs)
@@ -689,7 +689,7 @@ class RequestHandler(object):
                 content_length = sum(len(part) for part in self._write_buffer)
                 self.set_header("Content-Length", content_length)
 
-        if hasattr(self.request, "connection"):
+        if self.request.connection is not None:
             # Now that the request is finished, clear the callback we
             # set on the IOStream (which would otherwise prevent the
             # garbage collection of the RequestHandler when there
