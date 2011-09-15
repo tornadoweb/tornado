@@ -25,7 +25,6 @@ This module also defines the `HTTPRequest` class which is exposed via
 """
 
 import Cookie
-import errno
 import logging
 import socket
 import time
@@ -33,10 +32,8 @@ import urlparse
 
 from tornado.escape import utf8, native_str, parse_qs_bytes
 from tornado import httputil
-from tornado import ioloop
 from tornado import iostream
 from tornado.netutil import TCPServer
-from tornado import process
 from tornado import stack_context
 from tornado.util import b, bytes_type
 
@@ -46,7 +43,8 @@ except ImportError:
     ssl = None
 
 class HTTPServer(TCPServer):
-    """
+    r"""A non-blocking, single-threaded HTTP server.
+
     A server is defined by a request callback that takes an HTTPRequest
     instance as an argument and writes a valid HTTP response with
     `HTTPRequest.write`. `HTTPRequest.finish` finishes the request (but does
@@ -67,9 +65,6 @@ class HTTPServer(TCPServer):
         http_server.listen(8888)
         ioloop.IOLoop.instance().start()
 
-    In many cases, `tornado.web.Application.listen` can be used to avoid
-    the need to explicitly create the `HTTPServer`.
-
     `HTTPServer` is a very basic connection handler. Beyond parsing the
     HTTP request body and headers, the only HTTP semantics implemented
     in `HTTPServer` is HTTP/1.1 keep-alive connections. We do not, however,
@@ -85,13 +80,64 @@ class HTTPServer(TCPServer):
     headers, which override the remote IP and HTTP scheme for all requests.
     These headers are useful when running Tornado behind a reverse proxy or
     load balancer.
+
+    `HTTPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
+    To make this server serve SSL traffic, send the ssl_options dictionary
+    argument with the arguments required for the `ssl.wrap_socket` method,
+    including "certfile" and "keyfile"::
+
+       HTTPServer(applicaton, ssl_options={
+           "certfile": os.path.join(data_dir, "mydomain.crt"),
+           "keyfile": os.path.join(data_dir, "mydomain.key"),
+       })
+
+    `HTTPServer` initialization follows one of three patterns (the
+    initialization methods are defined on `tornado.netutil.TCPServer`):
+
+    1. `~tornado.netutil.TCPServer.listen`: simple single-process::
+
+            server = HTTPServer(app)
+            server.listen(8888)
+            IOLoop.instance().start()
+
+       In many cases, `tornado.web.Application.listen` can be used to avoid
+       the need to explicitly create the `HTTPServer`.
+
+    2. `~tornado.netutil.TCPServer.bind`/`~tornado.netutil.TCPServer.start`: 
+       simple multi-process::
+
+            server = HTTPServer(app)
+            server.bind(8888)
+            server.start(0)  # Forks multiple sub-processes
+            IOLoop.instance().start()
+
+       When using this interface, an `IOLoop` must *not* be passed
+       to the `HTTPServer` constructor.  `start` will always start
+       the server on the default singleton `IOLoop`.
+
+    3. `~tornado.netutil.TCPServer.add_sockets`: advanced multi-process::
+
+            sockets = tornado.netutil.bind_sockets(8888)
+            tornado.process.fork_processes(0)
+            server = HTTPServer(app)
+            server.add_sockets(sockets)
+            IOLoop.instance().start()
+
+       The `add_sockets` interface is more complicated, but it can be
+       used with `tornado.process.fork_processes` to give you more
+       flexibility in when the fork happens.  `add_sockets` can
+       also be used in single-process servers if you want to create
+       your listening sockets in some way other than
+       `tornado.netutil.bind_sockets`.
+
     """
-    def __init__(self, request_callback, no_keep_alive=False, xheaders=False,
-                 **kwargs):
+    def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
+                 xheaders=False, ssl_options=None, **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
-        TCPServer.__init__(self, **kwargs)
+        TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
+                           **kwargs)
 
     def handle_stream(self, stream, address):
         HTTPConnection(stream, address, self.request_callback,

@@ -22,6 +22,7 @@ import os
 import socket
 import stat
 
+from tornado import process
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.platform.auto import set_close_exec
@@ -32,15 +33,17 @@ except ImportError:
     ssl = None
 
 class TCPServer(object):
-    r"""A non-blocking, single-threaded server with additional methods for TCP
-    connections.
+    r"""A non-blocking, single-threaded TCP server.
+
+    To use `TCPServer`, define a subclass which overrides the `handle_stream`
+    method.
 
     `TCPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
     To make this server serve SSL traffic, send the ssl_options dictionary
     argument with the arguments required for the `ssl.wrap_socket` method,
     including "certfile" and "keyfile"::
 
-       TCPServer(applicaton, ssl_options={
+       TCPServer(ssl_options={
            "certfile": os.path.join(data_dir, "mydomain.crt"),
            "keyfile": os.path.join(data_dir, "mydomain.key"),
        })
@@ -49,13 +52,13 @@ class TCPServer(object):
 
     1. `listen`: simple single-process::
 
-            server = TCPServer(app)
+            server = TCPServer()
             server.listen(8888)
             IOLoop.instance().start()
 
     2. `bind`/`start`: simple multi-process::
 
-            server = TCPServer(app)
+            server = TCPServer()
             server.bind(8888)
             server.start(0)  # Forks multiple sub-processes
             IOLoop.instance().start()
@@ -68,7 +71,7 @@ class TCPServer(object):
 
             sockets = bind_sockets(8888)
             tornado.process.fork_processes(0)
-            server = TCPServer(app)
+            server = TCPServer()
             server.add_sockets(sockets)
             IOLoop.instance().start()
 
