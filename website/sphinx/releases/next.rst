@@ -14,20 +14,25 @@ Backwards-incompatible changes
   in the browser on uncaught exceptions.  Since this may leak sensitive
   information, debug mode is not recommended for public-facing servers.
 
+Security fixes
+~~~~~~~~~~~~~~
+
+* Diginotar has been removed from the default CA certificates file used
+  by `SimpleAsyncHTTPClient`.
+
 New modules
 ~~~~~~~~~~~
 
 * `tornado.gen`:  A generator-based interface to simplify writing 
   asynchronous functions.
+* `tornado.netutil`:  Parts of `tornado.httpserver` have been extracted into
+  a new module for use with non-HTTP protocols.
 * `tornado.platform.twisted`:  A bridge between the Tornado IOLoop and the
   Twisted Reactor, allowing code written for Twisted to be run on Tornado.
 * `tornado.process`:  Multi-process mode has been improved, and can now restart
   crashed child processes.  A new entry point has been added at 
   `tornado.process.fork_processes`, although
   `tornado.httpserver.HTTPServer.start` is still supported.
-* `tornado.netutil`:  To facilitate some advanced multi-process scenarios,
-  ``HTTPServer`` has a new method ``add_sockets``, and socket-opening code is
-  available separately as `tornado.netutil.bind_sockets`.
 
 ``tornado.web``
 ~~~~~~~~~~~~~~~
@@ -53,10 +58,15 @@ New modules
   appear multiple times in the response.
 * `RequestHandler.flush` can now take a callback for flow control.
 * The ``application/json`` content type can now be gzipped.
+* The cookie-signing functions are now accessible as static functions
+  `tornado.web.create_signed_value` and `tornado.web.decode_signed_value`.
 
 ``tornado.httpserver``
 ~~~~~~~~~~~~~~~~~~~~~~
 
+* To facilitate some advanced multi-process scenarios, ``HTTPServer``
+  has a new method ``add_sockets``, and socket-opening code is
+  available separately as `tornado.netutil.bind_sockets`.
 * The ``cookies`` property is now available on `tornado.httpserver.HTTPRequest`
   (it is also available in its old location as a property of
   `~tornado.web.RequestHandler`)
@@ -74,6 +84,9 @@ New modules
   small synchronous requests.
 * New methods `tornado.iostream.IOStream.read_until_close` and 
   `tornado.iostream.IOStream.read_until_regex`.
+* `IOStream.read_bytes` and `IOStream.read_until_close` now take a
+  ``streaming_callback`` argument to return data as it is received rather
+  than all at once.
 * `IOLoop.add_timeout` now accepts `datetime.timedelta` objects in addition
   to absolute timestamps.
 * `~tornado.ioloop.PeriodicCallback` now sticks to the specified period
