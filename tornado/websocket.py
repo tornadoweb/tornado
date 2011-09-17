@@ -390,7 +390,7 @@ class WebSocketProtocol8(WebSocketProtocol):
             finbit = 0
         frame = struct.pack("B", finbit | opcode)
         l = len(data)
-        if l <= 126:
+        if l < 126:
             frame += struct.pack("B", l)
         elif l <= 0xFFFF:
             frame += struct.pack("!BH", 126, l)
