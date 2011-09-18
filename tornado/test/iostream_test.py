@@ -30,6 +30,8 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         client_stream.connect(('127.0.0.1', port),
                               callback=connect_callback)
         self.wait(condition=lambda: all(streams))
+        self.io_loop.remove_handler(listener.fileno())
+        listener.close()
         return streams
 
     def test_read_zero_bytes(self):
