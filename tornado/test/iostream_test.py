@@ -137,3 +137,26 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         finally:
             server.close()
             client.close()
+
+    def test_delayed_close_callback(self):
+        # The scenario:  Server closes the connection while there is a pending
+        # read that can be served out of buffered data.  The client does not
+        # run the close_callback as soon as it detects the close, but rather
+        # defers it until after the buffered read has finished.
+        server, client = self.make_iostream_pair()
+        try:
+            client.set_close_callback(self.stop)
+            server.write(b("12"))
+            chunks = []
+            def callback1(data):
+                chunks.append(data)
+                client.read_bytes(1, callback2)
+                server.close()
+            def callback2(data):
+                chunks.append(data)
+            client.read_bytes(1, callback1)
+            self.wait()  # stopped by close_callback
+            self.assertEqual(chunks, [b("1"), b("2")])
+        finally:
+            server.close()
+            client.close()
