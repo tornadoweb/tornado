@@ -1,8 +1,8 @@
-What's new in the next release of Tornado
-=========================================
+What's new in Tornado 2.1
+=========================
 
-In progress
------------
+Sep 20, 2011
+------------
 
 Backwards-incompatible changes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
