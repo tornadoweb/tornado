@@ -190,7 +190,14 @@ class HTTPConnection(object):
             callback = self._write_callback
             self._write_callback = None
             callback()            
-        if self._request_finished:
+        # _on_write_complete is enqueued on the IOLoop whenever the
+        # IOStream's write buffer becomes empty, but it's possible for
+        # another callback that runs on the IOLoop before it to
+        # simultaneously write more data and finish the request.  If
+        # there is still data in the IOStream, a future
+        # _on_write_complete will be responsible for calling
+        # _finish_request.
+        if self._request_finished and not self.stream.writing():
             self._finish_request()
 
     def _finish_request(self):
