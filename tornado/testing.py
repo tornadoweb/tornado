@@ -21,12 +21,10 @@ information.
 from __future__ import with_statement
 
 from cStringIO import StringIO
-from logging.handlers import MemoryHandler
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.stack_context import StackContext, NullContext
 import contextlib
-import json
 import logging
 import sys
 import time
@@ -297,7 +295,7 @@ class LogTrapTestCase(unittest.TestCase):
             handler.stream = old_stream
 
 
-class LogTestCase(unittest.TestCase):
+class LogCaptureTestCase(unittest.TestCase):
     def assertInLog(self, handler, asserts):
         for record in handler.buffer:
             try:
@@ -316,23 +314,6 @@ class LogTestCase(unittest.TestCase):
                 pass
             else:
                 self.fail("No matching record found in log: %s" % handler.prettyPrintBuffer())
-
-
-class LogHandler(MemoryHandler):
-    def __init__(self):
-        MemoryHandler.__init__(self, capacity=0, flushLevel=100)
-        self.logger = logging.getLogger()
-
-    def __enter__(self):
-        self.logger.addHandler(self)
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.logger.removeHandler(self)
-        self.close()
-
-    def prettyPrintBuffer(self):
-        return json.dumps([record.__dict__ for record in self.buffer], sort_keys=True, indent=4)
 
 
 def main():

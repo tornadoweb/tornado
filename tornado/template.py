@@ -239,21 +239,31 @@ class Template(object):
         try:
             return execute()
         except Exception:
-            error_msg = "\n%s\n\n"
-            error_args = [_format_code(self.code).rstrip()]
-            if self.loader:
-                frames = traceback.extract_tb(sys.exc_info()[2])
-                line_number = None
-                for filename, cur_line_number, function, text in frames:
-                    match = re.match(r"\<template ([^\>]+)\>", filename)
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            if self.loader and not hasattr(exc_value, "_logged"):
+                frame = exc_traceback.tb_next.tb_frame
+                code_msg = ""
+                code_args = []
+                trace_msg = ""
+                trace_args = []
+                while frame is not None:
+                    match = re.match(r"\<template ([^\>]+)\>", frame.f_code.co_filename)
                     if match:
                         template = self.loader.templates[match.groups()[0]]
-                        for file, line_number in template.line_numbers[cur_line_number]:
-                            error_msg += "%s:%i:%s\n"
+                        code_msg = "%s code:\n%s\n\n" + code_msg
+                        code_args = [template.name, _format_code(self.code).rstrip()] + code_args
+                        include_trace_msg = ""
+                        include_trace_args = []
+                        for file, line_number in template.line_numbers[frame.f_lineno]:
                             lines = self.loader.templates[file.name].template_string.split("\n")
-                            error_args.extend([file.name, line_number, lines[line_number-1]])
-            logging.error(error_msg, *error_args)
-            raise
+                            include_trace_msg += "%s:%i:%s\n"
+                            include_trace_args.extend([file.name, line_number, lines[line_number-1]])
+                        trace_msg = include_trace_msg + trace_msg
+                        trace_args = include_trace_args + trace_args
+                    frame = frame.f_back
+                logging.error("\n" + code_msg + trace_msg, *(code_args + trace_args))
+            exc_value._logged = None
+            raise exc_type, exc_value, exc_traceback
 
     def _generate_python(self, loader, compress_whitespace):
         buffer = cStringIO.StringIO()
