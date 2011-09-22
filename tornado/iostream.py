@@ -272,6 +272,8 @@ class IOStream(object):
                 state |= self.io_loop.READ
             if self.writing():
                 state |= self.io_loop.WRITE
+            if state == self.io_loop.ERROR:
+                state |= self.io_loop.READ
             if state != self._state:
                 assert self._state is not None, \
                     "shouldn't happen: _handle_events without self._state"
@@ -500,7 +502,7 @@ class IOStream(object):
                     self._close_callback = None
                     self._run_callback(cb)
             else:
-                self._add_io_state(0)
+                self._add_io_state(ioloop.IOLoop.READ)
 
     def _add_io_state(self, state):
         """Adds `state` (IOLoop.{READ,WRITE} flags) to our event handler.
