@@ -174,6 +174,15 @@ class RequestHandler(object):
         """
         pass
 
+    def on_finish(self):
+        """Called at the end of the request.
+
+        Useful if you have extra processing to manage after a response is
+        sent to the client. For example, cleaning up database connections or
+        saving data.
+        """
+        pass
+
     def on_connection_close(self):
         """Called in async handlers if the client closed the connection.
 
@@ -641,6 +650,7 @@ class RequestHandler(object):
             self.request.finish()
             self._log()
         self._finished = True
+        self.on_finish()
 
     def send_error(self, status_code=500, **kwargs):
         """Sends the given HTTP error code to the browser.
