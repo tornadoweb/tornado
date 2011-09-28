@@ -44,6 +44,16 @@ class ContentLengthHandler(RequestHandler):
         self.set_header("Content-Length", self.get_argument("value"))
         self.write("ok")
 
+class PRGPostHandler(RequestHandler):
+    def post(self):
+        self.set_header("Location", "/prg_get")
+        self.set_status(303)
+
+class PRGGetHandler(RequestHandler):    
+    def get(self):
+        self.write("ok")
+        
+        
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -56,6 +66,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/hang", HangHandler),
             url("/hello", HelloWorldHandler),
             url("/content_length", ContentLengthHandler),
+            url("/prg_post", PRGPostHandler),
+            url("/prg_get", PRGGetHandler),
             ], gzip=True)
 
     def test_singleton(self):
@@ -134,6 +146,14 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
+    def test_303_redirect(self):
+       response = self.fetch("/prg_post", method="POST", body="")
+       self.assertEqual(200, response.code)
+       self.assertTrue(response.request.url.endswith("/prg_post"))
+       self.assertTrue(response.effective_url.endswith("/prg_get"))
+       #request is the original request, is a POST still
+       self.assertEqual("POST", response.request.method)
+        
     def test_request_timeout(self):
         response = self.fetch('/hang', request_timeout=0.1)
         self.assertEqual(response.code, 599)
