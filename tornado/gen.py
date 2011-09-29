@@ -88,17 +88,17 @@ def engine(func):
     def wrapper(*args, **kwargs):
         gen = func(*args, **kwargs)
         if isinstance(gen, types.GeneratorType):
-            Runner(gen).run()
-            return
+            return Runner(gen).run()
         assert gen is None, gen
         # no yield, so we're done
     return wrapper
+
 
 class YieldPoint(object):
     """Base class for objects that may be yielded from the generator."""
     def start(self, runner):
         """Called by the runner after the generator has yielded.
-        
+
         No other methods will be called on this object before ``start``.
         """
         raise NotImplementedError()
@@ -112,11 +112,24 @@ class YieldPoint(object):
 
     def get_result(self):
         """Returns the value to use as the result of the yield expression.
-        
+
         This method will only be called once, and only after `is_ready`
         has returned true.
         """
         raise NotImplementedError()
+
+class Return(YieldPoint):
+    """Wrapper for a value to be returned from a function using
+    `tornado.gen.engine`.
+    """
+
+    def __init__(self, retval):
+        """Takes a value to be returned from the function using the generator"""
+
+        self.retval = retval
+
+    def is_ready(self):
+        return True
 
 class Callback(YieldPoint):
     """Returns a callable object that will allow a matching `Wait` to proceed.
@@ -173,10 +186,10 @@ class WaitAll(YieldPoint):
 
     def is_ready(self):
         return all(self.runner.is_ready(key) for key in self.keys)
-        
+
     def get_result(self):
         return [self.runner.pop_result(key) for key in self.keys]
-            
+
 
 class Task(YieldPoint):
     """Runs a single asynchronous operation.
@@ -187,9 +200,9 @@ class Task(YieldPoint):
 
     A `Task` is equivalent to a `Callback`/`Wait` pair (with a unique
     key generated automatically)::
-    
+
         result = yield gen.Task(func, args)
-        
+
         func(args, callback=(yield gen.Callback(key)))
         result = yield gen.Wait(key)
     """
@@ -205,7 +218,7 @@ class Task(YieldPoint):
         runner.register_callback(self.key)
         self.kwargs["callback"] = runner.result_callback(self.key)
         self.func(*self.args, **self.kwargs)
-    
+
     def is_ready(self):
         return self.runner.is_ready(self.key)
 
@@ -223,7 +236,7 @@ class Multi(YieldPoint):
     def __init__(self, children):
         assert all(isinstance(i, YieldPoint) for i in children)
         self.children = children
-    
+
     def start(self, runner):
         for i in self.children:
             i.start(runner)
@@ -291,6 +304,7 @@ class Runner(object):
                     try:
                         if not self.yield_point.is_ready():
                             return
+
                         next = self.yield_point.get_result()
                     except Exception:
                         self.exc_info = sys.exc_info()
@@ -311,6 +325,13 @@ class Runner(object):
                 except Exception:
                     self.finished = True
                     raise
+
+                # if we were yielded a Return, stop running & return
+                # with that value
+                if isinstance(yielded, Return):
+                    self.running = False
+                    return yielded.retval
+
                 if isinstance(yielded, list):
                     yielded = Multi(yielded)
                 if isinstance(yielded, YieldPoint):
