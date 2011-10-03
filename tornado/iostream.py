@@ -161,7 +161,7 @@ class IOStream(object):
         ``callback`` will be empty.
         """
         assert not self._read_callback, "Already reading"
-        assert isinstance(num_bytes, int)
+        assert isinstance(num_bytes, (int, long))
         self._read_bytes = num_bytes
         self._read_callback = stack_context.wrap(callback)
         self._streaming_callback = stack_context.wrap(streaming_callback)
