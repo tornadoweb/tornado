@@ -141,11 +141,15 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
 
     def test_ipv6(self):
+        if not socket.has_ipv6:
+            # python compiled without ipv6 support, so skip this test
+            return
         try:
             self.http_server.listen(self.get_http_port(), address='::1')
         except socket.gaierror, e:
             if e.errno == socket.EAI_ADDRFAMILY:
-                # ipv6 is not configured on this system, so skip this test
+                # python supports ipv6, but it's not configured on the network
+                # interface, so skip this test.
                 return
             raise
         url = self.get_url("/hello").replace("localhost", "[::1]")
