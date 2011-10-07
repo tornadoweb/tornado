@@ -1,0 +1,23 @@
+This directory contains virtual machine setup scripts for testing Tornado.
+
+Requirements:
+
+Vagrant (http://vagrantup.com) and VirtualBox (http://virtualbox.org).
+Vagrant provides an easy download for Ubuntu 10.04 (aka lucid64); base
+images for other platforms are harder to find and can be built with
+VeeWee (https://github.com/jedi4ever/veewee).
+
+Usage:
+
+cd to the appropriate directory and run `vagrant up`, then `vagrant ssh`.
+From there, simply run `tox` to run the full test suite, or cd to /tornado
+and test manually.  Afterwards, use `vagrant suspend` or `vagrant destroy`
+to clean up.
+
+Notes:
+
+Python distutils (and therefore tox) assume that if the platform
+supports hard links, they can be used in the Tornado source directory.
+VirtualBox's shared folder filesystem does not support hard links (or
+symlinks), so we have to use NFS shared folders instead.  (which has
+the unfortunate side effect of requiring sudo on the host machine)
