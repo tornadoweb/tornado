@@ -52,7 +52,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     Some features found in the curl-based AsyncHTTPClient are not yet
     supported.  In particular, proxies are not supported, connections
-    are not reused, and callers cannot select the network interface to be 
+    are not reused, and callers cannot select the network interface to be
     used.
 
     Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
@@ -61,7 +61,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """
     def initialize(self, io_loop=None, max_clients=10,
                    max_simultaneous_connections=None,
-                   hostname_mapping=None, max_buffer_size=104857600):
+                   hostname_mapping=None, max_buffer_size=104857600,
+                   ca_certs=_DEFAULT_CA_CERTS):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -88,6 +89,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.active = {}
         self.hostname_mapping = hostname_mapping
         self.max_buffer_size = max_buffer_size
+        self.ca_certs = ca_certs
 
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
@@ -111,7 +113,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 _HTTPConnection(self.io_loop, self, request,
                                 functools.partial(self._release_fetch, key),
                                 callback,
-                                self.max_buffer_size)
+                                self.max_buffer_size,
+                                self.ca_certs)
 
     def _release_fetch(self, key):
         del self.active[key]
@@ -123,7 +126,7 @@ class _HTTPConnection(object):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
 
     def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size):
+                 final_callback, max_buffer_size, ca_certs):
         self.start_time = time.time()
         self.io_loop = io_loop
         self.client = client
@@ -180,7 +183,7 @@ class _HTTPConnection(object):
                 if request.ca_certs is not None:
                     ssl_options["ca_certs"] = request.ca_certs
                 else:
-                    ssl_options["ca_certs"] = _DEFAULT_CA_CERTS
+                    ssl_options["ca_certs"] = ca_certs
                 if request.client_key is not None:
                     ssl_options["keyfile"] = request.client_key
                 if request.client_cert is not None:
@@ -289,7 +292,7 @@ class _HTTPConnection(object):
             yield
         except Exception, e:
             logging.warning("uncaught exception", exc_info=True)
-            self._run_callback(HTTPResponse(self.request, 599, error=e, 
+            self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
 
@@ -324,7 +327,7 @@ class _HTTPConnection(object):
                 # use them but if they differ it's an error.
                 pieces = re.split(r',\s*', self.headers["Content-Length"])
                 if any(i != pieces[0] for i in pieces):
-                    raise ValueError("Multiple unequal Content-Lengths: %r" % 
+                    raise ValueError("Multiple unequal Content-Lengths: %r" %
                                      self.headers["Content-Length"])
                 self.headers["Content-Length"] = pieces[0]
             self.stream.read_bytes(int(self.headers["Content-Length"]),
