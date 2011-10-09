@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/> 
+        <title>Server-Sent Events Demo</title>
+    </head>
+    <body>
+        <ul id="messages">
+        </ul>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.js"></script>
+        <script>
+            source = new EventSource('/sse-handler');
+            
+            source.onopen = function(e){
+                $('<li>is open.</li>').appendTo('#messages');
+            }
+            
+            source.onerror = function(e){
+                if (e.eventPhase == EventSource.CLOSED) {
+                    $('<li>is closed</li>').appendTo('#messages');
+                } else {
+                    $('<li>'+e.eventPhase+'</li>').appendTo('#messages');
+                    console.log(e);
+                }
+            }
+            
+            source.onmessage = function(e){
+                $('<li>'+e.lastEventId+': '+e.data+'</li>').appendTo('#messages');
+            }
+        </script>
+    </body>
+</html>
