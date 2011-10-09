@@ -42,7 +42,7 @@ class MessageSourceHandler(tornado.server_sent_events.SSEHandler):
     def on_open(self):
         print 'connection %s opened'%self.connection_id
 
-        MessageSourceHandler.write_message_to_all('connection_id', self.connection_id)
+        self.write_message('connection_id', self.connection_id)
 
         if not MessageSourceHandler._msg_timeout:
             self.send_message()
