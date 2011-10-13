@@ -13,6 +13,7 @@ communication between the browser and server.
 # Author: Jacob Kristhammar, 2010
 
 import functools
+import weakref
 import hashlib
 import logging
 import struct
@@ -152,7 +153,7 @@ class WebSocketProtocol(object):
     """Base class for WebSocket protocol versions.
     """
     def __init__(self, handler):
-        self.handler = handler
+        self.handler = weakref.proxy(handler)
         self.request = handler.request
         self.stream = handler.stream
         self.client_terminated = False
