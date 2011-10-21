@@ -79,7 +79,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.open_args = args
         self.open_kwargs = kwargs
 
-        if (self.request.headers.get("Sec-WebSocket-Version") == "8" or
+        if (self.request.headers.get("Sec-WebSocket-Version") == "13" or
+            self.request.headers.get("Sec-WebSocket-Version") == "8" or
             self.request.headers.get("Sec-WebSocket-Version") == "7"):
             self.ws_connection = WebSocketProtocol8(self)
             self.ws_connection.accept_connection()
