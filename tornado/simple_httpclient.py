@@ -15,6 +15,7 @@ import copy
 import functools
 import logging
 import os.path
+import Queue
 import re
 import socket
 import time
@@ -88,6 +89,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.active = {}
         self.hostname_mapping = hostname_mapping
         self.max_buffer_size = max_buffer_size
+        self.stream_map = {}
 
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
@@ -136,6 +138,11 @@ class _HTTPConnection(object):
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None
+        self._connect_timeout = None
+        if self.request.headers.get('Connection') == 'close':
+            self.keep_alive = False 
+        else:
+            self.keep_alive = True
         with stack_context.StackContext(self.cleanup):
             parsed = urlparse.urlsplit(_unicode(self.request.url))
             if ssl is None and parsed.scheme == "https":
@@ -168,6 +175,24 @@ class _HTTPConnection(object):
                 # We only try the first IP we get from getaddrinfo,
                 # so restrict to ipv4 by default.
                 af = socket.AF_INET
+            # Ignore keep_alive logic if explicitly requesting non-presistent connections
+            if self.keep_alive:
+                self.stream_key = (host, port, parsed.scheme)
+                if self.client.stream_map.has_key(self.stream_key):
+                    while not self.client.stream_map[self.stream_key].empty():
+                        self.stream = self.client.stream_map[self.stream_key].get_nowait()
+                        # Ditch closed streams and get a new one
+                        if self.stream.closed():
+                            continue
+                        # Double check the stream isn't in use
+                        # Don't put back in the queue because if it's in use whoever's using it will,
+                        # or if it's closed it shouldn't be there
+                        if not (self.stream.reading() or self.stream.writing()):
+                                self.stream.set_close_callback(self._on_close)
+                                self._on_connect(parsed)
+                                return
+                else:
+                    self.client.stream_map[self.stream_key]  = Queue.Queue()
 
             addrinfo = socket.getaddrinfo(host, port, af, socket.SOCK_STREAM,
                                           0, 0)
@@ -210,6 +235,9 @@ class _HTTPConnection(object):
         self.stream.close()
 
     def _on_connect(self, parsed):
+        if self._connect_timeout is not None:
+            self.io_loop.remove_timeout(self._connect_timeout)
+            self._connect_timeout = None
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
@@ -306,6 +334,10 @@ class _HTTPConnection(object):
         assert match
         self.code = int(match.group(1))
         self.headers = HTTPHeaders.parse(header_data)
+        if self.headers.get('Connection') == 'keep-alive':
+            self.keep_alive = True
+        elif self.headers.get('Connection') == 'close':
+            self.keep_alive = False
         if self.request.header_callback is not None:
             for k, v in self.headers.get_all():
                 self.request.header_callback("%s: %s\r\n" % (k, v))
@@ -333,6 +365,9 @@ class _HTTPConnection(object):
             self.stream.read_until_close(self._on_body)
 
     def _on_body(self, data):
+        if self.keep_alive:
+            self.stream._close_callback = None
+            self.client.stream_map[self.stream_key].put_nowait(self.stream)
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
@@ -369,7 +404,8 @@ class _HTTPConnection(object):
                                 buffer=buffer,
                                 effective_url=self.request.url)
         self._run_callback(response)
-        self.stream.close()
+        if not self.keep_alive:
+            self.stream.close()
 
     def _on_chunk_length(self, data):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
