@@ -350,12 +350,22 @@ class _HTTPConnection(object):
                                    self.request)
         if (self.request.follow_redirects and
             self.request.max_redirects > 0 and
-            self.code in (301, 302)):
+            self.code in (301, 302, 303)):
             new_request = copy.copy(self.request)
             new_request.url = urlparse.urljoin(self.request.url,
                                                self.headers["Location"])
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
+            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
+            # client SHOULD make a GET request
+            if self.code == 303:
+                new_request.method = "GET"
+                new_request.body = None
+                for h in ["Content-Length", "Content-Type"]:
+                    try:
+                        del self.request.headers[h]
+                    except KeyError:
+                        pass
             new_request.original_request = original_request
             final_callback = self.final_callback
             self.final_callback = None
