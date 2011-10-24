@@ -44,12 +44,12 @@ class ContentLengthHandler(RequestHandler):
         self.set_header("Content-Length", self.get_argument("value"))
         self.write("ok")
 
-class PRGPostHandler(RequestHandler):
+class SeeOther303PostHandler(RequestHandler):
     def post(self):
-        self.set_header("Location", "/prg_get")
+        self.set_header("Location", "/303_get")
         self.set_status(303)
 
-class PRGGetHandler(RequestHandler):    
+class SeeOther303GetHandler(RequestHandler):    
     def get(self):
         self.write("ok")
         
@@ -66,8 +66,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/hang", HangHandler),
             url("/hello", HelloWorldHandler),
             url("/content_length", ContentLengthHandler),
-            url("/prg_post", PRGPostHandler),
-            url("/prg_get", PRGGetHandler),
+            url("/303_post", SeeOther303PostHandler),
+            url("/303_get", SeeOther303GetHandler),
             ], gzip=True)
 
     def test_singleton(self):
@@ -147,10 +147,10 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
     def test_303_redirect(self):
-       response = self.fetch("/prg_post", method="POST", body="")
+       response = self.fetch("/303_post", method="POST", body="")
        self.assertEqual(200, response.code)
-       self.assertTrue(response.request.url.endswith("/prg_post"))
-       self.assertTrue(response.effective_url.endswith("/prg_get"))
+       self.assertTrue(response.request.url.endswith("/303_post"))
+       self.assertTrue(response.effective_url.endswith("/303_get"))
        #request is the original request, is a POST still
        self.assertEqual("POST", response.request.method)
         

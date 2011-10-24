@@ -361,7 +361,8 @@ class _HTTPConnection(object):
             if self.code == 303:
                 new_request.method = "GET"
                 new_request.body = None
-                for h in ["Content-Length", "Content-Type"]:
+                for h in ["Content-Length", "Content-Type", 
+                    "Content-Encoding", "Transfer-Encoding"]:
                     try:
                         del self.request.headers[h]
                     except KeyError:
