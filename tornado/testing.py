@@ -294,6 +294,28 @@ class LogTrapTestCase(unittest.TestCase):
         finally:
             handler.stream = old_stream
 
+
+class LogCaptureTestCase(unittest.TestCase):
+    def assertInLog(self, handler, asserts):
+        for record in handler.buffer:
+            try:
+                asserts(record)
+            except AssertionError as err:
+                pass
+            else:
+                return
+        self.fail("No matching record found in log: %s" % handler.prettyPrintBuffer())
+
+    def assertNotInLog(self, handler, asserts):
+        for record in handler.buffer:
+            try:
+                asserts(record)
+            except AssertionError as err:
+                pass
+            else:
+                self.fail("No matching record found in log: %s" % handler.prettyPrintBuffer())
+
+
 def main():
     """A simple test runner.
 

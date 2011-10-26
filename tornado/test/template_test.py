@@ -1,9 +1,12 @@
 from tornado.escape import utf8, native_str
 from tornado.template import Template, DictLoader, ParseError
-from tornado.testing import LogTrapTestCase
-from tornado.util import b, bytes_type
+from tornado.testing import LogCaptureTestCase, LogTrapTestCase
+from tornado.util import b, bytes_type, ObjectDict, LogCaptureHandler
 
-class TemplateTest(LogTrapTestCase):
+def _error_log(loader, name, line_number):
+    return (name, line_number, loader.templates[name].template_string.split('\n')[line_number-1])
+
+class TemplateTest(LogTrapTestCase, LogCaptureTestCase):
     def test_simple(self):
         template = Template("Hello {{ name }}!")
         self.assertEqual(template.generate(name="Ben"),
@@ -92,6 +95,91 @@ class TemplateTest(LogTrapTestCase):
     def test_comment(self):
         template = Template(utf8("{% comment blah blah %}foo"))
         self.assertEqual(template.generate(), b("foo"))
+
+    def test_error_line_number_expression(self):
+        loader = DictLoader({"test.html": """one
+two{{1/0}}
+three
+        """})
+        with LogCaptureHandler() as handler:
+            try:
+                loader.load("test.html").generate()
+            except ZeroDivisionError:
+                pass
+            self.assertInLog(handler, lambda record: self.assertEqual(record.args[2:], _error_log(loader, "test.html", 2)))
+
+    def test_error_line_number_directive(self):
+        loader = DictLoader({"test.html": """one
+two{%if 1/0%}
+three{%end%}
+        """})
+        with LogCaptureHandler() as handler:
+            try:
+                loader.load("test.html").generate()
+            except ZeroDivisionError:
+                pass
+            self.assertInLog(handler, lambda record: self.assertEqual(record.args[2:], _error_log(loader, "test.html", 2)))
+
+    def test_error_line_number_module(self):
+        loader = DictLoader({
+            "base.html": "{% module Template('sub.html') %}",
+            "sub.html": "{{1/0}}",
+        }, namespace={"_modules": ObjectDict({"Template": lambda path, **kwargs: loader.load(path).generate(**kwargs)})})
+        with LogCaptureHandler() as handler:
+            try:
+                loader.load("base.html").generate()
+            except ZeroDivisionError:
+                pass
+            self.assertInLog(handler, lambda record: self.assertEqual(record.args[0], "base.html") and
+                                self.assertEqual(record.args[2], "sub.html") and
+                                self.assertEqual(record.args[4:],
+                                    _error_log(loader, "base.html", 1) +
+                                    _error_log(loader, "sub.html", 1)))
+
+    def test_error_line_number_include(self):
+        loader = DictLoader({
+            "base.html": "{% include 'sub.html' %}",
+            "sub.html": "{{1/0}}",
+        })
+        with LogCaptureHandler() as handler:
+            try:
+                loader.load("base.html").generate()
+            except ZeroDivisionError:
+                pass
+            self.assertInLog(handler, lambda record: self.assertEqual(record.args[2:],
+                                _error_log(loader, "base.html", 1) +
+                                _error_log(loader, "sub.html", 1)))
+
+    def test_error_line_number_extends_base_error(self):
+        loader = DictLoader({
+            "base.html": "{{1/0}}",
+            "sub.html": "{% extends 'base.html' %}",
+        })
+        with LogCaptureHandler() as handler:
+            try:
+                loader.load("sub.html").generate()
+            except ZeroDivisionError:
+                pass
+            self.assertInLog(handler, lambda record: self.assertEqual(record.args[2:],
+                                _error_log(loader, "base.html", 1)))
+
+    def test_error_line_number_extends_sub_error(self):
+        loader = DictLoader({
+            "base.html": "{% block 'block' %}{% end %}",
+            "sub.html": """
+{% extends 'base.html' %}
+{% block 'block' %}
+{{1/0}}
+{% end %}
+            """})
+        with LogCaptureHandler() as handler:
+            try:
+                loader.load("sub.html").generate()
+            except ZeroDivisionError:
+                pass
+            self.assertInLog(handler, lambda record: self.assertEqual(record.args[2:],
+                                _error_log(loader, "base.html", 1) +
+                                _error_log(loader, "sub.html", 4)))
 
 
 class AutoEscapeTest(LogTrapTestCase):
