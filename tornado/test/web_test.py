@@ -322,9 +322,18 @@ class MultiHeaderHandler(RequestHandler):
         self.add_header("x-multi", 3)
         self.add_header("x-multi", "4")
 
+class SetTemplateContextHandler(RequestHandler):
+    
+    def initialize(self):
+        self.set_template_context("name", "tornado")
+    
+    def get(self):
+        self.render("template_context.html")
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         loader = DictLoader({
+                "template_context.html": "{{ name }}",
                 "linkify.html": "{% module linkify(message) %}",
                 "page.html": """\
 <html><head></head><body>
@@ -345,6 +354,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/optional_path/(.+)?", OptionalPathHandler),
             url("/flow_control", FlowControlHandler),
             url("/multi_header", MultiHeaderHandler),
+            url("/template_context", SetTemplateContextHandler),
             ]
         return Application(urls,
                            template_loader=loader,
@@ -430,6 +440,9 @@ js_embed()
         self.assertEqual(response.headers["x-overwrite"], "2")
         self.assertEqual(response.headers.get_list("x-multi"), ["3", "4"])
 
+    def test_template_context(self):
+        response = self.fetch("/template_context")
+        self.assertEqual(response.body, b("tornado"))
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):

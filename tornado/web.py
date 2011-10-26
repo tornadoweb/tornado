@@ -120,6 +120,17 @@ class RequestHandler(object):
         if hasattr(self.request, "connection"):
             self.request.connection.stream.set_close_callback(
                 self.on_connection_close)
+        # Base template context
+        self.template_context = dict(
+            handler=self,
+            request=self.request,
+            current_user=self.current_user,
+            locale=self.locale,
+            _=self.locale.translate,
+            static_url=self.static_url,
+            xsrf_form_html=self.xsrf_form_html,
+            reverse_url=self.application.reverse_url
+        )
         self.initialize(**kwargs)
 
     def initialize(self):
@@ -441,6 +452,10 @@ class RequestHandler(object):
             self.set_header("Content-Type", "application/json; charset=UTF-8")
         chunk = utf8(chunk)
         self._write_buffer.append(chunk)
+    
+    def set_template_context(self, name, value):
+        """Sets the given template context name and value."""
+        self.template_context[name] = value
 
     def render(self, template_name, **kwargs):
         """Renders the template with the given arguments as the response."""
@@ -543,16 +558,7 @@ class RequestHandler(object):
             loader = self.create_template_loader(template_path)
             RequestHandler._templates[template_path] = loader
         t = RequestHandler._templates[template_path].load(template_name)
-        args = dict(
-            handler=self,
-            request=self.request,
-            current_user=self.current_user,
-            locale=self.locale,
-            _=self.locale.translate,
-            static_url=self.static_url,
-            xsrf_form_html=self.xsrf_form_html,
-            reverse_url=self.application.reverse_url
-        )
+        args = self.template_context        
         args.update(self.ui)
         args.update(kwargs)
         return t.generate(**args)
