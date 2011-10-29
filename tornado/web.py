@@ -1484,6 +1484,7 @@ class StaticFileHandler(RequestHandler):
                 return
 
         if not include_body:
+            self.set_header("Content-Length", os.path.getsize(abspath))
             return
         file = open(abspath, "rb")
         try:
