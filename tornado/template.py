@@ -119,6 +119,9 @@ and ``{%!`` if you need to include a literal ``{{`` or ``{%`` in the output.
         {% extends "base.html" %}
         {% block title %}My page title{% end %}
 
+``{% code %}...{% end %}``
+    Executes the code inside the block.
+
 ``{% comment ... %}``
     A comment which will be removed from the template output.  Note that
     there is no ``{% end %}`` tag; the comment goes from the word ``comment``
@@ -132,7 +135,7 @@ and ``{%!`` if you need to include a literal ``{{`` or ``{%`` in the output.
 
 ``{% for *var* in *expr* %}...{% end %}``
     Same as the python ``for`` statement.
-    
+
 ``{% from *x* import *y* %}``
     Same as the python ``import`` statement.
 
@@ -454,6 +457,20 @@ class _ApplyBlock(_Node):
             self.method, method_name))
 
 
+class _CodeBlock(_Node):
+    def __init__(self, body=None):
+        self.body = body
+
+    def each_child(self):
+        return (self.body,)
+
+    def generate(self, writer):
+        for text in self.body.each_child():
+            for line in text.value.split("\n"):
+                line = re.sub(r"[\r\n\s*]$", "", line)
+                writer.write_line(line)
+
+
 class _ControlBlock(_Node):
     def __init__(self, statement, body=None):
         self.statement = statement
@@ -747,13 +764,15 @@ def _parse(reader, template, in_block=None):
             body.chunks.append(block)
             continue
 
-        elif operator in ("apply", "block", "try", "if", "for", "while"):
+        elif operator in ("apply", "block", "try", "if", "for", "while", "code"):
             # parse inner body recursively
             block_body = _parse(reader, template, operator)
             if operator == "apply":
                 if not suffix:
                     raise ParseError("apply missing method name on line %d" % line)
                 block = _ApplyBlock(suffix, block_body)
+            elif operator == "code":
+                block = _CodeBlock(block_body)
             elif operator == "block":
                 if not suffix:
                     raise ParseError("block missing name on line %d" % line)
