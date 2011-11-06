@@ -322,7 +322,7 @@ class RequestHandler(object):
 
     def get_cookie(self, name, default=None):
         """Gets the value of the cookie with the given name, else default."""
-        if name in self.request.cookies:
+        if self.request.cookies is not None and name in self.request.cookies:
             return self.request.cookies[name].value
         return default
 

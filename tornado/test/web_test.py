@@ -68,7 +68,7 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
 
         class GetCookieHandler(RequestHandler):
             def get(self):
-                self.write(self.get_cookie("foo"))
+                self.write(self.get_cookie("foo", "default"))
 
         class SetCookieDomainHandler(RequestHandler):
             def get(self):
@@ -104,6 +104,9 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
 
         response = self.fetch("/get", headers={"Cookie": 'foo="bar"'})
         self.assertEqual(response.body, b("bar"))
+
+        response = self.fetch("/get", headers={"Cookie": "/=exception;"})
+        self.assertEqual(response.body, b("default"))
 
     def test_set_cookie_domain(self):
         response = self.fetch("/set_domain")
