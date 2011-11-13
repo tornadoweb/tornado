@@ -69,7 +69,7 @@ class AsyncTestCase(unittest.TestCase):
                 client.fetch("http://www.tornadoweb.org/", self.handle_fetch)
                 self.wait()
 
-            def handle_fetch(self, response)
+            def handle_fetch(self, response):
                 # Test contents of response (failures and exceptions here
                 # will cause self.wait() to throw an exception and end the
                 # test).
