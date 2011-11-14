@@ -21,8 +21,16 @@ information.
 from __future__ import with_statement
 
 from cStringIO import StringIO
-from tornado.httpclient import AsyncHTTPClient
-from tornado.httpserver import HTTPServer
+try:
+    from tornado.httpclient import AsyncHTTPClient
+    from tornado.httpserver import HTTPServer
+    from tornado.ioloop import IOLoop
+except ImportError:
+    # These modules are not importable on app engine.  Parts of this module
+    # won't work, but e.g. LogTrapTestCase and main() will.
+    AsyncHTTPClient = None
+    HTTPServer = None
+    IOLoop = None
 from tornado.stack_context import StackContext, NullContext
 import contextlib
 import logging
@@ -30,8 +38,6 @@ import signal
 import sys
 import time
 import unittest
-
-from tornado.ioloop import IOLoop
 
 _next_port = 10000
 def get_unused_port():
