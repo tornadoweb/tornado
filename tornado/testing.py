@@ -26,6 +26,7 @@ from tornado.httpserver import HTTPServer
 from tornado.stack_context import StackContext, NullContext
 import contextlib
 import logging
+import signal
 import sys
 import time
 import unittest
@@ -325,11 +326,19 @@ def main():
     define('autoreload', type=bool, default=False,
            help="DEPRECATED: use tornado.autoreload.main instead")
     define('httpclient', type=str, default=None)
+    define('exception_on_interrupt', type=bool, default=True,
+           help=("If true (default), ctrl-c raises a KeyboardInterrupt "
+                 "exception.  This prints a stack trace but cannot interrupt "
+                 "certain operations.  If false, the process is more reliably "
+                 "killed, but does not print a stack trace."))
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
 
     if options.httpclient:
         from tornado.httpclient import AsyncHTTPClient
         AsyncHTTPClient.configure(options.httpclient)
+
+    if not options.exception_on_interrupt:
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     if __name__ == '__main__' and len(argv) == 1:
         print >> sys.stderr, "No tests specified"
