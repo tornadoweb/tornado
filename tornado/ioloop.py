@@ -455,6 +455,7 @@ class PeriodicCallback(object):
         self.callback_time = callback_time
         self.io_loop = io_loop or IOLoop.instance()
         self._running = False
+        self._timeout = None
 
     def start(self):
         """Starts the timer."""
@@ -465,6 +466,9 @@ class PeriodicCallback(object):
     def stop(self):
         """Stops the timer."""
         self._running = False
+        if self._timeout is not None:
+            self.io_loop.remove_timeout(self._timeout)
+            self._timeout = None
 
     def _run(self):
         if not self._running: return
@@ -479,7 +483,7 @@ class PeriodicCallback(object):
             current_time = time.time()
             while self._next_timeout <= current_time:
                 self._next_timeout += self.callback_time / 1000.0
-            self.io_loop.add_timeout(self._next_timeout, self._run)
+            self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
 
 
 class _EPoll(object):
