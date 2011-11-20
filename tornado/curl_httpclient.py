@@ -307,8 +307,15 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.setopt(pycurl.WRITEFUNCTION, buffer.write)
     curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
     curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
-    curl.setopt(pycurl.CONNECTTIMEOUT, int(request.connect_timeout))
-    curl.setopt(pycurl.TIMEOUT, int(request.request_timeout))
+
+    if request.connect_timeout - int(request.connect_timeout):
+        curl.setopt(pycurl.NOSIGNAL, 1)
+    curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000*request.connect_timeout))
+
+    if request.request_timeout - int(request.request_timeout):
+        curl.setopt(pycurl.NOSIGNAL, 1)
+    curl.setopt(pycurl.TIMEOUT_MS, int(1000*request.request_timeout))
+
     if request.user_agent:
         curl.setopt(pycurl.USERAGENT, utf8(request.user_agent))
     else:
