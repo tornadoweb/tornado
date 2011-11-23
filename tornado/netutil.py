@@ -241,9 +241,9 @@ class BaseProtocol(object):
             def _on_read(self, line):
                 self.stream.write(line, callback=self._wait)
 
-            server = TCPServer(protocol=EchoProtocol)
-            server.listen(8888)
-            IOLoop.instance().start()
+        server = TCPServer(protocol=EchoProtocol)
+        server.listen(8888)
+        IOLoop.instance().start()
     """
     def __init__(self, stream, address, server=None):
         self.stream = stream
