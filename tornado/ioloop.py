@@ -172,7 +172,7 @@ class IOLoop(object):
                 try:
                     os.close(fd)
                 except Exception:
-                    logging.debug("error closing fd %d", fd, exc_info=True)
+                    logging.debug("error closing fd %s", fd, exc_info=True)
         self._waker.close()
         self._impl.close()
 
@@ -262,8 +262,8 @@ class IOLoop(object):
                         timeout = heapq.heappop(self._timeouts)
                         self._run_callback(timeout.callback)
                     else:
-                        milliseconds = self._timeouts[0].deadline - now
-                        poll_timeout = min(milliseconds, poll_timeout)
+                        seconds = self._timeouts[0].deadline - now
+                        poll_timeout = min(seconds, poll_timeout)
                         break
 
             if self._callbacks:
@@ -312,10 +312,10 @@ class IOLoop(object):
                         # Happens when the client closes the connection
                         pass
                     else:
-                        logging.error("Exception in I/O handler for fd %d",
+                        logging.error("Exception in I/O handler for fd %s",
                                       fd, exc_info=True)
                 except Exception:
-                    logging.error("Exception in I/O handler for fd %d",
+                    logging.error("Exception in I/O handler for fd %s",
                                   fd, exc_info=True)
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
