@@ -82,11 +82,13 @@ class TCPServer(object):
        your listening sockets in some way other than
        `bind_sockets`.
     """
-    def __init__(self, io_loop=None, ssl_options=None):
+    def __init__(self, io_loop=None, ssl_options=None, protocol=None):
         self.io_loop = io_loop
         self.ssl_options = ssl_options
         self._sockets = {}  # fd -> socket object
         self._pending_sockets = []
+        # Class or callable object for handing IOStream
+        self._protocol = protocol
         self._started = False
 
     def listen(self, port, address=""):
@@ -186,8 +188,14 @@ class TCPServer(object):
             sock.close()
 
     def handle_stream(self, stream, address):
-        """Override to handle a new `IOStream` from an incoming connection."""
-        raise NotImplementedError()
+        """Create object of stream handler if ``protocol`` was passed. 
+        
+        If you don't provide ``protocol`` params, you should
+        override to handle a new `IOStream` from an incoming connection."""
+        if self._protocol:
+            self._protocol(stream, address, server=self)
+        else:
+            raise NotImplementedError('Set protocol or override this method')
 
     def _handle_connection(self, connection, address):
         if self.ssl_options is not None:
@@ -216,6 +224,51 @@ class TCPServer(object):
         except Exception:
             logging.error("Error in connection callback", exc_info=True)
 
+
+class BaseProtocol(object):
+    """Base class for implementing handlers for TCP connections.
+    
+    Example of how to use ``BaseProtocol`` for impelementing simple 
+    Echo server (just return to client each received line):
+    
+        class EchoProtocol(BaseProtocol):
+            def _on_connect(self):
+                self._wait()
+              
+            def _wait(self):
+                self.stream.read_unit(b('\n'), self._on_read)
+              
+            def _on_read(self, line):
+                self.stream.write(line, callback=self._wait)
+
+            server = TCPServer(protocol=EchoProtocol)
+            server.listen(8888)
+            IOLoop.instance().start()
+    """
+    def __init__(self, stream, address, server=None):
+        self.stream = stream
+        if self.stream.socket.family not in (socket.AF_INET, socket.AF_INET6):
+            # Unix (or other) socket; fake the remote address
+            address = ('0.0.0.0', 0)
+        self.address = address
+        self.server = server    
+        
+        # Set on_disconnect as callback for closing stream
+        self._disconnect_callback = stack_context.wrap(self._on_disconnect)
+        self.stream.set_close_callback(self._disconnect_callback)
+        
+        # Call special method which you can override to 
+        # provide custom logic without recalling __init__ 
+        # from inherited class 
+        self._on_connect()
+        
+    def _on_connect(self):
+        """Override to provide some actions after connection is established"""
+        pass
+
+    def _on_disconnect(self):
+        """Override to provide some actions after stream is closed"""
+        pass        
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
     """Creates listening sockets bound to the given port and address.
