@@ -190,8 +190,8 @@ class TCPServer(object):
     def handle_stream(self, stream, address):
         """Create object of stream handler if ``protocol`` was passed. 
         
-        If you don't provide ``protocol`` params, you should
-        override to handle a new `IOStream` from an incoming connection."""
+        If you didn't provide ``protocol`` param, you should override 
+        this method to handle a new `IOStream` from an incoming connection."""
         if self._protocol:
             self._protocol(stream, address, server=self)
         else:
