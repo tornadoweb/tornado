@@ -253,9 +253,8 @@ class BaseProtocol(object):
         self.address = address
         self.server = server    
         
-        # Set on_disconnect as callback for closing stream
-        self._disconnect_callback = stack_context.wrap(self._on_disconnect)
-        self.stream.set_close_callback(self._disconnect_callback)
+        # Set _on_disconnect method as callback for stream closing
+        self.stream.set_close_callback(self._on_disconnect)
         
         # Call special method which you can override to 
         # provide custom logic without recalling __init__ 
