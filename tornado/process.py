@@ -55,7 +55,7 @@ def _reseed_random():
     try:
         seed = long(hexlify(os.urandom(16)), 16)
     except NotImplementedError:
-        seed(int(time.time() * 1000) ^ os.getpid())
+        seed = int(time.time() * 1000) ^ os.getpid()
     random.seed(seed)
 
 
