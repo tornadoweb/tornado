@@ -228,7 +228,7 @@ class TCPServer(object):
 class BaseProtocol(object):
     """Base class for implementing handlers for TCP connections.
     
-    Example of how to use ``BaseProtocol`` for impelementing simple 
+    Example of how to use ``BaseProtocol`` to implement a simple 
     Echo server (just return to client each received line):
     
         class EchoProtocol(BaseProtocol):
