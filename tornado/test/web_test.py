@@ -528,8 +528,30 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
             def get(self, path):
                 self.write(self.static_url(path))
 
+        class OverrideStaticUrlHandler(RequestHandler):
+            def get(self, path):
+                do_include = bool(self.get_argument("include_host"))
+                self.include_host = not do_include
+
+                regular_url = self.static_url(path)
+                override_url = self.static_url(path, include_host=do_include)
+                if override_url == regular_url:
+                    return self.write(str(False))
+
+                protocol = self.request.protocol + "://"
+                protocol_length = len(protocol)
+                check_regular = regular_url.find(protocol, 0, protocol_length)
+                check_override = override_url.find(protocol, 0, protocol_length)
+
+                if do_include:
+                    result = (check_override == 0 and check_regular == -1)
+                else:
+                    result = (check_override == -1 and check_regular == 0)
+                self.write(str(result))
+
         return Application([('/static_url/(.*)', StaticUrlHandler),
-                            ('/abs_static_url/(.*)', AbsoluteStaticUrlHandler)],
+                            ('/abs_static_url/(.*)', AbsoluteStaticUrlHandler),
+                            ('/override_static_url/(.*)', OverrideStaticUrlHandler)],
                            static_path=os.path.join(os.path.dirname(__file__), 'static'))
 
     def test_static_files(self):
@@ -547,6 +569,15 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/abs_static_url/robots.txt")
         self.assertEqual(response.body,
                          utf8(self.get_url("/") + "static/robots.txt?v=f71d2"))
+
+    def test_include_host_override(self):
+        self._trigger_include_host_check(False)
+        self._trigger_include_host_check(True)
+
+    def _trigger_include_host_check(self, include_host):
+        path = "/override_static_url/robots.txt?include_host=%s"
+        response = self.fetch(path % int(include_host))
+        self.assertEqual(response.body, utf8(str(True)))
 
 class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
