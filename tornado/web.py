@@ -1529,7 +1529,7 @@ class StaticFileHandler(RequestHandler):
         is the static path being requested.  The url returned should be
         relative to the current host.
         """
-        static_url_prefix = settings.get('static_url_prefix', '/static/')
+        static_url_prefix = settings.get("static_url_prefix", "/static/")
         version_hash = cls.get_version(settings, path)
         if version_hash:
             return static_url_prefix + path + "?v=" + version_hash
