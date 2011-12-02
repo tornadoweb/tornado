@@ -1446,6 +1446,7 @@ class StaticFileHandler(RequestHandler):
     def get(self, path, include_body=True):
         if os.path.sep != "/":
             path = path.replace("/", os.path.sep)
+        path = self.parse_url_path(path)
         abspath = os.path.abspath(os.path.join(self.root, path))
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
@@ -1557,6 +1558,10 @@ class StaticFileHandler(RequestHandler):
             if hsh:
                 return hsh[:5]
         return None
+
+    @classmethod
+    def parse_url_path(cls, url_path):
+        return url_path
 
 
 class FallbackHandler(RequestHandler):
