@@ -1542,7 +1542,6 @@ class StaticFileHandler(RequestHandler):
         ``settings`` is the `Application.settings` dictionary and ```path``
         is the relative location of the requested asset on the filesystem.
         """
-        hsh = None
         abs_path = os.path.join(settings["static_path"], path)
         with cls._lock:
             hashes = cls._static_hashes
@@ -1554,8 +1553,10 @@ class StaticFileHandler(RequestHandler):
                 except Exception:
                     logging.error("Could not open static file %r", path)
                     hashes[abs_path] = None
-            hsh = hashes.get(abs_path)[:5]
-        return hsh
+            hsh = hashes.get(abs_path)
+            if hsh:
+                return hsh[:5]
+        return None
 
 
 class FallbackHandler(RequestHandler):
