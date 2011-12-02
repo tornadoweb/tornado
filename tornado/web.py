@@ -1528,6 +1528,21 @@ class StaticFileHandler(RequestHandler):
         is the static path being requested.  The url returned should be
         relative to the current host.
         """
+        static_url_prefix = settings.get('static_url_prefix', '/static/')
+        version_hash = cls.get_version(settings, path)
+        if version_hash:
+            return static_url_prefix + path + "?v=" + version_hash
+        return static_url_prefix + path
+
+    @classmethod
+    def get_version(cls, settings, path):
+        """Generate the version string to be appended as a query string
+        to the static URL - allowing aggressive caching.
+
+        ``settings`` is the `Application.settings` dictionary and ```path``
+        is the relative location of the requested asset on the filesystem.
+        """
+        hsh = None
         abs_path = os.path.join(settings["static_path"], path)
         with cls._lock:
             hashes = cls._static_hashes
@@ -1539,12 +1554,8 @@ class StaticFileHandler(RequestHandler):
                 except Exception:
                     logging.error("Could not open static file %r", path)
                     hashes[abs_path] = None
-            hsh = hashes.get(abs_path)
-        static_url_prefix = settings.get('static_url_prefix', '/static/')
-        if hsh:
-            return static_url_prefix + path + "?v=" + hsh[:5]
-        else:
-            return static_url_prefix + path
+            hsh = hashes.get(abs_path)[:5]
+        return hsh
 
 
 class FallbackHandler(RequestHandler):
