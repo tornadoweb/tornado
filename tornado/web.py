@@ -1564,6 +1564,68 @@ class StaticFileHandler(RequestHandler):
         return url_path
 
 
+class CloudFrontStaticFileHandler(StaticFileHandler):
+    """Extends the base class in order to set the versioning of static
+    assets directly in their filename rather than as a query parameter.
+
+    Thereby supporting Content Delivery Networks like CloudFront which
+    does not identify files differently depending on their given query string.
+    """
+    #: The string to append before the version hash in the filename.
+    #: In other words foo.png could become foo.v-fa35f.png.
+    #: We prepend the version hash with this identifier in order to verify
+    #: whether versioning is included in the filename when parsing it.
+    #: However, be aware that this does open up for naming collision
+    #: and you should therefore ensure that this naming standard is not
+    #: employed by your organization.
+    VERSION_HASH_PREPEND = 'v-'
+    #: The length of ``VERSION_HASH_PREPEND``
+    VERSION_HASH_PREPEND_LENGTH = 2
+
+    @classmethod
+    def make_static_url(cls, settings, path):
+        """Constructs a versioned url for the given path.
+
+        In contrast to the base class the version string is not appended
+        in a query string, but rather before the file extension. Thereby
+        allowing aggressive caching even in cases where the CDN does not
+        support differentiation depending on query strings, like CloudFront.
+        """
+        static_url_prefix = settings.get("static_url_prefix", "/static/")
+        version_hash = cls.get_version(settings, path)
+        if not version_hash:
+            return static_url_prefix + path
+
+        extension_index = path.rfind('.')
+        if extension_index == -1:
+            return static_url_prefix + path
+
+        pre_version = path[:extension_index]
+        post_version = path[(extension_index + 1):]
+        version_hash = '%s%s' % (cls.VERSION_HASH_PREPEND, version_hash)
+        path = '%s.%s.%s' % (pre_version, version_hash, post_version)
+        return static_url_prefix + path
+
+    @classmethod
+    def parse_url_path(cls, url_path):
+        """Parse the given url path in order to retrieve the path to
+        be used when looking for the file in the filesystem.
+
+        This method will check whether a version string exists within
+        the filename and in case it does remove it.
+        """
+        extension_index = url_path.rindex('.')
+        version_index = url_path.rfind('.', 0, extension_index)
+        if version_index == -1:
+            return url_path
+
+        version_hash = url_path[version_index:extension_index]
+        version_verify = version_hash[1:(cls.VERSION_HASH_PREPEND_LENGTH + 1)]
+        if version_verify != cls.VERSION_HASH_PREPEND:
+            return url_path
+        return '%s%s' % (url_path[:version_index], url_path[extension_index:])
+
+
 class FallbackHandler(RequestHandler):
     """A RequestHandler that wraps another HTTP server callback.
 
