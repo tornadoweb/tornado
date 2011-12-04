@@ -1446,7 +1446,6 @@ class StaticFileHandler(RequestHandler):
     def get(self, path, include_body=True):
         if os.path.sep != "/":
             path = path.replace("/", os.path.sep)
-        path = self.parse_url_path(path)
         abspath = os.path.abspath(os.path.join(self.root, path))
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
@@ -1559,10 +1558,6 @@ class StaticFileHandler(RequestHandler):
                 return hsh[:5]
         return None
 
-    @classmethod
-    def parse_url_path(cls, url_path):
-        return url_path
-
 
 class CloudFrontStaticFileHandler(StaticFileHandler):
     """Extends the base class in order to set the versioning of static
@@ -1581,6 +1576,27 @@ class CloudFrontStaticFileHandler(StaticFileHandler):
     VERSION_HASH_PREPEND = 'v-'
     #: The length of ``VERSION_HASH_PREPEND``
     VERSION_HASH_PREPEND_LENGTH = len(VERSION_HASH_PREPEND)
+
+    def get(self, path, include_body=True):
+        """Extend parent implementation in order to remove versioning
+        in the filename in case a version string is detected.
+
+        """
+        parent = super(CloudFrontStaticFileHandler, self).get
+        extension_index = path.rindex('.')
+        version_index = path.rfind('.', 0, extension_index)
+        if version_index == -1:
+            parent(path, include_body=include_body)
+            return
+
+        version_hash = path[version_index:extension_index]
+        version_verify = version_hash[1:(self.VERSION_HASH_PREPEND_LENGTH + 1)]
+        if version_verify != self.VERSION_HASH_PREPEND:
+            parent(path, include_body=include_body)
+            return
+
+        path = '%s%s' % (path[:version_index], path[extension_index:])
+        parent(path, include_body=include_body)
 
     @classmethod
     def make_static_url(cls, settings, path):
@@ -1605,25 +1621,6 @@ class CloudFrontStaticFileHandler(StaticFileHandler):
         version_hash = '%s%s' % (cls.VERSION_HASH_PREPEND, version_hash)
         path = '%s.%s.%s' % (pre_version, version_hash, post_version)
         return static_url_prefix + path
-
-    @classmethod
-    def parse_url_path(cls, url_path):
-        """Parse the given url path in order to retrieve the path to
-        be used when looking for the file in the filesystem.
-
-        This method will check whether a version string exists within
-        the filename and in case it does remove it.
-        """
-        extension_index = url_path.rindex('.')
-        version_index = url_path.rfind('.', 0, extension_index)
-        if version_index == -1:
-            return url_path
-
-        version_hash = url_path[version_index:extension_index]
-        version_verify = version_hash[1:(cls.VERSION_HASH_PREPEND_LENGTH + 1)]
-        if version_verify != cls.VERSION_HASH_PREPEND:
-            return url_path
-        return '%s%s' % (url_path[:version_index], url_path[extension_index:])
 
 
 class FallbackHandler(RequestHandler):
