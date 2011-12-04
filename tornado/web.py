@@ -1580,7 +1580,7 @@ class CloudFrontStaticFileHandler(StaticFileHandler):
     #: employed by your organization.
     VERSION_HASH_PREPEND = 'v-'
     #: The length of ``VERSION_HASH_PREPEND``
-    VERSION_HASH_PREPEND_LENGTH = 2
+    VERSION_HASH_PREPEND_LENGTH = len(VERSION_HASH_PREPEND)
 
     @classmethod
     def make_static_url(cls, settings, path):
