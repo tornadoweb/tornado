@@ -204,7 +204,13 @@ class Task(YieldPoint):
         self.key = object()
         runner.register_callback(self.key)
         self.kwargs["callback"] = runner.result_callback(self.key)
-        self.func(*self.args, **self.kwargs)
+        try:
+            self.func(*self.args, **self.kwargs)
+        except Exception, e:
+            try:
+                self.runner.gen.throw(e)
+            except StopIteration:
+                return
     
     def is_ready(self):
         return self.runner.is_ready(self.key)
