@@ -143,7 +143,7 @@ class AuthRedirectRequestHandler(RequestHandler):
     def get_login_url(self):
         return self.login_url
 
-    @authenticated
+    @authenticated_to_login
     def get(self):
         # we'll never actually get here because the test doesn't follow redirects
         self.send_error(500)
