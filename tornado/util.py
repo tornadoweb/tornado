@@ -1,9 +1,5 @@
 """Miscellaneous utility functions."""
 
-from logging.handlers import MemoryHandler
-import json
-import logging
-
 class ObjectDict(dict):
     """Makes a dictionary behave like an object."""
     def __getattr__(self, name):
@@ -14,23 +10,6 @@ class ObjectDict(dict):
 
     def __setattr__(self, name, value):
         self[name] = value
-
-
-class LogCaptureHandler(MemoryHandler):
-    def __init__(self):
-        MemoryHandler.__init__(self, capacity=0, flushLevel=100)
-        self.logger = logging.getLogger()
-
-    def __enter__(self):
-        self.logger.addHandler(self)
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.logger.removeHandler(self)
-        self.close()
-
-    def prettyPrintBuffer(self):
-        return json.dumps([record.__dict__ for record in self.buffer], sort_keys=True, indent=4)
 
 
 def import_object(name):

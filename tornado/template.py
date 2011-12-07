@@ -173,16 +173,15 @@ from __future__ import with_statement
 
 import cStringIO
 import datetime
+import linecache
 import logging
 import os.path
 import posixpath
 import re
 import threading
-import sys
-import traceback
 
 from tornado import escape
-from tornado.util import bytes_type
+from tornado.util import bytes_type, ObjectDict
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()
@@ -195,7 +194,6 @@ class Template(object):
     """
     def __init__(self, template_string, name="<string>", loader=None,
                  compress_whitespace=None, autoescape=_UNSET):
-        self.template_string = template_string
         self.name = name
         if compress_whitespace is None:
             compress_whitespace = name.endswith(".html") or \
@@ -207,14 +205,17 @@ class Template(object):
         else:
             self.autoescape = _DEFAULT_AUTOESCAPE
         self.namespace = loader.namespace if loader else {}
-        reader = _TemplateReader(name, escape.native_str(self.template_string))
+        reader = _TemplateReader(name, escape.native_str(template_string))
         self.file = _File(self, _parse(reader, self))
-        self.code, self.line_numbers = self._generate_python(
-                                                  loader, compress_whitespace)
+        self.code = self._generate_python(loader, compress_whitespace)
         self.loader = loader
         try:
-            self.compiled = compile(escape.to_unicode(self.code),
-                                    "<template %s>" % self.name, "exec")
+            # Under python2.5, the fake filename used here must match
+            # the module name used in __name__ below.
+            self.compiled = compile(
+                escape.to_unicode(self.code),
+                "%s.generated.py" % self.name.replace('.','_'),
+                "exec")
         except Exception:
             formatted_code = _format_code(self.code).rstrip()
             logging.error("%s code:\n%s", self.name, formatted_code)
@@ -232,39 +233,25 @@ class Template(object):
             "datetime": datetime,
             "_utf8": escape.utf8,  # for internal use
             "_string_types": (unicode, bytes_type),
+            # __name__ and __loader__ allow the traceback mechanism to find
+            # the generated source code.
+            "__name__": self.name.replace('.', '_'),
+            "__loader__": ObjectDict(get_source=lambda name: self.code),
         }
         namespace.update(self.namespace)
         namespace.update(kwargs)
         exec self.compiled in namespace
         execute = namespace["_execute"]
+        # Clear the traceback module's cache of source data now that
+        # we've generated a new template (mainly for this module's
+        # unittests, where different tests reuse the same name).
+        linecache.clearcache()
         try:
             return execute()
         except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            if self.loader and not hasattr(exc_value, "_logged"):
-                frame = exc_traceback.tb_next.tb_frame
-                code_msg = ""
-                code_args = []
-                trace_msg = ""
-                trace_args = []
-                while frame is not None:
-                    match = re.match(r"\<template ([^\>]+)\>", frame.f_code.co_filename)
-                    if match:
-                        template = self.loader.templates[match.groups()[0]]
-                        code_msg = "%s code:\n%s\n\n" + code_msg
-                        code_args = [template.name, _format_code(self.code).rstrip()] + code_args
-                        include_trace_msg = ""
-                        include_trace_args = []
-                        for file, line_number in template.line_numbers[frame.f_lineno]:
-                            lines = self.loader.templates[file.name].template_string.split("\n")
-                            include_trace_msg += "%s:%i:%s\n"
-                            include_trace_args.extend([file.name, line_number, lines[line_number-1]])
-                        trace_msg = include_trace_msg + trace_msg
-                        trace_args = include_trace_args + trace_args
-                    frame = frame.f_back
-                logging.error("\n" + code_msg + trace_msg, *(code_args + trace_args))
-            exc_value._logged = None
-            raise exc_type, exc_value, exc_traceback
+            formatted_code = _format_code(self.code).rstrip()
+            logging.error("%s code:\n%s", self.name, formatted_code)
+            raise
 
     def _generate_python(self, loader, compress_whitespace):
         buffer = cStringIO.StringIO()
@@ -279,7 +266,7 @@ class Template(object):
             writer = _CodeWriter(buffer, named_blocks, loader, ancestors[0].template,
                                  compress_whitespace)
             ancestors[0].generate(writer)
-            return buffer.getvalue(), writer.line_numbers
+            return buffer.getvalue()
         finally:
             buffer.close()
 
@@ -580,8 +567,6 @@ class _CodeWriter(object):
         self.compress_whitespace = compress_whitespace
         self.apply_counter = 0
         self.include_stack = []
-        self.line_numbers = {}
-        self._current_line = 1
         self._indent = 0
 
     def indent_size(self):
@@ -600,7 +585,7 @@ class _CodeWriter(object):
         return Indenter()
 
     def include(self, template, line):
-        self.include_stack.append((self.current_template, line+1))
+        self.include_stack.append((self.current_template, line))
         self.current_template = template
 
         class IncludeTemplate(object):
@@ -615,17 +600,19 @@ class _CodeWriter(object):
     def write_line(self, line, line_number, indent=None):
         if indent == None:
             indent = self._indent
-        print >> self.file, "    "*indent + line
-
-        self.line_numbers[self._current_line] = self.include_stack[:]+[(self.current_template, line_number+1)]
-        self._current_line += 1
+        line_comment = '  # %s:%d' % (self.current_template.name, line_number)
+        if self.include_stack:
+            ancestors = ["%s:%d" % (tmpl.name, lineno)
+                         for (tmpl, lineno) in self.include_stack]
+            line_comment += ' (via %s)' % ', '.join(reversed(ancestors))
+        print >> self.file, "    "*indent + line + line_comment
 
 
 class _TemplateReader(object):
     def __init__(self, name, text):
         self.name = name
         self.text = text
-        self.line = 0
+        self.line = 1
         self.pos = 0
 
     def find(self, needle, start=0, end=None):
