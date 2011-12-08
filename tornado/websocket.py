@@ -82,7 +82,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.open_args = args
         self.open_kwargs = kwargs
 
-        # Websocket requires GET method
+        # Websocket only supports GET method
         if self.request.method != 'GET':
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
@@ -101,7 +101,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         # Connection header should be upgrade. Some proxy servers/load balancers
         # might mess with it.
-        if self.request.headers.get("Connection", "").lower() != 'upgrade':
+        if self.request.headers.get("Connection", "").lower().find('upgrade') == -1:
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 400 Bad Request\r\n\r\n"
                 "\"Connection\" must be \"Upgrade\"."
