@@ -208,7 +208,7 @@ class Task(YieldPoint):
             self.func(*self.args, **self.kwargs)
         except Exception, e:
             try:
-                self.runner.gen.throw(e)
+                self.runner.gen.throw(*sys.exc_info())
             except StopIteration:
                 return
     
