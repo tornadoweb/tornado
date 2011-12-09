@@ -126,7 +126,7 @@ class _HTTPConnection(object):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
 
     def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size, ca_certs):
+                 final_callback, max_buffer_size, ca_certs=None):
         self.start_time = time.time()
         self.io_loop = io_loop
         self.client = client
