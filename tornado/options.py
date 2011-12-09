@@ -401,7 +401,7 @@ define("help", type=bool, help="show this help information")
 define("logging", default="info",
        help=("Set the Python log level. If 'none', tornado won't touch the "
              "logging configuration."),
-       metavar="info|warning|error|none")
+       metavar="debug|info|warning|error|none")
 define("log_to_stderr", type=bool, default=None,
        help=("Send log output to stderr (colorized if possible). "
              "By default use stderr if --log_file_prefix is not set and "

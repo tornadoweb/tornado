@@ -32,6 +32,8 @@ import time
 from twisted.internet.posixbase import PosixReactorBase
 from twisted.internet.interfaces import \
     IReactorFDSet, IDelayedCall, IReactorTime
+from twisted.python import failure
+from twisted.internet import error
 
 from zope.interface import implements
 
@@ -39,6 +41,7 @@ import tornado
 import tornado.ioloop
 from tornado.stack_context import NullContext
 from tornado.ioloop import IOLoop
+
 
 class TornadoDelayedCall(object):
     """
@@ -139,10 +142,15 @@ class TornadoReactor(PosixReactorBase):
     # IReactorFDSet
     def _invoke_callback(self, fd, events):
         (reader, writer) = self._fds[fd]
-        if events | IOLoop.READ and reader:
+        if events & IOLoop.READ and reader:
             reader.doRead()
-        if events | IOLoop.WRITE and writer:
+        if events & IOLoop.WRITE and writer:
             writer.doWrite()
+	if events & IOLoop.ERROR:
+	    if reader:
+	        reader.readConnectionLost(failure.Failure(error.ConnectionLost()))
+	    if writer:
+	        writer.connectionLost(failure.Failure(error.ConnectionLost()))
 
     def addReader(self, reader):
         """

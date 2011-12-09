@@ -21,16 +21,23 @@ information.
 from __future__ import with_statement
 
 from cStringIO import StringIO
-from tornado.httpclient import AsyncHTTPClient
-from tornado.httpserver import HTTPServer
+try:
+    from tornado.httpclient import AsyncHTTPClient
+    from tornado.httpserver import HTTPServer
+    from tornado.ioloop import IOLoop
+except ImportError:
+    # These modules are not importable on app engine.  Parts of this module
+    # won't work, but e.g. LogTrapTestCase and main() will.
+    AsyncHTTPClient = None
+    HTTPServer = None
+    IOLoop = None
 from tornado.stack_context import StackContext, NullContext
 import contextlib
 import logging
+import signal
 import sys
 import time
 import unittest
-
-from tornado.ioloop import IOLoop
 
 _next_port = 10000
 def get_unused_port():
@@ -69,7 +76,7 @@ class AsyncTestCase(unittest.TestCase):
                 client.fetch("http://www.tornadoweb.org/", self.handle_fetch)
                 self.wait()
 
-            def handle_fetch(self, response)
+            def handle_fetch(self, response):
                 # Test contents of response (failures and exceptions here
                 # will cause self.wait() to throw an exception and end the
                 # test).
@@ -325,11 +332,19 @@ def main():
     define('autoreload', type=bool, default=False,
            help="DEPRECATED: use tornado.autoreload.main instead")
     define('httpclient', type=str, default=None)
+    define('exception_on_interrupt', type=bool, default=True,
+           help=("If true (default), ctrl-c raises a KeyboardInterrupt "
+                 "exception.  This prints a stack trace but cannot interrupt "
+                 "certain operations.  If false, the process is more reliably "
+                 "killed, but does not print a stack trace."))
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
 
     if options.httpclient:
         from tornado.httpclient import AsyncHTTPClient
         AsyncHTTPClient.configure(options.httpclient)
+
+    if not options.exception_on_interrupt:
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     if __name__ == '__main__' and len(argv) == 1:
         print >> sys.stderr, "No tests specified"

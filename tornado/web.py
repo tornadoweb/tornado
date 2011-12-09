@@ -69,6 +69,7 @@ import os.path
 import re
 import stat
 import sys
+import threading
 import time
 import tornado
 import traceback
@@ -97,6 +98,9 @@ class RequestHandler(object):
     RequestHandler class.
     """
     SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PUT", "OPTIONS")
+
+    _template_loaders = {}  # {path: template.BaseLoader}
+    _template_loader_lock = threading.Lock()
 
     def __init__(self, application, request, **kwargs):
         self.application = application
@@ -322,7 +326,7 @@ class RequestHandler(object):
 
     def get_cookie(self, name, default=None):
         """Gets the value of the cookie with the given name, else default."""
-        if name in self.request.cookies:
+        if self.request.cookies is not None and name in self.request.cookies:
             return self.request.cookies[name].value
         return default
 
@@ -537,12 +541,13 @@ class RequestHandler(object):
             while frame.f_code.co_filename == web_file:
                 frame = frame.f_back
             template_path = os.path.dirname(frame.f_code.co_filename)
-        if not getattr(RequestHandler, "_templates", None):
-            RequestHandler._templates = {}
-        if template_path not in RequestHandler._templates:
-            loader = self.create_template_loader(template_path)
-            RequestHandler._templates[template_path] = loader
-        t = RequestHandler._templates[template_path].load(template_name)
+        with RequestHandler._template_loader_lock:
+            if template_path not in RequestHandler._template_loaders:
+                loader = self.create_template_loader(template_path)
+                RequestHandler._template_loaders[template_path] = loader
+            else:
+                loader = RequestHandler._template_loaders[template_path]
+        t = loader.load(template_name)
         args = dict(
             handler=self,
             request=self.request,
@@ -1320,10 +1325,10 @@ class Application(object):
         # In debug mode, re-compile templates and reload static files on every
         # request so you don't need to restart to see changes
         if self.settings.get("debug"):
-            if getattr(RequestHandler, "_templates", None):
-                for loader in RequestHandler._templates.values():
+            with RequestHandler._template_loader_lock:
+                for loader in RequestHandler._template_loaders.values():
                     loader.reset()
-            RequestHandler._static_hashes = {}
+            StaticFileHandler.reset()
 
         handler._execute(transforms, *args, **kwargs)
         return handler
@@ -1424,10 +1429,16 @@ class StaticFileHandler(RequestHandler):
     CACHE_MAX_AGE = 86400*365*10 #10 years
 
     _static_hashes = {}
+    _lock = threading.Lock()  # protects _static_hashes
 
     def initialize(self, path, default_filename=None):
         self.root = os.path.abspath(path) + os.path.sep
         self.default_filename = default_filename
+
+    @classmethod
+    def reset(cls):
+        with cls._lock:
+            cls._static_hashes = {}
 
     def head(self, path):
         self.get(path, include_body=False)
@@ -1517,19 +1528,21 @@ class StaticFileHandler(RequestHandler):
         is the static path being requested.  The url returned should be
         relative to the current host.
         """
-        hashes = cls._static_hashes
         abs_path = os.path.join(settings["static_path"], path)
-        if abs_path not in hashes:
-            try:
-                f = open(abs_path, "rb")
-                hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
-                f.close()
-            except Exception:
-                logging.error("Could not open static file %r", path)
-                hashes[abs_path] = None
+        with cls._lock:
+            hashes = cls._static_hashes
+            if abs_path not in hashes:
+                try:
+                    f = open(abs_path, "rb")
+                    hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
+                    f.close()
+                except Exception:
+                    logging.error("Could not open static file %r", path)
+                    hashes[abs_path] = None
+            hsh = hashes.get(abs_path)
         static_url_prefix = settings.get('static_url_prefix', '/static/')
-        if hashes.get(abs_path):
-            return static_url_prefix + path + "?v=" + hashes[abs_path][:5]
+        if hsh:
+            return static_url_prefix + path + "?v=" + hsh[:5]
         else:
             return static_url_prefix + path
 

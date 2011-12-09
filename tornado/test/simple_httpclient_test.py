@@ -44,6 +44,16 @@ class ContentLengthHandler(RequestHandler):
         self.set_header("Content-Length", self.get_argument("value"))
         self.write("ok")
 
+class HeadHandler(RequestHandler):
+    def head(self):
+        self.set_header("Content-Length", "7")
+
+class NoContentHandler(RequestHandler):
+    def get(self):
+        if self.get_argument("error", None):
+            self.set_header("Content-Length", "7")
+        self.set_status(204)
+
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -56,6 +66,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/hang", HangHandler),
             url("/hello", HelloWorldHandler),
             url("/content_length", ContentLengthHandler),
+            url("/head", HeadHandler),
+            url("/no_content", NoContentHandler),
             ], gzip=True)
 
     def test_singleton(self):
@@ -172,4 +184,21 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/content_length?value=2,4")
         self.assertEqual(response.code, 599)
         response = self.fetch("/content_length?value=2,%202,3")
+        self.assertEqual(response.code, 599)
+
+    def test_head_request(self):
+        response = self.fetch("/head", method="HEAD")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers["content-length"], "7")
+        self.assertFalse(response.body)
+
+    def test_no_content(self):
+        response = self.fetch("/no_content")
+        self.assertEqual(response.code, 204)
+        # 204 status doesn't need a content-length, but tornado will
+        # add a zero content-length anyway.
+        self.assertEqual(response.headers["Content-length"], "0")
+
+        # 204 status with non-zero content length is malformed
+        response = self.fetch("/no_content?error=1")
         self.assertEqual(response.code, 599)

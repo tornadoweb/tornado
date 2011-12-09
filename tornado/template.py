@@ -177,6 +177,7 @@ import logging
 import os.path
 import posixpath
 import re
+import threading
 
 from tornado import escape
 from tornado.util import bytes_type
@@ -282,10 +283,17 @@ class BaseLoader(object):
         self.autoescape = autoescape
         self.namespace = namespace or {}
         self.templates = {}
+        # self.lock protects self.templates.  It's a reentrant lock
+        # because templates may load other templates via `include` or
+        # `extends`.  Note that thanks to the GIL this code would be safe
+        # even without the lock, but could lead to wasted work as multiple
+        # threads tried to compile the same template simultaneously.
+        self.lock = threading.RLock()
 
     def reset(self):
         """Resets the cache of compiled templates."""
-        self.templates = {}
+        with self.lock:
+            self.templates = {}
 
     def resolve_path(self, name, parent_path=None):
         """Converts a possibly-relative path to absolute (used internally)."""
@@ -294,9 +302,10 @@ class BaseLoader(object):
     def load(self, name, parent_path=None):
         """Loads a template."""
         name = self.resolve_path(name, parent_path=parent_path)
-        if name not in self.templates:
-            self.templates[name] = self._create_template(name)
-        return self.templates[name]
+        with self.lock:
+            if name not in self.templates:
+                self.templates[name] = self._create_template(name)
+            return self.templates[name]
 
     def _create_template(self, name):
         raise NotImplementedError()

@@ -309,18 +309,8 @@ class _HTTPConnection(object):
         assert match
         self.code = int(match.group(1))
         self.headers = HTTPHeaders.parse(header_data)
-        if self.request.header_callback is not None:
-            for k, v in self.headers.get_all():
-                self.request.header_callback("%s: %s\r\n" % (k, v))
-        if (self.request.use_gzip and
-            self.headers.get("Content-Encoding") == "gzip"):
-            # Magic parameter makes zlib module understand gzip header
-            # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
-            self._decompressor = zlib.decompressobj(16+zlib.MAX_WBITS)
-        if self.headers.get("Transfer-Encoding") == "chunked":
-            self.chunks = []
-            self.stream.read_until(b("\r\n"), self._on_chunk_length)
-        elif "Content-Length" in self.headers:
+
+        if "Content-Length" in self.headers:
             if "," in self.headers["Content-Length"]:
                 # Proxies sometimes cause Content-Length headers to get
                 # duplicated.  If all the values are identical then we can
@@ -330,8 +320,37 @@ class _HTTPConnection(object):
                     raise ValueError("Multiple unequal Content-Lengths: %r" %
                                      self.headers["Content-Length"])
                 self.headers["Content-Length"] = pieces[0]
-            self.stream.read_bytes(int(self.headers["Content-Length"]),
-                                   self._on_body)
+            content_length = int(self.headers["Content-Length"])
+        else:
+            content_length = None
+
+        if self.request.header_callback is not None:
+            for k, v in self.headers.get_all():
+                self.request.header_callback("%s: %s\r\n" % (k, v))
+
+        if self.request.method == "HEAD":
+            # HEAD requests never have content, even though they may have
+            # content-length headers
+            self._on_body(b(""))
+            return
+        if 100 <= self.code < 200 or self.code in (204, 304):
+            # These response codes never have bodies
+            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
+            assert "Transfer-Encoding" not in self.headers
+            assert content_length in (None, 0)
+            self._on_body(b(""))
+            return
+
+        if (self.request.use_gzip and
+            self.headers.get("Content-Encoding") == "gzip"):
+            # Magic parameter makes zlib module understand gzip header
+            # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
+            self._decompressor = zlib.decompressobj(16+zlib.MAX_WBITS)
+        if self.headers.get("Transfer-Encoding") == "chunked":
+            self.chunks = []
+            self.stream.read_until(b("\r\n"), self._on_chunk_length)
+        elif content_length is not None:
+            self.stream.read_bytes(content_length, self._on_body)
         else:
             self.stream.read_until_close(self._on_body)
 
