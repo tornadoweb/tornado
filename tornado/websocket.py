@@ -390,7 +390,7 @@ class WebSocketProtocol8(WebSocketProtocol):
         raised
         """
         fields = ("Host", "Sec-Websocket-Key", "Sec-Websocket-Version")
-        if (not all(map(lambda f: self.request.headers.get(f), fields))):
+        if not all(map(lambda f: self.request.headers.get(f), fields)):
             raise ValueError("Missing/Invalid WebSocket headers")
 
     def _challenge_response(self):
