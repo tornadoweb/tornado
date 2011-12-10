@@ -101,7 +101,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         # Connection header should be upgrade. Some proxy servers/load balancers
         # might mess with it.
-        if self.request.headers.get("Connection", "").lower().find('upgrade') == -1:
+        headers = self.request.headers
+        connection = map(lambda s: s.strip().lower(), headers.get("Connection", "").split(","))
+        if 'upgrade' not in connection:
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 400 Bad Request\r\n\r\n"
                 "\"Connection\" must be \"Upgrade\"."
@@ -231,6 +233,7 @@ class WebSocketProtocol76(WebSocketProtocol):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
+
         scheme = "wss" if self.request.protocol == "https" else "ws"
         # Write the initial headers before attempting to read the challenge.
         # This is necessary when using proxies (such as HAProxy), which
@@ -285,12 +288,9 @@ class WebSocketProtocol76(WebSocketProtocol):
         If a header is missing or have an incorrect value ValueError will be
         raised
         """
-        headers = self.request.headers
         fields = ("Origin", "Host", "Sec-Websocket-Key1",
                   "Sec-Websocket-Key2")
-        if headers.get("Upgrade", '').lower() != "websocket" or \
-           headers.get("Connection", '').lower() != "upgrade" or \
-           not all(map(lambda f: self.request.headers.get(f), fields)):
+        if not all(map(lambda f: self.request.headers.get(f), fields)):
             raise ValueError("Missing/Invalid WebSocket headers")
 
     def _calculate_part(self, key):
@@ -389,13 +389,8 @@ class WebSocketProtocol8(WebSocketProtocol):
         If a header is missing or have an incorrect value ValueError will be
         raised
         """
-        headers = self.request.headers
         fields = ("Host", "Sec-Websocket-Key", "Sec-Websocket-Version")
-        connection = map(lambda s: s.strip().lower(), headers.get("Connection", '').split(","))
-        if (self.request.method != "GET" or
-            headers.get("Upgrade", '').lower() != "websocket" or
-            "upgrade" not in connection or
-            not all(map(lambda f: self.request.headers.get(f), fields))):
+        if (not all(map(lambda f: self.request.headers.get(f), fields))):
             raise ValueError("Missing/Invalid WebSocket headers")
 
     def _challenge_response(self):
