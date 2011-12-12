@@ -501,7 +501,7 @@ class TwitterMixin(OAuthMixin):
         """
         # Add the OAuth resource request signature if we have credentials
         subdomain="api"
-        if path == "search":
+        if path == "/search":
             subdomain="search"
 
         url = "http://%s.twitter.com/1%s.json" %(subdomain, path)
