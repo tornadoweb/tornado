@@ -126,7 +126,6 @@ def parse_command_line(args=None):
             break
         arg = args[i].lstrip("-")
         name, equals, value = arg.partition("=")
-        name = name.replace('-', '_')
         if not name in options:
             print_help()
             raise Error('Unrecognized command line option: %r' % name)
@@ -187,6 +186,8 @@ class _Options(dict):
         return cls._instance
 
     def __getattr__(self, name):
+        if '_' in name and name.replace('_', '-') in self:
+            name = name.replace('_', '-')
         if isinstance(self.get(name), _Option):
             return self[name].value()
         raise AttributeError("Unrecognized option %r" % name)
