@@ -38,7 +38,7 @@ class HTTPHeaders(dict):
     >>> h.add("Set-Cookie", "A=B")
     >>> h.add("Set-Cookie", "C=D")
     >>> h["set-cookie"]
-    'A=B,C=D'
+    'A=B, C=D'
     >>> h.get_list("set-cookie")
     ['A=B', 'C=D']
 
@@ -65,7 +65,7 @@ class HTTPHeaders(dict):
         self._last_key = norm_name
         if norm_name in self:
             # bypass our override of __setitem__ since it modifies _as_list
-            dict.__setitem__(self, norm_name, self[norm_name] + ',' + value)
+            dict.__setitem__(self, norm_name, self[norm_name] + ', ' + value)
             self._as_list[norm_name].append(value)
         else:
             self[norm_name] = value
