@@ -155,6 +155,8 @@ def parse_config_file(path):
     for name in config:
         if name in options:
             options[name].set(config[name])
+        elif name.replace('_', '-') in options:
+            options[name.replace('_', '-')].set(config[name])
 
 
 def print_help(file=sys.stdout):
