@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import logging
+import sys
 import unittest
 
 # Most of our tests depend on IOLoop, which is not importable on app engine.
@@ -57,16 +57,19 @@ def import_everything():
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 
-if __name__ == '__main__':
+def main():
     print "Content-Type: text/plain\r\n\r\n",
 
     import_everything()
 
-    import tornado.testing
     try:
-        tornado.testing.main()
+        unittest.main(defaultTest="all", argv=sys.argv)
     except SystemExit, e:
         if e.code == 0:
             print "PASS"
         else:
             raise
+
+if __name__ == '__main__':
+    main()
+

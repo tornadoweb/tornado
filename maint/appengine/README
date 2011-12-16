@@ -6,6 +6,3 @@ forbidden modules.
 The code lives in maint/appengine/common, but should be run from the py25
 or py27 subdirectories (which contain an app.yaml and a bunch of symlinks).
 runtests.py is the entry point; cgi_runtests.py is used internally.
-dev_appserver.py doesn't work with virtualenv
-(http://code.google.com/p/googleappengine/issues/detail?id=4339) so these
-tests are not hooked into tox yet.
