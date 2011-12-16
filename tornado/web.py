@@ -1175,7 +1175,7 @@ class Application(object):
 
         # Automatically reload modified modules
         if self.settings.get("debug") and not wsgi:
-            import autoreload
+            from tornado import autoreload
             autoreload.start()
 
     def listen(self, port, address="", **kwargs):
