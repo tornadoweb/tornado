@@ -92,6 +92,9 @@ to the current autoescape setting and inserted into the output.  Other
 template directives use ``{% %}``.  These tags may be escaped as ``{{!``
 and ``{%!`` if you need to include a literal ``{{`` or ``{%`` in the output.
 
+To comment out a section so that it is omitted from the output, surround it
+with ``{# ... #}``.
+
 ``{% apply *function* %}...{% end %}``
     Applies a function to the output of all template code between ``apply``
     and ``end``::
@@ -683,7 +686,7 @@ def _parse(reader, template, in_block=None):
                 return body
             # If the first curly brace is not the start of a special token,
             # start searching from the character after it
-            if reader[curly + 1] not in ("{", "%"):
+            if reader[curly + 1] not in ("{", "%", "#"):
                 curly += 1
                 continue
             # When there are more than 2 curlies in a row, use the
@@ -710,6 +713,15 @@ def _parse(reader, template, in_block=None):
         if reader.remaining() and reader[0] == "!":
             reader.consume(1)
             body.chunks.append(_Text(start_brace, line))
+            continue
+
+        # Comment
+        if start_brace == "{#":
+            end = reader.find("#}")
+            if end == -1:
+                raise ParseError("Missing end expression #} on line %d" % line)
+            contents = reader.consume(end).strip()
+            reader.consume(2)
             continue
 
         # Expression
