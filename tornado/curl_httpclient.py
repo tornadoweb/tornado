@@ -270,6 +270,7 @@ def _curl_create(max_simultaneous_connections=None):
     return curl
 
 
+_PYCURL_ASYNC_DNS = (pycurl.version_info()[4] >> 7) & 1
 def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.URL, request.url)
 
@@ -308,13 +309,9 @@ def _curl_setup_request(curl, request, buffer, headers):
     curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
     curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
 
-    if request.connect_timeout - int(request.connect_timeout):
-        curl.setopt(pycurl.NOSIGNAL, 1)
     curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000*request.connect_timeout))
-
-    if request.request_timeout - int(request.request_timeout):
-        curl.setopt(pycurl.NOSIGNAL, 1)
     curl.setopt(pycurl.TIMEOUT_MS, int(1000*request.request_timeout))
+    curl.setopt(pycurl.NOSIGNAL, _PYCURL_ASYNC_DNS)
 
     if request.user_agent:
         curl.setopt(pycurl.USERAGENT, utf8(request.user_agent))
