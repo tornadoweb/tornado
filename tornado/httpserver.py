@@ -322,7 +322,7 @@ class HTTPRequest(object):
     .. attribute:: protocol
 
        The protocol used, either "http" or "https".  If `HTTPServer.xheaders`
-       is seet, will pass along the protocol used by a load balancer if
+       is set, will pass along the protocol used by a load balancer if
        reported via an ``X-Scheme`` header.
 
     .. attribute:: host
