@@ -404,17 +404,16 @@ class WebSocketProtocol8(WebSocketProtocol):
         frame += data
         self.stream.write(frame)
 
-    def write_message(self, message, binary=False):
+    def write_message(self, message):
         """Sends the given message to the client of this Web Socket."""
         if isinstance(message, dict):
             message = tornado.escape.json_encode(message)
         if isinstance(message, unicode):
-            message = message.encode("utf-8")
-        assert isinstance(message, bytes_type)
-        if not binary:
             opcode = 0x1
+            message = message.encode("utf-8")
         else:
             opcode = 0x2
+        assert isinstance(message, bytes_type)
         self._write_frame(True, opcode, message)
 
     def _receive_frame(self):
@@ -423,11 +422,22 @@ class WebSocketProtocol8(WebSocketProtocol):
     def _on_frame_start(self, data):
         header, payloadlen = struct.unpack("BB", data)
         self._final_frame = header & 0x80
+        reserved_bits = header & 0x70
         self._frame_opcode = header & 0xf
+        self._frame_opcode_is_control = self._frame_opcode & 0x8
+        if reserved_bits:
+            # client is using as-yet-undefined extensions; abort
+            self._abort()
+            return
         if not (payloadlen & 0x80):
             # Unmasked frame -> abort connection
             self._abort()
+            return
         payloadlen = payloadlen & 0x7f
+        if self._frame_opcode_is_control and payloadlen >= 126:
+            # control frames must have payload < 126
+            self._abort()
+            return
         if payloadlen < 126:
             self._frame_length = payloadlen
             self.stream.read_bytes(4, self._on_masking_key)
@@ -454,18 +464,42 @@ class WebSocketProtocol8(WebSocketProtocol):
             unmasked[i] = unmasked[i] ^ self._frame_mask[i % 4]
 
         if not self._final_frame:
-            if self._fragmented_message_buffer:
+            if self._frame_opcode_is_control:
+                # control frames must not be fragmented
+                self._abort()
+                return
+            if self._fragmented_message_buffer is not None:
+                if self._frame_opcode != 0:
+                    # continuation frames must have opcode 0
+                    self._abort()
+                    return
                 self._fragmented_message_buffer += unmasked
             else:
+                if self._frame_opcode == 0:
+                    # continuation frame but nothing to continue
+                    self._abort()
+                    return
                 self._fragmented_message_opcode = self._frame_opcode
                 self._fragmented_message_buffer = unmasked
         else:
             if self._frame_opcode == 0:
+                if self._fragmented_message_buffer is None:
+                    # continuation frame but nothing to continue
+                    self._abort()
+                    return
                 unmasked = self._fragmented_message_buffer + unmasked
                 opcode = self._fragmented_message_opcode
                 self._fragmented_message_buffer = None
             else:
                 opcode = self._frame_opcode
+                if (self._fragmented_message_buffer is not None and
+                    not self._frame_opcode_is_control):
+                    # We have a fragmented buffer but we're not continuing
+                    # it.  This is an error for data packets, but
+                    # (non-fragmentable) control packets can be interleaved
+                    # with fragmented data.
+                    self._abort()
+                    return
 
             self._handle_message(opcode, bytes_type(unmasked))
 
@@ -475,10 +509,15 @@ class WebSocketProtocol8(WebSocketProtocol):
 
     def _handle_message(self, opcode, data):
         if self.client_terminated: return
-        
+
         if opcode == 0x1:
             # UTF-8 data
-            self.async_callback(self.handler.on_message)(data.decode("utf-8", "replace"))
+            try:
+                decoded = data.decode("utf-8")
+            except UnicodeDecodeError:
+                self._abort()
+                return
+            self.async_callback(self.handler.on_message)(decoded)
         elif opcode == 0x2:
             # Binary data
             self.async_callback(self.handler.on_message)(data)
