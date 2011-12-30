@@ -463,44 +463,37 @@ class WebSocketProtocol8(WebSocketProtocol):
         for i in xrange(len(data)):
             unmasked[i] = unmasked[i] ^ self._frame_mask[i % 4]
 
-        if not self._final_frame:
-            if self._frame_opcode_is_control:
+        if self._frame_opcode_is_control:
+            # control frames may be interleaved with a series of fragmented
+            # data frames, so control frames must not interact with
+            # self._fragmented_*
+            if not self._final_frame:
                 # control frames must not be fragmented
                 self._abort()
                 return
+            opcode = self._frame_opcode
+        elif self._frame_opcode == 0:  # continuation frame
+            if self._fragmented_message_buffer is None:
+                # nothing to continue
+                self._abort()
+                return
+            self._fragmented_message_buffer += unmasked
+            if self._final_frame:
+                opcode = self._fragmented_message_opcode
+                unmasked = self._fragmented_message_buffer
+                self._fragmented_message_buffer = None
+        else:  # start of new data message
             if self._fragmented_message_buffer is not None:
-                if self._frame_opcode != 0:
-                    # continuation frames must have opcode 0
-                    self._abort()
-                    return
-                self._fragmented_message_buffer += unmasked
+                # can't start new message until the old one is finished
+                self._abort()
+                return
+            if self._final_frame:
+                opcode = self._frame_opcode
             else:
-                if self._frame_opcode == 0:
-                    # continuation frame but nothing to continue
-                    self._abort()
-                    return
                 self._fragmented_message_opcode = self._frame_opcode
                 self._fragmented_message_buffer = unmasked
-        else:
-            if self._frame_opcode == 0:
-                if self._fragmented_message_buffer is None:
-                    # continuation frame but nothing to continue
-                    self._abort()
-                    return
-                unmasked = self._fragmented_message_buffer + unmasked
-                opcode = self._fragmented_message_opcode
-                self._fragmented_message_buffer = None
-            else:
-                opcode = self._frame_opcode
-                if (self._fragmented_message_buffer is not None and
-                    not self._frame_opcode_is_control):
-                    # We have a fragmented buffer but we're not continuing
-                    # it.  This is an error for data packets, but
-                    # (non-fragmentable) control packets can be interleaved
-                    # with fragmented data.
-                    self._abort()
-                    return
 
+        if self._final_frame:
             self._handle_message(opcode, bytes_type(unmasked))
 
         if not self.client_terminated:
