@@ -45,6 +45,25 @@ Example usage::
         # in the ioloop.
         http_client.fetch(url, callback)
     ioloop.start()
+
+Most applications shouln't have to work with `StackContext` directly.
+Here are a few rules of thumb for when it's necessary:
+
+* If you're writing an asynchronous library that doesn't rely on a
+  stack_context-aware library like `tornado.ioloop` or `tornado.iostream`
+  (for example, if you're writing a thread pool), use
+  `stack_context.wrap()` before any asynchronous operations to capture the
+  stack context from where the operation was started.
+
+* If you're writing an asynchronous library that has some shared
+  resources (such as a connection pool), create those shared resources
+  within a ``with stack_context.NullContext():`` block.  This will prevent
+  ``StackContexts`` from leaking from one request to another.
+
+* If you want to write something like an exception handler that will
+  persist across asynchronous calls, create a new `StackContext` (or
+  `ExceptionStackContext`), and make your asynchronous calls in a ``with``
+  block that references your `StackContext`.
 '''
 
 from __future__ import with_statement

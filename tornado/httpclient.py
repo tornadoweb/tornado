@@ -10,6 +10,10 @@ The default implementation is `simple_httpclient`, and this is expected
 to be suitable for most users' needs.  However, some applications may wish
 to switch to `curl_httpclient` for reasons such as the following:
 
+* `curl_httpclient` has some features not found in `simple_httpclient`,
+  including support for HTTP proxies and the ability to use a specified
+  network interface.
+
 * `curl_httpclient` is more likely to be compatible with sites that are
   not-quite-compliant with the HTTP spec, or sites that use little-exercised
   features of HTTP.

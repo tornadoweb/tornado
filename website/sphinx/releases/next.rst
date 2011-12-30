@@ -18,8 +18,8 @@ Other modules
 
 * `tornado.iostream.IOStream.write` now works correctly when given an
   empty string.
-* `tornado.simple_httpclient` no longer hangs on ``HEAD`` requests
-  and responses with no content.
+* `tornado.simple_httpclient` no longer hangs on ``HEAD`` requests,
+  responses with no content, or empty ``POST``/``PUT`` response bodies.
 * `tornado.websocket` has been updated to support the latest protocol
   (as finalized in RFC 6455).
 * `tornado.platform.twisted` compatibility has been improved.  However,

@@ -80,16 +80,23 @@ class AsyncTestCase(unittest.TestCase):
                 # Test contents of response (failures and exceptions here
                 # will cause self.wait() to throw an exception and end the
                 # test).
+                # Exceptions thrown here are magically propagated to
+                # self.wait() in test_http_fetch() via stack_context.
+                self.assertIn("FriendFeed", response.body)
                 self.stop()
 
         # This test uses the argument passing between self.stop and self.wait
-        # for a simpler, more synchronous style
+        # for a simpler, more synchronous style.
+        # This style is recommended over the preceding example because it
+        # keeps the assertions in the test method itself, and is therefore
+        # less sensitive to the subtleties of stack_context.
         class MyTestCase2(AsyncTestCase):
             def test_http_fetch(self):
                 client = AsyncHTTPClient(self.io_loop)
                 client.fetch("http://www.tornadoweb.org/", self.stop)
                 response = self.wait()
                 # Test contents of response
+                self.assertIn("FriendFeed", response.body)
     """
     def __init__(self, *args, **kwargs):
         super(AsyncTestCase, self).__init__(*args, **kwargs)
