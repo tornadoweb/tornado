@@ -159,7 +159,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         try:
             self.http_server.listen(self.get_http_port(), address='::1')
         except socket.gaierror, e:
-            if e.errno == socket.EAI_ADDRFAMILY:
+            if e.args[0] == socket.EAI_ADDRFAMILY:
                 # python supports ipv6, but it's not configured on the network
                 # interface, so skip this test.
                 return
