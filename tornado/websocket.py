@@ -13,6 +13,7 @@ communication between the browser and server.
 """
 # Author: Jacob Kristhammar, 2010
 
+import array
 import functools
 import hashlib
 import logging
@@ -455,11 +456,11 @@ class WebSocketProtocol8(WebSocketProtocol):
         self.stream.read_bytes(4, self._on_masking_key);
 
     def _on_masking_key(self, data):
-        self._frame_mask = bytearray(data)
+        self._frame_mask = array.array("B", data)
         self.stream.read_bytes(self._frame_length, self._on_frame_data)
 
     def _on_frame_data(self, data):
-        unmasked = bytearray(data)
+        unmasked = array.array("B", data)
         for i in xrange(len(data)):
             unmasked[i] = unmasked[i] ^ self._frame_mask[i % 4]
 
@@ -494,7 +495,7 @@ class WebSocketProtocol8(WebSocketProtocol):
                 self._fragmented_message_buffer = unmasked
 
         if self._final_frame:
-            self._handle_message(opcode, bytes_type(unmasked))
+            self._handle_message(opcode, unmasked.tostring())
 
         if not self.client_terminated:
             self._receive_frame()
