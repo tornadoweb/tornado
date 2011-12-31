@@ -412,8 +412,25 @@ class IOStream(object):
                 self._run_callback(callback, self._consume(num_bytes))
                 return True
         elif self._read_delimiter is not None:
-            _merge_prefix(self._read_buffer, sys.maxint)
-            loc = self._read_buffer[0].find(self._read_delimiter)
+            # Multi-byte delimiters (e.g. '\r\n') may straddle two
+            # chunks in the read buffer, so we can't easily find them
+            # without collapsing the buffer.  However, since protocols
+            # using delimited reads (as opposed to reads of a known
+            # length) tend to be "line" oriented, the delimiter is likely
+            # to be in the first few chunks.  Merge the buffer gradually
+            # since large merges are relatively expensive and get undone in
+            # consume().
+            loc = -1
+            if self._read_buffer:
+                loc = self._read_buffer[0].find(self._read_delimiter)
+            while loc == -1 and len(self._read_buffer) > 1:
+                # Grow by doubling, but don't split the second chunk just
+                # because the first one is small.
+                new_len = max(len(self._read_buffer[0]) * 2,
+                              (len(self._read_buffer[0]) +
+                               len(self._read_buffer[1])))
+                _merge_prefix(self._read_buffer, new_len)
+                loc = self._read_buffer[0].find(self._read_delimiter)
             if loc != -1:
                 callback = self._read_callback
                 delimiter_len = len(self._read_delimiter)
@@ -424,6 +441,17 @@ class IOStream(object):
                                    self._consume(loc + delimiter_len))
                 return True
         elif self._read_regex is not None:
+            m = None
+            if self._read_buffer:
+                m = self._read_regex.search(self._read_buffer[0])
+            while m is None and len(self._read_buffer) > 1:
+                # Grow by doubling, but don't split the second chunk just
+                # because the first one is small.
+                new_len = max(len(self._read_buffer[0]) * 2,
+                              (len(self._read_buffer[0]) +
+                               len(self._read_buffer[1])))
+                _merge_prefix(self._read_buffer, new_len)
+                m = self._read_regex.search(self._read_buffer[0])
             _merge_prefix(self._read_buffer, sys.maxint)
             m = self._read_regex.search(self._read_buffer[0])
             if m:
