@@ -410,11 +410,21 @@ class RequestHandler(object):
         return decode_signed_value(self.application.settings["cookie_secret"],
                                    name, value, max_age_days=max_age_days)
 
-    def redirect(self, url, permanent=False):
-        """Sends a redirect to the given (optionally relative) URL."""
+    def redirect(self, url, permanent=False, status=None):
+        """Sends a redirect to the given (optionally relative) URL.
+
+        If the ``status`` argument is specified, that value is used as the
+        HTTP status code; otherwise either 301 (permanent) or 302
+        (temporary) is chosen based on the ``permanent`` argument.
+        The default is 302 (temporary).
+        """
         if self._headers_written:
             raise Exception("Cannot redirect after headers have been written")
-        self.set_status(301 if permanent else 302)
+        if status is None:
+            status = 301 if permanent else 302
+        else:
+            assert isinstance(status, int) and 300 <= status <= 399
+        self.set_status(status)
         # Remove whitespace
         url = re.sub(b(r"[\x00-\x20]+"), "", utf8(url))
         self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
