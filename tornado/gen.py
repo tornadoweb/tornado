@@ -88,8 +88,9 @@ def engine(func):
     def wrapper(*args, **kwargs):
         gen = func(*args, **kwargs)
         if isinstance(gen, types.GeneratorType):
-            Runner(gen).run()
-            return
+            runner = Runner(gen)
+            runner.run()
+            return runner 
         assert gen is None, gen
         # no yield, so we're done
     return wrapper
@@ -198,13 +199,25 @@ class Task(YieldPoint):
         self.args = args
         self.kwargs = kwargs
         self.func = func
+        self.func_result = None
 
     def start(self, runner):
         self.runner = runner
         self.key = object()
         runner.register_callback(self.key)
         self.kwargs["callback"] = runner.result_callback(self.key)
-        self.func(*self.args, **self.kwargs)
+        try:
+            self.func_result = self.func(*self.args, **self.kwargs)
+            if isinstance(self.func_result, Runner):
+                self.func_result.exception_handler = self.exception_handler
+        except Exception:
+            self.exception_handler(*sys.exc_info())
+
+    def exception_handler(self, *args):
+        try:
+            self.runner.gen.throw(*args)
+        except StopIteration:
+            pass 
     
     def is_ready(self):
         return self.runner.is_ready(self.key)
@@ -255,6 +268,7 @@ class Runner(object):
         self.running = False
         self.finished = False
         self.exc_info = None
+        self.exception_handler = None
 
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
@@ -310,7 +324,11 @@ class Runner(object):
                     return
                 except Exception:
                     self.finished = True
-                    raise
+                    if self.exception_handler is not None:
+                        self.exception_handler(*sys.exc_info())
+                        return 
+                    else:
+                        raise
                 if isinstance(yielded, list):
                     yielded = Multi(yielded)
                 if isinstance(yielded, YieldPoint):
