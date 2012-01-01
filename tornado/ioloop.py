@@ -241,8 +241,7 @@ class IOLoop(object):
         self._thread_ident = thread.get_ident()
         self._running = True
         while True:
-            # Never use an infinite timeout here - it can stall epoll
-            poll_timeout = 0.2
+            poll_timeout = 3600.0
 
             # Prevent IO event starvation by delaying new callbacks
             # to the next iteration of the event loop.
