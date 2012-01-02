@@ -362,7 +362,7 @@ class HTTPRequest(object):
             # Squid uses X-Forwarded-For, others use X-Real-Ip
             self.remote_ip = self.headers.get(
                 "X-Real-Ip", self.headers.get("X-Forwarded-For", remote_ip))
-            if not self.__valid_ip(self.remote_ip):
+            if not self._valid_ip(self.remote_ip):
                 self.remote_ip = remote_ip
             # AWS uses X-Forwarded-Proto
             self.protocol = self.headers.get(
@@ -460,13 +460,15 @@ class HTTPRequest(object):
         return "%s(%s, headers=%s)" % (
             self.__class__.__name__, args, dict(self.headers))
 
-    def __valid_ip(self, ip):
+    def _valid_ip(self, ip):
         try:
-            address = socket.inet_pton(socket.AF_INET, ip)
-        except socket.error:
-            try:
-                address = socket.inet_pton(socket.AF_INET6, ip)
-            except socket.error:
+            res = socket.getaddrinfo(ip, 0, socket.AF_UNSPEC,
+                                     socket.SOCK_STREAM,
+                                     0, socket.AI_NUMERICHOST)
+            return bool(res)
+        except socket.gaierror, e:
+            if e.args[0] == socket.EAI_NONAME:
                 return False
-
+            raise
         return True
+

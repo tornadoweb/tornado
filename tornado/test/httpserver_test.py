@@ -20,6 +20,15 @@ try:
 except ImportError:
     ssl = None
 
+class HandlerBaseTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        return Application([('/', self.__class__.Handler)])
+
+    def fetch_json(self, *args, **kwargs):
+        response = self.fetch(*args, **kwargs)
+        response.rethrow()
+        return json_decode(response.body)
+
 class HelloWorldRequestHandler(RequestHandler):
     def initialize(self, protocol="http"):
         self.expected_protocol = protocol
@@ -235,6 +244,39 @@ class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/typecheck", method="POST", body="foo=bar", headers=headers)
         data = json_decode(response.body)
         self.assertEqual(data, {})
+
+class XHeaderTest(HandlerBaseTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write(dict(remote_ip=self.request.remote_ip))
+
+    def get_httpserver_options(self):
+        return dict(xheaders=True)
+
+    def test_ip_headers(self):
+        self.assertEqual(self.fetch_json("/")["remote_ip"],
+                         "127.0.0.1")
+
+        valid_ipv4 = {"X-Real-IP": "4.4.4.4"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv4)["remote_ip"],
+            "4.4.4.4")
+
+        valid_ipv6 = {"X-Real-IP": "2620:0:1cfe:face:b00c::3"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv6)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3")
+
+        invalid_chars = {"X-Real-IP": "4.4.4.4<script>"}
+        self.assertEqual(
+            self.fetch_json("/", headers=invalid_chars)["remote_ip"],
+            "127.0.0.1")
+
+        invalid_host = {"X-Real-IP": "www.google.com"}
+        self.assertEqual(
+            self.fetch_json("/", headers=invalid_host)["remote_ip"],
+            "127.0.0.1")
+
 
 class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
     """HTTPServers can listen on Unix sockets too.
