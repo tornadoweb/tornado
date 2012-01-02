@@ -70,6 +70,19 @@ class GenTest(AsyncTestCase):
                 self.stop()
         self.run_gen(f)
 
+    def test_exception_in_task_phase2(self):
+        def fail_task(callback):
+            self.io_loop.add_callback(lambda: 1/0)
+
+        @gen.engine
+        def f():
+            try:
+                yield gen.Task(fail_task)
+                raise Exception("did not get expected exception")
+            except ZeroDivisionError:
+                self.stop()
+        self.run_gen(f)
+
     def test_with_arg(self):
         @gen.engine
         def f():

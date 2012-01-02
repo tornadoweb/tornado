@@ -62,11 +62,14 @@ it was called with one argument, the result is that argument.  If it was
 called with more than one argument or any keyword arguments, the result
 is an `Arguments` object, which is a named tuple ``(args, kwargs)``.
 """
+from __future__ import with_statement
 
 import functools
 import operator
 import sys
 import types
+
+from tornado.stack_context import ExceptionStackContext
 
 class KeyReuseError(Exception): pass
 class UnknownKeyError(Exception): pass
@@ -86,12 +89,23 @@ def engine(func):
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        gen = func(*args, **kwargs)
-        if isinstance(gen, types.GeneratorType):
-            Runner(gen).run()
-            return
-        assert gen is None, gen
-        # no yield, so we're done
+        runner = None
+        def handle_exception(typ, value, tb):
+            # if the function throws an exception before its first "yield"
+            # (or is not a generator at all), the Runner won't exist yet.
+            # However, in that case we haven't reached anything asynchronous
+            # yet, so we can just let the exception propagate.
+            if runner is not None:
+                return runner.handle_exception(typ, value, tb)
+            return False
+        with ExceptionStackContext(handle_exception):
+            gen = func(*args, **kwargs)
+            if isinstance(gen, types.GeneratorType):
+                runner = Runner(gen)
+                runner.run()
+                return
+            assert gen is None, gen
+            # no yield, so we're done
     return wrapper
 
 class YieldPoint(object):
@@ -340,6 +354,14 @@ class Runner(object):
                 result = None
             self.set_result(key, result)
         return inner
+
+    def handle_exception(self, typ, value, tb):
+        if not self.running and not self.finished:
+            self.exc_info = (typ, value, tb)
+            self.run()
+            return True
+        else:
+            return False
 
 # in python 2.6+ this could be a collections.namedtuple
 class Arguments(tuple):
