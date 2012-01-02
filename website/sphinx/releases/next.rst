@@ -4,6 +4,18 @@ What's new in the next release of Tornado
 In progress
 -----------
 
+``IOLoop`` and ``IOStream``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* `IOStream.write` now works correctly when given an empty string.
+* `IOStream.read_until` (and ``read_until_regex``) now perform better
+  when there is a lot of buffered data, which improves peformance of
+  `SimpleAsyncHTTPClient` when downloading files with lots of
+  chunks.
+* Idle ``IOLoops`` no longer wake up several times a second.
+* `tornado.ioloop.PeriodicCallback` no longer triggers duplicate callbacks
+  when stopped and started repeatedly.
+
 ``tornado.template``
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -16,19 +28,21 @@ In progress
 Other modules
 ~~~~~~~~~~~~~
 
-* `tornado.iostream.IOStream.write` now works correctly when given an
-  empty string.
-* `tornado.simple_httpclient` no longer hangs on ``HEAD`` requests,
+* `SimpleAsyncHTTPClient` no longer hangs on ``HEAD`` requests,
   responses with no content, or empty ``POST``/``PUT`` response bodies.
 * `tornado.websocket` has been updated to support the latest protocol
   (as finalized in RFC 6455).
 * `tornado.platform.twisted` compatibility has been improved.  However,
   only Twisted version 11.0.0 is supported (and not 11.1.0).
-* `tornado.ioloop.PeriodicCallback` no longer triggers duplicate callbacks
-  when stopped and started repeatedly.
 * `tornado.web` now behaves better when given malformed ``Cookie`` headers
+* `RequestHandler.redirect` now has a ``status`` argument to send
+  status codes other than 301 and 302.
 * `tornado.testing.main` supports a new flag ``--exception_on_interrupt``,
   which can be set to false to make ``Ctrl-C`` kill the process more
   reliably (at the expense of stack traces when it does so).
 * `tornado.process.fork_processes` correctly reseeds the `random` module
   even when `os.urandom` is not implemented.
+* `HTTPServer` with ``xheaders=True`` will no longer accept
+  ``X-Real-IP`` headers that don't look like valid IP addresses.
+* Exception handling in `tornado.gen` has been improved.  It is now possible
+  to catch exceptions thrown by a ``Task``.
