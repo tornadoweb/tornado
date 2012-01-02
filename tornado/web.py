@@ -739,6 +739,7 @@ class RequestHandler(object):
             if not self._locale:
                 self._locale = self.get_browser_locale()
                 assert self._locale
+        locale.locale = self._locale
         return self._locale
 
     def get_user_locale(self):

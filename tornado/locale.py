@@ -470,3 +470,7 @@ LOCALE_NAMES = {
     "zh_CN": {"name_en": u"Chinese (Simplified)", "name": u"\u4e2d\u6587(\u7b80\u4f53)"},
     "zh_TW": {"name_en": u"Chinese (Traditional)", "name": u"\u4e2d\u6587(\u7e41\u9ad4)"},
 }
+
+locale = get(_default_locale)
+def _(message):
+    return locale.translate(message)
