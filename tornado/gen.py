@@ -255,6 +255,7 @@ class Runner(object):
         self.running = False
         self.finished = False
         self.exc_info = None
+        self.had_exception = False
 
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
@@ -296,6 +297,7 @@ class Runner(object):
                         self.exc_info = sys.exc_info()
                 try:
                     if self.exc_info is not None:
+                        self.had_exception = True
                         exc_info = self.exc_info
                         self.exc_info = None
                         yielded = self.gen.throw(*exc_info)
@@ -303,7 +305,11 @@ class Runner(object):
                         yielded = self.gen.send(next)
                 except StopIteration:
                     self.finished = True
-                    if self.pending_callbacks:
+                    if self.pending_callbacks and not self.had_exception:
+                        # If we ran cleanly without waiting on all callbacks
+                        # raise an error (really more of a warning).  If we
+                        # had an exception then some callbacks may have been
+                        # orphaned, so skip the check in that case.
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
@@ -315,7 +321,10 @@ class Runner(object):
                     yielded = Multi(yielded)
                 if isinstance(yielded, YieldPoint):
                     self.yield_point = yielded
-                    self.yield_point.start(self)
+                    try:
+                        self.yield_point.start(self)
+                    except Exception:
+                        self.exc_info = sys.exc_info()
                 else:
                     self.exc_info = (BadYieldError("yielded unknown object %r" % yielded),)
         finally:
