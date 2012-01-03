@@ -352,6 +352,10 @@ class IOLoop(object):
         ``deadline`` may be a number denoting a unix timestamp (as returned
         by ``time.time()`` or a ``datetime.timedelta`` object for a deadline
         relative to the current time.
+
+        Note that it is not safe to call `add_timeout` from other threads.
+        Instead, you must use `add_callback` to transfer control to the
+        IOLoop's thread, and then call `add_timeout` from there.
         """
         timeout = _Timeout(deadline, stack_context.wrap(callback))
         heapq.heappush(self._timeouts, timeout)
