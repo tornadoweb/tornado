@@ -4,6 +4,14 @@ What's new in the next release of Tornado
 In progress
 -----------
 
+Backwards-incompatible changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* `tornado.process.fork_processes` now raises `SystemExit` if all child
+  processes exit cleanly rather than returning ``None``.  The old behavior
+  was surprising and inconsistent with most of the documented examples
+  of this function (which did not check the return value).
+
 ``IOLoop`` and ``IOStream``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

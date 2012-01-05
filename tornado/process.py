@@ -134,6 +134,11 @@ def fork_processes(num_processes, max_restarts=100):
             raise RuntimeError("Too many child restarts, giving up")
         new_id = start_child(id)
         if new_id is not None: return new_id
+    # All child processes exited cleanly, so exit the master process
+    # instead of just returning to right after the call to
+    # fork_processes (which will probably just start up another IOLoop
+    # unless the caller checks the return value).
+    sys.exit(0)
 
 def task_id():
     """Returns the current task id, if any.

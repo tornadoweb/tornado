@@ -355,16 +355,6 @@ class _HTTPConnection(object):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
-        if self._decompressor:
-            data = self._decompressor.decompress(data)
-        if self.request.streaming_callback:
-            if self.chunks is None:
-                # if chunks is not None, we already called streaming_callback
-                # in _on_chunk_data
-                self.request.streaming_callback(data)
-            buffer = BytesIO()
-        else:
-            buffer = BytesIO(data) # TODO: don't require one big string?
         original_request = getattr(self.request, "original_request",
                                    self.request)
         if (self.request.follow_redirects and
@@ -382,6 +372,16 @@ class _HTTPConnection(object):
             self.client.fetch(new_request, final_callback)
             self.stream.close()
             return
+        if self._decompressor:
+            data = self._decompressor.decompress(data)
+        if self.request.streaming_callback:
+            if self.chunks is None:
+                # if chunks is not None, we already called streaming_callback
+                # in _on_chunk_data
+                self.request.streaming_callback(data)
+            buffer = BytesIO()
+        else:
+            buffer = BytesIO(data) # TODO: don't require one big string?
         response = HTTPResponse(original_request,
                                 self.code, headers=self.headers,
                                 request_time=time.time() - self.start_time,

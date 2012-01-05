@@ -396,7 +396,8 @@ def main():
     for arg in args:
         try:
             response = client.fetch(arg,
-                                    follow_redirects=options.follow_redirects)
+                                    follow_redirects=options.follow_redirects
+                                    )
         except HTTPError, e:
             if e.response is not None:
                 response = e.response
