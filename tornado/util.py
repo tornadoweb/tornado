@@ -15,17 +15,38 @@ class ObjectDict(dict):
 def import_object(name):
     """Imports an object by name.
 
+    import_object('x') is equivalent to 'import x'.
     import_object('x.y.z') is equivalent to 'from x.y import z'.
+
+    It will return None in case of failed import operation.
 
     >>> import tornado.escape
     >>> import_object('tornado.escape') is tornado.escape
     True
     >>> import_object('tornado.escape.utf8') is tornado.escape.utf8
     True
+    >>> import_object('tornado') is tornado
+    True
+    >>> import_object('tornado.missing_module') is None
+    True
+    >>> import_object('missing_module') is None
+    True
     """
-    parts = name.split('.')
-    obj = __import__('.'.join(parts[:-1]), None, None, [parts[-1]], 0)
-    return getattr(obj, parts[-1])
+    def safe_import(*args, **kwargs):
+        try:
+            return __import__(*args, **kwargs)
+        except ImportError:
+            return None
+
+    if name.count('.') == 0:
+        return safe_import(name, None, None)
+    else:
+        parts = name.split('.')
+        obj = safe_import('.'.join(parts[:-1]), None, None, [parts[-1]], 0)
+        try:
+            return getattr(obj, parts[-1])
+        except AttributeError:
+            return None
 
 # Fake byte literal support:  In python 2.6+, you can say b"foo" to get
 # a byte literal (str in 2.x, bytes in 3.x).  There's no way to do this
