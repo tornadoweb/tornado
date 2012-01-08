@@ -54,9 +54,11 @@ class HTTPClient(object):
         except httpclient.HTTPError, e:
             print "Error:", e
     """
-    def __init__(self):
+    def __init__(self, async_client_class=None):
         self._io_loop = IOLoop()
-        self._async_client = AsyncHTTPClient(self._io_loop)
+        if async_client_class is None:
+            async_client_class = AsyncHTTPClient
+        self._async_client = async_client_class(self._io_loop)
         self._response = None
         self._closed = False
 

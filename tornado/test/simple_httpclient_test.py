@@ -55,6 +55,10 @@ class NoContentHandler(RequestHandler):
         self.set_status(204)
 
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+    def setUp(self):
+        super(SimpleHTTPClientTestCase, self).setUp()
+        self.http_client = SimpleAsyncHTTPClient(self.io_loop)
+
     def get_app(self):
         # callable objects to finish pending /trigger requests
         self.triggers = collections.deque()

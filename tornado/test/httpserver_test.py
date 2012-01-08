@@ -118,7 +118,8 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         return Application(self.get_handlers())
 
     def raw_fetch(self, headers, body):
-        conn = RawRequestHTTPConnection(self.io_loop, self.http_client,
+        client = SimpleAsyncHTTPClient(self.io_loop)
+        conn = RawRequestHTTPConnection(self.io_loop, client,
                                         httpclient.HTTPRequest(self.get_url("/")),
                                         None, self.stop,
                                         1024*1024)
@@ -127,6 +128,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
                            [utf8("Content-Length: %d\r\n" % len(body))]) +
             b("\r\n") + body)
         response = self.wait()
+        client.close()
         response.rethrow()
         return response
 
