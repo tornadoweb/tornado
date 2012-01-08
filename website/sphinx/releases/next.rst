@@ -11,6 +11,9 @@ Backwards-incompatible changes
   processes exit cleanly rather than returning ``None``.  The old behavior
   was surprising and inconsistent with most of the documented examples
   of this function (which did not check the return value).
+* `tornado.websocket` no longer supports the older "draft 76" version
+  of the websocket protocol by default, although this version can
+  be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
 
 ``IOLoop`` and ``IOStream``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -33,13 +36,22 @@ Backwards-incompatible changes
   ``{% comment %}`` directive, these can wrap other template directives).
 * Template directives may now span multiple lines.
 
+``tornado.websocket``
+~~~~~~~~~~~~~~~~~~~~~
+
+* Updated to support the latest version of the protocol, as finalized
+  in RFC 6455.
+* `tornado.websocket` no longer supports the older "draft 76" version
+  of the websocket protocol by default, although this version can
+  be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
+* `WebSocketHandler.write_message` now accepts a ``binary`` argument
+  to send binary messages.
+
 Other modules
 ~~~~~~~~~~~~~
 
 * `SimpleAsyncHTTPClient` no longer hangs on ``HEAD`` requests,
   responses with no content, or empty ``POST``/``PUT`` response bodies.
-* `tornado.websocket` has been updated to support the latest protocol
-  (as finalized in RFC 6455).
 * `tornado.platform.twisted` compatibility has been improved.  However,
   only Twisted version 11.0.0 is supported (and not 11.1.0).
 * `tornado.web` now behaves better when given malformed ``Cookie`` headers

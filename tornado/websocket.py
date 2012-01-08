@@ -5,11 +5,16 @@ communication between the browser and server.
 
 .. warning::
 
-   The WebSocket protocol is still in development.  This module
-   currently implements the "hixie-76", "hybi-10", and "hybi-17"
-   versions of the protocol.  See this `browser compatibility table
-   <http://en.wikipedia.org/wiki/WebSockets#Browser_support>`_ on
-   Wikipedia.
+   The WebSocket protocol was recently finalized as `RFC 6455
+   <http://tools.ietf.org/html/rfc6455>`_ and is not yet supported in
+   all browsers.  Refer to http://caniuse.com/websockets for details
+   on compatibility.  In addition, during development the protocol
+   went through several incompatible versions, and some browsers only
+   support older versions.  By default this module only supports the
+   latest version of the protocol, but optional support for an older
+   version (known as "draft 76" or "hixie-76") can be enabled by
+   overriding `WebSocketHandler.allow_draft76` (see that method's
+   documentation for caveats).
 """
 # Author: Jacob Kristhammar, 2010
 
@@ -32,13 +37,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
     open and on_close to handle opened and closed connections.
 
     See http://dev.w3.org/html5/websockets/ for details on the
-    JavaScript interface. This implement the protocol as specified at
-    http://tools.ietf.org/html/draft-ietf-hybi-thewebsocketprotocol-17
-    The older protocol versions specified at
-    http://tools.ietf.org/html/draft-ietf-hybi-thewebsocketprotocol-10
-    and 
-    http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-76.
-    are also supported.
+    JavaScript interface.  The protocol is specified at
+    http://tools.ietf.org/html/rfc6455.
 
     Here is an example Web Socket handler that echos back all received messages
     back to the client::
@@ -88,7 +88,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # simply "Origin".
         logging.info('starting websocket')
         if self.request.headers.get("Sec-WebSocket-Version") in ("7", "8", "13"):
-            self.ws_connection = WebSocketProtocol8(self)
+            self.ws_connection = WebSocketProtocol13(self)
             self.ws_connection.accept_connection()
         elif (self.allow_draft76() and
               "Sec-WebSocket-Version" not in self.request.headers):
@@ -101,7 +101,13 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.stream.close()
 
     def write_message(self, message, binary=False):
-        """Sends the given message to the client of this Web Socket."""
+        """Sends the given message to the client of this Web Socket.
+
+        The message may be either a string or a dict (which will be
+        encoded as json).  If the ``binary`` argument is false, the
+        message will be sent as utf8; in binary mode any byte string
+        is allowed.
+        """
         if isinstance(message, dict):
             message = tornado.escape.json_encode(message)
         self.ws_connection.write_message(message, binary=binary)
@@ -350,11 +356,11 @@ class WebSocketProtocol76(WebSocketProtocol):
                                 time.time() + 5, self._abort)
 
 
-class WebSocketProtocol8(WebSocketProtocol):
-    """Implementation of the WebSocket protocol, version 8 (draft version 10).
+class WebSocketProtocol13(WebSocketProtocol):
+    """Implementation of the WebSocket protocol from RFC 6455.
 
-    Compare
-    http://tools.ietf.org/html/draft-ietf-hybi-thewebsocketprotocol-10
+    This class supports versions 7 and 8 of the protocol in addition to the
+    final version 13.
     """
     def __init__(self, handler):
         WebSocketProtocol.__init__(self, handler)

@@ -2,4 +2,6 @@
 ====================================================================
 
 .. automodule:: tornado.websocket
-   :members:
+
+   .. autoclass:: WebSocketHandler
+      :members:  
