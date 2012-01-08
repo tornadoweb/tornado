@@ -86,19 +86,19 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # The difference between version 8 and 13 is that in 8 the
         # client sends a "Sec-Websocket-Origin" header and in 13 it's
         # simply "Origin".
+        logging.info('starting websocket')
         if self.request.headers.get("Sec-WebSocket-Version") in ("7", "8", "13"):
             self.ws_connection = WebSocketProtocol8(self)
             self.ws_connection.accept_connection()
-            
-        elif self.request.headers.get("Sec-WebSocket-Version"):
+        elif (self.allow_draft76() and
+              "Sec-WebSocket-Version" not in self.request.headers):
+            self.ws_connection = WebSocketProtocol76(self)
+            self.ws_connection.accept_connection()
+        else:
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 426 Upgrade Required\r\n"
                 "Sec-WebSocket-Version: 8\r\n\r\n"))
             self.stream.close()
-            
-        else:
-            self.ws_connection = WebSocketProtocol76(self)
-            self.ws_connection.accept_connection()
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket."""
@@ -113,7 +113,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def on_message(self, message):
         """Handle incoming messages on the WebSocket
 
-        This method must be overloaded
+        This method must be overridden.
         """
         raise NotImplementedError
 
@@ -127,6 +127,21 @@ class WebSocketHandler(tornado.web.RequestHandler):
         Once the close handshake is successful the socket will be closed.
         """
         self.ws_connection.close()
+
+    def allow_draft76(self):
+        """Override to enable support for the older "draft76" protocol.
+
+        The draft76 version of the websocket protocol is disabled by
+        default due to security concerns, but it can be enabled by
+        overriding this method to return True.
+
+        Connections using the draft76 protocol do not support the
+        ``binary=True`` flag to `write_message`.
+
+        Support for the draft76 protocol is deprecated and will be
+        removed in a future version of Tornado.
+        """
+        return False
 
     def async_callback(self, callback, *args, **kwargs):
         """Wrap callbacks with this if they are used on asynchronous requests.
