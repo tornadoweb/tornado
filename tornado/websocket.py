@@ -100,9 +100,11 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.ws_connection = WebSocketProtocol76(self)
             self.ws_connection.accept_connection()
 
-    def write_message(self, message):
+    def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket."""
-        self.ws_connection.write_message(message)
+        if isinstance(message, dict):
+            message = tornado.escape.json_encode(message)
+        self.ws_connection.write_message(message, binary=binary)
 
     def open(self, *args, **kwargs):
         """Invoked when a new WebSocket is opened."""
@@ -312,10 +314,11 @@ class WebSocketProtocol76(WebSocketProtocol):
         self.client_terminated = True
         self.close()
 
-    def write_message(self, message):
+    def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket."""
-        if isinstance(message, dict):
-            message = tornado.escape.json_encode(message)
+        if binary:
+            raise ValueError(
+                "Binary messages not supported by this version of websockets")
         if isinstance(message, unicode):
             message = message.encode("utf-8")
         assert isinstance(message, bytes_type)
@@ -405,15 +408,13 @@ class WebSocketProtocol8(WebSocketProtocol):
         frame += data
         self.stream.write(frame)
 
-    def write_message(self, message):
+    def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket."""
-        if isinstance(message, dict):
-            message = tornado.escape.json_encode(message)
-        if isinstance(message, unicode):
-            opcode = 0x1
-            message = message.encode("utf-8")
-        else:
+        if binary:
             opcode = 0x2
+        else:
+            opcode = 0x1
+        message = tornado.escape.utf8(message)
         assert isinstance(message, bytes_type)
         self._write_frame(True, opcode, message)
 
