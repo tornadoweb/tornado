@@ -104,11 +104,22 @@ class SSLv3Test(BaseSSLTest, SSLTestMixin):
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self): return ssl.PROTOCOL_TLSv1
 
+class SSLv2Test(BaseSSLTest):
+    def get_ssl_version(self): return ssl.PROTOCOL_SSLv2
+
+    def test_sslv2_fail(self):
+        # This is really more of a client test, but run it here since
+        # we've got all the other ssl version tests here.
+        # Clients should have SSLv2 disabled by default.
+        response = self.fetch('/')
+        self.assertEqual(response.code, 599)
+
 if ssl is None:
     del BaseSSLTest
     del SSLv23Test
     del SSLv3Test
     del TLSv1Test
+    del SSLv2Test
 elif getattr(ssl, 'OPENSSL_VERSION_INFO', (0,0)) < (1,0):
     # In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
     # ClientHello messages, which are rejected by SSLv3 and TLSv1

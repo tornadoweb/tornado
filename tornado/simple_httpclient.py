@@ -17,6 +17,7 @@ import logging
 import os.path
 import re
 import socket
+import sys
 import time
 import urlparse
 import zlib
@@ -185,6 +186,26 @@ class _HTTPConnection(object):
                     ssl_options["keyfile"] = request.client_key
                 if request.client_cert is not None:
                     ssl_options["certfile"] = request.client_cert
+
+                # SSL interoperability is tricky.  We want to disable
+                # SSLv2 for security reasons; it wasn't disabled by default
+                # until openssl 1.0.  The best way to do this is to use
+                # the SSL_OP_NO_SSLv2, but that wasn't exposed to python
+                # until 3.2.  Python 2.7 adds the ciphers argument, which
+                # can also be used to disable SSLv2.  As a last resort
+                # on python 2.6, we set ssl_version to SSLv3.  This is
+                # more narrow than we'd like since it also breaks
+                # compatibility with servers configured for TLSv1 only,
+                # but nearly all servers support SSLv3:
+                # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
+                if sys.version_info >= (2,7):
+                    ssl_options["ciphers"] = "DEFAULT:!SSLv2"
+                else:
+                    # This is really only necessary for pre-1.0 versions
+                    # of openssl, but python 2.6 doesn't expose version
+                    # information.
+                    ssl_options["ssl_version"] = ssl.PROTOCOL_SSLv3
+
                 self.stream = SSLIOStream(socket.socket(af, socktype, proto),
                                           io_loop=self.io_loop,
                                           ssl_options=ssl_options,
