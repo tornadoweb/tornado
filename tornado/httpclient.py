@@ -393,12 +393,14 @@ def main():
     define("print_headers", type=bool, default=False)
     define("print_body", type=bool, default=True)
     define("follow_redirects", type=bool, default=True)
+    define("validate_cert", type=bool, default=True)
     args = parse_command_line()
     client = HTTPClient()
     for arg in args:
         try:
             response = client.fetch(arg,
-                                    follow_redirects=options.follow_redirects
+                                    follow_redirects=options.follow_redirects,
+                                    validate_cert=options.validate_cert,
                                     )
         except HTTPError, e:
             if e.response is not None:
