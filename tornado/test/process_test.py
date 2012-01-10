@@ -50,9 +50,12 @@ class ProcessTest(LogTrapTestCase):
         sockets = bind_sockets(port, "127.0.0.1")
         # ensure that none of these processes live too long
         signal.alarm(5)  # master process
-        id = fork_processes(3, max_restarts=3)
-        if id is None:
-            # back in the master process; everything worked!
+        try:
+            id = fork_processes(3, max_restarts=3)
+        except SystemExit, e:
+            # if we exit cleanly from fork_processes, all the child processes
+            # finished with status 0
+            self.assertEqual(e.code, 0)
             self.assertTrue(task_id() is None)
             for sock in sockets: sock.close()
             signal.alarm(0)

@@ -55,7 +55,7 @@ def _reseed_random():
     try:
         seed = long(hexlify(os.urandom(16)), 16)
     except NotImplementedError:
-        seed(int(time.time() * 1000) ^ os.getpid())
+        seed = int(time.time() * 1000) ^ os.getpid()
     random.seed(seed)
 
 
@@ -134,6 +134,11 @@ def fork_processes(num_processes, max_restarts=100):
             raise RuntimeError("Too many child restarts, giving up")
         new_id = start_child(id)
         if new_id is not None: return new_id
+    # All child processes exited cleanly, so exit the master process
+    # instead of just returning to right after the call to
+    # fork_processes (which will probably just start up another IOLoop
+    # unless the caller checks the return value).
+    sys.exit(0)
 
 def task_id():
     """Returns the current task id, if any.

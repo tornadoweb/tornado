@@ -68,7 +68,7 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
 
         class GetCookieHandler(RequestHandler):
             def get(self):
-                self.write(self.get_cookie("foo"))
+                self.write(self.get_cookie("foo", "default"))
 
         class SetCookieDomainHandler(RequestHandler):
             def get(self):
@@ -104,6 +104,9 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
 
         response = self.fetch("/get", headers={"Cookie": 'foo="bar"'})
         self.assertEqual(response.body, b("bar"))
+
+        response = self.fetch("/get", headers={"Cookie": "/=exception;"})
+        self.assertEqual(response.body, b("default"))
 
     def test_set_cookie_domain(self):
         response = self.fetch("/set_domain")
@@ -322,6 +325,16 @@ class MultiHeaderHandler(RequestHandler):
         self.add_header("x-multi", 3)
         self.add_header("x-multi", "4")
 
+class RedirectHandler(RequestHandler):
+    def get(self):
+        if self.get_argument('permanent', None) is not None:
+            self.redirect('/', permanent=int(self.get_argument('permanent')))
+        elif self.get_argument('status', None) is not None:
+            self.redirect('/', status=int(self.get_argument('status')))
+        else:
+            raise Exception("didn't get permanent or status arguments")
+
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         loader = DictLoader({
@@ -345,6 +358,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/optional_path/(.+)?", OptionalPathHandler),
             url("/flow_control", FlowControlHandler),
             url("/multi_header", MultiHeaderHandler),
+            url("/redirect", RedirectHandler),
             ]
         return Application(urls,
                            template_loader=loader,
@@ -429,6 +443,14 @@ js_embed()
         response = self.fetch("/multi_header")
         self.assertEqual(response.headers["x-overwrite"], "2")
         self.assertEqual(response.headers.get_list("x-multi"), ["3", "4"])
+
+    def test_redirect(self):
+        response = self.fetch("/redirect?permanent=1", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        response = self.fetch("/redirect?permanent=0", follow_redirects=False)
+        self.assertEqual(response.code, 302)
+        response = self.fetch("/redirect?status=307", follow_redirects=False)
+        self.assertEqual(response.code, 307)
 
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
