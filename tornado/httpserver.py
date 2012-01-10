@@ -412,6 +412,10 @@ class HTTPRequest(object):
 
     def write(self, chunk, callback=None):
         """Writes the given chunk to the response stream."""
+
+        if bytes_type is str and isinstance(chunk, unicode):
+            chunk = chunk.encode('latin1') # Marinho Brandao
+
         assert isinstance(chunk, bytes_type)
         self.connection.write(chunk, callback=callback)
 
