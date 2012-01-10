@@ -4,6 +4,13 @@ What's new in the next release of Tornado
 In progress
 -----------
 
+Security fixes
+~~~~~~~~~~~~~~
+
+* `tornado.simple_httpclient` now disables SSLv2 in all cases.  Previously
+  SSLv2 would be allowed if the Python interpreter was linked against a
+  pre-1.0 version of OpenSSL.
+
 Backwards-incompatible changes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -11,6 +18,9 @@ Backwards-incompatible changes
   processes exit cleanly rather than returning ``None``.  The old behavior
   was surprising and inconsistent with most of the documented examples
   of this function (which did not check the return value).
+* On Python 2.6, `tornado.simple_httpclient` only supports SSLv3.  This
+  is because Python 2.6 does not expose a way to support both SSLv3 and TLSv1
+  without also supporting the insecure SSLv2.
 * `tornado.websocket` no longer supports the older "draft 76" version
   of the websocket protocol by default, although this version can
   be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
@@ -23,6 +33,8 @@ Backwards-incompatible changes
   when there is a lot of buffered data, which improves peformance of
   `SimpleAsyncHTTPClient` when downloading files with lots of
   chunks.
+* `SSLIOStream` now works correctly when ``ssl_version`` is set to
+  a value other than ``SSLv23``.
 * Idle ``IOLoops`` no longer wake up several times a second.
 * `tornado.ioloop.PeriodicCallback` no longer triggers duplicate callbacks
   when stopped and started repeatedly.
