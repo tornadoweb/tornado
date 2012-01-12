@@ -346,7 +346,9 @@ class Runner(object):
 
     def result_callback(self, key):
         def inner(*args, **kwargs):
-            if kwargs or len(args) > 1:
+            if kwargs and len(args) == 1:
+                result = (args[0], kwargs)
+            elif kwargs or len(args) > 1:
                 result = Arguments(args, kwargs)
             elif args:
                 result = args[0]
