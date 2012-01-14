@@ -205,11 +205,13 @@ class HTTPConnection(object):
             disconnect = True
         else:
             connection_header = self._request.headers.get("Connection")
+            if connection_header is not None:
+                connection_header = connection_header.lower()
             if self._request.supports_http_1_1():
                 disconnect = connection_header == "close"
             elif ("Content-Length" in self._request.headers
                     or self._request.method in ("HEAD", "GET")):
-                disconnect = connection_header != "Keep-Alive"
+                disconnect = connection_header != "keep-alive"
             else:
                 disconnect = True
         self._request = None

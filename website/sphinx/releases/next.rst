@@ -25,6 +25,7 @@ Backwards-incompatible changes
   of the websocket protocol by default, although this version can
   be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
 
+
 ``IOLoop`` and ``IOStream``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -76,5 +77,7 @@ Other modules
   even when `os.urandom` is not implemented.
 * `HTTPServer` with ``xheaders=True`` will no longer accept
   ``X-Real-IP`` headers that don't look like valid IP addresses.
+* `HTTPServer` now treats the ``Connection`` request header as
+  case-insensitive.
 * Exception handling in `tornado.gen` has been improved.  It is now possible
   to catch exceptions thrown by a ``Task``.
