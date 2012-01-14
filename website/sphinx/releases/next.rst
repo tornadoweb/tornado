@@ -81,3 +81,5 @@ Other modules
   case-insensitive.
 * Exception handling in `tornado.gen` has been improved.  It is now possible
   to catch exceptions thrown by a ``Task``.
+* `tornado.netutil.bind_sockets` now works when ``getaddrinfo`` returns
+  duplicate addresses.
