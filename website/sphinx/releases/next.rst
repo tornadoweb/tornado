@@ -85,3 +85,4 @@ Other modules
   duplicate addresses.
 * `tornado.version_info` is now a four-tuple so official releases can be
   distinguished from development branches.
+* `tornado.curl_httpclient` now accepts non-integer timeouts.
