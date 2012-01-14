@@ -83,3 +83,5 @@ Other modules
   to catch exceptions thrown by a ``Task``.
 * `tornado.netutil.bind_sockets` now works when ``getaddrinfo`` returns
   duplicate addresses.
+* `tornado.version_info` is now a four-tuple so official releases can be
+  distinguished from development branches.
