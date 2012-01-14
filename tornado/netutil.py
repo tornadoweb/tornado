@@ -244,8 +244,8 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
         # exist on some platforms (specifically WinXP, although
         # newer versions of windows have it)
         flags |= socket.AI_ADDRCONFIG
-    for res in socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                  0, flags):
+    for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
+                                  0, flags)):
         af, socktype, proto, canonname, sockaddr = res
         sock = socket.socket(af, socktype, proto)
         set_close_exec(sock.fileno())
