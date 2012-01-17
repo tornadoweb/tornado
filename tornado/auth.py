@@ -451,14 +451,14 @@ class TwitterMixin(OAuthMixin):
     _OAUTH_NO_CALLBACKS = False
 
 
-    def authenticate_redirect(self):
+    def authenticate_redirect(self, callback_uri = None):
         """Just like authorize_redirect(), but auto-redirects if authorized.
 
         This is generally the right interface to use if you are using
         Twitter for single-sign on.
         """
         http = httpclient.AsyncHTTPClient()
-        http.fetch(self._oauth_request_token_url(), self.async_callback(
+        http.fetch(self._oauth_request_token_url(callback_uri = callback_uri), self.async_callback(
             self._on_request_token, self._OAUTH_AUTHENTICATE_URL, None))
 
     def twitter_request(self, path, callback, access_token=None,
