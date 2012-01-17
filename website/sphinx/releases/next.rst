@@ -65,8 +65,8 @@ Other modules
 
 * `SimpleAsyncHTTPClient` no longer hangs on ``HEAD`` requests,
   responses with no content, or empty ``POST``/``PUT`` response bodies.
-* `tornado.platform.twisted` compatibility has been improved.  However,
-  only Twisted version 11.0.0 is supported (and not 11.1.0).
+* `tornado.platform.twisted` compatibility has been significantly improved.
+  Twisted version 11.1.0 is now supported in addition to 11.0.0.
 * `tornado.web` now behaves better when given malformed ``Cookie`` headers
 * `RequestHandler.redirect` now has a ``status`` argument to send
   status codes other than 301 and 302.
