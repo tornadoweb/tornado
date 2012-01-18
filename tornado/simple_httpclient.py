@@ -53,7 +53,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     Some features found in the curl-based AsyncHTTPClient are not yet
     supported.  In particular, proxies are not supported, connections
-    are not reused, and callers cannot select the network interface to be 
+    are not reused, and callers cannot select the network interface to be
     used.
 
     Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
@@ -310,7 +310,7 @@ class _HTTPConnection(object):
             yield
         except Exception, e:
             logging.warning("uncaught exception", exc_info=True)
-            self._run_callback(HTTPResponse(self.request, 599, error=e, 
+            self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
 
@@ -335,7 +335,7 @@ class _HTTPConnection(object):
                 # use them but if they differ it's an error.
                 pieces = re.split(r',\s*', self.headers["Content-Length"])
                 if any(i != pieces[0] for i in pieces):
-                    raise ValueError("Multiple unequal Content-Lengths: %r" % 
+                    raise ValueError("Multiple unequal Content-Lengths: %r" %
                                      self.headers["Content-Length"])
                 self.headers["Content-Length"] = pieces[0]
             content_length = int(self.headers["Content-Length"])
@@ -380,7 +380,7 @@ class _HTTPConnection(object):
                                    self.request)
         if (self.request.follow_redirects and
             self.request.max_redirects > 0 and
-            self.code in (301, 302, 303)):
+            self.code in (301, 302, 303, 307)):
             new_request = copy.copy(self.request)
             new_request.url = urlparse.urljoin(self.request.url,
                                                self.headers["Location"])
@@ -391,8 +391,8 @@ class _HTTPConnection(object):
             if self.code == 303:
                 new_request.method = "GET"
                 new_request.body = None
-                for h in ["Content-Length", "Content-Type", 
-                    "Content-Encoding", "Transfer-Encoding"]:
+                for h in ["Content-Length", "Content-Type",
+                          "Content-Encoding", "Transfer-Encoding"]:
                     try:
                         del self.request.headers[h]
                     except KeyError:

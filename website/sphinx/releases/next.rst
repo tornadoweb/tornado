@@ -74,6 +74,7 @@ Other modules
 
 * `SimpleAsyncHTTPClient` no longer hangs on ``HEAD`` requests,
   responses with no content, or empty ``POST``/``PUT`` response bodies.
+* `SimpleAsyncHTTPClient` now supports 303 and 307 redirect codes.
 * `tornado.platform.twisted` compatibility has been significantly improved.
   Twisted version 11.1.0 is now supported in addition to 11.0.0.
 * `tornado.testing.main` supports a new flag ``--exception_on_interrupt``,

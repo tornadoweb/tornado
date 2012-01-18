@@ -56,14 +56,16 @@ class NoContentHandler(RequestHandler):
 
 class SeeOther303PostHandler(RequestHandler):
     def post(self):
+        assert self.request.body == b("blah")
         self.set_header("Location", "/303_get")
         self.set_status(303)
 
-class SeeOther303GetHandler(RequestHandler):    
+class SeeOther303GetHandler(RequestHandler):
     def get(self):
+        assert not self.request.body
         self.write("ok")
-        
-        
+
+
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def setUp(self):
         super(SimpleHTTPClientTestCase, self).setUp()
@@ -163,13 +165,13 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
     def test_303_redirect(self):
-       response = self.fetch("/303_post", method="POST", body="")
+       response = self.fetch("/303_post", method="POST", body="blah")
        self.assertEqual(200, response.code)
        self.assertTrue(response.request.url.endswith("/303_post"))
        self.assertTrue(response.effective_url.endswith("/303_get"))
        #request is the original request, is a POST still
        self.assertEqual("POST", response.request.method)
-        
+
     def test_request_timeout(self):
         response = self.fetch('/hang', request_timeout=0.1)
         self.assertEqual(response.code, 599)
