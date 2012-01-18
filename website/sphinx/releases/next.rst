@@ -92,3 +92,8 @@ Other modules
 * `tornado.version_info` is now a four-tuple so official releases can be
   distinguished from development branches.
 * `tornado.curl_httpclient` now accepts non-integer timeouts.
+* `tornado.auth.TwitterMixin.authenticate_redirect` now takes a
+  ``callback_uri`` parameter.
+* `tornado.auth.TwitterMixin.twitter_request` now accepts both URLs and
+  partial paths (complete URLs are useful for the search API which follows
+  different patterns).
