@@ -171,18 +171,31 @@ class RequestHandler(object):
         raise HTTPError(405)
 
     def prepare(self):
-        """Called before the actual handler method.
+        """Called at the beginning of a request before `get`/`post`/etc.
 
-        Useful to override in a handler if you want a common bottleneck for
-        all of your requests.
+        Override this method to perform common initialization regardless
+        of the request method.
+        """
+        pass
+
+    def on_finish(self):
+        """Called after the end of a request.
+
+        Override this method to perform cleanup, logging, etc.
+        This method is a counterpart to `prepare`.  ``on_finish`` may
+        not produce any output, as it is called after the response
+        has been sent to the client.
         """
         pass
 
     def on_connection_close(self):
         """Called in async handlers if the client closed the connection.
 
-        You may override this to clean up resources associated with
-        long-lived connections.
+        Override this to clean up resources associated with
+        long-lived connections.  Note that this method is called only if
+        the connection was closed during asynchronous processing; if you
+        need to do cleanup after every request override `on_finish`
+        instead.
 
         Proxies may keep a connection open for a time (perhaps
         indefinitely) after the client has gone away, so this method
@@ -656,6 +669,7 @@ class RequestHandler(object):
             self.request.finish()
             self._log()
         self._finished = True
+        self.on_finish()
 
     def send_error(self, status_code=500, **kwargs):
         """Sends the given HTTP error code to the browser.

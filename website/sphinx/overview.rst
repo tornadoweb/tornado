@@ -140,6 +140,9 @@ place:
 4. One of the HTTP methods is called: ``get()``, ``post()``, ``put()``,
    etc. If the URL regular expression contains capturing groups, they
    are passed as arguments to this method.
+5. When the request is finished, ``on_finish()`` is called.  For synchronous
+   handlers this is immediately after ``get()`` (etc) return; for
+   asynchronous handlers it is after the call to ``finish()``.
 
 Here is an example demonstrating the ``initialize()`` method:
 

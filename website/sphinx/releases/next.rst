@@ -49,6 +49,15 @@ Backwards-incompatible changes
   ``{% comment %}`` directive, these can wrap other template directives).
 * Template directives may now span multiple lines.
 
+``tornado.web``
+~~~~~~~~~~~~~~~
+
+* Now behaves better when given malformed ``Cookie`` headers
+* `RequestHandler.redirect` now has a ``status`` argument to send
+  status codes other than 301 and 302.
+* New method `RequestHandler.on_finish` may be overridden for post-request
+  processing (as a counterpart to `RequestHandler.prepare`)
+
 ``tornado.websocket``
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -67,9 +76,6 @@ Other modules
   responses with no content, or empty ``POST``/``PUT`` response bodies.
 * `tornado.platform.twisted` compatibility has been significantly improved.
   Twisted version 11.1.0 is now supported in addition to 11.0.0.
-* `tornado.web` now behaves better when given malformed ``Cookie`` headers
-* `RequestHandler.redirect` now has a ``status`` argument to send
-  status codes other than 301 and 302.
 * `tornado.testing.main` supports a new flag ``--exception_on_interrupt``,
   which can be set to false to make ``Ctrl-C`` kill the process more
   reliably (at the expense of stack traces when it does so).
