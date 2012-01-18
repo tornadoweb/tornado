@@ -499,8 +499,13 @@ class TwitterMixin(OAuthMixin):
                     self.finish("Posted a message!")
 
         """
+        if path.startswith('http:') or path.startswith('https:'):
+            # Raw urls are useful for e.g. search which doesn't follow the
+            # usual pattern: http://search.twitter.com/search.json
+            url = path
+        else:
+            url = "http://api.twitter.com/1" + path + ".json"
         # Add the OAuth resource request signature if we have credentials
-        url = "http://api.twitter.com/1" + path + ".json"
         if access_token:
             all_args = {}
             all_args.update(args)
