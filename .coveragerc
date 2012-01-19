@@ -1,0 +1,15 @@
+[run]
+branch = true
+source =
+       tornado
+
+omit =
+     tornado/test/*
+     tornado/testing.py
+
+[report]
+ignore_errors = true
+precision = 2
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover

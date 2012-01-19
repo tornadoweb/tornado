@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 import unittest
 
+try:
+    import coverage
+    use_coverage = True
+except ImportError:
+    use_coverage = False
+    import sys
+    print >> sys.stderr, "Test coverage disabled. To enable install ``coverage`` package"
+
 TEST_MODULES = [
     'tornado.httputil.doctests',
     'tornado.iostream.doctests',
@@ -28,6 +36,21 @@ TEST_MODULES = [
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 
+def run_with_coverage(runtests):
+    cov = coverage.coverage(config_file=True)
+    cov.start()
+    try:
+        runtests()
+    except SystemExit, e:
+        cov.stop()
+        cov.save()
+        cov.report()
+        raise e
+
 if __name__ == '__main__':
     import tornado.testing
-    tornado.testing.main()
+
+    if use_coverage:
+        run_with_coverage(tornado.testing.main)
+    else:
+        tornado.testing.main()
