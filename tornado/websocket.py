@@ -554,7 +554,11 @@ class WebSocketProtocol13(WebSocketProtocol):
         
     def close(self):
         """Closes the WebSocket connection."""
-        self._write_frame(True, 0x8, b(""))
-        self._started_closing_handshake = True
-        self._waiting = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 5, self._abort)
+        if self.client_terminated and self._waiting:
+            tornado.ioloop.IOLoop.instance().remove_timeout(self._waiting)
+            self.stream.close()
+        elif not self._started_closing_handshake:
+            self._started_closing_handshake = True
+            self._waiting = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 5, self._abort)
+            self._write_frame(True, 0x8, b(""))
 
