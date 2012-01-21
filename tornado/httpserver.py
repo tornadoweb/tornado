@@ -409,7 +409,7 @@ class HTTPRequest(object):
                     self._cookies.load(
                         native_str(self.headers["Cookie"]))
                 except Exception:
-                    self._cookies = None
+                    self._cookies = {}
         return self._cookies
 
     def write(self, chunk, callback=None):
