@@ -112,6 +112,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
             message = tornado.escape.json_encode(message)
         self.ws_connection.write_message(message, binary=binary)
 
+    def validate_subprotocol(self, subprotocols):
+        """Invoked when a new WebSocket requests specific subprotocols."""
+        return None
+
     def open(self, *args, **kwargs):
         """Invoked when a new WebSocket is opened."""
         pass
@@ -241,6 +245,18 @@ class WebSocketProtocol76(WebSocketProtocol):
             self._abort()
             return
         scheme = self.handler.get_websocket_scheme()
+
+        subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", None)
+        if subprotocols:
+            subprotocol = self.handler.validate_subprotocol(subprotocols)
+            if not subprotocol:
+                logging.debug("Subprotocol rejected by handler.")
+                self._abort()
+                return
+            subprotocol = "Sec-WebSocket-Protocol: %s\r\n" % subprotocol
+        else:
+            subprotocol = ''
+
         # Write the initial headers before attempting to read the challenge.
         # This is necessary when using proxies (such as HAProxy), which
         # need to see the Upgrade headers before passing through the
@@ -251,12 +267,15 @@ class WebSocketProtocol76(WebSocketProtocol):
             "Connection: Upgrade\r\n"
             "Server: TornadoServer/%(version)s\r\n"
             "Sec-WebSocket-Origin: %(origin)s\r\n"
-            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(uri)s\r\n\r\n" % (dict(
+            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(uri)s\r\n"
+            "%(subprotocol)s"
+            "\r\n" % (dict(
                     version=tornado.version,
                     origin=self.request.headers["Origin"],
                     scheme=scheme,
                     host=self.request.host,
-                    uri=self.request.uri))))
+                    uri=self.request.uri,
+                    subprotocol=subprotocol))))
         self.stream.read_bytes(8, self._handle_challenge)
 
     def challenge_response(self, challenge):
@@ -392,7 +411,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
-    
+
     def _handle_websocket_headers(self):
         """Verifies all invariant- and required headers
 
@@ -416,11 +435,24 @@ class WebSocketProtocol13(WebSocketProtocol):
         return tornado.escape.native_str(base64.b64encode(sha1.digest()))
 
     def _accept_connection(self):
+        subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", None)
+        if subprotocols:
+            subprotocol = self.handler.validate_subprotocol(subprotocols)
+            if not subprotocol:
+                logging.debug("Subprotocol rejected by handler.")
+                self._abort()
+                return
+            subprotocol = "Sec-WebSocket-Protocol: %s\r\n" % subprotocol
+        else:
+            subprotocol = ''
+
         self.stream.write(tornado.escape.utf8(
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: %s\r\n\r\n" % self._challenge_response()))
+            "Sec-WebSocket-Accept: %s\r\n"
+            "%s"
+            "\r\n" % (self._challenge_response(), subprotocol)))
 
         self.async_callback(self.handler.open)(*self.handler.open_args, **self.handler.open_kwargs)
         self._receive_frame()
@@ -484,7 +516,7 @@ class WebSocketProtocol13(WebSocketProtocol):
     def _on_frame_length_16(self, data):
         self._frame_length = struct.unpack("!H", data)[0];
         self.stream.read_bytes(4, self._on_masking_key);
-        
+
     def _on_frame_length_64(self, data):
         self._frame_length = struct.unpack("!Q", data)[0];
         self.stream.read_bytes(4, self._on_masking_key);
@@ -533,7 +565,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
         if not self.client_terminated:
             self._receive_frame()
-        
+
 
     def _handle_message(self, opcode, data):
         if self.client_terminated: return
@@ -563,10 +595,9 @@ class WebSocketProtocol13(WebSocketProtocol):
             pass
         else:
             self._abort()
-        
+
     def close(self):
         """Closes the WebSocket connection."""
         self._write_frame(True, 0x8, b(""))
         self._started_closing_handshake = True
         self._waiting = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 5, self._abort)
-
