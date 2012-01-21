@@ -112,8 +112,17 @@ class WebSocketHandler(tornado.web.RequestHandler):
             message = tornado.escape.json_encode(message)
         self.ws_connection.write_message(message, binary=binary)
 
-    def validate_subprotocol(self, subprotocols):
-        """Invoked when a new WebSocket requests specific subprotocols."""
+    def select_subprotocol(self, subprotocols):
+        """Invoked when a new WebSocket requests specific subprotocols.
+
+        ``subprotocols`` is a list of strings identifying the
+        subprotocols proposed by the client.  This method may be
+        overridden to return one of those strings to select it, or
+        ``None`` to not select a subprotocol.  Failure to select a
+        subprotocol does not automatically abort the connection,
+        although clients may close the connection if none of their
+        proposed subprotocols was selected.
+        """
         return None
 
     def open(self, *args, **kwargs):
@@ -246,16 +255,14 @@ class WebSocketProtocol76(WebSocketProtocol):
             return
         scheme = self.handler.get_websocket_scheme()
 
-        subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", None)
-        if subprotocols:
-            subprotocol = self.handler.validate_subprotocol(subprotocols)
-            if not subprotocol:
-                logging.debug("Subprotocol rejected by handler.")
-                self._abort()
-                return
-            subprotocol = "Sec-WebSocket-Protocol: %s\r\n" % subprotocol
-        else:
-            subprotocol = ''
+        # draft76 only allows a single subprotocol
+        subprotocol_header = ''
+        subprotocol = self.request.headers.get("Sec-WebSocket-Protocol", None)
+        if subprotocol:
+            selected = self.handler.select_subprotocol([subprotocol])
+            if selected:
+                assert selected == subprotocol
+                subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
 
         # Write the initial headers before attempting to read the challenge.
         # This is necessary when using proxies (such as HAProxy), which
@@ -275,7 +282,7 @@ class WebSocketProtocol76(WebSocketProtocol):
                     scheme=scheme,
                     host=self.request.host,
                     uri=self.request.uri,
-                    subprotocol=subprotocol))))
+                    subprotocol=subprotocol_header))))
         self.stream.read_bytes(8, self._handle_challenge)
 
     def challenge_response(self, challenge):
@@ -435,16 +442,14 @@ class WebSocketProtocol13(WebSocketProtocol):
         return tornado.escape.native_str(base64.b64encode(sha1.digest()))
 
     def _accept_connection(self):
-        subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", None)
+        subprotocol_header = ''
+        subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", '')
+        subprotocols = [s.strip() for s in subprotocols.split(',')]
         if subprotocols:
-            subprotocol = self.handler.validate_subprotocol(subprotocols)
-            if not subprotocol:
-                logging.debug("Subprotocol rejected by handler.")
-                self._abort()
-                return
-            subprotocol = "Sec-WebSocket-Protocol: %s\r\n" % subprotocol
-        else:
-            subprotocol = ''
+            selected = self.handler.select_subprotocol(subprotocols)
+            if selected:
+                assert selected in subprotocols
+                subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
 
         self.stream.write(tornado.escape.utf8(
             "HTTP/1.1 101 Switching Protocols\r\n"
@@ -452,7 +457,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             "Connection: Upgrade\r\n"
             "Sec-WebSocket-Accept: %s\r\n"
             "%s"
-            "\r\n" % (self._challenge_response(), subprotocol)))
+            "\r\n" % (self._challenge_response(), subprotocol_header)))
 
         self.async_callback(self.handler.open)(*self.handler.open_args, **self.handler.open_kwargs)
         self._receive_frame()
