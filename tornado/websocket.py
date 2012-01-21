@@ -149,6 +149,18 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         return False
 
+    def get_websocket_scheme(self):
+        """Return the url scheme used for this request, either "ws" or "wss".
+
+        This is normally decided by HTTPServer, but applications
+        may wish to override this if they are using an SSL proxy
+        that does not provide the X-Scheme header as understood
+        by HTTPServer.
+        
+        Note that this is only used by the draft76 protocol.
+        """
+        return "wss" if self.request.protocol == "https" else "ws"
+
     def async_callback(self, callback, *args, **kwargs):
         """Wrap callbacks with this if they are used on asynchronous requests.
 
@@ -228,7 +240,7 @@ class WebSocketProtocol76(WebSocketProtocol):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
-        scheme = "wss" if self.request.protocol == "https" else "ws"
+        scheme = self.handler.get_websocket_scheme()
         # Write the initial headers before attempting to read the challenge.
         # This is necessary when using proxies (such as HAProxy), which
         # need to see the Upgrade headers before passing through the
