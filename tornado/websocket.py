@@ -228,7 +228,8 @@ class WebSocketProtocol76(WebSocketProtocol):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
-        scheme = "wss" if self.request.protocol == "https" else "ws"
+        scheme = "wss" if self.request.headers['Origin'].startswith('https') \
+                   else "ws"
         # Write the initial headers before attempting to read the challenge.
         # This is necessary when using proxies (such as HAProxy), which
         # need to see the Upgrade headers before passing through the
@@ -380,7 +381,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
-    
+
     def _handle_websocket_headers(self):
         """Verifies all invariant- and required headers
 
@@ -472,7 +473,7 @@ class WebSocketProtocol13(WebSocketProtocol):
     def _on_frame_length_16(self, data):
         self._frame_length = struct.unpack("!H", data)[0];
         self.stream.read_bytes(4, self._on_masking_key);
-        
+
     def _on_frame_length_64(self, data):
         self._frame_length = struct.unpack("!Q", data)[0];
         self.stream.read_bytes(4, self._on_masking_key);
@@ -521,7 +522,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
         if not self.client_terminated:
             self._receive_frame()
-        
+
 
     def _handle_message(self, opcode, data):
         if self.client_terminated: return
@@ -551,7 +552,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             pass
         else:
             self._abort()
-        
+
     def close(self):
         """Closes the WebSocket connection."""
         self._write_frame(True, 0x8, b(""))
