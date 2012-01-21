@@ -10,3 +10,4 @@ _auto2to3*
 .vagrant
 /.coverage
 /htmlcov/
+/env/
