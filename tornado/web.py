@@ -1518,18 +1518,16 @@ class StaticFileHandler(RequestHandler):
                 self.set_status(304)
                 return
 
-        if not include_body:
-            self.set_header("Content-Length", os.path.getsize(abspath))
-            with open(abspath, "rb") as file:
-                hasher = hashlib.sha1()
-                hasher.update(file.read())
-                self.set_header("Etag", '"%s"' % hasher.hexdigest())
-            return
-        file = open(abspath, "rb")
-        try:
-            self.write(file.read())
-        finally:
-            file.close()
+        with open(abspath, "rb") as file:
+            data = file.read()
+            hasher = hashlib.sha1()
+            hasher.update(data)
+            self.set_header("Etag", '"%s"' % hasher.hexdigest())
+            if include_body:
+                self.write(data)
+            else:
+                assert self.request.method == "HEAD"
+                self.set_header("Content-Length", len(data))
 
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
