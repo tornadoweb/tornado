@@ -1552,6 +1552,20 @@ class StaticFileHandler(RequestHandler):
         is the static path being requested.  The url returned should be
         relative to the current host.
         """
+        static_url_prefix = settings.get("static_url_prefix", "/static/")
+        version_hash = cls.get_version(settings, path)
+        if version_hash:
+            return static_url_prefix + path + "?v=" + version_hash
+        return static_url_prefix + path
+
+    @classmethod
+    def get_version(cls, settings, path):
+        """Generate the version string to be appended as a query string
+        to the static URL - allowing aggressive caching.
+
+        ``settings`` is the `Application.settings` dictionary and ```path``
+        is the relative location of the requested asset on the filesystem.
+        """
         abs_path = os.path.join(settings["static_path"], path)
         with cls._lock:
             hashes = cls._static_hashes
@@ -1564,11 +1578,73 @@ class StaticFileHandler(RequestHandler):
                     logging.error("Could not open static file %r", path)
                     hashes[abs_path] = None
             hsh = hashes.get(abs_path)
-        static_url_prefix = settings.get('static_url_prefix', '/static/')
-        if hsh:
-            return static_url_prefix + path + "?v=" + hsh[:5]
-        else:
+            if hsh:
+                return hsh[:5]
+        return None
+
+
+class CloudFrontStaticFileHandler(StaticFileHandler):
+    """Extends the base class in order to set the versioning of static
+    assets directly in their filename rather than as a query parameter.
+
+    Thereby supporting Content Delivery Networks like CloudFront which
+    does not identify files differently depending on their given query string.
+    """
+    #: The string to append before the version hash in the filename.
+    #: In other words foo.png could become foo.v-fa35f.png.
+    #: We prepend the version hash with this identifier in order to verify
+    #: whether versioning is included in the filename when parsing it.
+    #: However, be aware that this does open up for naming collision
+    #: and you should therefore ensure that this naming standard is not
+    #: employed by your organization.
+    VERSION_HASH_PREPEND = 'v-'
+    #: The length of ``VERSION_HASH_PREPEND``
+    VERSION_HASH_PREPEND_LENGTH = len(VERSION_HASH_PREPEND)
+
+    def get(self, path, include_body=True):
+        """Extend parent implementation in order to remove versioning
+        in the filename in case a version string is detected.
+
+        """
+        parent = super(CloudFrontStaticFileHandler, self).get
+        extension_index = path.rindex('.')
+        version_index = path.rfind('.', 0, extension_index)
+        if version_index == -1:
+            parent(path, include_body=include_body)
+            return
+
+        version_hash = path[version_index:extension_index]
+        version_verify = version_hash[1:(self.VERSION_HASH_PREPEND_LENGTH + 1)]
+        if version_verify != self.VERSION_HASH_PREPEND:
+            parent(path, include_body=include_body)
+            return
+
+        path = '%s%s' % (path[:version_index], path[extension_index:])
+        parent(path, include_body=include_body)
+
+    @classmethod
+    def make_static_url(cls, settings, path):
+        """Constructs a versioned url for the given path.
+
+        In contrast to the base class the version string is not appended
+        in a query string, but rather before the file extension. Thereby
+        allowing aggressive caching even in cases where the CDN does not
+        support differentiation depending on query strings, like CloudFront.
+        """
+        static_url_prefix = settings.get("static_url_prefix", "/static/")
+        version_hash = cls.get_version(settings, path)
+        if not version_hash:
             return static_url_prefix + path
+
+        extension_index = path.rfind('.')
+        if extension_index == -1:
+            return static_url_prefix + path
+
+        pre_version = path[:extension_index]
+        post_version = path[(extension_index + 1):]
+        version_hash = '%s%s' % (cls.VERSION_HASH_PREPEND, version_hash)
+        path = '%s.%s.%s' % (pre_version, version_hash, post_version)
+        return static_url_prefix + path
 
 
 class FallbackHandler(RequestHandler):
