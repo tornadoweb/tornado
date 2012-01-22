@@ -383,10 +383,10 @@ def _curl_setup_request(curl, request, buffer, headers):
         else:
             curl.setopt(pycurl.INFILESIZE, len(request.body))
 
-    if request.auth_username and request.auth_password:
-        userpwd = "%s:%s" % (request.auth_username, request.auth_password)
+    if request.auth_username is not None:
+        userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
         curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
-        curl.setopt(pycurl.USERPWD, userpwd)
+        curl.setopt(pycurl.USERPWD, userpwd.encode('ascii'))
         logging.debug("%s %s (username: %r)", request.method, request.url,
                       request.auth_username)
     else:
