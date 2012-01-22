@@ -83,6 +83,35 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.open_args = args
         self.open_kwargs = kwargs
 
+        # Websocket only supports GET method
+        if self.request.method != 'GET':
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
+            ))
+            self.stream.close()
+            return
+
+        # Upgrade header should be present and should be equal to WebSocket
+        if self.request.headers.get("Upgrade", "").lower() != 'websocket':
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 400 Bad Request\r\n\r\n"
+                "Can \"Upgrade\" only to \"WebSocket\"."
+            ))
+            self.stream.close()
+            return
+
+        # Connection header should be upgrade. Some proxy servers/load balancers
+        # might mess with it.
+        headers = self.request.headers
+        connection = map(lambda s: s.strip().lower(), headers.get("Connection", "").split(","))
+        if 'upgrade' not in connection:
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 400 Bad Request\r\n\r\n"
+                "\"Connection\" must be \"Upgrade\"."
+            ))
+            self.stream.close()
+            return
+
         # The difference between version 8 and 13 is that in 8 the
         # client sends a "Sec-Websocket-Origin" header and in 13 it's
         # simply "Origin".
@@ -253,6 +282,7 @@ class WebSocketProtocol76(WebSocketProtocol):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
+
         scheme = self.handler.get_websocket_scheme()
 
         # draft76 only allows a single subprotocol
@@ -320,12 +350,9 @@ class WebSocketProtocol76(WebSocketProtocol):
         If a header is missing or have an incorrect value ValueError will be
         raised
         """
-        headers = self.request.headers
         fields = ("Origin", "Host", "Sec-Websocket-Key1",
                   "Sec-Websocket-Key2")
-        if headers.get("Upgrade", '').lower() != "websocket" or \
-           headers.get("Connection", '').lower() != "upgrade" or \
-           not all(map(lambda f: self.request.headers.get(f), fields)):
+        if not all(map(lambda f: self.request.headers.get(f), fields)):
             raise ValueError("Missing/Invalid WebSocket headers")
 
     def _calculate_part(self, key):
@@ -430,13 +457,8 @@ class WebSocketProtocol13(WebSocketProtocol):
         If a header is missing or have an incorrect value ValueError will be
         raised
         """
-        headers = self.request.headers
         fields = ("Host", "Sec-Websocket-Key", "Sec-Websocket-Version")
-        connection = map(lambda s: s.strip().lower(), headers.get("Connection", '').split(","))
-        if (self.request.method != "GET" or
-            headers.get("Upgrade", '').lower() != "websocket" or
-            "upgrade" not in connection or
-            not all(map(lambda f: self.request.headers.get(f), fields))):
+        if not all(map(lambda f: self.request.headers.get(f), fields)):
             raise ValueError("Missing/Invalid WebSocket headers")
 
     def _challenge_response(self):
