@@ -898,13 +898,11 @@ class RequestHandler(object):
         returned content. The signature is based on the content of the
         file.
 
-        If this handler has a "include_host" attribute, we include the
-        full host for every static URL, including the "http://". Set
-        this attribute for handlers whose output needs non-relative static
-        path names. However, in case the "include_host" argument to this
-        method is given a value other than None it will override the
-        attribute value when determening whether to generate a relative
-        or absolute URL.
+        By default this method returns URLs relative to the current
+        host, but if ``include_host`` is true the URL returned will be
+        absolute.  If this handler has an ``include_host`` attribute,
+        that value will be used as the default for all `static_url`
+        calls that do not pass ``include_host`` as a keyword argument.
         """
         self.require_setting("static_path", "static_url")
         static_handler_class = self.settings.get(
@@ -1475,8 +1473,6 @@ class StaticFileHandler(RequestHandler):
         self.get(path, include_body=False)
 
     def get(self, path, include_body=True):
-        if os.path.sep != "/":
-            path = path.replace("/", os.path.sep)
         path = self.parse_url_path(path)
         abspath = os.path.abspath(os.path.join(self.root, path))
         # os.path.abspath strips a trailing /
@@ -1571,11 +1567,16 @@ class StaticFileHandler(RequestHandler):
 
     @classmethod
     def get_version(cls, settings, path):
-        """Generate the version string to be appended as a query string
-        to the static URL - allowing aggressive caching.
+        """Generate the version string to be used in static URLs.
 
-        ``settings`` is the `Application.settings` dictionary and ```path``
+        This method may be overridden in subclasses (but note that it
+        is a class method rather than a static method).  The default
+        implementation uses a hash of the file's contents.
+
+        ``settings`` is the `Application.settings` dictionary and ``path``
         is the relative location of the requested asset on the filesystem.
+        The returned value should be a string, or ``None`` if no version
+        could be determined.
         """
         abs_path = os.path.join(settings["static_path"], path)
         with cls._lock:
@@ -1593,8 +1594,15 @@ class StaticFileHandler(RequestHandler):
                 return hsh[:5]
         return None
 
-    @classmethod
-    def parse_url_path(cls, url_path):
+    def parse_url_path(self, url_path):
+        """Converts a static URL path into a filesystem path.
+
+        ``url_path`` is the path component of the URL with
+        ``static_url_prefix`` removed.  The return value should be
+        filesystem path relative to ``static_path``.
+        """
+        if os.path.sep != "/":
+            url_path = url_path.replace("/", os.path.sep)
         return url_path
 
 
