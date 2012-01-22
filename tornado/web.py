@@ -1519,6 +1519,11 @@ class StaticFileHandler(RequestHandler):
                 return
 
         if not include_body:
+            self.set_header("Content-Length", os.path.getsize(abspath))
+            with open(abspath, "rb") as file:
+                hasher = hashlib.sha1()
+                hasher.update(file.read())
+                self.set_header("Etag", '"%s"' % hasher.hexdigest())
             return
         file = open(abspath, "rb")
         try:
