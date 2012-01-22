@@ -602,12 +602,24 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         class MyStaticFileHandler(StaticFileHandler):
             def get(self, path):
+                path = self.parse_url_path(path)
                 assert path == "foo.txt"
                 self.write("bar")
 
             @classmethod
             def make_static_url(cls, settings, path):
-                return "/static/%s?v=42" % path
+                version_hash = cls.get_version(settings, path)
+                extension_index = path.rindex('.')
+                before_version = path[:extension_index]
+                after_version = path[(extension_index + 1):]
+                return '/static/%s.%s.%s' % (before_version, 42, after_version)
+
+            @classmethod
+            def parse_url_path(cls, url_path):
+                extension_index = url_path.rindex('.')
+                version_index = url_path.rindex('.', 0, extension_index)
+                return '%s%s' % (url_path[:version_index],
+                                 url_path[extension_index:])
 
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
@@ -618,9 +630,9 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
                            static_handler_class=MyStaticFileHandler)
 
     def test_serve(self):
-        response = self.fetch("/static/foo.txt")
+        response = self.fetch("/static/foo.42.txt")
         self.assertEqual(response.body, b("bar"))
 
     def test_static_url(self):
         response = self.fetch("/static_url/foo.txt")
-        self.assertEqual(response.body, b("/static/foo.txt?v=42"))
+        self.assertEqual(response.body, b("/static/foo.42.txt"))
