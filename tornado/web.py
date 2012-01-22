@@ -886,7 +886,7 @@ class RequestHandler(object):
         return '<input type="hidden" name="_xsrf" value="' + \
             escape.xhtml_escape(self.xsrf_token) + '"/>'
 
-    def static_url(self, path):
+    def static_url(self, path, include_host=None):
         """Returns a static URL for the given relative static file path.
 
         This method requires you set the 'static_path' setting in your
@@ -901,12 +901,19 @@ class RequestHandler(object):
         If this handler has a "include_host" attribute, we include the
         full host for every static URL, including the "http://". Set
         this attribute for handlers whose output needs non-relative static
-        path names.
+        path names. However, in case the "include_host" argument to this
+        method is given a value other than None it will override the
+        attribute value when determening whether to generate a relative
+        or absolute URL.
         """
         self.require_setting("static_path", "static_url")
         static_handler_class = self.settings.get(
             "static_handler_class", StaticFileHandler)
-        if getattr(self, "include_host", False):
+
+        if include_host is None:
+            include_host = getattr(self, "include_host", False)
+
+        if include_host:
             base = self.request.protocol + "://" + self.request.host
         else:
             base = ""
