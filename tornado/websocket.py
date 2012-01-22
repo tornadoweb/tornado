@@ -186,14 +186,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def on_connection_close(self):
         if self.ws_connection:
-            self.ws_connection.client_terminated = True
+            self.ws_connection.on_connection_close()
+            self.ws_connection = None
             self.on_close()
-
-    def _set_client_terminated(self, value):
-        self.ws_connection.client_terminated = value
-
-    client_terminated = property(lambda self: self.ws_connection.client_terminated,
-                                 _set_client_terminated)
 
 
 for method in ["write", "redirect", "set_header", "send_error", "set_cookie",
@@ -209,6 +204,7 @@ class WebSocketProtocol(object):
         self.request = handler.request
         self.stream = handler.stream
         self.client_terminated = False
+        self.server_terminated = False
 
     def async_callback(self, callback, *args, **kwargs):
         """Wrap callbacks with this if they are used on asynchronous requests.
@@ -227,10 +223,15 @@ class WebSocketProtocol(object):
                 self._abort()
         return wrapper
 
+    def on_connection_close(self):
+        self._abort()
+
     def _abort(self):
         """Instantly aborts the WebSocket connection by closing the socket"""
         self.client_terminated = True
-        self.stream.close()
+        self.server_terminated = True
+        self.stream.close()  # forcibly tear down the connection
+        self.close()  # let the subclass cleanup
 
 
 class WebSocketProtocol76(WebSocketProtocol):
@@ -384,14 +385,18 @@ class WebSocketProtocol76(WebSocketProtocol):
 
     def close(self):
         """Closes the WebSocket connection."""
-        if self.client_terminated and self._waiting:
-            tornado.ioloop.IOLoop.instance().remove_timeout(self._waiting)
+        if not self.server_terminated:
+            if not self.stream.closed():
+                self.stream.write("\xff\x00")
+            self.server_terminated = True
+        if self.client_terminated:
+            if self._waiting is not None:
+                self.stream.io_loop.remove_timeout(self._waiting)
             self._waiting = None
             self.stream.close()
-        elif not self.stream.closed():
-            self.stream.write("\xff\x00")
-            self._waiting = tornado.ioloop.IOLoop.instance().add_timeout(
-                                time.time() + 5, self._abort)
+        elif self._waiting is None:
+            self._waiting = self.stream.io_loop.add_timeout(
+                time.time() + 5, self._abort)
 
 
 class WebSocketProtocol13(WebSocketProtocol):
@@ -408,7 +413,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._frame_length = None
         self._fragmented_message_buffer = None
         self._fragmented_message_opcode = None
-        self._started_closing_handshake = False
+        self._waiting = None
 
     def accept_connection(self):
         try:
@@ -589,9 +594,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         elif opcode == 0x8:
             # Close
             self.client_terminated = True
-            if not self._started_closing_handshake:
-                self._write_frame(True, 0x8, b(""))
-            self.stream.close()
+            self.close()
         elif opcode == 0x9:
             # Ping
             self._write_frame(True, 0xA, data)
@@ -603,7 +606,17 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def close(self):
         """Closes the WebSocket connection."""
-        if self.stream.closed(): return
-        self._write_frame(True, 0x8, b(""))
-        self._started_closing_handshake = True
-        self._waiting = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 5, self._abort)
+        if not self.server_terminated:
+            if not self.stream.closed():
+                self._write_frame(True, 0x8, b(""))
+            self.server_terminated = True
+        if self.client_terminated:
+            if self._waiting is not None:
+                self.stream.io_loop.remove_timeout(self._waiting)
+                self._waiting = None
+            self.stream.close()
+        elif self._waiting is None:
+            # Give the client a few seconds to complete a clean shutdown,
+            # otherwise just close the connection.
+            self._waiting = self.stream.io_loop.add_timeout(
+                time.time() + 5, self._abort)
