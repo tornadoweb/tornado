@@ -113,7 +113,12 @@ if hasattr(ssl, 'PROTOCOL_SSLv2'):
             # we've got all the other ssl version tests here.
             # Clients should have SSLv2 disabled by default.
             try:
-                response = self.fetch('/')
+                # The server simply closes the connection when it gets
+                # an SSLv2 ClientHello packet.
+                # request_timeout is needed here because on some platforms
+                # (cygwin, but not native windows python), the close is not
+                # detected promptly.
+                response = self.fetch('/', request_timeout=1)
             except ssl.SSLError:
                 # In some python/ssl builds the PROTOCOL_SSLv2 constant
                 # exists but SSLv2 support is still compiled out, which
