@@ -257,7 +257,7 @@ class _HTTPConnection(object):
             username, password = parsed.username, parsed.password
         elif self.request.auth_username is not None:
             username = self.request.auth_username
-            password = self.request.auth_password
+            password = self.request.auth_password or ''
         if username is not None:
             auth = utf8(username) + b(":") + utf8(password)
             self.request.headers["Authorization"] = (b("Basic ") +

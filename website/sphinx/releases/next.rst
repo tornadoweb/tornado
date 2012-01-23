@@ -32,6 +32,8 @@ Backwards-incompatible changes
   responses with no content, or empty ``POST``/``PUT`` response bodies.
 * `SimpleAsyncHTTPClient` now supports 303 and 307 redirect codes.
 * `tornado.curl_httpclient` now accepts non-integer timeouts.
+* `tornado.curl_httpclient` now supports basic authentication with an
+  empty password.
 
 ``tornado.httpserver``
 ~~~~~~~~~~~~~~~~~~~~~~
