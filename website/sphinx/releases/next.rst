@@ -25,9 +25,24 @@ Backwards-incompatible changes
   of the websocket protocol by default, although this version can
   be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
 
+``tornado.httpclient``
+~~~~~~~~~~~~~~~~~~~~~~
 
-``IOLoop`` and ``IOStream``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* `SimpleAsyncHTTPClient` no longer hangs on ``HEAD`` requests,
+  responses with no content, or empty ``POST``/``PUT`` response bodies.
+* `SimpleAsyncHTTPClient` now supports 303 and 307 redirect codes.
+* `tornado.curl_httpclient` now accepts non-integer timeouts.
+
+``tornado.httpserver``
+~~~~~~~~~~~~~~~~~~~~~~
+
+* `HTTPServer` with ``xheaders=True`` will no longer accept
+  ``X-Real-IP`` headers that don't look like valid IP addresses.
+* `HTTPServer` now treats the ``Connection`` request header as
+  case-insensitive.
+
+``tornado.ioloop`` and ``tornado.iostream``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * `IOStream.write` now works correctly when given an empty string.
 * `IOStream.read_until` (and ``read_until_regex``) now perform better
@@ -57,44 +72,49 @@ Backwards-incompatible changes
   status codes other than 301 and 302.
 * New method `RequestHandler.on_finish` may be overridden for post-request
   processing (as a counterpart to `RequestHandler.prepare`)
+* `StaticFileHandler` now outputs ``Content-Length`` and ``Etag`` headers
+  on ``HEAD`` requests.
+* `StaticFileHandler` now has overridable ``get_version`` and
+  ``parse_url_path`` methods for use in subclasses.
+* `RequestHandler.static_url` now takes an ``include_host`` parameter
+  (in addition to the old support for the `RequestHandler.include_host`
+  attribute).
 
 ``tornado.websocket``
 ~~~~~~~~~~~~~~~~~~~~~
 
 * Updated to support the latest version of the protocol, as finalized
   in RFC 6455.
+* Many bugs were fixed in all supported protocol versions.
 * `tornado.websocket` no longer supports the older "draft 76" version
   of the websocket protocol by default, although this version can
   be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
 * `WebSocketHandler.write_message` now accepts a ``binary`` argument
   to send binary messages.
+* Subprotocols (i.e. the ``Sec-WebSocket-Protocol`` header) are now supported;
+  see the `WebSocketHandler.select_subprotocol` method for details.
+* `WebSocketHandler.get_websocket_scheme` can be used to select the
+  appropriate url scheme (``ws://`` or ``wss://``) in cases where
+  `HTTPRequest.protocol` is not set correctly.
 
 Other modules
 ~~~~~~~~~~~~~
 
-* `SimpleAsyncHTTPClient` no longer hangs on ``HEAD`` requests,
-  responses with no content, or empty ``POST``/``PUT`` response bodies.
-* `SimpleAsyncHTTPClient` now supports 303 and 307 redirect codes.
-* `tornado.platform.twisted` compatibility has been significantly improved.
-  Twisted version 11.1.0 is now supported in addition to 11.0.0.
-* `tornado.testing.main` supports a new flag ``--exception_on_interrupt``,
-  which can be set to false to make ``Ctrl-C`` kill the process more
-  reliably (at the expense of stack traces when it does so).
-* `tornado.process.fork_processes` correctly reseeds the `random` module
-  even when `os.urandom` is not implemented.
-* `HTTPServer` with ``xheaders=True`` will no longer accept
-  ``X-Real-IP`` headers that don't look like valid IP addresses.
-* `HTTPServer` now treats the ``Connection`` request header as
-  case-insensitive.
-* Exception handling in `tornado.gen` has been improved.  It is now possible
-  to catch exceptions thrown by a ``Task``.
-* `tornado.netutil.bind_sockets` now works when ``getaddrinfo`` returns
-  duplicate addresses.
-* `tornado.version_info` is now a four-tuple so official releases can be
-  distinguished from development branches.
-* `tornado.curl_httpclient` now accepts non-integer timeouts.
 * `tornado.auth.TwitterMixin.authenticate_redirect` now takes a
   ``callback_uri`` parameter.
 * `tornado.auth.TwitterMixin.twitter_request` now accepts both URLs and
   partial paths (complete URLs are useful for the search API which follows
   different patterns).
+* Exception handling in `tornado.gen` has been improved.  It is now possible
+  to catch exceptions thrown by a ``Task``.
+* `tornado.netutil.bind_sockets` now works when ``getaddrinfo`` returns
+  duplicate addresses.
+* `tornado.platform.twisted` compatibility has been significantly improved.
+  Twisted version 11.1.0 is now supported in addition to 11.0.0.
+* `tornado.process.fork_processes` correctly reseeds the `random` module
+  even when `os.urandom` is not implemented.
+* `tornado.testing.main` supports a new flag ``--exception_on_interrupt``,
+  which can be set to false to make ``Ctrl-C`` kill the process more
+  reliably (at the expense of stack traces when it does so).
+* `tornado.version_info` is now a four-tuple so official releases can be
+  distinguished from development branches.
