@@ -36,6 +36,11 @@ coverage_ignore_classes = [
     "OutputTransform",
     "TemplateModule",
     "url",
+
+    # tornado.websocket
+    "WebSocketProtocol",
+    "WebSocketProtocol13",
+    "WebSocketProtocol76",
     ]
 
 coverage_ignore_functions = [

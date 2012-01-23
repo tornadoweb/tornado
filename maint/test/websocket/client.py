@@ -11,7 +11,7 @@ define('servers', type=str, multiple=True,
 define('cases', type=str, multiple=True,
        default=["*"])
 define('exclude', type=str, multiple=True,
-       default=[])
+       default=["9.*"])
 
 if __name__ == '__main__':
    parse_command_line()

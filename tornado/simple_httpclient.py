@@ -17,6 +17,7 @@ import logging
 import os.path
 import re
 import socket
+import sys
 import time
 import urlparse
 import zlib
@@ -52,7 +53,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     Some features found in the curl-based AsyncHTTPClient are not yet
     supported.  In particular, proxies are not supported, connections
-    are not reused, and callers cannot select the network interface to be 
+    are not reused, and callers cannot select the network interface to be
     used.
 
     Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
@@ -185,6 +186,26 @@ class _HTTPConnection(object):
                     ssl_options["keyfile"] = request.client_key
                 if request.client_cert is not None:
                     ssl_options["certfile"] = request.client_cert
+
+                # SSL interoperability is tricky.  We want to disable
+                # SSLv2 for security reasons; it wasn't disabled by default
+                # until openssl 1.0.  The best way to do this is to use
+                # the SSL_OP_NO_SSLv2, but that wasn't exposed to python
+                # until 3.2.  Python 2.7 adds the ciphers argument, which
+                # can also be used to disable SSLv2.  As a last resort
+                # on python 2.6, we set ssl_version to SSLv3.  This is
+                # more narrow than we'd like since it also breaks
+                # compatibility with servers configured for TLSv1 only,
+                # but nearly all servers support SSLv3:
+                # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
+                if sys.version_info >= (2,7):
+                    ssl_options["ciphers"] = "DEFAULT:!SSLv2"
+                else:
+                    # This is really only necessary for pre-1.0 versions
+                    # of openssl, but python 2.6 doesn't expose version
+                    # information.
+                    ssl_options["ssl_version"] = ssl.PROTOCOL_SSLv3
+
                 self.stream = SSLIOStream(socket.socket(af, socktype, proto),
                                           io_loop=self.io_loop,
                                           ssl_options=ssl_options,
@@ -236,7 +257,7 @@ class _HTTPConnection(object):
             username, password = parsed.username, parsed.password
         elif self.request.auth_username is not None:
             username = self.request.auth_username
-            password = self.request.auth_password
+            password = self.request.auth_password or ''
         if username is not None:
             auth = utf8(username) + b(":") + utf8(password)
             self.request.headers["Authorization"] = (b("Basic ") +
@@ -289,7 +310,7 @@ class _HTTPConnection(object):
             yield
         except Exception, e:
             logging.warning("uncaught exception", exc_info=True)
-            self._run_callback(HTTPResponse(self.request, 599, error=e, 
+            self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
 
@@ -314,7 +335,7 @@ class _HTTPConnection(object):
                 # use them but if they differ it's an error.
                 pieces = re.split(r',\s*', self.headers["Content-Length"])
                 if any(i != pieces[0] for i in pieces):
-                    raise ValueError("Multiple unequal Content-Lengths: %r" % 
+                    raise ValueError("Multiple unequal Content-Lengths: %r" %
                                      self.headers["Content-Length"])
                 self.headers["Content-Length"] = pieces[0]
             content_length = int(self.headers["Content-Length"])
@@ -359,12 +380,23 @@ class _HTTPConnection(object):
                                    self.request)
         if (self.request.follow_redirects and
             self.request.max_redirects > 0 and
-            self.code in (301, 302)):
+            self.code in (301, 302, 303, 307)):
             new_request = copy.copy(self.request)
             new_request.url = urlparse.urljoin(self.request.url,
                                                self.headers["Location"])
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
+            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
+            # client SHOULD make a GET request
+            if self.code == 303:
+                new_request.method = "GET"
+                new_request.body = None
+                for h in ["Content-Length", "Content-Type",
+                          "Content-Encoding", "Transfer-Encoding"]:
+                    try:
+                        del self.request.headers[h]
+                    except KeyError:
+                        pass
             new_request.original_request = original_request
             final_callback = self.final_callback
             self.final_callback = None

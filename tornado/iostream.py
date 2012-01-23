@@ -657,6 +657,11 @@ class SSLIOStream(IOStream):
 
 
     def _read_from_socket(self):
+        if self._ssl_accepting:
+            # If the handshake hasn't finished yet, there can't be anything
+            # to read (attempting to read may or may not raise an exception
+            # depending on the SSL version)
+            return None
         try:
             # SSLSocket objects have both a read() and recv() method,
             # while regular sockets only have recv().

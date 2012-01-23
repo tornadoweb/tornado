@@ -82,10 +82,12 @@ def engine(func):
     Any generator that yields objects from this module must be wrapped
     in this decorator.  The decorator only works on functions that are
     already asynchronous.  For `~tornado.web.RequestHandler`
-    ``get``/``post``/etc methods, this means that both the `tornado.gen.engine`
-    and `tornado.web.asynchronous` decorators must be used (in either order).
-    In most other cases, it means that it doesn't make sense to use
-    ``gen.engine`` on functions that don't already take a callback argument.
+    ``get``/``post``/etc methods, this means that both the
+    `tornado.web.asynchronous` and `tornado.gen.engine` decorators
+    must be used (for proper exception handling, ``asynchronous``
+    should come before ``gen.engine``).  In most other cases, it means
+    that it doesn't make sense to use ``gen.engine`` on functions that
+    don't already take a callback argument.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
