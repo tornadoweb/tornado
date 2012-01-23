@@ -1,5 +1,7 @@
 """Miscellaneous utility functions."""
 
+import sys
+
 class ObjectDict(dict):
     """Makes a dictionary behave like an object."""
     def __getattr__(self, name):
@@ -18,8 +20,6 @@ def import_object(name):
     import_object('x') is equivalent to 'import x'.
     import_object('x.y.z') is equivalent to 'from x.y import z'.
 
-    It will return None in case of failed import operation.
-
     >>> import tornado.escape
     >>> import_object('tornado.escape') is tornado.escape
     True
@@ -27,26 +27,25 @@ def import_object(name):
     True
     >>> import_object('tornado') is tornado
     True
-    >>> import_object('tornado.missing_module') is None
-    True
-    >>> import_object('missing_module') is None
-    True
+    >>> import_object('missing_module')
+    Traceback (most recent call last):
+        ...
+    ImportError: No module named missing_module
+    >>> import_object('tornado.missing_module')
+    Traceback (most recent call last):
+        ...
+    ImportError: No module named missing_module
     """
-    def safe_import(*args, **kwargs):
-        try:
-            return __import__(*args, **kwargs)
-        except ImportError:
-            return None
-
     if name.count('.') == 0:
-        return safe_import(name, None, None)
-    else:
-        parts = name.split('.')
-        obj = safe_import('.'.join(parts[:-1]), None, None, [parts[-1]], 0)
-        try:
-            return getattr(obj, parts[-1])
-        except AttributeError:
-            return None
+        return __import__(name, None, None)
+
+    parts = name.split('.')
+    obj = __import__('.'.join(parts[:-1]), None, None, [parts[-1]], 0)
+    try:
+        return getattr(obj, parts[-1])
+    except AttributeError:
+        exc_info = sys.exc_info()
+        raise ImportError, "No module named %s" % parts[-1], exc_info[2] 
 
 # Fake byte literal support:  In python 2.6+, you can say b"foo" to get
 # a byte literal (str in 2.x, bytes in 3.x).  There's no way to do this
