@@ -153,8 +153,13 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         return None
 
-    def open(self, *args, **kwargs):
-        """Invoked when a new WebSocket is opened."""
+    def open(self):
+        """Invoked when a new WebSocket is opened.
+
+        The arguments to `open` are extracted from the `tornado.web.URLSpec`
+        regular expression, just like the arguments to
+        `tornado.web.RequestHandler.get`.
+        """
         pass
 
     def on_message(self, message):
@@ -206,7 +211,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """Wrap callbacks with this if they are used on asynchronous requests.
 
         Catches exceptions properly and closes this WebSocket if an exception
-        is uncaught.
+        is uncaught.  (Note that this is usually unnecessary thanks to
+        `tornado.stack_context`)
         """
         return self.ws_connection.async_callback(callback, *args, **kwargs)
 
