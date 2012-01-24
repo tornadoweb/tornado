@@ -54,7 +54,23 @@ class NoContentHandler(RequestHandler):
             self.set_header("Content-Length", "7")
         self.set_status(204)
 
+class SeeOther303PostHandler(RequestHandler):
+    def post(self):
+        assert self.request.body == b("blah")
+        self.set_header("Location", "/303_get")
+        self.set_status(303)
+
+class SeeOther303GetHandler(RequestHandler):
+    def get(self):
+        assert not self.request.body
+        self.write("ok")
+
+
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+    def setUp(self):
+        super(SimpleHTTPClientTestCase, self).setUp()
+        self.http_client = SimpleAsyncHTTPClient(self.io_loop)
+
     def get_app(self):
         # callable objects to finish pending /trigger requests
         self.triggers = collections.deque()
@@ -68,6 +84,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/content_length", ContentLengthHandler),
             url("/head", HeadHandler),
             url("/no_content", NoContentHandler),
+            url("/303_post", SeeOther303PostHandler),
+            url("/303_get", SeeOther303GetHandler),
             ], gzip=True)
 
     def test_singleton(self):
@@ -145,6 +163,14 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.request.url.endswith("/countdown/5"))
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
+
+    def test_303_redirect(self):
+       response = self.fetch("/303_post", method="POST", body="blah")
+       self.assertEqual(200, response.code)
+       self.assertTrue(response.request.url.endswith("/303_post"))
+       self.assertTrue(response.effective_url.endswith("/303_get"))
+       #request is the original request, is a POST still
+       self.assertEqual("POST", response.request.method)
 
     def test_request_timeout(self):
         response = self.fetch('/hang', request_timeout=0.1)

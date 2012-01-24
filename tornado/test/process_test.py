@@ -9,6 +9,7 @@ from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.netutil import bind_sockets
 from tornado.process import fork_processes, task_id
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import LogTrapTestCase, get_unused_port
 from tornado.web import RequestHandler, Application
 
@@ -72,7 +73,11 @@ class ProcessTest(LogTrapTestCase):
                 signal.alarm(5)
                 self.assertEqual(id, task_id())
                 for sock in sockets: sock.close()
-                client = HTTPClient()
+                # Always use SimpleAsyncHTTPClient here; the curl
+                # version appears to get confused sometimes if the
+                # connection gets closed before it's had a chance to
+                # switch from writing mode to reading mode.
+                client = HTTPClient(SimpleAsyncHTTPClient)
 
                 def fetch(url, fail_ok=False):
                     try:

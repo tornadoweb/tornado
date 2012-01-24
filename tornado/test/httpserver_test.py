@@ -40,9 +40,12 @@ class HelloWorldRequestHandler(RequestHandler):
     def post(self):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
-class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
+class BaseSSLTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_ssl_version(self):
+        raise NotImplementedError()
+
     def setUp(self):
-        super(SSLTest, self).setUp()
+        super(BaseSSLTest, self).setUp()
         # Replace the client defined in the parent class.
         # Some versions of libcurl have deadlock bugs with ssl,
         # so always run these tests with SimpleAsyncHTTPClient.
@@ -59,7 +62,8 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
         test_dir = os.path.dirname(__file__)
         return dict(ssl_options=dict(
                 certfile=os.path.join(test_dir, 'test.crt'),
-                keyfile=os.path.join(test_dir, 'test.key')))
+                keyfile=os.path.join(test_dir, 'test.key'),
+                ssl_version=self.get_ssl_version()))
 
     def fetch(self, path, **kwargs):
         self.http_client.fetch(self.get_url(path).replace('http', 'https'),
@@ -68,6 +72,7 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
                                **kwargs)
         return self.wait()
 
+class SSLTestMixin(object):
     def test_ssl(self):
         response = self.fetch('/')
         self.assertEqual(response.body, b("Hello world"))
@@ -88,8 +93,55 @@ class SSLTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.wait()
         self.assertEqual(response.code, 599)
 
+# Python's SSL implementation differs significantly between versions.
+# For example, SSLv3 and TLSv1 throw an exception if you try to read
+# from the socket before the handshake is complete, but the default
+# of SSLv23 allows it.
+class SSLv23Test(BaseSSLTest, SSLTestMixin):
+    def get_ssl_version(self): return ssl.PROTOCOL_SSLv23
+class SSLv3Test(BaseSSLTest, SSLTestMixin):
+    def get_ssl_version(self): return ssl.PROTOCOL_SSLv3
+class TLSv1Test(BaseSSLTest, SSLTestMixin):
+    def get_ssl_version(self): return ssl.PROTOCOL_TLSv1
+
+if hasattr(ssl, 'PROTOCOL_SSLv2'):
+    class SSLv2Test(BaseSSLTest):
+        def get_ssl_version(self): return ssl.PROTOCOL_SSLv2
+
+        def test_sslv2_fail(self):
+            # This is really more of a client test, but run it here since
+            # we've got all the other ssl version tests here.
+            # Clients should have SSLv2 disabled by default.
+            try:
+                # The server simply closes the connection when it gets
+                # an SSLv2 ClientHello packet.
+                # request_timeout is needed here because on some platforms
+                # (cygwin, but not native windows python), the close is not
+                # detected promptly.
+                response = self.fetch('/', request_timeout=1)
+            except ssl.SSLError:
+                # In some python/ssl builds the PROTOCOL_SSLv2 constant
+                # exists but SSLv2 support is still compiled out, which
+                # would result in an SSLError here (details vary depending
+                # on python version).  The important thing is that
+                # SSLv2 request's don't succeed, so we can just ignore
+                # the errors here.
+                return
+            self.assertEqual(response.code, 599)
+
 if ssl is None:
-    del SSLTest
+    del BaseSSLTest
+    del SSLv23Test
+    del SSLv3Test
+    del TLSv1Test
+elif getattr(ssl, 'OPENSSL_VERSION_INFO', (0,0)) < (1,0):
+    # In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
+    # ClientHello messages, which are rejected by SSLv3 and TLSv1
+    # servers.  Note that while the OPENSSL_VERSION_INFO was formally
+    # introduced in python3.2, it was present but undocumented in
+    # python 2.7
+    del SSLv3Test
+    del TLSv1Test
 
 class MultipartTestHandler(RequestHandler):
     def post(self):
@@ -118,7 +170,8 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         return Application(self.get_handlers())
 
     def raw_fetch(self, headers, body):
-        conn = RawRequestHTTPConnection(self.io_loop, self.http_client,
+        client = SimpleAsyncHTTPClient(self.io_loop)
+        conn = RawRequestHTTPConnection(self.io_loop, client,
                                         httpclient.HTTPRequest(self.get_url("/")),
                                         None, self.stop,
                                         1024*1024)
@@ -127,6 +180,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
                            [utf8("Content-Length: %d\r\n" % len(body))]) +
             b("\r\n") + body)
         response = self.wait()
+        client.close()
         response.rethrow()
         return response
 

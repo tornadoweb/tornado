@@ -271,7 +271,7 @@ def _curl_create(max_simultaneous_connections=None):
 
 
 def _curl_setup_request(curl, request, buffer, headers):
-    curl.setopt(pycurl.URL, request.url)
+    curl.setopt(pycurl.URL, utf8(request.url))
 
     # libcurl's magic "Expect: 100-continue" behavior causes delays
     # with servers that don't support it (which include, among others,
@@ -307,8 +307,8 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.setopt(pycurl.WRITEFUNCTION, buffer.write)
     curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
     curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
-    curl.setopt(pycurl.CONNECTTIMEOUT, int(request.connect_timeout))
-    curl.setopt(pycurl.TIMEOUT, int(request.request_timeout))
+    curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000 * request.connect_timeout))
+    curl.setopt(pycurl.TIMEOUT_MS, int(1000 * request.request_timeout))
     if request.user_agent:
         curl.setopt(pycurl.USERAGENT, utf8(request.user_agent))
     else:
@@ -383,10 +383,10 @@ def _curl_setup_request(curl, request, buffer, headers):
         else:
             curl.setopt(pycurl.INFILESIZE, len(request.body))
 
-    if request.auth_username and request.auth_password:
-        userpwd = "%s:%s" % (request.auth_username, request.auth_password)
+    if request.auth_username is not None:
+        userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
         curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
-        curl.setopt(pycurl.USERPWD, userpwd)
+        curl.setopt(pycurl.USERPWD, utf8(userpwd))
         logging.debug("%s %s (username: %r)", request.method, request.url,
                       request.auth_username)
     else:

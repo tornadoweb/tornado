@@ -451,14 +451,14 @@ class TwitterMixin(OAuthMixin):
     _OAUTH_NO_CALLBACKS = False
 
 
-    def authenticate_redirect(self):
+    def authenticate_redirect(self, callback_uri = None):
         """Just like authorize_redirect(), but auto-redirects if authorized.
 
         This is generally the right interface to use if you are using
         Twitter for single-sign on.
         """
         http = httpclient.AsyncHTTPClient()
-        http.fetch(self._oauth_request_token_url(), self.async_callback(
+        http.fetch(self._oauth_request_token_url(callback_uri = callback_uri), self.async_callback(
             self._on_request_token, self._OAUTH_AUTHENTICATE_URL, None))
 
     def twitter_request(self, path, callback, access_token=None,
@@ -499,8 +499,13 @@ class TwitterMixin(OAuthMixin):
                     self.finish("Posted a message!")
 
         """
+        if path.startswith('http:') or path.startswith('https:'):
+            # Raw urls are useful for e.g. search which doesn't follow the
+            # usual pattern: http://search.twitter.com/search.json
+            url = path
+        else:
+            url = "http://api.twitter.com/1" + path + ".json"
         # Add the OAuth resource request signature if we have credentials
-        url = "http://api.twitter.com/1" + path + ".json"
         if access_token:
             all_args = {}
             all_args.update(args)
