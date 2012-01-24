@@ -956,31 +956,31 @@ class RequestHandler(object):
         try:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
+            # read and parse the request body, if not disabled
+            exec_req_cb = lambda: self._execute_request(*args, **kwargs)
+            if (getattr(self, '_read_body', True) and
+                hasattr(self.request, 'content_length')):
+                self.request._read_body(exec_req_cb)
+            else:
+                exec_req_cb()
+        except Exception, e:
+            self._handle_request_exception(e)
+
+    def _execute_request(self, *args, **kwargs):
+        try:
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
-            if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
-               self.application.settings.get("xsrf_cookies"):
+            if (self.request.method not in ("GET", "HEAD", "OPTIONS") and
+                    self.application.settings.get("xsrf_cookies")):
                 self.check_xsrf_cookie()
             self.prepare()
             if not self._finished:
                 args = [self.decode_argument(arg) for arg in args]
                 kwargs = dict((k, self.decode_argument(v, name=k))
                               for (k,v) in kwargs.iteritems())
-                # read and parse the request body, if not disabled
-                exec_req_cb = lambda: self._execute_request(*args, **kwargs)
-                if (getattr(self, '_read_body', True) and
-                    hasattr(self.request, 'content_length')):
-                    self.request._read_body(exec_req_cb)
-                else:
-                    exec_req_cb()
-        except Exception, e:
-            self._handle_request_exception(e)
-
-    def _execute_request(self, *args, **kwargs):
-        try:
-            getattr(self, self.request.method.lower())(*args, **kwargs)
-            if self._auto_finish and not self._finished:
-                self.finish()
+                getattr(self, self.request.method.lower())(*args, **kwargs)
+                if self._auto_finish and not self._finished:
+                    self.finish()
         except Exception, e:
             self._handle_request_exception(e)
 
