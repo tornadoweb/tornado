@@ -162,6 +162,18 @@ Foo--1234--''').replace(b("\n"), b("\r\n"))
         parse_multipart_form_data(b("1234"), data, args, files)
         self.assertEqual(files, {})
 
+    def test_content_disposition_header_without_name_parameter(self):
+        data = b("""\
+--1234
+Content-Disposition: form-data; filename="ab.txt"
+
+Foo
+--1234--""").replace(b("\n"), b("\r\n"))
+        args = {}
+        files = {}
+        parse_multipart_form_data(b("1234"), data, args, files)
+        self.assertEqual(files, {})
+
 
 class HTTPHeadersTest(unittest.TestCase):
     def test_multi_line(self):
