@@ -151,6 +151,17 @@ Foo
         parse_multipart_form_data(b("1234"), data, args, files)
         self.assertEqual(files, {})
 
+    def test_line_does_not_end_with_correct_line_break(self):
+        data = b('''\
+--1234
+Content-Disposition: form-data; name="files"; filename="ab.txt"
+
+Foo--1234--''').replace(b("\n"), b("\r\n"))
+        args = {}
+        files = {}
+        parse_multipart_form_data(b("1234"), data, args, files)
+        self.assertEqual(files, {})
+
 
 class HTTPHeadersTest(unittest.TestCase):
     def test_multi_line(self):
