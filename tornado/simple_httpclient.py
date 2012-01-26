@@ -391,7 +391,12 @@ class _HTTPConnection(object):
             self._timeout = None
         original_request = getattr(self.request, "original_request",
                                    self.request)
-        if (self.request.follow_redirects and
+        if self.code in (100,):
+            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3
+            # support HTTP/1.1 100 Continue
+            self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
+            return
+        elif (self.request.follow_redirects and
             self.request.max_redirects > 0 and
             self.code in (301, 302, 303, 307)):
             new_request = copy.copy(self.request)
