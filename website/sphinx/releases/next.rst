@@ -4,6 +4,14 @@ What's new in the next release of Tornado
 In progress
 -----------
 
+Highlights
+~~~~~~~~~~
+
+* Updated and expanded WebSocket support.
+* Improved compatibility in the Twisted/Tornado bridge.
+* Template errors now generate better stack traces.
+* Better exception handling in `tornado.gen`.
+
 Security fixes
 ~~~~~~~~~~~~~~
 
