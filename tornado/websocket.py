@@ -96,7 +96,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # Websocket only supports GET method
         if self.request.method != "GET":
             self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
+                "HTTP/1.1 405 Method Not Allowed\r\n"
+                "Allow: GET\r\n"
+                "\r\n"
             ))
             self.stream.close()
             return
