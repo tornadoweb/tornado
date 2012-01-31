@@ -28,7 +28,17 @@ import base64
 import tornado.escape
 import tornado.web
 
+from tornado import stack_context
 from tornado.util import bytes_type, b
+
+# Support for 2.5
+try:
+    make_array = bytearray
+    to_string = bytes_type
+except NameError:
+    make_array = lambda d: array.array("B", d)
+    to_string = lambda d: d.tostring()
+
 
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
@@ -84,15 +94,17 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.open_kwargs = kwargs
 
         # Websocket only supports GET method
-        if self.request.method != 'GET':
+        if self.request.method != "GET":
             self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
+                "HTTP/1.1 405 Method Not Allowed\r\n"
+                "Allow: GET\r\n"
+                "\r\n"
             ))
             self.stream.close()
             return
 
         # Upgrade header should be present and should be equal to WebSocket
-        if self.request.headers.get("Upgrade", "").lower() != 'websocket':
+        if self.request.headers.get("Upgrade", "").lower() != "websocket":
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 400 Bad Request\r\n\r\n"
                 "Can \"Upgrade\" only to \"WebSocket\"."
@@ -104,7 +116,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # might mess with it.
         headers = self.request.headers
         connection = map(lambda s: s.strip().lower(), headers.get("Connection", "").split(","))
-        if 'upgrade' not in connection:
+        if "upgrade" not in connection:
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 400 Bad Request\r\n\r\n"
                 "\"Connection\" must be \"Upgrade\"."
@@ -116,17 +128,20 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # client sends a "Sec-Websocket-Origin" header and in 13 it's
         # simply "Origin".
         if self.request.headers.get("Sec-WebSocket-Version") in ("7", "8", "13"):
-            self.ws_connection = WebSocketProtocol13(self)
+            self.ws_connection = WebSocketProtocol13(self, self.auto_decode())
             self.ws_connection.accept_connection()
         elif (self.allow_draft76() and
               "Sec-WebSocket-Version" not in self.request.headers):
-            self.ws_connection = WebSocketProtocol76(self)
+            self.ws_connection = WebSocketProtocol76(self, self.auto_decode())
             self.ws_connection.accept_connection()
         else:
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 426 Upgrade Required\r\n"
                 "Sec-WebSocket-Version: 8\r\n\r\n"))
             self.stream.close()
+
+    def abort_connection(self):
+        self.ws_connection._abort()
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket.
@@ -195,6 +210,16 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         return False
 
+    def auto_decode(self):
+        """Override to disable automatic utf-8 message decoding.
+
+        Useful for performance reasons - if your protocol is JSON based, most
+        of the python json decoders work with utf-8 encoded strings and if they
+        receive utf-16 as input, they usually convert it back to utf-8 and only
+        then parse.
+        """
+        return True
+
     def get_websocket_scheme(self):
         """Return the url scheme used for this request, either "ws" or "wss".
 
@@ -202,7 +227,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         may wish to override this if they are using an SSL proxy
         that does not provide the X-Scheme header as understood
         by HTTPServer.
-        
+
         Note that this is only used by the draft76 protocol.
         """
         return "wss" if self.request.protocol == "https" else "ws"
@@ -234,12 +259,14 @@ for method in ["write", "redirect", "set_header", "send_error", "set_cookie",
 class WebSocketProtocol(object):
     """Base class for WebSocket protocol versions.
     """
-    def __init__(self, handler):
+    def __init__(self, handler, auto_decode):
         self.handler = handler
         self.request = handler.request
         self.stream = handler.stream
         self.client_terminated = False
         self.server_terminated = False
+
+        self._auto_decode = auto_decode
 
     def async_callback(self, callback, *args, **kwargs):
         """Wrap callbacks with this if they are used on asynchronous requests.
@@ -249,6 +276,7 @@ class WebSocketProtocol(object):
         """
         if args or kwargs:
             callback = functools.partial(callback, *args, **kwargs)
+
         def wrapper(*args, **kwargs):
             try:
                 return callback(*args, **kwargs)
@@ -256,6 +284,7 @@ class WebSocketProtocol(object):
                 logging.error("Uncaught exception in %s",
                               self.request.path, exc_info=True)
                 self._abort()
+
         return wrapper
 
     def on_connection_close(self):
@@ -276,8 +305,8 @@ class WebSocketProtocol76(WebSocketProtocol):
     specified in
     http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-76
     """
-    def __init__(self, handler):
-        WebSocketProtocol.__init__(self, handler)
+    def __init__(self, handler, auto_decode):
+        WebSocketProtocol.__init__(self, handler, auto_decode)
         self.challenge = None
         self._waiting = None
 
@@ -394,8 +423,12 @@ class WebSocketProtocol76(WebSocketProtocol):
 
     def _on_end_delimiter(self, frame):
         if not self.client_terminated:
-            self.async_callback(self.handler.on_message)(
-                    frame[:-1].decode("utf-8", "replace"))
+            msg = frame[:-1]
+
+            if self._auto_decode:
+                msg = msg.decode("utf-8", "replace")
+
+            self.async_callback(self.handler.on_message)(msg)
         if not self.client_terminated:
             self._receive_message()
 
@@ -432,14 +465,21 @@ class WebSocketProtocol76(WebSocketProtocol):
                 time.time() + 5, self._abort)
 
 
+STRUCT_BB = struct.Struct("BB")
+STRUCT_BBH = struct.Struct("!BBH")
+STRUCT_BBQ = struct.Struct("!BBQ")
+STRUCT_H = struct.Struct("!H")
+STRUCT_Q = struct.Struct("!Q")
+
+
 class WebSocketProtocol13(WebSocketProtocol):
     """Implementation of the WebSocket protocol from RFC 6455.
 
     This class supports versions 7 and 8 of the protocol in addition to the
     final version 13.
     """
-    def __init__(self, handler):
-        WebSocketProtocol.__init__(self, handler)
+    def __init__(self, handler, auto_decode):
+        WebSocketProtocol.__init__(self, handler, auto_decode)
         self._final_frame = False
         self._frame_opcode = None
         self._frame_mask = None
@@ -497,17 +537,17 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def _write_frame(self, fin, opcode, data):
         if fin:
-            finbit = 0x80
+            finbit = opcode | 0x80
         else:
-            finbit = 0
-        frame = struct.pack("B", finbit | opcode)
+            finbit = opcode
+
         l = len(data)
         if l < 126:
-            frame += struct.pack("B", l)
+            frame = STRUCT_BB.pack(finbit, l)
         elif l <= 0xFFFF:
-            frame += struct.pack("!BH", 126, l)
+            frame = STRUCT_BBH.pack(finbit, 126, l)
         else:
-            frame += struct.pack("!BQ", 127, l)
+            frame = STRUCT_BBQ.pack(finbit, 127, l)
         frame += data
         self.stream.write(frame)
 
@@ -525,7 +565,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.stream.read_bytes(2, self._on_frame_start)
 
     def _on_frame_start(self, data):
-        header, payloadlen = struct.unpack("BB", data)
+        header, payloadlen = STRUCT_BB.unpack(data)
         self._final_frame = header & 0x80
         reserved_bits = header & 0x70
         self._frame_opcode = header & 0xf
@@ -552,21 +592,22 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.stream.read_bytes(8, self._on_frame_length_64)
 
     def _on_frame_length_16(self, data):
-        self._frame_length = struct.unpack("!H", data)[0];
-        self.stream.read_bytes(4, self._on_masking_key);
+        self._frame_length = STRUCT_H.unpack(data)[0]
+        self.stream.read_bytes(4, self._on_masking_key)
 
     def _on_frame_length_64(self, data):
-        self._frame_length = struct.unpack("!Q", data)[0];
-        self.stream.read_bytes(4, self._on_masking_key);
+        self._frame_length = STRUCT_Q.unpack(data)[0]
+        self.stream.read_bytes(4, self._on_masking_key)
 
     def _on_masking_key(self, data):
-        self._frame_mask = array.array("B", data)
+        self._frame_mask = make_array(data)
         self.stream.read_bytes(self._frame_length, self._on_frame_data)
 
     def _on_frame_data(self, data):
-        unmasked = array.array("B", data)
+        unmasked = make_array(data)
+        mask = self._frame_mask
         for i in xrange(len(data)):
-            unmasked[i] = unmasked[i] ^ self._frame_mask[i % 4]
+            unmasked[i] = unmasked[i] ^ mask[i % 4]
 
         if self._frame_opcode_is_control:
             # control frames may be interleaved with a series of fragmented
@@ -599,19 +640,22 @@ class WebSocketProtocol13(WebSocketProtocol):
                 self._fragmented_message_buffer = unmasked
 
         if self._final_frame:
-            self._handle_message(opcode, unmasked.tostring())
+            self._handle_message(opcode, to_string(unmasked))
 
         if not self.client_terminated:
             self._receive_frame()
 
-
     def _handle_message(self, opcode, data):
-        if self.client_terminated: return
+        if self.client_terminated:
+            return
 
         if opcode == 0x1:
             # UTF-8 data
             try:
-                decoded = data.decode("utf-8")
+                if self._auto_decode:
+                    decoded = data.decode("utf-8")
+                else:
+                    decoded = data
             except UnicodeDecodeError:
                 self._abort()
                 return
