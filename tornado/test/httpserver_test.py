@@ -217,9 +217,10 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         stream.connect(("localhost", self.get_http_port()), callback=self.stop)
         self.wait()
         stream.write(b("\r\n").join([b("POST /hello HTTP/1.1"),
-                                  b("Content-Length: 1024"),
-                                  b("Expect: 100-continue"),
-                                  b("\r\n")]), callback=self.stop)
+                                     b("Content-Length: 1024"),
+                                     b("Expect: 100-continue"),
+                                     b("Connection: close"),
+                                     b("\r\n")]), callback=self.stop)
         self.wait()
         stream.read_until(b("\r\n\r\n"), self.stop)
         data = self.wait()
@@ -234,6 +235,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         stream.read_bytes(int(headers["Content-Length"]), self.stop)
         body = self.wait()
         self.assertEqual(body, b("Got 1024 bytes in POST"))
+        stream.close()
 
 class EchoHandler(RequestHandler):
     def get(self):
@@ -368,6 +370,8 @@ class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
         stream.read_bytes(int(headers["Content-Length"]), self.stop)
         body = self.wait()
         self.assertEqual(body, b("Hello world"))
+        stream.close()
+        server.stop()
 
 if not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin':
     del UnixSocketTest

@@ -32,7 +32,8 @@ class TriggerHandler(RequestHandler):
     def get(self):
         logging.info("queuing trigger")
         self.queue.append(self.finish)
-        self.wake_callback()
+        if self.get_argument("wake", "true") == "true":
+            self.wake_callback()
 
 class HangHandler(RequestHandler):
     @asynchronous
@@ -173,10 +174,12 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
        self.assertEqual("POST", response.request.method)
 
     def test_request_timeout(self):
-        response = self.fetch('/hang', request_timeout=0.1)
+        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
         self.assertEqual(response.code, 599)
         self.assertTrue(0.099 < response.request_time < 0.11, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
+        # trigger the hanging request to let it clean up after itself
+        self.triggers.popleft()()
 
     def test_ipv6(self):
         if not socket.has_ipv6:

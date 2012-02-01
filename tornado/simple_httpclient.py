@@ -250,6 +250,8 @@ class _HTTPConnection(object):
                     'proxy_username', 'proxy_password'):
             if getattr(self.request, key, None):
                 raise NotImplementedError('%s not supported' % key)
+        if "Connection" not in self.request.headers:
+            self.request.headers["Connection"] = "close"
         if "Host" not in self.request.headers:
             self.request.headers["Host"] = parsed.netloc
         username, password = None, None
@@ -313,6 +315,8 @@ class _HTTPConnection(object):
             self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
+            if hasattr(self, "stream"):
+                self.stream.close()
 
     def _on_close(self):
         self._run_callback(HTTPResponse(

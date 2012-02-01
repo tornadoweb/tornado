@@ -58,6 +58,8 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         data = self.wait()
         self.assertEqual(data, b("200"))
 
+        s.close()
+
     def test_write_zero_bytes(self):
         # Attempting to write zero bytes should run the callback without
         # going into an infinite loop.
@@ -67,6 +69,8 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         # As a side effect, the stream is now listening for connection
         # close (if it wasn't already), but is not listening for writes
         self.assertEqual(server._state, IOLoop.READ|IOLoop.ERROR)
+        server.close()
+        client.close()
 
     def test_connection_refused(self):
         # When a connection is refused, the connect callback should not
