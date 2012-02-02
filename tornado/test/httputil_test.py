@@ -114,6 +114,67 @@ Foo
             self.assertEqual(file["filename"], filename)
             self.assertEqual(file["body"], b("Foo"))
 
+    def test_boundary_starts_and_ends_with_quotes(self):
+        data = b('''\
+--1234
+Content-Disposition: form-data; name="files"; filename="ab.txt"
+
+Foo
+--1234--''').replace(b("\n"), b("\r\n"))
+        args = {}
+        files = {}
+        parse_multipart_form_data(b('"1234"'), data, args, files)
+        file = files["files"][0]
+        self.assertEqual(file["filename"], "ab.txt")
+        self.assertEqual(file["body"], b("Foo"))
+
+    def test_missing_headers(self):
+        data = b('''\
+--1234
+
+Foo
+--1234--''').replace(b("\n"), b("\r\n"))
+        args = {}
+        files = {}
+        parse_multipart_form_data(b("1234"), data, args, files)
+        self.assertEqual(files, {})
+
+    def test_invalid_content_disposition(self):
+        data = b('''\
+--1234
+Content-Disposition: invalid; name="files"; filename="ab.txt"
+
+Foo
+--1234--''').replace(b("\n"), b("\r\n"))
+        args = {}
+        files = {}
+        parse_multipart_form_data(b("1234"), data, args, files)
+        self.assertEqual(files, {})
+
+    def test_line_does_not_end_with_correct_line_break(self):
+        data = b('''\
+--1234
+Content-Disposition: form-data; name="files"; filename="ab.txt"
+
+Foo--1234--''').replace(b("\n"), b("\r\n"))
+        args = {}
+        files = {}
+        parse_multipart_form_data(b("1234"), data, args, files)
+        self.assertEqual(files, {})
+
+    def test_content_disposition_header_without_name_parameter(self):
+        data = b("""\
+--1234
+Content-Disposition: form-data; filename="ab.txt"
+
+Foo
+--1234--""").replace(b("\n"), b("\r\n"))
+        args = {}
+        files = {}
+        parse_multipart_form_data(b("1234"), data, args, files)
+        self.assertEqual(files, {})
+
+
 class HTTPHeadersTest(unittest.TestCase):
     def test_multi_line(self):
         # Lines beginning with whitespace are appended to the previous line
