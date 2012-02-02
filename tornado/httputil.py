@@ -274,7 +274,3 @@ def _parse_header(line):
 def doctests():
     import doctest
     return doctest.DocTestSuite()
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
