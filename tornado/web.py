@@ -579,7 +579,8 @@ class RequestHandler(object):
             _=self.locale.translate,
             static_url=self.static_url,
             xsrf_form_html=self.xsrf_form_html,
-            reverse_url=self.reverse_url
+            reverse_url=self.reverse_url,
+            get_supported_locales=locale.get_supported_locales
         )
         args.update(self.ui)
         args.update(kwargs)
