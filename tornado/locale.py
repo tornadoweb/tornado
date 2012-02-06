@@ -77,6 +77,10 @@ def set_default_locale(code):
     _default_locale = code
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
 
+def get_default_locale():
+    """docstring for get_default_locale"""
+    global _default_locale
+    return _default_locale
 
 def load_translations(directory):
     u"""Loads translations from CSV files in a directory.
