@@ -104,9 +104,10 @@ class RequestHandler(object):
     _template_loaders = {}  # {path: template.BaseLoader}
     _template_loader_lock = threading.Lock()
     
-    def __init__(self, application, request, **kwargs):
+    def __init__(self, application, request, spec_match, **kwargs):
         self.application = application
         self.request = request
+        self.spec_match = spec_match
         self._headers_written = False
         self._finished = False
         self._auto_finish = True
@@ -1305,32 +1306,17 @@ class Application(object):
         args = []
         kwargs = {}
         handlers = self._get_host_handlers(request)
+        
         if not handlers:
             handler = RedirectHandler(
                 self, request, url="http://" + self.default_host + "/")
         else:
             for spec in handlers:
-                match = spec.regex.match(request.path)
-                if match:
-                    handler = spec.handler_class(self, request, **spec.kwargs)
-                    if spec.regex.groups:
-                        # None-safe wrapper around url_unescape to handle
-                        # unmatched optional groups correctly
-                        def unquote(s):
-                            if s is None: return s
-                            return escape.url_unescape(s, encoding=None)
-                        # Pass matched groups to the handler.  Since
-                        # match.groups() includes both named and unnamed groups,
-                        # we want to use either groups or groupdict but not both.
-                        # Note that args are passed as bytes so the handler can
-                        # decide what encoding to use.
-                        
-                        if spec.regex.groupindex:
-                            kwargs = dict(
-                                (k, unquote(v))
-                                for (k, v) in match.groupdict().iteritems())
-                        else:
-                            args = [unquote(s) for s in match.groups()]
+                spec_match = spec.match(request, self)
+                if spec_match:
+                    handler = spec_match.get_handler()
+                    args    = spec_match.args
+                    kwargs  = spec_match.kwargs
                     break
             if not handler:
                 handler = ErrorHandler(self, request, status_code=404)
@@ -1892,7 +1878,63 @@ class TemplateModule(UIModule):
     def html_body(self):
         return "".join(self._get_resources("html_body"))
 
+def unquote(s):
+    if s is None: return s
+    return escape.url_unescape(s, encoding=None)
 
+class URLSpecMatch(object):
+    def __init__(self, spec, request, match, application):
+        """docstring for __init__"""
+        self.spec        = spec
+        self.request     = request
+        self.match       = match
+        self.application = application
+    
+    def get_handler(self):
+        """docstring for get_handler"""
+        return self.spec.handler_class(self.application, self.request, self, **self.spec.kwargs)
+    
+    def get_base_args(self):
+        """docstring for get_base_args"""
+        regex = self.spec.regex
+        args = []
+        
+        if regex.groups and not regex.groupindex:
+            args = [unquote(s) for s in self.match.groups()]
+        
+        return args
+    
+    def get_args(self):
+        """docstring for get_args"""
+        return self.get_base_args()
+    
+    @property
+    def args(self):
+        """docstring for args"""
+        return self.get_args()
+    
+    def get_kwargs(self):
+        """docstring for get_kwargs"""
+        if self.spec.regex.groups and self.spec.regex.groupindex:
+            # None-safe wrapper around url_unescape to handle
+            # unmatched optional groups correctly
+            
+            # Pass matched groups to the handler.  Since
+            # match.groups() includes both named and unnamed groups,
+            # we want to use either groups or groupdict but not both.
+            # Note that args are passed as bytes so the handler can
+            # decide what encoding to use.
+            
+            return dict(
+                (k, unquote(v))
+                for (k, v) in self.match.groupdict().iteritems())
+        
+        return {}
+    
+    @property
+    def kwargs(self):
+        """docstring for kwargs"""
+        return self.get_kwargs()
 
 class URLSpec(object):
     """Specifies mappings between URLs and handlers."""
@@ -1994,17 +2036,15 @@ class URLSpec(object):
         
         return result
     
-    def reverse(self, *args):
-        assert self._path is not None, \
-            "Cannot reverse url regex " + self.regex.pattern
-        assert len(args) == self._group_count, "required number of arguments "\
-            "not found"
-        if not len(args):
-            return self._path
-        return self._path % tuple([str(a) for a in args])
+    def match(self, request, application):
+        """docstring for match"""
+        path = request.path
+        match = self.regex.match(path)
+        if match:
+            return URLSpecMatch(self, request, match, application)
+        return None
 
 url = URLSpec
-
 
 def _time_independent_equals(a, b):
     if len(a) != len(b):
