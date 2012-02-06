@@ -90,6 +90,8 @@ try:
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
 
+named_group_regex = re.compile(r'\?P<(.*)>')
+
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
     
@@ -925,9 +927,9 @@ class RequestHandler(object):
             raise Exception("You must define the '%s' setting in your "
                             "application to use %s" % (name, feature))
     
-    def reverse_url(self, name, *args):
+    def reverse_url(self, name, *args, **kwargs):
         """Alias for `Application.reverse_url`."""
-        return self.application.reverse_url(name, *args)
+        return self.application.reverse_url(name, *args, **kwargs)
     
     def compute_etag(self):
         """Computes the etag header to be used for this request.
@@ -1344,13 +1346,13 @@ class Application(object):
         handler._execute(transforms, *args, **kwargs)
         return handler
     
-    def reverse_url(self, name, *args):
+    def reverse_url(self, name, *args, **kwargs):
         """Returns a URL path for handler named `name`
         
         The handler must be added to the application as a named URLSpec
         """
         if name in self.named_handlers:
-            return self.named_handlers[name].reverse(*args)
+            return self.named_handlers[name].reverse(*args, **kwargs)
         raise KeyError("%s not found in named urls" % name)
     
     def log_request(self, handler):
@@ -1920,7 +1922,7 @@ class URLSpec(object):
         self.handler_class = handler_class
         self.kwargs = kwargs
         self.name = name
-        self._path, self._group_count = self._find_groups()
+        self._path, self._group_count, self._named_path, self._named_group_count = self._find_groups()
     
     def _find_groups(self):
         """Returns a tuple (reverse string, group count) for a url.
@@ -1937,18 +1939,60 @@ class URLSpec(object):
         if self.regex.groups != pattern.count('('):
             # The pattern is too complicated for our simplistic matching,
             # so we can't support reversing it.
-            return (None, None)
+            return (None, None, None, None)
         
-        pieces = []
+        pieces       = []
+        named_pieces = []
+        nb           = 0
+        
         for fragment in pattern.split('('):
             if ')' in fragment:
                 paren_loc = fragment.index(')')
                 if paren_loc >= 0:
                     pieces.append('%s' + fragment[paren_loc + 1:])
+                
+                match = named_group_regex.match(fragment[:paren_loc])
+                if match:
+                    name = match.groups()[0]
+                    if paren_loc >= 0:
+                        named_pieces.append('%(' + name + ')s' + fragment[paren_loc + 1:])
+                        nb += 1
+            
             else:
                 pieces.append(fragment)
         
-        return (''.join(pieces), self.regex.groups)
+        return (''.join(pieces) or '/', self.regex.groups, ''.join(named_pieces), nb)
+    
+    def reverse(self, *args, **kwargs):
+        if args and kwargs:
+            raise Exception('Args OR kwargs only')
+        result = None
+        
+        if kwargs:
+            assert self._named_path is not None, \
+                "Cannot reverse url regex " + self.regex.pattern
+            assert len(kwargs) == self._named_group_count, "required number of arguments "\
+                "not found"
+            if not len(kwargs):
+                result = self._named_path
+            else:
+                
+                new_kwargs = {}
+                for key, value in kwargs.items():
+                    new_kwargs[str(key)] = str(value)
+                
+                result = self._named_path % new_kwargs
+        else:
+            assert self._path is not None, \
+                "Cannot reverse url regex " + self.regex.pattern
+            assert len(args) == self._group_count, "required number of arguments "\
+                "not found"
+            if not len(args):
+                result = self._path
+            else:
+                result = self._path % tuple([str(a) for a in args])
+        
+        return result
     
     def reverse(self, *args):
         assert self._path is not None, \
