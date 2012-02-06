@@ -575,7 +575,7 @@ class RequestHandler(object):
             handler=self,
             request=self.request,
             current_user=self.current_user,
-            locale=self.locale,
+            current_locale=self.locale,
             _=self.locale.translate,
             static_url=self.static_url,
             xsrf_form_html=self.xsrf_form_html,
