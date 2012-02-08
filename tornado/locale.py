@@ -48,6 +48,7 @@ import re
 _default_locale = "en_US"
 _translations = {}
 _supported_locales = frozenset([_default_locale])
+_supported_langs = {_default_locale : _default_locale.partition('_')[0]}
 _use_gettext = False
 
 def get(*locale_codes):
@@ -74,8 +75,10 @@ def set_default_locale(code):
     """
     global _default_locale
     global _supported_locales
+    global _supported_langs
     _default_locale = code
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
+    _supported_langs = {_default_locale : _default_locale.partition('_')[0]}
 
 def get_default_locale():
     """docstring for get_default_locale"""
@@ -111,6 +114,7 @@ def load_translations(directory):
     """
     global _translations
     global _supported_locales
+    global _supported_langs
     _translations = {}
     for path in os.listdir(directory):
         if not path.endswith(".csv"): continue
@@ -136,6 +140,12 @@ def load_translations(directory):
             _translations[locale].setdefault(plural, {})[english] = translation
         f.close()
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
+    _supported_langs = {}
+    for key in _translations.keys():
+        new_key = key.partition('_')[0]
+        if not new_key in _supported_langs:
+            _supported_langs[new_key] = key
+    _supported_langs[_default_locale] = _default_locale.partition('_')[0]
     logging.info("Supported locales: %s", sorted(_supported_locales))
 
 def load_gettext_translations(directory, domain):
@@ -159,6 +169,7 @@ def load_gettext_translations(directory, domain):
     import gettext
     global _translations
     global _supported_locales
+    global _supported_langs
     global _use_gettext
     _translations = {}
     for lang in os.listdir(directory):
@@ -172,6 +183,12 @@ def load_gettext_translations(directory, domain):
             logging.error("Cannot load translation for '%s': %s", lang, str(e))
             continue
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
+    _supported_langs = {}
+    for key in _translations.keys():
+        new_key = key.partition('_')[0]
+        if not new_key in _supported_langs:
+            _supported_langs[new_key] = key
+    _supported_langs[_default_locale] = _default_locale.partition('_')[0]
     _use_gettext = True
     logging.info("Supported locales: %s", sorted(_supported_locales))
 
@@ -200,8 +217,8 @@ class Locale(object):
                 code = parts[0].lower() + "_" + parts[1].upper()
             if code in _supported_locales:
                 return cls.get(code)
-            if parts[0].lower() in _supported_locales:
-                return cls.get(parts[0].lower())
+            if parts[0].lower() in _supported_langs:
+                return cls.get(_supported_langs[parts[0].lower()])
         return cls.get(_default_locale)
 
     @classmethod
