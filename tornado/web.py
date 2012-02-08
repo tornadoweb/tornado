@@ -1319,7 +1319,7 @@ class Application(object):
                     kwargs  = spec_match.kwargs
                     break
             if not handler:
-                handler = ErrorHandler(self, request, status_code=404)
+                handler = ErrorHandler(self, request, None, status_code=404)
         
         # In debug mode, re-compile templates and reload static files on every
         # request so you don't need to restart to see changes
