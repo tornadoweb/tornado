@@ -91,31 +91,31 @@ class Connection(object):
         self._db = MySQLdb.connect(**self._db_args)
         self._db.autocommit(True)
 
-    def iter(self, query, *parameters):
+    def iter(self, query, *parameters, **kwparameters):
         """Returns an iterator for the given query and parameters."""
         self._ensure_connected()
         cursor = MySQLdb.cursors.SSCursor(self._db)
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, kwparameters)
             column_names = [d[0] for d in cursor.description]
             for row in cursor:
                 yield Row(zip(column_names, row))
         finally:
             cursor.close()
 
-    def query(self, query, *parameters):
+    def query(self, query, *parameters, **kwparameters):
         """Returns a row list for the given query and parameters."""
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, kwparameters)
             column_names = [d[0] for d in cursor.description]
             return [Row(itertools.izip(column_names, row)) for row in cursor]
         finally:
             cursor.close()
 
-    def get(self, query, *parameters):
+    def get(self, query, *parameters, **kwparameters):
         """Returns the first row returned for the given query."""
-        rows = self.query(query, *parameters)
+        rows = self.query(query, *parameters, **kwparameters)
         if not rows:
             return None
         elif len(rows) > 1:
@@ -125,24 +125,24 @@ class Connection(object):
 
     # rowcount is a more reasonable default return value than lastrowid,
     # but for historical compatibility execute() must return lastrowid.
-    def execute(self, query, *parameters):
+    def execute(self, query, *parameters, **kwparameters):
         """Executes the given query, returning the lastrowid from the query."""
-        return self.execute_lastrowid(query, *parameters)
+        return self.execute_lastrowid(query, *parameters, **kwparameters)
 
-    def execute_lastrowid(self, query, *parameters):
+    def execute_lastrowid(self, query, *parameters, **kwparameters):
         """Executes the given query, returning the lastrowid from the query."""
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, kwparameters)
             return cursor.lastrowid
         finally:
             cursor.close()
 
-    def execute_rowcount(self, query, *parameters):
+    def execute_rowcount(self, query, *parameters, **kwparameters):
         """Executes the given query, returning the rowcount from the query."""
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, kwparameters)
             return cursor.rowcount
         finally:
             cursor.close()
@@ -178,6 +178,12 @@ class Connection(object):
         finally:
             cursor.close()
 
+    update = execute_rowcount
+    updatemany = executemany_rowcount
+
+    insert = execute_lastrowid
+    insertmany = executemany_lastrowid
+
     def _ensure_connected(self):
         # Mysql by default closes client connections that are idle for
         # 8 hours, but the client library does not report this fact until
@@ -193,9 +199,9 @@ class Connection(object):
         self._ensure_connected()
         return self._db.cursor()
 
-    def _execute(self, cursor, query, parameters):
+    def _execute(self, cursor, query, parameters, kwparameters):
         try:
-            return cursor.execute(query, parameters)
+            return cursor.execute(query, kwparameters or parameters)
         except OperationalError:
             logging.error("Error connecting to MySQL on %s", self.host)
             self.close()
