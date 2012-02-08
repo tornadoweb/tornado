@@ -154,6 +154,15 @@ class HTTPHeaders(dict):
         for k, v in dict(*args, **kwargs).iteritems():
             self[k] = v
 
+    def copy(self):
+        # Create a new HTTPHeaders object.
+        # This will initialize the HTTPHeaders with the values in our dict, but
+        # won't populate the full lists as tracked by self._as_list
+        ret = HTTPHeaders(self)
+        # Update ret._as_list separately
+        ret._as_list = self._as_list.copy()
+        return ret
+
     _NORMALIZED_HEADER_RE = re.compile(r'^[A-Z0-9][a-z0-9]*(-[A-Z0-9][a-z0-9]*)*$')
     _normalized_headers = {}
 
