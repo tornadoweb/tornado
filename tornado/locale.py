@@ -17,14 +17,14 @@
 """Translation methods for generating localized strings.
 
 To load a locale and generate a translated string::
-
+    
     user_locale = locale.get("es_LA")
     print user_locale.translate("Sign out")
 
 locale.get() returns the closest matching locale, not necessarily the
 specific locale you requested. You can support pluralization with
 additional arguments to translate(), e.g.::
-
+    
     people = [...]
     message = user_locale.translate(
         "%(list)s is online", "%(list)s are online", len(people))
@@ -53,11 +53,11 @@ _use_gettext = False
 
 def get(*locale_codes):
     """Returns the closest match for the given locale codes.
-
+    
     We iterate over all given locale codes in order. If we have a tight
     or a loose match for the code (e.g., "en" for "en_US"), we return
     the locale. Otherwise we move to the next code in the list.
-
+    
     By default we return en_US if no translations are found for any of
     the specified locales. You can change the default locale with
     set_default_locale() below.
@@ -67,7 +67,7 @@ def get(*locale_codes):
 
 def set_default_locale(code):
     """Sets the default locale, used in get_closest_locale().
-
+    
     The default locale is assumed to be the language used for all strings
     in the system. The translations loaded from disk are mappings from
     the default locale to the destination locale. Consequently, you don't
@@ -87,10 +87,10 @@ def get_default_locale():
 
 def load_translations(directory):
     u"""Loads translations from CSV files in a directory.
-
+    
     Translations are strings with optional Python-style named placeholders
     (e.g., "My name is %(name)s") and their associated translations.
-
+    
     The directory should have translation files of the form LOCALE.csv,
     e.g. es_GT.csv. The CSV files should have two or three columns: string,
     translation, and an optional plural indicator. Plural indicators should
@@ -101,16 +101,16 @@ def load_translations(directory):
     that string, one with plural indicator "singular", and one "plural".
     For strings with no verbs that would change on translation, simply
     use "unknown" or the empty string (or don't include the column at all).
-
+    
     The file is read using the csv module in the default "excel" dialect.
     In this format there should not be spaces after the commas.
-
+    
     Example translation es_LA.csv:
-
+        
         "I love you","Te amo"
         "%(name)s liked this","A %(name)s les gust\u00f3 esto","plural"
         "%(name)s liked this","A %(name)s le gust\u00f3 esto","singular"
-
+    
     """
     global _translations
     global _supported_locales
@@ -150,19 +150,19 @@ def load_translations(directory):
 
 def load_gettext_translations(directory, domain):
     """Loads translations from gettext's locale tree
-
+    
     Locale tree is similar to system's /usr/share/locale, like:
-
+    
     {directory}/{lang}/LC_MESSAGES/{domain}.mo
-
+    
     Three steps are required to have you app translated:
-
+    
     1. Generate POT translation file
         xgettext --language=Python --keyword=_:1,2 -d cyclone file1.py file2.html etc
-
+    
     2. Merge against existing POT file:
         msgmerge old.po cyclone.po > new.po
-
+    
     3. Compile:
         msgfmt cyclone.po -o {directory}/pt_BR/LC_MESSAGES/cyclone.mo
     """
@@ -200,7 +200,7 @@ def get_supported_locales():
 
 class Locale(object):
     """Object representing a locale.
-
+    
     After calling one of `load_translations` or `load_gettext_translations`,
     call `get` or `get_closest` to get a Locale object.
     """
@@ -220,11 +220,11 @@ class Locale(object):
             if parts[0].lower() in _supported_langs:
                 return cls.get(_supported_langs[parts[0].lower()])
         return cls.get(_default_locale)
-
+    
     @classmethod
     def get(cls, code):
         """Returns the Locale for the given locale code.
-
+        
         If it is not supported, we raise an exception.
         """
         if not hasattr(cls, "_cache"):
@@ -240,7 +240,7 @@ class Locale(object):
                 locale = CSVLocale(code, translations)
             cls._cache[code] = locale
         return cls._cache[code]
-
+    
     def __init__(self, code, translations):
         self.code = code
         self.name = LOCALE_NAMES.get(code, {}).get("name", u"Unknown")
@@ -250,7 +250,7 @@ class Locale(object):
                 self.rtl = True
                 break
         self.translations = translations
-
+        
         # Initialize strings for date formatting
         _ = self.translate
         self._months = [
@@ -260,26 +260,26 @@ class Locale(object):
         self._weekdays = [
             _("Monday"), _("Tuesday"), _("Wednesday"), _("Thursday"),
             _("Friday"), _("Saturday"), _("Sunday")]
-
+    
     def translate(self, message, plural_message=None, count=None):
         """Returns the translation for the given message for this locale.
-
+        
         If plural_message is given, you must also provide count. We return
         plural_message when count != 1, and we return the singular form
         for the given message when count == 1.
         """
         raise NotImplementedError()
-
+    
     def format_date(self, date, gmt_offset=0, relative=True, shorter=False,
-                    full_format=False):
+                    full_format=False, really_shorter=False):
         """Formats the given date (which should be GMT).
-
+        
         By default, we return a relative time (e.g., "2 minutes ago"). You
         can return an absolute date string with relative=False.
-
+        
         You can force a full format date ("July 10, 1980") with
         full_format=True.
-
+        
         This method is primarily intended for dates in the past.
         For dates in the future, we fall back to full format.
         """
@@ -303,7 +303,7 @@ class Locale(object):
         difference = now - date
         seconds = difference.seconds
         days = difference.days
-
+        
         _ = self.translate
         format = None
         if not full_format:
@@ -311,16 +311,16 @@ class Locale(object):
                 if seconds < 50:
                     return _("1 second ago", "%(seconds)d seconds ago",
                              seconds) % { "seconds": seconds }
-
+                
                 if seconds < 50 * 60:
                     minutes = round(seconds / 60.0)
                     return _("1 minute ago", "%(minutes)d minutes ago",
                              minutes) % { "minutes": minutes }
-
+                
                 hours = round(seconds / (60.0 * 60))
                 return _("1 hour ago", "%(hours)d hours ago",
                          hours) % { "hours": hours }
-
+            
             if days == 0:
                 format = _("%(time)s")
             elif days == 1 and local_date.day == local_yesterday.day and \
@@ -333,11 +333,15 @@ class Locale(object):
             elif days < 334:  # 11mo, since confusing for same month last year
                 format = _("%(month_name)s %(day)s") if shorter else \
                          _("%(month_name)s %(day)s at %(time)s")
-
+        
         if format is None:
-            format = _("%(month_name)s %(day)s, %(year)s") if shorter else \
-                     _("%(month_name)s %(day)s, %(year)s at %(time)s")
-
+            if really_shorter:
+                format = _("%(month_name)s %(year)s")
+            elif shorter:
+                format = _("%(month_name)s %(day)s, %(year)s")
+            else:
+                 format = _("%(month_name)s %(day)s, %(year)s at %(time)s")
+        
         tfhour_clock = self.code not in ("en", "en_US", "zh_CN")
         if tfhour_clock:
             str_time = "%d:%02d" % (local_date.hour, local_date.minute)
@@ -349,7 +353,7 @@ class Locale(object):
             str_time = "%d:%02d %s" % (
                 local_date.hour % 12 or 12, local_date.minute,
                 ("am", "pm")[local_date.hour >= 12])
-
+        
         return format % {
             "month_name": self._months[local_date.month - 1],
             "weekday": self._weekdays[local_date.weekday()],
@@ -357,10 +361,10 @@ class Locale(object):
             "year": str(local_date.year),
             "time": str_time
         }
-
+    
     def format_day(self, date, gmt_offset=0, dow=True):
         """Formats the given date as a day of week.
-
+        
         Example: "Monday, January 22". You can remove the day of week with
         dow=False.
         """
@@ -377,10 +381,10 @@ class Locale(object):
                 "month_name": self._months[local_date.month - 1],
                 "day": str(local_date.day),
             }
-
+    
     def list(self, parts):
         """Returns a comma-separated list for the given list of parts.
-
+        
         The format is, e.g., "A, B and C", "A and B" or just "A" for lists
         of size 1.
         """
@@ -392,7 +396,7 @@ class Locale(object):
             "commas": comma.join(parts[:-1]),
             "last": parts[len(parts) - 1],
         }
-
+    
     def friendly_number(self, value):
         """Returns a comma-separated number for the given integer."""
         if self.code not in ("en", "en_US"):
