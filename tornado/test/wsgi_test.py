@@ -6,6 +6,7 @@ from tornado.util import b
 from tornado.web import RequestHandler
 from tornado.wsgi import WSGIApplication, WSGIContainer
 
+
 class WSGIContainerTest(AsyncHTTPTestCase, LogTrapTestCase):
     def wsgi_app(self, environ, start_response):
         status = "200 OK"
@@ -19,6 +20,7 @@ class WSGIContainerTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_simple(self):
         response = self.fetch("/")
         self.assertEqual(response.body, b("Hello world!"))
+
 
 class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
@@ -51,6 +53,7 @@ class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
 # WSGIContainer and WSGIApplication to make sure everything survives
 # repeated disassembly and reassembly.
 from tornado.test.httpserver_test import HTTPConnectionTest
+
 
 class WSGIConnectionTest(HTTPConnectionTest):
     def get_app(self):

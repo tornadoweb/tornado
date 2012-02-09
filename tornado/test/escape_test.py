@@ -66,11 +66,11 @@ linkify_tests = [
     ("http://www.example.com/wpstyle/?p=364.", {},
      u'<a href="http://www.example.com/wpstyle/?p=364">http://www.example.com/wpstyle/?p=364</a>.'),
 
-    ("rdar://1234", 
+    ("rdar://1234",
      {"permitted_protocols": ["http", "rdar"]},
      u'<a href="rdar://1234">rdar://1234</a>'),
 
-    ("rdar:/1234", 
+    ("rdar:/1234",
      {"permitted_protocols": ["rdar"]},
      u'<a href="rdar:/1234">rdar:/1234</a>'),
 
@@ -99,7 +99,7 @@ linkify_tests = [
     ("Just a www.example.com link.", {},
      u'Just a <a href="http://www.example.com">www.example.com</a> link.'),
 
-    ("Just a www.example.com link.", 
+    ("Just a www.example.com link.",
      {"require_protocol": True},
      u'Just a www.example.com link.'),
 

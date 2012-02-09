@@ -42,6 +42,7 @@ from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.util import import_object, bytes_type
 
+
 class HTTPClient(object):
     """A blocking HTTP client.
 
@@ -76,7 +77,7 @@ class HTTPClient(object):
 
     def fetch(self, request, **kwargs):
         """Executes a request, returning an `HTTPResponse`.
-        
+
         The request may be either a string URL or an `HTTPRequest` object.
         If it is a string, we construct an `HTTPRequest` using any additional
         kwargs: ``HTTPRequest(request, **kwargs)``
@@ -92,6 +93,7 @@ class HTTPClient(object):
         self._response = None
         response.rethrow()
         return response
+
 
 class AsyncHTTPClient(object):
     """An non-blocking HTTP client.
@@ -129,7 +131,7 @@ class AsyncHTTPClient(object):
             cls._async_client_dict = weakref.WeakKeyDictionary()
         return cls._async_client_dict
 
-    def __new__(cls, io_loop=None, max_clients=10, force_instance=False, 
+    def __new__(cls, io_loop=None, max_clients=10, force_instance=False,
                 **kwargs):
         io_loop = io_loop or IOLoop.instance()
         if cls is AsyncHTTPClient:
@@ -202,6 +204,7 @@ class AsyncHTTPClient(object):
         AsyncHTTPClient._impl_class = impl
         AsyncHTTPClient._impl_kwargs = kwargs
 
+
 class HTTPRequest(object):
     """HTTP client request object."""
     def __init__(self, url, method="GET", headers=None, body=None,
@@ -237,23 +240,23 @@ class HTTPRequest(object):
         :arg bool use_gzip: Request gzip encoding from the server
         :arg string network_interface: Network interface to use for request
         :arg callable streaming_callback: If set, `streaming_callback` will
-           be run with each chunk of data as it is received, and 
-           `~HTTPResponse.body` and `~HTTPResponse.buffer` will be empty in 
+           be run with each chunk of data as it is received, and
+           `~HTTPResponse.body` and `~HTTPResponse.buffer` will be empty in
            the final response.
         :arg callable header_callback: If set, `header_callback` will
-           be run with each header line as it is received, and 
+           be run with each header line as it is received, and
            `~HTTPResponse.headers` will be empty in the final response.
         :arg callable prepare_curl_callback: If set, will be called with
            a `pycurl.Curl` object to allow the application to make additional
            `setopt` calls.
-        :arg string proxy_host: HTTP proxy hostname.  To use proxies, 
-           `proxy_host` and `proxy_port` must be set; `proxy_username` and 
-           `proxy_pass` are optional.  Proxies are currently only support 
+        :arg string proxy_host: HTTP proxy hostname.  To use proxies,
+           `proxy_host` and `proxy_port` must be set; `proxy_username` and
+           `proxy_pass` are optional.  Proxies are currently only support
            with `curl_httpclient`.
         :arg int proxy_port: HTTP proxy port
         :arg string proxy_username: HTTP proxy username
         :arg string proxy_password: HTTP proxy password
-        :arg bool allow_nonstandard_methods: Allow unknown values for `method` 
+        :arg bool allow_nonstandard_methods: Allow unknown values for `method`
            argument?
         :arg bool validate_cert: For HTTPS requests, validate the server's
            certificate?
@@ -262,7 +265,7 @@ class HTTPRequest(object):
            any request uses a custom `ca_certs` file, they all must (they
            don't have to all use the same `ca_certs`, but it's not possible
            to mix requests with ca_certs and requests that use the defaults.
-        :arg bool allow_ipv6: Use IPv6 when available?  Default is false in 
+        :arg bool allow_ipv6: Use IPv6 when available?  Default is false in
            `simple_httpclient` and true in `curl_httpclient`
         :arg string client_key: Filename for client SSL key, if any
         :arg string client_cert: Filename for client SSL certificate, if any

@@ -27,6 +27,7 @@ TEST_MODULES = [
     'tornado.test.wsgi_test',
 ]
 
+
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 

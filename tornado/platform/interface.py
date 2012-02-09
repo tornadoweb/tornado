@@ -23,9 +23,11 @@ implementation from `tornado.platform.auto`.
 
 from __future__ import absolute_import, division, with_statement
 
+
 def set_close_exec(fd):
     """Sets the close-on-exec bit (``FD_CLOEXEC``)for a file descriptor."""
     raise NotImplementedError()
+
 
 class Waker(object):
     """A socket-like object that can wake another thread from ``select()``.
@@ -38,7 +40,7 @@ class Waker(object):
     """
     def fileno(self):
         """Returns a file descriptor for this waker.
-        
+
         Must be suitable for use with ``select()`` or equivalent on the
         local platform.
         """
@@ -55,5 +57,3 @@ class Waker(object):
     def close(self):
         """Closes the waker's file descriptor(s)."""
         raise NotImplementedError()
-
-    

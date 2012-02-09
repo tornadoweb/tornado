@@ -40,12 +40,15 @@ import time
 import unittest
 
 _next_port = 10000
+
+
 def get_unused_port():
     """Returns a (hopefully) unused port number."""
     global _next_port
     port = _next_port
     _next_port = _next_port + 1
     return port
+
 
 class AsyncTestCase(unittest.TestCase):
     """TestCase subclass for testing IOLoop-based asynchronous code.
@@ -269,6 +272,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_client.close()
         super(AsyncHTTPTestCase, self).tearDown()
 
+
 class LogTrapTestCase(unittest.TestCase):
     """A test case that captures and discards all logging output
     if the test passes.
@@ -307,6 +311,7 @@ class LogTrapTestCase(unittest.TestCase):
                 old_stream.write(handler.stream.getvalue())
         finally:
             handler.stream = old_stream
+
 
 def main():
     """A simple test runner.

@@ -8,6 +8,7 @@ from tornado.web import Application, RequestHandler, asynchronous
 
 from tornado import gen
 
+
 class GenTest(AsyncTestCase):
     def run_gen(self, f):
         f()
@@ -47,7 +48,7 @@ class GenTest(AsyncTestCase):
     def test_exception_phase1(self):
         @gen.engine
         def f():
-            1/0
+            1 / 0
         self.assertRaises(ZeroDivisionError, self.run_gen, f)
 
     def test_exception_phase2(self):
@@ -55,12 +56,12 @@ class GenTest(AsyncTestCase):
         def f():
             self.io_loop.add_callback((yield gen.Callback("k1")))
             yield gen.Wait("k1")
-            1/0
+            1 / 0
         self.assertRaises(ZeroDivisionError, self.run_gen, f)
 
     def test_exception_in_task_phase1(self):
         def fail_task(callback):
-            1/0
+            1 / 0
 
         @gen.engine
         def f():
@@ -74,7 +75,7 @@ class GenTest(AsyncTestCase):
     def test_exception_in_task_phase2(self):
         # This is the case that requires the use of stack_context in gen.engine
         def fail_task(callback):
-            self.io_loop.add_callback(lambda: 1/0)
+            self.io_loop.add_callback(lambda: 1 / 0)
 
         @gen.engine
         def f():
@@ -265,6 +266,7 @@ class GenSequenceHandler(RequestHandler):
         yield gen.Wait("k1")
         self.finish("3")
 
+
 class GenTaskHandler(RequestHandler):
     @asynchronous
     @gen.engine
@@ -275,6 +277,7 @@ class GenTaskHandler(RequestHandler):
         response.rethrow()
         self.finish(b("got response: ") + response.body)
 
+
 class GenExceptionHandler(RequestHandler):
     @asynchronous
     @gen.engine
@@ -284,19 +287,22 @@ class GenExceptionHandler(RequestHandler):
         yield gen.Task(io_loop.add_callback)
         raise Exception("oops")
 
+
 class GenYieldExceptionHandler(RequestHandler):
     @asynchronous
     @gen.engine
     def get(self):
         io_loop = self.request.connection.stream.io_loop
         # Test the interaction of the two stack_contexts.
+
         def fail_task(callback):
-            io_loop.add_callback(lambda: 1/0)
+            io_loop.add_callback(lambda: 1 / 0)
         try:
             yield gen.Task(fail_task)
             raise Exception("did not get expected exception")
         except ZeroDivisionError:
             self.finish('ok')
+
 
 class GenWebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):

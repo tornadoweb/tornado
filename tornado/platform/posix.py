@@ -24,14 +24,17 @@ import os
 from tornado.platform import interface
 from tornado.util import b
 
+
 def set_close_exec(fd):
     flags = fcntl.fcntl(fd, fcntl.F_GETFD)
     fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
+
 def _set_nonblocking(fd):
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-    
+
+
 class Waker(interface.Waker):
     def __init__(self):
         r, w = os.pipe()
@@ -55,7 +58,8 @@ class Waker(interface.Waker):
         try:
             while True:
                 result = self.reader.read()
-                if not result: break;
+                if not result:
+                    break
         except IOError:
             pass
 

@@ -8,6 +8,7 @@ import time
 
 from tornado.testing import AsyncTestCase, LogTrapTestCase
 
+
 class TestIOLoop(AsyncTestCase, LogTrapTestCase):
     def test_add_callback_wakeup(self):
         # Make sure that add_callback from inside a running IOLoop

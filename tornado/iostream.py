@@ -30,16 +30,17 @@ from tornado import stack_context
 from tornado.util import b, bytes_type
 
 try:
-    import ssl # Python 2.6+
+    import ssl  # Python 2.6+
 except ImportError:
     ssl = None
+
 
 class IOStream(object):
     r"""A utility class to write to and read from a non-blocking socket.
 
     We support a non-blocking ``write()`` and a family of ``read_*()`` methods.
     All of the methods take callbacks (since writing and reading are
-    non-blocking and asynchronous). 
+    non-blocking and asynchronous).
 
     The socket parameter may either be connected or unconnected.  For
     server operations the socket is the result of calling socket.accept().
@@ -147,7 +148,7 @@ class IOStream(object):
             if self._read_to_buffer() == 0:
                 break
         self._add_io_state(self.io_loop.READ)
-        
+
     def read_until(self, delimiter, callback):
         """Call callback when we read the given delimiter."""
         assert not self._read_callback, "Already reading"
@@ -655,7 +656,6 @@ class SSLIOStream(IOStream):
         # until we've completed the SSL handshake (so certificates are
         # available, etc).
 
-
     def _read_from_socket(self):
         if self._ssl_accepting:
             # If the handshake hasn't finished yet, there can't be anything
@@ -685,6 +685,7 @@ class SSLIOStream(IOStream):
             self.close()
             return None
         return chunk
+
 
 def _merge_prefix(deque, size):
     """Replace the first entries in a deque of strings with a single
@@ -722,6 +723,7 @@ def _merge_prefix(deque, size):
         deque.appendleft(type(prefix[0])().join(prefix))
     if not deque:
         deque.appendleft(b(""))
+
 
 def doctests():
     import doctest

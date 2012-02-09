@@ -90,7 +90,8 @@ class Waker(interface.Waker):
         try:
             while True:
                 result = self.reader.recv(1024)
-                if not result: break
+                if not result:
+                    break
         except IOError:
             pass
 

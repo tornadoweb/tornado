@@ -107,6 +107,7 @@ class TornadoDelayedCall(object):
     def active(self):
         return self._active
 
+
 class TornadoReactor(PosixReactorBase):
     """Twisted reactor built on the Tornado IOLoop.
 
@@ -125,7 +126,7 @@ class TornadoReactor(PosixReactorBase):
         self._io_loop = io_loop
         self._readers = {}  # map of reader objects to fd
         self._writers = {}  # map of writer objects to fd
-        self._fds = {} # a map of fd to a (reader, writer) tuple
+        self._fds = {}  # a map of fd to a (reader, writer) tuple
         self._delayedCalls = {}
         PosixReactorBase.__init__(self)
 
@@ -295,6 +296,7 @@ class TornadoReactor(PosixReactorBase):
         if self._stopped:
             self.fireSystemEvent("shutdown")
 
+
 class _TestReactor(TornadoReactor):
     """Subclass of TornadoReactor for use in unittests.
 
@@ -317,7 +319,6 @@ class _TestReactor(TornadoReactor):
             interface = '127.0.0.1'
         return super(_TestReactor, self).listenUDP(
             port, protocol, interface=interface, maxPacketSize=maxPacketSize)
-
 
 
 def install(io_loop=None):

@@ -74,10 +74,12 @@ import itertools
 import sys
 import threading
 
+
 class _State(threading.local):
     def __init__(self):
         self.contexts = ()
 _state = _State()
+
 
 class StackContext(object):
     '''Establishes the given context as a StackContext that will be transferred.
@@ -116,6 +118,7 @@ class StackContext(object):
         finally:
             _state.contexts = self.old_contexts
 
+
 class ExceptionStackContext(object):
     '''Specialization of StackContext for exception handling.
 
@@ -144,6 +147,7 @@ class ExceptionStackContext(object):
         finally:
             _state.contexts = self.old_contexts
 
+
 class NullContext(object):
     '''Resets the StackContext.
 
@@ -158,8 +162,10 @@ class NullContext(object):
     def __exit__(self, type, value, traceback):
         _state.contexts = self.old_contexts
 
+
 class _StackContextWrapper(functools.partial):
     pass
+
 
 def wrap(fn):
     '''Returns a callable object that will restore the current StackContext
@@ -173,6 +179,7 @@ def wrap(fn):
         return fn
     # functools.wraps doesn't appear to work on functools.partial objects
     #@functools.wraps(fn)
+
     def wrapped(callback, contexts, *args, **kwargs):
         if contexts is _state.contexts or not contexts:
             callback(*args, **kwargs)
@@ -190,7 +197,7 @@ def wrap(fn):
                 for a, b in itertools.izip(_state.contexts, contexts))):
             # contexts have been removed or changed, so start over
             new_contexts = ([NullContext()] +
-                            [cls(arg) for (cls,arg) in contexts])
+                            [cls(arg) for (cls, arg) in contexts])
         else:
             new_contexts = [cls(arg)
                             for (cls, arg) in contexts[len(_state.contexts):]]
@@ -206,6 +213,7 @@ def wrap(fn):
         return _StackContextWrapper(wrapped, fn, _state.contexts)
     else:
         return _StackContextWrapper(fn)
+
 
 @contextlib.contextmanager
 def _nested(*managers):
@@ -241,4 +249,3 @@ def _nested(*managers):
             # the right information. Another exception may
             # have been raised and caught by an exit method
             raise exc[0], exc[1], exc[2]
-

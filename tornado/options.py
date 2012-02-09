@@ -96,7 +96,8 @@ def define(name, default=None, type=None, help=None, metavar=None,
     frame = sys._getframe(0)
     options_file = frame.f_code.co_filename
     file_name = frame.f_back.f_code.co_filename
-    if file_name == options_file: file_name = ""
+    if file_name == options_file:
+        file_name = ""
     if type is None:
         if not multiple and default is not None:
             type = default.__class__
@@ -116,7 +117,8 @@ def parse_command_line(args=None):
 
     We return all command line arguments that are not options as a list.
     """
-    if args is None: args = sys.argv
+    if args is None:
+        args = sys.argv
     remaining = []
     for i in xrange(1, len(args)):
         # All things after the last option are command line arguments
@@ -124,7 +126,7 @@ def parse_command_line(args=None):
             remaining = args[i:]
             break
         if args[i] == "--":
-            remaining = args[i+1:]
+            remaining = args[i + 1:]
             break
         arg = args[i].lstrip("-")
         name, equals, value = arg.partition("=")
@@ -170,7 +172,8 @@ def print_help(file=sys.stdout):
         by_group.setdefault(option.group_name, []).append(option)
 
     for filename, o in sorted(by_group.items()):
-        if filename: print >> file, filename
+        if filename:
+            print >> file, filename
         o.sort(key=lambda option: option.name)
         for option in o:
             prefix = option.name
@@ -228,7 +231,7 @@ class _Option(object):
                     lo, _, hi = part.partition(":")
                     lo = _parse(lo)
                     hi = _parse(hi) if hi else lo
-                    self._value.extend(range(lo, hi+1))
+                    self._value.extend(range(lo, hi + 1))
                 else:
                     self._value.append(_parse(part))
         else:
@@ -322,7 +325,7 @@ class Error(Exception):
 
 def enable_pretty_logging():
     """Turns on formatted logging output as configured.
-    
+
     This is called automatically by `parse_command_line`.
     """
     root_logger = logging.getLogger()
@@ -350,7 +353,6 @@ def enable_pretty_logging():
         root_logger.addHandler(channel)
 
 
-
 class _LogFormatter(logging.Formatter):
     def __init__(self, color, *args, **kwargs):
         logging.Formatter.__init__(self, *args, **kwargs)
@@ -368,13 +370,13 @@ class _LogFormatter(logging.Formatter):
             if (3, 0) < sys.version_info < (3, 2, 3):
                 fg_color = unicode(fg_color, "ascii")
             self._colors = {
-                logging.DEBUG: unicode(curses.tparm(fg_color, 4), # Blue
+                logging.DEBUG: unicode(curses.tparm(fg_color, 4),  # Blue
                                        "ascii"),
-                logging.INFO: unicode(curses.tparm(fg_color, 2), # Green
+                logging.INFO: unicode(curses.tparm(fg_color, 2),  # Green
                                       "ascii"),
-                logging.WARNING: unicode(curses.tparm(fg_color, 3), # Yellow
+                logging.WARNING: unicode(curses.tparm(fg_color, 3),  # Yellow
                                          "ascii"),
-                logging.ERROR: unicode(curses.tparm(fg_color, 1), # Red
+                logging.ERROR: unicode(curses.tparm(fg_color, 1),  # Red
                                        "ascii"),
             }
             self._normal = unicode(curses.tigetstr("sgr0"), "ascii")

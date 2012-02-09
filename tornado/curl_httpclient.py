@@ -32,6 +32,7 @@ from tornado import stack_context
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 
+
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(self, io_loop=None, max_clients=10,
                    max_simultaneous_connections=None):
@@ -109,15 +110,17 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
         self._timeout = self.io_loop.add_timeout(
-            time.time() + msecs/1000.0, self._handle_timeout)
+            time.time() + msecs / 1000.0, self._handle_timeout)
 
     def _handle_events(self, fd, events):
         """Called by IOLoop when there is activity on one of our
         file descriptors.
         """
         action = 0
-        if events & ioloop.IOLoop.READ: action |= pycurl.CSELECT_IN
-        if events & ioloop.IOLoop.WRITE: action |= pycurl.CSELECT_OUT
+        if events & ioloop.IOLoop.READ:
+            action |= pycurl.CSELECT_IN
+        if events & ioloop.IOLoop.WRITE:
+            action |= pycurl.CSELECT_OUT
         while True:
             try:
                 ret, num_handles = self._socket_action(fd, action)
@@ -250,7 +253,6 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         except Exception:
             self.handle_callback_exception(info["callback"])
 
-
     def handle_callback_exception(self, callback):
         self.io_loop.handle_callback_exception(callback)
 
@@ -372,7 +374,7 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     # Handle curl's cryptic options for every individual HTTP method
     if request.method in ("POST", "PUT"):
-        request_buffer =  cStringIO.StringIO(utf8(request.body))
+        request_buffer = cStringIO.StringIO(utf8(request.body))
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
         if request.method == "POST":
             def ioctl(cmd):
@@ -419,6 +421,7 @@ def _curl_header_callback(headers, header_line):
     if not header_line:
         return
     headers.parse_line(header_line)
+
 
 def _curl_debug(debug_type, debug_msg):
     debug_types = ('I', '<', '>', '<', '>')

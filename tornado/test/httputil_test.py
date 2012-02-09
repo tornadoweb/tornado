@@ -15,42 +15,42 @@ class TestUrlConcat(unittest.TestCase):
     def test_url_concat_no_query_params(self):
         url = url_concat(
                 "https://localhost/path",
-                [('y','y'), ('z','z')],
+                [('y', 'y'), ('z', 'z')],
                 )
         self.assertEqual(url, "https://localhost/path?y=y&z=z")
 
     def test_url_concat_encode_args(self):
         url = url_concat(
                 "https://localhost/path",
-                [('y','/y'), ('z','z')],
+                [('y', '/y'), ('z', 'z')],
                 )
         self.assertEqual(url, "https://localhost/path?y=%2Fy&z=z")
 
     def test_url_concat_trailing_q(self):
         url = url_concat(
                 "https://localhost/path?",
-                [('y','y'), ('z','z')],
+                [('y', 'y'), ('z', 'z')],
                 )
         self.assertEqual(url, "https://localhost/path?y=y&z=z")
 
     def test_url_concat_q_with_no_trailing_amp(self):
         url = url_concat(
                 "https://localhost/path?x",
-                [('y','y'), ('z','z')],
+                [('y', 'y'), ('z', 'z')],
                 )
         self.assertEqual(url, "https://localhost/path?x&y=y&z=z")
 
     def test_url_concat_trailing_amp(self):
         url = url_concat(
                 "https://localhost/path?x&",
-                [('y','y'), ('z','z')],
+                [('y', 'y'), ('z', 'z')],
                 )
         self.assertEqual(url, "https://localhost/path?x&y=y&z=z")
 
     def test_url_concat_mult_params(self):
         url = url_concat(
                 "https://localhost/path?a=1&b=2",
-                [('y','y'), ('z','z')],
+                [('y', 'y'), ('z', 'z')],
                 )
         self.assertEqual(url, "https://localhost/path?a=1&b=2&y=y&z=z")
 
@@ -60,6 +60,7 @@ class TestUrlConcat(unittest.TestCase):
             [],
             )
         self.assertEqual(url, "https://localhost/path?r=1&t=2")
+
 
 class MultipartFormDataTest(LogTrapTestCase):
     def test_file_upload(self):
@@ -75,7 +76,7 @@ Foo
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b("Foo"))
-        
+
     def test_unquoted_names(self):
         # quotes are optional unless special characters are present
         data = b("""\
@@ -90,7 +91,7 @@ Foo
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b("Foo"))
-        
+
     def test_special_filenames(self):
         filenames = ['a;b.txt',
                      'a"b.txt',

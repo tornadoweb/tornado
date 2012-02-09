@@ -28,8 +28,10 @@ import sys
 import urllib
 
 # Python3 compatibility:  On python2.5, introduce the bytes alias from 2.6
-try: bytes
-except Exception: bytes = str
+try:
+    bytes
+except Exception:
+    bytes = str
 
 try:
     from urlparse import parse_qs  # Python 2.6+
@@ -64,6 +66,8 @@ except Exception:
 
 _XHTML_ESCAPE_RE = re.compile('[&<>"]')
 _XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}
+
+
 def xhtml_escape(value):
     """Escapes a string so it is valid within XML or XHTML."""
     return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)],
@@ -145,13 +149,14 @@ else:
         result = parse_qs(qs, keep_blank_values, strict_parsing,
                           encoding='latin1', errors='strict')
         encoded = {}
-        for k,v in result.iteritems():
+        for k, v in result.iteritems():
             encoded[k] = [i.encode('latin1') for i in v]
         return encoded
-        
 
 
 _UTF8_TYPES = (bytes, type(None))
+
+
 def utf8(value):
     """Converts a string argument to a byte string.
 
@@ -164,6 +169,8 @@ def utf8(value):
     return value.encode("utf-8")
 
 _TO_UNICODE_TYPES = (unicode, type(None))
+
+
 def to_unicode(value):
     """Converts a string argument to a unicode string.
 
@@ -187,6 +194,8 @@ else:
     native_str = utf8
 
 _BASESTRING_TYPES = (basestring, type(None))
+
+
 def to_basestring(value):
     """Converts a string argument to a subclass of basestring.
 
@@ -201,13 +210,14 @@ def to_basestring(value):
     assert isinstance(value, bytes)
     return value.decode("utf-8")
 
+
 def recursive_unicode(obj):
     """Walks a simple data structure, converting byte strings to unicode.
 
     Supports lists, tuples, and dictionaries.
     """
     if isinstance(obj, dict):
-        return dict((recursive_unicode(k), recursive_unicode(v)) for (k,v) in obj.iteritems())
+        return dict((recursive_unicode(k), recursive_unicode(v)) for (k, v) in obj.iteritems())
     elif isinstance(obj, list):
         return list(recursive_unicode(i) for i in obj)
     elif isinstance(obj, tuple):
@@ -217,7 +227,7 @@ def recursive_unicode(obj):
     else:
         return obj
 
-# I originally used the regex from 
+# I originally used the regex from
 # http://daringfireball.net/2010/07/improved_regex_for_matching_urls
 # but it gets all exponential on certain patterns (such as too many trailing
 # dots), causing the regex matcher to never return.

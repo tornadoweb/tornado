@@ -13,6 +13,7 @@ import re
 import socket
 import sys
 
+
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
     def __init__(self):
@@ -25,6 +26,7 @@ class CookieTestRequestHandler(RequestHandler):
 
     def set_cookie(self, name, value, expires_days=None):
         self._cookies[name] = value
+
 
 class SecureCookieTest(LogTrapTestCase):
     def test_round_trip(self):
@@ -57,6 +59,7 @@ class SecureCookieTest(LogTrapTestCase):
         # it gets rejected
         assert handler.get_secure_cookie('foo') is None
 
+
 class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         class SetCookieHandler(RequestHandler):
@@ -83,7 +86,6 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
                 self.set_cookie("equals", "a=b")
                 self.set_cookie("semicolon", "a;b")
                 self.set_cookie("quote", 'a"b')
-
 
         return Application([
                 ("/set", SetCookieHandler),
@@ -137,6 +139,7 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
             response = self.fetch("/get", headers={"Cookie": header})
             self.assertEqual(response.body, utf8(expected))
 
+
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
         self.login_url = login_url
@@ -148,6 +151,7 @@ class AuthRedirectRequestHandler(RequestHandler):
     def get(self):
         # we'll never actually get here because the test doesn't follow redirects
         self.send_error(500)
+
 
 class AuthRedirectTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
@@ -184,6 +188,7 @@ class ConnectionCloseHandler(RequestHandler):
     def on_connection_close(self):
         self.test.on_connection_close()
 
+
 class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([('/', ConnectionCloseHandler, dict(test=self))])
@@ -203,6 +208,7 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
         logging.info('connection closed')
         self.stop()
 
+
 class EchoHandler(RequestHandler):
     def get(self, path):
         # Type checks: web.py interfaces convert argument values to
@@ -219,6 +225,7 @@ class EchoHandler(RequestHandler):
         self.write(dict(path=path,
                         args=recursive_unicode(self.request.arguments)))
 
+
 class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([("/(.*)", EchoHandler)])
@@ -233,8 +240,9 @@ class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_path_encoding(self):
         # Path components and query arguments should be decoded the same way
         self.assertEqual(json_decode(self.fetch('/%C3%A9?arg=%C3%A9').body),
-                         {u"path":u"\u00e9",
+                         {u"path": u"\u00e9",
                           u"args": {u"arg": [u"\u00e9"]}})
+
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
@@ -271,6 +279,7 @@ class TypeCheckHandler(RequestHandler):
             self.errors[name] = "expected %s, got %s" % (expected_type,
                                                          actual_type)
 
+
 class DecodeArgHandler(RequestHandler):
     def decode_argument(self, value, name=None):
         assert type(value) == bytes_type, repr(value)
@@ -291,17 +300,21 @@ class DecodeArgHandler(RequestHandler):
                     'query': describe(self.get_argument("foo")),
                     })
 
+
 class LinkifyHandler(RequestHandler):
     def get(self):
         self.render("linkify.html", message="http://example.com")
 
+
 class UIModuleResourceHandler(RequestHandler):
     def get(self):
-        self.render("page.html", entries=[1,2])
+        self.render("page.html", entries=[1, 2])
+
 
 class OptionalPathHandler(RequestHandler):
     def get(self, path):
         self.write({"path": path})
+
 
 class FlowControlHandler(RequestHandler):
     # These writes are too small to demonstrate real flow control,
@@ -319,12 +332,14 @@ class FlowControlHandler(RequestHandler):
         self.write("3")
         self.finish()
 
+
 class MultiHeaderHandler(RequestHandler):
     def get(self):
         self.set_header("x-overwrite", "1")
         self.set_header("x-overwrite", 2)
         self.add_header("x-multi", 3)
         self.add_header("x-multi", "4")
+
 
 class RedirectHandler(RequestHandler):
     def get(self):
@@ -460,14 +475,14 @@ class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
             def get(self):
                 if self.get_argument("status", None):
                     raise HTTPError(int(self.get_argument("status")))
-                1/0
+                1 / 0
 
         class WriteErrorHandler(RequestHandler):
             def get(self):
                 if self.get_argument("status", None):
                     self.send_error(int(self.get_argument("status")))
                 else:
-                    1/0
+                    1 / 0
 
             def write_error(self, status_code, **kwargs):
                 self.set_header("Content-Type", "text/plain")
@@ -481,7 +496,7 @@ class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
                 if self.get_argument("status", None):
                     self.send_error(int(self.get_argument("status")))
                 else:
-                    1/0
+                    1 / 0
 
             def get_error_html(self, status_code, **kwargs):
                 self.set_header("Content-Type", "text/plain")
@@ -492,11 +507,10 @@ class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
 
         class FailedWriteErrorHandler(RequestHandler):
             def get(self):
-                1/0
+                1 / 0
 
             def write_error(self, status_code, **kwargs):
                 raise Exception("exception in write_error")
-
 
         return Application([
                 url("/default", DefaultHandler),
@@ -537,6 +551,7 @@ class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.code, 500)
         self.assertEqual(b(""), response.body)
 
+
 class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         class StaticUrlHandler(RequestHandler):
@@ -545,6 +560,7 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
 
         class AbsoluteStaticUrlHandler(RequestHandler):
             include_host = True
+
             def get(self, path):
                 self.write(self.static_url(path))
 
@@ -598,6 +614,7 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         path = "/override_static_url/robots.txt?include_host=%s"
         response = self.fetch(path % int(include_host))
         self.assertEqual(response.body, utf8(str(True)))
+
 
 class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):

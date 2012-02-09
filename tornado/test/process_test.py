@@ -18,6 +18,8 @@ from tornado.web import RequestHandler, Application
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
 # Logging is tricky here so you may want to replace LogTrapTestCase
 # with unittest.TestCase when debugging.
+
+
 class ProcessTest(LogTrapTestCase):
     def get_app(self):
         class ProcessHandler(RequestHandler):
@@ -48,6 +50,7 @@ class ProcessTest(LogTrapTestCase):
     def test_multi_process(self):
         self.assertFalse(IOLoop.initialized())
         port = get_unused_port()
+
         def get_url(path):
             return "http://127.0.0.1:%d%s" % (port, path)
         sockets = bind_sockets(port, "127.0.0.1")
@@ -60,7 +63,8 @@ class ProcessTest(LogTrapTestCase):
             # finished with status 0
             self.assertEqual(e.code, 0)
             self.assertTrue(task_id() is None)
-            for sock in sockets: sock.close()
+            for sock in sockets:
+                sock.close()
             signal.alarm(0)
             return
         signal.alarm(5)  # child process
@@ -74,7 +78,8 @@ class ProcessTest(LogTrapTestCase):
             elif id == 2:
                 signal.alarm(5)
                 self.assertEqual(id, task_id())
-                for sock in sockets: sock.close()
+                for sock in sockets:
+                    sock.close()
                 # Always use SimpleAsyncHTTPClient here; the curl
                 # version appears to get confused sometimes if the
                 # connection gets closed before it's had a chance to
@@ -118,7 +123,7 @@ class ProcessTest(LogTrapTestCase):
         except Exception:
             logging.error("exception in child process %d", id, exc_info=True)
             raise
-            
+
 
 if os.name != 'posix' or sys.platform == 'cygwin':
     # All sorts of unixisms here

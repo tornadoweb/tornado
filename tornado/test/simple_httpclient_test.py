@@ -12,6 +12,7 @@ from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
 
+
 class SimpleHTTPClientCommonTestCase(HTTPClientCommonTestCase):
     def get_http_client(self):
         client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
@@ -22,6 +23,7 @@ class SimpleHTTPClientCommonTestCase(HTTPClientCommonTestCase):
 # Remove the base class from our namespace so the unittest module doesn't
 # try to run it again.
 del HTTPClientCommonTestCase
+
 
 class TriggerHandler(RequestHandler):
     def initialize(self, queue, wake_callback):
@@ -35,19 +37,23 @@ class TriggerHandler(RequestHandler):
         if self.get_argument("wake", "true") == "true":
             self.wake_callback()
 
+
 class HangHandler(RequestHandler):
     @asynchronous
     def get(self):
         pass
+
 
 class ContentLengthHandler(RequestHandler):
     def get(self):
         self.set_header("Content-Length", self.get_argument("value"))
         self.write("ok")
 
+
 class HeadHandler(RequestHandler):
     def head(self):
         self.set_header("Content-Length", "7")
+
 
 class NoContentHandler(RequestHandler):
     def get(self):
@@ -55,11 +61,13 @@ class NoContentHandler(RequestHandler):
             self.set_header("Content-Length", "7")
         self.set_status(204)
 
+
 class SeeOther303PostHandler(RequestHandler):
     def post(self):
         assert self.request.body == b("blah")
         self.set_header("Location", "/303_get")
         self.set_status(303)
+
 
 class SeeOther303GetHandler(RequestHandler):
     def get(self):

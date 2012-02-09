@@ -8,9 +8,11 @@ from tornado.web import RequestHandler, Application
 import socket
 import time
 
+
 class HelloHandler(RequestHandler):
     def get(self):
         self.write("Hello")
+
 
 class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
@@ -21,9 +23,11 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         [listener] = netutil.bind_sockets(port, '127.0.0.1',
                                           family=socket.AF_INET)
         streams = [None, None]
+
         def accept_callback(connection, address):
             streams[0] = IOStream(connection, io_loop=self.io_loop, **kwargs)
             self.stop()
+
         def connect_callback():
             streams[1] = client_stream
             self.stop()
@@ -69,7 +73,7 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         self.wait()
         # As a side effect, the stream is now listening for connection
         # close (if it wasn't already), but is not listening for writes
-        self.assertEqual(server._state, IOLoop.READ|IOLoop.ERROR)
+        self.assertEqual(server._state, IOLoop.READ | IOLoop.ERROR)
         server.close()
         client.close()
 
@@ -80,6 +84,7 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         port = get_unused_port()
         stream = IOStream(socket.socket(), self.io_loop)
         self.connect_called = False
+
         def connect_callback():
             self.connect_called = True
         stream.set_close_callback(self.stop)
@@ -102,7 +107,7 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         s.connect(("localhost", self.get_http_port()))
         stream = IOStream(s, io_loop=self.io_loop)
         stream.write(b("GET / HTTP/1.0\r\n\r\n"))
-        
+
         stream.read_until_close(self.stop)
         data = self.wait()
         self.assertTrue(data.startswith(b("HTTP/1.0 200")))
@@ -113,9 +118,11 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         try:
             chunks = []
             final_called = []
+
             def streaming_callback(data):
                 chunks.append(data)
                 self.stop()
+
             def final_callback(data):
                 assert not data
                 final_called.append(True)
@@ -140,6 +147,7 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         server, client = self.make_iostream_pair()
         try:
             chunks = []
+
             def callback(data):
                 chunks.append(data)
                 self.stop()
@@ -166,10 +174,12 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
             client.set_close_callback(self.stop)
             server.write(b("12"))
             chunks = []
+
             def callback1(data):
                 chunks.append(data)
                 client.read_bytes(1, callback2)
                 server.close()
+
             def callback2(data):
                 chunks.append(data)
             client.read_bytes(1, callback1)

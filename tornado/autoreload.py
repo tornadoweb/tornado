@@ -44,6 +44,7 @@ try:
 except ImportError:
     signal = None
 
+
 def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
 
@@ -56,6 +57,7 @@ def start(io_loop=None, check_time=500):
     callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
     scheduler.start()
+
 
 def wait():
     """Wait for a watched file to change, then restart the process.
@@ -70,6 +72,7 @@ def wait():
 
 _watched_files = set()
 
+
 def watch(filename):
     """Add a file to the watch list.
 
@@ -78,6 +81,7 @@ def watch(filename):
     _watched_files.add(filename)
 
 _reload_hooks = []
+
 
 def add_reload_hook(fn):
     """Add a function to be called before reloading the process.
@@ -89,6 +93,7 @@ def add_reload_hook(fn):
     """
     _reload_hooks.append(fn)
 
+
 def _close_all_fds(io_loop):
     for fd in io_loop._handlers.keys():
         try:
@@ -97,6 +102,7 @@ def _close_all_fds(io_loop):
             pass
 
 _reload_attempted = False
+
 
 def _reload_on_update(modify_times):
     if _reload_attempted:
@@ -112,14 +118,17 @@ def _reload_on_update(modify_times):
         # in the standard library), and occasionally this can cause strange
         # failures in getattr.  Just ignore anything that's not an ordinary
         # module.
-        if not isinstance(module, types.ModuleType): continue
+        if not isinstance(module, types.ModuleType):
+            continue
         path = getattr(module, "__file__", None)
-        if not path: continue
+        if not path:
+            continue
         if path.endswith(".pyc") or path.endswith(".pyo"):
             path = path[:-1]
         _check_file(modify_times, path)
     for path in _watched_files:
         _check_file(modify_times, path)
+
 
 def _check_file(modify_times, path):
     try:
@@ -132,6 +141,7 @@ def _check_file(modify_times, path):
     if modify_times[path] != modified:
         logging.info("%s modified; restarting server", path)
         _reload()
+
 
 def _reload():
     global _reload_attempted
@@ -173,9 +183,11 @@ Usage:
   python -m tornado.autoreload -m module.to.run [args...]
   python -m tornado.autoreload path/to/script.py [args...]
 """
+
+
 def main():
     """Command-line wrapper to re-run a script whenever its source changes.
-    
+
     Scripts may be specified by filename or module name::
 
         python -m tornado.autoreload -m tornado.test.runtests
@@ -229,7 +241,7 @@ def main():
         watch(pkgutil.get_loader(module).get_filename())
 
     wait()
-    
+
 
 if __name__ == "__main__":
     # If this module is run with "python -m tornado.autoreload", the current

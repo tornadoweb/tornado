@@ -40,7 +40,9 @@ except ImportError:
     fcntl = None
     twisted = None
     IReadDescriptor = IWriteDescriptor = None
-    def implements(f): pass
+
+    def implements(f):
+        pass
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
@@ -49,6 +51,7 @@ from tornado.testing import get_unused_port
 from tornado.util import import_object
 from tornado.web import RequestHandler, Application
 
+
 class ReactorTestCase(unittest.TestCase):
     def setUp(self):
         self._io_loop = IOLoop()
@@ -56,6 +59,7 @@ class ReactorTestCase(unittest.TestCase):
 
     def tearDown(self):
         self._io_loop.close(all_fds=True)
+
 
 class ReactorWhenRunningTest(ReactorTestCase):
     def test_whenRunning(self):
@@ -74,6 +78,7 @@ class ReactorWhenRunningTest(ReactorTestCase):
     def anotherWhenRunningCallback(self):
         self._anotherWhenRunningCalled = True
 
+
 class ReactorCallLaterTest(ReactorTestCase):
     def test_callLater(self):
         self._laterCalled = False
@@ -90,6 +95,7 @@ class ReactorCallLaterTest(ReactorTestCase):
         self._laterCalled = True
         self._called = self._reactor.seconds()
         self._reactor.stop()
+
 
 class ReactorTwoCallLaterTest(ReactorTestCase):
     def test_callLater(self):
@@ -118,6 +124,7 @@ class ReactorTwoCallLaterTest(ReactorTestCase):
         self._called2 = self._reactor.seconds()
         self._reactor.stop()
 
+
 class ReactorCallFromThreadTest(ReactorTestCase):
     def setUp(self):
         super(ReactorCallFromThreadTest, self).setUp()
@@ -145,6 +152,7 @@ class ReactorCallFromThreadTest(ReactorTestCase):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
 
+
 class ReactorCallInThread(ReactorTestCase):
     def setUp(self):
         super(ReactorCallInThread, self).setUp()
@@ -161,6 +169,7 @@ class ReactorCallInThread(ReactorTestCase):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
 
+
 class Reader:
     implements(IReadDescriptor)
 
@@ -168,7 +177,8 @@ class Reader:
         self._fd = fd
         self._callback = callback
 
-    def logPrefix(self): return "Reader"
+    def logPrefix(self):
+        return "Reader"
 
     def close(self):
         self._fd.close()
@@ -182,6 +192,7 @@ class Reader:
     def doRead(self):
         self._callback(self._fd)
 
+
 class Writer:
     implements(IWriteDescriptor)
 
@@ -189,7 +200,8 @@ class Writer:
         self._fd = fd
         self._callback = callback
 
-    def logPrefix(self): return "Writer"
+    def logPrefix(self):
+        return "Writer"
 
     def close(self):
         self._fd.close()
@@ -202,6 +214,7 @@ class Writer:
 
     def doWrite(self):
         self._callback(self._fd)
+
 
 class ReactorReaderWriterTest(ReactorTestCase):
     def _set_nonblocking(self, fd):
@@ -229,9 +242,11 @@ class ReactorReaderWriterTest(ReactorTestCase):
         reads it, check the value and ends the test.
         """
         self.shouldWrite = True
+
         def checkReadInput(fd):
             self.assertEquals(fd.read(), 'x')
             self._reactor.stop()
+
         def writeOnce(fd):
             if self.shouldWrite:
                 self.shouldWrite = False
@@ -285,6 +300,8 @@ class ReactorReaderWriterTest(ReactorTestCase):
 
 # Test various combinations of twisted and tornado http servers,
 # http clients, and event loop interfaces.
+
+
 class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.io_loop = IOLoop()
@@ -297,6 +314,7 @@ class CompatibilityTests(unittest.TestCase):
     def start_twisted_server(self):
         class HelloResource(Resource):
             isLeaf = True
+
             def render_GET(self, request):
                 return "Hello from twisted!"
         site = Site(HelloResource())
@@ -325,6 +343,7 @@ class CompatibilityTests(unittest.TestCase):
     def tornado_fetch(self, url, runner):
         responses = []
         client = AsyncHTTPClient(self.io_loop)
+
         def callback(response):
             responses.append(response)
             self.stop_loop()
@@ -339,18 +358,23 @@ class CompatibilityTests(unittest.TestCase):
         chunks = []
         client = Agent(self.reactor)
         d = client.request('GET', url)
+
         class Accumulator(Protocol):
             def __init__(self, finished):
                 self.finished = finished
+
             def dataReceived(self, data):
                 chunks.append(data)
+
             def connectionLost(self, reason):
                 self.finished.callback(None)
+
         def callback(response):
             finished = Deferred()
             response.deliverBody(Accumulator(finished))
             return finished
         d.addCallback(callback)
+
         def shutdown(ignored):
             self.stop_loop()
         d.addBoth(shutdown)
@@ -448,9 +472,11 @@ else:
                 # The test_func may be defined in a mixin, so clobber
                 # it instead of delattr()
                 setattr(test_class, test_func, lambda self: None)
+
         def make_test_subclass(test_class):
             class TornadoTest(test_class):
                 _reactors = ["tornado.platform.twisted._TestReactor"]
+
                 def unbuildReactor(self, reactor):
                     test_class.unbuildReactor(self, reactor)
                     # Clean up file descriptors (especially epoll/kqueue

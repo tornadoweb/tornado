@@ -10,6 +10,7 @@ import functools
 import logging
 import unittest
 
+
 class TestRequestHandler(RequestHandler):
     def __init__(self, app, request, io_loop):
         super(TestRequestHandler, self).__init__(app, request)
@@ -38,6 +39,7 @@ class TestRequestHandler(RequestHandler):
         else:
             return 'unexpected failure'
 
+
 class HTTPStackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([('/', TestRequestHandler,
@@ -52,6 +54,7 @@ class HTTPStackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
     def handle_response(self, response):
         self.response = response
         self.stop()
+
 
 class StackContextTest(AsyncTestCase, LogTrapTestCase):
     def setUp(self):
@@ -73,10 +76,12 @@ class StackContextTest(AsyncTestCase, LogTrapTestCase):
             with StackContext(functools.partial(self.context, 'library')):
                 self.io_loop.add_callback(
                   functools.partial(library_inner_callback, callback))
+
         def library_inner_callback(callback):
             self.assertEqual(self.active_contexts[-2:],
                              ['application', 'library'])
             callback()
+
         def final_callback():
             # implementation detail:  the full context stack at this point
             # is ['application', 'library', 'application'].  The 'library'

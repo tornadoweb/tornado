@@ -28,11 +28,12 @@ except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
 
 try:
-    import ssl # python 2.6+
+    import ssl  # python 2.6+
 except ImportError:
     ssl = None
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
+
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -119,7 +120,6 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self._process_queue()
 
 
-
 class _HTTPConnection(object):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
 
@@ -198,7 +198,7 @@ class _HTTPConnection(object):
                 # compatibility with servers configured for TLSv1 only,
                 # but nearly all servers support SSLv3:
                 # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
-                if sys.version_info >= (2,7):
+                if sys.version_info >= (2, 7):
                     ssl_options["ciphers"] = "DEFAULT:!SSLv2"
                 else:
                     # This is really only necessary for pre-1.0 versions
@@ -367,7 +367,7 @@ class _HTTPConnection(object):
             self.headers.get("Content-Encoding") == "gzip"):
             # Magic parameter makes zlib module understand gzip header
             # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
-            self._decompressor = zlib.decompressobj(16+zlib.MAX_WBITS)
+            self._decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
             self.stream.read_until(b("\r\n"), self._on_chunk_length)
@@ -417,7 +417,7 @@ class _HTTPConnection(object):
                 self.request.streaming_callback(data)
             buffer = BytesIO()
         else:
-            buffer = BytesIO(data) # TODO: don't require one big string?
+            buffer = BytesIO(data)  # TODO: don't require one big string?
         response = HTTPResponse(original_request,
                                 self.code, headers=self.headers,
                                 request_time=time.time() - self.start_time,
@@ -456,6 +456,7 @@ class _HTTPConnection(object):
 class CertificateError(ValueError):
     pass
 
+
 def _dnsname_to_pat(dn):
     pats = []
     for frag in dn.split(r'.'):
@@ -468,6 +469,7 @@ def _dnsname_to_pat(dn):
             frag = re.escape(frag)
             pats.append(frag.replace(r'\*', '[^.]*'))
     return re.compile(r'\A' + r'\.'.join(pats) + r'\Z', re.IGNORECASE)
+
 
 def match_hostname(cert, hostname):
     """Verify that *cert* (in decoded format as returned by

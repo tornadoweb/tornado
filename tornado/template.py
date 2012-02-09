@@ -135,7 +135,7 @@ with ``{# ... #}``.
 
 ``{% for *var* in *expr* %}...{% end %}``
     Same as the python ``for`` statement.
-    
+
 ``{% from *x* import *y* %}``
     Same as the python ``import`` statement.
 
@@ -189,6 +189,7 @@ from tornado.util import bytes_type, ObjectDict
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()
 
+
 class Template(object):
     """A compiled template.
 
@@ -217,7 +218,7 @@ class Template(object):
             # the module name used in __name__ below.
             self.compiled = compile(
                 escape.to_unicode(self.code),
-                "%s.generated.py" % self.name.replace('.','_'),
+                "%s.generated.py" % self.name.replace('.', '_'),
                 "exec")
         except Exception:
             formatted_code = _format_code(self.code).rstrip()
@@ -326,6 +327,7 @@ class BaseLoader(object):
     def _create_template(self, name):
         raise NotImplementedError()
 
+
 class Loader(BaseLoader):
     """A template loader that loads from a single root directory.
 
@@ -402,7 +404,6 @@ class _File(_Node):
 
     def each_child(self):
         return (self.body,)
-
 
 
 class _ChunkList(_Node):
@@ -531,10 +532,12 @@ class _Expression(_Node):
                               writer.current_template.autoescape, self.line)
         writer.write_line("_append(_tmp)", self.line)
 
+
 class _Module(_Expression):
     def __init__(self, expression, line):
         super(_Module, self).__init__("_modules." + expression, line,
                                       raw=True)
+
 
 class _Text(_Node):
     def __init__(self, value, line):
@@ -608,7 +611,7 @@ class _CodeWriter(object):
             ancestors = ["%s:%d" % (tmpl.name, lineno)
                          for (tmpl, lineno) in self.include_stack]
             line_comment += ' (via %s)' % ', '.join(reversed(ancestors))
-        print >> self.file, "    "*indent + line + line_comment
+        print >> self.file, "    " * indent + line + line_comment
 
 
 class _TemplateReader(object):
@@ -651,9 +654,12 @@ class _TemplateReader(object):
         if type(key) is slice:
             size = len(self)
             start, stop, step = key.indices(size)
-            if start is None: start = self.pos
-            else: start += self.pos
-            if stop is not None: stop += self.pos
+            if start is None:
+                start = self.pos
+            else:
+                start += self.pos
+            if stop is not None:
+                stop += self.pos
             return self.text[slice(start, stop, step)]
         elif key < 0:
             return self.text[key]
@@ -796,7 +802,8 @@ def _parse(reader, template, in_block=None):
                 block = _Statement(suffix, line)
             elif operator == "autoescape":
                 fn = suffix.strip()
-                if fn == "None": fn = None
+                if fn == "None":
+                    fn = None
                 template.autoescape = fn
                 continue
             elif operator == "raw":

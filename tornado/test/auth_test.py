@@ -11,6 +11,7 @@ from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous
 
+
 class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
     def initialize(self, test):
         self._OPENID_ENDPOINT = test.get_url('/openid/server/authenticate')
@@ -27,10 +28,12 @@ class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
         assert user is not None
         self.finish(user)
 
+
 class OpenIdServerAuthenticateHandler(RequestHandler):
     def post(self):
         assert self.get_argument('openid.mode') == 'check_authentication'
         self.write('is_valid:true')
+
 
 class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
     def initialize(self, test, version):
@@ -58,6 +61,7 @@ class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
         assert access_token == dict(key=b('uiop'), secret=b('5678')), access_token
         callback(dict(email='foo@example.com'))
 
+
 class OAuth1ClientRequestParametersHandler(RequestHandler, OAuthMixin):
     def initialize(self, version):
         self._OAUTH_VERSION = version
@@ -70,16 +74,20 @@ class OAuth1ClientRequestParametersHandler(RequestHandler, OAuthMixin):
             'http://www.example.com/api/asdf',
             dict(key='uiop', secret='5678'),
             parameters=dict(foo='bar'))
-        import urllib; urllib.urlencode(params)
+        import urllib
+        urllib.urlencode(params)
         self.write(params)
+
 
 class OAuth1ServerRequestTokenHandler(RequestHandler):
     def get(self):
         self.write('oauth_token=zxcv&oauth_token_secret=1234')
 
+
 class OAuth1ServerAccessTokenHandler(RequestHandler):
     def get(self):
         self.write('oauth_token=uiop&oauth_token_secret=5678')
+
 
 class OAuth2ClientLoginHandler(RequestHandler, OAuth2Mixin):
     def initialize(self, test):
@@ -139,7 +147,7 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_oauth10_get_user(self):
         response = self.fetch(
             '/oauth10/client/login?oauth_token=zxcv',
-            headers={'Cookie':'_oauth_request_token=enhjdg==|MTIzNA=='})
+            headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['email'], 'foo@example.com')
@@ -167,7 +175,7 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_oauth10a_get_user(self):
         response = self.fetch(
             '/oauth10a/client/login?oauth_token=zxcv',
-            headers={'Cookie':'_oauth_request_token=enhjdg==|MTIzNA=='})
+            headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['email'], 'foo@example.com')
