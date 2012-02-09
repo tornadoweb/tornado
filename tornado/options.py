@@ -55,8 +55,10 @@ import logging
 import logging.handlers
 import re
 import sys
+import textwrap
 import time
 
+from collections import defaultdict
 from tornado.escape import _unicode
 
 # For pretty log messages, if available
@@ -160,24 +162,63 @@ def parse_config_file(path):
             options[name].set(config[name])
 
 
+def _console_width(default=80):
+    """Determine the current console width."""
+    import termios, fcntl, struct
+
+    if not sys.stdout.isatty():
+        return default
+    if sys.platform.startswith('win'):
+        return default
+
+    s = struct.pack('HHHH', 0, 0, 0, 0)
+    fd_stdout = sys.stdout.fileno()
+    size = fcntl.ioctl(fd_stdout, termios.TIOCGWINSZ, s)
+    height, width = struct.unpack('HHHH', size)[:2]
+    return width or default
+
+
 def print_help(file=sys.stdout):
     """Prints all the command line options to stdout."""
     print >> file, "Usage: %s [OPTIONS]" % sys.argv[0]
     print >> file, ""
     print >> file, "Options:"
-    by_group = {}
-    for option in options.itervalues():
-        by_group.setdefault(option.group_name, []).append(option)
 
-    for filename, o in sorted(by_group.items()):
-        if filename: print >> file, filename
-        o.sort(key=lambda option: option.name)
-        for option in o:
-            prefix = option.name
+    # Group options by their group_name attribute.
+    groups = defaultdict(list)
+    for option in options.itervalues():
+        groups[option.group_name].append(option)
+
+    # The code below attempts to start printing an option's help text starting
+    # at help_position. If the option's prefix exceeds that position, the help
+    # text is moved to the following line instead. We print up to help_width
+    # characters of help text per line, intelligently wrapping longer strings.
+    help_position = 30
+    help_width = _console_width() - help_position
+
+    for group, o in sorted(groups.items()):
+        if group: print >> file, group
+        for option in sorted(o, key=lambda option: option.name):
+            prefix = "  --%s" % option.name
             if option.metavar:
                 prefix += "=" + option.metavar
-            print >> file, "  --%-30s %s" % (prefix, option.help or "")
-    print >> file
+
+            if len(prefix) > help_position - 2: # -2 for spacing
+                text = "%s\n" % prefix
+                indent = help_position
+            else:
+                text = "%-*s" % (help_position, prefix)
+                indent = 0
+
+            if option.help:
+                lines = textwrap.wrap(option.help, help_width)
+                text += "%*s%s\n" % (indent, "", lines[0])
+                for line in lines[1:]:
+                    text += "%*s%s\n" % (help_position, "", line)
+            elif text[-1] != "\n":
+                result.append("\n")
+            print >> file, text,
+        print >> file
 
 
 class _Options(dict):
