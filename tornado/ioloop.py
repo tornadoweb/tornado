@@ -633,7 +633,7 @@ elif hasattr(select, "kqueue"):
 else:
     try:
         # Linux systems with our C module installed
-        import epoll
+        from tornado import epoll
         _poll = _EPoll
     except Exception:
         # All other systems
