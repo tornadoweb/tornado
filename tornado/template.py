@@ -172,7 +172,7 @@ with ``{# ... #}``.
     Same as the python ``while`` statement.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, with_statement
 
 import cStringIO
 import datetime

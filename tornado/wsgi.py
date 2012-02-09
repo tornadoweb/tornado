@@ -29,6 +29,8 @@ provides WSGI support in two ways:
   and Tornado handlers in a single server.
 """
 
+from __future__ import absolute_import, with_statement
+
 import Cookie
 import cgi
 import httplib

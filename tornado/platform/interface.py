@@ -21,6 +21,8 @@ for other tornado.platform modules.  Most code should import the appropriate
 implementation from `tornado.platform.auto`.
 """
 
+from __future__ import absolute_import, with_statement
+
 def set_close_exec(fd):
     """Sets the close-on-exec bit (``FD_CLOEXEC``)for a file descriptor."""
     raise NotImplementedError()

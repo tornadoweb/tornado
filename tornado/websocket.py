@@ -16,6 +16,8 @@ communication between the browser and server.
    overriding `WebSocketHandler.allow_draft76` (see that method's
    documentation for caveats).
 """
+
+from __future__ import absolute_import, with_statement
 # Author: Jacob Kristhammar, 2010
 
 import array

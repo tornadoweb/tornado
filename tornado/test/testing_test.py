@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+
+from __future__ import absolute_import, with_statement
 import unittest
 from tornado.testing import AsyncTestCase, LogTrapTestCase
 

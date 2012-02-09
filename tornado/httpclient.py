@@ -29,6 +29,8 @@ you use a recent version of ``libcurl`` and ``pycurl``.  Currently the minimum
 supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
 """
 
+from __future__ import absolute_import, with_statement
+
 import calendar
 import email.utils
 import httplib

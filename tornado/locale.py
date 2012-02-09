@@ -39,6 +39,8 @@ supported by gettext and related tools).  If neither method is called,
 the locale.translate method will simply return the original string.
 """
 
+from __future__ import absolute_import, with_statement
+
 import csv
 import datetime
 import logging

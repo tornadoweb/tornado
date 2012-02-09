@@ -1,3 +1,4 @@
+from __future__ import absolute_import, with_statement
 from tornado.test.httpclient_test import HTTPClientCommonTestCase
 
 try:

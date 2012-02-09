@@ -24,6 +24,8 @@ This module also defines the `HTTPRequest` class which is exposed via
 `tornado.web.RequestHandler.request`.
 """
 
+from __future__ import absolute_import, with_statement
+
 import Cookie
 import logging
 import socket

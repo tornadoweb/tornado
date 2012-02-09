@@ -62,7 +62,7 @@ it was called with one argument, the result is that argument.  If it was
 called with more than one argument or any keyword arguments, the result
 is an `Arguments` object, which is a named tuple ``(args, kwargs)``.
 """
-from __future__ import with_statement
+from __future__ import absolute_import, with_statement
 
 import functools
 import operator

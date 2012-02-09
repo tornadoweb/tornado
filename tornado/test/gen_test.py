@@ -1,3 +1,4 @@
+from __future__ import absolute_import, with_statement
 import functools
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient

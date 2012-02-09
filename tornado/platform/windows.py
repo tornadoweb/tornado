@@ -1,6 +1,8 @@
 # NOTE: win32 support is currently experimental, and not recommended
 # for production use.
 
+
+from __future__ import absolute_import, with_statement
 import ctypes
 import ctypes.wintypes
 import socket

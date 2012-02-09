@@ -16,7 +16,7 @@
 
 """A utility class to write to and read from a non-blocking socket."""
 
-from __future__ import with_statement
+from __future__ import absolute_import, with_statement
 
 import collections
 import errno

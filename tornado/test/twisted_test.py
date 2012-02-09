@@ -17,6 +17,8 @@
 Unittest for the twisted-style reactor.
 """
 
+from __future__ import absolute_import, with_statement
+
 import os
 import thread
 import threading

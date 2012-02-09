@@ -16,6 +16,8 @@
 
 """Utilities for working with multiple processes."""
 
+from __future__ import absolute_import, with_statement
+
 import errno
 import logging
 import os

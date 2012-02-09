@@ -18,7 +18,7 @@ inheritance.  See the docstrings for each class/function below for more
 information.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, with_statement
 
 from cStringIO import StringIO
 try:

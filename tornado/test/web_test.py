@@ -1,3 +1,4 @@
+from __future__ import absolute_import, with_statement
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
 from tornado.iostream import IOStream
 from tornado.template import DictLoader

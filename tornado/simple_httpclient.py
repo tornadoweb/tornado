@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from __future__ import with_statement
+from __future__ import absolute_import, with_statement
 
 from tornado.escape import utf8, _unicode, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main

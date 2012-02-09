@@ -16,6 +16,8 @@
 
 """Posix implementations of platform-specific functionality."""
 
+from __future__ import absolute_import, with_statement
+
 import fcntl
 import os
 
