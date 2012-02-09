@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders
 from tornado.escape import utf8
 from tornado.testing import LogTrapTestCase

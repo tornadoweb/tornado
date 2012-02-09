@@ -16,7 +16,7 @@
 
 """The Tornado web server and tools."""
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 
 # version is a human-readable version number.
 

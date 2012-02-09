@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 import tornado.escape
 import unittest
 

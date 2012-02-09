@@ -44,7 +44,7 @@ before closing the `IOLoop`.
 This module has been tested with Twisted versions 11.0.0 and 11.1.0.
 """
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 
 import functools
 import logging

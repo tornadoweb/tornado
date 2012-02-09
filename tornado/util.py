@@ -1,6 +1,6 @@
 """Miscellaneous utility functions."""
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 
 class ObjectDict(dict):
     """Makes a dictionary behave like an object."""

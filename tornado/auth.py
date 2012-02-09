@@ -44,7 +44,7 @@ Example usage for Google OpenID::
             # Save the user with, e.g., set_secure_cookie()
 """
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 
 import base64
 import binascii

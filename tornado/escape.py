@@ -20,7 +20,7 @@ Also includes a few other miscellaneous string manipulation functions that
 have crept in over time.
 """
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 
 import htmlentitydefs
 import re

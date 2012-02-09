@@ -48,7 +48,7 @@ kwarg to define). We also accept multi-value options. See the documentation
 for define() below.
 """
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 
 import datetime
 import logging

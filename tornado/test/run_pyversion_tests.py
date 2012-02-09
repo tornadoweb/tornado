@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Runs the tornado test suite with all supported python interpreters."""
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 
 import os
 import subprocess

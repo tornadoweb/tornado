@@ -21,6 +21,7 @@ class FixFutureImports(fixer_base.BaseFix):
     def new_future_import(self, old):
         new = FromImport("__future__",
                          [Name("absolute_import", prefix=" "), Comma(),
+                          Name("division", prefix=" "), Comma(),
                           Name("with_statement", prefix=" ")])
         if old is not None:
             new.prefix = old.prefix

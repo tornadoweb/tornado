@@ -17,7 +17,7 @@ communication between the browser and server.
    documentation for caveats).
 """
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 # Author: Jacob Kristhammar, 2010
 
 import array

@@ -26,7 +26,7 @@ and Google AppEngine.  It also will not work correctly when HTTPServer's
 multi-process mode is used.
 """
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import, division, with_statement
 
 import functools
 import logging
