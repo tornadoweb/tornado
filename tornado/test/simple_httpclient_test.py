@@ -174,12 +174,12 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
 
     def test_303_redirect(self):
-       response = self.fetch("/303_post", method="POST", body="blah")
-       self.assertEqual(200, response.code)
-       self.assertTrue(response.request.url.endswith("/303_post"))
-       self.assertTrue(response.effective_url.endswith("/303_get"))
-       #request is the original request, is a POST still
-       self.assertEqual("POST", response.request.method)
+        response = self.fetch("/303_post", method="POST", body="blah")
+        self.assertEqual(200, response.code)
+        self.assertTrue(response.request.url.endswith("/303_post"))
+        self.assertTrue(response.effective_url.endswith("/303_get"))
+        #request is the original request, is a POST still
+        self.assertEqual("POST", response.request.method)
 
     def test_request_timeout(self):
         response = self.fetch('/trigger?wake=false', request_timeout=0.1)

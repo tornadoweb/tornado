@@ -326,7 +326,7 @@ class OAuthMixin(object):
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         if "verifier" in request_token:
-          args["oauth_verifier"] = request_token["verifier"]
+            args["oauth_verifier"] = request_token["verifier"]
 
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
             signature = _oauth10a_signature(consumer_token, "GET", url, args,
@@ -954,68 +954,68 @@ class FacebookGraphMixin(OAuth2Mixin):
 
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
                               code, callback, extra_fields=None):
-      """Handles the login for the Facebook user, returning a user object.
+        """Handles the login for the Facebook user, returning a user object.
 
-      Example usage::
+        Example usage::
 
-          class FacebookGraphLoginHandler(LoginHandler, tornado.auth.FacebookGraphMixin):
-            @tornado.web.asynchronous
-            def get(self):
-                if self.get_argument("code", False):
-                    self.get_authenticated_user(
-                      redirect_uri='/auth/facebookgraph/',
-                      client_id=self.settings["facebook_api_key"],
-                      client_secret=self.settings["facebook_secret"],
-                      code=self.get_argument("code"),
-                      callback=self.async_callback(
-                        self._on_login))
-                    return
-                self.authorize_redirect(redirect_uri='/auth/facebookgraph/',
-                                        client_id=self.settings["facebook_api_key"],
-                                        extra_params={"scope": "read_stream,offline_access"})
+            class FacebookGraphLoginHandler(LoginHandler, tornado.auth.FacebookGraphMixin):
+              @tornado.web.asynchronous
+              def get(self):
+                  if self.get_argument("code", False):
+                      self.get_authenticated_user(
+                        redirect_uri='/auth/facebookgraph/',
+                        client_id=self.settings["facebook_api_key"],
+                        client_secret=self.settings["facebook_secret"],
+                        code=self.get_argument("code"),
+                        callback=self.async_callback(
+                          self._on_login))
+                      return
+                  self.authorize_redirect(redirect_uri='/auth/facebookgraph/',
+                                          client_id=self.settings["facebook_api_key"],
+                                          extra_params={"scope": "read_stream,offline_access"})
 
-            def _on_login(self, user):
-              logging.error(user)
-              self.finish()
+              def _on_login(self, user):
+                logging.error(user)
+                self.finish()
 
-      """
-      http = httpclient.AsyncHTTPClient()
-      args = {
-        "redirect_uri": redirect_uri,
-        "code": code,
-        "client_id": client_id,
-        "client_secret": client_secret,
-      }
+        """
+        http = httpclient.AsyncHTTPClient()
+        args = {
+          "redirect_uri": redirect_uri,
+          "code": code,
+          "client_id": client_id,
+          "client_secret": client_secret,
+        }
 
-      fields = set(['id', 'name', 'first_name', 'last_name',
-                    'locale', 'picture', 'link'])
-      if extra_fields:
+        fields = set(['id', 'name', 'first_name', 'last_name',
+                      'locale', 'picture', 'link'])
+        if extra_fields:
             fields.update(extra_fields)
 
-      http.fetch(self._oauth_request_token_url(**args),
-          self.async_callback(self._on_access_token, redirect_uri, client_id,
-                              client_secret, callback, fields))
+        http.fetch(self._oauth_request_token_url(**args),
+            self.async_callback(self._on_access_token, redirect_uri, client_id,
+                                client_secret, callback, fields))
 
     def _on_access_token(self, redirect_uri, client_id, client_secret,
                         callback, fields, response):
-      if response.error:
-          logging.warning('Facebook auth error: %s' % str(response))
-          callback(None)
-          return
+        if response.error:
+            logging.warning('Facebook auth error: %s' % str(response))
+            callback(None)
+            return
 
-      args = escape.parse_qs_bytes(escape.native_str(response.body))
-      session = {
-          "access_token": args["access_token"][-1],
-          "expires": args.get("expires")
-      }
+        args = escape.parse_qs_bytes(escape.native_str(response.body))
+        session = {
+            "access_token": args["access_token"][-1],
+            "expires": args.get("expires")
+        }
 
-      self.facebook_request(
-          path="/me",
-          callback=self.async_callback(
-              self._on_get_user_info, callback, session, fields),
-          access_token=session["access_token"],
-          fields=",".join(fields)
-          )
+        self.facebook_request(
+            path="/me",
+            callback=self.async_callback(
+                self._on_get_user_info, callback, session, fields),
+            access_token=session["access_token"],
+            fields=",".join(fields)
+            )
 
     def _on_get_user_info(self, callback, session, fields, user):
         if user is None:
