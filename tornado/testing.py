@@ -107,6 +107,7 @@ class AsyncTestCase(unittest.TestCase):
         self.__running = False
         self.__failure = None
         self.__stop_args = None
+        self.__timeout = None
 
     def setUp(self):
         super(AsyncTestCase, self).setUp()
@@ -173,7 +174,9 @@ class AsyncTestCase(unittest.TestCase):
                     except Exception:
                         self.__failure = sys.exc_info()
                     self.stop()
-                self.io_loop.add_timeout(time.time() + timeout, timeout_func)
+                if self.__timeout is not None:
+                    self.io_loop.remove_timeout(self.__timeout)
+                self.__timeout = self.io_loop.add_timeout(time.time() + timeout, timeout_func)
             while True:
                 self.__running = True
                 with NullContext():
