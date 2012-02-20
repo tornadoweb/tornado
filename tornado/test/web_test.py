@@ -87,19 +87,29 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
                 self.set_cookie("semicolon", "a;b")
                 self.set_cookie("quote", 'a"b')
 
+        class SetCookieOverwriteHandler(RequestHandler):
+            def get(self):
+                self.set_cookie("a", "b", domain="example.com")
+                self.set_cookie("c", "d" ,domain="example.com")
+                # A second call with the same name clobbers the first.
+                # Attributes from the first call are not carried over.
+                self.set_cookie("a", "e")
+
         return Application([
                 ("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
                 ("/special_char", SetCookieSpecialCharHandler),
+                ("/set_overwrite", SetCookieOverwriteHandler),
                 ])
 
     def test_set_cookie(self):
         response = self.fetch("/set")
-        self.assertEqual(response.headers.get_list("Set-Cookie"),
-                         ["str=asdf; Path=/",
+        self.assertEqual(sorted(response.headers.get_list("Set-Cookie")),
+                         ["bytes=zxcv; Path=/",
+                          "str=asdf; Path=/",
                           "unicode=qwer; Path=/",
-                          "bytes=zxcv; Path=/"])
+                          ])
 
     def test_get_cookie(self):
         response = self.fetch("/get", headers={"Cookie": "foo=bar"})
@@ -118,14 +128,14 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_cookie_special_char(self):
         response = self.fetch("/special_char")
-        headers = response.headers.get_list("Set-Cookie")
+        headers = sorted(response.headers.get_list("Set-Cookie"))
         self.assertEqual(len(headers), 3)
         self.assertEqual(headers[0], 'equals="a=b"; Path=/')
+        self.assertEqual(headers[1], 'quote="a\\"b"; Path=/')
         # python 2.7 octal-escapes the semicolon; older versions leave it alone
-        self.assertTrue(headers[1] in ('semicolon="a;b"; Path=/',
+        self.assertTrue(headers[2] in ('semicolon="a;b"; Path=/',
                                        'semicolon="a\\073b"; Path=/'),
-                        headers[1])
-        self.assertEqual(headers[2], 'quote="a\\"b"; Path=/')
+                        headers[2])
 
         data = [('foo=a=b', 'a=b'),
                 ('foo="a=b"', 'a=b'),
@@ -138,6 +148,12 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
             logging.info("trying %r", header)
             response = self.fetch("/get", headers={"Cookie": header})
             self.assertEqual(response.body, utf8(expected))
+
+    def test_set_cookie_overwrite(self):
+        response = self.fetch("/set_overwrite")
+        headers = response.headers.get_list("Set-Cookie")
+        self.assertEqual(sorted(headers),
+                         ["a=e; Path=/", "c=d; Domain=example.com; Path=/"])
 
 
 class AuthRedirectRequestHandler(RequestHandler):

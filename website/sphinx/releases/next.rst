@@ -9,3 +9,5 @@ In progress
   the upcoming release of Python 3.3.
 * `tornado.simple_httpclient` is better about closing its sockets
   instead of leaving them for garbage collection.
+* Repeated calls to `RequestHandler.set_cookie` with the same name now
+  overwrite the previous cookie instead of producing additional copies.

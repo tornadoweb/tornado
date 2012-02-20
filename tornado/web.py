@@ -359,26 +359,27 @@ class RequestHandler(object):
         if re.search(r"[\x00-\x20]", name + value):
             # Don't let us accidentally inject bad stuff
             raise ValueError("Invalid cookie %r: %r" % (name, value))
-        if not hasattr(self, "_new_cookies"):
-            self._new_cookies = []
-        new_cookie = Cookie.SimpleCookie()
-        self._new_cookies.append(new_cookie)
-        new_cookie[name] = value
+        if not hasattr(self, "_new_cookie"):
+            self._new_cookie = Cookie.SimpleCookie()
+        if name in self._new_cookie:
+            del self._new_cookie[name]
+        self._new_cookie[name] = value
+        morsel = self._new_cookie[name]
         if domain:
-            new_cookie[name]["domain"] = domain
+            morsel["domain"] = domain
         if expires_days is not None and not expires:
             expires = datetime.datetime.utcnow() + datetime.timedelta(
                 days=expires_days)
         if expires:
             timestamp = calendar.timegm(expires.utctimetuple())
-            new_cookie[name]["expires"] = email.utils.formatdate(
+            morsel["expires"] = email.utils.formatdate(
                 timestamp, localtime=False, usegmt=True)
         if path:
-            new_cookie[name]["path"] = path
+            morsel["path"] = path
         for k, v in kwargs.iteritems():
             if k == 'max_age':
                 k = 'max-age'
-            new_cookie[name][k] = v
+            morsel[k] = v
 
     def clear_cookie(self, name, path="/", domain=None):
         """Deletes the cookie with the given name."""
@@ -1007,8 +1008,8 @@ class RequestHandler(object):
                       " " + httplib.responses[self._status_code])]
         lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in
                       itertools.chain(self._headers.iteritems(), self._list_headers)])
-        for cookie_dict in getattr(self, "_new_cookies", []):
-            for cookie in cookie_dict.values():
+        if hasattr(self, "_new_cookie"):
+            for cookie in self._new_cookie.values():
                 lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))
         return b("\r\n").join(lines) + b("\r\n\r\n")
 
