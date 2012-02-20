@@ -391,7 +391,7 @@ class _HTTPConnection(object):
         if (self.request.follow_redirects and
             self.request.max_redirects > 0 and
             self.code in (301, 302, 303, 307)):
-            new_request = copy.copy(self.request)
+            new_request = copy.deepcopy(self.request)
             new_request.url = urlparse.urljoin(self.request.url,
                                                self.headers["Location"])
             new_request.max_redirects -= 1
