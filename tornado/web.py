@@ -657,12 +657,11 @@ class RequestHandler(object):
                 "Etag" not in self._headers):
                 etag = self.compute_etag()
                 if etag is not None:
+                    self.set_header("Etag", etag)
                     inm = self.request.headers.get("If-None-Match")
                     if inm and inm.find(etag) != -1:
                         self._write_buffer = []
                         self.set_status(304)
-                    else:
-                        self.set_header("Etag", etag)
             if "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
                 self.set_header("Content-Length", content_length)
