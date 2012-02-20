@@ -162,6 +162,7 @@ class _HTTPConnection(object):
                 host = host[1:-1]
             if self.client.hostname_mapping is not None:
                 host = self.client.hostname_mapping.get(host, host)
+            parsed._hostname = host # save correct hostname for _on_connect
 
             if request.allow_ipv6:
                 af = socket.AF_UNSPEC
@@ -241,7 +242,9 @@ class _HTTPConnection(object):
         if (self.request.validate_cert and
             isinstance(self.stream, SSLIOStream)):
             match_hostname(self.stream.socket.getpeercert(),
-                           parsed.hostname)
+                           # ipv6 addresses are broken until 2.7, here is
+                           # correctly parsed value calculated in __init__
+                           parsed._hostname)
         if (self.request.method not in self._SUPPORTED_METHODS and
             not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
