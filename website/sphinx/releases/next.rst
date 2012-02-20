@@ -13,3 +13,5 @@ In progress
   overwrite the previous cookie instead of producing additional copies.
 * `tornado.simple_httpclient` correctly verifies SSL certificates for
   URLs containing IPv6 literals (This bug affected Python 2.5 and 2.6).
+* Fixed a bug on python versions before 2.6.5 when `URLSpec` regexes
+  are constructed from unicode strings and keyword arguments are extracted.

@@ -670,3 +670,19 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_static_url(self):
         response = self.fetch("/static_url/foo.txt")
         self.assertEqual(response.body, b("/static/foo.42.txt"))
+
+class NamedURLSpecGroupsTest(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        class EchoHandler(RequestHandler):
+            def get(self, path):
+                self.write(path)
+
+        return Application([("/str/(?P<path>.*)", EchoHandler),
+                            (u"/unicode/(?P<path>.*)", EchoHandler)])
+
+    def test_named_urlspec_groups(self):
+        response = self.fetch("/str/foo")
+        self.assertEqual(response.body, b("foo"))
+
+        response = self.fetch("/unicode/bar")
+        self.assertEqual(response.body, b("bar"))
