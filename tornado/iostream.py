@@ -139,29 +139,13 @@ class IOStream(object):
         """Call callback when we read the given regex pattern."""
         assert not self._read_callback, "Already reading"
         self._read_regex = re.compile(regex)
-        self._read_callback = stack_context.wrap(callback)
-        while True:
-            # See if we've already got the data from a previous read
-            if self._read_from_buffer():
-                return
-            self._check_closed()
-            if self._read_to_buffer() == 0:
-                break
-        self._add_io_state(self.io_loop.READ)
+        self._read_until(callback)
 
     def read_until(self, delimiter, callback):
         """Call callback when we read the given delimiter."""
         assert not self._read_callback, "Already reading"
         self._read_delimiter = delimiter
-        self._read_callback = stack_context.wrap(callback)
-        while True:
-            # See if we've already got the data from a previous read
-            if self._read_from_buffer():
-                return
-            self._check_closed()
-            if self._read_to_buffer() == 0:
-                break
-        self._add_io_state(self.io_loop.READ)
+        self._read_until(callback)
 
     def read_bytes(self, num_bytes, callback, streaming_callback=None):
         """Call callback when we read the given number of bytes.
@@ -173,15 +157,8 @@ class IOStream(object):
         assert not self._read_callback, "Already reading"
         assert isinstance(num_bytes, (int, long))
         self._read_bytes = num_bytes
-        self._read_callback = stack_context.wrap(callback)
         self._streaming_callback = stack_context.wrap(streaming_callback)
-        while True:
-            if self._read_from_buffer():
-                return
-            self._check_closed()
-            if self._read_to_buffer() == 0:
-                break
-        self._add_io_state(self.io_loop.READ)
+        self._read_until(callback)
 
     def read_until_close(self, callback, streaming_callback=None):
         """Reads all data from the socket until it is closed.
@@ -349,6 +326,20 @@ class IOStream(object):
             else:
                 if self._read_from_buffer():
                     return
+
+    def _read_until(self, callback):
+        """Assign given read callback and initiate read to buffer
+        unless stream has already been read or closed.
+        """
+        self._read_callback = stack_context.wrap(callback)
+        while True:
+            # See if we've already got the data from a previous read
+            if self._read_from_buffer():
+                return
+            self._check_closed()
+            if self._read_to_buffer() == 0:
+                break
+        self._add_io_state(self.io_loop.READ)
 
     def _read_from_socket(self):
         """Attempts to read from the socket.
