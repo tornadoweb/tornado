@@ -298,7 +298,7 @@ class _HTTPConnection(object):
                 raise ValueError('Newline in header: ' + repr(line))
             request_lines.append(line)
         self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
-        if self.request.body is not None:
+        if self.request.body is not None and self.request.headers.get("Expect") != "100-continue":
             self.stream.write(self.request.body)
         self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
 
@@ -340,6 +340,14 @@ class _HTTPConnection(object):
         assert match
         self.code = int(match.group(1))
         self.headers = HTTPHeaders.parse(header_data)
+
+        if self.code == 100:
+            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3
+            # support HTTP/1.1 100 Continue
+            if self.request.body is not None:
+                self.stream.write(self.request.body)
+            self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
+            return
 
         if "Content-Length" in self.headers:
             if "," in self.headers["Content-Length"]:
@@ -391,12 +399,7 @@ class _HTTPConnection(object):
             self._timeout = None
         original_request = getattr(self.request, "original_request",
                                    self.request)
-        if self.code in (100,):
-            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3
-            # support HTTP/1.1 100 Continue
-            self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
-            return
-        elif (self.request.follow_redirects and
+        if (self.request.follow_redirects and
             self.request.max_redirects > 0 and
             self.code in (301, 302, 303, 307)):
             new_request = copy.copy(self.request)
