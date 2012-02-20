@@ -15,3 +15,16 @@ In progress
   URLs containing IPv6 literals (This bug affected Python 2.5 and 2.6).
 * Fixed a bug on python versions before 2.6.5 when `URLSpec` regexes
   are constructed from unicode strings and keyword arguments are extracted.
+* `tornado.curl_httpclient` now supports client SSL certificates (using
+  the same ``client_cert`` and ``client_key`` arguments as
+  `tornado.simple_httpclient`)
+* `tornado.httpclient.HTTPClient` now supports the same constructor
+  keyword arguments as `AsyncHTTPClient`.
+* `tornado.locale.get_supported_locales` no longer takes a meaningless
+  ``cls`` argument.
+* The ``reverse_url`` function in the template namespace now comes from
+  the `RequestHandler` rather than the `Application`.  (Unless overridden,
+  `RequestHandler.reverse_url` is just an alias for the `Application`
+  method).
+* The ``Etag`` header is now returned on 304 responses to an ``If-None-Match``
+  request, improving compatibility with some caches.
