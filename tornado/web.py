@@ -1360,7 +1360,7 @@ class Application(object):
 
                         if spec.regex.groupindex:
                             kwargs = dict(
-                                (k, unquote(v))
+                                (str(k), unquote(v))
                                 for (k, v) in match.groupdict().iteritems())
                         else:
                             args = [unquote(s) for s in match.groups()]
