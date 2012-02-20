@@ -160,9 +160,9 @@ class _HTTPConnection(object):
             if re.match(r'^\[.*\]$', host):
                 # raw ipv6 addresses in urls are enclosed in brackets
                 host = host[1:-1]
+            parsed_hostname = host  # save final parsed host for _on_connect
             if self.client.hostname_mapping is not None:
                 host = self.client.hostname_mapping.get(host, host)
-            parsed._hostname = host # save correct hostname for _on_connect
 
             if request.allow_ipv6:
                 af = socket.AF_UNSPEC
@@ -222,7 +222,8 @@ class _HTTPConnection(object):
                     self._on_timeout)
             self.stream.set_close_callback(self._on_close)
             self.stream.connect(sockaddr,
-                                functools.partial(self._on_connect, parsed))
+                                functools.partial(self._on_connect, parsed,
+                                                  parsed_hostname))
 
     def _on_timeout(self):
         self._timeout = None
@@ -231,7 +232,7 @@ class _HTTPConnection(object):
                                         error=HTTPError(599, "Timeout")))
         self.stream.close()
 
-    def _on_connect(self, parsed):
+    def _on_connect(self, parsed, parsed_hostname):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
@@ -242,9 +243,11 @@ class _HTTPConnection(object):
         if (self.request.validate_cert and
             isinstance(self.stream, SSLIOStream)):
             match_hostname(self.stream.socket.getpeercert(),
-                           # ipv6 addresses are broken until 2.7, here is
-                           # correctly parsed value calculated in __init__
-                           parsed._hostname)
+                           # ipv6 addresses are broken (in
+                           # parsed.hostname) until 2.7, here is
+                           # correctly parsed value calculated in
+                           # __init__
+                           parsed_hostname)
         if (self.request.method not in self._SUPPORTED_METHODS and
             not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)

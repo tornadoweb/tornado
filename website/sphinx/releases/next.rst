@@ -11,3 +11,5 @@ In progress
   instead of leaving them for garbage collection.
 * Repeated calls to `RequestHandler.set_cookie` with the same name now
   overwrite the previous cookie instead of producing additional copies.
+* `tornado.simple_httpclient` correctly verifies SSL certificates for
+  URLs containing IPv6 literals (This bug affected Python 2.5 and 2.6).
