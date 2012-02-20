@@ -28,3 +28,5 @@ In progress
   method).
 * The ``Etag`` header is now returned on 304 responses to an ``If-None-Match``
   request, improving compatibility with some caches.
+* `tornado.simple_httpclient` no longer includes basic auth credentials
+  in the ``Host`` header when those credentials are extracted from the URL.

@@ -259,7 +259,10 @@ class _HTTPConnection(object):
         if "Connection" not in self.request.headers:
             self.request.headers["Connection"] = "close"
         if "Host" not in self.request.headers:
-            self.request.headers["Host"] = parsed.netloc
+            if '@' in parsed.netloc:
+                self.request.headers["Host"] = parsed.netloc.rpartition('@')[-1]
+            else:
+                self.request.headers["Host"] = parsed.netloc
         username, password = None, None
         if parsed.username is not None:
             username, password = parsed.username, parsed.password

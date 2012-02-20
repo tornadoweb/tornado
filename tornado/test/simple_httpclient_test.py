@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, with_statement
 import collections
 import gzip
 import logging
+import re
 import socket
 
 from tornado.ioloop import IOLoop
@@ -74,6 +75,10 @@ class SeeOther303GetHandler(RequestHandler):
         assert not self.request.body
         self.write("ok")
 
+class HostEchoHandler(RequestHandler):
+    def get(self):
+        self.write(self.request.headers["Host"])
+
 
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def setUp(self):
@@ -95,6 +100,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/no_content", NoContentHandler),
             url("/303_post", SeeOther303PostHandler),
             url("/303_get", SeeOther303GetHandler),
+            url("/host_echo", HostEchoHandler),
             ], gzip=True)
 
     def test_singleton(self):
@@ -239,3 +245,13 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         # 204 status with non-zero content length is malformed
         response = self.fetch("/no_content?error=1")
         self.assertEqual(response.code, 599)
+
+    def test_host_header(self):
+        host_re = re.compile(b("^localhost:[0-9]+$"))
+        response = self.fetch("/host_echo")
+        self.assertTrue(host_re.match(response.body))
+
+        url = self.get_url("/host_echo").replace("http://", "http://me:secret@")
+        self.http_client.fetch(url, self.stop)
+        response = self.wait()
+        self.assertTrue(host_re.match(response.body), response.body)
