@@ -441,8 +441,16 @@ else:
         'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
             'test_systemCallUninterruptedByChildExit',
             ],
-        'twisted.internet.test.test_tcp.TCPClientTestsBuilder': [],
-        'twisted.internet.test.test_tcp.TCPPortTestsBuilder': [],
+        'twisted.internet.test.test_tcp.TCPClientTestsBuilder': [
+            'test_badContext',  # ssl-related; see also SSLClientTestsMixin
+            ],
+        'twisted.internet.test.test_tcp.TCPPortTestsBuilder': [
+            # These use link-local addresses and cause firewall prompts on mac
+            'test_buildProtocolIPv6AddressScopeID',
+            'test_portGetHostOnIPv6ScopeID',
+            'test_serverGetHostOnIPv6ScopeID',
+            'test_serverGetPeerOnIPv6ScopeID',
+            ],
         'twisted.internet.test.test_tcp.TCPConnectionTestsBuilder': [],
         'twisted.internet.test.test_tcp.WriteSequenceTests': [],
         'twisted.internet.test.test_tcp.AbortConnectionTestCase': [],
