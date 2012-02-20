@@ -395,8 +395,11 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.unsetopt(pycurl.USERPWD)
         logging.debug("%s %s", request.method, request.url)
 
-    if request.client_key is not None or request.client_cert is not None:
-        raise ValueError("Client certificate not supported with curl_httpclient")
+    if request.client_cert is not None:
+        curl.setopt(pycurl.SSLCERT, request.client_cert)
+        
+    if request.client_key is not None:
+        curl.setopt(pycurl.SSLKEY, request.client_key)
 
     if threading.activeCount() > 1:
         # libcurl/pycurl is not thread-safe by default.  When multiple threads
