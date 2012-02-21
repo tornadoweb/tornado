@@ -28,6 +28,34 @@ multi-process mode is used.
 
 from __future__ import absolute_import, division, with_statement
 
+import os
+import sys
+
+if __name__ == "__main__":
+    # If this module is run with "python -m tornado.autoreload", the current
+    # directory is automatically prepended to sys.path, but not if it is
+    # run as "path/to/tornado/autoreload.py".  The processing for "-m" rewrites
+    # the former to the latter, so subsequent executions won't have the same
+    # path as the original.  Modify os.environ here to ensure that the
+    # re-executed process will have the same path.
+    #
+    # Conversely, when run as path/to/tornado/autoreload.py, the directory
+    # containing autoreload.py gets added to the path, but we don't want
+    # tornado modules importable at top level, so remove it.
+    #
+    # This sys.path manipulation must come before our imports (as much
+    # as possible - if we introduced a tornado.sys or tornado.os
+    # module we'd be in trouble), or else our imports would become
+    # relative again despite the future import.
+    #
+    # There is a separate __main__ block at the end of the file to call main().
+    path_prefix = '.' + os.pathsep
+    if (sys.path[0] == '' and
+        not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
+        os.environ["PYTHONPATH"] = path_prefix + os.environ.get("PYTHONPATH", "")
+    if sys.path[0] == os.path.dirname(__file__):
+        del sys.path[0]
+
 import functools
 import logging
 import os
@@ -244,19 +272,6 @@ def main():
 
 
 if __name__ == "__main__":
-    # If this module is run with "python -m tornado.autoreload", the current
-    # directory is automatically prepended to sys.path, but not if it is
-    # run as "path/to/tornado/autoreload.py".  The processing for "-m" rewrites
-    # the former to the latter, so subsequent executions won't have the same
-    # path as the original.  Modify os.environ here to ensure that the
-    # re-executed process will have the same path.
-    # Conversely, when run as path/to/tornado/autoreload.py, the directory
-    # containing autoreload.py gets added to the path, but we don't want
-    # tornado modules importable at top level, so remove it.
-    path_prefix = '.' + os.pathsep
-    if (sys.path[0] == '' and
-        not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
-        os.environ["PYTHONPATH"] = path_prefix + os.environ.get("PYTHONPATH", "")
-    elif sys.path[0] == os.path.dirname(__file__):
-        del sys.path[0]
+    # See also the other __main__ block at the top of the file, which modifies
+    # sys.path before our imports
     main()
