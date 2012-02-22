@@ -2,6 +2,7 @@
 
 from __future__ import absolute_import, division, with_statement
 import unittest
+import time
 from tornado.testing import AsyncTestCase, LogTrapTestCase
 
 
@@ -14,6 +15,15 @@ class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):
         except ZeroDivisionError:
             pass
 
+    def test_subsequent_wait_calls(self):
+        """
+        This test makes sure that a second call to wait()
+        clears the first timeout.
+        """
+        self.io_loop.add_timeout(time.time() + 0.001, self.stop)
+        self.wait(timeout = 0.002)
+        self.io_loop.add_timeout(time.time() + 0.003, self.stop)
+        self.wait(timeout = 0.01)
 
 class SetUpTearDownTest(unittest.TestCase):
     def test_set_up_tear_down(self):
