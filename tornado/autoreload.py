@@ -79,6 +79,18 @@ def watch(filename):
     All imported modules are watched by default.
     """
     _watched_files.add(filename)
+    
+def watch_dir(dirname, include_subdirs=True):
+    """Add a dir and all of its files to the watch list.
+    
+    Any file or subdirectory that begins with a period is ignored.
+    """
+    for _root, _dirs, _files in os.walk(dirname):
+        for _file in _files:
+            if not _file.startswith('.'): watch('%s/%s' % (_root, _file))
+        if include_subdirs:
+            for _dir in _dirs:
+                if not _dir.startswith('.'): watch_dir('%s/%s' % _root, _dir)
 
 _reload_hooks = []
 
