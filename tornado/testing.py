@@ -138,9 +138,24 @@ class AsyncTestCase(unittest.TestCase):
             self.__failure = sys.exc_info()
             self.stop()
 
+    def __rethrow(self):
+        if self.__failure is not None:
+            failure = self.__failure
+            self.__failure = None
+            # 2to3 isn't smart enough to convert three-argument raise
+            # statements correctly in some cases.
+            if isinstance(failure[1], failure[0]):
+                raise failure[1], None, failure[2]
+            else:
+                raise failure[0], failure[1], failure[2]
+
+
     def run(self, result=None):
         with StackContext(self._stack_context):
             super(AsyncTestCase, self).run(result)
+        # In case an exception escaped super.run or the StackContext caught
+        # an exception when there wasn't a wait() to re-raise it, do so here.
+        self.__rethrow()
 
     def stop(self, _arg=None, **kwargs):
         '''Stops the ioloop, causing one pending (or future) call to wait()
@@ -189,13 +204,7 @@ class AsyncTestCase(unittest.TestCase):
                     break
         assert self.__stopped
         self.__stopped = False
-        if self.__failure is not None:
-            # 2to3 isn't smart enough to convert three-argument raise
-            # statements correctly in some cases.
-            if isinstance(self.__failure[1], self.__failure[0]):
-                raise self.__failure[1], None, self.__failure[2]
-            else:
-                raise self.__failure[0], self.__failure[1], self.__failure[2]
+        self.__rethrow()
         result = self.__stop_args
         self.__stop_args = None
         return result
