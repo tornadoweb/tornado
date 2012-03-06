@@ -20,6 +20,7 @@ Unittest for the twisted-style reactor.
 from __future__ import absolute_import, division, with_statement
 
 import os
+import signal
 import thread
 import threading
 import unittest
@@ -51,14 +52,26 @@ from tornado.testing import get_unused_port
 from tornado.util import import_object
 from tornado.web import RequestHandler, Application
 
+def save_signal_handlers():
+    saved = {}
+    for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:
+        saved[sig] = signal.getsignal(sig)
+    assert "twisted" not in repr(saved), repr(saved)
+    return saved
+
+def restore_signal_handlers(saved):
+    for sig, handler in saved.iteritems():
+        signal.signal(sig, handler)
 
 class ReactorTestCase(unittest.TestCase):
     def setUp(self):
+        self._saved_signals = save_signal_handlers()
         self._io_loop = IOLoop()
         self._reactor = TornadoReactor(self._io_loop)
 
     def tearDown(self):
         self._io_loop.close(all_fds=True)
+        restore_signal_handlers(self._saved_signals)
 
 
 class ReactorWhenRunningTest(ReactorTestCase):
@@ -304,12 +317,14 @@ class ReactorReaderWriterTest(ReactorTestCase):
 
 class CompatibilityTests(unittest.TestCase):
     def setUp(self):
+        self.saved_signals = save_signal_handlers()
         self.io_loop = IOLoop()
         self.reactor = TornadoReactor(self.io_loop)
 
     def tearDown(self):
         self.reactor.disconnectAll()
         self.io_loop.close(all_fds=True)
+        restore_signal_handlers(self.saved_signals)
 
     def start_twisted_server(self):
         class HelloResource(Resource):
@@ -485,6 +500,10 @@ else:
             class TornadoTest(test_class):
                 _reactors = ["tornado.platform.twisted._TestReactor"]
 
+                def buildReactor(self):
+                    self.__saved_signals = save_signal_handlers()
+                    return test_class.buildReactor(self)
+
                 def unbuildReactor(self, reactor):
                     test_class.unbuildReactor(self, reactor)
                     # Clean up file descriptors (especially epoll/kqueue
@@ -493,6 +512,8 @@ else:
                     # since twisted expects to be able to unregister
                     # connections in a post-shutdown hook.
                     reactor._io_loop.close(all_fds=True)
+                    restore_signal_handlers(self.__saved_signals)
+
             TornadoTest.__name__ = test_class.__name__
             return TornadoTest
         test_subclass = make_test_subclass(test_class)
