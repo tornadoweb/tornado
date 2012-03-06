@@ -1882,7 +1882,7 @@ class TemplateModule(UIModule):
 
 class URLSpec(object):
     """Specifies mappings between URLs and handlers."""
-    def __init__(self, pattern, handler_class, kwargs={}, name=None):
+    def __init__(self, pattern, handler_class, kwargs=None, name=None):
         """Creates a URLSpec.
 
         Parameters:
@@ -1906,7 +1906,7 @@ class URLSpec(object):
             ("groups in url regexes must either be all named or all "
              "positional: %r" % self.regex.pattern)
         self.handler_class = handler_class
-        self.kwargs = kwargs
+        self.kwargs = kwargs or {}
         self.name = name
         self._path, self._group_count = self._find_groups()
 
