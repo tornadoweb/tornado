@@ -6,6 +6,7 @@ import logging
 import re
 import socket
 
+from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
@@ -178,6 +179,13 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(response.request.url.endswith("/countdown/5"))
         self.assertTrue(response.effective_url.endswith("/countdown/2"))
         self.assertTrue(response.headers["Location"].endswith("/countdown/1"))
+
+    def test_header_reuse(self):
+        # Apps may reuse a headers object if they are only passing in constant
+        # headers like user-agent.  The header object should not be modified.
+        headers = HTTPHeaders({'User-Agent': 'Foo'})
+        self.fetch("/hello", headers=headers)
+        self.assertEqual(list(headers.get_all()), [('User-Agent', 'Foo')])
 
     def test_303_redirect(self):
         response = self.fetch("/303_post", method="POST", body="blah")

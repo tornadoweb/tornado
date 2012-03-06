@@ -58,7 +58,14 @@ class HTTPHeaders(dict):
         dict.__init__(self)
         self._as_list = {}
         self._last_key = None
-        self.update(*args, **kwargs)
+        if (len(args) == 1 and len(kwargs) == 0 and
+            isinstance(args[0], HTTPHeaders)):
+            # Copy constructor
+            for k,v in args[0].get_all():
+                self.add(k,v)
+        else:
+            # Dict-style initialization
+            self.update(*args, **kwargs)
 
     # new public methods
 

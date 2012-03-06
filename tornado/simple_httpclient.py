@@ -94,8 +94,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
-        if not isinstance(request.headers, HTTPHeaders):
-            request.headers = HTTPHeaders(request.headers)
+        # We're going to modify this (to add Host, Accept-Encoding, etc),
+        # so make sure we don't modify the caller's object.  This is also
+        # where normal dicts get converted to HTTPHeaders objects.
+        request.headers = HTTPHeaders(request.headers)
         callback = stack_context.wrap(callback)
         self.queue.append((request, callback))
         self._process_queue()
