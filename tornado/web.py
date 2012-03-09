@@ -1507,7 +1507,7 @@ class StaticFileHandler(RequestHandler):
         if not os.path.isfile(abspath):
             raise HTTPError(403, "%s is not a file", path)
 
-        if not self.set_headers(abspath, path)
+        if not self.set_headers(abspath, path):
             return
 
         body = self.get_content(abspath)
