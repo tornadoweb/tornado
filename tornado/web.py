@@ -1507,6 +1507,27 @@ class StaticFileHandler(RequestHandler):
         if not os.path.isfile(abspath):
             raise HTTPError(403, "%s is not a file", path)
 
+        if not self.set_headers(abspath, path)
+            return
+
+        body = self.get_content(abspath)
+        if not body:
+            return
+
+        hasher = hashlib.sha1()
+        hasher.update(body)
+        self.set_header("Etag", '"%s"' % hasher.hexdigest())
+        if include_body:
+            self.write(body)
+        else:
+            assert self.request.method == "HEAD"
+            self.set_header("Content-Length", len(body))
+
+    def set_headers(self, abspath, path):
+        """Set the response headers in order to ensure that client browsers
+        will cache the requested resource and not proceed to retrieve its content
+        in the case of a 304 response.
+        """
         stat_result = os.stat(abspath)
         modified = datetime.datetime.fromtimestamp(stat_result[stat.ST_MTIME])
 
@@ -1535,18 +1556,17 @@ class StaticFileHandler(RequestHandler):
             if_since = datetime.datetime.fromtimestamp(time.mktime(date_tuple))
             if if_since >= modified:
                 self.set_status(304)
-                return
+                return False
 
+        return True
+
+    def get_content(self, abspath):
+        """Retrieve the content of the requested resource which is located
+        at the given ``abspath``.
+        """
         with open(abspath, "rb") as file:
-            data = file.read()
-            hasher = hashlib.sha1()
-            hasher.update(data)
-            self.set_header("Etag", '"%s"' % hasher.hexdigest())
-            if include_body:
-                self.write(data)
-            else:
-                assert self.request.method == "HEAD"
-                self.set_header("Content-Length", len(data))
+            return file.read()
+        return None
 
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
