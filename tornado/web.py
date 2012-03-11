@@ -1489,6 +1489,30 @@ class StaticFileHandler(RequestHandler):
 
     def get(self, path, include_body=True):
         path = self.parse_url_path(path)
+        abspath = self.get_absolute_path(path)
+        if not self.set_headers(abspath, path):
+            return
+
+        body = self.get_content(abspath)
+        if not body:
+            return
+
+        hasher = hashlib.sha1()
+        hasher.update(body)
+        self.set_header("Etag", '"%s"' % hasher.hexdigest())
+        if include_body:
+            self.write(body)
+        else:
+            assert self.request.method == "HEAD"
+            self.set_header("Content-Length", len(body))
+
+    def get_absolute_path(self, path):
+        """Retrieve the absolute path on the filesystem where the resource
+        corresponding to the given URL ``path`` can be found.
+
+        This method also handles the validation of the given path and ensures
+        resources outside of the static directory cannot be accessed.
+        """
         abspath = os.path.abspath(os.path.join(self.root, path))
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
@@ -1506,22 +1530,7 @@ class StaticFileHandler(RequestHandler):
             raise HTTPError(404)
         if not os.path.isfile(abspath):
             raise HTTPError(403, "%s is not a file", path)
-
-        if not self.set_headers(abspath, path):
-            return
-
-        body = self.get_content(abspath)
-        if not body:
-            return
-
-        hasher = hashlib.sha1()
-        hasher.update(body)
-        self.set_header("Etag", '"%s"' % hasher.hexdigest())
-        if include_body:
-            self.write(body)
-        else:
-            assert self.request.method == "HEAD"
-            self.set_header("Content-Length", len(body))
+        return abspath
 
     def set_headers(self, abspath, path):
         """Set the response headers in order to ensure that client browsers
