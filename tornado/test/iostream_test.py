@@ -216,3 +216,17 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         finally:
             server.close()
             client.close()
+
+    def test_consecutive_read_iterations(self):
+        server, client = self.make_iostream_pair(read_chunk_size=1, consecutive_read_iterations=2)
+        try:
+            server.write(b("A") * 256)
+            client.read_bytes(256, self.stop)
+            self.assertEquals(len(client._read_buffer), 2)
+            self.io_loop.add_callback(self.stop)
+            self.wait()        # for callback
+            data = self.wait() # for data
+            self.assertEqual(b("A") * 256, data)
+        finally:
+            server.close()
+            client.close()

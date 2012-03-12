@@ -78,12 +78,13 @@ class IOStream(object):
 
     """
     def __init__(self, socket, io_loop=None, max_buffer_size=104857600,
-                 read_chunk_size=4096):
+                 read_chunk_size=4096, consecutive_read_iterations=-1):
         self.socket = socket
         self.socket.setblocking(False)
         self.io_loop = io_loop or ioloop.IOLoop.instance()
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
+        self.consecutive_read_iterations = consecutive_read_iterations
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
         self._read_buffer_size = 0
@@ -310,7 +311,9 @@ class IOStream(object):
             self.io_loop.add_callback(wrapper)
 
     def _handle_read(self):
-        while True:
+        read_iterations_left = self.consecutive_read_iterations
+
+        while read_iterations_left != 0:
             try:
                 # Read from the socket until we get EWOULDBLOCK or equivalent.
                 # SSL sockets do some internal buffering, and if the data is
@@ -326,6 +329,7 @@ class IOStream(object):
             else:
                 if self._read_from_buffer():
                     return
+            read_iterations_left -= 1
 
     def _set_read_callback(self, callback):
         assert not self._read_callback, "Already reading"
@@ -338,13 +342,17 @@ class IOStream(object):
         read callback on the next IOLoop iteration; otherwise starts
         listening for reads on the socket.
         """
-        while True:
+        read_iterations_left = self.consecutive_read_iterations
+
+        while read_iterations_left != 0:
             # See if we've already got the data from a previous read
             if self._read_from_buffer():
                 return
             self._check_closed()
             if self._read_to_buffer() == 0:
                 break
+            read_iterations_left -= 1
+
         self._add_io_state(self.io_loop.READ)
 
     def _read_from_socket(self):
