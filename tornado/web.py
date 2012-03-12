@@ -874,6 +874,11 @@ class RequestHandler(object):
         http://www.djangoproject.com/weblog/2011/feb/08/security/
         http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
         """
+        if hasattr(self, 'no_xsrf') and self.no_xsrf:
+            # when handler.no_xsrf = True, we will not check xsrf cookie
+            # this is very useful when exposing handlers to HTTP clients
+            # other than browsers
+            return
         token = (self.get_argument("_xsrf", None) or
                  self.request.headers.get("X-Xsrftoken") or
                  self.request.headers.get("X-Csrftoken"))
