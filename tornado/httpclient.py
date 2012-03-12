@@ -330,12 +330,15 @@ class HTTPResponse(object):
         plus 'queue', which is the delay (if any) introduced by waiting for
         a slot under AsyncHTTPClient's max_clients setting.
     """
-    def __init__(self, request, code, headers={}, buffer=None,
+    def __init__(self, request, code, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
-                 time_info={}):
+                 time_info=None):
         self.request = request
         self.code = code
-        self.headers = headers
+        if headers is not None:
+            self.headers = headers
+        else:
+            self.headers = httputil.HTTPHeaders()
         self.buffer = buffer
         self._body = None
         if effective_url is None:
@@ -350,7 +353,7 @@ class HTTPResponse(object):
         else:
             self.error = error
         self.request_time = request_time
-        self.time_info = time_info
+        self.time_info = time_info or {}
 
     def _get_body(self):
         if self.buffer is None:

@@ -1,0 +1,15 @@
+# http://travis-ci.org/#!/facebook/tornado
+language: python
+python:
+    - 2.6
+    - 2.7
+    - 3.2
+# TODO: install pycurl, twisted, etc (depends on python version)
+install:
+    - python setup.py install
+script:
+    # Must cd somewhere else so python3 doesn't get confused and run
+    # the python2 code from the current directory instead of the installed
+    # 2to3 version.
+    - cd maint
+    - python -m tornado.test.runtests
