@@ -395,20 +395,21 @@ class IOStream(object):
 
         Returns True if the read was completed.
         """
-        if self._read_bytes is not None:
-            if self._streaming_callback is not None and self._read_buffer_size:
-                bytes_to_consume = min(self._read_bytes, self._read_buffer_size)
+        if self._streaming_callback is not None and self._read_buffer_size:
+            bytes_to_consume = self._read_buffer_size
+            if self._read_bytes is not None:
+                bytes_to_consume = min(self._read_bytes, bytes_to_consume)
                 self._read_bytes -= bytes_to_consume
-                self._run_callback(self._streaming_callback,
-                                   self._consume(bytes_to_consume))
-            if self._read_buffer_size >= self._read_bytes:
-                num_bytes = self._read_bytes
-                callback = self._read_callback
-                self._read_callback = None
-                self._streaming_callback = None
-                self._read_bytes = None
-                self._run_callback(callback, self._consume(num_bytes))
-                return True
+            self._run_callback(self._streaming_callback,
+                               self._consume(bytes_to_consume))
+        if self._read_bytes is not None and self._read_buffer_size >= self._read_bytes:
+            num_bytes = self._read_bytes
+            callback = self._read_callback
+            self._read_callback = None
+            self._streaming_callback = None
+            self._read_bytes = None
+            self._run_callback(callback, self._consume(num_bytes))
+            return True
         elif self._read_delimiter is not None:
             # Multi-byte delimiters (e.g. '\r\n') may straddle two
             # chunks in the read buffer, so we can't easily find them
@@ -418,51 +419,35 @@ class IOStream(object):
             # to be in the first few chunks.  Merge the buffer gradually
             # since large merges are relatively expensive and get undone in
             # consume().
-            loc = -1
             if self._read_buffer:
-                loc = self._read_buffer[0].find(self._read_delimiter)
-            while loc == -1 and len(self._read_buffer) > 1:
-                # Grow by doubling, but don't split the second chunk just
-                # because the first one is small.
-                new_len = max(len(self._read_buffer[0]) * 2,
-                              (len(self._read_buffer[0]) +
-                               len(self._read_buffer[1])))
-                _merge_prefix(self._read_buffer, new_len)
-                loc = self._read_buffer[0].find(self._read_delimiter)
-            if loc != -1:
-                callback = self._read_callback
-                delimiter_len = len(self._read_delimiter)
-                self._read_callback = None
-                self._streaming_callback = None
-                self._read_delimiter = None
-                self._run_callback(callback,
-                                   self._consume(loc + delimiter_len))
-                return True
+                while True:
+                    loc = self._read_buffer[0].find(self._read_delimiter)
+                    if loc != -1:
+                        callback = self._read_callback
+                        delimiter_len = len(self._read_delimiter)
+                        self._read_callback = None
+                        self._streaming_callback = None
+                        self._read_delimiter = None
+                        self._run_callback(callback,
+                                           self._consume(loc + delimiter_len))
+                        return True
+                    if len(self._read_buffer) == 1:
+                        break
+                    _double_prefix(self._read_buffer)
         elif self._read_regex is not None:
-            m = None
             if self._read_buffer:
-                m = self._read_regex.search(self._read_buffer[0])
-            while m is None and len(self._read_buffer) > 1:
-                # Grow by doubling, but don't split the second chunk just
-                # because the first one is small.
-                new_len = max(len(self._read_buffer[0]) * 2,
-                              (len(self._read_buffer[0]) +
-                               len(self._read_buffer[1])))
-                _merge_prefix(self._read_buffer, new_len)
-                m = self._read_regex.search(self._read_buffer[0])
-            _merge_prefix(self._read_buffer, sys.maxint)
-            m = self._read_regex.search(self._read_buffer[0])
-            if m:
-                callback = self._read_callback
-                self._read_callback = None
-                self._streaming_callback = None
-                self._read_regex = None
-                self._run_callback(callback, self._consume(m.end()))
-                return True
-        elif self._read_until_close:
-            if self._streaming_callback is not None and self._read_buffer_size:
-                self._run_callback(self._streaming_callback,
-                                   self._consume(self._read_buffer_size))
+                while True:
+                    m = self._read_regex.search(self._read_buffer[0])
+                    if m is not None:
+                        callback = self._read_callback
+                        self._read_callback = None
+                        self._streaming_callback = None
+                        self._read_regex = None
+                        self._run_callback(callback, self._consume(m.end()))
+                        return True
+                    if len(self._read_buffer) == 1:
+                        break
+                    _double_prefix(self._read_buffer)
         return False
 
     def _handle_connect(self):
@@ -682,6 +667,14 @@ class SSLIOStream(IOStream):
             self.close()
             return None
         return chunk
+
+def _double_prefix(deque):
+    """Grow by doubling, but don't split the second chunk just because the
+    first one is small.
+    """
+    new_len = max(len(deque[0]) * 2,
+                  (len(deque[0]) + len(deque[1])))
+    _merge_prefix(deque, new_len)
 
 
 def _merge_prefix(deque, size):
