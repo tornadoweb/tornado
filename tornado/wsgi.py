@@ -43,7 +43,7 @@ import urllib
 from tornado import escape
 from tornado import httputil
 from tornado import web
-from tornado.escape import native_str, utf8
+from tornado.escape import native_str, utf8, parse_qs_bytes
 from tornado.util import b
 
 try:
@@ -146,7 +146,7 @@ class HTTPRequest(object):
         self.files = {}
         content_type = self.headers.get("Content-Type", "")
         if content_type.startswith("application/x-www-form-urlencoded"):
-            for name, values in cgi.parse_qs(self.body).iteritems():
+            for name, values in parse_qs_bytes(native_str(self.body)).iteritems():
                 self.arguments.setdefault(name, []).extend(values)
         elif content_type.startswith("multipart/form-data"):
             if 'boundary=' in content_type:
