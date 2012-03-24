@@ -116,7 +116,7 @@ class HTTPRequest(object):
         self.query = environ.get("QUERY_STRING", "")
         if self.query:
             self.uri += "?" + self.query
-            arguments = cgi.parse_qs(self.query)
+            arguments = parse_qs_bytes(native_str(self.query))
             for name, values in arguments.iteritems():
                 values = [v for v in values if v]
                 if values:
