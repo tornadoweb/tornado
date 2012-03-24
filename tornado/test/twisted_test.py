@@ -453,9 +453,10 @@ else:
             # Doesn't clean up its temp files
             'test_shebang',
             ],
-        'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
-            'test_systemCallUninterruptedByChildExit',
-            ],
+        # Process tests appear to work on OSX 10.7, but not 10.6
+        #'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
+        #    'test_systemCallUninterruptedByChildExit',
+        #    ],
         'twisted.internet.test.test_tcp.TCPClientTestsBuilder': [
             'test_badContext',  # ssl-related; see also SSLClientTestsMixin
             ],
