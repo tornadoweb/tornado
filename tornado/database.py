@@ -52,9 +52,9 @@ class Connection(object):
         args = dict(conv=CONVERSIONS, use_unicode=True, charset="utf8",
                     db=database, init_command='SET time_zone = "+0:00"',
                     sql_mode="TRADITIONAL")
-        if user is not None:
+        
+        if (user is not None) and (password is not None):
             args["user"] = user
-        if password is not None:
             args["passwd"] = password
 
         # We accept a path to a MySQL socket file or a host(:port) string
