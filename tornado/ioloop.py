@@ -164,7 +164,20 @@ class IOLoop(object):
         """Closes the IOLoop, freeing any resources used.
 
         If ``all_fds`` is true, all file descriptors registered on the
-        IOLoop will be closed (not just the ones created by the IOLoop itself.
+        IOLoop will be closed (not just the ones created by the IOLoop itself).
+
+        Many applications will only use a single IOLoop that runs for the
+        entire lifetime of the process.  In that case closing the IOLoop
+        is not necessary since everything will be cleaned up when the
+        process exits.  `IOLoop.close` is provided mainly for scenarios
+        such as unit tests, which create and destroy a large number of
+        IOLoops.
+
+        An IOLoop must be completely stopped before it can be closed.  This
+        means that `IOLoop.stop()` must be called *and* `IOLoop.start()` must
+        be allowed to return before attempting to call `IOLoop.close()`.
+        Therefore the call to `close` will usually appear just after
+        the call to `start` rather than near the call to `stop`.
         """
         self.remove_handler(self._waker.fileno())
         if all_fds:
@@ -335,6 +348,9 @@ class IOLoop(object):
 
         ioloop.start() will return after async_method has run its callback,
         whether that callback was invoked before or after ioloop.start.
+
+        Note that even after `stop` has been called, the IOLoop is not
+        completely stopped until `IOLoop.start` has also returned.
         """
         self._running = False
         self._stopped = True
