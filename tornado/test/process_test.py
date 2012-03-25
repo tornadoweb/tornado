@@ -45,6 +45,8 @@ class ProcessTest(LogTrapTestCase):
             logging.error("aborting child process from tearDown")
             logging.shutdown()
             os._exit(1)
+        # In the surviving process, clear the alarm we set earlier
+        signal.alarm(0)
         super(ProcessTest, self).tearDown()
 
     def test_multi_process(self):
@@ -55,7 +57,7 @@ class ProcessTest(LogTrapTestCase):
             return "http://127.0.0.1:%d%s" % (port, path)
         sockets = bind_sockets(port, "127.0.0.1")
         # ensure that none of these processes live too long
-        signal.alarm(5)  # master process
+        signal.alarm(5)
         try:
             id = fork_processes(3, max_restarts=3)
         except SystemExit, e:
@@ -65,18 +67,14 @@ class ProcessTest(LogTrapTestCase):
             self.assertTrue(task_id() is None)
             for sock in sockets:
                 sock.close()
-            signal.alarm(0)
             return
-        signal.alarm(5)  # child process
         try:
             if id in (0, 1):
-                signal.alarm(5)
                 self.assertEqual(id, task_id())
                 server = HTTPServer(self.get_app())
                 server.add_sockets(sockets)
                 IOLoop.instance().start()
             elif id == 2:
-                signal.alarm(5)
                 self.assertEqual(id, task_id())
                 for sock in sockets:
                     sock.close()
