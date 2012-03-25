@@ -79,6 +79,7 @@ import urlparse
 import uuid
 
 from tornado import escape
+from tornado import gen
 from tornado import locale
 from tornado import stack_context
 from tornado import template
@@ -1499,23 +1500,28 @@ class StaticFileHandler(RequestHandler):
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
         ])
 
-    The local root directory of the content should be passed as the "path"
-    argument to the handler.
+    :arg string path: The local root directory of the content
 
-    To support aggressive browser caching, if the argument "v" is given
-    with the path, we set an infinite HTTP expiration header. So, if you
-    want browsers to cache a file indefinitely, send them to, e.g.,
-    /static/images/myimage.png?v=xxx. Override ``get_cache_time`` method for
-    more fine-grained cache control.
+    :arg string v: To support aggressive browser caching, if given, we
+        set an infinite HTTP expiration header. So, if you want browsers
+        to cache a file indefinitely, send them to, e.g.,
+        /static/images/myimage.png?v=xxx. Override `get_cache_time`
+        method for more fine-grained cache control.
+
+    :arg int chunk_size: The size of each chunk that we read and write
+        the file in, to avoid exceeding available memory for very large
+        files
+
     """
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
     _static_hashes = {}
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(self, path, default_filename=None):
+    def initialize(self, path, default_filename=None, chunk_size=0x1000):
         self.root = os.path.abspath(path) + os.path.sep
         self.default_filename = default_filename
+        self.chunk_size = chunk_size # default 64kB
 
     @classmethod
     def reset(cls):
@@ -1525,6 +1531,7 @@ class StaticFileHandler(RequestHandler):
     def head(self, path):
         self.get(path, include_body=False)
 
+    @gen.engine
     def get(self, path, include_body=True):
         path = self.parse_url_path(path)
         abspath = os.path.abspath(os.path.join(self.root, path))
@@ -1545,10 +1552,10 @@ class StaticFileHandler(RequestHandler):
         if not os.path.isfile(abspath):
             raise HTTPError(403, "%s is not a file", path)
 
-        stat_result = os.stat(abspath)
-        modified = datetime.datetime.fromtimestamp(stat_result[stat.ST_MTIME])
-
+        stat_result = os.stat(abspath)[stat.ST_MTIME]
+        modified = datetime.datetime.fromtimestamp(stat_result)
         self.set_header("Last-Modified", modified)
+        self.set_header("Etag", '"%s"' % hashlib.sha1('\0'.join([abspath, str(stat_result)])).hexdigest())
 
         mime_type, encoding = mimetypes.guess_type(abspath)
         if mime_type:
@@ -1575,16 +1582,17 @@ class StaticFileHandler(RequestHandler):
                 self.set_status(304)
                 return
 
-        with open(abspath, "rb") as file:
-            data = file.read()
-            hasher = hashlib.sha1()
-            hasher.update(data)
-            self.set_header("Etag", '"%s"' % hasher.hexdigest())
-            if include_body:
-                self.write(data)
-            else:
-                assert self.request.method == "HEAD"
-                self.set_header("Content-Length", len(data))
+        if include_body:
+            with open(abspath, "rb") as file:
+                while True:
+                    data = file.read(self.chunk_size)
+                    if len(data) == 0:
+                        break
+                    self.write(data)
+                    yield gen.Task(self.flush)
+        else:
+            assert self.request.method == "HEAD"
+            self.set_header("Content-Length", os.path.getsize(abspath))
 
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
