@@ -29,3 +29,13 @@ In progress
   request, improving compatibility with some caches.
 * `tornado.simple_httpclient` no longer includes basic auth credentials
   in the ``Host`` header when those credentials are extracted from the URL.
+* `tornado.testing.AsyncTestCase.wait` now resets its timeout on each call.
+* `tornado.simple_httpclient` no longer modifies the caller-supplied header
+  dictionary, which caused problems when following redirects.
+* `tornado.web.addslash` and ``removeslash`` decorators now send permanent
+  redirects (301) instead of temporary (302).
+* `tornado.wsgi.WSGIApplication` now parses arguments correctly on Python 3.
+* `tornado.auth.FacebookGraphMixin` no longer sends ``post_args`` redundantly
+  in the url.
+* `tornado.iostream.IOStream.read_until` and ``read_until_regex`` are much
+  faster with large input.
