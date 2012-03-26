@@ -216,3 +216,20 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         finally:
             server.close()
             client.close()
+
+    def test_large_read_until(self):
+        # Performance test: read_until used to have a quadratic component
+        # so a read_until of 4MB would take 8 seconds; now it takes 0.25
+        # seconds.
+        server, client = self.make_iostream_pair()
+        try:
+            NUM_KB = 4096
+            for i in xrange(NUM_KB):
+                client.write(b("A") * 1024)
+            client.write(b("\r\n"))
+            server.read_until(b("\r\n"), self.stop)
+            data = self.wait()
+            self.assertEqual(len(data), NUM_KB * 1024 + 2)
+        finally:
+            server.close()
+            client.close()
