@@ -223,8 +223,7 @@ class _Option(object):
             str: self._parse_string,
         }.get(self.type, self.type)
         if self.multiple:
-            if self._value is None:
-                self._value = []
+            self._value = []
             for part in value.split(","):
                 if self.type in (int, long):
                     # allow ranges of the form X:Y (inclusive at both ends)
