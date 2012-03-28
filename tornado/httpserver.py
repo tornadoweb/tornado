@@ -175,6 +175,7 @@ class HTTPConnection(object):
         self._header_callback = stack_context.wrap(self._on_headers)
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
         self._write_callback = None
+        self._start_time = time.time()
 
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
@@ -221,6 +222,7 @@ class HTTPConnection(object):
                 disconnect = True
         self._request = None
         self._request_finished = False
+        self._start_time = None
         if disconnect:
             self.stream.close()
             return
@@ -240,7 +242,8 @@ class HTTPConnection(object):
             headers = httputil.HTTPHeaders.parse(data[eol:])
             self._request = HTTPRequest(
                 connection=self, method=method, uri=uri, version=version,
-                headers=headers, remote_ip=self.address[0])
+                headers=headers, remote_ip=self.address[0],
+                connection_start_time=self._start_time)
 
             content_length = headers.get("Content-Length")
             if content_length:
@@ -359,7 +362,7 @@ class HTTPRequest(object):
     """
     def __init__(self, method, uri, version="HTTP/1.0", headers=None,
                  body=None, remote_ip=None, protocol=None, host=None,
-                 files=None, connection=None):
+                 files=None, connection=None, connection_start_time=None):
         self.method = method
         self.uri = uri
         self.version = version
@@ -390,6 +393,7 @@ class HTTPRequest(object):
         self.connection = connection
         self._start_time = time.time()
         self._finish_time = None
+        self._connection_start_time = connection_start_time or self._start_time
 
         scheme, netloc, path, query, fragment = urlparse.urlsplit(native_str(uri))
         self.path = path
@@ -438,6 +442,15 @@ class HTTPRequest(object):
             return time.time() - self._start_time
         else:
             return self._finish_time - self._start_time
+
+    def full_request_time(self):
+        """Returns the full amount of time it took for this request to execute
+        (from accept to finish).
+        """
+        if self._finish_time is None:
+            return time.time() - self._connection_start_time
+        else:
+            return self._finish_time - self._connection_start_time
 
     def get_ssl_certificate(self):
         """Returns the client's SSL certificate, if any.
