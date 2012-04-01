@@ -19,13 +19,19 @@
 from __future__ import absolute_import, division, with_statement
 
 import copy
-import MySQLdb.constants
-import MySQLdb.converters
-import MySQLdb.cursors
 import itertools
 import logging
 import time
 
+try:
+    import MySQLdb.constants
+    import MySQLdb.converters
+    import MySQLdb.cursors
+except ImportError:
+    # If MySQLdb isn't available this module won't actually be useable,
+    # but we want it to at least be importable (mainly for readthedocs.org,
+    # which has limitations on third-party modules)
+    MySQLdb = None
 
 class Connection(object):
     """A lightweight wrapper around MySQLdb DB-API connections.
@@ -213,20 +219,20 @@ class Row(dict):
         except KeyError:
             raise AttributeError(name)
 
+if MySQLdb is not None:
+    # Fix the access conversions to properly recognize unicode/binary
+    FIELD_TYPE = MySQLdb.constants.FIELD_TYPE
+    FLAG = MySQLdb.constants.FLAG
+    CONVERSIONS = copy.copy(MySQLdb.converters.conversions)
 
-# Fix the access conversions to properly recognize unicode/binary
-FIELD_TYPE = MySQLdb.constants.FIELD_TYPE
-FLAG = MySQLdb.constants.FLAG
-CONVERSIONS = copy.copy(MySQLdb.converters.conversions)
+    field_types = [FIELD_TYPE.BLOB, FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING]
+    if 'VARCHAR' in vars(FIELD_TYPE):
+        field_types.append(FIELD_TYPE.VARCHAR)
 
-field_types = [FIELD_TYPE.BLOB, FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING]
-if 'VARCHAR' in vars(FIELD_TYPE):
-    field_types.append(FIELD_TYPE.VARCHAR)
-
-for field_type in field_types:
-    CONVERSIONS[field_type] = [(FLAG.BINARY, str)] + CONVERSIONS[field_type]
+    for field_type in field_types:
+        CONVERSIONS[field_type] = [(FLAG.BINARY, str)] + CONVERSIONS[field_type]
 
 
-# Alias some common MySQL exceptions
-IntegrityError = MySQLdb.IntegrityError
-OperationalError = MySQLdb.OperationalError
+    # Alias some common MySQL exceptions
+    IntegrityError = MySQLdb.IntegrityError
+    OperationalError = MySQLdb.OperationalError
