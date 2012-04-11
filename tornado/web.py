@@ -308,16 +308,27 @@ class RequestHandler(object):
         The returned values are always unicode.
         """
         values = []
-        for v in self.request.arguments.get(name, []):
-            v = self.decode_argument(v, name=name)
-            if isinstance(v, unicode):
-                # Get rid of any weird control chars (unless decoding gave
-                # us bytes, in which case leave it alone)
-                v = re.sub(r"[\x00-\x08\x0e-\x1f]", " ", v)
-            if strip:
-                v = v.strip()
-            values.append(v)
+        args = self.request.arguments.get(name, [])
+        if isinstance(args, dict):
+            values = {}
+            for k, val in args.iteritems():
+                for v in val:
+                    values[k] = self.strip_argument(v, strip)
+            values = [values]
+        else:
+            for v in args:
+                values.append(self.strip_argument(v, strip))
         return values
+
+    def strip_argument(self, value, whitespace=True):
+        value = self.decode_argument(value)
+        if isinstance(value, unicode):
+            # Get rid of any weird control chars (unless decoding gave
+            # us bytes, in which case leave it alone)
+            value = re.sub(r"[\x00-\x08\x0e-\x1f]", " ", value)
+        if whitespace:
+            value = value.strip()
+        return value
 
     def decode_argument(self, value, name=None):
         """Decodes an argument from the request.
