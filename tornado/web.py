@@ -313,20 +313,20 @@ class RequestHandler(object):
             values = {}
             for k, val in args.iteritems():
                 for v in val:
-                    values[k] = self.strip_argument(v, strip)
+                    values[k] = self.clean_argument(v, strip)
             values = [values]
         else:
             for v in args:
-                values.append(self.strip_argument(v, strip))
+                values.append(self.clean_argument(v, strip))
         return values
 
-    def strip_argument(self, value, whitespace=True):
+    def clean_argument(self, value, strip=True):
         value = self.decode_argument(value)
         if isinstance(value, unicode):
             # Get rid of any weird control chars (unless decoding gave
             # us bytes, in which case leave it alone)
             value = re.sub(r"[\x00-\x08\x0e-\x1f]", " ", value)
-        if whitespace:
+        if strip:
             value = value.strip()
         return value
 
