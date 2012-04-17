@@ -100,6 +100,16 @@ class TemplateTest(LogTrapTestCase):
         self.assertEqual(template.generate(x=5), b("yes"))
         self.assertEqual(template.generate(x=3), b("no"))
 
+    def test_try(self):
+        template = Template(utf8("""{% try %}
+try{% set y = 1/x %}
+{% except %}-except
+{% else %}-else
+{% finally %}-finally
+{% end %}"""))
+        self.assertEqual(template.generate(x=1), b("\ntry\n-else\n-finally\n"))
+        self.assertEqual(template.generate(x=0), b("\ntry-except\n-finally\n"))
+
     def test_comment_directive(self):
         template = Template(utf8("{% comment blah blah %}foo"))
         self.assertEqual(template.generate(), b("foo"))

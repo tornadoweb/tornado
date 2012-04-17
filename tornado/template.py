@@ -165,7 +165,7 @@ with ``{# ... #}``.
 ``{% set *x* = *y* %}``
     Sets a local variable.
 
-``{% try %}...{% except %}...{% finally %}...{% end %}``
+``{% try %}...{% except %}...{% finally %}...{% else %}...{% end %}``
     Same as the python ``try`` statement.
 
 ``{% while *condition* %}... {% end %}``
@@ -757,7 +757,7 @@ def _parse(reader, template, in_block=None):
 
         # Intermediate ("else", "elif", etc) blocks
         intermediate_blocks = {
-            "else": set(["if", "for", "while"]),
+            "else": set(["if", "for", "while", "try"]),
             "elif": set(["if"]),
             "except": set(["try"]),
             "finally": set(["try"]),
