@@ -362,10 +362,15 @@ class IOStream(object):
         if self._read_from_buffer():
             return
         self._check_closed()
-        while True:
-            if self._read_to_buffer() == 0:
-                break
-            self._check_closed()
+        try:
+            # See comments in _handle_read about incrementing _pending_callbacks
+            self._pending_callbacks += 1
+            while True:
+                if self._read_to_buffer() == 0:
+                    break
+                self._check_closed()
+        finally:
+            self._pending_callbacks -= 1
         if self._read_from_buffer():
             return
         self._add_io_state(self.io_loop.READ)

@@ -636,8 +636,7 @@ class RequestHandler(object):
                 self.request.write(headers, callback=callback)
             return
 
-        if headers or chunk:
-            self.request.write(headers + chunk, callback=callback)
+        self.request.write(headers + chunk, callback=callback)
 
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""

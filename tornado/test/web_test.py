@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, with_statement
+from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
 from tornado.iostream import IOStream
 from tornado.template import DictLoader
@@ -366,6 +367,19 @@ class RedirectHandler(RequestHandler):
         else:
             raise Exception("didn't get permanent or status arguments")
 
+class EmptyFlushCallbackHandler(RequestHandler):
+    @gen.engine
+    @asynchronous
+    def get(self):
+        # Ensure that the flush callback is run whether or not there
+        # was any output.
+        yield gen.Task(self.flush)  # "empty" flush, but writes headers
+        yield gen.Task(self.flush)  # empty flush
+        self.write("o")
+        yield gen.Task(self.flush)  # flushes the "o"
+        yield gen.Task(self.flush)  # empty flush
+        self.finish("k")
+
 
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
@@ -391,6 +405,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/flow_control", FlowControlHandler),
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
+            url("/empty_flush", EmptyFlushCallbackHandler),
             ]
         return Application(urls,
                            template_loader=loader,
@@ -483,6 +498,10 @@ js_embed()
         self.assertEqual(response.code, 302)
         response = self.fetch("/redirect?status=307", follow_redirects=False)
         self.assertEqual(response.code, 307)
+
+    def test_empty_flush(self):
+        response = self.fetch("/empty_flush")
+        self.assertEqual(response.body, b("ok"))
 
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
