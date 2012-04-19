@@ -31,6 +31,7 @@ import logging
 import socket
 import time
 import urlparse
+import re
 
 from tornado.escape import utf8, native_str, parse_qs_bytes
 from tornado import httputil
@@ -268,8 +269,13 @@ class HTTPConnection(object):
                 for name, values in arguments.iteritems():
                     values = [v for v in values if v]
                     if values:
-                        self._request.arguments.setdefault(name, []).extend(
-                            values)
+                        list_arg = re.search(r"^(\w*)\[(\w*)]$", name)
+                        if list_arg:
+                            self._request.arguments.setdefault(list_arg.group(1), {}) \
+                                .setdefault(list_arg.group(2), []).extend(values)
+                        else:
+                            self._request.arguments.setdefault(name, []).extend(
+                                values)
             elif content_type.startswith("multipart/form-data"):
                 fields = content_type.split(";")
                 for field in fields:
