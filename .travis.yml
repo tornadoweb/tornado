@@ -1,7 +1,8 @@
 # http://travis-ci.org/#!/facebook/tornado
 language: python
+# The build of 2.6 on travis has a bug related to ssl (it segfaults in
+# test_sslv2_fail)
 python:
-    - 2.6
     - 2.7
     - 3.2
 # TODO: install pycurl, twisted, etc (depends on python version)
@@ -12,4 +13,4 @@ script:
     # the python2 code from the current directory instead of the installed
     # 2to3 version.
     - cd maint
-    - python -m tornado.test.runtests -- -v tornado.test.runtests.all
+    - python -m tornado.test.runtests
