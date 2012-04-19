@@ -12,4 +12,4 @@ script:
     # the python2 code from the current directory instead of the installed
     # 2to3 version.
     - cd maint
-    - python -m tornado.test.runtests
+    - python -m tornado.test.runtests -- -v tornado.test.runtests.all
