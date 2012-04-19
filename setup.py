@@ -45,7 +45,8 @@ distutils.core.setup(
     packages = ["tornado", "tornado.test", "tornado.platform"],
     package_data = {
         "tornado": ["ca-certificates.crt"],
-        "tornado.test": ["README", "test.crt", "test.key", "static/robots.txt"],
+        "tornado.test": ["README", "test.crt", "test.key", "static/robots.txt",
+                         "templates/utf8.html"],
         },
     ext_modules = extensions,
     author="Facebook",

@@ -352,7 +352,7 @@ class Loader(BaseLoader):
 
     def _create_template(self, name):
         path = os.path.join(self.root, name)
-        f = open(path, "r")
+        f = open(path, "rb")
         template = Template(f.read(), name=name, loader=self)
         f.close()
         return template
