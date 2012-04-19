@@ -20,10 +20,10 @@ class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):
         This test makes sure that a second call to wait()
         clears the first timeout.
         """
-        self.io_loop.add_timeout(time.time() + 0.001, self.stop)
-        self.wait(timeout = 0.002)
-        self.io_loop.add_timeout(time.time() + 0.003, self.stop)
-        self.wait(timeout = 0.01)
+        self.io_loop.add_timeout(time.time() + 0.01, self.stop)
+        self.wait(timeout = 0.02)
+        self.io_loop.add_timeout(time.time() + 0.03, self.stop)
+        self.wait(timeout = 0.1)
 
 class SetUpTearDownTest(unittest.TestCase):
     def test_set_up_tear_down(self):
