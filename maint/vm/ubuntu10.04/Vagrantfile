@@ -2,7 +2,7 @@ Vagrant::Config.run do |config|
     config.vm.box = "lucid64"
     config.vm.box_url = "http://files.vagrantup.com/lucid64.box"
 
-    config.vm.network "172.19.1.2"
+    config.vm.network :hostonly, "172.19.1.2"
     config.vm.share_folder("tornado", "/tornado", "../../..", :nfs=> true)
 
     config.vm.provision :shell, :path => "setup.sh"
