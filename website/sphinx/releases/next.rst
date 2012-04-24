@@ -4,8 +4,6 @@ What's new in the next version of Tornado
 In progress
 -----------
 
-* Colored logging configuration in `tornado.options` is compatible with
-  the upcoming release of Python 3.3.
 * `tornado.simple_httpclient` is better about closing its sockets
   instead of leaving them for garbage collection.
 * Repeated calls to `RequestHandler.set_cookie` with the same name now
