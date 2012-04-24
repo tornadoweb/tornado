@@ -23,5 +23,5 @@
 # is zero for an official release, positive for a development branch,
 # or negative for a release candidate (after the base version number
 # has been incremented)
-version = "2.2"
-version_info = (2, 2, 0, 0)
+version = "2.2.1"
+version_info = (2, 2, 1, 0)
