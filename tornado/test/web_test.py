@@ -381,6 +381,16 @@ class EmptyFlushCallbackHandler(RequestHandler):
         self.finish("k")
 
 
+class HeaderInjectionHandler(RequestHandler):
+    def get(self):
+        try:
+            self.set_header("X-Foo", "foo\r\nX-Bar: baz")
+            raise Exception("Didn't get expected exception")
+        except ValueError, e:
+            assert "Unsafe header value" in str(e)
+            self.finish(b("ok"))
+
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         loader = DictLoader({
@@ -406,6 +416,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
             url("/empty_flush", EmptyFlushCallbackHandler),
+            url("/header_injection", HeaderInjectionHandler),
             ]
         return Application(urls,
                            template_loader=loader,
@@ -501,6 +512,10 @@ js_embed()
 
     def test_empty_flush(self):
         response = self.fetch("/empty_flush")
+        self.assertEqual(response.body, b("ok"))
+
+    def test_header_injection(self):
+        response = self.fetch("/header_injection")
         self.assertEqual(response.body, b("ok"))
 
 

@@ -276,7 +276,7 @@ class RequestHandler(object):
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request. Also cap length to
         # prevent obviously erroneous values.
-        if len(value) > 4000 or re.match(b(r"[\x00-\x1f]"), value):
+        if len(value) > 4000 or re.search(b(r"[\x00-\x1f]"), value):
             raise ValueError("Unsafe header value %r", value)
         return value
 
