@@ -335,6 +335,16 @@ class RedirectHandler(RequestHandler):
             raise Exception("didn't get permanent or status arguments")
 
 
+class HeaderInjectionHandler(RequestHandler):
+    def get(self):
+        try:
+            self.set_header("X-Foo", "foo\r\nX-Bar: baz")
+            raise Exception("Didn't get expected exception")
+        except ValueError, e:
+            assert "Unsafe header value" in str(e)
+            self.finish(b("ok"))
+
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         loader = DictLoader({
@@ -359,6 +369,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/flow_control", FlowControlHandler),
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
+            url("/header_injection", HeaderInjectionHandler),
             ]
         return Application(urls,
                            template_loader=loader,
@@ -451,6 +462,10 @@ js_embed()
         self.assertEqual(response.code, 302)
         response = self.fetch("/redirect?status=307", follow_redirects=False)
         self.assertEqual(response.code, 307)
+
+    def test_header_injection(self):
+        response = self.fetch("/header_injection")
+        self.assertEqual(response.body, b("ok"))
 
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
