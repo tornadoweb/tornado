@@ -201,7 +201,7 @@ class _HTTPConnection(object):
                 # compatibility with servers configured for TLSv1 only,
                 # but nearly all servers support SSLv3:
                 # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
-                if sys.version_info >= (2, 7):
+                if (2, 7) <= sys.version_info < (3,0) or sys.version_info >= (3, 2):
                     ssl_options["ciphers"] = "DEFAULT:!SSLv2"
                 else:
                     # This is really only necessary for pre-1.0 versions
