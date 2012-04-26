@@ -48,6 +48,8 @@ try:
                  fileno=None,
                  suppress_ragged_eofs=True):
 
+            # Prevent the original socket from being gc'ed (and thereby closed)
+            self.__original_sock_prevent_gc = sock
             connected = False
             if sock is not None:
                 socket.socket.__init__(self,
