@@ -31,6 +31,78 @@ from tornado.util import b, bytes_type
 
 try:
     import ssl  # Python 2.6+
+
+    # This is a crazy hack for a crazy bug.
+    # The built-in ssl.SSLSocket.__init__ on Python 3.1 uses a dup() of the
+    # underlying (non-SSL) socket, and then closes the original. This breaks
+    # our assumption that  ssl.SSLSocket(sock).fileno() == sock.fileno() .
+    # Therefore, we monkey-patch ssl.SSLSocket.__init__ with a slightly
+    # modified version.
+    if sys.version_info[:2] == (3, 1):
+        import _ssl
+        def __init__(self, sock=None, keyfile=None, certfile=None,
+                 server_side=False, cert_reqs=ssl.CERT_NONE,
+                 ssl_version=ssl.PROTOCOL_SSLv23, ca_certs=None,
+                 do_handshake_on_connect=True,
+                 family=socket.AF_INET, type=ssl.SOCK_STREAM, proto=0,
+                 fileno=None,
+                 suppress_ragged_eofs=True):
+
+            connected = False
+            if sock is not None:
+                socket.socket.__init__(self,
+                                family=sock.family,
+                                type=sock.type,
+                                proto=sock.proto,
+                                fileno=sock.fileno()) # <-- changed
+                self.settimeout(sock.gettimeout())
+                # see if it's connected
+                try:
+                    sock.getpeername()
+                except socket.socket_error as e:
+                    if e.errno != errno.ENOTCONN:
+                        raise
+                else:
+                    connected = True
+                #sock.close() # <-- changed
+            elif fileno is not None:
+                socket.__init__(self, fileno=fileno)
+            else:
+                socket.__init__(self, family=family, type=type, proto=proto)
+
+            if certfile and not keyfile:
+                keyfile = certfile
+
+            self._closed = False
+            self._sslobj = None
+            if connected:
+                # create the SSL object
+                try:
+                    self._sslobj = _ssl.sslwrap(self, server_side,
+                                                keyfile, certfile,
+                                                cert_reqs, ssl_version,
+                                                ca_certs)
+                    if do_handshake_on_connect:
+                        timeout = self.gettimeout()
+                        if timeout == 0.0:
+                            # non-blocking
+                            raise ValueError("do_handshake_on_connect should "
+                                   "not be specified for non-blocking sockets")
+                        self.do_handshake()
+
+                except socket_error as x:
+                    self.close()
+                    raise x
+
+            self.keyfile = keyfile
+            self.certfile = certfile
+            self.cert_reqs = cert_reqs
+            self.ssl_version = ssl_version
+            self.ca_certs = ca_certs
+            self.do_handshake_on_connect = do_handshake_on_connect
+            self.suppress_ragged_eofs = suppress_ragged_eofs
+        ssl.SSLSocket.__init__ = __init__
+
 except ImportError:
     ssl = None
 
