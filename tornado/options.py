@@ -184,7 +184,7 @@ def print_help(file=sys.stdout):
 
 
 class _Options(dict):
-    """Our global program options, an dictionary with object-like access."""
+    """Our global program options, a dictionary with object-like access."""
     @classmethod
     def instance(cls):
         if not hasattr(cls, "_instance"):
@@ -196,9 +196,14 @@ class _Options(dict):
             return self[name].value()
         raise AttributeError("Unrecognized option %r" % name)
 
+    def __setattr__(self, name, value):
+        if isinstance(self.get(name), _Option):
+            return self[name].set(value)
+        raise AttributeError("Unrecognized option %r" % name)
+
 
 class _Option(object):
-    def __init__(self, name, default=None, type=str, help=None, metavar=None,
+    def __init__(self, name, default=None, type=basestring, help=None, metavar=None,
                  multiple=False, file_name=None, group_name=None):
         if default is None and multiple:
             default = []
@@ -220,7 +225,7 @@ class _Option(object):
             datetime.datetime: self._parse_datetime,
             datetime.timedelta: self._parse_timedelta,
             bool: self._parse_bool,
-            str: self._parse_string,
+            basestring: self._parse_string,
         }.get(self.type, self.type)
         if self.multiple:
             if self._value is None:
@@ -249,8 +254,8 @@ class _Option(object):
                                 (self.name, self.type.__name__))
         else:
             if value != None and not isinstance(value, self.type):
-                raise Error("Option %r is required to be a %s" %
-                            (self.name, self.type.__name__))
+                raise Error("Option %r is required to be a %s (%s given)" %
+                            (self.name, self.type.__name__, type(value)))
         self._value = value
 
     # Supported date/time formats in our options
