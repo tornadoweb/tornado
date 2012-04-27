@@ -184,7 +184,7 @@ def print_help(file=sys.stdout):
             if option.default is not None and option.default != '':
                 description += " (default %s)" % option.default
             lines = textwrap.wrap(description, 79 - 35)
-            if len(prefix) > 30:
+            if len(prefix) > 30 or len(lines) == 0:
                 lines.insert(0, '')
             print >> file, "  --%-30s %s" % (prefix, lines[0])
             for line in lines[1:]:
