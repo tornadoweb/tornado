@@ -2,12 +2,6 @@
 
 set -e
 
-# Ubuntu 10.10+ do some extra permissions checks for hard links.
-# Vagrant's nfs shared folders come through with funny uids, but
-# attempts to access them still work despite the visible permissions
-# being incorrect.
-sysctl -w kernel.yama.protected_nonaccess_hardlinks=0
-
 apt-get update
 
 # libcurl4-gnutls-dev is the default if you ask for libcurl4-dev, but it
@@ -26,7 +20,7 @@ python-software-properties
 apt-get -y install $APT_PACKAGES
 
 
-# Ubuntu 11.04 has python 2.7 as default; install more from here.
+# Ubuntu 12.04 has python 2.7 as default; install more from here.
 # The most important thing is to have both 2.5 and a later version so we
 # test with both tornado.epoll and 2.6+ stdlib's select.epoll.
 add-apt-repository ppa:fkrull/deadsnakes
@@ -35,8 +29,6 @@ apt-get update
 DEADSNAKES_PACKAGES="
 python2.5
 python2.5-dev
-python2.6
-python2.6-dev
 python3.2
 python3.2-dev
 "
