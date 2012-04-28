@@ -5,15 +5,18 @@ import gzip
 import logging
 import re
 import socket
+from contextlib import closing
+import functools
 
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
-
+from tornado import netutil
+from tornado.iostream import IOStream
 
 class SimpleHTTPClientCommonTestCase(HTTPClientCommonTestCase):
     def get_http_client(self):
@@ -263,3 +266,33 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.http_client.fetch(url, self.stop)
         response = self.wait()
         self.assertTrue(host_re.match(response.body), response.body)
+
+    def test_100_continue(self):
+        # testing if httpclient is able to skip 100 continue responses.
+        # to test without httpserver implementation, using
+        # raw response as same as httpclient_test.test_chunked_close.
+        port = get_unused_port()
+        (sock,) = netutil.bind_sockets(port, address="127.0.0.1")
+        with closing(sock):
+            def write_response(stream, request_data):
+                stream.write(b("""\
+HTTP/1.1 100 Continue
+
+HTTP/1.1 200 OK
+Content-Length: 6
+
+hjkl
+""").replace(b("\n"), b("\r\n")), callback=stream.close)
+            def accept_callback(conn, address):
+                # fake an HTTP server using chunked encoding where the final chunks
+                # and connection close all happen at once
+                stream = IOStream(conn, io_loop=self.io_loop)
+                stream.read_until(b("\r\n\r\n"),
+                                  functools.partial(write_response, stream))
+            netutil.add_accept_handler(sock, accept_callback, self.io_loop)
+            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop,
+                                   headers={"Expect": "100-continue"})
+            resp = self.wait()
+            resp.rethrow()
+            self.assertEqual(resp.body, b("hjkl\r\n"))
+
