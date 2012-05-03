@@ -1,15 +1,14 @@
 application: python-tornado
 version: 2
-runtime: python27
-threadsafe: yes
+runtime: python
 api_version: 1
 
 handlers:
 - url: /static/tornado-0.1.tar.gz
-  script: website.application
+  script: website.py
 
 - url: /static/tornado-0.2.tar.gz
-  script: website.application
+  script: website.py
 
 - url: /static/
   static_dir: static
@@ -23,10 +22,10 @@ handlers:
   upload: static/favicon.ico
 
 - url: /documentation/?
-  script: website.application
+  script: website.py
 
 - url: /documentation
   static_dir: sphinx/build/html
 
 - url: /.*
-  script: website.application
+  script: website.py
