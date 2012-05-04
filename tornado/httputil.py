@@ -22,6 +22,7 @@ import logging
 import urllib
 import re
 
+from tornado.escape import utf8
 from tornado.util import b, ObjectDict
 
 
@@ -186,7 +187,9 @@ def url_concat(url, args):
         return url
     if url[-1] not in ('?', '&'):
         url += '&' if ('?' in url) else '?'
-    return url + urllib.urlencode(args)
+    if hasattr(args, 'items'):
+        args = args.items()
+    return url + urllib.urlencode([(utf8(k), utf8(v)) for k, v in args])
 
 
 class HTTPFile(ObjectDict):

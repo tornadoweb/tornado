@@ -82,7 +82,7 @@ from tornado import escape
 from tornado import locale
 from tornado import stack_context
 from tornado import template
-from tornado.escape import utf8, _unicode
+from tornado.escape import url_unescape, utf8, _unicode
 from tornado.util import b, bytes_type, import_object, ObjectDict
 
 try:
@@ -1340,14 +1340,20 @@ class Application(object):
                 self, request, url="http://" + self.default_host + "/")
         else:
             for spec in handlers:
-                match = spec.regex.match(request.path)
+                path = request.path
+                path_encoding = self.settings.get('path_encoding')
+                if path_encoding:
+                    path = url_unescape(path, encoding=path_encoding)
+                match = spec.regex.match(path)
                 if match:
                     handler = spec.handler_class(self, request, **spec.kwargs)
                     if spec.regex.groups:
                         # None-safe wrapper around url_unescape to handle
                         # unmatched optional groups correctly
                         def unquote(s):
-                            if s is None:
+                            # If the path has already been percent-decoded,
+                            # don't do it again
+                            if s is None or path_encoding:
                                 return s
                             return escape.url_unescape(s, encoding=None)
                         # Pass matched groups to the handler.  Since
