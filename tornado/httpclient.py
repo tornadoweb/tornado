@@ -35,6 +35,7 @@ import calendar
 import email.utils
 import httplib
 import time
+import urllib
 import weakref
 
 from tornado.escape import utf8
@@ -280,7 +281,8 @@ class HTTPRequest(object):
         self.proxy_port = proxy_port
         self.proxy_username = proxy_username
         self.proxy_password = proxy_password
-        self.url = url
+        # Quote UTF-8 encoded characters, not URI-reserved ones
+        self.url = urllib.quote_plus(utf8(url), safe="!*'();:@&=+$,/?#[]%")
         self.method = method
         self.headers = headers
         self.body = utf8(body)

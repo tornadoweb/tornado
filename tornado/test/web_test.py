@@ -243,22 +243,33 @@ class EchoHandler(RequestHandler):
                         args=recursive_unicode(self.request.arguments)))
 
 
+class PathHandler(RequestHandler):
+    def get(self):
+        self.write(self.request.path)
+
+
 class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
-        return Application([("/(.*)", EchoHandler)])
+        return Application([
+            ("/group/(.*)", EchoHandler),
+            (u"/\u00e9", PathHandler),
+            ], path_encoding='utf-8')
 
-    def test_question_mark(self):
+    def test_group_reserved(self):
         # Ensure that url-encoded question marks are handled properly
-        self.assertEqual(json_decode(self.fetch('/%3F').body),
+        self.assertEqual(json_decode(self.fetch('/group/%3F').body),
                          dict(path='?', args={}))
-        self.assertEqual(json_decode(self.fetch('/%3F?%3F=%3F').body),
+        self.assertEqual(json_decode(self.fetch('/group/%3F?%3F=%3F').body),
                          dict(path='?', args={'?': ['?']}))
 
-    def test_path_encoding(self):
+    def test_group_encoding(self):
         # Path components and query arguments should be decoded the same way
-        self.assertEqual(json_decode(self.fetch('/%C3%A9?arg=%C3%A9').body),
+        self.assertEqual(json_decode(self.fetch('/group/%C3%A9?arg=%C3%A9').body),
                          {u"path": u"\u00e9",
                           u"args": {u"arg": [u"\u00e9"]}})
+
+    def test_path_encoding(self):
+        self.assertEqual(self.fetch(u'/\u00e9').body, "/%C3%A9")
 
 
 class TypeCheckHandler(RequestHandler):
