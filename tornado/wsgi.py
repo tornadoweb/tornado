@@ -96,8 +96,8 @@ class WSGIApplication(web.Application):
         status = str(handler._status_code) + " " + \
             httplib.responses[handler._status_code]
         headers = handler._headers.items()
-        for cookie_dict in getattr(handler, "_new_cookies", []):
-            for cookie in cookie_dict.values():
+        if hasattr(handler, "_new_cookie"):
+            for cookie in handler._new_cookie.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))
         start_response(status,
                        [(native_str(k), native_str(v)) for (k, v) in headers])
