@@ -98,7 +98,8 @@ class RequestHandler(object):
     should override the class variable SUPPORTED_METHODS in your
     RequestHandler class.
     """
-    SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PUT", "OPTIONS")
+    SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PATCH", "PUT",
+                         "OPTIONS")
 
     _template_loaders = {}  # {path: template.BaseLoader}
     _template_loader_lock = threading.Lock()
@@ -163,6 +164,9 @@ class RequestHandler(object):
         raise HTTPError(405)
 
     def delete(self, *args, **kwargs):
+        raise HTTPError(405)
+
+    def patch(self, *args, **kwargs):
         raise HTTPError(405)
 
     def put(self, *args, **kwargs):
