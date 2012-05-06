@@ -227,7 +227,7 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
 
 
 class EchoHandler(RequestHandler):
-    def get(self, path):
+    def get(self, *path_args):
         # Type checks: web.py interfaces convert argument values to
         # unicode strings (by default, but see also decode_argument).
         # In httpserver.py (i.e. self.request.arguments), they're left
@@ -238,27 +238,48 @@ class EchoHandler(RequestHandler):
                 assert type(value) == bytes_type, repr(value)
             for value in self.get_arguments(key):
                 assert type(value) == unicode, repr(value)
-        assert type(path) == unicode, repr(path)
-        self.write(dict(path=path,
+        for arg in path_args:
+            assert type(arg) == unicode, repr(arg)
+        self.write(dict(path=self.request.path,
+                        path_args=path_args,
                         args=recursive_unicode(self.request.arguments)))
 
 
 class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
-        return Application([("/(.*)", EchoHandler)])
+        return Application([
+                ("/group/(.*)", EchoHandler),
+                ("/slashes/([^/]*)/([^/]*)", EchoHandler),
+                ])
 
-    def test_question_mark(self):
+    def fetch_json(self, path):
+        return json_decode(self.fetch(path).body)
+
+    def test_group_question_mark(self):
         # Ensure that url-encoded question marks are handled properly
-        self.assertEqual(json_decode(self.fetch('/%3F').body),
-                         dict(path='?', args={}))
-        self.assertEqual(json_decode(self.fetch('/%3F?%3F=%3F').body),
-                         dict(path='?', args={'?': ['?']}))
+        self.assertEqual(self.fetch_json('/group/%3F'),
+                         dict(path='/group/%3F', path_args=['?'], args={}))
+        self.assertEqual(self.fetch_json('/group/%3F?%3F=%3F'),
+                         dict(path='/group/%3F', path_args=['?'], args={'?': ['?']}))
 
-    def test_path_encoding(self):
+    def test_group_encoding(self):
         # Path components and query arguments should be decoded the same way
-        self.assertEqual(json_decode(self.fetch('/%C3%A9?arg=%C3%A9').body),
-                         {u"path": u"\u00e9",
+        self.assertEqual(self.fetch_json('/group/%C3%A9?arg=%C3%A9'),
+                         {u"path": u"/group/%C3%A9",
+                          u"path_args": [u"\u00e9"],
                           u"args": {u"arg": [u"\u00e9"]}})
+
+    def test_slashes(self):
+        # Slashes may be escaped to appear as a single "directory" in the path,
+        # but they are then unescaped when passed to the get() method.
+        self.assertEqual(self.fetch_json('/slashes/foo/bar'),
+                         dict(path="/slashes/foo/bar",
+                              path_args=["foo", "bar"],
+                              args={}))
+        self.assertEqual(self.fetch_json('/slashes/a%2Fb/c%2Fd'),
+                         dict(path="/slashes/a%2Fb/c%2Fd",
+                              path_args=["a/b", "c/d"],
+                              args={}))
 
 
 class TypeCheckHandler(RequestHandler):
