@@ -123,7 +123,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
 
 class _HTTPConnection(object):
-    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
+    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE"])
 
     def __init__(self, io_loop, client, request, release_callback,
                  final_callback, max_buffer_size):
@@ -278,7 +278,7 @@ class _HTTPConnection(object):
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
-            if self.request.method in ("POST", "PUT"):
+            if self.request.method in ("POST", "PATCH", "PUT"):
                 assert self.request.body is not None
             else:
                 assert self.request.body is None
