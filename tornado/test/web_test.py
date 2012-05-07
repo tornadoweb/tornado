@@ -442,7 +442,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
                 })
         urls = [
             url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
-            url("/decode_arg/(.*)", DecodeArgHandler),
+            url("/decode_arg/(.*)", DecodeArgHandler, name='decode_arg'),
             url("/decode_arg_kw/(?P<arg>.*)", DecodeArgHandler),
             url("/linkify", LinkifyHandler),
             url("/uimodule_resources", UIModuleResourceHandler),
@@ -453,10 +453,11 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/empty_flush", EmptyFlushCallbackHandler),
             url("/header_injection", HeaderInjectionHandler),
             ]
-        return Application(urls,
-                           template_loader=loader,
-                           autoescape="xhtml_escape",
-                           cookie_secret=self.COOKIE_SECRET)
+        self.app = Application(urls,
+                               template_loader=loader,
+                               autoescape="xhtml_escape",
+                               cookie_secret=self.COOKIE_SECRET)
+        return self.app
 
     def fetch_json(self, *args, **kwargs):
         response = self.fetch(*args, **kwargs)
@@ -495,6 +496,16 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(data, {u'path': [u'bytes', u'c3a9'],
                                 u'query': [u'bytes', u'c3a9'],
                                 })
+
+    def test_reverse_url(self):
+        self.assertEqual(self.app.reverse_url('decode_arg', 'foo'),
+                         '/decode_arg/foo')
+        self.assertEqual(self.app.reverse_url('decode_arg', 42),
+                         '/decode_arg/42')
+        self.assertEqual(self.app.reverse_url('decode_arg', b('\xe9')),
+                         '/decode_arg/%E9')
+        self.assertEqual(self.app.reverse_url('decode_arg', u'\u00e9'),
+                         '/decode_arg/%C3%A9')
 
     def test_uimodule_unescaped(self):
         response = self.fetch("/linkify")

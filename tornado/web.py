@@ -1391,7 +1391,11 @@ class Application(object):
     def reverse_url(self, name, *args):
         """Returns a URL path for handler named `name`
 
-        The handler must be added to the application as a named URLSpec
+        The handler must be added to the application as a named URLSpec.
+
+        Args will be substituted for capturing groups in the URLSpec regex.
+        They will be converted to strings if necessary, encoded as utf8,
+        and url-escaped.
         """
         if name in self.named_handlers:
             return self.named_handlers[name].reverse(*args)
@@ -1955,7 +1959,12 @@ class URLSpec(object):
             "not found"
         if not len(args):
             return self._path
-        return self._path % tuple([str(a) for a in args])
+        converted_args = []
+        for a in args:
+            if not isinstance(a, (unicode, bytes_type)):
+                a = str(a)
+            converted_args.append(escape.url_escape(utf8(a)))
+        return self._path % tuple(converted_args)
 
 url = URLSpec
 
