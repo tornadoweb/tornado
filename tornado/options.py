@@ -145,10 +145,9 @@ def parse_command_line(args=None):
         print_help()
         sys.exit(0)
 
-    # Set up log level and pretty console logging by default
+    # Set up log level
     if options.logging != 'none':
         logging.getLogger().setLevel(getattr(logging, options.logging.upper()))
-        enable_pretty_logging()
 
     return remaining
 
@@ -324,10 +323,7 @@ class Error(Exception):
 
 
 def enable_pretty_logging():
-    """Turns on formatted logging output as configured.
-
-    This is called automatically by `parse_command_line`.
-    """
+    """Turns on formatted logging output as configured. """
     root_logger = logging.getLogger()
     if options.log_file_prefix:
         channel = logging.handlers.RotatingFileHandler(
