@@ -280,7 +280,9 @@ def main():
     if mode == 'module':
         # runpy did a fake import of the module as __main__, but now it's
         # no longer in sys.modules.  Figure out where it is and watch it.
-        watch(pkgutil.get_loader(module).get_filename())
+        loader = pkgutil.get_loader(module)
+        if loader is not None:
+            watch(loader.get_filename())
 
     wait()
 
