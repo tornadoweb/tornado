@@ -5,7 +5,7 @@ from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type, ObjectDict
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value
 
 import binascii
 import logging
@@ -59,6 +59,13 @@ class SecureCookieTest(LogTrapTestCase):
         handler._cookies['foo'] = utf8('1234|5678%s|%s' % (timestamp, sig))
         # it gets rejected
         assert handler.get_secure_cookie('foo') is None
+
+    def test_arbitrary_bytes(self):
+        # Secure cookies accept arbitrary data (which is base64 encoded).
+        # Note that normal cookies accept only a subset of ascii.
+        handler = CookieTestRequestHandler()
+        handler.set_secure_cookie('foo', b('\xe9'))
+        self.assertEqual(handler.get_secure_cookie('foo'), b('\xe9'))
 
 
 class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
@@ -294,6 +301,12 @@ class TypeCheckHandler(RequestHandler):
         self.check_type('cookie_key', self.cookies.keys()[0], str)
         self.check_type('cookie_value', self.cookies.values()[0].value, str)
 
+        # Secure cookies return bytes because they can contain arbitrary
+        # data, but regular cookies are native strings.
+        assert self.cookies.keys() == ['asdf']
+        self.check_type('get_secure_cookie', self.get_secure_cookie('asdf'), bytes_type)
+        self.check_type('get_cookie', self.get_cookie('asdf'), str)
+
         self.check_type('xsrf_token', self.xsrf_token, bytes_type)
         self.check_type('xsrf_form_html', self.xsrf_form_html(), str)
 
@@ -413,6 +426,7 @@ class HeaderInjectionHandler(RequestHandler):
 
 
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
+    COOKIE_SECRET = "WebTest.COOKIE_SECRET"
     def get_app(self):
         loader = DictLoader({
                 "linkify.html": "{% module linkify(message) %}",
@@ -441,7 +455,8 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             ]
         return Application(urls,
                            template_loader=loader,
-                           autoescape="xhtml_escape")
+                           autoescape="xhtml_escape",
+                           cookie_secret=self.COOKIE_SECRET)
 
     def fetch_json(self, *args, **kwargs):
         response = self.fetch(*args, **kwargs)
@@ -449,13 +464,15 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
         return json_decode(response.body)
 
     def test_types(self):
+        cookie_value = to_unicode(create_signed_value(self.COOKIE_SECRET,
+                                                      "asdf", "qwer"))
         response = self.fetch("/typecheck/asdf?foo=bar",
-                              headers={"Cookie": "cook=ie"})
+                              headers={"Cookie": "asdf=" + cookie_value})
         data = json_decode(response.body)
         self.assertEqual(data, {})
 
         response = self.fetch("/typecheck/asdf?foo=bar", method="POST",
-                              headers={"Cookie": "cook=ie"},
+                              headers={"Cookie": "asdf=" + cookie_value},
                               body="foo=bar")
 
     def test_decode_argument(self):

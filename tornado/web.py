@@ -408,6 +408,9 @@ class RequestHandler(object):
         Note that the ``expires_days`` parameter sets the lifetime of the
         cookie in the browser, but is independent of the ``max_age_days``
         parameter to `get_secure_cookie`.
+
+        Secure cookies may contain arbitrary byte values, not just unicode
+        strings (unlike regular cookies)
         """
         self.set_cookie(name, self.create_signed_value(name, value),
                         expires_days=expires_days, **kwargs)
@@ -424,7 +427,11 @@ class RequestHandler(object):
                                    name, value)
 
     def get_secure_cookie(self, name, value=None, max_age_days=31):
-        """Returns the given signed cookie if it validates, or None."""
+        """Returns the given signed cookie if it validates, or None.
+
+        The decoded cookie value is returned as a byte string (unlike
+        `get_cookie`).
+        """
         self.require_setting("cookie_secret", "secure cookies")
         if value is None:
             value = self.get_cookie(name)
