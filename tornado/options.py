@@ -55,7 +55,9 @@ import logging
 import logging.handlers
 import re
 import sys
+import os
 import time
+import textwrap
 
 from tornado.escape import _unicode
 
@@ -165,21 +167,28 @@ def parse_config_file(path):
 def print_help(file=sys.stdout):
     """Prints all the command line options to stdout."""
     print >> file, "Usage: %s [OPTIONS]" % sys.argv[0]
-    print >> file, ""
-    print >> file, "Options:"
+    print >> file, "\nOptions:\n"
     by_group = {}
     for option in options.itervalues():
         by_group.setdefault(option.group_name, []).append(option)
 
     for filename, o in sorted(by_group.items()):
         if filename:
-            print >> file, filename
+            print >> file, "\n%s options:\n" % os.path.normpath(filename)
         o.sort(key=lambda option: option.name)
         for option in o:
             prefix = option.name
             if option.metavar:
                 prefix += "=" + option.metavar
-            print >> file, "  --%-30s %s" % (prefix, option.help or "")
+            description = option.help or ""
+            if option.default is not None and option.default != '':
+                description += " (default %s)" % option.default
+            lines = textwrap.wrap(description, 79 - 35)
+            if len(prefix) > 30 or len(lines) == 0:
+                lines.insert(0, '')
+            print >> file, "  --%-30s %s" % (prefix, lines[0])
+            for line in lines[1:]:
+                print >> file, "%-34s %s" % (' ', line)
     print >> file
 
 
