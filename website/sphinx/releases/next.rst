@@ -37,3 +37,22 @@ In progress
   in the url.
 * `tornado.iostream.IOStream.read_until` and ``read_until_regex`` are much
   faster with large input.
+* `tornado.simple_httpclient` now supports the ``OPTIONS`` and ``PATCH``
+  HTTP methods.
+* `tornado.web.RequestHandler` now supports the ``PATCH`` HTTP method.
+  Note that this means any existing methods named ``patch`` in
+  ``RequestHandler`` subclasses will need to be renamed.
+* `tornado.options` options with ``multiple=True`` that are set more than
+  once now overwrite rather than append.  This makes it possible to override
+  values set in `parse_config_file` with `parse_command_line`.
+* `tornado.options` ``--help`` output is now prettier.
+* Templates now support ``else`` clauses in
+  ``try``/``except``/``finally``/``else`` blocks.
+* Template files containing non-ASCII (utf8) characters now work on Python 3
+  regardless of the locale environment variables.
+* `RequestHandler.flush` now invokes its callback whether there was any data
+  to flush or not.
+* `IOLoop.instance()` is now thread-safe.
+* `tornado.options.options` now supports attribute assignment.
+* The ``max_clients`` keyword argument to `AsyncHTTPClient.configure` now works.
+
