@@ -257,7 +257,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["content-length"], "2")
         self.assertEqual(response.headers["access-control-allow-origin"], "*")
-        self.assertEqual(response.body, "ok")
+        self.assertEqual(response.body, b("ok"))
 
     def test_no_content(self):
         response = self.fetch("/no_content")
