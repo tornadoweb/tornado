@@ -59,6 +59,12 @@ class HeadHandler(RequestHandler):
         self.set_header("Content-Length", "7")
 
 
+class OptionsHandler(RequestHandler):
+    def options(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.write("ok")
+
+
 class NoContentHandler(RequestHandler):
     def get(self):
         if self.get_argument("error", None):
@@ -100,6 +106,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/hello", HelloWorldHandler),
             url("/content_length", ContentLengthHandler),
             url("/head", HeadHandler),
+            url("/options", OptionsHandler),
             url("/no_content", NoContentHandler),
             url("/303_post", SeeOther303PostHandler),
             url("/303_get", SeeOther303GetHandler),
@@ -244,6 +251,13 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["content-length"], "7")
         self.assertFalse(response.body)
+
+    def test_options_request(self):
+        response = self.fetch("/options", method="OPTIONS")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers["content-length"], "2")
+        self.assertEqual(response.headers["access-control-allow-origin"], "*")
+        self.assertEqual(response.body, "ok")
 
     def test_no_content(self):
         response = self.fetch("/no_content")
