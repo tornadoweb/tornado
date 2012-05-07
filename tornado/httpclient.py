@@ -124,6 +124,8 @@ class AsyncHTTPClient(object):
     _impl_class = None
     _impl_kwargs = None
 
+    _DEFAULT_MAX_CLIENTS = 10
+
     @classmethod
     def _async_clients(cls):
         assert cls is not AsyncHTTPClient, "should only be called on subclasses"
@@ -131,7 +133,7 @@ class AsyncHTTPClient(object):
             cls._async_client_dict = weakref.WeakKeyDictionary()
         return cls._async_client_dict
 
-    def __new__(cls, io_loop=None, max_clients=10, force_instance=False,
+    def __new__(cls, io_loop=None, max_clients=None, force_instance=False,
                 **kwargs):
         io_loop = io_loop or IOLoop.instance()
         if cls is AsyncHTTPClient:
@@ -149,7 +151,13 @@ class AsyncHTTPClient(object):
             if cls._impl_kwargs:
                 args.update(cls._impl_kwargs)
             args.update(kwargs)
-            instance.initialize(io_loop, max_clients, **args)
+            if max_clients is not None:
+                # max_clients is special because it may be passed
+                # positionally instead of by keyword
+                args["max_clients"] = max_clients
+            elif "max_clients" not in args:
+                args["max_clients"] = AsyncHTTPClient._DEFAULT_MAX_CLIENTS
+            instance.initialize(io_loop, **args)
             if not force_instance:
                 impl._async_clients()[io_loop] = instance
             return instance
@@ -203,6 +211,15 @@ class AsyncHTTPClient(object):
             raise ValueError("Invalid AsyncHTTPClient implementation")
         AsyncHTTPClient._impl_class = impl
         AsyncHTTPClient._impl_kwargs = kwargs
+
+    @staticmethod
+    def _save_configuration():
+        return (AsyncHTTPClient._impl_class, AsyncHTTPClient._impl_kwargs)
+
+    @staticmethod
+    def _restore_configuration(saved):
+        AsyncHTTPClient._impl_class = saved[0]
+        AsyncHTTPClient._impl_kwargs = saved[1]
 
 
 class HTTPRequest(object):

@@ -1,16 +1,18 @@
 from __future__ import absolute_import, division, with_statement
 
 import collections
+from contextlib import closing
 import gzip
 import logging
 import re
 import socket
 
+from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
 
@@ -263,3 +265,40 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.http_client.fetch(url, self.stop)
         response = self.wait()
         self.assertTrue(host_re.match(response.body), response.body)
+
+
+class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
+    def setUp(self):
+        super(CreateAsyncHTTPClientTestCase, self).setUp()
+        self.saved = AsyncHTTPClient._save_configuration()
+
+    def tearDown(self):
+        AsyncHTTPClient._restore_configuration(self.saved)
+        super(CreateAsyncHTTPClientTestCase, self).tearDown()
+
+    def test_max_clients(self):
+        # The max_clients argument is tricky because it was originally
+        # allowed to be passed positionally; newer arguments are keyword-only.
+        AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
+        with closing(AsyncHTTPClient(
+                self.io_loop, force_instance=True)) as client:
+            self.assertEqual(client.max_clients, 10)
+        with closing(AsyncHTTPClient(
+                self.io_loop, 11, force_instance=True)) as client:
+            self.assertEqual(client.max_clients, 11)
+        with closing(AsyncHTTPClient(
+                self.io_loop, max_clients=11, force_instance=True)) as client:
+            self.assertEqual(client.max_clients, 11)
+
+        # Now configure max_clients statically and try overriding it
+        # with each way max_clients can be passed
+        AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=12)
+        with closing(AsyncHTTPClient(
+                self.io_loop, force_instance=True)) as client:
+            self.assertEqual(client.max_clients, 12)
+        with closing(AsyncHTTPClient(
+                self.io_loop, max_clients=13, force_instance=True)) as client:
+            self.assertEqual(client.max_clients, 13)
+        with closing(AsyncHTTPClient(
+                self.io_loop, max_clients=14, force_instance=True)) as client:
+            self.assertEqual(client.max_clients, 14)
