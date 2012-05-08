@@ -3,7 +3,8 @@
 
 from __future__ import absolute_import, division, with_statement
 from tornado import httpclient, simple_httpclient, netutil
-from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
+from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str, \
+     json_encode
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
@@ -399,3 +400,19 @@ class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
 
 if not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin':
     del UnixSocketTest
+
+
+class FullResponseTimeTestCase(HandlerBaseTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write(json_encode([self.request.full_request_time(),
+                                    self.request.request_time()]))
+
+    def test_response_times(self):
+        import time
+        t_start = time.time()
+        response = self.fetch('/')
+        t = time.time() - t_start
+        full_request_time, request_time = json_decode(response.body)
+        self.assertGreater(full_request_time, request_time)
+        self.assertGreater(t, full_request_time)
