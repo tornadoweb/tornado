@@ -391,10 +391,8 @@ class HTTPRequest(object):
         self._start_time = time.time()
         self._finish_time = None
 
-        scheme, netloc, path, query, fragment = urlparse.urlsplit(native_str(uri))
-        self.path = path
-        self.query = query
-        arguments = parse_qs_bytes(query)
+        self.path, sep, self.query = uri.partition('?')
+        arguments = parse_qs_bytes(self.query)
         self.arguments = {}
         for name, values in arguments.iteritems():
             values = [v for v in values if v]

@@ -307,6 +307,7 @@ class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([("/echo", EchoHandler),
                             ("/typecheck", TypeCheckHandler),
+                            ("//doubleslash", EchoHandler),
                             ])
 
     def test_query_string_encoding(self):
@@ -323,6 +324,14 @@ class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/typecheck", method="POST", body="foo=bar", headers=headers)
         data = json_decode(response.body)
         self.assertEqual(data, {})
+
+    def test_double_slash(self):
+        # urlparse.urlsplit (which tornado.httpserver used to use
+        # incorrectly) would parse paths beginning with "//" as
+        # protocol-relative urls.
+        response = self.fetch("//doubleslash")
+        self.assertEqual(200, response.code)
+        self.assertEqual(json_decode(response.body), {})
 
 
 class XHeaderTest(HandlerBaseTestCase):
