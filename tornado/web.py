@@ -684,8 +684,7 @@ class RequestHandler(object):
             self.request.connection.stream.set_close_callback(None)
 
         if not self.application._wsgi:
-            self.flush(include_footers=True)
-            self.request.finish()
+            self.flush(include_footers=True, callback=self.request.finish)
             self._log()
         self._finished = True
         self.on_finish()
