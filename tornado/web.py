@@ -83,7 +83,7 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type, import_object, ObjectDict
+from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info
 
 try:
     from io import BytesIO  # python 3
@@ -739,7 +739,7 @@ class RequestHandler(object):
                 kwargs['exception'] = exc_info[1]
                 try:
                     # Put the traceback into sys.exc_info()
-                    raise exc_info[0], exc_info[1], exc_info[2]
+                    raise_exc_info(exc_info)
                 except Exception:
                     self.finish(self.get_error_html(status_code, **kwargs))
             else:
@@ -984,7 +984,7 @@ class RequestHandler(object):
             # the exception value instead of the full triple,
             # so re-raise the exception to ensure that it's in
             # sys.exc_info()
-            raise type, value, traceback
+            raise_exc_info((type, value, traceback))
         except Exception:
             self._handle_request_exception(value)
         return True

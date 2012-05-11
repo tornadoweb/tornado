@@ -32,6 +32,7 @@ except ImportError:
     HTTPServer = None
     IOLoop = None
 from tornado.stack_context import StackContext, NullContext
+from tornado.util import raise_exc_info
 import contextlib
 import logging
 import signal
@@ -142,12 +143,7 @@ class AsyncTestCase(unittest.TestCase):
         if self.__failure is not None:
             failure = self.__failure
             self.__failure = None
-            # 2to3 isn't smart enough to convert three-argument raise
-            # statements correctly in some cases.
-            if isinstance(failure[1], failure[0]):
-                raise failure[1], None, failure[2]
-            else:
-                raise failure[0], failure[1], failure[2]
+            raise_exc_info(failure)
 
 
     def run(self, result=None):
