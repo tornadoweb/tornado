@@ -30,5 +30,8 @@ import os
 if os.name == 'nt':
     from tornado.platform.common import Waker
     from tornado.platform.windows import set_close_exec
+elif os.name == 'java':
+    from tornado.platform.common import Waker
+    def set_close_exec(fd): pass
 else:
     from tornado.platform.posix import set_close_exec, Waker

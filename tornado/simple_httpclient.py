@@ -285,7 +285,9 @@ class _HTTPConnection(object):
         if (self.request.method == "POST" and
             "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
-        if self.request.use_gzip:
+        if self.request.use_gzip and os.name != 'java':
+            # jython's zlib module doesn't support the magic to read
+            # gzip headers.
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((parsed.path or '/') +
                 (('?' + parsed.query) if parsed.query else ''))
