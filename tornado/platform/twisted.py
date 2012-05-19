@@ -41,7 +41,7 @@ recommended to call::
 
 before closing the `IOLoop`.
 
-This module has been tested with Twisted versions 11.0.0 and 11.1.0.
+This module has been tested with Twisted versions 11.0.0, 11.1.0, and 12.0.0
 """
 
 from __future__ import absolute_import, division, with_statement
@@ -66,6 +66,11 @@ from tornado.ioloop import IOLoop
 
 class TornadoDelayedCall(object):
     """DelayedCall object for Tornado."""
+    # Note that zope.interface.implements is deprecated in
+    # zope.interface 4.0, because it cannot work in python 3.  The
+    # replacement is a class decorator, which cannot work on python
+    # 2.5.  So when twisted supports python 3, we'll need to drop 2.5
+    # support on this module to make it work.
     implements(IDelayedCall)
 
     def __init__(self, reactor, seconds, f, *args, **kw):
