@@ -248,13 +248,15 @@ def linkify(text, shorten=False, extra_params="",
 
     extra_params: Extra text to include in the link tag, or a callable
         taking the link as an argument and returning the extra text
-        e.g. linkify(text, extra_params='rel="nofollow" class="external"')
-          or def extra_params_cb(url):
-                 if url.startswith("http://example.com"):
-                     return 'class="internal"'
-                 else:
-                     return 'class="external" rel="nofollow"'
-             linkify(text, extra_params=extra_params_cb)
+        e.g. ``linkify(text, extra_params='rel="nofollow" class="external"')``,
+        or::
+
+            def extra_params_cb(url):
+                if url.startswith("http://example.com"):
+                    return 'class="internal"'
+                else:
+                    return 'class="external" rel="nofollow"'
+            linkify(text, extra_params=extra_params_cb)
 
     require_protocol: Only linkify urls which include a protocol. If this is
         False, urls such as www.facebook.com will also be linkified.
