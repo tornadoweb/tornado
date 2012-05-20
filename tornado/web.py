@@ -633,8 +633,9 @@ class RequestHandler(object):
         if not self._headers_written:
             self._headers_written = True
             for transform in self._transforms:
-                self._headers, chunk = transform.transform_first_chunk(
-                    self._headers, chunk, include_footers)
+                self._status_code, self._headers, chunk = \
+                    transform.transform_first_chunk(
+                    self._status_code, self._headers, chunk, include_footers)
             headers = self._generate_headers()
         else:
             for transform in self._transforms:
@@ -1668,8 +1669,8 @@ class OutputTransform(object):
     def __init__(self, request):
         pass
 
-    def transform_first_chunk(self, headers, chunk, finishing):
-        return headers, chunk
+    def transform_first_chunk(self, status_code, headers, chunk, finishing):
+        return status_code, headers, chunk
 
     def transform_chunk(self, chunk, finishing):
         return chunk
@@ -1690,7 +1691,7 @@ class GZipContentEncoding(OutputTransform):
         self._gzipping = request.supports_http_1_1() and \
             "gzip" in request.headers.get("Accept-Encoding", "")
 
-    def transform_first_chunk(self, headers, chunk, finishing):
+    def transform_first_chunk(self, status_code, headers, chunk, finishing):
         if self._gzipping:
             ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = (ctype in self.CONTENT_TYPES) and \
@@ -1704,7 +1705,7 @@ class GZipContentEncoding(OutputTransform):
             chunk = self.transform_chunk(chunk, finishing)
             if "Content-Length" in headers:
                 headers["Content-Length"] = str(len(chunk))
-        return headers, chunk
+        return status_code, headers, chunk
 
     def transform_chunk(self, chunk, finishing):
         if self._gzipping:
@@ -1727,7 +1728,7 @@ class ChunkedTransferEncoding(OutputTransform):
     def __init__(self, request):
         self._chunking = request.supports_http_1_1()
 
-    def transform_first_chunk(self, headers, chunk, finishing):
+    def transform_first_chunk(self, status_code, headers, chunk, finishing):
         if self._chunking:
             # No need to chunk the output if a Content-Length is specified
             if "Content-Length" in headers or "Transfer-Encoding" in headers:
@@ -1735,7 +1736,7 @@ class ChunkedTransferEncoding(OutputTransform):
             else:
                 headers["Transfer-Encoding"] = "chunked"
                 chunk = self.transform_chunk(chunk, finishing)
-        return headers, chunk
+        return status_code, headers, chunk
 
     def transform_chunk(self, block, finishing):
         if self._chunking:
