@@ -121,6 +121,14 @@ linkify_tests = [
     ("www.external-link.com",
      {"extra_params": 'rel="nofollow" class="external"'},
      u'<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>'),
+
+    ("www.external-link.com and www.internal-link.com/blogs extra",
+     {"extra_params": lambda(href):'class="internal"' if href.startswith("http://www.internal-link.com") else 'rel="nofollow" class="external"'},
+     u'<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a> and <a href="http://www.internal-link.com/blogs" class="internal">www.internal-link.com/blogs</a> extra'),
+
+    ("www.external-link.com",
+     {"extra_params": lambda(href):'    rel="nofollow" class="external"  '},
+     u'<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>'),
 ]
 
 
