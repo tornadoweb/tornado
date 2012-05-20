@@ -15,6 +15,16 @@ import socket
 import sys
 
 
+class SimpleHandlerTestCase(AsyncHTTPTestCase):
+    """Simplified base class for tests that work with a single handler class.
+
+    To use, define a nested class named ``Handler``.
+    """
+    def get_app(self):
+        return Application([('/', self.Handler)],
+                           log_function=lambda x: None)
+
+
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
     def __init__(self):
@@ -714,6 +724,14 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch(path % int(include_host))
         self.assertEqual(response.body, utf8(str(True)))
 
+    def test_static_304(self):
+        response1 = self.fetch("/static/robots.txt")
+        response2 = self.fetch("/static/robots.txt", headers={
+                'If-Modified-Since': response1.headers['Last-Modified']})
+        self.assertEqual(response2.code, 304)
+        self.assertTrue('Content-Length' not in response2.headers)
+        self.assertTrue('Last-Modified' not in response2.headers)
+
 
 class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
@@ -769,3 +787,36 @@ class NamedURLSpecGroupsTest(AsyncHTTPTestCase, LogTrapTestCase):
 
         response = self.fetch("/unicode/bar")
         self.assertEqual(response.body, b("bar"))
+
+class ClearHeaderTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.set_header("h1", "foo")
+            self.set_header("h2", "bar")
+            self.clear_header("h1")
+            self.clear_header("nonexistent")
+
+    def test_clear_header(self):
+        response = self.fetch("/")
+        self.assertTrue("h1" not in response.headers)
+        self.assertEqual(response.headers["h2"], "bar")
+        
+
+class Header304Test(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.set_header("Content-Language", "en_US")
+            self.write("hello")
+            
+    def test_304_headers(self):
+        response1 = self.fetch('/')
+        self.assertEqual(response1.headers["Content-Length"], "5")
+        self.assertEqual(response1.headers["Content-Language"], "en_US")
+        
+        response2 = self.fetch('/', headers={
+                'If-None-Match': response1.headers["Etag"]})
+        self.assertEqual(response2.code, 304)
+        self.assertTrue("Content-Length" not in response2.headers)
+        self.assertTrue("Content-Language" not in response2.headers)
+        # Not an entity header, but should not be added to 304s by chunking
+        self.assertTrue("Transfer-Encoding" not in response2.headers)

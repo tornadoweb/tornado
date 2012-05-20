@@ -264,6 +264,15 @@ class RequestHandler(object):
         """
         self._list_headers.append((name, self._convert_header_value(value)))
 
+    def clear_header(self, name):
+        """Clears an outgoing header, undoing a previous `set_header` call.
+
+        Note that this method does not apply to multi-valued headers
+        set by `add_header`.
+        """
+        if name in self._headers:
+            del self._headers[name]
+
     def _convert_header_value(self, value):
         if isinstance(value, bytes_type):
             pass
@@ -673,7 +682,10 @@ class RequestHandler(object):
                     if inm and inm.find(etag) != -1:
                         self._write_buffer = []
                         self.set_status(304)
-            if "Content-Length" not in self._headers:
+            if self._status_code == 304:
+                assert not self._write_buffer, "Cannot send body with 304"
+                self._clear_headers_for_304()
+            elif "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
                 self.set_header("Content-Length", content_length)
 
@@ -1064,6 +1076,17 @@ class RequestHandler(object):
 
     def _ui_method(self, method):
         return lambda *args, **kwargs: method(self, *args, **kwargs)
+
+    def _clear_headers_for_304(self):
+        # 304 responses should not contain entity headers (defined in
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec7.html#sec7.1)
+        # not explicitly allowed by
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.5
+        headers = ["Allow", "Content-Encoding", "Content-Language",
+                   "Content-Length", "Content-MD5", "Content-Range",
+                   "Content-Type", "Last-Modified"]
+        for h in headers:
+            self.clear_header(h)
 
 
 def asynchronous(method):
@@ -1729,7 +1752,9 @@ class ChunkedTransferEncoding(OutputTransform):
         self._chunking = request.supports_http_1_1()
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
-        if self._chunking:
+        # 304 responses have no body (not even a zero-length body), and so
+        # should not have either Content-Length or Transfer-Encoding headers.
+        if self._chunking and status_code != 304:
             # No need to chunk the output if a Content-Length is specified
             if "Content-Length" in headers or "Transfer-Encoding" in headers:
                 self._chunking = False
