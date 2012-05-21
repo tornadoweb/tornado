@@ -55,4 +55,15 @@ In progress
 * `IOLoop.instance()` is now thread-safe.
 * `tornado.options.options` now supports attribute assignment.
 * The ``max_clients`` keyword argument to `AsyncHTTPClient.configure` now works.
-
+* The ``extra_params`` argument to `tornado.escape.linkify` may now be
+  a callable, to allow parameters to be chosen separately for each link.
+* `HTTPServer` now works correctly with paths starting with ``//``
+* Exception handling on Python 3 has been improved; previously some exceptions
+  such as `UnicodeDecodeError` would generate `TypeErrors`
+* `tornado.web.OutputTransform.transform_first_chunk` now takes and returns
+  a status code in addition to the headers and chunk.  This is a
+  backwards-incompatible change to an interface that was never technically
+  private, but was not included in the documentation and does not appear
+  to have been used outside Tornado itself.
+* `tornado.web` will no longer produce responses with status code 304
+  that also have entity headers such as ``Content-Length``.
