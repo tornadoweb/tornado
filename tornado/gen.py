@@ -113,13 +113,14 @@ def engine(func):
             if runner is not None:
                 return runner.handle_exception(typ, value, tb)
             return False
-        with ExceptionStackContext(handle_exception):
+        with ExceptionStackContext(handle_exception) as deactivate:
             gen = func(*args, **kwargs)
             if isinstance(gen, types.GeneratorType):
-                runner = Runner(gen)
+                runner = Runner(gen, deactivate)
                 runner.run()
                 return
             assert gen is None, gen
+            deactivate()
             # no yield, so we're done
     return wrapper
 
@@ -285,8 +286,9 @@ class Runner(object):
 
     Maintains information about pending callbacks and their results.
     """
-    def __init__(self, gen):
+    def __init__(self, gen, deactivate_stack_context):
         self.gen = gen
+        self.deactivate_stack_context = deactivate_stack_context
         self.yield_point = _NullYieldPoint()
         self.pending_callbacks = set()
         self.results = {}
@@ -351,6 +353,7 @@ class Runner(object):
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
+                    self.deactivate_stack_context()
                     return
                 except Exception:
                     self.finished = True

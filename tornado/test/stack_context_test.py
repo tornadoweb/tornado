@@ -93,5 +93,32 @@ class StackContextTest(AsyncTestCase, LogTrapTestCase):
             library_function(final_callback)
         self.wait()
 
+    def test_deactivate(self):
+        deactivate_callbacks = []
+        def f1():
+            with StackContext(functools.partial(self.context, 'c1')) as c1:
+                deactivate_callbacks.append(c1)
+                self.io_loop.add_callback(f2)
+        def f2():
+            with StackContext(functools.partial(self.context, 'c2')) as c2:
+                deactivate_callbacks.append(c2)
+                self.io_loop.add_callback(f3)
+        def f3():
+            with StackContext(functools.partial(self.context, 'c3')) as c3:
+                deactivate_callbacks.append(c3)
+                self.io_loop.add_callback(f4)
+        def f4():
+            self.assertEqual(self.active_contexts, ['c1', 'c2', 'c3'])
+            deactivate_callbacks[1]()
+            # deactivating a context doesn't remove it immediately,
+            # but it will be missing from the next iteration
+            self.assertEqual(self.active_contexts, ['c1', 'c2', 'c3'])
+            self.io_loop.add_callback(f5)
+        def f5():
+            self.assertEqual(self.active_contexts, ['c1', 'c3'])
+            self.stop()
+        self.io_loop.add_callback(f1)
+        self.wait()
+
 if __name__ == '__main__':
     unittest.main()
