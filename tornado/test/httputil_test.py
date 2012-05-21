@@ -177,6 +177,24 @@ Foo
         parse_multipart_form_data(b("1234"), data, args, files)
         self.assertEqual(files, {})
 
+    def test_data_after_final_boundary(self):
+        # The spec requires that data after the final boundary be ignored.
+        # http://www.w3.org/Protocols/rfc1341/7_2_Multipart.html
+        # In practice, some libraries include an extra CRLF after the boundary.
+        data = b("""\
+--1234
+Content-Disposition: form-data; name="files"; filename="ab.txt"
+
+Foo
+--1234--
+""").replace(b("\n"), b("\r\n"))
+        args = {}
+        files = {}
+        parse_multipart_form_data(b("1234"), data, args, files)
+        file = files["files"][0]
+        self.assertEqual(file["filename"], "ab.txt")
+        self.assertEqual(file["body"], b("Foo"))
+
 
 class HTTPHeadersTest(unittest.TestCase):
     def test_multi_line(self):
