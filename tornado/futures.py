@@ -24,8 +24,12 @@ class _WorkItem(object):
 
 
 class TornadoExecutor(_base.Executor):
-    def __init__(self):
+    def __init__(self, ioloop=None):
         self._shutdown = False
+        if ioloop is None:
+            self._ioloop = tornado.ioloop.IOLoop.instance()
+        else:
+            self._ioloop = ioloop
 
     def submit(self, fn, *args, **kwargs):
         if self._shutdown:
@@ -33,7 +37,7 @@ class TornadoExecutor(_base.Executor):
 
         f = _base.Future()
         w = _WorkItem(f, fn, args, kwargs)
-        tornado.ioloop.IOLoop.instance().add_callback(w.run)
+        self._ioloop.add_callback(w.run)
         return f
 
     def shutdown(self, wait=True):
