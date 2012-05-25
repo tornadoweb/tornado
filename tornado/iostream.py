@@ -192,7 +192,11 @@ class IOStream(object):
         if data:
             # We use bool(_write_buffer) as a proxy for write_buffer_size>0,
             # so never put empty strings in the buffer.
-            self._write_buffer.append(data)
+            if len(data) > 128*1024:
+                for i in range(0, len(data), 128*1024):
+                    self._write_buffer.append(data[i:i+128*1024])
+            else:
+                self._write_buffer.append(data)
         self._write_callback = stack_context.wrap(callback)
         self._handle_write()
         if self._write_buffer:
