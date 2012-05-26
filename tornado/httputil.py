@@ -154,6 +154,10 @@ class HTTPHeaders(dict):
         for k, v in dict(*args, **kwargs).iteritems():
             self[k] = v
 
+    def copy(self):
+        # default implementation returns dict(self), not the subclass
+        return HTTPHeaders(self)
+
     _NORMALIZED_HEADER_RE = re.compile(r'^[A-Z0-9][a-z0-9]*(-[A-Z0-9][a-z0-9]*)*$')
     _normalized_headers = {}
 
