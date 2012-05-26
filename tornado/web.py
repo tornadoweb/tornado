@@ -123,7 +123,7 @@ class RequestHandler(object):
         self.ui["modules"] = self.ui["_modules"]
         self.clear()
         # Check since connection is not available in WSGI
-        if hasattr(self.request, "connection"):
+        if getattr(self.request, "connection", None):
             self.request.connection.stream.set_close_callback(
                 self.on_connection_close)
         self.initialize(**kwargs)
