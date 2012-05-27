@@ -499,6 +499,7 @@ class IOStream(object):
     def _handle_connect(self):
         err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
         if err != 0:
+            self.error = socket.error(err, os.strerror(err))
             # IOLoop implementations may vary: some of them return
             # an error state before the socket becomes writable, so
             # in that case a connection failure would be handled by the
