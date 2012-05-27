@@ -24,6 +24,7 @@ import logging
 import socket
 import sys
 import re
+import os
 
 from tornado import ioloop
 from tornado import stack_context
@@ -84,6 +85,7 @@ class IOStream(object):
         self.io_loop = io_loop or ioloop.IOLoop.instance()
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
+        self.exc_info = None
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
         self._read_buffer_size = 0
@@ -100,6 +102,7 @@ class IOStream(object):
         self._connecting = False
         self._state = None
         self._pending_callbacks = 0
+
 
     def connect(self, address, callback=None):
         """Connects the socket to a remote address without blocking.
@@ -213,6 +216,10 @@ class IOStream(object):
 
     def close(self):
         """Close this stream."""
+        exc_info = sys.exc_info()
+        if any(exc_info):
+            self.exc_info = exc_info
+
         if self.socket is not None:
             if self._read_until_close:
                 callback = self._read_callback
@@ -264,6 +271,16 @@ class IOStream(object):
             if not self.socket:
                 return
             if events & self.io_loop.ERROR:
+                errno = self.socket.getsockopt(
+                    socket.SOL_SOCKET, socket.SO_ERROR)
+
+                # There's no Exception to catch, so simulate exc_info.
+                self.exc_info = (
+                    socket.error,                               # type
+                    socket.error(errno, os.strerror(errno)),    # error
+                    None                                        # traceback
+                )
+
                 # We may have queued up a user callback in _handle_read or
                 # _handle_write, so don't close the IOStream until those
                 # callbacks have had a chance to run.

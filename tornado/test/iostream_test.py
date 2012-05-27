@@ -42,6 +42,15 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         listener.close()
         return streams
 
+    def check_exc_info(self, stream, exc_type):
+        self.assertTrue(isinstance(stream.exc_info, tuple))
+        self.assertEqual(3, len(stream.exc_info))
+        exc_type, exc_value, exc_tb = stream.exc_info
+        self.assertEqual(exc_type, exc_type)
+        self.assertTrue(isinstance(exc_value, exc_type))
+        # We don't check that the third member is a traceback -- not all
+        # socket errors result in a traceback.
+
     def test_read_zero_bytes(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("localhost", self.get_http_port()))
@@ -91,6 +100,15 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         stream.connect(("localhost", port), connect_callback)
         self.wait()
         self.assertFalse(self.connect_called)
+        self.check_exc_info(stream, socket.error)
+
+    def test_gaierror(self):
+        # Test that IOStream sets its exc_info on getaddrinfo error
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        stream = IOStream(s, io_loop=self.io_loop)
+        stream.set_close_callback(self.stop)
+        stream.connect(('adomainthatdoesntexist.asdf', 54321))
+        self.check_exc_info(stream, socket.gaierror)
 
     def test_connection_closed(self):
         # When a server sends a response and then closes the connection,
