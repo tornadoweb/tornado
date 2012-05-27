@@ -5,6 +5,7 @@ from tornado.iostream import IOStream
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
 from tornado.util import b
 from tornado.web import RequestHandler, Application
+import errno
 import socket
 import time
 
@@ -91,6 +92,16 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         stream.connect(("localhost", port), connect_callback)
         self.wait()
         self.assertFalse(self.connect_called)
+        self.assertTrue(isinstance(stream.error, socket.error), stream.error)
+        self.assertEqual(stream.error.args[0], errno.ECONNREFUSED)
+
+    def test_gaierror(self):
+        # Test that IOStream sets its exc_info on getaddrinfo error
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        stream = IOStream(s, io_loop=self.io_loop)
+        stream.set_close_callback(self.stop)
+        stream.connect(('adomainthatdoesntexist.asdf', 54321))
+        self.assertTrue(isinstance(stream.error, socket.gaierror), stream.error)
 
     def test_connection_closed(self):
         # When a server sends a response and then closes the connection,

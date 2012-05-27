@@ -21,6 +21,7 @@ from __future__ import absolute_import, division, with_statement
 import collections
 import errno
 import logging
+import os
 import socket
 import sys
 import re
@@ -47,6 +48,9 @@ class IOStream(object):
     For client operations the socket is created with socket.socket(),
     and may either be connected before passing it to the IOStream or
     connected with IOStream.connect.
+
+    When a stream is closed due to an error, the IOStream's `error`
+    attribute contains the exception object.
 
     A very simple (and broken) HTTP client using this class::
 
@@ -84,6 +88,7 @@ class IOStream(object):
         self.io_loop = io_loop or ioloop.IOLoop.instance()
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
+        self.error = None
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
         self._read_buffer_size = 0
@@ -214,6 +219,8 @@ class IOStream(object):
     def close(self):
         """Close this stream."""
         if self.socket is not None:
+            if any(sys.exc_info()):
+                self.error = sys.exc_info()[1]
             if self._read_until_close:
                 callback = self._read_callback
                 self._read_callback = None
@@ -264,6 +271,9 @@ class IOStream(object):
             if not self.socket:
                 return
             if events & self.io_loop.ERROR:
+                errno = self.socket.getsockopt(socket.SOL_SOCKET,
+                                               socket.SO_ERROR)
+                self.error = socket.error(errno, os.strerror(errno))
                 # We may have queued up a user callback in _handle_read or
                 # _handle_write, so don't close the IOStream until those
                 # callbacks have had a chance to run.
