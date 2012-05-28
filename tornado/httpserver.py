@@ -30,7 +30,6 @@ import Cookie
 import logging
 import socket
 import time
-import urlparse
 
 from tornado.escape import utf8, native_str, parse_qs_bytes
 from tornado import httputil

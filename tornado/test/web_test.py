@@ -745,7 +745,7 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
 
             @classmethod
             def make_static_url(cls, settings, path):
-                version_hash = cls.get_version(settings, path)
+                cls.get_version(settings, path)
                 extension_index = path.rindex('.')
                 before_version = path[:extension_index]
                 after_version = path[(extension_index + 1):]
