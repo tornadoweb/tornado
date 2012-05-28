@@ -96,6 +96,13 @@ class StackContext(object):
     StackContext takes the function itself rather than its result::
 
       with StackContext(my_context):
+
+    The result of ``with StackContext() as cb:`` is a deactivation
+    callback.  Run this callback when the StackContext is no longer
+    needed to ensure that it is not propagated any further (note that
+    deactivating a context does not affect any instances of that
+    context that are currently pending).  This is an advanced feature
+    and not necessary in most applications.
     '''
     def __init__(self, context_factory, _active_cell=None):
         self.context_factory = context_factory
