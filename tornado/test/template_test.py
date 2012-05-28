@@ -322,6 +322,7 @@ raw: {% raw name %}""",
         self.assertEqual(render("foo.py", ["not a string"]),
                          b("""s = "['not a string']"\n"""))
 
+
 class TemplateLoaderTest(LogTrapTestCase):
     def setUp(self):
         self.loader = Loader(os.path.join(os.path.dirname(__file__), "templates"))

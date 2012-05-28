@@ -1069,7 +1069,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         if access_token:
             all_args["access_token"] = access_token
             all_args.update(args)
-            
+
         if all_args:
             url += "?" + urllib.urlencode(all_args)
         callback = self.async_callback(self._on_facebook_request, callback)

@@ -84,6 +84,7 @@ class SeeOther303GetHandler(RequestHandler):
         assert not self.request.body
         self.write("ok")
 
+
 class HostEchoHandler(RequestHandler):
     def get(self):
         self.write(self.request.headers["Host"])

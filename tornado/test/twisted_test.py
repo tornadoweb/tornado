@@ -52,6 +52,7 @@ from tornado.testing import get_unused_port
 from tornado.util import import_object
 from tornado.web import RequestHandler, Application
 
+
 def save_signal_handlers():
     saved = {}
     for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:
@@ -59,9 +60,11 @@ def save_signal_handlers():
     assert "twisted" not in repr(saved), repr(saved)
     return saved
 
+
 def restore_signal_handlers(saved):
     for sig, handler in saved.iteritems():
         signal.signal(sig, handler)
+
 
 class ReactorTestCase(unittest.TestCase):
     def setUp(self):

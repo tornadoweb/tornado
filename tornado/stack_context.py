@@ -77,6 +77,7 @@ import threading
 
 from tornado.util import raise_exc_info
 
+
 class _State(threading.local):
     def __init__(self):
         self.contexts = ()

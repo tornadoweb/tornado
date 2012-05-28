@@ -4,6 +4,7 @@ import unittest
 
 from tornado.util import raise_exc_info
 
+
 class RaiseExcInfoTest(unittest.TestCase):
     def test_two_arg_exception(self):
         # This test would fail on python 3 if raise_exc_info were simply

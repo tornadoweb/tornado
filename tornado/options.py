@@ -303,7 +303,6 @@ class _Option(object):
         return _unicode(value)
 
 
-
 options = _Options()
 """Global options dictionary.
 

@@ -61,8 +61,8 @@ class HTTPHeaders(dict):
         if (len(args) == 1 and len(kwargs) == 0 and
             isinstance(args[0], HTTPHeaders)):
             # Copy constructor
-            for k,v in args[0].get_all():
-                self.add(k,v)
+            for k, v in args[0].get_all():
+                self.add(k, v)
         else:
             # Dict-style initialization
             self.update(*args, **kwargs)

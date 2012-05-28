@@ -7,6 +7,7 @@ import socket
 from tornado.platform import interface
 from tornado.util import b
 
+
 class Waker(interface.Waker):
     """Create an OS independent asynchronous pipe.
 

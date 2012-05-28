@@ -108,7 +108,7 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
         class SetCookieOverwriteHandler(RequestHandler):
             def get(self):
                 self.set_cookie("a", "b", domain="example.com")
-                self.set_cookie("c", "d" ,domain="example.com")
+                self.set_cookie("c", "d", domain="example.com")
                 # A second call with the same name clobbers the first.
                 # Attributes from the first call are not carried over.
                 self.set_cookie("a", "e")
@@ -411,6 +411,7 @@ class RedirectHandler(RequestHandler):
         else:
             raise Exception("didn't get permanent or status arguments")
 
+
 class EmptyFlushCallbackHandler(RequestHandler):
     @gen.engine
     @asynchronous
@@ -437,6 +438,7 @@ class HeaderInjectionHandler(RequestHandler):
 
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
+
     def get_app(self):
         loader = DictLoader({
                 "linkify.html": "{% module linkify(message) %}",
@@ -772,6 +774,7 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/static_url/foo.txt")
         self.assertEqual(response.body, b("/static/foo.42.txt"))
 
+
 class NamedURLSpecGroupsTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         class EchoHandler(RequestHandler):
@@ -788,6 +791,7 @@ class NamedURLSpecGroupsTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/unicode/bar")
         self.assertEqual(response.body, b("bar"))
 
+
 class ClearHeaderTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -800,19 +804,19 @@ class ClearHeaderTest(SimpleHandlerTestCase):
         response = self.fetch("/")
         self.assertTrue("h1" not in response.headers)
         self.assertEqual(response.headers["h2"], "bar")
-        
+
 
 class Header304Test(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
             self.set_header("Content-Language", "en_US")
             self.write("hello")
-            
+
     def test_304_headers(self):
         response1 = self.fetch('/')
         self.assertEqual(response1.headers["Content-Length"], "5")
         self.assertEqual(response1.headers["Content-Language"], "en_US")
-        
+
         response2 = self.fetch('/', headers={
                 'If-None-Match': response1.headers["Etag"]})
         self.assertEqual(response2.code, 304)

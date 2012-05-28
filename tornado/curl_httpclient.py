@@ -397,7 +397,7 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     if request.client_cert is not None:
         curl.setopt(pycurl.SSLCERT, request.client_cert)
-        
+
     if request.client_key is not None:
         curl.setopt(pycurl.SSLKEY, request.client_key)
 

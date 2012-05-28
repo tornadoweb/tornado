@@ -145,7 +145,6 @@ class AsyncTestCase(unittest.TestCase):
             self.__failure = None
             raise_exc_info(failure)
 
-
     def run(self, result=None):
         with StackContext(self._stack_context):
             super(AsyncTestCase, self).run(result)

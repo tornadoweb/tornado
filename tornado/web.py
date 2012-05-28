@@ -1134,7 +1134,7 @@ def removeslash(method):
                 if uri:  # don't try to redirect '/' to ''
                     if self.request.query:
                         uri += "?" + self.request.query
-                    self.redirect(uri, permanent = True)
+                    self.redirect(uri, permanent=True)
                     return
             else:
                 raise HTTPError(404)
@@ -1156,7 +1156,7 @@ def addslash(method):
                 uri = self.request.path + "/"
                 if self.request.query:
                     uri += "?" + self.request.query
-                self.redirect(uri, permanent = True)
+                self.redirect(uri, permanent=True)
                 return
             raise HTTPError(404)
         return method(self, *args, **kwargs)

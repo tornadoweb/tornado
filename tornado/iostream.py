@@ -203,7 +203,7 @@ class IOStream(object):
             WRITE_BUFFER_CHUNK_SIZE = 128 * 1024
             if len(data) > WRITE_BUFFER_CHUNK_SIZE:
                 for i in range(0, len(data), WRITE_BUFFER_CHUNK_SIZE):
-                    self._write_buffer.append(data[i:i+WRITE_BUFFER_CHUNK_SIZE])
+                    self._write_buffer.append(data[i:i + WRITE_BUFFER_CHUNK_SIZE])
             else:
                 self._write_buffer.append(data)
         self._write_callback = stack_context.wrap(callback)
@@ -363,7 +363,6 @@ class IOStream(object):
             return
         else:
             self._maybe_run_close_callback()
-
 
     def _set_read_callback(self, callback):
         assert not self._read_callback, "Already reading"
@@ -711,6 +710,7 @@ class SSLIOStream(IOStream):
             self.close()
             return None
         return chunk
+
 
 def _double_prefix(deque):
     """Grow by doubling, but don't split the second chunk just because the

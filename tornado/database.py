@@ -33,6 +33,7 @@ except ImportError:
     # which has limitations on third-party modules)
     MySQLdb = None
 
+
 class Connection(object):
     """A lightweight wrapper around MySQLdb DB-API connections.
 
@@ -231,7 +232,6 @@ if MySQLdb is not None:
 
     for field_type in field_types:
         CONVERSIONS[field_type] = [(FLAG.BINARY, str)] + CONVERSIONS[field_type]
-
 
     # Alias some common MySQL exceptions
     IntegrityError = MySQLdb.IntegrityError

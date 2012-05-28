@@ -18,5 +18,3 @@ def set_close_exec(fd):
     success = SetHandleInformation(fd, HANDLE_FLAG_INHERIT, 0)
     if not success:
         raise ctypes.GetLastError()
-
-

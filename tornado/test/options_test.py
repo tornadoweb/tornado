@@ -2,6 +2,7 @@ import unittest
 
 from tornado.options import _Options
 
+
 class OptionsTest(unittest.TestCase):
     def setUp(self):
         self.options = _Options()
