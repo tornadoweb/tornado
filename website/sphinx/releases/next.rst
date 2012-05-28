@@ -67,3 +67,16 @@ In progress
   to have been used outside Tornado itself.
 * `tornado.web` will no longer produce responses with status code 304
   that also have entity headers such as ``Content-Length``.
+* `StackContext` instances now have a deactivation callback that can be
+  used to prevent further propagation.
+* `tornado.gen` no longer leaks `StackContexts` when a ``@gen.engine`` wrapped
+  function is called repeatedly.
+* Extra data at the end of multipart form bodies is now ignored, which fixes
+  a compatibility problem with an iOS HTTP client library.
+* `IOStream.write` performs better when given very large strings.
+* `HTTPHeaders.copy` (inherited from `dict.copy`) now works correctly.
+* `HTTPConnection.address` is now always the socket address, even for non-IP
+  sockets.  `HTTPRequest.remote_ip` is still always an IP-style address
+  (fake data is used for non-IP sockets)
+* `IOStream` now has an ``error`` attribute that can be used to determine
+  why a socket was closed.
