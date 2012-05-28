@@ -7,6 +7,7 @@ from tornado.util import b
 from tornado.web import RequestHandler, Application
 import errno
 import socket
+import sys
 import time
 
 
@@ -93,7 +94,9 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         self.wait()
         self.assertFalse(self.connect_called)
         self.assertTrue(isinstance(stream.error, socket.error), stream.error)
-        self.assertEqual(stream.error.args[0], errno.ECONNREFUSED)
+        if sys.platform != 'cygwin':
+            # cygwin's errnos don't match those used on native windows python
+            self.assertEqual(stream.error.args[0], errno.ECONNREFUSED)
 
     def test_gaierror(self):
         # Test that IOStream sets its exc_info on getaddrinfo error
