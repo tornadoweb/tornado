@@ -366,7 +366,7 @@ class IOStream(object):
 
     def _set_read_callback(self, callback):
         assert not self._read_callback, "Already reading"
-        self._read_callback = callback
+        self._read_callback = stack_context.wrap(callback)
 
     def _try_inline_read(self):
         """Attempt to complete the current read operation from buffered data.
