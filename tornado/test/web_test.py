@@ -3,7 +3,7 @@ from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
 from tornado.iostream import IOStream
 from tornado.template import DictLoader
-from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
+from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase, AsyncSPDYTestCase
 from tornado.util import b, bytes_type, ObjectDict
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value
 
@@ -229,7 +229,7 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_connection_close(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
+        s.connect(("localhost", self.get_port()))
         self.stream = IOStream(s, io_loop=self.io_loop)
         self.stream.write(b("GET / HTTP/1.0\r\n\r\n"))
         self.wait()
@@ -436,22 +436,25 @@ class HeaderInjectionHandler(RequestHandler):
             self.finish(b("ok"))
 
 
-class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
-    COOKIE_SECRET = "WebTest.COOKIE_SECRET"
-
-    def get_app(self):
-        loader = DictLoader({
-                "linkify.html": "{% module linkify(message) %}",
-                "page.html": """\
+loader = DictLoader({
+        "linkify.html": "{% module linkify(message) %}",
+        "page.html": """\
 <html><head></head><body>
 {% for e in entries %}
 {% module Template("entry.html", entry=e) %}
 {% end %}
 </body></html>""",
-                "entry.html": """\
+        "entry.html": """\
 {{ set_resources(embedded_css=".entry { margin-bottom: 1em; }", embedded_javascript="js_embed()", css_files=["/base.css", "/foo.css"], javascript_files="/common.js", html_head="<meta>", html_body='<script src="/analytics.js"/>') }}
 <div class="entry">...</div>""",
-                })
+        "static_url.html": "{{ static_url('/base.css') }}{{ static_url('/foo.css', push=False) }}",
+})
+
+
+class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
+    COOKIE_SECRET = "WebTest.COOKIE_SECRET"
+
+    def get_app(self):
         urls = [
             url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
             url("/decode_arg/(.*)", DecodeArgHandler, name='decode_arg'),
@@ -468,12 +471,12 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.app = Application(urls,
                                template_loader=loader,
                                autoescape="xhtml_escape",
+                               spdy=True,
                                cookie_secret=self.COOKIE_SECRET)
         return self.app
 
     def fetch_json(self, *args, **kwargs):
         response = self.fetch(*args, **kwargs)
-        response.rethrow()
         return json_decode(response.body)
 
     def test_types(self):
@@ -496,14 +499,12 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
                 ]
         for url in urls:
             response = self.fetch(url)
-            response.rethrow()
             data = json_decode(response.body)
             self.assertEqual(data, {u'path': [u'unicode', u'\u00e9'],
                                     u'query': [u'unicode', u'\u00e9'],
                                     })
 
         response = self.fetch("/decode_arg/%C3%A9?foo=%C3%A9")
-        response.rethrow()
         data = json_decode(response.body)
         self.assertEqual(data, {u'path': [u'bytes', u'c3a9'],
                                 u'query': [u'bytes', u'c3a9'],
@@ -578,6 +579,11 @@ js_embed()
     def test_header_injection(self):
         response = self.fetch("/header_injection")
         self.assertEqual(response.body, b("ok"))
+
+    def test_spdy_alternate_protocol(self):
+        response = self.fetch('/pushed')
+        self.assertEqual(response.headers['Alternate-Protocol'], '443:npn-spdy')
+
 
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
@@ -824,3 +830,78 @@ class Header304Test(SimpleHandlerTestCase):
         self.assertTrue("Content-Language" not in response2.headers)
         # Not an entity header, but should not be added to 304s by chunking
         self.assertTrue("Transfer-Encoding" not in response2.headers)
+
+
+class PusherHandler(RequestHandler):
+    def get(self):
+        self.push("/pushed")
+        self.write("foo")
+
+class PostFlushPusherHandler(RequestHandler):
+    def get(self):
+        self.write("o")
+        self.flush()
+        try:
+            self.push("/pushed")
+        except:
+            self.write("k")
+
+class PushedHandler(RequestHandler):
+    @classmethod
+    def make_static_url(cls, handler, path):
+        return path
+
+    def get(self):
+        self.set_header("a", "b")
+        self.write(self.request.path)
+
+class StaticUrlHandler(RequestHandler):
+    def get(self):
+        self.render("static_url.html")
+
+class SPDYTestCase(AsyncSPDYTestCase, LogTrapTestCase):
+    def get_app(self):
+        return Application([("/pusher", PusherHandler),
+                            ("/flush_pusher", PostFlushPusherHandler),
+                            ("/pushed", PushedHandler),
+                            ("/uimodule", UIModuleResourceHandler),
+                            ("/static_url", StaticUrlHandler),
+                            ("/common.js", PushedHandler),
+                            ("/base.css", PushedHandler),
+                            ("/foo.css", PushedHandler)],
+                            template_loader=loader,
+                            static_path="/",
+                            static_handler_class=PushedHandler,
+                            gzip=True)
+
+    def fetch(self, path, **kwargs):
+        self.pushed = []
+        def push_callback(response):
+            self.pushed.append(response)
+        return AsyncSPDYTestCase.fetch(self, path, push_callback=push_callback, **kwargs)
+
+    def test_push(self):
+        response = self.fetch('/pusher')
+        self.assertEqual(response.body, b('foo'))
+        self.assertEqual(response.associated_urls, [self.get_url('/pushed')])
+
+        self.assertEqual(self.pushed[0].associated_to_url, self.get_url('/pusher'))
+        self.assertEqual(self.pushed[0].body, b('/pushed'))
+        self.assertEqual(self.pushed[0].headers['Url'], self.get_url('/pushed'))
+        self.assertEqual(self.pushed[0].headers['A'], 'b')
+
+    def test_push_after_body_flush(self):
+        response = self.fetch('/flush_pusher')
+        self.assertEqual(response.body, b('ok'))
+
+    def test_uimodule_push(self):
+        self.fetch('/uimodule')
+        self.assertEqual(set([p.body for p in self.pushed]), set([b('/common.js'), b('/base.css'), b('/foo.css')]))
+
+    def test_static_url_push(self):
+        self.fetch('/static_url')
+        self.assertEqual(set([p.body for p in self.pushed]), set([b('/base.css')]))
+
+    def test_assumes_accepts_gzip(self):
+        response = self.fetch('/pushed', use_gzip=False)
+        self.assertEqual(response.headers['Content-Encoding'], 'gzip')

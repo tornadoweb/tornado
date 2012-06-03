@@ -69,7 +69,6 @@ Here are a few rules of thumb for when it's necessary:
 from __future__ import absolute_import, division, with_statement
 
 import contextlib
-import functools
 import itertools
 import operator
 import sys
@@ -178,12 +177,59 @@ class NullContext(object):
         _state.contexts = self.old_contexts
 
 
-class _StackContextWrapper(functools.partial):
-    pass
+def save():
+    """Returns a copy of the current stack of contexts"""
+    return _state.contexts
+
+
+def switch_contexts(contexts):
+    """Returns a context manager that will restore the passed-in context stack
+    within its block
+    """
+    if contexts is _state.contexts or not contexts:
+        new_contexts = []
+    elif not _state.contexts:
+        new_contexts = [cls(arg, active_cell)
+                        for (cls, arg, active_cell) in contexts
+                        if active_cell[0]]
+    # If we're moving down the stack, _state.contexts is a prefix
+    # of contexts.  For each element of contexts not in that prefix,
+    # create a new StackContext object.
+    # If we're moving up the stack (or to an entirely different stack),
+    # _state.contexts will have elements not in contexts.  Use
+    # NullContext to clear the state and then recreate from contexts.
+    elif (len(_state.contexts) > len(contexts) or
+        any(a[1] is not b[1]
+            for a, b in itertools.izip(_state.contexts, contexts))):
+        # contexts have been removed or changed, so start over
+        new_contexts = ([NullContext()] +
+                        [cls(arg, active_cell)
+                         for (cls, arg, active_cell) in contexts
+                         if active_cell[0]])
+    else:
+        new_contexts = [cls(arg, active_cell)
+                        for (cls, arg, active_cell) in contexts[len(_state.contexts):]
+                        if active_cell[0]]
+    return _nested(*new_contexts)
+
+
+class _StackContextWrapper(object):
+    def __init__(self, callback, contexts):
+        self._callback = callback
+        self._contexts = contexts
+
+    def __call__(self, *args, **kwargs):
+        """Restores the saved context stack, then executes the wrapped function."""
+        with self.restore():
+            self._callback(*args, **kwargs)
+
+    def restore(self):
+        """Returns a context manager that will restore the saved context stack within its block."""
+        return switch_contexts(self._contexts)
 
 
 def wrap(fn):
-    '''Returns a callable object that will restore the current StackContext
+    '''Returns a _StackContextWrapper that will restore the current StackContext
     when executed.
 
     Use this whenever saving a callback to be executed later in a
@@ -195,44 +241,7 @@ def wrap(fn):
     # functools.wraps doesn't appear to work on functools.partial objects
     #@functools.wraps(fn)
 
-    def wrapped(callback, contexts, *args, **kwargs):
-        if contexts is _state.contexts or not contexts:
-            callback(*args, **kwargs)
-            return
-        if not _state.contexts:
-            new_contexts = [cls(arg, active_cell)
-                            for (cls, arg, active_cell) in contexts
-                            if active_cell[0]]
-        # If we're moving down the stack, _state.contexts is a prefix
-        # of contexts.  For each element of contexts not in that prefix,
-        # create a new StackContext object.
-        # If we're moving up the stack (or to an entirely different stack),
-        # _state.contexts will have elements not in contexts.  Use
-        # NullContext to clear the state and then recreate from contexts.
-        elif (len(_state.contexts) > len(contexts) or
-            any(a[1] is not b[1]
-                for a, b in itertools.izip(_state.contexts, contexts))):
-            # contexts have been removed or changed, so start over
-            new_contexts = ([NullContext()] +
-                            [cls(arg, active_cell)
-                             for (cls, arg, active_cell) in contexts
-                             if active_cell[0]])
-        else:
-            new_contexts = [cls(arg, active_cell)
-                            for (cls, arg, active_cell) in contexts[len(_state.contexts):]
-                            if active_cell[0]]
-        if len(new_contexts) > 1:
-            with _nested(*new_contexts):
-                callback(*args, **kwargs)
-        elif new_contexts:
-            with new_contexts[0]:
-                callback(*args, **kwargs)
-        else:
-            callback(*args, **kwargs)
-    if _state.contexts:
-        return _StackContextWrapper(wrapped, fn, _state.contexts)
-    else:
-        return _StackContextWrapper(fn)
+    return _StackContextWrapper(fn, _state.contexts)
 
 
 @contextlib.contextmanager

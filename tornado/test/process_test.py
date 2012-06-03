@@ -6,12 +6,12 @@ import logging
 import os
 import signal
 import sys
-from tornado.httpclient import HTTPClient, HTTPError
+from tornado.httpclient import HTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.netutil import bind_sockets
 from tornado.process import fork_processes, task_id
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, TCPConnectionException
 from tornado.testing import LogTrapTestCase, get_unused_port
 from tornado.web import RequestHandler, Application
 
@@ -87,8 +87,8 @@ class ProcessTest(LogTrapTestCase):
                 def fetch(url, fail_ok=False):
                     try:
                         return client.fetch(get_url(url))
-                    except HTTPError, e:
-                        if not (fail_ok and e.code == 599):
+                    except TCPConnectionException:
+                        if not fail_ok:
                             raise
 
                 # Make two processes exit abnormally

@@ -22,12 +22,13 @@ import collections
 import errno
 import logging
 import os
+import re
 import socket
 import sys
-import re
 
 from tornado import ioloop
 from tornado import stack_context
+from tornado.netutil import wrap_socket
 from tornado.util import b, bytes_type
 
 try:
@@ -211,6 +212,10 @@ class IOStream(object):
         if self._write_buffer:
             self._add_io_state(self.io_loop.WRITE)
         self._maybe_add_error_listener()
+
+    def set_connect_callback(self, callback):
+        """Call the given callback when the stream is established."""
+        self._connect_callback = stack_context.wrap(callback)
 
     def set_close_callback(self, callback):
         """Call the given callback when the stream is closed."""
@@ -622,10 +627,13 @@ class SSLIOStream(IOStream):
         it will be used as additional keyword arguments to ssl.wrap_socket.
         """
         self._ssl_options = kwargs.pop('ssl_options', {})
+        self._ssl_options['do_handshake_on_connect'] = False
+        self._npn_protocols = kwargs.pop('npn_protocols', None)
         super(SSLIOStream, self).__init__(*args, **kwargs)
         self._ssl_accepting = True
         self._handshake_reading = False
         self._handshake_writing = False
+        self._add_io_state(self.io_loop.READ)
 
     def reading(self):
         return self._handshake_reading or super(SSLIOStream, self).reading()
@@ -673,9 +681,7 @@ class SSLIOStream(IOStream):
         super(SSLIOStream, self)._handle_write()
 
     def _handle_connect(self):
-        self.socket = ssl.wrap_socket(self.socket,
-                                      do_handshake_on_connect=False,
-                                      **self._ssl_options)
+        self.socket = wrap_socket(self.socket, self._ssl_options, self._npn_protocols)
         # Don't call the superclass's _handle_connect (which is responsible
         # for telling the application that the connection is complete)
         # until we've completed the SSL handshake (so certificates are

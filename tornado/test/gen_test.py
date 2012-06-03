@@ -294,7 +294,6 @@ class GenTaskHandler(RequestHandler):
         io_loop = self.request.connection.stream.io_loop
         client = AsyncHTTPClient(io_loop=io_loop)
         response = yield gen.Task(client.fetch, self.get_argument('url'))
-        response.rethrow()
         self.finish(b("got response: ") + response.body)
 
 

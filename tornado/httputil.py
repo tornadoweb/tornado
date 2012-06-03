@@ -22,6 +22,7 @@ import logging
 import urllib
 import re
 
+from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.util import b, ObjectDict
 
 
@@ -71,7 +72,7 @@ class HTTPHeaders(dict):
 
     def add(self, name, value):
         """Adds a new value for the given key."""
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = HTTPHeaders.normalize_name(name)
         self._last_key = norm_name
         if norm_name in self:
             # bypass our override of __setitem__ since it modifies _as_list
@@ -82,7 +83,7 @@ class HTTPHeaders(dict):
 
     def get_list(self, name):
         """Returns all values for the given header as a list."""
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = HTTPHeaders.normalize_name(name)
         return self._as_list.get(norm_name, [])
 
     def get_all(self):
@@ -130,24 +131,24 @@ class HTTPHeaders(dict):
     # dict implementation overrides
 
     def __setitem__(self, name, value):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = HTTPHeaders.normalize_name(name)
         dict.__setitem__(self, norm_name, value)
         self._as_list[norm_name] = [value]
 
     def __getitem__(self, name):
-        return dict.__getitem__(self, HTTPHeaders._normalize_name(name))
+        return dict.__getitem__(self, HTTPHeaders.normalize_name(name))
 
     def __delitem__(self, name):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = HTTPHeaders.normalize_name(name)
         dict.__delitem__(self, norm_name)
         del self._as_list[norm_name]
 
     def __contains__(self, name):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = HTTPHeaders.normalize_name(name)
         return dict.__contains__(self, norm_name)
 
     def get(self, name, default=None):
-        return dict.get(self, HTTPHeaders._normalize_name(name), default)
+        return dict.get(self, HTTPHeaders.normalize_name(name), default)
 
     def update(self, *args, **kwargs):
         # dict.update bypasses our __setitem__
@@ -162,10 +163,10 @@ class HTTPHeaders(dict):
     _normalized_headers = {}
 
     @staticmethod
-    def _normalize_name(name):
+    def normalize_name(name):
         """Converts a name to Http-Header-Case.
 
-        >>> HTTPHeaders._normalize_name("coNtent-TYPE")
+        >>> HTTPHeaders.normalize_name("coNtent-TYPE")
         'Content-Type'
         """
         try:
@@ -203,6 +204,24 @@ class HTTPFile(ObjectDict):
         and should not be trusted outright given that it can be easily forged.
     """
     pass
+
+
+def parse_body_arguments(content_type, body, arguments, files):
+    if content_type.startswith("application/x-www-form-urlencoded"):
+        uri_arguments = parse_qs_bytes(native_str(body))
+        for name, values in uri_arguments.iteritems():
+            values = [v for v in values if v]
+            if values:
+                arguments.setdefault(name, []).extend(values)
+    elif content_type.startswith("multipart/form-data"):
+        fields = content_type.split(";")
+        for field in fields:
+            k, sep, v = field.strip().partition("=")
+            if k == "boundary" and v:
+                parse_multipart_form_data(utf8(v), body, arguments, files)
+                break
+        else:
+            logging.warning("Invalid multipart/form-data")
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):

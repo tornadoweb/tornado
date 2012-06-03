@@ -19,14 +19,11 @@
 from __future__ import absolute_import, division, with_statement
 
 import errno
-import logging
 import os
 import socket
 import stat
 
-from tornado import process
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream, SSLIOStream
 from tornado.platform.auto import set_close_exec
 
 try:
@@ -35,189 +32,28 @@ except ImportError:
     ssl = None
 
 
-class TCPServer(object):
-    r"""A non-blocking, single-threaded TCP server.
+SUPPORTS_NPN = getattr(ssl, 'HAS_NPN', False)
 
-    To use `TCPServer`, define a subclass which overrides the `handle_stream`
-    method.
 
-    `TCPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
-    To make this server serve SSL traffic, send the ssl_options dictionary
-    argument with the arguments required for the `ssl.wrap_socket` method,
-    including "certfile" and "keyfile"::
-
-       TCPServer(ssl_options={
-           "certfile": os.path.join(data_dir, "mydomain.crt"),
-           "keyfile": os.path.join(data_dir, "mydomain.key"),
-       })
-
-    `TCPServer` initialization follows one of three patterns:
-
-    1. `listen`: simple single-process::
-
-            server = TCPServer()
-            server.listen(8888)
-            IOLoop.instance().start()
-
-    2. `bind`/`start`: simple multi-process::
-
-            server = TCPServer()
-            server.bind(8888)
-            server.start(0)  # Forks multiple sub-processes
-            IOLoop.instance().start()
-
-       When using this interface, an `IOLoop` must *not* be passed
-       to the `TCPServer` constructor.  `start` will always start
-       the server on the default singleton `IOLoop`.
-
-    3. `add_sockets`: advanced multi-process::
-
-            sockets = bind_sockets(8888)
-            tornado.process.fork_processes(0)
-            server = TCPServer()
-            server.add_sockets(sockets)
-            IOLoop.instance().start()
-
-       The `add_sockets` interface is more complicated, but it can be
-       used with `tornado.process.fork_processes` to give you more
-       flexibility in when the fork happens.  `add_sockets` can
-       also be used in single-process servers if you want to create
-       your listening sockets in some way other than
-       `bind_sockets`.
-    """
-    def __init__(self, io_loop=None, ssl_options=None):
-        self.io_loop = io_loop
-        self.ssl_options = ssl_options
-        self._sockets = {}  # fd -> socket object
-        self._pending_sockets = []
-        self._started = False
-
-    def listen(self, port, address=""):
-        """Starts accepting connections on the given port.
-
-        This method may be called more than once to listen on multiple ports.
-        `listen` takes effect immediately; it is not necessary to call
-        `TCPServer.start` afterwards.  It is, however, necessary to start
-        the `IOLoop`.
-        """
-        sockets = bind_sockets(port, address=address)
-        self.add_sockets(sockets)
-
-    def add_sockets(self, sockets):
-        """Makes this server start accepting connections on the given sockets.
-
-        The ``sockets`` parameter is a list of socket objects such as
-        those returned by `bind_sockets`.
-        `add_sockets` is typically used in combination with that
-        method and `tornado.process.fork_processes` to provide greater
-        control over the initialization of a multi-process server.
-        """
-        if self.io_loop is None:
-            self.io_loop = IOLoop.instance()
-
-        for sock in sockets:
-            self._sockets[sock.fileno()] = sock
-            add_accept_handler(sock, self._handle_connection,
-                               io_loop=self.io_loop)
-
-    def add_socket(self, socket):
-        """Singular version of `add_sockets`.  Takes a single socket object."""
-        self.add_sockets([socket])
-
-    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128):
-        """Binds this server to the given port on the given address.
-
-        To start the server, call `start`. If you want to run this server
-        in a single process, you can call `listen` as a shortcut to the
-        sequence of `bind` and `start` calls.
-
-        Address may be either an IP address or hostname.  If it's a hostname,
-        the server will listen on all IP addresses associated with the
-        name.  Address may be an empty string or None to listen on all
-        available interfaces.  Family may be set to either ``socket.AF_INET``
-        or ``socket.AF_INET6`` to restrict to ipv4 or ipv6 addresses, otherwise
-        both will be used if available.
-
-        The ``backlog`` argument has the same meaning as for
-        `socket.listen`.
-
-        This method may be called multiple times prior to `start` to listen
-        on multiple ports or interfaces.
-        """
-        sockets = bind_sockets(port, address=address, family=family,
-                               backlog=backlog)
-        if self._started:
-            self.add_sockets(sockets)
-        else:
-            self._pending_sockets.extend(sockets)
-
-    def start(self, num_processes=1):
-        """Starts this server in the IOLoop.
-
-        By default, we run the server in this process and do not fork any
-        additional child process.
-
-        If num_processes is ``None`` or <= 0, we detect the number of cores
-        available on this machine and fork that number of child
-        processes. If num_processes is given and > 1, we fork that
-        specific number of sub-processes.
-
-        Since we use processes and not threads, there is no shared memory
-        between any server code.
-
-        Note that multiple processes are not compatible with the autoreload
-        module (or the ``debug=True`` option to `tornado.web.Application`).
-        When using multiple processes, no IOLoops can be created or
-        referenced until after the call to ``TCPServer.start(n)``.
-        """
-        assert not self._started
-        self._started = True
-        if num_processes != 1:
-            process.fork_processes(num_processes)
-        sockets = self._pending_sockets
-        self._pending_sockets = []
-        self.add_sockets(sockets)
-
-    def stop(self):
-        """Stops listening for new connections.
-
-        Requests currently in progress may still continue after the
-        server is stopped.
-        """
-        for fd, sock in self._sockets.iteritems():
-            self.io_loop.remove_handler(fd)
-            sock.close()
-
-    def handle_stream(self, stream, address):
-        """Override to handle a new `IOStream` from an incoming connection."""
-        raise NotImplementedError()
-
-    def _handle_connection(self, connection, address):
-        if self.ssl_options is not None:
-            assert ssl, "Python 2.6+ and OpenSSL required for SSL"
-            try:
-                connection = ssl.wrap_socket(connection,
-                                             server_side=True,
-                                             do_handshake_on_connect=False,
-                                             **self.ssl_options)
-            except ssl.SSLError, err:
-                if err.args[0] == ssl.SSL_ERROR_EOF:
-                    return connection.close()
-                else:
-                    raise
-            except socket.error, err:
-                if err.args[0] == errno.ECONNABORTED:
-                    return connection.close()
-                else:
-                    raise
-        try:
-            if self.ssl_options is not None:
-                stream = SSLIOStream(connection, io_loop=self.io_loop)
-            else:
-                stream = IOStream(connection, io_loop=self.io_loop)
-            self.handle_stream(stream, address)
-        except Exception:
-            logging.error("Error in connection callback", exc_info=True)
+def wrap_socket(sock, ssl_options, npn_protocols):
+    if npn_protocols is not None:
+        # NPN requires Python 3.x features like SSLContext
+        assert SUPPORTS_NPN, "Python 3.3+ and OpenSSL 1.0.1+ required for TLS NPN"
+        ssl_options = ssl_options.copy()
+        context = ssl.SSLContext(ssl_options.pop('ssl_version',
+                                                 ssl.PROTOCOL_TLSv1))
+        context.verify_mode = ssl_options.pop('cert_reqs', ssl.CERT_NONE)
+        if 'ca_certs' in ssl_options:
+            context.load_verify_locations(cafile=ssl_options.pop('ca_certs'))
+        if 'ciphers' in ssl_options:
+            context.set_ciphers(ssl_options.pop('ciphers'))
+        if 'certfile' in ssl_options:
+            context.load_cert_chain(certfile=ssl_options.pop('certfile'),
+                                    keyfile=ssl_options.pop('keyfile', None))
+        context.set_npn_protocols(npn_protocols)
+        return context.wrap_socket(sock, **ssl_options)
+    else:
+        return ssl.wrap_socket(sock, **ssl_options)
 
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
@@ -269,6 +105,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
         sock.listen(backlog)
         sockets.append(sock)
     return sockets
+
 
 if hasattr(socket, 'AF_UNIX'):
     def bind_unix_socket(file, mode=0600, backlog=128):

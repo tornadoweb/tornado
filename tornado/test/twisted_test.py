@@ -368,7 +368,6 @@ class CompatibilityTests(unittest.TestCase):
         client.fetch(url, callback=callback)
         runner()
         self.assertEqual(len(responses), 1)
-        responses[0].rethrow()
         return responses[0]
 
     def twisted_fetch(self, url, runner):

@@ -2,6 +2,13 @@
 
 from __future__ import absolute_import, division, with_statement
 
+import zlib
+
+try:
+    from io import BytesIO  # python 3
+except ImportError:
+    from cStringIO import StringIO as BytesIO  # python 2
+
 
 class ObjectDict(dict):
     """Makes a dictionary behave like an object."""
@@ -13,6 +20,14 @@ class ObjectDict(dict):
 
     def __setattr__(self, name, value):
         self[name] = value
+
+
+class GzipDecompressor(object):
+    def __init__(self):
+        self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+
+    def __call__(self, value):
+        return self.decompressobj.decompress(value)
 
 
 def import_object(name):
