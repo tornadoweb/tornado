@@ -447,6 +447,24 @@ class RequestHandler(object):
         return decode_signed_value(self.application.settings["cookie_secret"],
                                    name, value, max_age_days=max_age_days)
 
+    def link(self, uri, params):
+        """Add a link to the Link header. See http://tools.ietf.org/html/rfc5988
+        for a description.
+
+        :arg string uri: URI of the link
+        :arg list params: List of (name, value) link parameters
+        """
+        self.add_header('Link', ('<%s>;' % uri)+';'.join(['%s=%s' % pair for pair in params]))
+
+    def hint(self, uri, rel='"subresource"'):
+        """Convenience function for hinting to the client that the given URI
+        is related to this resource.
+
+        :arg string uri: URI of the link
+        :arg string rel: Relation type of the link
+        """
+        self.link(uri, [('rel', rel)])
+
     def redirect(self, url, permanent=False, status=None):
         """Sends a redirect to the given (optionally relative) URL.
 
