@@ -20,14 +20,18 @@ Also includes a few other miscellaneous string manipulation functions that
 have crept in over time.
 """
 
+from __future__ import absolute_import, division, with_statement
+
 import htmlentitydefs
 import re
 import sys
 import urllib
 
 # Python3 compatibility:  On python2.5, introduce the bytes alias from 2.6
-try: bytes
-except Exception: bytes = str
+try:
+    bytes
+except Exception:
+    bytes = str
 
 try:
     from urlparse import parse_qs  # Python 2.6+
@@ -62,6 +66,8 @@ except Exception:
 
 _XHTML_ESCAPE_RE = re.compile('[&<>"]')
 _XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}
+
+
 def xhtml_escape(value):
     """Escapes a string so it is valid within XML or XHTML."""
     return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)],
@@ -143,13 +149,14 @@ else:
         result = parse_qs(qs, keep_blank_values, strict_parsing,
                           encoding='latin1', errors='strict')
         encoded = {}
-        for k,v in result.iteritems():
+        for k, v in result.iteritems():
             encoded[k] = [i.encode('latin1') for i in v]
         return encoded
-        
 
 
 _UTF8_TYPES = (bytes, type(None))
+
+
 def utf8(value):
     """Converts a string argument to a byte string.
 
@@ -162,6 +169,8 @@ def utf8(value):
     return value.encode("utf-8")
 
 _TO_UNICODE_TYPES = (unicode, type(None))
+
+
 def to_unicode(value):
     """Converts a string argument to a unicode string.
 
@@ -185,6 +194,8 @@ else:
     native_str = utf8
 
 _BASESTRING_TYPES = (basestring, type(None))
+
+
 def to_basestring(value):
     """Converts a string argument to a subclass of basestring.
 
@@ -199,13 +210,14 @@ def to_basestring(value):
     assert isinstance(value, bytes)
     return value.decode("utf-8")
 
+
 def recursive_unicode(obj):
     """Walks a simple data structure, converting byte strings to unicode.
 
     Supports lists, tuples, and dictionaries.
     """
     if isinstance(obj, dict):
-        return dict((recursive_unicode(k), recursive_unicode(v)) for (k,v) in obj.iteritems())
+        return dict((recursive_unicode(k), recursive_unicode(v)) for (k, v) in obj.iteritems())
     elif isinstance(obj, list):
         return list(recursive_unicode(i) for i in obj)
     elif isinstance(obj, tuple):
@@ -215,7 +227,7 @@ def recursive_unicode(obj):
     else:
         return obj
 
-# I originally used the regex from 
+# I originally used the regex from
 # http://daringfireball.net/2010/07/improved_regex_for_matching_urls
 # but it gets all exponential on certain patterns (such as too many trailing
 # dots), causing the regex matcher to never return.
@@ -234,8 +246,17 @@ def linkify(text, shorten=False, extra_params="",
 
     shorten: Long urls will be shortened for display.
 
-    extra_params: Extra text to include in the link tag,
-        e.g. linkify(text, extra_params='rel="nofollow" class="external"')
+    extra_params: Extra text to include in the link tag, or a callable
+        taking the link as an argument and returning the extra text
+        e.g. ``linkify(text, extra_params='rel="nofollow" class="external"')``,
+        or::
+
+            def extra_params_cb(url):
+                if url.startswith("http://example.com"):
+                    return 'class="internal"'
+                else:
+                    return 'class="external" rel="nofollow"'
+            linkify(text, extra_params=extra_params_cb)
 
     require_protocol: Only linkify urls which include a protocol. If this is
         False, urls such as www.facebook.com will also be linkified.
@@ -244,7 +265,7 @@ def linkify(text, shorten=False, extra_params="",
         e.g. linkify(text, permitted_protocols=["http", "ftp", "mailto"]).
         It is very unsafe to include protocols such as "javascript".
     """
-    if extra_params:
+    if extra_params and not callable(extra_params):
         extra_params = " " + extra_params.strip()
 
     def make_link(m):
@@ -260,7 +281,10 @@ def linkify(text, shorten=False, extra_params="",
         if not proto:
             href = "http://" + href   # no proto specified, use http
 
-        params = extra_params
+        if callable(extra_params):
+            params = " " + extra_params(href).strip()
+        else:
+            params = extra_params
 
         # clip long urls. max_len is just an approximation
         max_len = 30

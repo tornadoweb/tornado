@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Runs the tornado test suite with all supported python interpreters."""
 
+from __future__ import absolute_import, division, with_statement
+
 import os
 import subprocess
 import sys
@@ -13,11 +15,13 @@ INTERPRETERS = [
     "pypy",
     ]
 
+
 def exists_on_path(filename):
     for dir in os.environ["PATH"].split(":"):
         if os.path.exists(os.path.join(dir, filename)):
             return True
     return False
+
 
 def main():
     for interpreter in INTERPRETERS:

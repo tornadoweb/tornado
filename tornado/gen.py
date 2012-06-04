@@ -62,7 +62,7 @@ it was called with one argument, the result is that argument.  If it was
 called with more than one argument or any keyword arguments, the result
 is an `Arguments` object, which is a named tuple ``(args, kwargs)``.
 """
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import functools
 import operator
@@ -71,10 +71,22 @@ import types
 
 from tornado.stack_context import ExceptionStackContext
 
-class KeyReuseError(Exception): pass
-class UnknownKeyError(Exception): pass
-class LeakedCallbackError(Exception): pass
-class BadYieldError(Exception): pass
+
+class KeyReuseError(Exception):
+    pass
+
+
+class UnknownKeyError(Exception):
+    pass
+
+
+class LeakedCallbackError(Exception):
+    pass
+
+
+class BadYieldError(Exception):
+    pass
+
 
 def engine(func):
     """Decorator for asynchronous generators.
@@ -92,6 +104,7 @@ def engine(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         runner = None
+
         def handle_exception(typ, value, tb):
             # if the function throws an exception before its first "yield"
             # (or is not a generator at all), the Runner won't exist yet.
@@ -100,21 +113,23 @@ def engine(func):
             if runner is not None:
                 return runner.handle_exception(typ, value, tb)
             return False
-        with ExceptionStackContext(handle_exception):
+        with ExceptionStackContext(handle_exception) as deactivate:
             gen = func(*args, **kwargs)
             if isinstance(gen, types.GeneratorType):
-                runner = Runner(gen)
+                runner = Runner(gen, deactivate)
                 runner.run()
                 return
             assert gen is None, gen
+            deactivate()
             # no yield, so we're done
     return wrapper
+
 
 class YieldPoint(object):
     """Base class for objects that may be yielded from the generator."""
     def start(self, runner):
         """Called by the runner after the generator has yielded.
-        
+
         No other methods will be called on this object before ``start``.
         """
         raise NotImplementedError()
@@ -128,11 +143,12 @@ class YieldPoint(object):
 
     def get_result(self):
         """Returns the value to use as the result of the yield expression.
-        
+
         This method will only be called once, and only after `is_ready`
         has returned true.
         """
         raise NotImplementedError()
+
 
 class Callback(YieldPoint):
     """Returns a callable object that will allow a matching `Wait` to proceed.
@@ -159,6 +175,7 @@ class Callback(YieldPoint):
     def get_result(self):
         return self.runner.result_callback(self.key)
 
+
 class Wait(YieldPoint):
     """Returns the argument passed to the result of a previous `Callback`."""
     def __init__(self, key):
@@ -172,6 +189,7 @@ class Wait(YieldPoint):
 
     def get_result(self):
         return self.runner.pop_result(self.key)
+
 
 class WaitAll(YieldPoint):
     """Returns the results of multiple previous `Callbacks`.
@@ -189,10 +207,10 @@ class WaitAll(YieldPoint):
 
     def is_ready(self):
         return all(self.runner.is_ready(key) for key in self.keys)
-        
+
     def get_result(self):
         return [self.runner.pop_result(key) for key in self.keys]
-            
+
 
 class Task(YieldPoint):
     """Runs a single asynchronous operation.
@@ -203,9 +221,9 @@ class Task(YieldPoint):
 
     A `Task` is equivalent to a `Callback`/`Wait` pair (with a unique
     key generated automatically)::
-    
+
         result = yield gen.Task(func, args)
-        
+
         func(args, callback=(yield gen.Callback(key)))
         result = yield gen.Wait(key)
     """
@@ -221,12 +239,13 @@ class Task(YieldPoint):
         runner.register_callback(self.key)
         self.kwargs["callback"] = runner.result_callback(self.key)
         self.func(*self.args, **self.kwargs)
-    
+
     def is_ready(self):
         return self.runner.is_ready(self.key)
 
     def get_result(self):
         return self.runner.pop_result(self.key)
+
 
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
@@ -239,7 +258,7 @@ class Multi(YieldPoint):
     def __init__(self, children):
         assert all(isinstance(i, YieldPoint) for i in children)
         self.children = children
-    
+
     def start(self, runner):
         for i in self.children:
             i.start(runner)
@@ -250,21 +269,26 @@ class Multi(YieldPoint):
     def get_result(self):
         return [i.get_result() for i in self.children]
 
+
 class _NullYieldPoint(YieldPoint):
     def start(self, runner):
         pass
+
     def is_ready(self):
         return True
+
     def get_result(self):
         return None
+
 
 class Runner(object):
     """Internal implementation of `tornado.gen.engine`.
 
     Maintains information about pending callbacks and their results.
     """
-    def __init__(self, gen):
+    def __init__(self, gen, deactivate_stack_context):
         self.gen = gen
+        self.deactivate_stack_context = deactivate_stack_context
         self.yield_point = _NullYieldPoint()
         self.pending_callbacks = set()
         self.results = {}
@@ -329,6 +353,7 @@ class Runner(object):
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
+                    self.deactivate_stack_context()
                     return
                 except Exception:
                     self.finished = True
@@ -366,6 +391,8 @@ class Runner(object):
             return False
 
 # in python 2.6+ this could be a collections.namedtuple
+
+
 class Arguments(tuple):
     """The result of a yield expression whose callback had more than one
     argument (or keyword arguments).

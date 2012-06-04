@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+
+from __future__ import absolute_import, division, with_statement
 from tornado import httpclient, simple_httpclient, netutil
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
 from tornado.httpserver import HTTPServer
@@ -20,6 +22,7 @@ try:
 except ImportError:
     ssl = None
 
+
 class HandlerBaseTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([('/', self.__class__.Handler)])
@@ -28,6 +31,7 @@ class HandlerBaseTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch(*args, **kwargs)
         response.rethrow()
         return json_decode(response.body)
+
 
 class HelloWorldRequestHandler(RequestHandler):
     def initialize(self, protocol="http"):
@@ -39,6 +43,7 @@ class HelloWorldRequestHandler(RequestHandler):
 
     def post(self):
         self.finish("Got %d bytes in POST" % len(self.request.body))
+
 
 class BaseSSLTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_ssl_version(self):
@@ -53,7 +58,7 @@ class BaseSSLTest(AsyncHTTPTestCase, LogTrapTestCase):
                                                  force_instance=True)
 
     def get_app(self):
-        return Application([('/', HelloWorldRequestHandler, 
+        return Application([('/', HelloWorldRequestHandler,
                              dict(protocol="https"))])
 
     def get_httpserver_options(self):
@@ -72,6 +77,7 @@ class BaseSSLTest(AsyncHTTPTestCase, LogTrapTestCase):
                                **kwargs)
         return self.wait()
 
+
 class SSLTestMixin(object):
     def test_ssl(self):
         response = self.fetch('/')
@@ -80,7 +86,7 @@ class SSLTestMixin(object):
     def test_large_post(self):
         response = self.fetch('/',
                               method='POST',
-                              body='A'*5000)
+                              body='A' * 5000)
         self.assertEqual(response.body, b("Got 5000 bytes in POST"))
 
     def test_non_ssl_request(self):
@@ -97,16 +103,26 @@ class SSLTestMixin(object):
 # For example, SSLv3 and TLSv1 throw an exception if you try to read
 # from the socket before the handshake is complete, but the default
 # of SSLv23 allows it.
+
+
 class SSLv23Test(BaseSSLTest, SSLTestMixin):
-    def get_ssl_version(self): return ssl.PROTOCOL_SSLv23
+    def get_ssl_version(self):
+        return ssl.PROTOCOL_SSLv23
+
+
 class SSLv3Test(BaseSSLTest, SSLTestMixin):
-    def get_ssl_version(self): return ssl.PROTOCOL_SSLv3
+    def get_ssl_version(self):
+        return ssl.PROTOCOL_SSLv3
+
+
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
-    def get_ssl_version(self): return ssl.PROTOCOL_TLSv1
+    def get_ssl_version(self):
+        return ssl.PROTOCOL_TLSv1
 
 if hasattr(ssl, 'PROTOCOL_SSLv2'):
     class SSLv2Test(BaseSSLTest):
-        def get_ssl_version(self): return ssl.PROTOCOL_SSLv2
+        def get_ssl_version(self):
+            return ssl.PROTOCOL_SSLv2
 
         def test_sslv2_fail(self):
             # This is really more of a client test, but run it here since
@@ -134,7 +150,7 @@ if ssl is None:
     del SSLv23Test
     del SSLv3Test
     del TLSv1Test
-elif getattr(ssl, 'OPENSSL_VERSION_INFO', (0,0)) < (1,0):
+elif getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0):
     # In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
     # ClientHello messages, which are rejected by SSLv3 and TLSv1
     # servers.  Note that while the OPENSSL_VERSION_INFO was formally
@@ -142,6 +158,7 @@ elif getattr(ssl, 'OPENSSL_VERSION_INFO', (0,0)) < (1,0):
     # python 2.7
     del SSLv3Test
     del TLSv1Test
+
 
 class MultipartTestHandler(RequestHandler):
     def post(self):
@@ -151,16 +168,19 @@ class MultipartTestHandler(RequestHandler):
                      "filebody": _unicode(self.request.files["files"][0]["body"]),
                      })
 
+
 class RawRequestHTTPConnection(simple_httpclient._HTTPConnection):
     def set_request(self, request):
         self.__next_request = request
 
-    def _on_connect(self, parsed):
+    def _on_connect(self, parsed, parsed_hostname):
         self.stream.write(self.__next_request)
         self.__next_request = None
         self.stream.read_until(b("\r\n\r\n"), self._on_headers)
 
 # This test is also called from wsgi_test
+
+
 class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_handlers(self):
         return [("/multipart", MultipartTestHandler),
@@ -174,7 +194,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         conn = RawRequestHTTPConnection(self.io_loop, client,
                                         httpclient.HTTPRequest(self.get_url("/")),
                                         None, self.stop,
-                                        1024*1024)
+                                        1024 * 1024)
         conn.set_request(
             b("\r\n").join(headers +
                            [utf8("Content-Length: %d\r\n" % len(body))]) +
@@ -217,9 +237,10 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         stream.connect(("localhost", self.get_http_port()), callback=self.stop)
         self.wait()
         stream.write(b("\r\n").join([b("POST /hello HTTP/1.1"),
-                                  b("Content-Length: 1024"),
-                                  b("Expect: 100-continue"),
-                                  b("\r\n")]), callback=self.stop)
+                                     b("Content-Length: 1024"),
+                                     b("Expect: 100-continue"),
+                                     b("Connection: close"),
+                                     b("\r\n")]), callback=self.stop)
         self.wait()
         stream.read_until(b("\r\n\r\n"), self.stop)
         data = self.wait()
@@ -234,10 +255,13 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
         stream.read_bytes(int(headers["Content-Length"]), self.stop)
         body = self.wait()
         self.assertEqual(body, b("Got 1024 bytes in POST"))
+        stream.close()
+
 
 class EchoHandler(RequestHandler):
     def get(self):
         self.write(recursive_unicode(self.request.arguments))
+
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
@@ -275,13 +299,15 @@ class TypeCheckHandler(RequestHandler):
     def check_type(self, name, obj, expected_type):
         actual_type = type(obj)
         if expected_type != actual_type:
-            self.errors[name] = "expected %s, got %s" % (expected_type, 
+            self.errors[name] = "expected %s, got %s" % (expected_type,
                                                          actual_type)
+
 
 class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([("/echo", EchoHandler),
                             ("/typecheck", TypeCheckHandler),
+                            ("//doubleslash", EchoHandler),
                             ])
 
     def test_query_string_encoding(self):
@@ -298,6 +324,15 @@ class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/typecheck", method="POST", body="foo=bar", headers=headers)
         data = json_decode(response.body)
         self.assertEqual(data, {})
+
+    def test_double_slash(self):
+        # urlparse.urlsplit (which tornado.httpserver used to use
+        # incorrectly) would parse paths beginning with "//" as
+        # protocol-relative urls.
+        response = self.fetch("//doubleslash")
+        self.assertEqual(200, response.code)
+        self.assertEqual(json_decode(response.body), {})
+
 
 class XHeaderTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
@@ -368,6 +403,8 @@ class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
         stream.read_bytes(int(headers["Content-Length"]), self.stop)
         body = self.wait()
         self.assertEqual(body, b("Hello world"))
+        stream.close()
+        server.stop()
 
 if not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin':
     del UnixSocketTest

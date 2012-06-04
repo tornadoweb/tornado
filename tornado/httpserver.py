@@ -24,11 +24,12 @@ This module also defines the `HTTPRequest` class which is exposed via
 `tornado.web.RequestHandler.request`.
 """
 
+from __future__ import absolute_import, division, with_statement
+
 import Cookie
 import logging
 import socket
 import time
-import urlparse
 
 from tornado.escape import utf8, native_str, parse_qs_bytes
 from tornado import httputil
@@ -38,9 +39,10 @@ from tornado import stack_context
 from tornado.util import b, bytes_type
 
 try:
-    import ssl # Python 2.6+
+    import ssl  # Python 2.6+
 except ImportError:
     ssl = None
+
 
 class HTTPServer(TCPServer):
     r"""A non-blocking, single-threaded HTTP server.
@@ -103,7 +105,7 @@ class HTTPServer(TCPServer):
        In many cases, `tornado.web.Application.listen` can be used to avoid
        the need to explicitly create the `HTTPServer`.
 
-    2. `~tornado.netutil.TCPServer.bind`/`~tornado.netutil.TCPServer.start`: 
+    2. `~tornado.netutil.TCPServer.bind`/`~tornado.netutil.TCPServer.start`:
        simple multi-process::
 
             server = HTTPServer(app)
@@ -143,9 +145,11 @@ class HTTPServer(TCPServer):
         HTTPConnection(stream, address, self.request_callback,
                        self.no_keep_alive, self.xheaders)
 
+
 class _BadRequestException(Exception):
     """Exception class for malformed HTTP requests."""
     pass
+
 
 class HTTPConnection(object):
     """Handles a connection to an HTTP client, executing HTTP requests.
@@ -156,9 +160,6 @@ class HTTPConnection(object):
     def __init__(self, stream, address, request_callback, no_keep_alive=False,
                  xheaders=False):
         self.stream = stream
-        if self.stream.socket.family not in (socket.AF_INET, socket.AF_INET6):
-            # Unix (or other) socket; fake the remote address
-            address = ('0.0.0.0', 0)
         self.address = address
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
@@ -189,7 +190,7 @@ class HTTPConnection(object):
         if self._write_callback is not None:
             callback = self._write_callback
             self._write_callback = None
-            callback()            
+            callback()
         # _on_write_complete is enqueued on the IOLoop whenever the
         # IOStream's write buffer becomes empty, but it's possible for
         # another callback that runs on the IOLoop before it to
@@ -233,9 +234,20 @@ class HTTPConnection(object):
             if not version.startswith("HTTP/"):
                 raise _BadRequestException("Malformed HTTP version in HTTP Request-Line")
             headers = httputil.HTTPHeaders.parse(data[eol:])
+
+            # HTTPRequest wants an IP, not a full socket address
+            if getattr(self.stream.socket, 'family', socket.AF_INET) in (
+                socket.AF_INET, socket.AF_INET6):
+                # Jython 2.5.2 doesn't have the socket.family attribute,
+                # so just assume IP in that case.
+                remote_ip = self.address[0]
+            else:
+                # Unix (or other) socket; fake the remote address
+                remote_ip = '0.0.0.0'
+
             self._request = HTTPRequest(
                 connection=self, method=method, uri=uri, version=version,
-                headers=headers, remote_ip=self.address[0])
+                headers=headers, remote_ip=remote_ip)
 
             content_length = headers.get("Content-Length")
             if content_length:
@@ -308,8 +320,8 @@ class HTTPRequest(object):
        GET/POST arguments are available in the arguments property, which
        maps arguments names to lists of values (to support multiple values
        for individual names). Names are of type `str`, while arguments
-       are byte strings.  Note that this is different from 
-       `RequestHandler.get_argument`, which returns argument values as 
+       are byte strings.  Note that this is different from
+       `RequestHandler.get_argument`, which returns argument values as
        unicode strings.
 
     .. attribute:: files
@@ -347,7 +359,7 @@ class HTTPRequest(object):
             self.remote_ip = remote_ip
             if protocol:
                 self.protocol = protocol
-            elif connection and isinstance(connection.stream, 
+            elif connection and isinstance(connection.stream,
                                            iostream.SSLIOStream):
                 self.protocol = "https"
             else:
@@ -358,14 +370,13 @@ class HTTPRequest(object):
         self._start_time = time.time()
         self._finish_time = None
 
-        scheme, netloc, path, query, fragment = urlparse.urlsplit(native_str(uri))
-        self.path = path
-        self.query = query
-        arguments = parse_qs_bytes(query)
+        self.path, sep, self.query = uri.partition('?')
+        arguments = parse_qs_bytes(self.query)
         self.arguments = {}
         for name, values in arguments.iteritems():
             values = [v for v in values if v]
-            if values: self.arguments[name] = values
+            if values:
+                self.arguments[name] = values
     
     def request_continue(self):
         '''Send a 100-Continue, telling the client to send the request body'''
@@ -380,7 +391,7 @@ class HTTPRequest(object):
     def _on_request_body(self, data, exec_req_cb):
         self.body = data
         content_type = self.headers.get("Content-Type", "")
-        if self.method in ("POST", "PUT"):
+        if self.method in ("POST", "PATCH", "PUT"):
             if content_type.startswith("application/x-www-form-urlencoded"):
                 arguments = parse_qs_bytes(native_str(self.body))
                 for name, values in arguments.iteritems():
@@ -401,7 +412,7 @@ class HTTPRequest(object):
                 else:
                     logging.warning("Invalid multipart/form-data")
         exec_req_cb()
-        
+
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""
         return self.version == "HTTP/1.1"
@@ -480,4 +491,3 @@ class HTTPRequest(object):
                 return False
             raise
         return True
-

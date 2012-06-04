@@ -81,9 +81,9 @@ You can get query string arguments and parse ``POST`` bodies with the
 
 ::
 
-    class MainHandler(tornado.web.RequestHandler):
+    class MyFormHandler(tornado.web.RequestHandler):
         def get(self):
-            self.write('<html><body><form action="/" method="post">'
+            self.write('<html><body><form action="/myform" method="post">'
                        '<input type="text" name="message">'
                        '<input type="submit" value="Submit">'
                        '</form></body></html>')

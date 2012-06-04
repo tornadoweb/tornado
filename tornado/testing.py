@@ -18,7 +18,7 @@ inheritance.  See the docstrings for each class/function below for more
 information.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 from cStringIO import StringIO
 try:
@@ -32,6 +32,7 @@ except ImportError:
     HTTPServer = None
     IOLoop = None
 from tornado.stack_context import StackContext, NullContext
+from tornado.util import raise_exc_info
 import contextlib
 import logging
 import signal
@@ -40,12 +41,15 @@ import time
 import unittest
 
 _next_port = 10000
+
+
 def get_unused_port():
     """Returns a (hopefully) unused port number."""
     global _next_port
     port = _next_port
     _next_port = _next_port + 1
     return port
+
 
 class AsyncTestCase(unittest.TestCase):
     """TestCase subclass for testing IOLoop-based asynchronous code.
@@ -104,6 +108,7 @@ class AsyncTestCase(unittest.TestCase):
         self.__running = False
         self.__failure = None
         self.__stop_args = None
+        self.__timeout = None
 
     def setUp(self):
         super(AsyncTestCase, self).setUp()
@@ -134,9 +139,18 @@ class AsyncTestCase(unittest.TestCase):
             self.__failure = sys.exc_info()
             self.stop()
 
+    def __rethrow(self):
+        if self.__failure is not None:
+            failure = self.__failure
+            self.__failure = None
+            raise_exc_info(failure)
+
     def run(self, result=None):
         with StackContext(self._stack_context):
             super(AsyncTestCase, self).run(result)
+        # In case an exception escaped super.run or the StackContext caught
+        # an exception when there wasn't a wait() to re-raise it, do so here.
+        self.__rethrow()
 
     def stop(self, _arg=None, **kwargs):
         '''Stops the ioloop, causing one pending (or future) call to wait()
@@ -165,12 +179,14 @@ class AsyncTestCase(unittest.TestCase):
                 def timeout_func():
                     try:
                         raise self.failureException(
-                          'Async operation timed out after %d seconds' %
+                          'Async operation timed out after %s seconds' %
                           timeout)
                     except Exception:
                         self.__failure = sys.exc_info()
                     self.stop()
-                self.io_loop.add_timeout(time.time() + timeout, timeout_func)
+                if self.__timeout is not None:
+                    self.io_loop.remove_timeout(self.__timeout)
+                self.__timeout = self.io_loop.add_timeout(time.time() + timeout, timeout_func)
             while True:
                 self.__running = True
                 with NullContext():
@@ -183,13 +199,7 @@ class AsyncTestCase(unittest.TestCase):
                     break
         assert self.__stopped
         self.__stopped = False
-        if self.__failure is not None:
-            # 2to3 isn't smart enough to convert three-argument raise
-            # statements correctly in some cases.
-            if isinstance(self.__failure[1], self.__failure[0]):
-                raise self.__failure[1], None, self.__failure[2]
-            else:
-                raise self.__failure[0], self.__failure[1], self.__failure[2]
+        self.__rethrow()
         result = self.__stop_args
         self.__stop_args = None
         return result
@@ -269,6 +279,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_client.close()
         super(AsyncHTTPTestCase, self).tearDown()
 
+
 class LogTrapTestCase(unittest.TestCase):
     """A test case that captures and discards all logging output
     if the test passes.
@@ -307,6 +318,7 @@ class LogTrapTestCase(unittest.TestCase):
                 old_stream.write(handler.stream.getvalue())
         finally:
             handler.stream = old_stream
+
 
 def main():
     """A simple test runner.

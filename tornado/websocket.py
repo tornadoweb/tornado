@@ -16,6 +16,8 @@ communication between the browser and server.
    overriding `WebSocketHandler.allow_draft76` (see that method's
    documentation for caveats).
 """
+
+from __future__ import absolute_import, division, with_statement
 # Author: Jacob Kristhammar, 2010
 
 import array
@@ -29,6 +31,7 @@ import tornado.escape
 import tornado.web
 
 from tornado.util import bytes_type, b
+
 
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
@@ -202,7 +205,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         may wish to override this if they are using an SSL proxy
         that does not provide the X-Scheme header as understood
         by HTTPServer.
-        
+
         Note that this is only used by the draft76 protocol.
         """
         return "wss" if self.request.protocol == "https" else "ws"
@@ -249,6 +252,7 @@ class WebSocketProtocol(object):
         """
         if args or kwargs:
             callback = functools.partial(callback, *args, **kwargs)
+
         def wrapper(*args, **kwargs):
             try:
                 return callback(*args, **kwargs)
@@ -471,7 +475,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         sha1 = hashlib.sha1()
         sha1.update(tornado.escape.utf8(
                 self.request.headers.get("Sec-Websocket-Key")))
-        sha1.update(b("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")) # Magic value
+        sha1.update(b("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))  # Magic value
         return tornado.escape.native_str(base64.b64encode(sha1.digest()))
 
     def _accept_connection(self):
@@ -552,12 +556,12 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.stream.read_bytes(8, self._on_frame_length_64)
 
     def _on_frame_length_16(self, data):
-        self._frame_length = struct.unpack("!H", data)[0];
-        self.stream.read_bytes(4, self._on_masking_key);
+        self._frame_length = struct.unpack("!H", data)[0]
+        self.stream.read_bytes(4, self._on_masking_key)
 
     def _on_frame_length_64(self, data):
-        self._frame_length = struct.unpack("!Q", data)[0];
-        self.stream.read_bytes(4, self._on_masking_key);
+        self._frame_length = struct.unpack("!Q", data)[0]
+        self.stream.read_bytes(4, self._on_masking_key)
 
     def _on_masking_key(self, data):
         self._frame_mask = array.array("B", data)
@@ -604,9 +608,9 @@ class WebSocketProtocol13(WebSocketProtocol):
         if not self.client_terminated:
             self._receive_frame()
 
-
     def _handle_message(self, opcode, data):
-        if self.client_terminated: return
+        if self.client_terminated:
+            return
 
         if opcode == 0x1:
             # UTF-8 data

@@ -16,6 +16,8 @@
 
 """Miscellaneous network utility code."""
 
+from __future__ import absolute_import, division, with_statement
+
 import errno
 import logging
 import os
@@ -28,9 +30,10 @@ from tornado.iostream import IOStream, SSLIOStream
 from tornado.platform.auto import set_close_exec
 
 try:
-    import ssl # Python 2.6+
+    import ssl  # Python 2.6+
 except ImportError:
     ssl = None
+
 
 class TCPServer(object):
     r"""A non-blocking, single-threaded TCP server.
@@ -231,7 +234,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
     or socket.AF_INET6 to restrict to ipv4 or ipv6 addresses, otherwise
     both will be used if available.
 
-    The ``backlog`` argument has the same meaning as for 
+    The ``backlog`` argument has the same meaning as for
     ``socket.listen()``.
     """
     sockets = []
@@ -275,7 +278,7 @@ if hasattr(socket, 'AF_UNIX'):
         If any other file with that name exists, an exception will be
         raised.
 
-        Returns a socket object (not a list of socket objects like 
+        Returns a socket object (not a list of socket objects like
         `bind_sockets`)
         """
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -297,6 +300,7 @@ if hasattr(socket, 'AF_UNIX'):
         sock.listen(backlog)
         return sock
 
+
 def add_accept_handler(sock, callback, io_loop=None):
     """Adds an ``IOLoop`` event handler to accept new connections on ``sock``.
 
@@ -308,6 +312,7 @@ def add_accept_handler(sock, callback, io_loop=None):
     """
     if io_loop is None:
         io_loop = IOLoop.instance()
+
     def accept_handler(fd, events):
         while True:
             try:
