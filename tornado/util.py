@@ -2,6 +2,8 @@
 
 from __future__ import absolute_import, division, with_statement
 
+import zlib
+
 
 class ObjectDict(dict):
     """Makes a dictionary behave like an object."""
@@ -13,6 +15,16 @@ class ObjectDict(dict):
 
     def __setattr__(self, name, value):
         self[name] = value
+
+
+class GzipDecompressor(object):
+    def __init__(self):
+        # Magic parameter makes zlib module understand gzip header
+        # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
+        self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+
+    def __call__(self, value):
+        return self.decompressobj.decompress(value)
 
 
 def import_object(name):

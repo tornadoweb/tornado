@@ -6,7 +6,7 @@ from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPCl
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
 from tornado import stack_context
-from tornado.util import b
+from tornado.util import b, GzipDecompressor
 
 import base64
 import collections
@@ -20,7 +20,6 @@ import socket
 import sys
 import time
 import urlparse
-import zlib
 
 try:
     from io import BytesIO  # python 3
@@ -376,9 +375,7 @@ class _HTTPConnection(object):
 
         if (self.request.use_gzip and
             self.headers.get("Content-Encoding") == "gzip"):
-            # Magic parameter makes zlib module understand gzip header
-            # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
-            self._decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            self._decompressor = GzipDecompressor()
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
             self.stream.read_until(b("\r\n"), self._on_chunk_length)
@@ -420,7 +417,7 @@ class _HTTPConnection(object):
             self.stream.close()
             return
         if self._decompressor:
-            data = self._decompressor.decompress(data)
+            data = self._decompressor(data)
         if self.request.streaming_callback:
             if self.chunks is None:
                 # if chunks is not None, we already called streaming_callback
@@ -453,7 +450,7 @@ class _HTTPConnection(object):
         assert data[-2:] == b("\r\n")
         chunk = data[:-2]
         if self._decompressor:
-            chunk = self._decompressor.decompress(chunk)
+            chunk = self._decompressor(chunk)
         if self.request.streaming_callback is not None:
             self.request.streaming_callback(chunk)
         else:
