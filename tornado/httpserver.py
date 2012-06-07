@@ -31,7 +31,7 @@ import logging
 import socket
 import time
 
-from tornado.escape import utf8, native_str, parse_qs_bytes
+from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
 from tornado.netutil import TCPServer
@@ -268,27 +268,10 @@ class HTTPConnection(object):
 
     def _on_request_body(self, data):
         self._request.body = data
-        content_type = self._request.headers.get("Content-Type", "")
         if self._request.method in ("POST", "PATCH", "PUT"):
-            if content_type.startswith("application/x-www-form-urlencoded"):
-                arguments = parse_qs_bytes(native_str(self._request.body))
-                for name, values in arguments.iteritems():
-                    values = [v for v in values if v]
-                    if values:
-                        self._request.arguments.setdefault(name, []).extend(
-                            values)
-            elif content_type.startswith("multipart/form-data"):
-                fields = content_type.split(";")
-                for field in fields:
-                    k, sep, v = field.strip().partition("=")
-                    if k == "boundary" and v:
-                        httputil.parse_multipart_form_data(
-                            utf8(v), data,
-                            self._request.arguments,
-                            self._request.files)
-                        break
-                else:
-                    logging.warning("Invalid multipart/form-data")
+            httputil.parse_body_arguments(
+                self._request.headers.get("Content-Type", ""), data,
+                self._request.arguments, self._request.files)
         self.request_callback(self._request)
 
 

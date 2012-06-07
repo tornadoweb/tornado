@@ -22,6 +22,7 @@ import logging
 import urllib
 import re
 
+from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.util import b, ObjectDict
 
 
@@ -203,6 +204,24 @@ class HTTPFile(ObjectDict):
         and should not be trusted outright given that it can be easily forged.
     """
     pass
+
+
+def parse_body_arguments(content_type, body, arguments, files):
+    if content_type.startswith("application/x-www-form-urlencoded"):
+        uri_arguments = parse_qs_bytes(native_str(body))
+        for name, values in uri_arguments.iteritems():
+            values = [v for v in values if v]
+            if values:
+                arguments.setdefault(name, []).extend(values)
+    elif content_type.startswith("multipart/form-data"):
+        fields = content_type.split(";")
+        for field in fields:
+            k, sep, v = field.strip().partition("=")
+            if k == "boundary" and v:
+                parse_multipart_form_data(utf8(v), body, arguments, files)
+                break
+        else:
+            logging.warning("Invalid multipart/form-data")
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):
