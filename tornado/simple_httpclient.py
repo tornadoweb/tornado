@@ -417,7 +417,8 @@ class _HTTPConnection(object):
             self.stream.close()
             return
         if self._decompressor:
-            data = self._decompressor(data)
+            data = (self._decompressor.decompress(data) +
+                    self._decompressor.flush())
         if self.request.streaming_callback:
             if self.chunks is None:
                 # if chunks is not None, we already called streaming_callback
@@ -438,9 +439,21 @@ class _HTTPConnection(object):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         length = int(data.strip(), 16)
         if length == 0:
-            # all the data has been decompressed, so we don't need to
-            # decompress again in _on_body
-            self._decompressor = None
+            if self._decompressor is not None:
+                tail = self._decompressor.flush()
+                if tail:
+                    # I believe the tail will always be empty (i.e.
+                    # decompress will return all it can).  The purpose
+                    # of the flush call is to detect errors such
+                    # as truncated input.  But in case it ever returns
+                    # anything, treat it as an extra chunk
+                    if self.request.streaming_callback is not None:
+                        self.request.streaming_callback(tail)
+                    else:
+                        self.chunks.append(tail)
+                # all the data has been decompressed, so we don't need to
+                # decompress again in _on_body
+                self._decompressor = None
             self._on_body(b('').join(self.chunks))
         else:
             self.stream.read_bytes(length + 2,  # chunk ends with \r\n
@@ -450,7 +463,7 @@ class _HTTPConnection(object):
         assert data[-2:] == b("\r\n")
         chunk = data[:-2]
         if self._decompressor:
-            chunk = self._decompressor(chunk)
+            chunk = self._decompressor.decompress(chunk)
         if self.request.streaming_callback is not None:
             self.request.streaming_callback(chunk)
         else:

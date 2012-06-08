@@ -18,13 +18,33 @@ class ObjectDict(dict):
 
 
 class GzipDecompressor(object):
+    """Streaming gzip decompressor.
+
+    The interface is like that of `zlib.decompressobj` (without the
+    optional arguments, but it understands gzip headers and checksums.
+    """
     def __init__(self):
         # Magic parameter makes zlib module understand gzip header
         # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
+        # This works on cpython and pypy, but not jython.
         self.decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
 
-    def __call__(self, value):
+    def decompress(self, value):
+        """Decompress a chunk, returning newly-available data.
+
+        Some data may be buffered for later processing; `flush` must
+        be called when there is no more input data to ensure that
+        all data was processed.
+        """
         return self.decompressobj.decompress(value)
+
+    def flush(self):
+        """Return any remaining buffered data not yet returned by decompress.
+
+        Also checks for errors such as truncated input.
+        No other methods may be called on this object after `flush`.
+        """
+        return self.decompressobj.flush()
 
 
 def import_object(name):
