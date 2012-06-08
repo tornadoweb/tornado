@@ -24,6 +24,7 @@ from cStringIO import StringIO
 try:
     from tornado.httpclient import AsyncHTTPClient
     from tornado.httpserver import HTTPServer
+    from tornado.simple_httpclient import SimpleAsyncHTTPClient
     from tornado.ioloop import IOLoop
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
@@ -31,10 +32,12 @@ except ImportError:
     AsyncHTTPClient = None
     HTTPServer = None
     IOLoop = None
+    SimpleAsyncHTTPClient = None
 from tornado.stack_context import StackContext, NullContext
 from tornado.util import raise_exc_info
 import contextlib
 import logging
+import os
 import signal
 import sys
 import time
@@ -232,11 +235,18 @@ class AsyncHTTPTestCase(AsyncTestCase):
         super(AsyncHTTPTestCase, self).setUp()
         self.__port = None
 
-        self.http_client = AsyncHTTPClient(io_loop=self.io_loop)
+        self.http_client = self.get_http_client()
         self._app = self.get_app()
-        self.http_server = HTTPServer(self._app, io_loop=self.io_loop,
-                                      **self.get_httpserver_options())
+        self.http_server = self.get_http_server()
         self.http_server.listen(self.get_http_port(), address="127.0.0.1")
+
+    def get_http_client(self):
+        return AsyncHTTPClient(io_loop=self.io_loop)
+
+    def get_http_server(self):
+        return HTTPServer(self._app, io_loop=self.io_loop,
+                          **self.get_httpserver_options())
+
 
     def get_app(self):
         """Should be overridden by subclasses to return a
@@ -257,12 +267,12 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def get_httpserver_options(self):
         """May be overridden by subclasses to return additional
-        keyword arguments for HTTPServer.
+        keyword arguments for the server.
         """
         return {}
 
     def get_http_port(self):
-        """Returns the port used by the HTTPServer.
+        """Returns the port used by the server.
 
         A new port is chosen for each test.
         """
@@ -270,14 +280,47 @@ class AsyncHTTPTestCase(AsyncTestCase):
             self.__port = get_unused_port()
         return self.__port
 
+    def get_protocol(self):
+        return 'http'
+
     def get_url(self, path):
         """Returns an absolute url for the given path on the test server."""
-        return 'http://localhost:%s%s' % (self.get_http_port(), path)
+        return '%s://localhost:%s%s' % (self.get_protocol(),
+                                        self.get_http_port(), path)
 
     def tearDown(self):
         self.http_server.stop()
         self.http_client.close()
         super(AsyncHTTPTestCase, self).tearDown()
+
+
+class AsyncSSLTestCase(AsyncHTTPTestCase):
+    def get_ssl_version(self):
+        raise NotImplementedError()
+
+    def get_http_client(self):
+        # Some versions of libcurl have deadlock bugs with ssl,
+        # so always run these tests with SimpleAsyncHTTPClient.
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop, force_instance=True)
+
+    def get_httpserver_options(self):
+        return dict(ssl_options=self.get_ssl_options())
+
+    def get_ssl_options(self):
+        # Testing keys were generated with:
+        # openssl req -new -keyout tornado/test/test.key -out tornado/test/test.crt -nodes -days 3650 -x509
+        module_dir = os.path.dirname(__file__)
+        return dict(
+                certfile=os.path.join(module_dir, 'test', 'test.crt'),
+                keyfile=os.path.join(module_dir, 'test', 'test.key'),
+                ssl_version=self.get_ssl_version())
+
+    def get_protocol(self):
+        return 'https'
+
+    def fetch(self, path, **kwargs):
+        return AsyncHTTPTestCase.fetch(self, path, validate_cert=False,
+                   **kwargs)
 
 
 class LogTrapTestCase(unittest.TestCase):

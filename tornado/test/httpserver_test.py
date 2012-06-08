@@ -8,7 +8,7 @@ from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, AsyncTestCase
+from tornado.testing import AsyncHTTPTestCase, AsyncSSLTestCase, AsyncTestCase, LogTrapTestCase
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler
 import os
@@ -45,37 +45,10 @@ class HelloWorldRequestHandler(RequestHandler):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
 
-class BaseSSLTest(AsyncHTTPTestCase, LogTrapTestCase):
-    def get_ssl_version(self):
-        raise NotImplementedError()
-
-    def setUp(self):
-        super(BaseSSLTest, self).setUp()
-        # Replace the client defined in the parent class.
-        # Some versions of libcurl have deadlock bugs with ssl,
-        # so always run these tests with SimpleAsyncHTTPClient.
-        self.http_client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
-                                                 force_instance=True)
-
+class BaseSSLTest(AsyncSSLTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([('/', HelloWorldRequestHandler,
                              dict(protocol="https"))])
-
-    def get_httpserver_options(self):
-        # Testing keys were generated with:
-        # openssl req -new -keyout tornado/test/test.key -out tornado/test/test.crt -nodes -days 3650 -x509
-        test_dir = os.path.dirname(__file__)
-        return dict(ssl_options=dict(
-                certfile=os.path.join(test_dir, 'test.crt'),
-                keyfile=os.path.join(test_dir, 'test.key'),
-                ssl_version=self.get_ssl_version()))
-
-    def fetch(self, path, **kwargs):
-        self.http_client.fetch(self.get_url(path).replace('http', 'https'),
-                               self.stop,
-                               validate_cert=False,
-                               **kwargs)
-        return self.wait()
 
 
 class SSLTestMixin(object):
@@ -119,38 +92,36 @@ class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_TLSv1
 
-if hasattr(ssl, 'PROTOCOL_SSLv2'):
-    class SSLv2Test(BaseSSLTest):
-        def get_ssl_version(self):
-            return ssl.PROTOCOL_SSLv2
 
-        def test_sslv2_fail(self):
-            # This is really more of a client test, but run it here since
-            # we've got all the other ssl version tests here.
-            # Clients should have SSLv2 disabled by default.
-            try:
-                # The server simply closes the connection when it gets
-                # an SSLv2 ClientHello packet.
-                # request_timeout is needed here because on some platforms
-                # (cygwin, but not native windows python), the close is not
-                # detected promptly.
-                response = self.fetch('/', request_timeout=1)
-            except ssl.SSLError:
-                # In some python/ssl builds the PROTOCOL_SSLv2 constant
-                # exists but SSLv2 support is still compiled out, which
-                # would result in an SSLError here (details vary depending
-                # on python version).  The important thing is that
-                # SSLv2 request's don't succeed, so we can just ignore
-                # the errors here.
-                return
-            self.assertEqual(response.code, 599)
+class SSLv2Test(BaseSSLTest):
+    def get_ssl_version(self):
+        return ssl.PROTOCOL_SSLv2
+
+    def test_sslv2_fail(self):
+        # This is really more of a client test, but run it here since
+        # we've got all the other ssl version tests here.
+        # Clients should have SSLv2 disabled by default.
+        try:
+            # The server simply closes the connection when it gets
+            # an SSLv2 ClientHello packet.
+            # request_timeout is needed here because on some platforms
+            # (cygwin, but not native windows python), the close is not
+            # detected promptly.
+            response = self.fetch('/', request_timeout=1)
+        except ssl.SSLError:
+            # In some python/ssl builds the PROTOCOL_SSLv2 constant
+            # exists but SSLv2 support is still compiled out, which
+            # would result in an SSLError here (details vary depending
+            # on python version).  The important thing is that
+            # SSLv2 request's don't succeed, so we can just ignore
+            # the errors here.
+            return
+        self.assertEqual(response.code, 599)
 
 if ssl is None:
     del BaseSSLTest
     del SSLv23Test
-    del SSLv3Test
-    del TLSv1Test
-elif getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0):
+if getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0):
     # In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
     # ClientHello messages, which are rejected by SSLv3 and TLSv1
     # servers.  Note that while the OPENSSL_VERSION_INFO was formally
@@ -158,6 +129,8 @@ elif getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0):
     # python 2.7
     del SSLv3Test
     del TLSv1Test
+if not hasattr(ssl, 'PROTOCOL_SSLv2'):
+    del SSLv2Test
 
 
 class MultipartTestHandler(RequestHandler):
