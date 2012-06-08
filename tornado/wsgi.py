@@ -43,12 +43,7 @@ from tornado import escape
 from tornado import httputil
 from tornado import web
 from tornado.escape import native_str, utf8, parse_qs_bytes
-from tornado.util import b
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
+from tornado.util import b, BytesIO
 
 
 class WSGIApplication(web.Application):
@@ -243,13 +238,8 @@ class WSGIContainer(object):
         if "server" not in header_set:
             headers.append(("Server", "TornadoServer/%s" % tornado.version))
 
-        parts = [escape.utf8("HTTP/1.1 " + data["status"] + "\r\n")]
-        for key, value in headers:
-            parts.append(escape.utf8(key) + b(": ") + escape.utf8(value) + b("\r\n"))
-        parts.append(b("\r\n"))
-        parts.append(body)
-        request.write(b("").join(parts))
-        request.finish()
+        request.connection.write_preamble(status_code=int(data["status"].split()[0]), headers=headers)
+        request.connection.write(body, finished=True)
         self._log(status_code, request)
 
     @staticmethod

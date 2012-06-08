@@ -5,8 +5,9 @@ from tornado.escape import utf8, _unicode, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.netutil import ssl
 from tornado import stack_context
-from tornado.util import b
+from tornado.util import b, BytesIO
 
 import base64
 import collections
@@ -21,16 +22,6 @@ import sys
 import time
 import urlparse
 import zlib
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
-
-try:
-    import ssl  # python 2.6+
-except ImportError:
-    ssl = None
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
 

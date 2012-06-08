@@ -2,11 +2,12 @@
 
 
 from __future__ import absolute_import, division, with_statement
-from tornado import httpclient, simple_httpclient, netutil
-from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
+from tornado.escape import json_decode, _unicode, recursive_unicode, native_str
+from tornado.httpclient import HTTPRequest
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
+from tornado.netutil import bind_unix_socket, ssl
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, AsyncTestCase
 from tornado.util import b, bytes_type
@@ -16,11 +17,6 @@ import shutil
 import socket
 import sys
 import tempfile
-
-try:
-    import ssl
-except ImportError:
-    ssl = None
 
 
 class HandlerBaseTestCase(AsyncHTTPTestCase, LogTrapTestCase):
@@ -169,18 +165,7 @@ class MultipartTestHandler(RequestHandler):
                      })
 
 
-class RawRequestHTTPConnection(simple_httpclient._HTTPConnection):
-    def set_request(self, request):
-        self.__next_request = request
-
-    def _on_connect(self, parsed, parsed_hostname):
-        self.stream.write(self.__next_request)
-        self.__next_request = None
-        self.stream.read_until(b("\r\n\r\n"), self._on_headers)
-
 # This test is also called from wsgi_test
-
-
 class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_handlers(self):
         return [("/multipart", MultipartTestHandler),
@@ -189,40 +174,26 @@ class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application(self.get_handlers())
 
-    def raw_fetch(self, headers, body):
-        client = SimpleAsyncHTTPClient(self.io_loop)
-        conn = RawRequestHTTPConnection(self.io_loop, client,
-                                        httpclient.HTTPRequest(self.get_url("/")),
-                                        None, self.stop,
-                                        1024 * 1024)
-        conn.set_request(
-            b("\r\n").join(headers +
-                           [utf8("Content-Length: %d\r\n" % len(body))]) +
-            b("\r\n") + body)
-        response = self.wait()
-        client.close()
-        response.rethrow()
-        return response
-
     def test_multipart_form(self):
         # Encodings here are tricky:  Headers are latin1, bodies can be
         # anything (we use utf8 by default).
-        response = self.raw_fetch([
-                b("POST /multipart HTTP/1.0"),
-                b("Content-Type: multipart/form-data; boundary=1234567890"),
-                b("X-Header-encoding-test: \xe9"),
-                ],
-                                  b("\r\n").join([
-                    b("Content-Disposition: form-data; name=argument"),
-                    b(""),
-                    u"\u00e1".encode("utf-8"),
-                    b("--1234567890"),
-                    u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode("utf8"),
-                    b(""),
-                    u"\u00fa".encode("utf-8"),
-                    b("--1234567890--"),
-                    b(""),
-                    ]))
+        self.http_client.fetch(HTTPRequest(
+            url=self.get_url("/multipart"),
+            method="POST",
+            headers={
+                'Content-Type': 'multipart/form-data; boundary=1234567890',
+                'X-Header-encoding-test': b('\xe9')},
+            body=b("\r\n").join([
+                b("Content-Disposition: form-data; name=argument"),
+                b(""),
+                u"\u00e1".encode("utf-8"),
+                b("--1234567890"),
+                u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode("utf8"),
+                b(""),
+                u"\u00fa".encode("utf-8"),
+                b("--1234567890--"),
+                b("")])), self.stop)
+        response = self.wait(timeout=5)
         data = json_decode(response.body)
         self.assertEqual(u"\u00e9", data["header"])
         self.assertEqual(u"\u00e1", data["argument"])
@@ -387,7 +358,7 @@ class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
 
     def test_unix_socket(self):
         sockfile = os.path.join(self.tmpdir, "test.sock")
-        sock = netutil.bind_unix_socket(sockfile)
+        sock = bind_unix_socket(sockfile)
         app = Application([("/hello", HelloWorldRequestHandler)])
         server = HTTPServer(app, io_loop=self.io_loop)
         server.add_socket(sock)

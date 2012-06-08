@@ -83,12 +83,7 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
+from tornado.util import b, BytesIO, bytes_type, import_object, ObjectDict, raise_exc_info
 
 
 class RequestHandler(object):
@@ -124,8 +119,7 @@ class RequestHandler(object):
         self.clear()
         # Check since connection is not available in WSGI
         if getattr(self.request, "connection", None):
-            self.request.connection.stream.set_close_callback(
-                self.on_connection_close)
+            self.request.connection.set_close_callback(self.on_connection_close)
         self.initialize(**kwargs)
 
     def initialize(self):
@@ -625,7 +619,7 @@ class RequestHandler(object):
             kwargs["autoescape"] = settings["autoescape"]
         return template.Loader(template_path, **kwargs)
 
-    def flush(self, include_footers=False, callback=None):
+    def flush(self, include_footers=False, finished=False, callback=None):
         """Flushes the current output buffer to the network.
 
         The ``callback`` argument, if given, can be used for flow control:
@@ -641,23 +635,30 @@ class RequestHandler(object):
         self._write_buffer = []
         if not self._headers_written:
             self._headers_written = True
+            if hasattr(self, "_new_cookie"):
+                for cookie in self._new_cookie.values():
+                    self.add_header("Set-Cookie", cookie.OutputString(None))
             for transform in self._transforms:
                 self._status_code, self._headers, chunk = \
                     transform.transform_first_chunk(
-                    self._status_code, self._headers, chunk, include_footers)
-            headers = self._generate_headers()
+                        self._status_code, self._headers, chunk, include_footers)
+            self.request.connection.write_preamble(
+                 status_code=self._status_code,
+                 version=self.request.version,
+                 headers=itertools.chain(self._headers.iteritems(),
+                                         self._list_headers),
+                 finished=finished and not chunk,
+                 callback=callback if not chunk else None)
         else:
             for transform in self._transforms:
                 chunk = transform.transform_chunk(chunk, include_footers)
-            headers = b("")
 
         # Ignore the chunk and only write the headers for HEAD requests
-        if self.request.method == "HEAD":
-            if headers:
-                self.request.write(headers, callback=callback)
-            return
-
-        self.request.write(headers + chunk, callback=callback)
+        if self.request.method != "HEAD" and chunk:
+            self._body_written = True
+            self.request.connection.write(chunk, finished=finished, callback=callback)
+        elif callback:
+            callback()
 
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
@@ -694,11 +695,10 @@ class RequestHandler(object):
             # set on the IOStream (which would otherwise prevent the
             # garbage collection of the RequestHandler when there
             # are keepalive connections)
-            self.request.connection.stream.set_close_callback(None)
+            self.request.connection.set_close_callback(None)
 
         if not self.application._wsgi:
-            self.flush(include_footers=True)
-            self.request.finish()
+            self.flush(include_footers=True, finished=True)
             self._log()
         self._finished = True
         self.on_finish()
@@ -1024,17 +1024,6 @@ class RequestHandler(object):
         except Exception, e:
             self._handle_request_exception(e)
 
-    def _generate_headers(self):
-        lines = [utf8(self.request.version + " " +
-                      str(self._status_code) +
-                      " " + httplib.responses[self._status_code])]
-        lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in
-                      itertools.chain(self._headers.iteritems(), self._list_headers)])
-        if hasattr(self, "_new_cookie"):
-            for cookie in self._new_cookie.values():
-                lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))
-        return b("\r\n").join(lines) + b("\r\n\r\n")
-
     def _log(self):
         """Logs the current request.
 
@@ -1046,7 +1035,7 @@ class RequestHandler(object):
 
     def _request_summary(self):
         return self.request.method + " " + self.request.uri + \
-            " (" + self.request.remote_ip + ")"
+            " (" + str(self.request.remote_ip) + ")"
 
     def _handle_request_exception(self, e):
         if isinstance(e, HTTPError):

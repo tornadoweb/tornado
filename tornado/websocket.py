@@ -88,19 +88,13 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         # Websocket only supports GET method
         if self.request.method != 'GET':
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
-            ))
-            self.stream.close()
+            self.request.connection.write_preamble(status_code=405, finished=True)
             return
 
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 400 Bad Request\r\n\r\n"
-                "Can \"Upgrade\" only to \"WebSocket\"."
-            ))
-            self.stream.close()
+            self.request.connection.write_preamble(status_code=400)
+            self.request.connection.write(b('Can "Upgrade" only to "WebSocket"'), finished=True)
             return
 
         # Connection header should be upgrade. Some proxy servers/load balancers
@@ -108,11 +102,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         headers = self.request.headers
         connection = map(lambda s: s.strip().lower(), headers.get("Connection", "").split(","))
         if 'upgrade' not in connection:
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 400 Bad Request\r\n\r\n"
-                "\"Connection\" must be \"Upgrade\"."
-            ))
-            self.stream.close()
+            self.request.connection.write_preamble(status_code=400)
+            self.request.connection.write(b('"Connection" must be "Upgrade".'), finished=True)
             return
 
         # The difference between version 8 and 13 is that in 8 the
@@ -126,10 +117,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.ws_connection = WebSocketProtocol76(self)
             self.ws_connection.accept_connection()
         else:
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 426 Upgrade Required\r\n"
-                "Sec-WebSocket-Version: 8\r\n\r\n"))
-            self.stream.close()
+            self.request.connection.write_preamble(status_code=426, headers=[('Sec-WebSocket-Version', '8')], finished=True)
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket.
@@ -294,35 +282,29 @@ class WebSocketProtocol76(WebSocketProtocol):
             return
 
         scheme = self.handler.get_websocket_scheme()
+        headers = [
+            ('Upgrade', 'WebSocket'),
+            ('Connection', 'Upgrade'),
+            ('Server', 'TornadoServer/%s' % tornado.version),
+            ('Sec-WebSocket-Origin', self.request.headers['Origin']),
+            ('Sec-WebSocket-Location', '%s://%s%s' % (scheme, self.request.host, self.request.uri))]
 
         # draft76 only allows a single subprotocol
-        subprotocol_header = ''
         subprotocol = self.request.headers.get("Sec-WebSocket-Protocol", None)
         if subprotocol:
             selected = self.handler.select_subprotocol([subprotocol])
             if selected:
                 assert selected == subprotocol
-                subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
+                headers.append(("Sec-WebSocket-Protocol", selected))
 
         # Write the initial headers before attempting to read the challenge.
         # This is necessary when using proxies (such as HAProxy), which
         # need to see the Upgrade headers before passing through the
         # non-HTTP traffic that follows.
-        self.stream.write(tornado.escape.utf8(
-            "HTTP/1.1 101 WebSocket Protocol Handshake\r\n"
-            "Upgrade: WebSocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Server: TornadoServer/%(version)s\r\n"
-            "Sec-WebSocket-Origin: %(origin)s\r\n"
-            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(uri)s\r\n"
-            "%(subprotocol)s"
-            "\r\n" % (dict(
-                    version=tornado.version,
-                    origin=self.request.headers["Origin"],
-                    scheme=scheme,
-                    host=self.request.host,
-                    uri=self.request.uri,
-                    subprotocol=subprotocol_header))))
+        self.request.connection.write_preamble(
+            status_code=101,
+            reason='WebSocket Protocol Handshake',
+            headers=headers)
         self.stream.read_bytes(8, self._handle_challenge)
 
     def challenge_response(self, challenge):
@@ -479,22 +461,18 @@ class WebSocketProtocol13(WebSocketProtocol):
         return tornado.escape.native_str(base64.b64encode(sha1.digest()))
 
     def _accept_connection(self):
-        subprotocol_header = ''
-        subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", '')
-        subprotocols = [s.strip() for s in subprotocols.split(',')]
+        headers = [
+            ('Upgrade', 'websocket'),
+            ('Connection', 'Upgrade'),
+            ('Sec-WebSocket-Accept', self._challenge_response())]
+
+        subprotocols = [s.strip() for s in self.request.headers.get("Sec-WebSocket-Protocol", '').split(',')]
         if subprotocols:
             selected = self.handler.select_subprotocol(subprotocols)
             if selected:
-                assert selected in subprotocols
-                subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
+                headers.append(('Sec-WebSocket-Protocol', selected))
 
-        self.stream.write(tornado.escape.utf8(
-            "HTTP/1.1 101 Switching Protocols\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: %s\r\n"
-            "%s"
-            "\r\n" % (self._challenge_response(), subprotocol_header)))
+        self.request.connection.write_preamble(status_code=101, headers=headers)
 
         self.async_callback(self.handler.open)(*self.handler.open_args, **self.handler.open_kwargs)
         self._receive_frame()
