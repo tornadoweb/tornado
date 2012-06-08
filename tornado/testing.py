@@ -294,10 +294,11 @@ class AsyncHTTPTestCase(AsyncTestCase):
         super(AsyncHTTPTestCase, self).tearDown()
 
 
-class AsyncSSLTestCase(AsyncHTTPTestCase):
-    def get_ssl_version(self):
-        raise NotImplementedError()
+class AsyncHTTPSTestCase(AsyncHTTPTestCase):
+    """A test case that starts an HTTPS server.
 
+    Interface is generally the same as `AsyncHTTPTestCase`.
+    """
     def get_http_client(self):
         # Some versions of libcurl have deadlock bugs with ssl,
         # so always run these tests with SimpleAsyncHTTPClient.
@@ -307,13 +308,16 @@ class AsyncSSLTestCase(AsyncHTTPTestCase):
         return dict(ssl_options=self.get_ssl_options())
 
     def get_ssl_options(self):
+        """May be overridden by subclasses to select SSL options.
+
+        By default includes a self-signed testing certificate.
+        """
         # Testing keys were generated with:
         # openssl req -new -keyout tornado/test/test.key -out tornado/test/test.crt -nodes -days 3650 -x509
         module_dir = os.path.dirname(__file__)
         return dict(
                 certfile=os.path.join(module_dir, 'test', 'test.crt'),
-                keyfile=os.path.join(module_dir, 'test', 'test.key'),
-                ssl_version=self.get_ssl_version())
+                keyfile=os.path.join(module_dir, 'test', 'test.key'))
 
     def get_protocol(self):
         return 'https'

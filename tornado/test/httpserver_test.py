@@ -8,7 +8,7 @@ from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncSSLTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler
 import os
@@ -45,13 +45,20 @@ class HelloWorldRequestHandler(RequestHandler):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
 
-class BaseSSLTest(AsyncSSLTestCase, LogTrapTestCase):
+class BaseSSLTest(AsyncHTTPSTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([('/', HelloWorldRequestHandler,
                              dict(protocol="https"))])
 
 
 class SSLTestMixin(object):
+    def get_ssl_options(self):
+        return dict(ssl_version = self.get_ssl_version(),
+                    **AsyncHTTPSTestCase.get_ssl_options())
+
+    def get_ssl_version(self):
+        raise NotImplementedError()
+
     def test_ssl(self):
         response = self.fetch('/')
         self.assertEqual(response.body, b("Hello world"))
@@ -94,8 +101,9 @@ class TLSv1Test(BaseSSLTest, SSLTestMixin):
 
 
 class SSLv2Test(BaseSSLTest):
-    def get_ssl_version(self):
-        return ssl.PROTOCOL_SSLv2
+    def get_ssl_options(self):
+        return dict(ssl_version=ssl.PROTOCOL_SSLv2,
+                    **AsyncHTTPSTestCase.get_ssl_options(self))
 
     def test_sslv2_fail(self):
         # This is really more of a client test, but run it here since
