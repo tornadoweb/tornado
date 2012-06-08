@@ -2,6 +2,11 @@
 
 from __future__ import absolute_import, division, with_statement
 
+try:
+    from io import BytesIO  # python 3
+except ImportError:
+    from cStringIO import StringIO as BytesIO  # python 2
+
 
 class ObjectDict(dict):
     """Makes a dictionary behave like an object."""
