@@ -60,10 +60,6 @@ class EchoPostHandler(RequestHandler):
 
 
 class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
-    def get_http_client(self):
-        """Returns AsyncHTTPClient instance.  May be overridden in subclass."""
-        return AsyncHTTPClient(io_loop=self.io_loop)
-
     def get_app(self):
         return Application([
             url("/hello", HelloWorldHandler),
@@ -73,11 +69,6 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
             url("/echopost", EchoPostHandler),
             ], gzip=True)
-
-    def setUp(self):
-        super(HTTPClientCommonTestCase, self).setUp()
-        # replace the client defined in the parent class
-        self.http_client = self.get_http_client()
 
     def test_hello_world(self):
         response = self.fetch("/hello")
