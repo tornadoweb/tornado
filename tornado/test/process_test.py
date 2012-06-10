@@ -12,6 +12,7 @@ from tornado.ioloop import IOLoop
 from tornado.netutil import bind_sockets
 from tornado.process import fork_processes, task_id
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, TCPConnectionException
+from tornado.stack_context import ExceptionStackContext
 from tornado.testing import LogTrapTestCase, get_unused_port
 from tornado.web import RequestHandler, Application
 
@@ -85,11 +86,11 @@ class ProcessTest(LogTrapTestCase):
                 client = HTTPClient(SimpleAsyncHTTPClient)
 
                 def fetch(url, fail_ok=False):
-                    try:
-                        return client.fetch(get_url(url))
-                    except TCPConnectionException:
+                    def handle_exception(type, value, traceback):
                         if not fail_ok:
                             raise
+                    with ExceptionStackContext(handle_exception):
+                        return client.fetch(get_url(url))
 
                 # Make two processes exit abnormally
                 fetch("/?exit=2", fail_ok=True)
