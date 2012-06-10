@@ -25,16 +25,24 @@ try:
     from tornado.httpclient import AsyncHTTPClient
     from tornado.httpserver import HTTPServer
     from tornado.ioloop import IOLoop
+    from tornado.simple_httpclient import SimpleAsyncHTTPClient
+    from tornado.spdyclient import AsyncSPDYClient
+    from tornado.spdyserver import SPDYServer
+    from tornado.spdyserver.v2 import SPDYServerProtocol
+    from tornado.tcpserver import TCPServer
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
     # won't work, but e.g. LogTrapTestCase and main() will.
     AsyncHTTPClient = None
+    AsyncSPDYClient = None
     HTTPServer = None
     IOLoop = None
-from tornado.stack_context import StackContext, NullContext
+    SPDYServer = None
+from tornado.stack_context import StackContext
 from tornado.util import raise_exc_info
 import contextlib
 import logging
+import os
 import signal
 import sys
 import time
@@ -135,7 +143,7 @@ class AsyncTestCase(unittest.TestCase):
     def _stack_context(self):
         try:
             yield
-        except Exception:
+        except:
             self.__failure = sys.exc_info()
             self.stop()
 
@@ -189,7 +197,7 @@ class AsyncTestCase(unittest.TestCase):
                 self.__timeout = self.io_loop.add_timeout(time.time() + timeout, timeout_func)
             while True:
                 self.__running = True
-                with NullContext():
+                with StackContext(self._stack_context):
                     # Wipe out the StackContext that was established in
                     # self.run() so that all callbacks executed inside the
                     # IOLoop will re-run it.
@@ -232,11 +240,16 @@ class AsyncHTTPTestCase(AsyncTestCase):
         super(AsyncHTTPTestCase, self).setUp()
         self.__port = None
 
-        self.http_client = AsyncHTTPClient(io_loop=self.io_loop)
-        self._app = self.get_app()
-        self.http_server = HTTPServer(self._app, io_loop=self.io_loop,
-                                      **self.get_httpserver_options())
-        self.http_server.listen(self.get_http_port(), address="127.0.0.1")
+        self.http_client = self.get_client()
+        self.http_server = self.get_server()
+        self.http_server.listen(self.get_port(), address="127.0.0.1")
+
+    def get_client(self):
+        return AsyncHTTPClient(io_loop=self.io_loop)
+
+    def get_server(self):
+        return HTTPServer(self.get_app(), io_loop=self.io_loop,
+                          **self.get_server_options())
 
     def get_app(self):
         """Should be overridden by subclasses to return a
@@ -253,15 +266,18 @@ class AsyncHTTPTestCase(AsyncTestCase):
         body="...", etc).
         """
         self.http_client.fetch(self.get_url(path), self.stop, **kwargs)
-        return self.wait()
+        return self.wait(timeout=5)
 
-    def get_httpserver_options(self):
+    def get_server_options(self):
         """May be overridden by subclasses to return additional
         keyword arguments for HTTPServer.
         """
         return {}
 
-    def get_http_port(self):
+    def get_protocol(self):
+        return 'http'
+
+    def get_port(self):
         """Returns the port used by the HTTPServer.
 
         A new port is chosen for each test.
@@ -272,12 +288,60 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def get_url(self, path):
         """Returns an absolute url for the given path on the test server."""
-        return 'http://localhost:%s%s' % (self.get_http_port(), path)
+        return '%s://localhost:%s%s' % (self.get_protocol(), self.get_port(),
+                                        path)
 
     def tearDown(self):
         self.http_server.stop()
         self.http_client.close()
         super(AsyncHTTPTestCase, self).tearDown()
+
+
+class AsyncSPDYNonSSLClient(AsyncSPDYClient):
+    def initialize(self, **kwargs):
+        AsyncSPDYClient.initialize(self, default_spdy=True, **kwargs)
+
+
+class AsyncSPDYTestCase(AsyncHTTPTestCase):
+    def get_client(self):
+        return AsyncSPDYNonSSLClient(io_loop=self.io_loop)
+
+    def get_server(self):
+        return TCPServer(SPDYServerProtocol(self.get_app(),
+                   **self.get_server_options()), io_loop=self.io_loop)
+
+
+class AsyncSSLTestCase(AsyncHTTPTestCase):
+    def get_ssl_version(self):
+        raise NotImplementedError()
+
+    def get_server_side(self):
+        return False
+
+    def get_client(self):
+        # Some versions of libcurl have deadlock bugs with ssl,
+        # so always run these tests with SimpleAsyncHTTPClient.
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop, force_instance=True)
+
+    def get_server_options(self):
+        return dict(ssl_options=self.get_ssl_options())
+
+    def get_ssl_options(self):
+        # Testing keys were generated with:
+        # openssl req -new -keyout tornado/test/test.key -out tornado/test/test.crt -nodes -days 3650 -x509
+        module_dir = os.path.dirname(__file__)
+        return dict(
+                certfile=os.path.join(module_dir, 'test', 'test.crt'),
+                keyfile=os.path.join(module_dir, 'test', 'test.key'),
+                server_side=self.get_server_side(),
+                ssl_version=self.get_ssl_version())
+
+    def get_protocol(self):
+        return 'https'
+
+    def fetch(self, path, **kwargs):
+        return AsyncHTTPTestCase.fetch(self, path, validate_cert=False,
+                   ssl_version=self.get_ssl_version(), **kwargs)
 
 
 class LogTrapTestCase(unittest.TestCase):

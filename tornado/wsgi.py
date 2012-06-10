@@ -42,13 +42,8 @@ import urllib
 from tornado import escape
 from tornado import httputil
 from tornado import web
-from tornado.escape import native_str, utf8, parse_qs_bytes
-from tornado.util import b
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
+from tornado.escape import native_str, parse_qs_bytes
+from tornado.util import b, BytesIO
 
 
 class WSGIApplication(web.Application):
@@ -143,18 +138,7 @@ class HTTPRequest(object):
 
         # Parse request body
         self.files = {}
-        content_type = self.headers.get("Content-Type", "")
-        if content_type.startswith("application/x-www-form-urlencoded"):
-            for name, values in parse_qs_bytes(native_str(self.body)).iteritems():
-                self.arguments.setdefault(name, []).extend(values)
-        elif content_type.startswith("multipart/form-data"):
-            if 'boundary=' in content_type:
-                boundary = content_type.split('boundary=', 1)[1]
-                if boundary:
-                    httputil.parse_multipart_form_data(
-                        utf8(boundary), self.body, self.arguments, self.files)
-            else:
-                logging.warning("Invalid multipart/form-data")
+        httputil.parse_body_arguments(self.headers.get("Content-Type", ""), self.body, self.arguments, self.files)
 
         self._start_time = time.time()
         self._finish_time = None
@@ -243,13 +227,8 @@ class WSGIContainer(object):
         if "server" not in header_set:
             headers.append(("Server", "TornadoServer/%s" % tornado.version))
 
-        parts = [escape.utf8("HTTP/1.1 " + data["status"] + "\r\n")]
-        for key, value in headers:
-            parts.append(escape.utf8(key) + b(": ") + escape.utf8(value) + b("\r\n"))
-        parts.append(b("\r\n"))
-        parts.append(body)
-        request.write(b("").join(parts))
-        request.finish()
+        request.connection.write_preamble(status_code=int(data["status"].split()[0]), headers=headers)
+        request.connection.write(body, finished=True)
         self._log(status_code, request)
 
     @staticmethod

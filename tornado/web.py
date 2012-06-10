@@ -83,12 +83,8 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
+from tornado.httpserver import HTTPRequest
+from tornado.util import b, BytesIO, bytes_type, import_object, ObjectDict, raise_exc_info
 
 
 class RequestHandler(object):
@@ -108,9 +104,11 @@ class RequestHandler(object):
         self.application = application
         self.request = request
         self._headers_written = False
+        self._body_written = False
         self._finished = False
         self._auto_finish = True
         self._transforms = None  # will be set in _execute
+        self._push_requests = {}
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
         # UIModules are available as both `modules` and `_modules` in the
@@ -124,8 +122,7 @@ class RequestHandler(object):
         self.clear()
         # Check since connection is not available in WSGI
         if getattr(self.request, "connection", None):
-            self.request.connection.stream.set_close_callback(
-                self.on_connection_close)
+            self.request.connection.set_close_callback(self.on_connection_close)
         self.initialize(**kwargs)
 
     def initialize(self):
@@ -535,13 +532,13 @@ class RequestHandler(object):
         if js_files:
             # Maintain order of JavaScript files given by modules
             paths = []
-            unique_paths = set()
             for path in js_files:
                 if not is_absolute(path):
                     path = self.static_url(path)
-                if path not in unique_paths:
+                if path not in paths:
                     paths.append(path)
-                    unique_paths.add(path)
+                    if module.push_files:
+                        self.push(path)
             js = ''.join('<script src="' + escape.xhtml_escape(p) +
                          '" type="text/javascript"></script>'
                          for p in paths)
@@ -554,13 +551,13 @@ class RequestHandler(object):
             html = html[:sloc] + js + b('\n') + html[sloc:]
         if css_files:
             paths = []
-            unique_paths = set()
             for path in css_files:
                 if not is_absolute(path):
                     path = self.static_url(path)
-                if path not in unique_paths:
+                if path not in paths:
                     paths.append(path)
-                    unique_paths.add(path)
+                    if module.push_files:
+                        self.push(path)
             css = ''.join('<link href="' + escape.xhtml_escape(p) + '" '
                           'type="text/css" rel="stylesheet"/>'
                           for p in paths)
@@ -577,6 +574,7 @@ class RequestHandler(object):
         if html_bodies:
             hloc = html.index(b('</body>'))
             html = html[:hloc] + b('').join(html_bodies) + b('\n') + html[hloc:]
+
         self.finish(html)
 
     def render_string(self, template_name, **kwargs):
@@ -625,7 +623,7 @@ class RequestHandler(object):
             kwargs["autoescape"] = settings["autoescape"]
         return template.Loader(template_path, **kwargs)
 
-    def flush(self, include_footers=False, callback=None):
+    def flush(self, include_footers=False, finished=False, callback=None):
         """Flushes the current output buffer to the network.
 
         The ``callback`` argument, if given, can be used for flow control:
@@ -637,27 +635,43 @@ class RequestHandler(object):
         if self.application._wsgi:
             raise Exception("WSGI applications do not support flush()")
 
+        for request in self._push_requests.itervalues():
+            request.connection = self.request.connection.push(request)
+            if request.connection:
+                self.application(request)
+        self._push_requests.clear()
+
         chunk = b("").join(self._write_buffer)
         self._write_buffer = []
         if not self._headers_written:
             self._headers_written = True
+            if hasattr(self, "_new_cookie"):
+                for cookie in self._new_cookie.values():
+                    self.add_header("Set-Cookie", cookie.OutputString(None))
+            if (self.settings.get('spdy', False) and
+                self.request.framing == 'http'):
+                self.add_header("Alternate-Protocol", "443:npn-spdy")
             for transform in self._transforms:
                 self._status_code, self._headers, chunk = \
                     transform.transform_first_chunk(
-                    self._status_code, self._headers, chunk, include_footers)
-            headers = self._generate_headers()
+                        self._status_code, self._headers, chunk, include_footers)
+            self.request.connection.write_preamble(
+                 status_code=self._status_code,
+                 version=self.request.version,
+                 headers=itertools.chain(self._headers.iteritems(),
+                                         self._list_headers),
+                 finished=finished and not chunk,
+                 callback=callback if not chunk else None)
         else:
             for transform in self._transforms:
                 chunk = transform.transform_chunk(chunk, include_footers)
-            headers = b("")
 
         # Ignore the chunk and only write the headers for HEAD requests
-        if self.request.method == "HEAD":
-            if headers:
-                self.request.write(headers, callback=callback)
-            return
-
-        self.request.write(headers + chunk, callback=callback)
+        if self.request.method != "HEAD" and chunk:
+            self._body_written = True
+            self.request.connection.write(chunk, finished=finished, callback=callback)
+        elif callback:
+            callback()
 
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
@@ -694,14 +708,36 @@ class RequestHandler(object):
             # set on the IOStream (which would otherwise prevent the
             # garbage collection of the RequestHandler when there
             # are keepalive connections)
-            self.request.connection.stream.set_close_callback(None)
+            self.request.connection.set_close_callback(None)
 
         if not self.application._wsgi:
-            self.flush(include_footers=True)
-            self.request.finish()
+            self.flush(include_footers=True, finished=True)
             self._log()
         self._finished = True
         self.on_finish()
+
+    def push(self, path, **kwargs):
+        """Queues a resource to be pushed to the client if the framing layer is
+        SPDY. The next time `flush()` is called, a GET `HTTPRequest` is
+        constructed and passed to the `Application` to be handled. Must not be
+        called after any of the response body has been flushed to the network.
+
+        :arg string path: Absolute URI path of the resource to be pushed. Must
+            be mappable to a `RequestHandler` by the `Application`, just like a
+            normal request.
+
+        All other keyword arguments are passed to the `HTTPRequest` constructor.
+
+        """
+        if self.request.framing == 'spdy/2':
+            if self._body_written:
+                raise Exception("Cannot push streams after response body has "
+                                "been written")
+            self._push_requests[path] = HTTPRequest(
+                uri=path, method='GET', version='HTTP/1.1',
+                host=self.request.host, protocol=self.request.protocol,
+                **kwargs)
+
 
     def send_error(self, status_code=500, **kwargs):
         """Sends the given HTTP error code to the browser.
@@ -918,7 +954,7 @@ class RequestHandler(object):
         return '<input type="hidden" name="_xsrf" value="' + \
             escape.xhtml_escape(self.xsrf_token) + '"/>'
 
-    def static_url(self, path, include_host=None):
+    def static_url(self, path, include_host=None, push=True):
         """Returns a static URL for the given relative static file path.
 
         This method requires you set the 'static_path' setting in your
@@ -930,11 +966,16 @@ class RequestHandler(object):
         returned content. The signature is based on the content of the
         file.
 
-        By default this method returns URLs relative to the current
-        host, but if ``include_host`` is true the URL returned will be
-        absolute.  If this handler has an ``include_host`` attribute,
-        that value will be used as the default for all `static_url`
-        calls that do not pass ``include_host`` as a keyword argument.
+        :arg string include_host: If not ``None``, an absolute URL will
+            be returned with this value as the host. Otherwise, the
+            URL will be relative to the current host. If this handler
+            has an ``include_host`` attribute, that value will be used
+            as the default for all `static_url` calls that do not pass
+            ``include_host`` as a keyword argument.
+
+        :arg bool push: If ``True`` and the request uses SPDY framing,
+            queue the returned URL to be pushed to the client.
+
         """
         self.require_setting("static_path", "static_url")
         static_handler_class = self.settings.get(
@@ -947,7 +988,10 @@ class RequestHandler(object):
             base = self.request.protocol + "://" + self.request.host
         else:
             base = ""
-        return base + static_handler_class.make_static_url(self.settings, path)
+        url = base + static_handler_class.make_static_url(self.settings, path)
+        if push:
+            self.push(url)
+        return url
 
     def async_callback(self, callback, *args, **kwargs):
         """Obsolete - catches exceptions from the wrapped function.
@@ -1024,17 +1068,6 @@ class RequestHandler(object):
         except Exception, e:
             self._handle_request_exception(e)
 
-    def _generate_headers(self):
-        lines = [utf8(self.request.version + " " +
-                      str(self._status_code) +
-                      " " + httplib.responses[self._status_code])]
-        lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in
-                      itertools.chain(self._headers.iteritems(), self._list_headers)])
-        if hasattr(self, "_new_cookie"):
-            for cookie in self._new_cookie.values():
-                lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))
-        return b("\r\n").join(lines) + b("\r\n\r\n")
-
     def _log(self):
         """Logs the current request.
 
@@ -1046,7 +1079,7 @@ class RequestHandler(object):
 
     def _request_summary(self):
         return self.request.method + " " + self.request.uri + \
-            " (" + self.request.remote_ip + ")"
+            " (" + str(self.request.remote_ip) + ")"
 
     def _handle_request_exception(self, e):
         if isinstance(e, HTTPError):
@@ -1712,7 +1745,8 @@ class GZipContentEncoding(OutputTransform):
 
     def __init__(self, request):
         self._gzipping = request.supports_http_1_1() and \
-            "gzip" in request.headers.get("Accept-Encoding", "")
+            "gzip" in request.headers.get("Accept-Encoding", "") or \
+            request.framing.startswith('spdy')
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
         if self._gzipping:
@@ -1749,7 +1783,7 @@ class ChunkedTransferEncoding(OutputTransform):
     See http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1
     """
     def __init__(self, request):
-        self._chunking = request.supports_http_1_1()
+        self._chunking = request.supports_http_1_1() and request.framing == 'http'
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
         # 304 responses have no body (not even a zero-length body), and so
@@ -1801,13 +1835,19 @@ class UIModule(object):
     UI modules often execute additional queries, and they can include
     additional CSS and JavaScript that will be included in the output
     page, which is automatically inserted on page render.
+
+    :arg bool push_files: If ``True`` and the request uses SPDY framing,
+        queue the JavaScript and CSS files to be pushed the client when
+        the UIModule is rendered.
+
     """
-    def __init__(self, handler):
+    def __init__(self, handler, push_files=True):
         self.handler = handler
         self.request = handler.request
         self.ui = handler.ui
         self.current_user = handler.current_user
         self.locale = handler.locale
+        self.push_files = push_files
 
     def render(self, *args, **kwargs):
         """Overridden in subclasses to return this module's output."""

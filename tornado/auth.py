@@ -150,8 +150,7 @@ class OpenIdMixin(object):
 
     def _on_authentication_verified(self, callback, response):
         if response.error or b("is_valid:true") not in response.body:
-            logging.warning("Invalid OpenID response: %s", response.error or
-                            response.body)
+            logging.warning("Invalid OpenID response: %s", response.body)
             callback(None)
             return
 
@@ -539,7 +538,7 @@ class TwitterMixin(OAuthMixin):
 
     def _on_twitter_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            logging.warning("Error response %s fetching %s", response.body,
                             response.request.url)
             callback(None)
             return
@@ -661,7 +660,7 @@ class FriendFeedMixin(OAuthMixin):
 
     def _on_friendfeed_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            logging.warning("Error response %s fetching %s", response.body,
                             response.request.url)
             callback(None)
             return
@@ -922,7 +921,7 @@ class FacebookMixin(object):
 
     def _parse_response(self, callback, response):
         if response.error:
-            logging.warning("HTTP error from Facebook: %s", response.error)
+            logging.warning("HTTP error from Facebook: %s", response.body)
             callback(None)
             return
         try:
@@ -1082,7 +1081,7 @@ class FacebookGraphMixin(OAuth2Mixin):
 
     def _on_facebook_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            logging.warning("Error response %s fetching %s", response.body,
                             response.request.url)
             callback(None)
             return

@@ -130,7 +130,6 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_openid_get_user(self):
         response = self.fetch('/openid/client/login?openid.mode=blah&openid.ns.ax=http://openid.net/srv/ax/1.0&openid.ax.type.email=http://axschema.org/contact/email&openid.ax.value.email=foo@example.com')
-        response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed["email"], "foo@example.com")
 
@@ -148,14 +147,12 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch(
             '/oauth10/client/login?oauth_token=zxcv',
             headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
-        response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['email'], 'foo@example.com')
         self.assertEqual(parsed['access_token'], dict(key='uiop', secret='5678'))
 
     def test_oauth10_request_parameters(self):
         response = self.fetch('/oauth10/client/request_params')
-        response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['oauth_consumer_key'], 'asdf')
         self.assertEqual(parsed['oauth_token'], 'uiop')
@@ -176,14 +173,12 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch(
             '/oauth10a/client/login?oauth_token=zxcv',
             headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
-        response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['email'], 'foo@example.com')
         self.assertEqual(parsed['access_token'], dict(key='uiop', secret='5678'))
 
     def test_oauth10a_request_parameters(self):
         response = self.fetch('/oauth10a/client/request_params')
-        response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['oauth_consumer_key'], 'asdf')
         self.assertEqual(parsed['oauth_token'], 'uiop')

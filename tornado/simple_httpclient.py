@@ -1,18 +1,16 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, with_statement
 
+from tornado import gen, netutil, stack_context
 from tornado.escape import utf8, _unicode, native_str
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+from tornado.httpclient import HTTPRequest, HTTPResponse, AsyncHTTPClient, main
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
-from tornado import stack_context
-from tornado.util import b
+from tornado.util import b, BytesIO, GzipDecompressor
 
 import base64
 import collections
-import contextlib
 import copy
-import functools
 import logging
 import os.path
 import re
@@ -20,12 +18,6 @@ import socket
 import sys
 import time
 import urlparse
-import zlib
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import ssl  # python 2.6+
@@ -35,55 +27,28 @@ except ImportError:
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
 
 
-class SimpleAsyncHTTPClient(AsyncHTTPClient):
-    """Non-blocking HTTP client with no external dependencies.
+class QueuedAsyncHTTPClient(AsyncHTTPClient):
+    """Framing-agnostic non-blocking HTTP client abstract base class.
 
-    This class implements an HTTP 1.1 client on top of Tornado's IOStreams.
-    It does not currently implement all applicable parts of the HTTP
-    specification, but it does enough to work with major web service APIs
-    (mostly tested against the Twitter API so far).
+    :arg callable handler: Called when the next request in the queue is ready
+        to be processed. Handlers may call `_http_connect` to open a new TCP
+        connection for the request, if necessary.
 
-    This class has not been tested extensively in production and
-    should be considered somewhat experimental as of the release of
-    tornado 1.2.  It is intended to become the default AsyncHTTPClient
-    implementation in a future release.  It may either be used
-    directly, or to facilitate testing of this class with an existing
-    application, setting the environment variable
-    USE_SIMPLE_HTTPCLIENT=1 will cause this class to transparently
-    replace tornado.httpclient.AsyncHTTPClient.
-
-    Some features found in the curl-based AsyncHTTPClient are not yet
-    supported.  In particular, proxies are not supported, connections
-    are not reused, and callers cannot select the network interface to be
-    used.
-
-    Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
-    should use the curl-based AsyncHTTPClient if HTTPS support is required.
-
-    """
-    def initialize(self, io_loop=None, max_clients=10,
-                   max_simultaneous_connections=None,
-                   hostname_mapping=None, max_buffer_size=104857600):
-        """Creates a AsyncHTTPClient.
-
-        Only a single AsyncHTTPClient instance exists per IOLoop
-        in order to provide limitations on the number of pending connections.
-        force_instance=True may be used to suppress this behavior.
-
-        max_clients is the number of concurrent requests that can be in
-        progress.  max_simultaneous_connections has no effect and is accepted
-        only for compatibility with the curl-based AsyncHTTPClient.  Note
-        that these arguments are only used when the client is first created,
-        and will be ignored when an existing client is reused.
-
-        hostname_mapping is a dictionary mapping hostnames to IP addresses.
+    :arg dict hostname_mapping: A dictionary mapping hostnames to IP addresses.
         It can be used to make local DNS changes when modifying system-wide
-        settings like /etc/hosts is not possible or desirable (e.g. in
+        settings like ``/etc/hosts`` is not possible or desirable (e.g. in
         unittests).
 
-        max_buffer_size is the number of bytes that can be read by IOStream. It
-        defaults to 100mb.
-        """
+    :arg int max_buffer_size: The number of bytes that can be read by IOStream.
+        It defaults to 100mb.
+
+    See `AsyncHTTPClient` for other keyword arguments.
+
+    """
+    def initialize(self, handler, io_loop=None, max_clients=10,
+                   max_simultaneous_connections=None, hostname_mapping=None,
+                   max_buffer_size=104857600):
+        self.handler = handler
         self.io_loop = io_loop
         self.max_clients = max_clients
         self.queue = collections.deque()
@@ -107,149 +72,180 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                     len(self.active), len(self.queue)))
 
     def _process_queue(self):
-        with stack_context.NullContext():
-            while self.queue and len(self.active) < self.max_clients:
-                request, callback = self.queue.popleft()
-                key = object()
-                self.active[key] = (request, callback)
-                _HTTPConnection(self.io_loop, self, request,
-                                functools.partial(self._release_fetch, key),
-                                callback,
-                                self.max_buffer_size)
+        while self.queue and len(self.active) < self.max_clients:
+            request, callback = self.queue.popleft()
+            key = object()
+            self.active[key] = (request, callback)
 
-    def _release_fetch(self, key):
-        del self.active[key]
-        self._process_queue()
+            def release_callback():
+                del self.active[key]
+                self._process_queue()
+            with callback.restore() if callback else stack_context.NullContext():
+                self.handler(request, release_callback, callback)
 
-
-class _HTTPConnection(object):
-    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-
-    def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size):
-        self.start_time = time.time()
-        self.io_loop = io_loop
-        self.client = client
-        self.request = request
-        self.release_callback = release_callback
-        self.final_callback = final_callback
-        self.code = None
-        self.headers = None
-        self.chunks = None
-        self._decompressor = None
-        # Timeout handle returned by IOLoop.add_timeout
-        self._timeout = None
-        with stack_context.StackContext(self.cleanup):
-            parsed = urlparse.urlsplit(_unicode(self.request.url))
-            if ssl is None and parsed.scheme == "https":
-                raise ValueError("HTTPS requires either python2.6+ or "
+    @gen.engine
+    def _http_connect(self, request, callback, npn_protocols=None):
+        parsed = urlparse.urlsplit(_unicode(request.url))
+        if ssl is None and parsed.scheme == "https":
+            raise ValueError("HTTPS requires either python2.6+ or "
                                  "curl_httpclient")
-            if parsed.scheme not in ("http", "https"):
-                raise ValueError("Unsupported url scheme: %s" %
-                                 self.request.url)
-            # urlsplit results have hostname and port results, but they
-            # didn't support ipv6 literals until python 2.7.
-            netloc = parsed.netloc
-            if "@" in netloc:
-                userpass, _, netloc = netloc.rpartition("@")
-            match = re.match(r'^(.+):(\d+)$', netloc)
-            if match:
-                host = match.group(1)
-                port = int(match.group(2))
+        # urlsplit results have hostname and port results, but they
+        # didn't support ipv6 literals until python 2.7.
+        netloc = parsed.netloc
+        if "@" in netloc:
+            userpass, _, netloc = netloc.rpartition("@")
+        match = re.match(r'^(.+):(\d+)$', netloc)
+        if match:
+            host = match.group(1)
+            port = int(match.group(2))
+        else:
+            host = netloc
+            port = 443 if parsed.scheme == "https" else 80
+        if re.match(r'^\[.*\]$', host):
+            # raw ipv6 addresses in urls are enclosed in brackets
+            host = host[1:-1]
+        parsed_hostname = host  # save final parsed host for _on_connect
+        if self.hostname_mapping is not None:
+            host = self.hostname_mapping.get(host, host)
+
+        if request.allow_ipv6:
+            af = socket.AF_UNSPEC
+        else:
+            # We only try the first IP we get from getaddrinfo,
+            # so restrict to ipv4 by default.
+            af = socket.AF_INET
+
+        addrinfo = socket.getaddrinfo(host, port, af, socket.SOCK_STREAM, 0, 0)
+        af, socktype, proto, canonname, sockaddr = addrinfo[0]
+
+        if parsed.scheme == "https":
+            ssl_options = {
+                "ca_certs": request.ca_certs or _DEFAULT_CA_CERTS
+            }
+            if request.validate_cert:
+                ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
+            if request.client_key is not None:
+                ssl_options["keyfile"] = request.client_key
+            if request.client_cert is not None:
+                ssl_options["certfile"] = request.client_cert
+
+            # SSL interoperability is tricky.  We want to disable
+            # SSLv2 for security reasons; it wasn't disabled by default
+            # until openssl 1.0.  The best way to do this is to use
+            # the SSL_OP_NO_SSLv2, but that wasn't exposed to python
+            # until 3.2.  Python 2.7 adds the ciphers argument, which
+            # can also be used to disable SSLv2.  As a last resort
+            # on python 2.6, we set ssl_version to SSLv3.  This is
+            # more narrow than we'd like since it also breaks
+            # compatibility with servers configured for TLSv1 only,
+            # but nearly all servers support SSLv3:
+            # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
+            if sys.version_info >= (2, 7):
+                ssl_options["ciphers"] = "DEFAULT:!SSLv2"
             else:
-                host = netloc
-                port = 443 if parsed.scheme == "https" else 80
-            if re.match(r'^\[.*\]$', host):
-                # raw ipv6 addresses in urls are enclosed in brackets
-                host = host[1:-1]
-            parsed_hostname = host  # save final parsed host for _on_connect
-            if self.client.hostname_mapping is not None:
-                host = self.client.hostname_mapping.get(host, host)
+                # This is really only necessary for pre-1.0 versions
+                # of openssl, but python 2.6 doesn't expose version
+                # information.
+                ssl_options["ssl_version"] = ssl.PROTOCOL_SSLv3
+            if request.ssl_version is not None:
+                ssl_options["ssl_version"] = request.ssl_version
 
-            if request.allow_ipv6:
-                af = socket.AF_UNSPEC
-            else:
-                # We only try the first IP we get from getaddrinfo,
-                # so restrict to ipv4 by default.
-                af = socket.AF_INET
+            stream = SSLIOStream(socket.socket(af, socktype, proto),
+                                 io_loop=self.io_loop,
+                                 ssl_options=ssl_options,
+                                 npn_protocols=npn_protocols,
+                                 max_buffer_size=self.max_buffer_size)
+        else:
+            stream = IOStream(socket.socket(af, socktype, proto),
+                              io_loop=self.io_loop,
+                              max_buffer_size=self.max_buffer_size)
 
-            addrinfo = socket.getaddrinfo(host, port, af, socket.SOCK_STREAM,
-                                          0, 0)
-            af, socktype, proto, canonname, sockaddr = addrinfo[0]
+        timeout = min(request.connect_timeout, request.request_timeout)
+        if timeout:
+            def on_timeout():
+                stream.close()
+                raise TCPConnectionException("Connect timeout")
+            timeout_handle = self.io_loop.add_timeout(
+                time.time() + timeout,
+                stack_context.wrap(on_timeout))
+        yield gen.Task(stream.connect, sockaddr)
 
-            if parsed.scheme == "https":
-                ssl_options = {}
-                if request.validate_cert:
-                    ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
-                if request.ca_certs is not None:
-                    ssl_options["ca_certs"] = request.ca_certs
-                else:
-                    ssl_options["ca_certs"] = _DEFAULT_CA_CERTS
-                if request.client_key is not None:
-                    ssl_options["keyfile"] = request.client_key
-                if request.client_cert is not None:
-                    ssl_options["certfile"] = request.client_cert
+        if timeout_handle is not None:
+            self.io_loop.remove_timeout(timeout_handle)
 
-                # SSL interoperability is tricky.  We want to disable
-                # SSLv2 for security reasons; it wasn't disabled by default
-                # until openssl 1.0.  The best way to do this is to use
-                # the SSL_OP_NO_SSLv2, but that wasn't exposed to python
-                # until 3.2.  Python 2.7 adds the ciphers argument, which
-                # can also be used to disable SSLv2.  As a last resort
-                # on python 2.6, we set ssl_version to SSLv3.  This is
-                # more narrow than we'd like since it also breaks
-                # compatibility with servers configured for TLSv1 only,
-                # but nearly all servers support SSLv3:
-                # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
-                if sys.version_info >= (2, 7):
-                    ssl_options["ciphers"] = "DEFAULT:!SSLv2"
-                else:
-                    # This is really only necessary for pre-1.0 versions
-                    # of openssl, but python 2.6 doesn't expose version
-                    # information.
-                    ssl_options["ssl_version"] = ssl.PROTOCOL_SSLv3
-
-                self.stream = SSLIOStream(socket.socket(af, socktype, proto),
-                                          io_loop=self.io_loop,
-                                          ssl_options=ssl_options,
-                                          max_buffer_size=max_buffer_size)
-            else:
-                self.stream = IOStream(socket.socket(af, socktype, proto),
-                                       io_loop=self.io_loop,
-                                       max_buffer_size=max_buffer_size)
-            timeout = min(request.connect_timeout, request.request_timeout)
-            if timeout:
-                self._timeout = self.io_loop.add_timeout(
-                    self.start_time + timeout,
-                    self._on_timeout)
-            self.stream.set_close_callback(self._on_close)
-            self.stream.connect(sockaddr,
-                                functools.partial(self._on_connect, parsed,
-                                                  parsed_hostname))
-
-    def _on_timeout(self):
-        self._timeout = None
-        self._run_callback(HTTPResponse(self.request, 599,
-                                        request_time=time.time() - self.start_time,
-                                        error=HTTPError(599, "Timeout")))
-        self.stream.close()
-
-    def _on_connect(self, parsed, parsed_hostname):
-        if self._timeout is not None:
-            self.io_loop.remove_timeout(self._timeout)
-            self._timeout = None
-        if self.request.request_timeout:
-            self._timeout = self.io_loop.add_timeout(
-                self.start_time + self.request.request_timeout,
-                self._on_timeout)
-        if (self.request.validate_cert and
-            isinstance(self.stream, SSLIOStream)):
-            match_hostname(self.stream.socket.getpeercert(),
+        if parsed.scheme == "https" and request.validate_cert:
+            match_hostname(stream.socket.getpeercert(),
                            # ipv6 addresses are broken (in
                            # parsed.hostname) until 2.7, here is
                            # correctly parsed value calculated in
                            # __init__
                            parsed_hostname)
+        callback((stream, sockaddr))
+
+
+class SimpleAsyncHTTPClient(QueuedAsyncHTTPClient):
+    """Non-blocking HTTP client with no external dependencies.
+
+    This class implements an HTTP 1.1 client on top of Tornado's IOStreams.
+    It does not currently implement all applicable parts of the HTTP
+    specification, but it does enough to work with major web service APIs
+    (mostly tested against the Twitter API so far).
+
+    Some features found in the curl-based AsyncHTTPClient are not yet
+    supported.  In particular, proxies are not supported, connections
+    are not reused, and callers cannot select the network interface to be
+    used.
+
+    Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
+    should use the curl-based AsyncHTTPClient if HTTPS support is required.
+
+    """
+    def initialize(self, **kwargs):
+        """Creates an AsyncHTTPClient. See `QueuedAsyncHTTPClient` for a
+        description of the arguments.
+
+        """
+        @gen.engine
+        def handler(request, release_callback, final_callback):
+            conn, address = yield gen.Task(self._http_connect, request,
+                npn_protocols=['http/1.1'] if netutil.SUPPORTS_NPN else None)
+            _HTTPClientConnection(conn, address, self, request,
+                                  release_callback, final_callback)
+        QueuedAsyncHTTPClient.initialize(self, handler, **kwargs)
+
+
+class TCPConnectionException(Exception):
+    pass
+
+
+class _HTTPClientConnection(object):
+    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+
+    def __init__(self, conn, address, client, request, release_callback,
+                 final_callback):
+        self.conn = conn
+        self.client = client
+        self.request = request
+        self.release_callback = release_callback
+        self.final_callback = final_callback
+        self.start_time = time.time()
+        self.code = None
+        self.headers = None
+        self.chunks = None
+        self._decompressor = None
+        self._released = False
+
+        def on_close():
+            if not self._released:
+                raise TCPConnectionException("Connection closed")
+        self.conn.set_close_callback(stack_context.wrap(on_close))
+
+        if self.request.request_timeout:
+            def on_timeout():
+                raise TCPConnectionException("Timeout")
+            self._timeout = self.client.io_loop.add_timeout(
+                self.start_time + self.request.request_timeout,
+                stack_context.wrap(on_timeout))
         if (self.request.method not in self._SUPPORTED_METHODS and
             not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
@@ -260,6 +256,7 @@ class _HTTPConnection(object):
                 raise NotImplementedError('%s not supported' % key)
         if "Connection" not in self.request.headers:
             self.request.headers["Connection"] = "close"
+        parsed = urlparse.urlsplit(_unicode(request.url))
         if "Host" not in self.request.headers:
             if '@' in parsed.netloc:
                 self.request.headers["Host"] = parsed.netloc.rpartition('@')[-1]
@@ -299,41 +296,11 @@ class _HTTPConnection(object):
             if b('\n') in line:
                 raise ValueError('Newline in header: ' + repr(line))
             request_lines.append(line)
-        self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
+        self.conn.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
         if self.request.body is not None:
-            self.stream.write(self.request.body)
-        self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
-
-    def _release(self):
-        if self.release_callback is not None:
-            release_callback = self.release_callback
-            self.release_callback = None
-            release_callback()
-
-    def _run_callback(self, response):
-        self._release()
-        if self.final_callback is not None:
-            final_callback = self.final_callback
-            self.final_callback = None
-            final_callback(response)
-
-    @contextlib.contextmanager
-    def cleanup(self):
-        try:
-            yield
-        except Exception, e:
-            logging.warning("uncaught exception", exc_info=True)
-            self._run_callback(HTTPResponse(self.request, 599, error=e,
-                                request_time=time.time() - self.start_time,
-                                ))
-            if hasattr(self, "stream"):
-                self.stream.close()
-
-    def _on_close(self):
-        self._run_callback(HTTPResponse(
-                self.request, 599,
-                request_time=time.time() - self.start_time,
-                error=HTTPError(599, "Connection closed")))
+            self.conn.write(self.request.body)
+        self.conn.read_until_regex(b("\r?\n\r?\n"),
+                                   stack_context.wrap(self._on_headers))
 
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
@@ -378,18 +345,20 @@ class _HTTPConnection(object):
             self.headers.get("Content-Encoding") == "gzip"):
             # Magic parameter makes zlib module understand gzip header
             # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
-            self._decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            self._decompressor = GzipDecompressor()
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
-            self.stream.read_until(b("\r\n"), self._on_chunk_length)
+            self.conn.read_until(b("\r\n"),
+                                 stack_context.wrap(self._on_chunk_length))
         elif content_length is not None:
-            self.stream.read_bytes(content_length, self._on_body)
+            self.conn.read_bytes(content_length,
+                                 stack_context.wrap(self._on_body))
         else:
-            self.stream.read_until_close(self._on_body)
+            self.conn.read_until_close(stack_context.wrap(self._on_body))
 
     def _on_body(self, data):
         if self._timeout is not None:
-            self.io_loop.remove_timeout(self._timeout)
+            self.client.io_loop.remove_timeout(self._timeout)
             self._timeout = None
         original_request = getattr(self.request, "original_request",
                                    self.request)
@@ -417,10 +386,10 @@ class _HTTPConnection(object):
             self.final_callback = None
             self._release()
             self.client.fetch(new_request, final_callback)
-            self.stream.close()
+            self.conn.close()
             return
         if self._decompressor:
-            data = self._decompressor.decompress(data)
+            data = self._decompressor(data)
         if self.request.streaming_callback:
             if self.chunks is None:
                 # if chunks is not None, we already called streaming_callback
@@ -435,7 +404,7 @@ class _HTTPConnection(object):
                                 buffer=buffer,
                                 effective_url=self.request.url)
         self._run_callback(response)
-        self.stream.close()
+        self.conn.close()
 
     def _on_chunk_length(self, data):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
@@ -446,19 +415,34 @@ class _HTTPConnection(object):
             self._decompressor = None
             self._on_body(b('').join(self.chunks))
         else:
-            self.stream.read_bytes(length + 2,  # chunk ends with \r\n
-                              self._on_chunk_data)
+            self.conn.read_bytes(length + 2,  # chunk ends with \r\n
+                              stack_context.wrap(self._on_chunk_data))
 
     def _on_chunk_data(self, data):
         assert data[-2:] == b("\r\n")
         chunk = data[:-2]
         if self._decompressor:
-            chunk = self._decompressor.decompress(chunk)
+            chunk = self._decompressor(chunk)
         if self.request.streaming_callback is not None:
             self.request.streaming_callback(chunk)
         else:
             self.chunks.append(chunk)
-        self.stream.read_until(b("\r\n"), self._on_chunk_length)
+        self.conn.read_until(b("\r\n"),
+                             stack_context.wrap(self._on_chunk_length))
+
+    def _run_callback(self, response):
+        self._release()
+        if self.final_callback is not None:
+            final_callback = self.final_callback
+            self.final_callback = None
+            final_callback(response)
+
+    def _release(self):
+        self._released = True
+        if self.release_callback is not None:
+            release_callback = self.release_callback
+            self.release_callback = None
+            release_callback()
 
 
 # match_hostname was added to the standard library ssl module in python 3.2.

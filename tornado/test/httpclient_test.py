@@ -8,7 +8,6 @@ from contextlib import closing
 import functools
 
 from tornado.escape import utf8
-from tornado.httpclient import AsyncHTTPClient
 from tornado.iostream import IOStream
 from tornado import netutil
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
@@ -60,10 +59,6 @@ class EchoPostHandler(RequestHandler):
 
 
 class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
-    def get_http_client(self):
-        """Returns AsyncHTTPClient instance.  May be overridden in subclass."""
-        return AsyncHTTPClient(io_loop=self.io_loop)
-
     def get_app(self):
         return Application([
             url("/hello", HelloWorldHandler),
@@ -73,11 +68,6 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
             url("/echopost", EchoPostHandler),
             ], gzip=True)
-
-    def setUp(self):
-        super(HTTPClientCommonTestCase, self).setUp()
-        # replace the client defined in the parent class
-        self.http_client = self.get_http_client()
 
     def test_hello_world(self):
         response = self.fetch("/hello")
@@ -97,6 +87,11 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         # with streaming_callback, data goes to the callback and not response.body
         self.assertEqual(chunks, [b("Hello world!")])
         self.assertFalse(response.body)
+
+    def test_header_callback(self):
+        headers = []
+        self.fetch("/hello", header_callback=headers.append)
+        self.assertTrue("Content-Type: text/plain\r\n" in headers)
 
     def test_post(self):
         response = self.fetch("/post", method="POST",
@@ -142,7 +137,6 @@ Transfer-Encoding: chunked
             netutil.add_accept_handler(sock, accept_callback, self.io_loop)
             self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
             resp = self.wait()
-            resp.rethrow()
             self.assertEqual(resp.body, b("12"))
 
     def test_basic_auth(self):
@@ -161,8 +155,9 @@ Transfer-Encoding: chunked
         self.assertEqual(b("Zero"), response.body)
 
     def test_credentials_in_url(self):
-        url = self.get_url("/auth").replace("http://", "http://me:secret@")
-        self.http_client.fetch(url, self.stop)
+        protocol = self.get_protocol()
+        url = self.get_url("/auth").replace("%s://" % protocol, "%s://me:secret@" % protocol)
+        self.http_client.fetch(url, self.stop, validate_cert=False)
         response = self.wait()
         self.assertEqual(b("Basic ") + base64.b64encode(b("me:secret")),
                          response.body)

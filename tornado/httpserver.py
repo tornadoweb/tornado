@@ -27,16 +27,16 @@ This module also defines the `HTTPRequest` class which is exposed via
 from __future__ import absolute_import, division, with_statement
 
 import Cookie
+import functools
+import httplib
 import logging
 import socket
 import time
 
+from tornado import httputil, iostream, netutil, stack_context
 from tornado.escape import utf8, native_str, parse_qs_bytes
-from tornado import httputil
-from tornado import iostream
-from tornado.netutil import TCPServer
-from tornado import stack_context
-from tornado.util import b, bytes_type
+from tornado.tcpserver import TCPServer
+from tornado.util import b
 
 try:
     import ssl  # Python 2.6+
@@ -59,9 +59,10 @@ class HTTPServer(TCPServer):
 
         def handle_request(request):
            message = "You requested %s\n" % request.uri
-           request.write("HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s" % (
-                         len(message), message))
-           request.finish()
+           request.connection.write_preamble(
+               status_code=200,
+               headers=[("Content-Length", str(len(message)))])
+           request.connection.write(message, finished=True)
 
         http_server = httpserver.HTTPServer(handle_request)
         http_server.listen(8888)
@@ -72,76 +73,48 @@ class HTTPServer(TCPServer):
     in `HTTPServer` is HTTP/1.1 keep-alive connections. We do not, however,
     implement chunked encoding, so the request callback must provide a
     ``Content-Length`` header or implement chunked encoding for HTTP/1.1
-    requests for the server to run correctly for HTTP/1.1 clients. If
-    the request handler is unable to do this, you can provide the
-    ``no_keep_alive`` argument to the `HTTPServer` constructor, which will
-    ensure the connection is closed on every request no matter what HTTP
-    version the client is using.
+    requests for the server to run correctly for HTTP/1.1 clients.
 
-    If ``xheaders`` is ``True``, we support the ``X-Real-Ip`` and ``X-Scheme``
-    headers, which override the remote IP and HTTP scheme for all requests.
-    These headers are useful when running Tornado behind a reverse proxy or
-    load balancer.
+    For initialization patterns, see `TCPServer`.
 
-    `HTTPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
-    To make this server serve SSL traffic, send the ssl_options dictionary
-    argument with the arguments required for the `ssl.wrap_socket` method,
-    including "certfile" and "keyfile"::
+    :arg dict ssl_options: Keyword arguments to be passed to `ssl.wrap_socket`.
 
-       HTTPServer(applicaton, ssl_options={
-           "certfile": os.path.join(data_dir, "mydomain.crt"),
-           "keyfile": os.path.join(data_dir, "mydomain.key"),
-       })
-
-    `HTTPServer` initialization follows one of three patterns (the
-    initialization methods are defined on `tornado.netutil.TCPServer`):
-
-    1. `~tornado.netutil.TCPServer.listen`: simple single-process::
-
-            server = HTTPServer(app)
-            server.listen(8888)
-            IOLoop.instance().start()
-
-       In many cases, `tornado.web.Application.listen` can be used to avoid
-       the need to explicitly create the `HTTPServer`.
-
-    2. `~tornado.netutil.TCPServer.bind`/`~tornado.netutil.TCPServer.start`:
-       simple multi-process::
-
-            server = HTTPServer(app)
-            server.bind(8888)
-            server.start(0)  # Forks multiple sub-processes
-            IOLoop.instance().start()
-
-       When using this interface, an `IOLoop` must *not* be passed
-       to the `HTTPServer` constructor.  `start` will always start
-       the server on the default singleton `IOLoop`.
-
-    3. `~tornado.netutil.TCPServer.add_sockets`: advanced multi-process::
-
-            sockets = tornado.netutil.bind_sockets(8888)
-            tornado.process.fork_processes(0)
-            server = HTTPServer(app)
-            server.add_sockets(sockets)
-            IOLoop.instance().start()
-
-       The `add_sockets` interface is more complicated, but it can be
-       used with `tornado.process.fork_processes` to give you more
-       flexibility in when the fork happens.  `add_sockets` can
-       also be used in single-process servers if you want to create
-       your listening sockets in some way other than
-       `tornado.netutil.bind_sockets`.
+    All other keyword arguments are passed to `HTTPServerProtocol`.
 
     """
-    def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, **kwargs):
+    def __init__(self, request_callback, io_loop=None, ssl_options=None,
+                 no_keep_alive=False, xheaders=False):
+        protocol = HTTPServerProtocol(request_callback,
+            no_keep_alive=no_keep_alive, xheaders=xheaders)
+        npn_protocols = None
+        if ssl_options and netutil.SUPPORTS_NPN:
+            npn_protocols = [('http/1.1', protocol)]
+        TCPServer.__init__(self,
+                           protocol=protocol,
+                           npn_protocols=npn_protocols,
+                           io_loop=io_loop,
+                           ssl_options=ssl_options)
+
+
+class HTTPServerProtocol(object):
+    """A server protocol handler implementing the HTTP specification, meant
+    to be instantiated and passed to the `TCPServer` constructor.
+
+    :arg bool no_keep_alive: If ``True``, ensures the connection is closed on
+        every request no matter what HTTP version the client is using.
+
+    :arg bool xheaders: If ``True``, we support the ``X-Real-Ip`` and
+        ``X-Scheme`` headers, which override the remote IP and HTTP scheme for
+        all requests. These headers are useful when running Tornado behind a
+        reverse proxy or load balancer.
+
+    """
+    def __init__(self, request_callback, no_keep_alive=False, xheaders=False):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
-        TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
-                           **kwargs)
 
-    def handle_stream(self, stream, address):
+    def __call__(self, stream, address, server):
         HTTPConnection(stream, address, self.request_callback,
                        self.no_keep_alive, self.xheaders)
 
@@ -151,45 +124,67 @@ class _BadRequestException(Exception):
     pass
 
 
-class HTTPConnection(object):
-    """Handles a connection to an HTTP client, executing HTTP requests.
-
-    We parse HTTP headers and bodies, and execute the request callback
-    until the HTTP conection is closed.
-    """
-    def __init__(self, stream, address, request_callback, no_keep_alive=False,
-                 xheaders=False):
+class BaseHTTPConnection(object):
+    def __init__(self, stream, address, request_callback, xheaders=False):
         self.stream = stream
         self.address = address
         self.request_callback = request_callback
-        self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
-        self._request = None
-        self._request_finished = False
+
+
+class HTTPConnection(BaseHTTPConnection):
+    """Handles a connection to an HTTP client, executing HTTP requests.
+
+    Parses HTTP headers and bodies, and executes the request callback,
+    providing itself as an interface for writing the response.
+
+    """
+    def __init__(self, stream, address, request_callback, no_keep_alive=False,
+                 xheaders=False):
+        BaseHTTPConnection.__init__(self, stream, address, request_callback,
+                                    xheaders)
+        self.no_keep_alive = no_keep_alive
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
-        self._write_callback = None
 
-    def write(self, chunk, callback=None):
-        """Writes a chunk of output to the stream."""
+        self._request = None
+        self._request_finished = False
+
+    def set_close_callback(self, callback):
+        self.stream.set_close_callback(callback)
+
+    def write(self, chunk, finished=False, callback=None):
+        """Writes a chunk of the response body to the stream."""
         assert self._request, "Request closed"
         if not self.stream.closed():
-            self._write_callback = stack_context.wrap(callback)
-            self.stream.write(chunk, self._on_write_complete)
+            self.stream.write(chunk, functools.partial(self._on_write_complete,
+                              callback=stack_context.wrap(callback)))
+        if finished:
+            self._finish()
 
-    def finish(self):
+    def write_preamble(self, status_code, reason=None, version="HTTP/1.1",
+                       headers=None, finished=False, callback=None):
+        """Writes the response status line and headers to the stream."""
+        lines = [utf8(version + " " +
+                      str(status_code) +
+                      " " + (reason or
+                             httplib.responses.get(status_code, '')))]
+        lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in headers or []])
+        self.write(b("\r\n").join(lines) + b("\r\n\r\n"), callback=callback)
+        if finished:
+            self._finish()
+
+    def _finish(self):
         """Finishes the request."""
         assert self._request, "Request closed"
         self._request_finished = True
         if not self.stream.writing():
             self._finish_request()
 
-    def _on_write_complete(self):
-        if self._write_callback is not None:
-            callback = self._write_callback
-            self._write_callback = None
+    def _on_write_complete(self, callback=None):
+        if callback is not None:
             callback()
         # _on_write_complete is enqueued on the IOLoop whenever the
         # IOStream's write buffer becomes empty, but it's possible for
@@ -247,7 +242,7 @@ class HTTPConnection(object):
 
             self._request = HTTPRequest(
                 connection=self, method=method, uri=uri, version=version,
-                headers=headers, remote_ip=remote_ip)
+                headers=headers, remote_ip=remote_ip, xheaders=self.xheaders)
 
             content_length = headers.get("Content-Length")
             if content_length:
@@ -268,27 +263,11 @@ class HTTPConnection(object):
 
     def _on_request_body(self, data):
         self._request.body = data
-        content_type = self._request.headers.get("Content-Type", "")
         if self._request.method in ("POST", "PATCH", "PUT"):
-            if content_type.startswith("application/x-www-form-urlencoded"):
-                arguments = parse_qs_bytes(native_str(self._request.body))
-                for name, values in arguments.iteritems():
-                    values = [v for v in values if v]
-                    if values:
-                        self._request.arguments.setdefault(name, []).extend(
-                            values)
-            elif content_type.startswith("multipart/form-data"):
-                fields = content_type.split(";")
-                for field in fields:
-                    k, sep, v = field.strip().partition("=")
-                    if k == "boundary" and v:
-                        httputil.parse_multipart_form_data(
-                            utf8(v), data,
-                            self._request.arguments,
-                            self._request.files)
-                        break
-                else:
-                    logging.warning("Invalid multipart/form-data")
+            httputil.parse_body_arguments(
+                self._request.headers.get("Content-Type", ""), data,
+                self._request.arguments, self._request.files)
+        self._request._finish_time = time.time()
         self.request_callback(self._request)
 
 
@@ -357,22 +336,41 @@ class HTTPRequest(object):
        File uploads are available in the files property, which maps file
        names to lists of :class:`HTTPFile`.
 
+    .. attribute:: xheaders
+
+       If ``True``, we support the ``X-Real-Ip`` and ``X-Scheme`` headers,
+       which override the remote IP and HTTP scheme for all requests. These
+       headers are useful when running Tornado behind a reverse proxy or load
+       balancer.
+
+    .. attribute:: priority
+
+       If SPDY framing was used for the connection, this represents the
+       priority, between 0 and 3, inclusive, that the client has indicated for
+       the request.
+
+    .. attribute:: framing
+
+       Framing that was used for the connection; either 'http' or 'spdy/2'
+
     .. attribute:: connection
 
        An HTTP request is attached to a single HTTP connection, which can
        be accessed through the "connection" attribute. Since connections
        are typically kept open in HTTP/1.1, multiple requests can be handled
        sequentially on a single connection.
+
     """
     def __init__(self, method, uri, version="HTTP/1.0", headers=None,
                  body=None, remote_ip=None, protocol=None, host=None,
-                 files=None, connection=None):
+                 files=None, xheaders=False, priority=None, framing='http',
+                 connection=None):
         self.method = method
         self.uri = uri
         self.version = version
         self.headers = headers or httputil.HTTPHeaders()
         self.body = body or ""
-        if connection and connection.xheaders:
+        if xheaders:
             # Squid uses X-Forwarded-For, others use X-Real-Ip
             self.remote_ip = self.headers.get(
                 "X-Real-Ip", self.headers.get("X-Forwarded-For", remote_ip))
@@ -392,8 +390,11 @@ class HTTPRequest(object):
                 self.protocol = "https"
             else:
                 self.protocol = "http"
+
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}
+        self.priority = priority
+        self.framing = framing
         self.connection = connection
         self._start_time = time.time()
         self._finish_time = None
@@ -423,19 +424,12 @@ class HTTPRequest(object):
                     self._cookies = {}
         return self._cookies
 
-    def write(self, chunk, callback=None):
-        """Writes the given chunk to the response stream."""
-        assert isinstance(chunk, bytes_type)
-        self.connection.write(chunk, callback=callback)
-
-    def finish(self):
-        """Finishes this HTTP request on the open connection."""
-        self.connection.finish()
-        self._finish_time = time.time()
-
     def full_url(self):
         """Reconstructs the full URL for this request."""
-        return self.protocol + "://" + self.host + self.uri
+        url = self.protocol + "://" + self.host + self.path
+        if self.query:
+            url += '?' + self.query
+        return url
 
     def request_time(self):
         """Returns the amount of time it took for this request to execute."""

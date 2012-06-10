@@ -11,7 +11,7 @@ if pycurl is not None:
 
 
 class CurlHTTPClientCommonTestCase(HTTPClientCommonTestCase):
-    def get_http_client(self):
+    def get_client(self):
         client = CurlAsyncHTTPClient(io_loop=self.io_loop)
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))

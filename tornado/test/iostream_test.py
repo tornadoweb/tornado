@@ -46,7 +46,7 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_read_zero_bytes(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
+        s.connect(("localhost", self.get_port()))
         self.stream = IOStream(s, io_loop=self.io_loop)
         self.stream.write(b("GET / HTTP/1.0\r\n\r\n"))
 
@@ -114,11 +114,10 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         # while kqueue reports them as a second read/write event with an EOF
         # flag.
         response = self.fetch("/", headers={"Connection": "close"})
-        response.rethrow()
 
     def test_read_until_close(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
+        s.connect(("localhost", self.get_port()))
         stream = IOStream(s, io_loop=self.io_loop)
         stream.write(b("GET / HTTP/1.0\r\n\r\n"))
 

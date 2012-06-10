@@ -6,11 +6,12 @@ import gzip
 import logging
 import re
 import socket
+import time
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
-from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, TCPConnectionException, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
 from tornado.util import b
@@ -18,11 +19,9 @@ from tornado.web import RequestHandler, Application, asynchronous, url
 
 
 class SimpleHTTPClientCommonTestCase(HTTPClientCommonTestCase):
-    def get_http_client(self):
-        client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
-                                       force_instance=True)
-        self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
-        return client
+    def get_client(self):
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop,
+                                     force_instance=True)
 
 # Remove the base class from our namespace so the unittest module doesn't
 # try to run it again.
@@ -162,7 +161,6 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         client.fetch(self.get_url('/countdown/3'), self.stop,
                      max_redirects=3)
         response = self.wait()
-        response.rethrow()
 
     def test_default_certificates_exist(self):
         open(_DEFAULT_CA_CERTS).close()
@@ -206,19 +204,24 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual("POST", response.request.method)
 
     def test_request_timeout(self):
-        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
-        self.assertEqual(response.code, 599)
-        self.assertTrue(0.099 < response.request_time < 0.11, response.request_time)
-        self.assertEqual(str(response.error), "HTTP 599: Timeout")
-        # trigger the hanging request to let it clean up after itself
-        self.triggers.popleft()()
+        try:
+            start = time.time()
+            response = self.fetch('/trigger?wake=false', request_timeout=0.1)
+        except TCPConnectionException, e:
+            self.assertTrue(0.099 < time.time()-start < 0.111)
+            self.assertEqual(str(e), "Timeout")
+        else:
+            self.fail()
+        finally:
+            # trigger the hanging request to let it clean up after itself
+            self.triggers.popleft()()
 
     def test_ipv6(self):
         if not socket.has_ipv6:
             # python compiled without ipv6 support, so skip this test
             return
         try:
-            self.http_server.listen(self.get_http_port(), address='::1')
+            self.http_server.listen(self.get_port(), address='::1')
         except socket.gaierror, e:
             if e.args[0] == socket.EAI_ADDRFAMILY:
                 # python supports ipv6, but it's not configured on the network
@@ -229,23 +232,27 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
 
         # ipv6 is currently disabled by default and must be explicitly requested
         self.http_client.fetch(url, self.stop)
-        response = self.wait()
-        self.assertEqual(response.code, 599)
+        try:
+            response = self.wait()
+            self.fail()
+        except:
+            pass
 
         self.http_client.fetch(url, self.stop, allow_ipv6=True)
         response = self.wait()
         self.assertEqual(response.body, b("Hello world!"))
 
     def test_multiple_content_length_accepted(self):
-        response = self.fetch("/content_length?value=2,2")
-        self.assertEqual(response.body, b("ok"))
-        response = self.fetch("/content_length?value=2,%202,2")
-        self.assertEqual(response.body, b("ok"))
+        for url in ("/content_length?value=2,2", "/content_length?value=2,%202,2"):
+            response = self.fetch("/content_length?value=2,2")
+            self.assertEqual(response.body, b("ok"))
 
-        response = self.fetch("/content_length?value=2,4")
-        self.assertEqual(response.code, 599)
-        response = self.fetch("/content_length?value=2,%202,3")
-        self.assertEqual(response.code, 599)
+        for url in ("/content_length?value=2,4", "/content_length?value=2,%202,3"):
+            try:
+                response = self.fetch(url)
+                self.fail()
+            except:
+                pass
 
     def test_head_request(self):
         response = self.fetch("/head", method="HEAD")
@@ -268,8 +275,11 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.headers["Content-length"], "0")
 
         # 204 status with non-zero content length is malformed
-        response = self.fetch("/no_content?error=1")
-        self.assertEqual(response.code, 599)
+        try:
+            response = self.fetch("/no_content?error=1")
+            self.fail()
+        except:
+            pass
 
     def test_host_header(self):
         host_re = re.compile(b("^localhost:[0-9]+$"))
