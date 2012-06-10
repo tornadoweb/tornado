@@ -221,7 +221,7 @@ class _HTTPConnection(object):
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
-                    self._on_timeout)
+                    stack_context.wrap(self._on_timeout))
             self.stream.set_close_callback(self._on_close)
             self.stream.connect(sockaddr,
                                 functools.partial(self._on_connect, parsed,
@@ -229,10 +229,8 @@ class _HTTPConnection(object):
 
     def _on_timeout(self):
         self._timeout = None
-        self._run_callback(HTTPResponse(self.request, 599,
-                                        request_time=time.time() - self.start_time,
-                                        error=HTTPError(599, "Timeout")))
-        self.stream.close()
+        if self.final_callback is not None:
+            raise HTTPError(599, "Timeout")
 
     def _on_connect(self, parsed, parsed_hostname):
         if self._timeout is not None:
@@ -241,7 +239,7 @@ class _HTTPConnection(object):
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
-                self._on_timeout)
+                stack_context.wrap(self._on_timeout))
         if (self.request.validate_cert and
             isinstance(self.stream, SSLIOStream)):
             match_hostname(self.stream.socket.getpeercert(),
@@ -330,10 +328,8 @@ class _HTTPConnection(object):
                 self.stream.close()
 
     def _on_close(self):
-        self._run_callback(HTTPResponse(
-                self.request, 599,
-                request_time=time.time() - self.start_time,
-                error=HTTPError(599, "Connection closed")))
+        if self.final_callback is not None:
+            raise HTTPError(599, "Connection closed")
 
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
