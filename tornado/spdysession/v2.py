@@ -22,12 +22,14 @@ from tornado.escape import native_str
 from tornado.httputil import HTTPHeaders
 from tornado.spdysession import ResetStreamException, SPDYSessionException
 from tornado.spdyutil import SPDYParseException, SPDYStreamParseException
-from tornado.spdyutil.v2 import ControlFrameType, FrameType, GoawayFrame, parse_frame, RstStreamFrame, STATUS_CODE_MESSAGES, StatusCode, ZLibContext
-from tornado.util import GzipDecompressor
+from tornado.spdyutil.v2 import ControlFrameType, DataFrame, FrameType, GoawayFrame, parse_frame, RstStreamFrame, STATUS_CODE_MESSAGES, StatusCode, ZLibContext
+from tornado.util import BytesIO, GzipDecompressor
 
 import logging
 import time
 
+
+_DATA_FRAME_MAX_LENGTH = 0xffffff # 24 bits
 
 class SPDYSession(object):
     """Accepts incoming SPDY frames and delegates to handlers. Implements logic
@@ -139,6 +141,18 @@ class SPDYSession(object):
         """Writes a frame of output to the stream."""
         if not self.conn.closed():
             self.conn.write(frame.serialize(self.context), stack_context.wrap(callback))
+
+    @gen.engine
+    def write_data(self, stream_id, data, finished=False, callback=None):
+        callback = stack_context.wrap(callback)
+        done = not data
+        body = BytesIO(data)
+        while not done:
+            chunk = body.read(_DATA_FRAME_MAX_LENGTH)
+            done = len(chunk) < _DATA_FRAME_MAX_LENGTH
+            yield gen.Task(self.write, DataFrame(stream_id, chunk, finished=done and finished))
+        if callback:
+            callback()
 
     @gen.engine
     def listen(self):

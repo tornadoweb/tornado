@@ -105,10 +105,11 @@ class SPDYConnection(object):
     def set_close_callback(self, callback):
         self.stream.close_callback = stack_context.wrap(callback)
 
+    @gen.engine
     def write(self, data, finished=False, callback=None):
         if self.stream.local_closed:
             return
-        self.stream.session.write(DataFrame(self.stream.id, data, finished=finished), callback)
+        self.stream.session.write_data(self.stream.id, data, finished, callback)
         if finished:
             self._finish()
 

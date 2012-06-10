@@ -22,7 +22,7 @@ from tornado.httputil import HTTPHeaders
 from tornado.simple_httpclient import TCPConnectionException
 from tornado.spdysession.v2 import ResetStreamException, SPDYSession
 from tornado.spdyutil import to_spdy_headers
-from tornado.spdyutil.v2 import DataFrame, StatusCode, SynStreamFrame
+from tornado.spdyutil.v2 import StatusCode, SynStreamFrame
 from tornado.util import b, BytesIO
 from tornado import gen, stack_context
 
@@ -31,8 +31,6 @@ import copy
 import urlparse
 import time
 
-
-_DATA_FRAME_MAX_LENGTH = 0xffffff # 24 bits
 
 class SPDYClientSession(SPDYSession):
     def __init__(self, conn, address, client, session_params, io_loop):
@@ -196,11 +194,7 @@ class SPDYClientSession(SPDYSession):
                 stack_context.wrap(on_timeout))
 
         stream = SPDYSession.add_stream(self, request, final_callback, timeout=timeout)
-        finished = not bool(request.body)
-        self.conn.write(SynStreamFrame(stream_id=stream.id, headers=request_headers, priority=request.priority, finished=finished).serialize(self.context))
-        body = BytesIO(request.body)
-        while not finished:
-            chunk = body.read(_DATA_FRAME_MAX_LENGTH)
-            finished = len(chunk) < _DATA_FRAME_MAX_LENGTH
-            yield gen.Task(self.conn.write, DataFrame(stream.id, chunk, finished=finished).serialize(self.context))
+        self.write(SynStreamFrame(stream_id=stream.id, headers=request_headers,
+                                  priority=request.priority, finished=not request.body))
+        self.write_data(stream.id, request.body, finished=True)
         self._local_close_stream(stream)
