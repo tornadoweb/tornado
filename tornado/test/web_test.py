@@ -436,6 +436,11 @@ class HeaderInjectionHandler(RequestHandler):
             self.finish(b("ok"))
 
 
+class ReverseURLUnescaped(RequestHandler):
+    def get(self, *args):
+        self.render("reverse_url_unescaped.html")
+
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
 
@@ -451,6 +456,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
                 "entry.html": """\
 {{ set_resources(embedded_css=".entry { margin-bottom: 1em; }", embedded_javascript="js_embed()", css_files=["/base.css", "/foo.css"], javascript_files="/common.js", html_head="<meta>", html_body='<script src="/analytics.js"/>') }}
 <div class="entry">...</div>""",
+                "reverse_url_unescaped.html": "{{reverse_url('reverse', 'foo@example.com')}}",
                 })
         urls = [
             url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
@@ -464,6 +470,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/redirect", RedirectHandler),
             url("/empty_flush", EmptyFlushCallbackHandler),
             url("/header_injection", HeaderInjectionHandler),
+            url("/reverse_url_unescaped/(.*)", ReverseURLUnescaped, name='reverse')
             ]
         self.app = Application(urls,
                                template_loader=loader,
@@ -578,6 +585,10 @@ js_embed()
     def test_header_injection(self):
         response = self.fetch("/header_injection")
         self.assertEqual(response.body, b("ok"))
+
+    def test_reverse_url_unescaped(self):
+        response = self.fetch("/reverse_url_unescaped/")
+        self.assertEqual(response.body, b('/reverse_url_unescaped/foo@example.com'))
 
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
