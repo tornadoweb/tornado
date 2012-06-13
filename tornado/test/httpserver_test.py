@@ -38,7 +38,8 @@ class HelloWorldRequestHandler(RequestHandler):
         self.expected_protocol = protocol
 
     def get(self):
-        assert self.request.protocol == self.expected_protocol
+        if self.request.protocol != self.expected_protocol:
+            raise Exception("unexpected protocol")
         self.finish("Hello world")
 
     def post(self):

@@ -25,13 +25,15 @@ class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
         self.authenticate_redirect()
 
     def on_user(self, user):
-        assert user is not None
+        if user is None:
+            raise Exception("user is None")
         self.finish(user)
 
 
 class OpenIdServerAuthenticateHandler(RequestHandler):
     def post(self):
-        assert self.get_argument('openid.mode') == 'check_authentication'
+        if self.get_argument('openid.mode') != 'check_authentication':
+            raise Exception("incorrect openid.mode %r")
         self.write('is_valid:true')
 
 
@@ -54,11 +56,13 @@ class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
         self.authorize_redirect(http_client=self.settings['http_client'])
 
     def on_user(self, user):
-        assert user is not None
+        if user is None:
+            raise Exception("user is None")
         self.finish(user)
 
     def _oauth_get_user(self, access_token, callback):
-        assert access_token == dict(key=b('uiop'), secret=b('5678')), access_token
+        if access_token != dict(key=b('uiop'), secret=b('5678')):
+            raise Exception("incorrect access token %r" % access_token)
         callback(dict(email='foo@example.com'))
 
 

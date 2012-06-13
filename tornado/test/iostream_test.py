@@ -138,7 +138,7 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
                 self.stop()
 
             def final_callback(data):
-                assert not data
+                self.assertFalse(data)
                 final_called.append(True)
                 self.stop()
             server.read_bytes(6, callback=final_callback,

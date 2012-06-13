@@ -51,7 +51,7 @@ class SecureCookieTest(LogTrapTestCase):
         handler.set_secure_cookie('foo', binascii.a2b_hex(b('d76df8e7aefc')))
         cookie = handler._cookies['foo']
         match = re.match(b(r'12345678\|([0-9]+)\|([0-9a-f]+)'), cookie)
-        assert match
+        self.assertTrue(match)
         timestamp = match.group(1)
         sig = match.group(2)
         self.assertEqual(
@@ -68,7 +68,7 @@ class SecureCookieTest(LogTrapTestCase):
         # tamper with the cookie
         handler._cookies['foo'] = utf8('1234|5678%s|%s' % (timestamp, sig))
         # it gets rejected
-        assert handler.get_secure_cookie('foo') is None
+        self.assertTrue(handler.get_secure_cookie('foo') is None)
 
     def test_arbitrary_bytes(self):
         # Secure cookies accept arbitrary data (which is base64 encoded).
@@ -250,13 +250,19 @@ class EchoHandler(RequestHandler):
         # In httpserver.py (i.e. self.request.arguments), they're left
         # as bytes.  Keys are always native strings.
         for key in self.request.arguments:
-            assert type(key) == str, repr(key)
+            if type(key) != str:
+                raise Exception("incorrect type for key: %r" % type(key))
             for value in self.request.arguments[key]:
-                assert type(value) == bytes_type, repr(value)
+                if type(value) != bytes_type:
+                    raise Exception("incorrect type for value: %r" %
+                                    type(value))
             for value in self.get_arguments(key):
-                assert type(value) == unicode, repr(value)
+                if type(value) != unicode:
+                    raise Exception("incorrect type for value: %r" %
+                                    type(value))
         for arg in path_args:
-            assert type(arg) == unicode, repr(arg)
+            if type(arg) != unicode:
+                raise Exception("incorrect type for path arg: %r" % type(arg))
         self.write(dict(path=self.request.path,
                         path_args=path_args,
                         args=recursive_unicode(self.request.arguments)))
@@ -313,7 +319,9 @@ class TypeCheckHandler(RequestHandler):
 
         # Secure cookies return bytes because they can contain arbitrary
         # data, but regular cookies are native strings.
-        assert self.cookies.keys() == ['asdf']
+        if self.cookies.keys() != ['asdf']:
+            raise Exception("unexpected values for cookie keys: %r" %
+                            self.cookies.keys())
         self.check_type('get_secure_cookie', self.get_secure_cookie('asdf'), bytes_type)
         self.check_type('get_cookie', self.get_cookie('asdf'), str)
 
@@ -343,7 +351,8 @@ class TypeCheckHandler(RequestHandler):
 
 class DecodeArgHandler(RequestHandler):
     def decode_argument(self, value, name=None):
-        assert type(value) == bytes_type, repr(value)
+        if type(value) != bytes_type:
+            raise Exception("unexpected type for value: %r" % type(value))
         # use self.request.arguments directly to avoid recursion
         if 'encoding' in self.request.arguments:
             return value.decode(to_unicode(self.request.arguments['encoding'][0]))
@@ -432,8 +441,10 @@ class HeaderInjectionHandler(RequestHandler):
             self.set_header("X-Foo", "foo\r\nX-Bar: baz")
             raise Exception("Didn't get expected exception")
         except ValueError, e:
-            assert "Unsafe header value" in str(e)
-            self.finish(b("ok"))
+            if "Unsafe header value" in str(e):
+                self.finish(b("ok"))
+            else:
+                raise
 
 
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
@@ -703,10 +714,10 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_static_files(self):
         response = self.fetch('/robots.txt')
-        assert b("Disallow: /") in response.body
+        self.assertTrue(b("Disallow: /") in response.body)
 
         response = self.fetch('/static/robots.txt')
-        assert b("Disallow: /") in response.body
+        self.assertTrue(b("Disallow: /") in response.body)
 
     def test_static_url(self):
         response = self.fetch("/static_url/robots.txt")
@@ -740,7 +751,8 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         class MyStaticFileHandler(StaticFileHandler):
             def get(self, path):
                 path = self.parse_url_path(path)
-                assert path == "foo.txt"
+                if path != "foo.txt":
+                    raise Exception("unexpected path: %r" % path)
                 self.write("bar")
 
             @classmethod

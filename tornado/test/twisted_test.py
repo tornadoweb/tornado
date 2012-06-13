@@ -57,7 +57,8 @@ def save_signal_handlers():
     saved = {}
     for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:
         saved[sig] = signal.getsignal(sig)
-    assert "twisted" not in repr(saved), repr(saved)
+    if "twisted" in repr(saved):
+        raise Exception("twisted signal handlers already installed")
     return saved
 
 

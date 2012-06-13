@@ -74,14 +74,16 @@ class NoContentHandler(RequestHandler):
 
 class SeeOther303PostHandler(RequestHandler):
     def post(self):
-        assert self.request.body == b("blah")
+        if self.request.body != b("blah"):
+            raise Exception("unexpected body %r" % self.request.body)
         self.set_header("Location", "/303_get")
         self.set_status(303)
 
 
 class SeeOther303GetHandler(RequestHandler):
     def get(self):
-        assert not self.request.body
+        if self.request.body:
+            raise Exception("unexpected body %r" % self.request.body)
         self.write("ok")
 
 

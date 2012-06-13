@@ -60,7 +60,7 @@ class ProcessTest(LogTrapTestCase):
         signal.alarm(5)  # master process
         try:
             id = fork_processes(3, max_restarts=3)
-            assert id is not None
+            self.assertTrue(id is not None)
             signal.alarm(5)  # child processes
         except SystemExit, e:
             # if we exit cleanly from fork_processes, all the child processes
