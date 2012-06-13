@@ -436,6 +436,12 @@ class HeaderInjectionHandler(RequestHandler):
             self.finish(b("ok"))
 
 
+class LinkHandler(RequestHandler):
+    def get(self):
+        self.link("http://example.com/uri", [('rel', '"previous"'), ('title', '"previous chapter"')])
+        self.hint("/hinted")
+
+
 class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
 
@@ -464,6 +470,7 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/redirect", RedirectHandler),
             url("/empty_flush", EmptyFlushCallbackHandler),
             url("/header_injection", HeaderInjectionHandler),
+            url("/link", LinkHandler),
             ]
         self.app = Application(urls,
                                template_loader=loader,
@@ -578,6 +585,10 @@ js_embed()
     def test_header_injection(self):
         response = self.fetch("/header_injection")
         self.assertEqual(response.body, b("ok"))
+
+    def test_link(self):
+        response = self.fetch("/link")
+        self.assertEqual(response.headers["Link"], '<http://example.com/uri>;rel="previous";title="previous chapter",</hinted>;rel="subresource"')
 
 
 class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
