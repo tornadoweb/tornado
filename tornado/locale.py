@@ -47,6 +47,8 @@ import logging
 import os
 import re
 
+from tornado import escape
+
 _default_locale = "en_US"
 _translations = {}
 _supported_locales = frozenset([_default_locale])
@@ -124,7 +126,7 @@ def load_translations(directory):
         for i, row in enumerate(csv.reader(f)):
             if not row or len(row) < 2:
                 continue
-            row = [c.decode("utf-8").strip() for c in row]
+            row = [escape.to_unicode(c).strip() for c in row]
             english, translation = row[:2]
             if len(row) > 2:
                 plural = row[2] or "unknown"
