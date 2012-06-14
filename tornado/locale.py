@@ -188,7 +188,7 @@ def load_gettext_translations(directory, domain):
             continue
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
     _use_gettext = True
-    logging.info("Supported locales: %s", sorted(_supported_locales))
+    logging.debug("Supported locales: %s", sorted(_supported_locales))
 
 
 def get_supported_locales():
@@ -423,12 +423,25 @@ class CSVLocale(Locale):
 
 class GettextLocale(Locale):
     """Locale implementation using the gettext module."""
+    def __init__(self, code, translations):
+        try:
+            # python 2
+            self.ngettext = translations.ungettext
+            self.gettext = translations.ugettext
+        except AttributeError:
+            # python 3
+            self.ngettext = translations.ngettext
+            self.gettext = translations.gettext
+        # self.gettext must exist before __init__ is called, since it
+        # calls into self.translate
+        super(GettextLocale, self).__init__(code, translations)
+
     def translate(self, message, plural_message=None, count=None):
         if plural_message is not None:
             assert count is not None
-            return self.translations.ungettext(message, plural_message, count)
+            return self.ngettext(message, plural_message, count)
         else:
-            return self.translations.ugettext(message)
+            return self.gettext(message)
 
 LOCALE_NAMES = {
     "af_ZA": {"name_en": u"Afrikaans", "name": u"Afrikaans"},
