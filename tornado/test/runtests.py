@@ -42,6 +42,9 @@ if __name__ == '__main__':
     # ignored by default, including DeprecationWarnings and
     # python 3.2's ResourceWarnings.
     warnings.filterwarnings("error")
+    # setuptools sometimes gives ImportWarnings about things that are on
+    # sys.path even if they're not being used.
+    warnings.filterwarnings("ignore", category=ImportWarning)
     # Tornado generally shouldn't use anything deprecated, but some of
     # our dependencies do (last match wins).
     warnings.filterwarnings("ignore", category=DeprecationWarning)
