@@ -1208,9 +1208,15 @@ class Application(object):
 
     .. attribute:: settings
 
-       Additonal keyword arguments passed to the constructor are saved in the
+       Additional keyword arguments passed to the constructor are saved in the
        `settings` dictionary, and are often referred to in documentation as
        "application settings".
+
+    .. attribute:: debug
+
+       If `True` the application runs in debug mode, described in
+       :ref:`debug-mode`. This is an application setting in the `settings`
+       dictionary, so handlers can access it.
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
                  wsgi=False, **settings):

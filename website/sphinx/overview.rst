@@ -957,6 +957,8 @@ the Google credentials in a cookie for later access:
 
 See the `tornado.auth` module documentation for more details.
 
+.. _debug-mode:
+
 Debug mode and automatic reloading
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -975,6 +977,12 @@ are using debug mode.
 The automatic reloading feature of debug mode is available as a
 standalone module in ``tornado.autoreload``, and is optionally used by
 the test runner in ``tornado.testing.main``.
+
+Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
+because it re-executes Python using ``sys.executable`` and ``sys.argv``.
+Additionally, modifying these variables will cause reloading to behave
+incorrectly.
+
 
 Running Tornado in production
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
