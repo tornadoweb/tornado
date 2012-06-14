@@ -103,7 +103,11 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         stream = IOStream(s, io_loop=self.io_loop)
         stream.set_close_callback(self.stop)
-        stream.connect(('adomainthatdoesntexist.asdf', 54321))
+        # To reliably generate a gaierror we use a malformed domain name
+        # instead of a name that's simply unlikely to exist (since
+        # opendns and some ISPs return bogus addresses for nonexistent
+        # domains instead of the proper error codes).
+        stream.connect(('an invalid domain', 54321))
         self.assertTrue(isinstance(stream.error, socket.gaierror), stream.error)
 
     def test_connection_closed(self):
