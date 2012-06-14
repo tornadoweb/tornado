@@ -121,7 +121,16 @@ def load_translations(directory):
             logging.error("Unrecognized locale %r (path: %s)", locale,
                           os.path.join(directory, path))
             continue
-        f = open(os.path.join(directory, path), "r")
+        full_path = os.path.join(directory, path)
+        try:
+            # python 3: csv.reader requires a file open in text mode.
+            # Force utf8 to avoid dependence on $LANG environment variable.
+            f = open(full_path, "r", encoding="utf-8")
+        except TypeError:
+            # python 2: files return byte strings, which are decoded below.
+            # Once we drop python 2.5, this could use io.open instead
+            # on both 2 and 3.
+            f = open(full_path, "r")
         _translations[locale] = {}
         for i, row in enumerate(csv.reader(f)):
             if not row or len(row) < 2:
@@ -139,7 +148,7 @@ def load_translations(directory):
             _translations[locale].setdefault(plural, {})[english] = translation
         f.close()
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
-    logging.info("Supported locales: %s", sorted(_supported_locales))
+    logging.debug("Supported locales: %s", sorted(_supported_locales))
 
 
 def load_gettext_translations(directory, domain):

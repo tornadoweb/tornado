@@ -45,8 +45,9 @@ distutils.core.setup(
     packages = ["tornado", "tornado.test", "tornado.platform"],
     package_data = {
         "tornado": ["ca-certificates.crt"],
+        # data files need to be listed both here and in MANIFEST.in
         "tornado.test": ["README", "test.crt", "test.key", "static/robots.txt",
-                         "templates/utf8.html"],
+                         "templates/utf8.html", "csv_translations/fr_FR.csv"],
         },
     ext_modules = extensions,
     author="Facebook",
