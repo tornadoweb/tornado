@@ -57,6 +57,10 @@ class ChatSocketHandler(tornado.websocket.WebSocketHandler):
     cache = []
     cache_size = 200
 
+    def allow_draft76(self):
+        # for iOS 5.0 Safari
+        return True
+
     def open(self):
         ChatSocketHandler.waiters.add(self)
 

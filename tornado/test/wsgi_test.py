@@ -1,9 +1,13 @@
+from __future__ import absolute_import, division, with_statement
 from wsgiref.validate import validator
 
+from tornado.escape import json_decode
+from tornado.test.httpserver_test import TypeCheckHandler
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.util import b
 from tornado.web import RequestHandler
 from tornado.wsgi import WSGIApplication, WSGIContainer
+
 
 class WSGIContainerTest(AsyncHTTPTestCase, LogTrapTestCase):
     def wsgi_app(self, environ, start_response):
@@ -18,6 +22,7 @@ class WSGIContainerTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_simple(self):
         response = self.fetch("/")
         self.assertEqual(response.body, b("Hello world!"))
+
 
 class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
@@ -36,6 +41,7 @@ class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
         return WSGIContainer(validator(WSGIApplication([
                         ("/", HelloHandler),
                         ("/path/(.*)", PathQuotingHandler),
+                        ("/typecheck", TypeCheckHandler),
                         ])))
 
     def test_simple(self):
@@ -46,10 +52,21 @@ class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/path/foo%20bar%C3%A9")
         self.assertEqual(response.body, u"foo bar\u00e9".encode("utf-8"))
 
+    def test_types(self):
+        headers = {"Cookie": "foo=bar"}
+        response = self.fetch("/typecheck?foo=bar", headers=headers)
+        data = json_decode(response.body)
+        self.assertEqual(data, {})
+
+        response = self.fetch("/typecheck", method="POST", body="foo=bar", headers=headers)
+        data = json_decode(response.body)
+        self.assertEqual(data, {})
+
 # This is kind of hacky, but run some of the HTTPServer tests through
 # WSGIContainer and WSGIApplication to make sure everything survives
 # repeated disassembly and reassembly.
 from tornado.test.httpserver_test import HTTPConnectionTest
+
 
 class WSGIConnectionTest(HTTPConnectionTest):
     def get_app(self):

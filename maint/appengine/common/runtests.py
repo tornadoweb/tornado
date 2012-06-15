@@ -1,8 +1,12 @@
 #!/usr/bin/env python
+from __future__ import with_statement
 
+import contextlib
+import errno
 import os
 import random
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -16,14 +20,34 @@ if __name__ == "__main__":
     # does dev_appserver.py ever live anywhere but /usr/local/bin?
     proc = subprocess.Popen([sys.executable,
                              "/usr/local/bin/dev_appserver.py",
-                             os.path.dirname(__file__),
-                             "--port=%d" % port
+                             os.path.dirname(os.path.abspath(__file__)),
+                             "--port=%d" % port,
+                             "--skip_sdk_update_check",
                              ],
                             cwd=tornado_root)
-    time.sleep(3)
+            
     try:
+        for i in xrange(50):
+            with contextlib.closing(socket.socket()) as sock:
+                err = sock.connect_ex(('localhost', port))
+                if err == 0:
+                    break
+                elif err != errno.ECONNREFUSED:
+                    raise Exception("Got unexpected socket error %d" % err)
+                time.sleep(0.1)
+        else:
+            raise Exception("Server didn't start listening")
+
         resp = urllib2.urlopen("http://localhost:%d/" % port)
         print resp.read()
     finally:
-        os.kill(proc.pid, signal.SIGTERM)
-        proc.wait()
+        # dev_appserver sometimes ignores SIGTERM (especially on 2.5),
+        # so try a few times to kill it.
+        for sig in [signal.SIGTERM, signal.SIGTERM, signal.SIGKILL]:
+            os.kill(proc.pid, sig)
+            res = os.waitpid(proc.pid, os.WNOHANG)
+            if res != (0,0):
+                break
+            time.sleep(0.1)
+        else:
+            os.waitpid(proc.pid, 0)

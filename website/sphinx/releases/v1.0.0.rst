@@ -3,15 +3,15 @@ What's new in Tornado 1.0
 
 July 22, 2010
 -------------
-    
+
 ::
 
     We are pleased to announce the release of Tornado 1.0, available
     from
-    http://github.com/downloads/facebook/tornado/tornado-1.0.tar.gz.
+    https://github.com/downloads/facebook/tornado/tornado-1.0.tar.gz.
     There have been many changes since version 0.2; here are some of
     the highlights:
-    
+
     New features:
     * Improved support for running other WSGI applications in a
       Tornado server (tested with Django and CherryPy)
@@ -41,7 +41,7 @@ July 22, 2010
     * Improved logging configuration in tornado.options.
     * UIModule.html_body() can be used to return html to be inserted
       at the end of the document body.
-    
+
     Backwards-incompatible changes:
     * RequestHandler.get_error_html() now receives the exception
       object as a keyword argument if the error was caused by an
@@ -54,8 +54,8 @@ July 22, 2010
       from the path now have %-escapes decoded, for consistency with
       the processing that was already done with other query
       parameters.
-    
+
     Many thanks to everyone who contributed patches, bug reports, and
     feedback that went into this release!
-    
+
     -Ben

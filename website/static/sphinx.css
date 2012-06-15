@@ -36,6 +36,10 @@ th.field-name {
     background: #fff;
 }
 
+tt {
+    background: #fff;
+}
+
 /* "related" = top header */
 div.related {
     position: fixed;

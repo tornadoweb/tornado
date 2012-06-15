@@ -1,0 +1,20 @@
+What's new in Tornado 2.2.1
+===========================
+
+Apr 23, 2012
+------------
+
+Security fixes
+~~~~~~~~~~~~~~
+
+* `tornado.web.RequestHandler.set_header` now properly sanitizes input
+  values to protect against header injection, response splitting, etc.
+  (it has always attempted to do this, but the check was incorrect).
+  Note that redirects, the most likely source of such bugs, are protected
+  by a separate check in `RequestHandler.redirect`.
+
+Bug fixes
+~~~~~~~~~
+
+* Colored logging configuration in `tornado.options` is compatible with
+  Python 3.2.3 (and 3.3).
