@@ -1,6 +1,7 @@
 # http://travis-ci.org/#!/facebook/tornado
 language: python
 python:
+    - 2.5
     - 2.6
     - 2.7
     - pypy
@@ -12,6 +13,7 @@ matrix:
         - python: 2.6
 # TODO: install pycurl, twisted, etc (depends on python version)
 install:
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.5' ]]; then pip install --use-mirrors simplejson; fi
     - python setup.py install
 script:
     # Must cd somewhere else so python3 doesn't get confused and run
