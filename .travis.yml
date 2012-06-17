@@ -1,10 +1,14 @@
 # http://travis-ci.org/#!/facebook/tornado
 language: python
-# The build of 2.6 on travis has a bug related to ssl (it segfaults in
-# test_sslv2_fail)
 python:
+    - 2.6
     - 2.7
     - 3.2
+matrix:
+    allow_failures:
+        # The build of 2.6 on travis has a bug related to ssl (it segfaults in
+        # test_sslv2_fail)
+        - python: 2.6
 # TODO: install pycurl, twisted, etc (depends on python version)
 install:
     - python setup.py install
