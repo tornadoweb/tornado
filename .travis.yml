@@ -18,6 +18,10 @@ matrix:
           env: FULL="true"
         - python: 2.7
           env: FULL="true"
+        - python: 3.2
+          env: LANG="en_US.utf-8"
+        - python: 3.2
+          env: LANG="C"
 # TODO: install pycurl, twisted, etc (depends on python version)
 install:
     - if [[ $TRAVIS_PYTHON_VERSION == '2.5' ]]; then pip install --use-mirrors simplejson; fi
