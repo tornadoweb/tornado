@@ -57,3 +57,27 @@ class Waker(object):
     def close(self):
         """Closes the waker's file descriptor(s)."""
         raise NotImplementedError()
+
+
+class GzipDecompressor(object):
+    """Streaming gzip decompressor.
+
+    The interface is like that of `zlib.decompressobj` (without the
+    optional arguments, but it understands gzip headers and checksums.
+    """
+    def decompress(self, value):
+        """Decompress a chunk, returning newly-available data.
+
+        Some data may be buffered for later processing; `flush` must
+        be called when there is no more input data to ensure that
+        all data was processed.
+        """
+        raise NotImplementedError()
+
+    def flush(self):
+        """Return any remaining buffered data not yet returned by decompress.
+
+        Also checks for errors such as truncated input.
+        No other methods may be called on this object after `flush`.
+        """
+        raise NotImplementedError()

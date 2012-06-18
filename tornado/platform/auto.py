@@ -28,10 +28,11 @@ from __future__ import absolute_import, division, with_statement
 import os
 
 if os.name == 'nt':
-    from tornado.platform.common import Waker
+    from tornado.platform.common import GzipDecompressor, Waker
     from tornado.platform.windows import set_close_exec
 elif os.name == 'java':
     from tornado.platform.common import Waker
-    def set_close_exec(fd): pass
+    from tornado.platform.java import GzipDecompressor, set_close_exec
 else:
+    from tornado.platform.common import GzipDecompressor
     from tornado.platform.posix import set_close_exec, Waker

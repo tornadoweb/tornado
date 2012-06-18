@@ -5,8 +5,9 @@ from tornado.escape import utf8, _unicode, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.platform.auto import GzipDecompressor
 from tornado import stack_context
-from tornado.util import b, GzipDecompressor
+from tornado.util import b
 
 import base64
 import collections
@@ -285,9 +286,7 @@ class _HTTPConnection(object):
         if (self.request.method == "POST" and
             "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
-        if self.request.use_gzip and os.name != 'java':
-            # jython's zlib module doesn't support the magic to read
-            # gzip headers.
+        if self.request.use_gzip:
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((parsed.path or '/') +
                 (('?' + parsed.query) if parsed.query else ''))
