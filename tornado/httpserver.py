@@ -239,8 +239,9 @@ class HTTPConnection(object):
             if getattr(self.stream.socket, 'family', socket.AF_INET) in (
                 socket.AF_INET, socket.AF_INET6):
                 # Jython 2.5.2 doesn't have the socket.family attribute,
-                # so just assume IP in that case.
-                remote_ip = self.address[0]
+                # so just assume IP in that case. It also returns the IP
+                # address as unicode, for some reason.
+                remote_ip = str(self.address[0])
             else:
                 # Unix (or other) socket; fake the remote address
                 remote_ip = '0.0.0.0'
@@ -376,7 +377,7 @@ class HTTPRequest(object):
             # Squid uses X-Forwarded-For, others use X-Real-Ip
             self.remote_ip = self.headers.get(
                 "X-Real-Ip", self.headers.get("X-Forwarded-For", remote_ip))
-            if not self._valid_ip(self.remote_ip):
+            if not _valid_ip(self.remote_ip):
                 self.remote_ip = remote_ip
             # AWS uses X-Forwarded-Proto
             self.protocol = self.headers.get(
@@ -473,14 +474,15 @@ class HTTPRequest(object):
         return "%s(%s, headers=%s)" % (
             self.__class__.__name__, args, dict(self.headers))
 
-    def _valid_ip(self, ip):
+
+def _valid_ip(ip):
+    try:
+        # Jython 2.5.2 incorrectly reports domain names like 'www.google.com'
+        # as valid IP addresses
+        socket.inet_pton(socket.AF_INET, ip)
+    except socket.error:
         try:
-            res = socket.getaddrinfo(ip, 0, socket.AF_UNSPEC,
-                                     socket.SOCK_STREAM,
-                                     0, socket.AI_NUMERICHOST)
-            return bool(res)
-        except socket.gaierror, e:
-            if e.args[0] == socket.EAI_NONAME:
-                return False
-            raise
-        return True
+            socket.inet_pton(socket.AF_INET6, ip)
+        except socket.error:
+            return False
+    return True

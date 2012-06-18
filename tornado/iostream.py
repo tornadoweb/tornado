@@ -182,7 +182,7 @@ class IOStream(object):
             return
         self._read_until_close = True
         self._streaming_callback = stack_context.wrap(streaming_callback)
-        self._add_io_state(self.io_loop.READ)
+        self._try_inline_read()
 
     def write(self, data, callback=None):
         """Write the given data to this stream.
