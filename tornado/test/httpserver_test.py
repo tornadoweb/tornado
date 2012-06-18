@@ -101,32 +101,6 @@ class TLSv1Test(BaseSSLTest, SSLTestMixin):
         return ssl.PROTOCOL_TLSv1
 
 
-class SSLv2Test(BaseSSLTest):
-    def get_ssl_options(self):
-        return dict(ssl_version=ssl.PROTOCOL_SSLv2,
-                    **AsyncHTTPSTestCase.get_ssl_options(self))
-
-    def test_sslv2_fail(self):
-        # This is really more of a client test, but run it here since
-        # we've got all the other ssl version tests here.
-        # Clients should have SSLv2 disabled by default.
-        try:
-            # The server simply closes the connection when it gets
-            # an SSLv2 ClientHello packet.
-            # request_timeout is needed here because on some platforms
-            # (cygwin, but not native windows python), the close is not
-            # detected promptly.
-            response = self.fetch('/', request_timeout=1)
-        except ssl.SSLError:
-            # In some python/ssl builds the PROTOCOL_SSLv2 constant
-            # exists but SSLv2 support is still compiled out, which
-            # would result in an SSLError here (details vary depending
-            # on python version).  The important thing is that
-            # SSLv2 request's don't succeed, so we can just ignore
-            # the errors here.
-            return
-        self.assertEqual(response.code, 599)
-
 if ssl is None:
     del BaseSSLTest
     del SSLv23Test
@@ -138,8 +112,6 @@ if getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0):
     # python 2.7
     del SSLv3Test
     del TLSv1Test
-if not hasattr(ssl, 'PROTOCOL_SSLv2'):
-    del SSLv2Test
 
 
 class MultipartTestHandler(RequestHandler):
