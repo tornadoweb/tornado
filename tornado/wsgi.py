@@ -94,7 +94,7 @@ class WSGIApplication(web.Application):
         assert handler._finished
         status = str(handler._status_code) + " " + \
             httplib.responses[handler._status_code]
-        headers = handler._headers.items()
+        headers = handler._headers.items() + handler._list_headers
         if hasattr(handler, "_new_cookie"):
             for cookie in handler._new_cookie.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))
