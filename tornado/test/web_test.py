@@ -447,10 +447,15 @@ class HeaderInjectionHandler(RequestHandler):
                 raise
 
 
-class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
+# This test is shared with wsgi_test.py
+class WSGISafeWebTest(AsyncHTTPTestCase, LogTrapTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
 
     def get_app(self):
+        self.app = Application(self.get_handlers(), **self.get_app_kwargs())
+        return self.app
+
+    def get_app_kwargs(self):
         loader = DictLoader({
                 "linkify.html": "{% module linkify(message) %}",
                 "page.html": """\
@@ -463,6 +468,11 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
 {{ set_resources(embedded_css=".entry { margin-bottom: 1em; }", embedded_javascript="js_embed()", css_files=["/base.css", "/foo.css"], javascript_files="/common.js", html_head="<meta>", html_body='<script src="/analytics.js"/>') }}
 <div class="entry">...</div>""",
                 })
+        return dict(template_loader=loader,
+                    autoescape="xhtml_escape",
+                    cookie_secret=self.COOKIE_SECRET)
+
+    def get_handlers(self):
         urls = [
             url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
             url("/decode_arg/(.*)", DecodeArgHandler, name='decode_arg'),
@@ -470,17 +480,11 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/linkify", LinkifyHandler),
             url("/uimodule_resources", UIModuleResourceHandler),
             url("/optional_path/(.+)?", OptionalPathHandler),
-            url("/flow_control", FlowControlHandler),
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
-            url("/empty_flush", EmptyFlushCallbackHandler),
             url("/header_injection", HeaderInjectionHandler),
             ]
-        self.app = Application(urls,
-                               template_loader=loader,
-                               autoescape="xhtml_escape",
-                               cookie_secret=self.COOKIE_SECRET)
-        return self.app
+        return urls
 
     def fetch_json(self, *args, **kwargs):
         response = self.fetch(*args, **kwargs)
@@ -566,9 +570,6 @@ js_embed()
         self.assertEqual(self.fetch_json("/optional_path/"),
                          {u"path": None})
 
-    def test_flow_control(self):
-        self.assertEqual(self.fetch("/flow_control").body, b("123"))
-
     def test_multi_header(self):
         response = self.fetch("/multi_header")
         self.assertEqual(response.headers["x-overwrite"], "2")
@@ -582,12 +583,24 @@ js_embed()
         response = self.fetch("/redirect?status=307", follow_redirects=False)
         self.assertEqual(response.code, 307)
 
-    def test_empty_flush(self):
-        response = self.fetch("/empty_flush")
-        self.assertEqual(response.body, b("ok"))
-
     def test_header_injection(self):
         response = self.fetch("/header_injection")
+        self.assertEqual(response.body, b("ok"))
+
+
+class NonWSGIWebTests(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        urls = [
+            ("/flow_control", FlowControlHandler),
+            ("/empty_flush", EmptyFlushCallbackHandler),
+            ]
+        return Application(urls)
+
+    def test_flow_control(self):
+        self.assertEqual(self.fetch("/flow_control").body, b("123"))
+
+    def test_empty_flush(self):
+        response = self.fetch("/empty_flush")
         self.assertEqual(response.body, b("ok"))
 
 

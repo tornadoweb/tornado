@@ -66,10 +66,17 @@ class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
 # WSGIContainer and WSGIApplication to make sure everything survives
 # repeated disassembly and reassembly.
 from tornado.test.httpserver_test import HTTPConnectionTest
+from tornado.test.web_test import WSGISafeWebTest
 
 
 class WSGIConnectionTest(HTTPConnectionTest):
     def get_app(self):
         return WSGIContainer(validator(WSGIApplication(self.get_handlers())))
 
+class WSGIWebTest(WSGISafeWebTest):
+    def get_app(self):
+        self.app = WSGIApplication(self.get_handlers(), **self.get_app_kwargs())
+        return WSGIContainer(validator(self.app))
+
 del HTTPConnectionTest
+del WSGISafeWebTest

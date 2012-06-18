@@ -43,12 +43,34 @@ from tornado import escape
 from tornado import httputil
 from tornado import web
 from tornado.escape import native_str, utf8, parse_qs_bytes
-from tornado.util import b
+from tornado.util import b, bytes_type
 
 try:
     from io import BytesIO  # python 3
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
+
+
+# PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
+# that are smuggled inside objects of type unicode (via the latin1 encoding).
+# These functions are like those in the tornado.escape module, but defined
+# here to minimize the temptation to use them in non-wsgi contexts.
+if str is unicode:
+    def to_wsgi_str(s):
+        assert isinstance(s, bytes_type)
+        return s.decode('latin1')
+
+    def from_wsgi_str(s):
+        assert isinstance(s, str)
+        return s.encode('latin1')
+else:
+    def to_wsgi_str(s):
+        assert isinstance(s, bytes_type)
+        return s
+
+    def from_wsgi_str(s):
+        assert isinstance(s, str)
+        return s
 
 
 class WSGIApplication(web.Application):
@@ -108,8 +130,8 @@ class HTTPRequest(object):
     def __init__(self, environ):
         """Parses the given WSGI environ to construct the request."""
         self.method = environ["REQUEST_METHOD"]
-        self.path = urllib.quote(environ.get("SCRIPT_NAME", ""))
-        self.path += urllib.quote(environ.get("PATH_INFO", ""))
+        self.path = urllib.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
+        self.path += urllib.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
         self.uri = self.path
         self.arguments = {}
         self.query = environ.get("QUERY_STRING", "")
@@ -266,7 +288,7 @@ class WSGIContainer(object):
         environ = {
             "REQUEST_METHOD": request.method,
             "SCRIPT_NAME": "",
-            "PATH_INFO": urllib.unquote(request.path),
+            "PATH_INFO": to_wsgi_str(escape.url_unescape(request.path, encoding=None)),
             "QUERY_STRING": request.query,
             "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,
