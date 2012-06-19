@@ -676,7 +676,7 @@ def _format_code(code):
     return "".join([format % (i + 1, line) for (i, line) in enumerate(lines)])
 
 
-def _parse(reader, template, in_block=None):
+def _parse(reader, template, in_block=None, in_loop=None):
     body = _ChunkList([])
     while True:
         # Find next template directive
@@ -815,7 +815,11 @@ def _parse(reader, template, in_block=None):
 
         elif operator in ("apply", "block", "try", "if", "for", "while"):
             # parse inner body recursively
-            block_body = _parse(reader, template, operator)
+            if operator in ("for", "while"):
+                block_body = _parse(reader, template, operator, operator)
+            else:
+                block_body = _parse(reader, template, operator, in_loop)
+
             if operator == "apply":
                 if not suffix:
                     raise ParseError("apply missing method name on line %d" % line)
@@ -827,6 +831,12 @@ def _parse(reader, template, in_block=None):
             else:
                 block = _ControlBlock(contents, line, block_body)
             body.chunks.append(block)
+            continue
+
+        elif operator in ("break", "continue"):
+            if not in_loop:
+                raise ParseError("%s outside %s block" % (operator, set(["for", "while"])))
+            body.chunks.append(_Statement(contents, line))
             continue
 
         else:
