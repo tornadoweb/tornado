@@ -272,7 +272,7 @@ class HTTPRequest(object):
         self.url = url
         self.method = method
         self.headers = headers
-        self.body = utf8(body or "")
+        self.body = utf8(body)
         self.auth_username = auth_username
         self.auth_password = auth_password
         self.connect_timeout = connect_timeout

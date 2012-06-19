@@ -245,10 +245,10 @@ class _HTTPConnection(object):
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
             if self.request.method in ("POST", "PUT"):
-                assert self.request.body
+                assert self.request.body is not None
             else:
-                assert self.request.body == ""
-        if self.request.body:
+                assert self.request.body is None
+        if self.request.body is not None:
             self.request.headers["Content-Length"] = str(len(
                     self.request.body))
         if (self.request.method == "POST" and
@@ -266,7 +266,7 @@ class _HTTPConnection(object):
                 raise ValueError('Newline in header: ' + repr(line))
             request_lines.append(line)
         self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
-        if self.request.body:
+        if self.request.body is not None:
             self.stream.write(self.request.body)
         self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
 
