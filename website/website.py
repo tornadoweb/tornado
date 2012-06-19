@@ -38,9 +38,9 @@ application = tornado.wsgi.WSGIApplication([
     (r"/", ContentHandler),
     (r"/(index)", ContentHandler),
     (r"/static/tornado-0.1.tar.gz", tornado.web.RedirectHandler,
-     dict(url="http://github.com/downloads/facebook/tornado/tornado-0.1.tar.gz")),
+     dict(url="https://github.com/downloads/facebook/tornado/tornado-0.1.tar.gz")),
     (r"/static/tornado-0.2.tar.gz", tornado.web.RedirectHandler,
-     dict(url="http://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz")),
+     dict(url="https://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz")),
 
     (r"/documentation/?", tornado.web.RedirectHandler,
      dict(url="/documentation/index.html")),

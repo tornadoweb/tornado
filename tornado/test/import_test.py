@@ -1,4 +1,6 @@
+from __future__ import absolute_import, division, with_statement
 import unittest
+
 
 class ImportTest(unittest.TestCase):
     def test_import_everything(self):

@@ -18,27 +18,41 @@ inheritance.  See the docstrings for each class/function below for more
 information.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 from cStringIO import StringIO
-from tornado.httpclient import AsyncHTTPClient
-from tornado.httpserver import HTTPServer
+try:
+    from tornado.httpclient import AsyncHTTPClient
+    from tornado.httpserver import HTTPServer
+    from tornado.simple_httpclient import SimpleAsyncHTTPClient
+    from tornado.ioloop import IOLoop
+except ImportError:
+    # These modules are not importable on app engine.  Parts of this module
+    # won't work, but e.g. LogTrapTestCase and main() will.
+    AsyncHTTPClient = None
+    HTTPServer = None
+    IOLoop = None
+    SimpleAsyncHTTPClient = None
 from tornado.stack_context import StackContext, NullContext
+from tornado.util import raise_exc_info
 import contextlib
 import logging
+import os
+import signal
 import sys
 import time
 import unittest
 
-from tornado.ioloop import IOLoop
-
 _next_port = 10000
+
+
 def get_unused_port():
     """Returns a (hopefully) unused port number."""
     global _next_port
     port = _next_port
     _next_port = _next_port + 1
     return port
+
 
 class AsyncTestCase(unittest.TestCase):
     """TestCase subclass for testing IOLoop-based asynchronous code.
@@ -69,20 +83,27 @@ class AsyncTestCase(unittest.TestCase):
                 client.fetch("http://www.tornadoweb.org/", self.handle_fetch)
                 self.wait()
 
-            def handle_fetch(self, response)
+            def handle_fetch(self, response):
                 # Test contents of response (failures and exceptions here
                 # will cause self.wait() to throw an exception and end the
                 # test).
+                # Exceptions thrown here are magically propagated to
+                # self.wait() in test_http_fetch() via stack_context.
+                self.assertIn("FriendFeed", response.body)
                 self.stop()
 
         # This test uses the argument passing between self.stop and self.wait
-        # for a simpler, more synchronous style
+        # for a simpler, more synchronous style.
+        # This style is recommended over the preceding example because it
+        # keeps the assertions in the test method itself, and is therefore
+        # less sensitive to the subtleties of stack_context.
         class MyTestCase2(AsyncTestCase):
             def test_http_fetch(self):
                 client = AsyncHTTPClient(self.io_loop)
                 client.fetch("http://www.tornadoweb.org/", self.stop)
                 response = self.wait()
                 # Test contents of response
+                self.assertIn("FriendFeed", response.body)
     """
     def __init__(self, *args, **kwargs):
         super(AsyncTestCase, self).__init__(*args, **kwargs)
@@ -90,6 +111,7 @@ class AsyncTestCase(unittest.TestCase):
         self.__running = False
         self.__failure = None
         self.__stop_args = None
+        self.__timeout = None
 
     def setUp(self):
         super(AsyncTestCase, self).setUp()
@@ -120,9 +142,18 @@ class AsyncTestCase(unittest.TestCase):
             self.__failure = sys.exc_info()
             self.stop()
 
+    def __rethrow(self):
+        if self.__failure is not None:
+            failure = self.__failure
+            self.__failure = None
+            raise_exc_info(failure)
+
     def run(self, result=None):
         with StackContext(self._stack_context):
             super(AsyncTestCase, self).run(result)
+        # In case an exception escaped super.run or the StackContext caught
+        # an exception when there wasn't a wait() to re-raise it, do so here.
+        self.__rethrow()
 
     def stop(self, _arg=None, **kwargs):
         '''Stops the ioloop, causing one pending (or future) call to wait()
@@ -151,12 +182,14 @@ class AsyncTestCase(unittest.TestCase):
                 def timeout_func():
                     try:
                         raise self.failureException(
-                          'Async operation timed out after %d seconds' %
+                          'Async operation timed out after %s seconds' %
                           timeout)
                     except Exception:
                         self.__failure = sys.exc_info()
                     self.stop()
-                self.io_loop.add_timeout(time.time() + timeout, timeout_func)
+                if self.__timeout is not None:
+                    self.io_loop.remove_timeout(self.__timeout)
+                self.__timeout = self.io_loop.add_timeout(time.time() + timeout, timeout_func)
             while True:
                 self.__running = True
                 with NullContext():
@@ -169,13 +202,7 @@ class AsyncTestCase(unittest.TestCase):
                     break
         assert self.__stopped
         self.__stopped = False
-        if self.__failure is not None:
-            # 2to3 isn't smart enough to convert three-argument raise
-            # statements correctly in some cases.
-            if isinstance(self.__failure[1], self.__failure[0]):
-                raise self.__failure[1], None, self.__failure[2]
-            else:
-                raise self.__failure[0], self.__failure[1], self.__failure[2]
+        self.__rethrow()
         result = self.__stop_args
         self.__stop_args = None
         return result
@@ -208,11 +235,18 @@ class AsyncHTTPTestCase(AsyncTestCase):
         super(AsyncHTTPTestCase, self).setUp()
         self.__port = None
 
-        self.http_client = AsyncHTTPClient(io_loop=self.io_loop)
+        self.http_client = self.get_http_client()
         self._app = self.get_app()
-        self.http_server = HTTPServer(self._app, io_loop=self.io_loop,
-                                      **self.get_httpserver_options())
+        self.http_server = self.get_http_server()
         self.http_server.listen(self.get_http_port(), address="127.0.0.1")
+
+    def get_http_client(self):
+        return AsyncHTTPClient(io_loop=self.io_loop)
+
+    def get_http_server(self):
+        return HTTPServer(self._app, io_loop=self.io_loop,
+                          **self.get_httpserver_options())
+
 
     def get_app(self):
         """Should be overridden by subclasses to return a
@@ -233,12 +267,12 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def get_httpserver_options(self):
         """May be overridden by subclasses to return additional
-        keyword arguments for HTTPServer.
+        keyword arguments for the server.
         """
         return {}
 
     def get_http_port(self):
-        """Returns the port used by the HTTPServer.
+        """Returns the port used by the server.
 
         A new port is chosen for each test.
         """
@@ -246,14 +280,52 @@ class AsyncHTTPTestCase(AsyncTestCase):
             self.__port = get_unused_port()
         return self.__port
 
+    def get_protocol(self):
+        return 'http'
+
     def get_url(self, path):
         """Returns an absolute url for the given path on the test server."""
-        return 'http://localhost:%s%s' % (self.get_http_port(), path)
+        return '%s://localhost:%s%s' % (self.get_protocol(),
+                                        self.get_http_port(), path)
 
     def tearDown(self):
         self.http_server.stop()
         self.http_client.close()
         super(AsyncHTTPTestCase, self).tearDown()
+
+
+class AsyncHTTPSTestCase(AsyncHTTPTestCase):
+    """A test case that starts an HTTPS server.
+
+    Interface is generally the same as `AsyncHTTPTestCase`.
+    """
+    def get_http_client(self):
+        # Some versions of libcurl have deadlock bugs with ssl,
+        # so always run these tests with SimpleAsyncHTTPClient.
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop, force_instance=True)
+
+    def get_httpserver_options(self):
+        return dict(ssl_options=self.get_ssl_options())
+
+    def get_ssl_options(self):
+        """May be overridden by subclasses to select SSL options.
+
+        By default includes a self-signed testing certificate.
+        """
+        # Testing keys were generated with:
+        # openssl req -new -keyout tornado/test/test.key -out tornado/test/test.crt -nodes -days 3650 -x509
+        module_dir = os.path.dirname(__file__)
+        return dict(
+                certfile=os.path.join(module_dir, 'test', 'test.crt'),
+                keyfile=os.path.join(module_dir, 'test', 'test.key'))
+
+    def get_protocol(self):
+        return 'https'
+
+    def fetch(self, path, **kwargs):
+        return AsyncHTTPTestCase.fetch(self, path, validate_cert=False,
+                   **kwargs)
+
 
 class LogTrapTestCase(unittest.TestCase):
     """A test case that captures and discards all logging output
@@ -294,6 +366,7 @@ class LogTrapTestCase(unittest.TestCase):
         finally:
             handler.stream = old_stream
 
+
 def main():
     """A simple test runner.
 
@@ -325,11 +398,19 @@ def main():
     define('autoreload', type=bool, default=False,
            help="DEPRECATED: use tornado.autoreload.main instead")
     define('httpclient', type=str, default=None)
+    define('exception_on_interrupt', type=bool, default=True,
+           help=("If true (default), ctrl-c raises a KeyboardInterrupt "
+                 "exception.  This prints a stack trace but cannot interrupt "
+                 "certain operations.  If false, the process is more reliably "
+                 "killed, but does not print a stack trace."))
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
 
     if options.httpclient:
         from tornado.httpclient import AsyncHTTPClient
         AsyncHTTPClient.configure(options.httpclient)
+
+    if not options.exception_on_interrupt:
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     if __name__ == '__main__' and len(argv) == 1:
         print >> sys.stderr, "No tests specified"

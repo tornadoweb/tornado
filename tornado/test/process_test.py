@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+
+from __future__ import absolute_import, division, with_statement
 import logging
 import os
 import signal
@@ -9,12 +11,15 @@ from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.netutil import bind_sockets
 from tornado.process import fork_processes, task_id
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import LogTrapTestCase, get_unused_port
 from tornado.web import RequestHandler, Application
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
 # Logging is tricky here so you may want to replace LogTrapTestCase
 # with unittest.TestCase when debugging.
+
+
 class ProcessTest(LogTrapTestCase):
     def get_app(self):
         class ProcessHandler(RequestHandler):
@@ -40,36 +45,46 @@ class ProcessTest(LogTrapTestCase):
             logging.error("aborting child process from tearDown")
             logging.shutdown()
             os._exit(1)
+        # In the surviving process, clear the alarm we set earlier
+        signal.alarm(0)
         super(ProcessTest, self).tearDown()
 
     def test_multi_process(self):
         self.assertFalse(IOLoop.initialized())
         port = get_unused_port()
+
         def get_url(path):
             return "http://127.0.0.1:%d%s" % (port, path)
         sockets = bind_sockets(port, "127.0.0.1")
         # ensure that none of these processes live too long
         signal.alarm(5)  # master process
-        id = fork_processes(3, max_restarts=3)
-        if id is None:
-            # back in the master process; everything worked!
+        try:
+            id = fork_processes(3, max_restarts=3)
+            self.assertTrue(id is not None)
+            signal.alarm(5)  # child processes
+        except SystemExit, e:
+            # if we exit cleanly from fork_processes, all the child processes
+            # finished with status 0
+            self.assertEqual(e.code, 0)
             self.assertTrue(task_id() is None)
-            for sock in sockets: sock.close()
-            signal.alarm(0)
+            for sock in sockets:
+                sock.close()
             return
-        signal.alarm(5)  # child process
         try:
             if id in (0, 1):
-                signal.alarm(5)
                 self.assertEqual(id, task_id())
                 server = HTTPServer(self.get_app())
                 server.add_sockets(sockets)
                 IOLoop.instance().start()
             elif id == 2:
-                signal.alarm(5)
                 self.assertEqual(id, task_id())
-                for sock in sockets: sock.close()
-                client = HTTPClient()
+                for sock in sockets:
+                    sock.close()
+                # Always use SimpleAsyncHTTPClient here; the curl
+                # version appears to get confused sometimes if the
+                # connection gets closed before it's had a chance to
+                # switch from writing mode to reading mode.
+                client = HTTPClient(SimpleAsyncHTTPClient)
 
                 def fetch(url, fail_ok=False):
                     try:
@@ -108,7 +123,7 @@ class ProcessTest(LogTrapTestCase):
         except Exception:
             logging.error("exception in child process %d", id, exc_info=True)
             raise
-            
+
 
 if os.name != 'posix' or sys.platform == 'cygwin':
     # All sorts of unixisms here

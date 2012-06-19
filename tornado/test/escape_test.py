@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+
+from __future__ import absolute_import, division, with_statement
 import tornado.escape
 import unittest
 
@@ -64,11 +66,11 @@ linkify_tests = [
     ("http://www.example.com/wpstyle/?p=364.", {},
      u'<a href="http://www.example.com/wpstyle/?p=364">http://www.example.com/wpstyle/?p=364</a>.'),
 
-    ("rdar://1234", 
+    ("rdar://1234",
      {"permitted_protocols": ["http", "rdar"]},
      u'<a href="rdar://1234">rdar://1234</a>'),
 
-    ("rdar:/1234", 
+    ("rdar:/1234",
      {"permitted_protocols": ["rdar"]},
      u'<a href="rdar:/1234">rdar:/1234</a>'),
 
@@ -97,7 +99,7 @@ linkify_tests = [
     ("Just a www.example.com link.", {},
      u'Just a <a href="http://www.example.com">www.example.com</a> link.'),
 
-    ("Just a www.example.com link.", 
+    ("Just a www.example.com link.",
      {"require_protocol": True},
      u'Just a www.example.com link.'),
 
@@ -118,6 +120,14 @@ linkify_tests = [
 
     ("www.external-link.com",
      {"extra_params": 'rel="nofollow" class="external"'},
+     u'<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>'),
+
+    ("www.external-link.com and www.internal-link.com/blogs extra",
+     {"extra_params": lambda(href):'class="internal"' if href.startswith("http://www.internal-link.com") else 'rel="nofollow" class="external"'},
+     u'<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a> and <a href="http://www.internal-link.com/blogs" class="internal">www.internal-link.com/blogs</a> extra'),
+
+    ("www.external-link.com",
+     {"extra_params": lambda(href):'    rel="nofollow" class="external"  '},
      u'<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>'),
 ]
 

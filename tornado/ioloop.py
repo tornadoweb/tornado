@@ -26,7 +26,7 @@ In addition to I/O events, the `IOLoop` can also schedule time-based events.
 `IOLoop.add_timeout` is a non-blocking alternative to `time.sleep`.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import datetime
 import errno
@@ -104,6 +104,9 @@ class IOLoop(object):
     WRITE = _EPOLLOUT
     ERROR = _EPOLLERR | _EPOLLHUP
 
+    # Global lock for creating global IOLoop instance
+    _instance_lock = threading.Lock()
+
     def __init__(self, impl=None):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
@@ -142,7 +145,10 @@ class IOLoop(object):
                     self.io_loop = io_loop or IOLoop.instance()
         """
         if not hasattr(IOLoop, "_instance"):
-            IOLoop._instance = IOLoop()
+            with IOLoop._instance_lock:
+                if not hasattr(IOLoop, "_instance"):
+                    # New instance after double check
+                    IOLoop._instance = IOLoop()
         return IOLoop._instance
 
     @staticmethod
@@ -164,7 +170,20 @@ class IOLoop(object):
         """Closes the IOLoop, freeing any resources used.
 
         If ``all_fds`` is true, all file descriptors registered on the
-        IOLoop will be closed (not just the ones created by the IOLoop itself.
+        IOLoop will be closed (not just the ones created by the IOLoop itself).
+
+        Many applications will only use a single IOLoop that runs for the
+        entire lifetime of the process.  In that case closing the IOLoop
+        is not necessary since everything will be cleaned up when the
+        process exits.  `IOLoop.close` is provided mainly for scenarios
+        such as unit tests, which create and destroy a large number of
+        IOLoops.
+
+        An IOLoop must be completely stopped before it can be closed.  This
+        means that `IOLoop.stop()` must be called *and* `IOLoop.start()` must
+        be allowed to return before attempting to call `IOLoop.close()`.
+        Therefore the call to `close` will usually appear just after
+        the call to `start` rather than near the call to `stop`.
         """
         self.remove_handler(self._waker.fileno())
         if all_fds:
@@ -172,7 +191,7 @@ class IOLoop(object):
                 try:
                     os.close(fd)
                 except Exception:
-                    logging.debug("error closing fd %d", fd, exc_info=True)
+                    logging.debug("error closing fd %s", fd, exc_info=True)
         self._waker.close()
         self._impl.close()
 
@@ -241,8 +260,7 @@ class IOLoop(object):
         self._thread_ident = thread.get_ident()
         self._running = True
         while True:
-            # Never use an infinite timeout here - it can stall epoll
-            poll_timeout = 0.2
+            poll_timeout = 3600.0
 
             # Prevent IO event starvation by delaying new callbacks
             # to the next iteration of the event loop.
@@ -262,8 +280,8 @@ class IOLoop(object):
                         timeout = heapq.heappop(self._timeouts)
                         self._run_callback(timeout.callback)
                     else:
-                        milliseconds = self._timeouts[0].deadline - now
-                        poll_timeout = min(milliseconds, poll_timeout)
+                        seconds = self._timeouts[0].deadline - now
+                        poll_timeout = min(seconds, poll_timeout)
                         break
 
             if self._callbacks:
@@ -312,10 +330,10 @@ class IOLoop(object):
                         # Happens when the client closes the connection
                         pass
                     else:
-                        logging.error("Exception in I/O handler for fd %d",
+                        logging.error("Exception in I/O handler for fd %s",
                                       fd, exc_info=True)
                 except Exception:
-                    logging.error("Exception in I/O handler for fd %d",
+                    logging.error("Exception in I/O handler for fd %s",
                                   fd, exc_info=True)
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
@@ -336,6 +354,9 @@ class IOLoop(object):
 
         ioloop.start() will return after async_method has run its callback,
         whether that callback was invoked before or after ioloop.start.
+
+        Note that even after `stop` has been called, the IOLoop is not
+        completely stopped until `IOLoop.start` has also returned.
         """
         self._running = False
         self._stopped = True
@@ -353,6 +374,10 @@ class IOLoop(object):
         ``deadline`` may be a number denoting a unix timestamp (as returned
         by ``time.time()`` or a ``datetime.timedelta`` object for a deadline
         relative to the current time.
+
+        Note that it is not safe to call `add_timeout` from other threads.
+        Instead, you must use `add_callback` to transfer control to the
+        IOLoop's thread, and then call `add_timeout` from there.
         """
         timeout = _Timeout(deadline, stack_context.wrap(callback))
         heapq.heappush(self._timeouts, timeout)
@@ -428,7 +453,7 @@ class _Timeout(object):
     @staticmethod
     def timedelta_to_seconds(td):
         """Equivalent to td.total_seconds() (introduced in python 2.7)."""
-        return (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10**6) / float(10**6)
+        return (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10 ** 6) / float(10 ** 6)
 
     # Comparison methods to sort by deadline, with object id as a tiebreaker
     # to guarantee a consistent ordering.  The heapq module uses __le__
@@ -455,6 +480,7 @@ class PeriodicCallback(object):
         self.callback_time = callback_time
         self.io_loop = io_loop or IOLoop.instance()
         self._running = False
+        self._timeout = None
 
     def start(self):
         """Starts the timer."""
@@ -465,9 +491,13 @@ class PeriodicCallback(object):
     def stop(self):
         """Stops the timer."""
         self._running = False
+        if self._timeout is not None:
+            self.io_loop.remove_timeout(self._timeout)
+            self._timeout = None
 
     def _run(self):
-        if not self._running: return
+        if not self._running:
+            return
         try:
             self.callback()
         except Exception:
@@ -477,9 +507,9 @@ class PeriodicCallback(object):
     def _schedule_next(self):
         if self._running:
             current_time = time.time()
-            while self._next_timeout < current_time:
+            while self._next_timeout <= current_time:
                 self._next_timeout += self.callback_time / 1000.0
-            self.io_loop.add_timeout(self._next_timeout, self._run)
+            self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
 
 
 class _EPoll(object):
@@ -584,8 +614,10 @@ class _Select(object):
         pass
 
     def register(self, fd, events):
-        if events & IOLoop.READ: self.read_fds.add(fd)
-        if events & IOLoop.WRITE: self.write_fds.add(fd)
+        if events & IOLoop.READ:
+            self.read_fds.add(fd)
+        if events & IOLoop.WRITE:
+            self.write_fds.add(fd)
         if events & IOLoop.ERROR:
             self.error_fds.add(fd)
             # Closed connections are reported as errors by epoll and kqueue,
@@ -626,7 +658,7 @@ elif hasattr(select, "kqueue"):
 else:
     try:
         # Linux systems with our C module installed
-        import epoll
+        from tornado import epoll
         _poll = _EPoll
     except Exception:
         # All other systems

@@ -3,11 +3,14 @@
 # and ensure that it doesn't blow up (e.g. with unicode/bytes issues in
 # python 3)
 
+
+from __future__ import absolute_import, division, with_statement
 from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin
 from tornado.escape import json_decode
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous
+
 
 class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
     def initialize(self, test):
@@ -22,13 +25,17 @@ class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
         self.authenticate_redirect()
 
     def on_user(self, user):
-        assert user is not None
+        if user is None:
+            raise Exception("user is None")
         self.finish(user)
+
 
 class OpenIdServerAuthenticateHandler(RequestHandler):
     def post(self):
-        assert self.get_argument('openid.mode') == 'check_authentication'
+        if self.get_argument('openid.mode') != 'check_authentication':
+            raise Exception("incorrect openid.mode %r")
         self.write('is_valid:true')
+
 
 class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
     def initialize(self, test, version):
@@ -49,12 +56,15 @@ class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
         self.authorize_redirect(http_client=self.settings['http_client'])
 
     def on_user(self, user):
-        assert user is not None
+        if user is None:
+            raise Exception("user is None")
         self.finish(user)
 
     def _oauth_get_user(self, access_token, callback):
-        assert access_token == dict(key=b('uiop'), secret=b('5678')), access_token
+        if access_token != dict(key=b('uiop'), secret=b('5678')):
+            raise Exception("incorrect access token %r" % access_token)
         callback(dict(email='foo@example.com'))
+
 
 class OAuth1ClientRequestParametersHandler(RequestHandler, OAuthMixin):
     def initialize(self, version):
@@ -68,16 +78,20 @@ class OAuth1ClientRequestParametersHandler(RequestHandler, OAuthMixin):
             'http://www.example.com/api/asdf',
             dict(key='uiop', secret='5678'),
             parameters=dict(foo='bar'))
-        import urllib; urllib.urlencode(params)
+        import urllib
+        urllib.urlencode(params)
         self.write(params)
+
 
 class OAuth1ServerRequestTokenHandler(RequestHandler):
     def get(self):
         self.write('oauth_token=zxcv&oauth_token_secret=1234')
 
+
 class OAuth1ServerAccessTokenHandler(RequestHandler):
     def get(self):
         self.write('oauth_token=uiop&oauth_token_secret=5678')
+
 
 class OAuth2ClientLoginHandler(RequestHandler, OAuth2Mixin):
     def initialize(self, test):
@@ -137,7 +151,7 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_oauth10_get_user(self):
         response = self.fetch(
             '/oauth10/client/login?oauth_token=zxcv',
-            headers={'Cookie':'_oauth_request_token=enhjdg==|MTIzNA=='})
+            headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['email'], 'foo@example.com')
@@ -165,7 +179,7 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_oauth10a_get_user(self):
         response = self.fetch(
             '/oauth10a/client/login?oauth_token=zxcv',
-            headers={'Cookie':'_oauth_request_token=enhjdg==|MTIzNA=='})
+            headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['email'], 'foo@example.com')

@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
+
+from __future__ import absolute_import, division, with_statement
 import datetime
 import unittest
 import time
 
 from tornado.testing import AsyncTestCase, LogTrapTestCase
+
 
 class TestIOLoop(AsyncTestCase, LogTrapTestCase):
     def test_add_callback_wakeup(self):

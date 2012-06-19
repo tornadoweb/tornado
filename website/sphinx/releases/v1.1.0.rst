@@ -5,10 +5,10 @@ Sep 7, 2010
 -----------
 
 ::
-    
+
     We are pleased to announce the release of Tornado 1.1, available from
-    http://github.com/downloads/facebook/tornado/tornado-1.1.tar.gz
-    
+    https://github.com/downloads/facebook/tornado/tornado-1.1.tar.gz
+
     Changes in this release:
     * RequestHandler.async_callback and related functions in other classes
       are no longer needed in most cases (although it's harmless to continue
@@ -35,7 +35,7 @@ Sep 7, 2010
     * The httpclient module now supports HTTP proxies.
     * When HTTPServer is run in SSL mode, the SSL handshake is now non-blocking.
     * Many smaller bug fixes and documentation updates
-    
+
     Backwards-compatibility notes:
     * While most users of Tornado should not have to deal with the stack_context
       module directly, users of worker thread pools and similar constructs may
@@ -46,8 +46,8 @@ Sep 7, 2010
       cannot be completed under the new module.  This applies only to the
       initial authorization process; once an authorized token is issued that
       token works with either version.
-    
+
     Many thanks to everyone who contributed patches, bug reports, and feedback
     that went into this release!
-    
+
     -Ben

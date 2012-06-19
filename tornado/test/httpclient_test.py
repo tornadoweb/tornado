@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import base64
 import binascii
@@ -15,16 +15,19 @@ from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler, url
 
+
 class HelloWorldHandler(RequestHandler):
     def get(self):
         name = self.get_argument("name", "world")
         self.set_header("Content-Type", "text/plain")
         self.finish("Hello %s!" % name)
 
+
 class PostHandler(RequestHandler):
     def post(self):
         self.finish("Post arg1: %s, arg2: %s" % (
             self.get_argument("arg1"), self.get_argument("arg2")))
+
 
 class ChunkHandler(RequestHandler):
     def get(self):
@@ -32,9 +35,11 @@ class ChunkHandler(RequestHandler):
         self.flush()
         self.write("qwer")
 
+
 class AuthHandler(RequestHandler):
     def get(self):
         self.finish(self.request.headers["Authorization"])
+
 
 class CountdownHandler(RequestHandler):
     def get(self, count):
@@ -44,6 +49,7 @@ class CountdownHandler(RequestHandler):
         else:
             self.write("Zero")
 
+
 class EchoPostHandler(RequestHandler):
     def post(self):
         self.write(self.request.body)
@@ -51,11 +57,9 @@ class EchoPostHandler(RequestHandler):
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
-class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
-    def get_http_client(self):
-        """Returns AsyncHTTPClient instance.  May be overridden in subclass."""
-        return AsyncHTTPClient(io_loop=self.io_loop)
 
+
+class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([
             url("/hello", HelloWorldHandler),
@@ -65,11 +69,6 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
             url("/echopost", EchoPostHandler),
             ], gzip=True)
-
-    def setUp(self):
-        super(HTTPClientCommonTestCase, self).setUp()
-        # replace the client defined in the parent class
-        self.http_client = self.get_http_client()
 
     def test_hello_world(self):
         response = self.fetch("/hello")
@@ -124,6 +123,7 @@ Transfer-Encoding: chunked
 0
 
 """).replace(b("\n"), b("\r\n")), callback=stream.close)
+
             def accept_callback(conn, address):
                 # fake an HTTP server using chunked encoding where the final chunks
                 # and connection close all happen at once
@@ -135,7 +135,6 @@ Transfer-Encoding: chunked
             resp = self.wait()
             resp.rethrow()
             self.assertEqual(resp.body, b("12"))
-        
 
     def test_basic_auth(self):
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",

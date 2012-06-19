@@ -12,6 +12,7 @@
    
    .. automethod:: RequestHandler.initialize
    .. automethod:: RequestHandler.prepare
+   .. automethod:: RequestHandler.on_finish
 
    Implement any of the following methods to handle the corresponding
    HTTP method.

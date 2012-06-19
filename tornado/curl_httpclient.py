@@ -16,7 +16,7 @@
 
 """Blocking and non-blocking HTTP client implementations using pycurl."""
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import cStringIO
 import collections
@@ -31,6 +31,7 @@ from tornado import stack_context
 
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(self, io_loop=None, max_clients=10,
@@ -109,15 +110,17 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
         self._timeout = self.io_loop.add_timeout(
-            time.time() + msecs/1000.0, self._handle_timeout)
+            time.time() + msecs / 1000.0, self._handle_timeout)
 
     def _handle_events(self, fd, events):
         """Called by IOLoop when there is activity on one of our
         file descriptors.
         """
         action = 0
-        if events & ioloop.IOLoop.READ: action |= pycurl.CSELECT_IN
-        if events & ioloop.IOLoop.WRITE: action |= pycurl.CSELECT_OUT
+        if events & ioloop.IOLoop.READ:
+            action |= pycurl.CSELECT_IN
+        if events & ioloop.IOLoop.WRITE:
+            action |= pycurl.CSELECT_OUT
         while True:
             try:
                 ret, num_handles = self._socket_action(fd, action)
@@ -250,7 +253,6 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         except Exception:
             self.handle_callback_exception(info["callback"])
 
-
     def handle_callback_exception(self, callback):
         self.io_loop.handle_callback_exception(callback)
 
@@ -271,7 +273,7 @@ def _curl_create(max_simultaneous_connections=None):
 
 
 def _curl_setup_request(curl, request, buffer, headers):
-    curl.setopt(pycurl.URL, request.url)
+    curl.setopt(pycurl.URL, utf8(request.url))
 
     # libcurl's magic "Expect: 100-continue" behavior causes delays
     # with servers that don't support it (which include, among others,
@@ -307,8 +309,8 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.setopt(pycurl.WRITEFUNCTION, buffer.write)
     curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
     curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
-    curl.setopt(pycurl.CONNECTTIMEOUT, int(request.connect_timeout))
-    curl.setopt(pycurl.TIMEOUT, int(request.request_timeout))
+    curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000 * request.connect_timeout))
+    curl.setopt(pycurl.TIMEOUT_MS, int(1000 * request.request_timeout))
     if request.user_agent:
         curl.setopt(pycurl.USERAGENT, utf8(request.user_agent))
     else:
@@ -351,7 +353,7 @@ def _curl_setup_request(curl, request, buffer, headers):
         # (but see version check in _process_queue above)
         curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)
 
-    # Set the request method through curl's retarded interface which makes
+    # Set the request method through curl's irritating interface which makes
     # up names for almost every single method
     curl_options = {
         "GET": pycurl.HTTPGET,
@@ -372,7 +374,7 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     # Handle curl's cryptic options for every individual HTTP method
     if request.method in ("POST", "PUT"):
-        request_buffer =  cStringIO.StringIO(utf8(request.body))
+        request_buffer = cStringIO.StringIO(utf8(request.body))
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
         if request.method == "POST":
             def ioctl(cmd):
@@ -383,18 +385,21 @@ def _curl_setup_request(curl, request, buffer, headers):
         else:
             curl.setopt(pycurl.INFILESIZE, len(request.body))
 
-    if request.auth_username and request.auth_password:
-        userpwd = "%s:%s" % (request.auth_username, request.auth_password)
+    if request.auth_username is not None:
+        userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
         curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
-        curl.setopt(pycurl.USERPWD, userpwd)
+        curl.setopt(pycurl.USERPWD, utf8(userpwd))
         logging.debug("%s %s (username: %r)", request.method, request.url,
                       request.auth_username)
     else:
         curl.unsetopt(pycurl.USERPWD)
         logging.debug("%s %s", request.method, request.url)
 
-    if request.client_key is not None or request.client_cert is not None:
-        raise ValueError("Client certificate not supported with curl_httpclient")
+    if request.client_cert is not None:
+        curl.setopt(pycurl.SSLCERT, request.client_cert)
+
+    if request.client_key is not None:
+        curl.setopt(pycurl.SSLKEY, request.client_key)
 
     if threading.activeCount() > 1:
         # libcurl/pycurl is not thread-safe by default.  When multiple threads
@@ -419,6 +424,7 @@ def _curl_header_callback(headers, header_line):
     if not header_line:
         return
     headers.parse_line(header_line)
+
 
 def _curl_debug(debug_type, debug_msg):
     debug_types = ('I', '<', '>', '<', '>')

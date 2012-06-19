@@ -1,0 +1,8 @@
+Unit test support for app engine.  Currently very limited as most of
+our tests depend on direct network access, but these tests ensure that the
+modules that are supposed to work on app engine don't depend on any
+forbidden modules.
+
+The code lives in maint/appengine/common, but should be run from the py25
+or py27 subdirectories (which contain an app.yaml and a bunch of symlinks).
+runtests.py is the entry point; cgi_runtests.py is used internally.

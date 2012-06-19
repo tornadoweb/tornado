@@ -1,0 +1,3 @@
+This directory contains tools and scripts that are used in the development
+and maintainance of Tornado itself, but are probably not of interest to
+Tornado users.

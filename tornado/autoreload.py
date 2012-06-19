@@ -24,9 +24,47 @@ and static resources.
 This module depends on IOLoop, so it will not work in WSGI applications
 and Google AppEngine.  It also will not work correctly when HTTPServer's
 multi-process mode is used.
+
+Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
+because it re-executes Python using ``sys.executable`` and ``sys.argv``.
+Additionally, modifying these variables will cause reloading to behave
+incorrectly.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
+
+import os
+import sys
+
+# sys.path handling
+# -----------------
+#
+# If a module is run with "python -m", the current directory (i.e. "")
+# is automatically prepended to sys.path, but not if it is run as
+# "path/to/file.py".  The processing for "-m" rewrites the former to
+# the latter, so subsequent executions won't have the same path as the
+# original.
+#
+# Conversely, when run as path/to/file.py, the directory containing
+# file.py gets added to the path, which can cause confusion as imports
+# may become relative in spite of the future import.
+#
+# We address the former problem by setting the $PYTHONPATH environment
+# variable before re-execution so the new process will see the correct
+# path.  We attempt to address the latter problem when tornado.autoreload
+# is run as __main__, although we can't fix the general case because
+# we cannot reliably reconstruct the original command line
+# (http://bugs.python.org/issue14208).
+
+if __name__ == "__main__":
+    # This sys.path manipulation must come before our imports (as much
+    # as possible - if we introduced a tornado.sys or tornado.os
+    # module we'd be in trouble), or else our imports would become
+    # relative again despite the future import.
+    #
+    # There is a separate __main__ block at the end of the file to call main().
+    if sys.path[0] == os.path.dirname(__file__):
+        del sys.path[0]
 
 import functools
 import logging
@@ -44,6 +82,7 @@ try:
 except ImportError:
     signal = None
 
+
 def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
 
@@ -56,6 +95,7 @@ def start(io_loop=None, check_time=500):
     callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
     scheduler.start()
+
 
 def wait():
     """Wait for a watched file to change, then restart the process.
@@ -70,6 +110,7 @@ def wait():
 
 _watched_files = set()
 
+
 def watch(filename):
     """Add a file to the watch list.
 
@@ -78,6 +119,7 @@ def watch(filename):
     _watched_files.add(filename)
 
 _reload_hooks = []
+
 
 def add_reload_hook(fn):
     """Add a function to be called before reloading the process.
@@ -89,6 +131,7 @@ def add_reload_hook(fn):
     """
     _reload_hooks.append(fn)
 
+
 def _close_all_fds(io_loop):
     for fd in io_loop._handlers.keys():
         try:
@@ -97,6 +140,7 @@ def _close_all_fds(io_loop):
             pass
 
 _reload_attempted = False
+
 
 def _reload_on_update(modify_times):
     if _reload_attempted:
@@ -112,14 +156,17 @@ def _reload_on_update(modify_times):
         # in the standard library), and occasionally this can cause strange
         # failures in getattr.  Just ignore anything that's not an ordinary
         # module.
-        if not isinstance(module, types.ModuleType): continue
+        if not isinstance(module, types.ModuleType):
+            continue
         path = getattr(module, "__file__", None)
-        if not path: continue
+        if not path:
+            continue
         if path.endswith(".pyc") or path.endswith(".pyo"):
             path = path[:-1]
         _check_file(modify_times, path)
     for path in _watched_files:
         _check_file(modify_times, path)
+
 
 def _check_file(modify_times, path):
     try:
@@ -133,6 +180,7 @@ def _check_file(modify_times, path):
         logging.info("%s modified; restarting server", path)
         _reload()
 
+
 def _reload():
     global _reload_attempted
     _reload_attempted = True
@@ -143,6 +191,15 @@ def _reload():
         # ioloop.set_blocking_log_threshold so it doesn't fire
         # after the exec.
         signal.setitimer(signal.ITIMER_REAL, 0, 0)
+    # sys.path fixes: see comments at top of file.  If sys.path[0] is an empty
+    # string, we were (probably) invoked with -m and the effective path
+    # is about to change on re-exec.  Add the current directory to $PYTHONPATH
+    # to ensure that the new process sees the same path we did.
+    path_prefix = '.' + os.pathsep
+    if (sys.path[0] == '' and
+        not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
+        os.environ["PYTHONPATH"] = (path_prefix +
+                                    os.environ.get("PYTHONPATH", ""))
     if sys.platform == 'win32':
         # os.execv is broken on Windows and can't properly parse command line
         # arguments and executable name if they contain whitespaces. subprocess
@@ -173,9 +230,11 @@ Usage:
   python -m tornado.autoreload -m module.to.run [args...]
   python -m tornado.autoreload path/to/script.py [args...]
 """
+
+
 def main():
     """Command-line wrapper to re-run a script whenever its source changes.
-    
+
     Scripts may be specified by filename or module name::
 
         python -m tornado.autoreload -m tornado.test.runtests
@@ -226,25 +285,14 @@ def main():
     if mode == 'module':
         # runpy did a fake import of the module as __main__, but now it's
         # no longer in sys.modules.  Figure out where it is and watch it.
-        watch(pkgutil.get_loader(module).get_filename())
+        loader = pkgutil.get_loader(module)
+        if loader is not None:
+            watch(loader.get_filename())
 
     wait()
-    
+
 
 if __name__ == "__main__":
-    # If this module is run with "python -m tornado.autoreload", the current
-    # directory is automatically prepended to sys.path, but not if it is
-    # run as "path/to/tornado/autoreload.py".  The processing for "-m" rewrites
-    # the former to the latter, so subsequent executions won't have the same
-    # path as the original.  Modify os.environ here to ensure that the
-    # re-executed process will have the same path.
-    # Conversely, when run as path/to/tornado/autoreload.py, the directory
-    # containing autoreload.py gets added to the path, but we don't want
-    # tornado modules importable at top level, so remove it.
-    path_prefix = '.' + os.pathsep
-    if (sys.path[0] == '' and
-        not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
-        os.environ["PYTHONPATH"] = path_prefix + os.environ.get("PYTHONPATH", "")
-    elif sys.path[0] == os.path.dirname(__file__):
-        del sys.path[0]
+    # See also the other __main__ block at the top of the file, which modifies
+    # sys.path before our imports
     main()

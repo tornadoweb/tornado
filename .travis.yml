@@ -1,0 +1,33 @@
+# http://travis-ci.org/#!/facebook/tornado
+language: python
+python:
+    - 2.5
+    - 2.6
+    - 2.7
+    - pypy
+    - 3.2
+matrix:
+    include:
+        - python: 2.5
+          env: FULL="true"
+        - python: 2.6
+          env: FULL="true"
+        - python: 2.7
+          env: FULL="true"
+        - python: 3.2
+          env: LANG="en_US.utf-8"
+        - python: 3.2
+          env: LANG="C"
+install:
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.5' ]]; then pip install --use-mirrors simplejson; fi
+    - if [[ $FULL == 'true' ]]; then sudo apt-get install librtmp-dev; pip install --use-mirrors MySQL-python pycurl; fi
+    - if [[ $FULL == 'true' && $TRAVIS_PYTHON_VERSION == '2.5' ]]; then pip install --use-mirrors twisted==11.0.0 'zope.interface<4.0'; fi
+    - if [[ $FULL == 'true' && $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install --use-mirrors twisted==11.0.0; fi
+    - if [[ $FULL == 'true' && $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pip install --use-mirrors twisted==12.0.0; fi
+    - python setup.py install
+script:
+    # Must cd somewhere else so python3 doesn't get confused and run
+    # the python2 code from the current directory instead of the installed
+    # 2to3 version.
+    - cd maint
+    - python -m tornado.test.runtests

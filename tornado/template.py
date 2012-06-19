@@ -92,6 +92,9 @@ to the current autoescape setting and inserted into the output.  Other
 template directives use ``{% %}``.  These tags may be escaped as ``{{!``
 and ``{%!`` if you need to include a literal ``{{`` or ``{%`` in the output.
 
+To comment out a section so that it is omitted from the output, surround it
+with ``{# ... #}``.
+
 ``{% apply *function* %}...{% end %}``
     Applies a function to the output of all template code between ``apply``
     and ``end``::
@@ -132,7 +135,7 @@ and ``{%!`` if you need to include a literal ``{{`` or ``{%`` in the output.
 
 ``{% for *var* in *expr* %}...{% end %}``
     Same as the python ``for`` statement.
-    
+
 ``{% from *x* import *y* %}``
     Same as the python ``import`` statement.
 
@@ -162,27 +165,30 @@ and ``{%!`` if you need to include a literal ``{{`` or ``{%`` in the output.
 ``{% set *x* = *y* %}``
     Sets a local variable.
 
-``{% try %}...{% except %}...{% finally %}...{% end %}``
+``{% try %}...{% except %}...{% finally %}...{% else %}...{% end %}``
     Same as the python ``try`` statement.
 
 ``{% while *condition* %}... {% end %}``
     Same as the python ``while`` statement.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import cStringIO
 import datetime
+import linecache
 import logging
 import os.path
 import posixpath
 import re
+import threading
 
 from tornado import escape
-from tornado.util import bytes_type
+from tornado.util import bytes_type, ObjectDict
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()
+
 
 class Template(object):
     """A compiled template.
@@ -204,12 +210,16 @@ class Template(object):
             self.autoescape = _DEFAULT_AUTOESCAPE
         self.namespace = loader.namespace if loader else {}
         reader = _TemplateReader(name, escape.native_str(template_string))
-        self.file = _File(_parse(reader, self))
+        self.file = _File(self, _parse(reader, self))
         self.code = self._generate_python(loader, compress_whitespace)
+        self.loader = loader
         try:
-            self.compiled = compile(escape.to_unicode(self.code),
-                                    "<template %s>" % self.name,
-                                    "exec")
+            # Under python2.5, the fake filename used here must match
+            # the module name used in __name__ below.
+            self.compiled = compile(
+                escape.to_unicode(self.code),
+                "%s.generated.py" % self.name.replace('.', '_'),
+                "exec")
         except Exception:
             formatted_code = _format_code(self.code).rstrip()
             logging.error("%s code:\n%s", self.name, formatted_code)
@@ -227,11 +237,19 @@ class Template(object):
             "datetime": datetime,
             "_utf8": escape.utf8,  # for internal use
             "_string_types": (unicode, bytes_type),
+            # __name__ and __loader__ allow the traceback mechanism to find
+            # the generated source code.
+            "__name__": self.name.replace('.', '_'),
+            "__loader__": ObjectDict(get_source=lambda name: self.code),
         }
         namespace.update(self.namespace)
         namespace.update(kwargs)
         exec self.compiled in namespace
         execute = namespace["_execute"]
+        # Clear the traceback module's cache of source data now that
+        # we've generated a new template (mainly for this module's
+        # unittests, where different tests reuse the same name).
+        linecache.clearcache()
         try:
             return execute()
         except Exception:
@@ -249,7 +267,7 @@ class Template(object):
             for ancestor in ancestors:
                 ancestor.find_named_blocks(loader, named_blocks)
             self.file.find_named_blocks(loader, named_blocks)
-            writer = _CodeWriter(buffer, named_blocks, loader, self,
+            writer = _CodeWriter(buffer, named_blocks, loader, ancestors[0].template,
                                  compress_whitespace)
             ancestors[0].generate(writer)
             return buffer.getvalue()
@@ -282,10 +300,17 @@ class BaseLoader(object):
         self.autoescape = autoescape
         self.namespace = namespace or {}
         self.templates = {}
+        # self.lock protects self.templates.  It's a reentrant lock
+        # because templates may load other templates via `include` or
+        # `extends`.  Note that thanks to the GIL this code would be safe
+        # even without the lock, but could lead to wasted work as multiple
+        # threads tried to compile the same template simultaneously.
+        self.lock = threading.RLock()
 
     def reset(self):
         """Resets the cache of compiled templates."""
-        self.templates = {}
+        with self.lock:
+            self.templates = {}
 
     def resolve_path(self, name, parent_path=None):
         """Converts a possibly-relative path to absolute (used internally)."""
@@ -294,12 +319,14 @@ class BaseLoader(object):
     def load(self, name, parent_path=None):
         """Loads a template."""
         name = self.resolve_path(name, parent_path=parent_path)
-        if name not in self.templates:
-            self.templates[name] = self._create_template(name)
-        return self.templates[name]
+        with self.lock:
+            if name not in self.templates:
+                self.templates[name] = self._create_template(name)
+            return self.templates[name]
 
     def _create_template(self, name):
         raise NotImplementedError()
+
 
 class Loader(BaseLoader):
     """A template loader that loads from a single root directory.
@@ -325,7 +352,7 @@ class Loader(BaseLoader):
 
     def _create_template(self, name):
         path = os.path.join(self.root, name)
-        f = open(path, "r")
+        f = open(path, "rb")
         template = Template(f.read(), name=name, loader=self)
         f.close()
         return template
@@ -362,20 +389,21 @@ class _Node(object):
 
 
 class _File(_Node):
-    def __init__(self, body):
+    def __init__(self, template, body):
+        self.template = template
         self.body = body
+        self.line = 0
 
     def generate(self, writer):
-        writer.write_line("def _execute():")
+        writer.write_line("def _execute():", self.line)
         with writer.indent():
-            writer.write_line("_buffer = []")
-            writer.write_line("_append = _buffer.append")
+            writer.write_line("_buffer = []", self.line)
+            writer.write_line("_append = _buffer.append", self.line)
             self.body.generate(writer)
-            writer.write_line("return _utf8('').join(_buffer)")
+            writer.write_line("return _utf8('').join(_buffer)", self.line)
 
     def each_child(self):
         return (self.body,)
-
 
 
 class _ChunkList(_Node):
@@ -391,20 +419,19 @@ class _ChunkList(_Node):
 
 
 class _NamedBlock(_Node):
-    def __init__(self, name, body, template):
+    def __init__(self, name, body, template, line):
         self.name = name
         self.body = body
         self.template = template
+        self.line = line
 
     def each_child(self):
         return (self.body,)
 
     def generate(self, writer):
         block = writer.named_blocks[self.name]
-        old = writer.current_template
-        writer.current_template = block.template
-        block.body.generate(writer)
-        writer.current_template = old
+        with writer.include(block.template, self.line):
+            block.body.generate(writer)
 
     def find_named_blocks(self, loader, named_blocks):
         named_blocks[self.name] = self
@@ -417,9 +444,10 @@ class _ExtendsBlock(_Node):
 
 
 class _IncludeBlock(_Node):
-    def __init__(self, name, reader):
+    def __init__(self, name, reader, line):
         self.name = name
         self.template_name = reader.name
+        self.line = line
 
     def find_named_blocks(self, loader, named_blocks):
         included = loader.load(self.name, self.template_name)
@@ -427,15 +455,14 @@ class _IncludeBlock(_Node):
 
     def generate(self, writer):
         included = writer.loader.load(self.name, self.template_name)
-        old = writer.current_template
-        writer.current_template = included
-        included.file.body.generate(writer)
-        writer.current_template = old
+        with writer.include(included, self.line):
+            included.file.body.generate(writer)
 
 
 class _ApplyBlock(_Node):
-    def __init__(self, method, body=None):
+    def __init__(self, method, line, body=None):
         self.method = method
+        self.line = line
         self.body = body
 
     def each_child(self):
@@ -444,71 +471,78 @@ class _ApplyBlock(_Node):
     def generate(self, writer):
         method_name = "apply%d" % writer.apply_counter
         writer.apply_counter += 1
-        writer.write_line("def %s():" % method_name)
+        writer.write_line("def %s():" % method_name, self.line)
         with writer.indent():
-            writer.write_line("_buffer = []")
-            writer.write_line("_append = _buffer.append")
+            writer.write_line("_buffer = []", self.line)
+            writer.write_line("_append = _buffer.append", self.line)
             self.body.generate(writer)
-            writer.write_line("return _utf8('').join(_buffer)")
+            writer.write_line("return _utf8('').join(_buffer)", self.line)
         writer.write_line("_append(%s(%s()))" % (
-            self.method, method_name))
+            self.method, method_name), self.line)
 
 
 class _ControlBlock(_Node):
-    def __init__(self, statement, body=None):
+    def __init__(self, statement, line, body=None):
         self.statement = statement
+        self.line = line
         self.body = body
 
     def each_child(self):
         return (self.body,)
 
     def generate(self, writer):
-        writer.write_line("%s:" % self.statement)
+        writer.write_line("%s:" % self.statement, self.line)
         with writer.indent():
             self.body.generate(writer)
 
 
 class _IntermediateControlBlock(_Node):
-    def __init__(self, statement):
+    def __init__(self, statement, line):
         self.statement = statement
+        self.line = line
 
     def generate(self, writer):
-        writer.write_line("%s:" % self.statement, writer.indent_size() - 1)
+        writer.write_line("%s:" % self.statement, self.line, writer.indent_size() - 1)
 
 
 class _Statement(_Node):
-    def __init__(self, statement):
+    def __init__(self, statement, line):
         self.statement = statement
+        self.line = line
 
     def generate(self, writer):
-        writer.write_line(self.statement)
+        writer.write_line(self.statement, self.line)
 
 
 class _Expression(_Node):
-    def __init__(self, expression, raw=False):
+    def __init__(self, expression, line, raw=False):
         self.expression = expression
+        self.line = line
         self.raw = raw
 
     def generate(self, writer):
-        writer.write_line("_tmp = %s" % self.expression)
+        writer.write_line("_tmp = %s" % self.expression, self.line)
         writer.write_line("if isinstance(_tmp, _string_types):"
-                          " _tmp = _utf8(_tmp)")
-        writer.write_line("else: _tmp = _utf8(str(_tmp))")
+                          " _tmp = _utf8(_tmp)", self.line)
+        writer.write_line("else: _tmp = _utf8(str(_tmp))", self.line)
         if not self.raw and writer.current_template.autoescape is not None:
             # In python3 functions like xhtml_escape return unicode,
             # so we have to convert to utf8 again.
             writer.write_line("_tmp = _utf8(%s(_tmp))" %
-                              writer.current_template.autoescape)
-        writer.write_line("_append(_tmp)")
+                              writer.current_template.autoescape, self.line)
+        writer.write_line("_append(_tmp)", self.line)
+
 
 class _Module(_Expression):
-    def __init__(self, expression):
-        super(_Module, self).__init__("_modules." + expression,
+    def __init__(self, expression, line):
+        super(_Module, self).__init__("_modules." + expression, line,
                                       raw=True)
 
+
 class _Text(_Node):
-    def __init__(self, value):
+    def __init__(self, value, line):
         self.value = value
+        self.line = line
 
     def generate(self, writer):
         value = self.value
@@ -521,7 +555,7 @@ class _Text(_Node):
             value = re.sub(r"(\s*\n\s*)", "\n", value)
 
         if value:
-            writer.write_line('_append(%r)' % escape.utf8(value))
+            writer.write_line('_append(%r)' % escape.utf8(value), self.line)
 
 
 class ParseError(Exception):
@@ -538,35 +572,53 @@ class _CodeWriter(object):
         self.current_template = current_template
         self.compress_whitespace = compress_whitespace
         self.apply_counter = 0
+        self.include_stack = []
         self._indent = 0
-
-    def indent(self):
-        return self
 
     def indent_size(self):
         return self._indent
 
-    def __enter__(self):
-        self._indent += 1
-        return self
+    def indent(self):
+        class Indenter(object):
+            def __enter__(_):
+                self._indent += 1
+                return self
 
-    def __exit__(self, *args):
-        assert self._indent > 0
-        self._indent -= 1
+            def __exit__(_, *args):
+                assert self._indent > 0
+                self._indent -= 1
 
-    def write_line(self, line, indent=None):
+        return Indenter()
+
+    def include(self, template, line):
+        self.include_stack.append((self.current_template, line))
+        self.current_template = template
+
+        class IncludeTemplate(object):
+            def __enter__(_):
+                return self
+
+            def __exit__(_, *args):
+                self.current_template = self.include_stack.pop()[0]
+
+        return IncludeTemplate()
+
+    def write_line(self, line, line_number, indent=None):
         if indent == None:
             indent = self._indent
-        for i in xrange(indent):
-            self.file.write("    ")
-        print >> self.file, line
+        line_comment = '  # %s:%d' % (self.current_template.name, line_number)
+        if self.include_stack:
+            ancestors = ["%s:%d" % (tmpl.name, lineno)
+                         for (tmpl, lineno) in self.include_stack]
+            line_comment += ' (via %s)' % ', '.join(reversed(ancestors))
+        print >> self.file, "    " * indent + line + line_comment
 
 
 class _TemplateReader(object):
     def __init__(self, name, text):
         self.name = name
         self.text = text
-        self.line = 0
+        self.line = 1
         self.pos = 0
 
     def find(self, needle, start=0, end=None):
@@ -602,9 +654,12 @@ class _TemplateReader(object):
         if type(key) is slice:
             size = len(self)
             start, stop, step = key.indices(size)
-            if start is None: start = self.pos
-            else: start += self.pos
-            if stop is not None: stop += self.pos
+            if start is None:
+                start = self.pos
+            else:
+                start += self.pos
+            if stop is not None:
+                stop += self.pos
             return self.text[slice(start, stop, step)]
         elif key < 0:
             return self.text[key]
@@ -633,11 +688,11 @@ def _parse(reader, template, in_block=None):
                 if in_block:
                     raise ParseError("Missing {%% end %%} block for %s" %
                                      in_block)
-                body.chunks.append(_Text(reader.consume()))
+                body.chunks.append(_Text(reader.consume(), reader.line))
                 return body
             # If the first curly brace is not the start of a special token,
             # start searching from the character after it
-            if reader[curly + 1] not in ("{", "%"):
+            if reader[curly + 1] not in ("{", "%", "#"):
                 curly += 1
                 continue
             # When there are more than 2 curlies in a row, use the
@@ -651,7 +706,8 @@ def _parse(reader, template, in_block=None):
 
         # Append any text before the special token
         if curly > 0:
-            body.chunks.append(_Text(reader.consume(curly)))
+            cons = reader.consume(curly)
+            body.chunks.append(_Text(cons, reader.line))
 
         start_brace = reader.consume(2)
         line = reader.line
@@ -662,25 +718,34 @@ def _parse(reader, template, in_block=None):
         # which also use double braces.
         if reader.remaining() and reader[0] == "!":
             reader.consume(1)
-            body.chunks.append(_Text(start_brace))
+            body.chunks.append(_Text(start_brace, line))
+            continue
+
+        # Comment
+        if start_brace == "{#":
+            end = reader.find("#}")
+            if end == -1:
+                raise ParseError("Missing end expression #} on line %d" % line)
+            contents = reader.consume(end).strip()
+            reader.consume(2)
             continue
 
         # Expression
         if start_brace == "{{":
             end = reader.find("}}")
-            if end == -1 or reader.find("\n", 0, end) != -1:
+            if end == -1:
                 raise ParseError("Missing end expression }} on line %d" % line)
             contents = reader.consume(end).strip()
             reader.consume(2)
             if not contents:
                 raise ParseError("Empty expression on line %d" % line)
-            body.chunks.append(_Expression(contents))
+            body.chunks.append(_Expression(contents, line))
             continue
 
         # Block
         assert start_brace == "{%", start_brace
         end = reader.find("%}")
-        if end == -1 or reader.find("\n", 0, end) != -1:
+        if end == -1:
             raise ParseError("Missing end block %%} on line %d" % line)
         contents = reader.consume(end).strip()
         reader.consume(2)
@@ -692,7 +757,7 @@ def _parse(reader, template, in_block=None):
 
         # Intermediate ("else", "elif", etc) blocks
         intermediate_blocks = {
-            "else": set(["if", "for", "while"]),
+            "else": set(["if", "for", "while", "try"]),
             "elif": set(["if"]),
             "except": set(["try"]),
             "finally": set(["try"]),
@@ -704,7 +769,7 @@ def _parse(reader, template, in_block=None):
                             (operator, allowed_parents))
             if in_block not in allowed_parents:
                 raise ParseError("%s block cannot be attached to %s block" % (operator, in_block))
-            body.chunks.append(_IntermediateControlBlock(contents))
+            body.chunks.append(_IntermediateControlBlock(contents, line))
             continue
 
         # End tag
@@ -725,25 +790,26 @@ def _parse(reader, template, in_block=None):
             elif operator in ("import", "from"):
                 if not suffix:
                     raise ParseError("import missing statement on line %d" % line)
-                block = _Statement(contents)
+                block = _Statement(contents, line)
             elif operator == "include":
                 suffix = suffix.strip('"').strip("'")
                 if not suffix:
                     raise ParseError("include missing file path on line %d" % line)
-                block = _IncludeBlock(suffix, reader)
+                block = _IncludeBlock(suffix, reader, line)
             elif operator == "set":
                 if not suffix:
                     raise ParseError("set missing statement on line %d" % line)
-                block = _Statement(suffix)
+                block = _Statement(suffix, line)
             elif operator == "autoescape":
                 fn = suffix.strip()
-                if fn == "None": fn = None
+                if fn == "None":
+                    fn = None
                 template.autoescape = fn
                 continue
             elif operator == "raw":
-                block = _Expression(suffix, raw=True)
+                block = _Expression(suffix, line, raw=True)
             elif operator == "module":
-                block = _Module(suffix)
+                block = _Module(suffix, line)
             body.chunks.append(block)
             continue
 
@@ -753,13 +819,13 @@ def _parse(reader, template, in_block=None):
             if operator == "apply":
                 if not suffix:
                     raise ParseError("apply missing method name on line %d" % line)
-                block = _ApplyBlock(suffix, block_body)
+                block = _ApplyBlock(suffix, line, block_body)
             elif operator == "block":
                 if not suffix:
                     raise ParseError("block missing name on line %d" % line)
-                block = _NamedBlock(suffix, block_body, template)
+                block = _NamedBlock(suffix, block_body, template, line)
             else:
-                block = _ControlBlock(contents, block_body)
+                block = _ControlBlock(contents, line, block_body)
             body.chunks.append(block)
             continue
 
