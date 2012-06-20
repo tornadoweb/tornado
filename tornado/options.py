@@ -428,7 +428,7 @@ class _LogFormatter(logging.Formatter):
         if self._color:
             prefix = (self._colors.get(record.levelno, self._normal) +
                       prefix + self._normal)
-        formatted = prefix + " " + record.message
+        formatted = prefix + " " + record.message.decode("utf-8")
         if record.exc_info:
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
