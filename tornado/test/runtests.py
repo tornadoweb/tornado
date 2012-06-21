@@ -1,16 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
-
-import sys
-import os.path
 import unittest
-
-# Ensure we utilize the same tornado module in which this test suite resides.
-# Otherwise, we risk executing the tests against our site-packages -
-# effectively compromising the integrity of our tests.
-TORNADO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
-sys.path.insert(1, TORNADO_DIR)
 
 TEST_MODULES = [
     'tornado.httputil.doctests',
