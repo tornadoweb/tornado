@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#
+# Execute the entire tornado test suite and ensure the local tornado
+# modules are imported rather than the system wide packages.
+#
+
+# Retrieve the absolute path of the root tornado directory
+# in which this script is located.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+TORNADO_ROOT_DIR="$( cd -P "$( dirname "$SOURCE" )/../" && pwd )"
+
+# Change directory to the root tornado directory
+cd $TORNADO_ROOT_DIR
+
+# Execute the entire test suite script as a module
+python -m tornado.test.runtests
