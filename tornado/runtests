@@ -13,5 +13,7 @@ TORNADO_ROOT_DIR="$( cd -P "$( dirname "$SOURCE" )/../" && pwd )"
 # Change directory to the root tornado directory
 cd $TORNADO_ROOT_DIR
 
-# Execute the entire test suite script as a module
-python -m tornado.test.runtests
+# Execute the entire test suite script as a module.
+# All arguments passed to this script will be passed along to the
+# tornado.test.runtests module.
+python -m tornado.test.runtests $*
