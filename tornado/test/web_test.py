@@ -710,12 +710,12 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_static_url(self):
         response = self.fetch("/static_url/robots.txt")
-        self.assertEqual(response.body, b("/static/robots.txt?v=f71d2"))
+        self.assertEqual(response.body, b("/static/robots.txt?v=63657"))
 
     def test_absolute_static_url(self):
         response = self.fetch("/abs_static_url/robots.txt")
         self.assertEqual(response.body,
-                         utf8(self.get_url("/") + "static/robots.txt?v=f71d2"))
+                         utf8(self.get_url("/") + "static/robots.txt?v=63657"))
 
     def test_include_host_override(self):
         self._trigger_include_host_check(False)

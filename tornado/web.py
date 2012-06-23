@@ -84,7 +84,7 @@ from tornado import locale
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info
+from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info, read_file_chunked
 
 try:
     from io import BytesIO  # python 3
@@ -1518,7 +1518,7 @@ class StaticFileHandler(RequestHandler):
     _static_hashes = {}
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(self, path, default_filename=None, chunk_size=0x1000):
+    def initialize(self, path, default_filename=None, chunk_size=64*1024):
         self.root = os.path.abspath(path) + os.path.sep
         self.default_filename = default_filename
         self.chunk_size = chunk_size # default 64kB
@@ -1555,7 +1555,7 @@ class StaticFileHandler(RequestHandler):
         stat_result = os.stat(abspath)[stat.ST_MTIME]
         modified = datetime.datetime.fromtimestamp(stat_result)
         self.set_header("Last-Modified", modified)
-        self.set_header("Etag", '"%s"' % hashlib.sha1('\0'.join([abspath, str(stat_result)])).hexdigest())
+        self.set_header("Etag", '"%s"' % self.get_entity_tag(abspath))
 
         mime_type, encoding = mimetypes.guess_type(abspath)
         if mime_type:
@@ -1583,13 +1583,9 @@ class StaticFileHandler(RequestHandler):
                 return
 
         if include_body:
-            with open(abspath, "rb") as file:
-                while True:
-                    data = file.read(self.chunk_size)
-                    if len(data) == 0:
-                        break
-                    self.write(data)
-                    yield gen.Task(self.flush)
+            for chunk in read_file_chunked(abspath, self.chunk_size):
+                self.write(chunk)
+                yield gen.Task(self.flush)
         else:
             assert self.request.method == "HEAD"
             self.set_header("Content-Length", os.path.getsize(abspath))
@@ -1632,28 +1628,40 @@ class StaticFileHandler(RequestHandler):
 
         This method may be overridden in subclasses (but note that it
         is a class method rather than a static method).  The default
-        implementation uses a hash of the file's contents.
+        implementation calls `get_entity_tag`.
 
         ``settings`` is the `Application.settings` dictionary and ``path``
         is the relative location of the requested asset on the filesystem.
         The returned value should be a string, or ``None`` if no version
         could be determined.
         """
-        abs_path = os.path.join(settings["static_path"], path)
+        entity_tag = cls.get_entity_tag(os.path.join(settings["static_path"],
+                                                     path))
+        return entity_tag[:5] if entity_tag else None
+
+    @classmethod
+    def get_entity_tag(cls, abspath):
+        """Generate the entity tag to be used in static URLs and the Etag
+        header.
+
+        This method may be overridden in subclasses (but note that it
+        is a class method rather than a static method).  The default
+        implementation uses a hash of the file's contents. The returned
+        value should be a string, or ``None`` if no version could be
+        determined.
+        """
         with cls._lock:
             hashes = cls._static_hashes
-            if abs_path not in hashes:
+            if abspath not in hashes:
                 try:
-                    f = open(abs_path, "rb")
-                    hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
-                    f.close()
-                except Exception:
-                    logging.error("Could not open static file %r", path)
-                    hashes[abs_path] = None
-            hsh = hashes.get(abs_path)
-            if hsh:
-                return hsh[:5]
-        return None
+                    hsh = hashlib.sha1()
+                    for chunk in read_file_chunked(abspath, 64*1024):
+                        hsh.update(chunk)
+                    hashes[abspath] = hsh.hexdigest()
+                except IOError:
+                    logging.error("Could not open static file %r", abspath)
+                    hashes[abspath] = None
+            return hashes.get(abspath)
 
     def parse_url_path(self, url_path):
         """Converts a static URL path into a filesystem path.

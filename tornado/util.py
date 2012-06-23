@@ -15,6 +15,20 @@ class ObjectDict(dict):
         self[name] = value
 
 
+def read_file_chunked(path, chunk_size):
+    """Returns a generator that reads a file in chunks.
+
+    :arg string path: Path to the file
+    :arg int chunk_size: Size of each chunk, in bytes
+    """
+    with open(path, "rb") as file:
+        while True:
+            data = file.read(chunk_size)
+            if len(data) == 0:
+                return
+            yield data
+
+
 def import_object(name):
     """Imports an object by name.
 
