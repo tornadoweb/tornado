@@ -492,8 +492,20 @@ class _ControlBlock(_Node):
 
     def generate(self, writer):
         writer.write_line("%s:" % self.statement, self.line)
-        with writer.indent():
-            self.body.generate(writer)
+        need_content = True
+        for chunk in self.body.chunks:
+            if isinstance(chunk, _IntermediateControlBlock):
+                if need_content:
+                    with writer.indent():
+                        writer.write_line("pass", self.line)
+                need_content = True
+            else:
+                need_content = False
+            with writer.indent():
+                chunk.generate(writer)
+        if need_content:
+            with writer.indent():
+                writer.write_line("pass", self.line)
 
 
 class _IntermediateControlBlock(_Node):
