@@ -165,18 +165,8 @@ class HTTPRequest(object):
 
         # Parse request body
         self.files = {}
-        content_type = self.headers.get("Content-Type", "")
-        if content_type.startswith("application/x-www-form-urlencoded"):
-            for name, values in parse_qs_bytes(native_str(self.body)).iteritems():
-                self.arguments.setdefault(name, []).extend(values)
-        elif content_type.startswith("multipart/form-data"):
-            if 'boundary=' in content_type:
-                boundary = content_type.split('boundary=', 1)[1]
-                if boundary:
-                    httputil.parse_multipart_form_data(
-                        utf8(boundary), self.body, self.arguments, self.files)
-            else:
-                logging.warning("Invalid multipart/form-data")
+        httputil.parse_body_arguments(self.headers.get("Content-Type", ""),
+                                      self.body, self.arguments, self.files)
 
         self._start_time = time.time()
         self._finish_time = None
