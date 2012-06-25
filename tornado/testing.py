@@ -388,9 +388,9 @@ def main():
     be overridden by naming a single test on the command line::
 
         # Runs all tests
-        tornado/test/runtests.py
+        python -m tornado.test.runtests
         # Runs one test
-        tornado/test/runtests.py tornado.test.stack_context_test
+        python -m tornado.test.runtests tornado.test.stack_context_test
 
     """
     from tornado.options import define, options, parse_command_line
