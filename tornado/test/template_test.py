@@ -115,6 +115,38 @@ try{% set y = 1/x %}
         template = Template(utf8("{% comment blah blah %}foo"))
         self.assertEqual(template.generate(), b("foo"))
 
+    def test_break_continue(self):
+        template = Template(utf8("""\
+{% for i in range(10) %}
+    {% if i == 2 %}
+        {% continue %}
+    {% end %}
+    {{ i }}
+    {% if i == 6 %}
+        {% break %}
+    {% end %}
+{% end %}"""))
+        result = template.generate()
+        # remove extraneous whitespace
+        result = b('').join(result.split())
+        self.assertEqual(result, b("013456"))
+
+    def test_break_outside_loop(self):
+        try:
+            Template(utf8("{% break %}"))
+            raise Exception("Did not get expected exception")
+        except ParseError:
+            pass
+
+    def test_break_in_apply(self):
+        # This test verifies current behavior, although of course it would
+        # be nice if apply didn't cause seemingly unrelated breakage
+        try:
+            Template(utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}"))
+            raise Exception("Did not get expected exception")
+        except ParseError:
+            pass
+
 
 class StackTraceTest(LogTrapTestCase):
     def test_error_line_number_expression(self):

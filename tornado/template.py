@@ -101,6 +101,11 @@ with ``{# ... #}``.
 
         {% apply linkify %}{{name}} said: {{message}}{% end %}
 
+    Note that as an implementation detail apply blocks are implemented
+    as nested functions and thus may interact strangely with variables
+    set via ``{% set %}``, or the use of ``{% break %}`` or ``{% continue %}``
+    within loops.
+
 ``{% autoescape *function* %}``
     Sets the autoescape mode for the current file.  This does not affect
     other files, even those referenced by ``{% include %}``.  Note that
@@ -134,7 +139,8 @@ with ``{# ... #}``.
     tag will be ignored.  For an example, see the ``{% block %}`` tag.
 
 ``{% for *var* in *expr* %}...{% end %}``
-    Same as the python ``for`` statement.
+    Same as the python ``for`` statement.  ``{% break %}`` and
+    ``{% continue %}`` may be used inside the loop.
 
 ``{% from *x* import *y* %}``
     Same as the python ``import`` statement.
@@ -169,7 +175,8 @@ with ``{# ... #}``.
     Same as the python ``try`` statement.
 
 ``{% while *condition* %}... {% end %}``
-    Same as the python ``while`` statement.
+    Same as the python ``while`` statement.  ``{% break %}`` and
+    ``{% continue %}`` may be used inside the loop.
 """
 
 from __future__ import absolute_import, division, with_statement
@@ -817,6 +824,10 @@ def _parse(reader, template, in_block=None, in_loop=None):
             # parse inner body recursively
             if operator in ("for", "while"):
                 block_body = _parse(reader, template, operator, operator)
+            elif operator == "apply":
+                # apply creates a nested function so syntactically it's not
+                # in the loop.
+                block_body = _parse(reader, template, operator, None)
             else:
                 block_body = _parse(reader, template, operator, in_loop)
 
