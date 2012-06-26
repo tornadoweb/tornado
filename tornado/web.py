@@ -1555,7 +1555,7 @@ class StaticFileHandler(RequestHandler):
         stat_result = os.stat(abspath)[stat.ST_MTIME]
         modified = datetime.datetime.fromtimestamp(stat_result)
         self.set_header("Last-Modified", modified)
-        self.set_header("Etag", '"%s"' % self.get_entity_tag(abspath))
+        self.set_header("Etag", '"%s"' % self.compute_etag_for_path(abspath))
 
         mime_type, encoding = mimetypes.guess_type(abspath)
         if mime_type:
@@ -1628,19 +1628,19 @@ class StaticFileHandler(RequestHandler):
 
         This method may be overridden in subclasses (but note that it
         is a class method rather than a static method).  The default
-        implementation calls `get_entity_tag`.
+        implementation calls `compute_etag_for_path`.
 
         ``settings`` is the `Application.settings` dictionary and ``path``
         is the relative location of the requested asset on the filesystem.
         The returned value should be a string, or ``None`` if no version
         could be determined.
         """
-        entity_tag = cls.get_entity_tag(os.path.join(settings["static_path"],
+        entity_tag = cls.compute_etag_for_path(os.path.join(settings["static_path"],
                                                      path))
         return entity_tag[:5] if entity_tag else None
 
     @classmethod
-    def get_entity_tag(cls, abspath):
+    def compute_etag_for_path(cls, abspath):
         """Generate the entity tag to be used in static URLs and the Etag
         header.
 
