@@ -654,7 +654,7 @@ class SSLIOStream(IOStream):
                 return self.close()
             raise
         except socket.error, err:
-            if err.args[0] == errno.ECONNABORTED:
+            if err.args[0] in (errno.ECONNABORTED, errno.ECONNRESET):
                 return self.close()
         else:
             self._ssl_accepting = False
