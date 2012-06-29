@@ -678,7 +678,7 @@ class RequestHandler(object):
                 "Etag" not in self._headers):
                 etag = self.compute_etag()
                 if etag is not None:
-                    self.set_header("Etag", etag)
+                    self.set_header("Etag", '"%s"' % etag)
                     inm = self.request.headers.get("If-None-Match")
                     if inm and inm.find(etag) != -1:
                         self._write_buffer = []
@@ -990,7 +990,7 @@ class RequestHandler(object):
         hasher = hashlib.sha1()
         for part in self._write_buffer:
             hasher.update(part)
-        return '"%s"' % hasher.hexdigest()
+        return hasher.hexdigest()
 
     def _stack_context_handle_exception(self, type, value, traceback):
         try:
@@ -1555,7 +1555,14 @@ class StaticFileHandler(RequestHandler):
         stat_result = os.stat(abspath)[stat.ST_MTIME]
         modified = datetime.datetime.fromtimestamp(stat_result)
         self.set_header("Last-Modified", modified)
-        self.set_header("Etag", '"%s"' % self.compute_etag_for_path(abspath))
+        etag = self.compute_etag_for_path(abspath)
+        if etag is not None:
+            quoted_etag = '"%s"' % etag
+            self.set_header("Etag", quoted_etag)
+            inm = self.request.headers.get("If-None-Match")
+            if inm and inm.find(quoted_etag) != -1:
+                self.set_status(304)
+                return
 
         mime_type, encoding = mimetypes.guess_type(abspath)
         if mime_type:

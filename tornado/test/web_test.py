@@ -734,6 +734,12 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue('Content-Length' not in response2.headers)
         self.assertTrue('Last-Modified' not in response2.headers)
 
+        response3 = self.fetch("/static/robots.txt", headers={
+                'If-None-Match': response1.headers['Etag']})
+        self.assertEqual(response3.code, 304)
+        self.assertTrue('Content-Length' not in response3.headers)
+        self.assertTrue('Etag' in response3.headers)
+
 
 class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
