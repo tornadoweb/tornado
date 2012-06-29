@@ -147,6 +147,16 @@ try{% set y = 1/x %}
         except ParseError:
             pass
 
+    def test_asynchronous(self):
+        def foo(arg, callback):
+            callback("foo-"+arg)
+        results = []
+        def bar(result):
+            results.append(result)
+        Template("{%asynchronous True%}{%set result = yield Task(foo, 'a')%}{{result}}").generate(foo=foo, callback=bar)
+        Template("{%asynchronous True%}{{yield Task(foo, 'b')}}").generate(foo=foo, callback=bar)
+        self.assertEqual(results, ["foo-a", "foo-b"])
+
 
 class StackTraceTest(LogTrapTestCase):
     def test_error_line_number_expression(self):
