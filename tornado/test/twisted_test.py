@@ -27,7 +27,6 @@ import unittest
 
 try:
     import fcntl
-    import twisted
     from twisted.internet.defer import Deferred
     from twisted.internet.interfaces import IReadDescriptor, IWriteDescriptor
     from twisted.internet.protocol import Protocol
@@ -36,14 +35,10 @@ try:
     from twisted.web.server import Site
     from twisted.python import log
     from tornado.platform.twisted import TornadoReactor
-    from zope.interface import implements
+    from zope.interface import implementer
+    have_twisted = True
 except ImportError:
-    fcntl = None
-    twisted = None
-    IReadDescriptor = IWriteDescriptor = None
-
-    def implements(f):
-        pass
+    have_twisted = False
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
@@ -187,9 +182,7 @@ class ReactorCallInThread(ReactorTestCase):
         self._reactor.run()
 
 
-class Reader:
-    implements(IReadDescriptor)
-
+class Reader(object):
     def __init__(self, fd, callback):
         self._fd = fd
         self._callback = callback
@@ -208,11 +201,11 @@ class Reader:
 
     def doRead(self):
         self._callback(self._fd)
+if have_twisted:
+    Reader = implementer(IReadDescriptor)(Reader)
 
 
-class Writer:
-    implements(IWriteDescriptor)
-
+class Writer(object):
     def __init__(self, fd, callback):
         self._fd = fd
         self._callback = callback
@@ -231,7 +224,8 @@ class Writer:
 
     def doWrite(self):
         self._callback(self._fd)
-
+if have_twisted:
+    Writer = implementer(IWriteDescriptor)(Writer)
 
 class ReactorReaderWriterTest(ReactorTestCase):
     def _set_nonblocking(self, fd):
@@ -426,7 +420,7 @@ class CompatibilityTests(unittest.TestCase):
         self.assertEqual(response, 'Hello from tornado!')
 
 
-if twisted is None:
+if not have_twisted:
     del ReactorWhenRunningTest
     del ReactorCallLaterTest
     del ReactorTwoCallLaterTest

@@ -51,13 +51,6 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("error", category=DeprecationWarning,
                             module=r"tornado\..*")
-    # tornado.platform.twisted uses a deprecated function from
-    # zope.interface in order to maintain compatibility with
-    # python 2.5
-    warnings.filterwarnings("ignore", category=DeprecationWarning,
-                            module=r"tornado\.platform\.twisted")
-    warnings.filterwarnings("ignore", category=DeprecationWarning,
-                            module=r"tornado\.test\.twisted_test")
 
     import tornado.testing
     tornado.testing.main()
