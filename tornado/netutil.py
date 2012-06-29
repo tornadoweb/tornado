@@ -92,6 +92,23 @@ class TCPServer(object):
         self._pending_sockets = []
         self._started = False
 
+        # Verify the SSL options. Otherwise we don't get errors until clients
+        # connect. This doesn't verify that the keys are legitimate, but
+        # the SSL module doesn't do that until there is a connected socket
+        # which seems like too much work
+        if self.ssl_options is not None:
+            # Only certfile is required: it can contain both keys
+            if 'certfile' not in self.ssl_options:
+                raise KeyError('missing key "certfile" in ssl_options')
+
+            if not os.path.exists(self.ssl_options['certfile']):
+                raise ValueError('certfile "%s" does not exist' %
+                    self.ssl_options['certfile'])
+            if ('keyfile' in self.ssl_options and
+                    not os.path.exists(self.ssl_options['keyfile'])):
+                raise ValueError('keyfile "%s" does not exist' %
+                    self.ssl_options['keyfile'])
+
     def listen(self, port, address=""):
         """Starts accepting connections on the given port.
 

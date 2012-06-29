@@ -6,6 +6,7 @@ from tornado import httpclient, simple_httpclient, netutil
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
+from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase
@@ -16,6 +17,7 @@ import shutil
 import socket
 import sys
 import tempfile
+import unittest
 
 try:
     import ssl
@@ -99,6 +101,35 @@ class SSLv3Test(BaseSSLTest, SSLTestMixin):
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_TLSv1
+
+
+class BadSSLOptionsTest(unittest.TestCase):
+    def test_missing_arguments(self):
+        application = Application()
+        self.assertRaises(KeyError, HTTPServer, application, ssl_options={
+            "keyfile": "/__missing__.crt",
+        })
+
+    def test_missing_key(self):
+        '''A missing SSL key should cause an immediate exception.'''
+
+        application = Application()
+        module_dir = os.path.dirname(__file__)
+        existing_certificate = os.path.join(module_dir, 'test.crt')
+
+        self.assertRaises(ValueError, HTTPServer, application, ssl_options={
+           "certfile": "/__mising__.crt",
+        })
+        self.assertRaises(ValueError, HTTPServer, application, ssl_options={
+           "certfile": existing_certificate,
+           "keyfile": "/__missing__.key"
+        })
+
+        # This actually works because both files exist
+        server = HTTPServer(application, ssl_options={
+           "certfile": existing_certificate,
+           "keyfile": existing_certificate
+        })
 
 
 if ssl is None:
