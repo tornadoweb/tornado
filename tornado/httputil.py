@@ -22,7 +22,7 @@ import logging
 import urllib
 import re
 
-from tornado.escape import native_str, parse_qs_bytes, utf8
+from tornado.escape import native_str, parse_qs_bytes, utf8, json_decode
 from tornado.util import b, ObjectDict
 
 
@@ -222,6 +222,14 @@ def parse_body_arguments(content_type, body, arguments, files):
                 break
         else:
             logging.warning("Invalid multipart/form-data")
+    elif content_type.startswith("application/json"):
+        try:
+            json = json_decode(body)
+        except:
+            logging.warning("Invalid application/json")
+        else:
+            for name, value in json.iteritems():
+                arguments.setdefault(name, []).append(value)
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):
