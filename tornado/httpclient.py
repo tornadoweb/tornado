@@ -331,11 +331,13 @@ class HTTPResponse(object):
 
     * code: numeric HTTP status code, e.g. 200 or 404
 
+    * reason: human-readable reason phrase describing the status code
+
     * headers: httputil.HTTPHeaders object
 
     * buffer: cStringIO object for response body
 
-    * body: respose body as string (created on demand from self.buffer)
+    * body: response body as string (created on demand from self.buffer)
 
     * error: Exception object, if any
 
@@ -347,11 +349,12 @@ class HTTPResponse(object):
         plus 'queue', which is the delay (if any) introduced by waiting for
         a slot under AsyncHTTPClient's max_clients setting.
     """
-    def __init__(self, request, code, headers=None, buffer=None,
+    def __init__(self, request, code, reason=None, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
                  time_info=None):
         self.request = request
         self.code = code
+        self.reason = reason
         if headers is not None:
             self.headers = headers
         else:

@@ -114,8 +114,10 @@ class WSGIApplication(web.Application):
     def __call__(self, environ, start_response):
         handler = web.Application.__call__(self, HTTPRequest(environ))
         assert handler._finished
-        status = str(handler._status_code) + " " + \
-            httplib.responses[handler._status_code]
+        reason = handler._reason
+        if reason is None:
+            reason = httplib.responses[handler._status_code]
+        status = str(handler._status_code) + " " + reason
         headers = handler._headers.items() + handler._list_headers
         if hasattr(handler, "_new_cookie"):
             for cookie in handler._new_cookie.values():

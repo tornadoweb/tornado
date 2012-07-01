@@ -227,6 +227,7 @@ class RequestHandler(object):
                 self.set_header("Connection", "Keep-Alive")
         self._write_buffer = []
         self._status_code = 200
+        self._reason = None
 
     def set_default_headers(self):
         """Override this to set HTTP headers at the beginning of the request.
@@ -238,10 +239,17 @@ class RequestHandler(object):
         """
         pass
 
-    def set_status(self, status_code):
-        """Sets the status code for our response."""
-        assert status_code in httplib.responses
+    def set_status(self, status_code, reason=None):
+        """Sets the status code for our response.
+
+        :arg int status_code: Response status code. If `reason` is ``None``,
+            it must be present in `httplib.responses`.
+        :arg string reason: Human-readable reason phrase describing the status
+            code. If ``None``, it will be filled in from `httplib.responses`.
+        """
+        assert reason is not None or status_code in httplib.responses
         self._status_code = status_code
+        self._reason = reason
 
     def get_status(self):
         """Returns the status code for our response."""
@@ -1025,9 +1033,12 @@ class RequestHandler(object):
             self._handle_request_exception(e)
 
     def _generate_headers(self):
+        reason = self._reason
+        if reason is None:
+            reason = httplib.responses[self._status_code]
         lines = [utf8(self.request.version + " " +
                       str(self._status_code) +
-                      " " + httplib.responses[self._status_code])]
+                      " " + reason)]
         lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in
                       itertools.chain(self._headers.iteritems(), self._list_headers)])
         if hasattr(self, "_new_cookie"):
