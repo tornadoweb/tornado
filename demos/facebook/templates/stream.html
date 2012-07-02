@@ -13,8 +13,8 @@
       </div>
       <div style="margin-bottom:1em"><a href="/">{{ _("Refresh stream") }}</a></div>
       <div id="stream">
-        {% for post in stream["posts"] %}
-          {{ modules.Post(post, stream["profiles"][post["actor_id"]]) }}
+        {% for post in stream["data"] %}
+          {{ modules.Post(post) }}
         {% end %}
       </div>
     </div>

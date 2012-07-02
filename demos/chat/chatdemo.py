@@ -17,7 +17,6 @@
 import logging
 import tornado.auth
 import tornado.escape
-import tornado.httpserver
 import tornado.ioloop
 import tornado.options
 import tornado.web
@@ -44,6 +43,7 @@ class Application(tornado.web.Application):
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
             static_path=os.path.join(os.path.dirname(__file__), "static"),
             xsrf_cookies=True,
+            autoescape="xhtml_escape",
         )
         tornado.web.Application.__init__(self, handlers, **settings)
 
@@ -62,7 +62,7 @@ class MainHandler(BaseHandler):
 
 
 class MessageMixin(object):
-    waiters = []
+    waiters = set()
     cache = []
     cache_size = 200
 
@@ -77,7 +77,11 @@ class MessageMixin(object):
             if recent:
                 callback(recent)
                 return
-        cls.waiters.append(callback)
+        cls.waiters.add(callback)
+
+    def cancel_wait(self, callback):
+        cls = MessageMixin
+        cls.waiters.remove(callback)
 
     def new_messages(self, messages):
         cls = MessageMixin
@@ -87,7 +91,7 @@ class MessageMixin(object):
                 callback(messages)
             except:
                 logging.error("Error in waiter callback", exc_info=True)
-        cls.waiters = []
+        cls.waiters = set()
         cls.cache.extend(messages)
         if len(cls.cache) > self.cache_size:
             cls.cache = cls.cache[-self.cache_size:]
@@ -114,7 +118,7 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
     @tornado.web.asynchronous
     def post(self):
         cursor = self.get_argument("cursor", None)
-        self.wait_for_messages(self.async_callback(self.on_new_messages),
+        self.wait_for_messages(self.on_new_messages,
                                cursor=cursor)
 
     def on_new_messages(self, messages):
@@ -122,6 +126,9 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
         if self.request.connection.stream.closed():
             return
         self.finish(dict(messages=messages))
+
+    def on_connection_close(self):
+        self.cancel_wait(self.on_new_messages)
 
 
 class AuthLoginHandler(BaseHandler, tornado.auth.GoogleMixin):
@@ -131,7 +138,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.GoogleMixin):
             self.get_authenticated_user(self.async_callback(self._on_auth))
             return
         self.authenticate_redirect(ax_attrs=["name"])
-    
+
     def _on_auth(self, user):
         if not user:
             raise tornado.web.HTTPError(500, "Google auth failed")
@@ -147,8 +154,8 @@ class AuthLogoutHandler(BaseHandler):
 
 def main():
     tornado.options.parse_command_line()
-    http_server = tornado.httpserver.HTTPServer(Application())
-    http_server.listen(options.port)
+    app = Application()
+    app.listen(options.port)
     tornado.ioloop.IOLoop.instance().start()
 
 

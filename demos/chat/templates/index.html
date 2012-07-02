@@ -7,13 +7,13 @@
   </head>
   <body>
     <div id="nav">
-      <b>{{ escape(current_user["name"]) }}</b> -
+      <b>{{ current_user["name"] }}</b> -
       <a href="/auth/logout">{{ _("Sign out") }}</a>
     </div>
     <div id="body">
       <div id="inbox">
         {% for message in messages %}
-          {% include "message.html" %}
+          {% module Template("message.html", message=message) %}
         {% end %}
       </div>
       <div id="input">
@@ -24,7 +24,7 @@
               <td style="padding-left:5px">
                 <input type="submit" value="{{ _("Post") }}"/>
                 <input type="hidden" name="next" value="{{ request.path }}"/>
-                {{ xsrf_form_html() }}
+                {% module xsrf_form_html() %}
               </td>
             </tr>
           </table>

@@ -1,0 +1,61 @@
+What's new in Tornado 1.0
+=========================
+
+July 22, 2010
+-------------
+
+::
+
+    We are pleased to announce the release of Tornado 1.0, available
+    from
+    https://github.com/downloads/facebook/tornado/tornado-1.0.tar.gz.
+    There have been many changes since version 0.2; here are some of
+    the highlights:
+
+    New features:
+    * Improved support for running other WSGI applications in a
+      Tornado server (tested with Django and CherryPy)
+    * Improved performance on Mac OS X and BSD (kqueue-based IOLoop),
+      and experimental support for win32
+    * Rewritten AsyncHTTPClient available as
+      tornado.httpclient.AsyncHTTPClient2 (this will become the
+      default in a future release)
+    * Support for standard .mo files in addition to .csv in the locale
+      module
+    * Pre-forking support for running multiple Tornado processes at
+      once (see HTTPServer.start())
+    * SSL and gzip support in HTTPServer
+    * reverse_url() function refers to urls from the Application
+      config by name from templates and RequestHandlers
+    * RequestHandler.on_connection_close() callback is called when the
+      client has closed the connection (subject to limitations of the
+      underlying network stack, any proxies, etc)
+    * Static files can now be served somewhere other than /static/ via
+      the static_url_prefix application setting
+    * URL regexes can now use named groups ("(?P<name>)") to pass
+      arguments to get()/post() via keyword instead of position
+    * HTTP header dictionary-like objects now support multiple values
+      for the same header via the get_all() and add() methods.
+    * Several new options in the httpclient module, including
+      prepare_curl_callback and header_callback
+    * Improved logging configuration in tornado.options.
+    * UIModule.html_body() can be used to return html to be inserted
+      at the end of the document body.
+
+    Backwards-incompatible changes:
+    * RequestHandler.get_error_html() now receives the exception
+      object as a keyword argument if the error was caused by an
+      uncaught exception.
+    * Secure cookies are now more secure, but incompatible with
+      cookies set by Tornado 0.2.  To read cookies set by older
+      versions of Tornado, pass include_name=False to
+      RequestHandler.get_secure_cookie()
+    * Parameters passed to RequestHandler.get/post() by extraction
+      from the path now have %-escapes decoded, for consistency with
+      the processing that was already done with other query
+      parameters.
+
+    Many thanks to everyone who contributed patches, bug reports, and
+    feedback that went into this release!
+
+    -Ben
