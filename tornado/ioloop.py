@@ -107,7 +107,7 @@ class IOLoop(object):
     # Global lock for creating global IOLoop instance
     _instance_lock = threading.Lock()
 
-    def __init__(self, impl=None):
+    def __init__(self, impl=None, timefunc=time.time):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
             set_close_exec(self._impl.fileno())
@@ -120,6 +120,7 @@ class IOLoop(object):
         self._stopped = False
         self._thread_ident = None
         self._blocking_signal_threshold = None
+        self.timefunc = timefunc
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
@@ -271,7 +272,7 @@ class IOLoop(object):
                 self._run_callback(callback)
 
             if self._timeouts:
-                now = time.time()
+                now = self.timefunc()
                 while self._timeouts:
                     if self._timeouts[0].callback is None:
                         # the timeout was cancelled
@@ -379,7 +380,7 @@ class IOLoop(object):
         Instead, you must use `add_callback` to transfer control to the
         IOLoop's thread, and then call `add_timeout` from there.
         """
-        timeout = _Timeout(deadline, stack_context.wrap(callback))
+        timeout = _Timeout(deadline, stack_context.wrap(callback), self.timefunc)
         heapq.heappush(self._timeouts, timeout)
         return timeout
 
@@ -441,11 +442,11 @@ class _Timeout(object):
     # Reduce memory overhead when there are lots of pending callbacks
     __slots__ = ['deadline', 'callback']
 
-    def __init__(self, deadline, callback):
+    def __init__(self, deadline, callback, timefunc):
         if isinstance(deadline, (int, long, float)):
             self.deadline = deadline
         elif isinstance(deadline, datetime.timedelta):
-            self.deadline = time.time() + _Timeout.timedelta_to_seconds(deadline)
+            self.deadline = timefunc() + _Timeout.timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r" % deadline)
         self.callback = callback
@@ -485,7 +486,7 @@ class PeriodicCallback(object):
     def start(self):
         """Starts the timer."""
         self._running = True
-        self._next_timeout = time.time()
+        self._next_timeout = self.io_loop.timefunc()
         self._schedule_next()
 
     def stop(self):
@@ -506,7 +507,7 @@ class PeriodicCallback(object):
 
     def _schedule_next(self):
         if self._running:
-            current_time = time.time()
+            current_time =  self.io_loop.timefunc()
             while self._next_timeout <= current_time:
                 self._next_timeout += self.callback_time / 1000.0
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
