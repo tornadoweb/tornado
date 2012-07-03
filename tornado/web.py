@@ -2046,6 +2046,7 @@ def decode_signed_value(secret, name, value, max_age_days=31):
         return None
     if parts[1].startswith(b("0")):
         logging.warning("Tampered cookie %r", value)
+        return None
     try:
         return base64.b64decode(parts[0])
     except Exception:
