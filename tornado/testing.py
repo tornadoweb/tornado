@@ -392,13 +392,11 @@ def main(**kwargs):
         # Runs one test
         python -m tornado.test.runtests tornado.test.stack_context_test
 
-    Args:
-      kwargs: Keyword arguments passed through to unittest.main().
-        For example:
-          tornado.testing.main(verbosity=2)
-        to show many test details as they are run.
-        See http://docs.python.org/library/unittest.html#unittest.main
-        for full argument list.
+    Additional keyword arguments passed through to ``unittest.main()``.
+    For example, use ``tornado.testing.main(verbosity=2)``
+    to show many test details as they are run.
+    See http://docs.python.org/library/unittest.html#unittest.main
+    for full argument list.
     """
     from tornado.options import define, options, parse_command_line
 
