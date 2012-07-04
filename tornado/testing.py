@@ -367,7 +367,7 @@ class LogTrapTestCase(unittest.TestCase):
             handler.stream = old_stream
 
 
-def main():
+def main(**kwargs):
     """A simple test runner.
 
     This test runner is essentially equivalent to `unittest.main` from
@@ -392,6 +392,13 @@ def main():
         # Runs one test
         python -m tornado.test.runtests tornado.test.stack_context_test
 
+    Args:
+      kwargs: Keyword arguments passed through to unittest.main().
+        For example:
+          tornado.testing.main(verbosity=2)
+        to show many test details as they are run.
+        See http://docs.python.org/library/unittest.html#unittest.main
+        for full argument list.
     """
     from tornado.options import define, options, parse_command_line
 
@@ -423,9 +430,9 @@ def main():
         # test discovery, which is incompatible with auto2to3), so don't
         # set module if we're not asking for a specific test.
         if len(argv) > 1:
-            unittest.main(module=None, argv=argv)
+            unittest.main(module=None, argv=argv, **kwargs)
         else:
-            unittest.main(defaultTest="all", argv=argv)
+            unittest.main(defaultTest="all", argv=argv, **kwargs)
     except SystemExit, e:
         if e.code == 0:
             logging.info('PASS')
