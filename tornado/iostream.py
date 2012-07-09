@@ -650,7 +650,12 @@ class SSLIOStream(IOStream):
                                  ssl.SSL_ERROR_ZERO_RETURN):
                 return self.close()
             elif err.args[0] == ssl.SSL_ERROR_SSL:
-                logging.warning("SSL Error on %d: %s", self.socket.fileno(), err)
+                try:
+                    peer = self.socket.getpeername()
+                except:
+                    peer = 'not connected'
+                logging.warning("SSL Error on %d %s: %s",
+                                self.socket.fileno(), peer, err)
                 return self.close()
             raise
         except socket.error, err:
