@@ -251,3 +251,26 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         finally:
             server.close()
             client.close()
+
+    def test_close_callback_with_pending_read(self):
+        # Regression test for a bug that was introduced in 2.3
+        # where the IOStream._close_callback would never be called
+        # if there were pending reads.
+        OK = b("OK\r\n")
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(self.stop)
+        try:
+            server.write(OK, server.close)
+            client.read_until(b("\r\n"), self.stop)
+            res = self.wait()
+            self.assertEquals(res, OK)
+
+            client.read_until(b("\r\n"), lambda x: x)
+            # If _close_callback (self.stop) is not called,
+            # an AssertionError: Async operation timed out after 5 seconds
+            # will be raised.
+            res = self.wait()
+            self.assertIsNone(res)
+        finally:
+            server.close()
+            client.close()
