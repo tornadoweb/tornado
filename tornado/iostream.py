@@ -390,7 +390,7 @@ class IOStream(object):
             self._pending_callbacks -= 1
         if self._read_from_buffer():
             return
-        self._add_io_state(self.io_loop.READ)
+        self._maybe_add_error_listener()
 
     def _read_from_socket(self):
         """Attempts to read from the socket.
