@@ -89,6 +89,7 @@ class IOStream(object):
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
         self.error = None
+        self.address = (None, 0)
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
         self._read_buffer_size = 0
@@ -123,6 +124,7 @@ class IOStream(object):
         """
         self._connecting = True
         try:
+            self.address = address
             self.socket.connect(address)
         except socket.error, e:
             # In non-blocking mode we expect connect() to raise an
@@ -133,7 +135,8 @@ class IOStream(object):
             # localhost, so handle them the same way as an error
             # reported later in _handle_connect.
             if e.args[0] not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
-                logging.warning("Connect error on fd %d: %s",
+                logging.warning("Connect error to %s:%d (fd %d): %s",
+                                self.address[0], self.address[1],
                                 self.socket.fileno(), e)
                 self.close()
                 return
@@ -421,7 +424,8 @@ class IOStream(object):
             chunk = self._read_from_socket()
         except socket.error, e:
             # ssl.SSLError is a subclass of socket.error
-            logging.warning("Read error on %d: %s",
+            logging.warning("Read error to %s:%d (fd %d): %s",
+                            self.address[0], self.address[1],
                             self.socket.fileno(), e)
             self.close()
             raise
@@ -503,7 +507,8 @@ class IOStream(object):
             # an error state before the socket becomes writable, so
             # in that case a connection failure would be handled by the
             # error path in _handle_events instead of here.
-            logging.warning("Connect error on fd %d: %s",
+            logging.warning("Connect error to %s:%d (fd %d): %s",
+                            self.address[0], self.address[1],
                             self.socket.fileno(), errno.errorcode[err])
             self.close()
             return
@@ -543,7 +548,8 @@ class IOStream(object):
                     self._write_buffer_frozen = True
                     break
                 else:
-                    logging.warning("Write error on %d: %s",
+                    logging.warning("Write error to %s:%d (fd %d): %s",
+                                    self.address[0], self.address[1],
                                     self.socket.fileno(), e)
                     self.close()
                     return
@@ -650,12 +656,9 @@ class SSLIOStream(IOStream):
                                  ssl.SSL_ERROR_ZERO_RETURN):
                 return self.close()
             elif err.args[0] == ssl.SSL_ERROR_SSL:
-                try:
-                    peer = self.socket.getpeername()
-                except:
-                    peer = '(not connected)'
-                logging.warning("SSL Error on %d %s: %s",
-                                self.socket.fileno(), peer, err)
+                logging.warning("SSL Error to %s:%d (fd %d): %s",
+                                self.address[0], self.address[1],
+                                self.socket.fileno(), err)
                 return self.close()
             raise
         except socket.error, err:
