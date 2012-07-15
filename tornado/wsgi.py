@@ -50,6 +50,7 @@ try:
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
 
+log = logging.getLogger('tornado')
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
 # that are smuggled inside objects of type unicode (via the latin1 encoding).
@@ -302,11 +303,11 @@ class WSGIContainer(object):
 
     def _log(self, status_code, request):
         if status_code < 400:
-            log_method = logging.info
+            log_method = log.info
         elif status_code < 500:
-            log_method = logging.warning
+            log_method = log.warning
         else:
-            log_method = logging.error
+            log_method = log.error
         request_time = 1000.0 * request.request_time()
         summary = request.method + " " + request.uri + " (" + \
             request.remote_ip + ")"

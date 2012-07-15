@@ -63,6 +63,7 @@ import tornado.ioloop
 from tornado.stack_context import NullContext
 from tornado.ioloop import IOLoop
 
+logger = logging.getLogger(__name__)
 
 class TornadoDelayedCall(object):
     """DelayedCall object for Tornado."""
@@ -80,7 +81,7 @@ class TornadoDelayedCall(object):
         try:
             self._func()
         except:
-            logging.error("_called caught exception", exc_info=True)
+            logger.error("_called caught exception", exc_info=True)
 
     def getTime(self):
         return self._time

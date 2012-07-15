@@ -54,6 +54,7 @@ _translations = {}
 _supported_locales = frozenset([_default_locale])
 _use_gettext = False
 
+log = logging.getLogger('tornado')
 
 def get(*locale_codes):
     """Returns the closest match for the given locale codes.
@@ -118,7 +119,7 @@ def load_translations(directory):
             continue
         locale, extension = path.split(".")
         if not re.match("[a-z]+(_[A-Z]+)?$", locale):
-            logging.error("Unrecognized locale %r (path: %s)", locale,
+            log.error("Unrecognized locale %r (path: %s)", locale,
                           os.path.join(directory, path))
             continue
         full_path = os.path.join(directory, path)
@@ -142,13 +143,13 @@ def load_translations(directory):
             else:
                 plural = "unknown"
             if plural not in ("plural", "singular", "unknown"):
-                logging.error("Unrecognized plural indicator %r in %s line %d",
+                log.error("Unrecognized plural indicator %r in %s line %d",
                               plural, path, i + 1)
                 continue
             _translations[locale].setdefault(plural, {})[english] = translation
         f.close()
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
-    logging.debug("Supported locales: %s", sorted(_supported_locales))
+    log.debug("Supported locales: %s", sorted(_supported_locales))
 
 
 def load_gettext_translations(directory, domain):
@@ -184,11 +185,11 @@ def load_gettext_translations(directory, domain):
             _translations[lang] = gettext.translation(domain, directory,
                                                       languages=[lang])
         except Exception, e:
-            logging.error("Cannot load translation for '%s': %s", lang, str(e))
+            log.error("Cannot load translation for '%s': %s", lang, str(e))
             continue
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
     _use_gettext = True
-    logging.debug("Supported locales: %s", sorted(_supported_locales))
+    log.debug("Supported locales: %s", sorted(_supported_locales))
 
 
 def get_supported_locales():
