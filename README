@@ -7,26 +7,49 @@ available at http://www.tornadoweb.org/
 Tornado is licensed under the Apache Licence, Version 2.0
 (http://www.apache.org/licenses/LICENSE-2.0.html).
 
-Installation
-============
-To install:
+Automatic installation
+----------------------
 
+ Tornado is listed in PyPI and can be installed with pip or
+easy_install. Note that the source distribution includes demo
+applications that are not present when Tornado is installed in this
+way, so you may wish to download a copy of the source tarball as well.
+
+Manual installation
+-------------------
+
+Download https://github.com/downloads/facebook/tornado/tornado-2.3.tar.gz
+
+    tar xvzf tornado-2.3.tar.gz
+    cd tornado-2.3
     python setup.py build
     sudo python setup.py install
 
-Tornado has been tested on Python 2.5 and 2.6. To use all of the features
-of Tornado, you need to have PycURL and (for Python 2.5 only) simplejson
-installed.
+The Tornado source code is hosted on GitHub: https://github.com/facebook/tornado
 
-On Mac OS X 10.6, you can install the packages with:
+On Python 2.6 and 2.7, it is also possible to simply add the tornado
+directory to your PYTHONPATH instead of building with setup.py, since
+the standard library includes epoll support.
 
-    sudo easy_install pycurl
+Prerequisites
+-------------
 
-On Ubuntu Linux, you can install the packages with:
+Tornado runs on Python 2.5, 2.6, 2.7 and 3.2.
 
-    # Python 2.6
-    sudo apt-get install python-pycurl
+On Python 2.6 and 2.7, there are no dependencies outside the Python
+standard library, although PycURL (version 7.18.2 or higher required;
+version 7.21.1 or higher recommended) may be used if desired.
 
-    # Python 2.5
-    sudo apt-get install python-dev python-pycurl python-simplejson
+On Python 2.5, PycURL is required, along with simplejson and the
+Python development headers (typically obtained by installing a package
+named something like python-dev from your operating system).
 
+On Python 3.2, the distribute package is required. Note that Python 3
+support is relatively new and may have bugs.
+
+Platforms
+---------
+
+ Tornado should run on any Unix-like platform, although for the best
+performance and scalability only Linux and BSD (including BSD
+derivatives like Mac OS X) are recommended.

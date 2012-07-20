@@ -26,7 +26,7 @@ In addition to I/O events, the `IOLoop` can also schedule time-based events.
 `IOLoop.add_timeout` is a non-blocking alternative to `time.sleep`.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import datetime
 import errno
@@ -104,6 +104,9 @@ class IOLoop(object):
     WRITE = _EPOLLOUT
     ERROR = _EPOLLERR | _EPOLLHUP
 
+    # Global lock for creating global IOLoop instance
+    _instance_lock = threading.Lock()
+
     def __init__(self, impl=None):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
@@ -142,7 +145,10 @@ class IOLoop(object):
                     self.io_loop = io_loop or IOLoop.instance()
         """
         if not hasattr(IOLoop, "_instance"):
-            IOLoop._instance = IOLoop()
+            with IOLoop._instance_lock:
+                if not hasattr(IOLoop, "_instance"):
+                    # New instance after double check
+                    IOLoop._instance = IOLoop()
         return IOLoop._instance
 
     @staticmethod
@@ -164,7 +170,20 @@ class IOLoop(object):
         """Closes the IOLoop, freeing any resources used.
 
         If ``all_fds`` is true, all file descriptors registered on the
-        IOLoop will be closed (not just the ones created by the IOLoop itself.
+        IOLoop will be closed (not just the ones created by the IOLoop itself).
+
+        Many applications will only use a single IOLoop that runs for the
+        entire lifetime of the process.  In that case closing the IOLoop
+        is not necessary since everything will be cleaned up when the
+        process exits.  `IOLoop.close` is provided mainly for scenarios
+        such as unit tests, which create and destroy a large number of
+        IOLoops.
+
+        An IOLoop must be completely stopped before it can be closed.  This
+        means that `IOLoop.stop()` must be called *and* `IOLoop.start()` must
+        be allowed to return before attempting to call `IOLoop.close()`.
+        Therefore the call to `close` will usually appear just after
+        the call to `start` rather than near the call to `stop`.
         """
         self.remove_handler(self._waker.fileno())
         if all_fds:
@@ -335,6 +354,9 @@ class IOLoop(object):
 
         ioloop.start() will return after async_method has run its callback,
         whether that callback was invoked before or after ioloop.start.
+
+        Note that even after `stop` has been called, the IOLoop is not
+        completely stopped until `IOLoop.start` has also returned.
         """
         self._running = False
         self._stopped = True
@@ -431,7 +453,7 @@ class _Timeout(object):
     @staticmethod
     def timedelta_to_seconds(td):
         """Equivalent to td.total_seconds() (introduced in python 2.7)."""
-        return (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10**6) / float(10**6)
+        return (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10 ** 6) / float(10 ** 6)
 
     # Comparison methods to sort by deadline, with object id as a tiebreaker
     # to guarantee a consistent ordering.  The heapq module uses __le__
@@ -474,7 +496,8 @@ class PeriodicCallback(object):
             self._timeout = None
 
     def _run(self):
-        if not self._running: return
+        if not self._running:
+            return
         try:
             self.callback()
         except Exception:
@@ -530,6 +553,8 @@ class _KQueue(object):
         self._kqueue.close()
 
     def register(self, fd, events):
+        if fd in self._active:
+            raise IOError("fd %d already registered" % fd)
         self._control(fd, events, select.KQ_EV_ADD)
         self._active[fd] = events
 
@@ -591,8 +616,12 @@ class _Select(object):
         pass
 
     def register(self, fd, events):
-        if events & IOLoop.READ: self.read_fds.add(fd)
-        if events & IOLoop.WRITE: self.write_fds.add(fd)
+        if fd in self.read_fds or fd in self.write_fds or fd in self.error_fds:
+            raise IOError("fd %d already registered" % fd)
+        if events & IOLoop.READ:
+            self.read_fds.add(fd)
+        if events & IOLoop.WRITE:
+            self.write_fds.add(fd)
         if events & IOLoop.ERROR:
             self.error_fds.add(fd)
             # Closed connections are reported as errors by epoll and kqueue,
@@ -633,7 +662,7 @@ elif hasattr(select, "kqueue"):
 else:
     try:
         # Linux systems with our C module installed
-        import epoll
+        from tornado import epoll
         _poll = _EPoll
     except Exception:
         # All other systems

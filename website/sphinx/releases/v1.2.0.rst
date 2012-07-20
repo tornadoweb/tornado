@@ -5,10 +5,10 @@ Feb 20, 2011
 ------------
 
 ::
-    
+
     We are pleased to announce the release of Tornado 1.2, available from
-    http://github.com/downloads/facebook/tornado/tornado-1.2.tar.gz
-    
+    https://github.com/downloads/facebook/tornado/tornado-1.2.tar.gz
+
     Backwards compatibility notes:
     * This release includes the backwards-incompatible security change from
       version 1.1.1.  Users upgrading from 1.1 or earlier should read the
@@ -19,7 +19,7 @@ Feb 20, 2011
       https://github.com/facebook/tornado/commit/7a7e24143e77481d140fb5579bc67e4c45cbcfad
     * When XSRF tokens are used, the token must also be present on PUT and
       DELETE requests (anything but GET and HEAD)
-    
+
     New features:
     * A new HTTP client implementation is available in the module
       tornado.simple_httpclient.  This HTTP client does not depend on pycurl.
@@ -61,7 +61,7 @@ Feb 20, 2011
     * FacebookGraphMixin.get_authenticated_user now accepts a new
       parameter 'extra_fields' which may be used to request additional
       information about the user
-    
+
     Bug fixes:
     * auth: Fixed KeyError with Facebook offline_access
     * auth: Uses request.uri instead of request.path as the default redirect
@@ -100,8 +100,8 @@ Feb 20, 2011
       root path
     * websocket: Now works over SSL
     * websocket: Improved compatibility with proxies
-    
+
     Many thanks to everyone who contributed patches, bug reports, and feedback
     that went into this release!
-    
+
     -Ben

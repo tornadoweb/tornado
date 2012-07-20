@@ -17,5 +17,5 @@ if __name__ == '__main__':
     app = Application([
             ('/', EchoHandler),
             ])
-    app.listen(options.port, address='localhost')
+    app.listen(options.port, address='127.0.0.1')
     IOLoop.instance().start()

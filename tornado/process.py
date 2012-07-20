@@ -16,6 +16,8 @@
 
 """Utilities for working with multiple processes."""
 
+from __future__ import absolute_import, division, with_statement
+
 import errno
 import logging
 import os
@@ -27,9 +29,10 @@ from binascii import hexlify
 from tornado import ioloop
 
 try:
-    import multiprocessing # Python 2.6+
+    import multiprocessing  # Python 2.6+
 except ImportError:
     multiprocessing = None
+
 
 def cpu_count():
     """Returns the number of processors on this machine."""
@@ -44,6 +47,7 @@ def cpu_count():
         pass
     logging.error("Could not detect number of processors; assuming 1")
     return 1
+
 
 def _reseed_random():
     if 'random' not in sys.modules:
@@ -60,6 +64,7 @@ def _reseed_random():
 
 
 _task_id = None
+
 
 def fork_processes(num_processes, max_restarts=100):
     """Starts multiple worker processes.
@@ -95,6 +100,7 @@ def fork_processes(num_processes, max_restarts=100):
                            "IOLoop.instance() before calling start_processes()")
     logging.info("Starting %d processes", num_processes)
     children = {}
+
     def start_child(i):
         pid = os.fork()
         if pid == 0:
@@ -108,7 +114,8 @@ def fork_processes(num_processes, max_restarts=100):
             return None
     for i in range(num_processes):
         id = start_child(i)
-        if id is not None: return id
+        if id is not None:
+            return id
     num_restarts = 0
     while children:
         try:
@@ -133,12 +140,14 @@ def fork_processes(num_processes, max_restarts=100):
         if num_restarts > max_restarts:
             raise RuntimeError("Too many child restarts, giving up")
         new_id = start_child(id)
-        if new_id is not None: return new_id
+        if new_id is not None:
+            return new_id
     # All child processes exited cleanly, so exit the master process
     # instead of just returning to right after the call to
     # fork_processes (which will probably just start up another IOLoop
     # unless the caller checks the return value).
     sys.exit(0)
+
 
 def task_id():
     """Returns the current task id, if any.

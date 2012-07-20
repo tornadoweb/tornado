@@ -1,3 +1,4 @@
+from __future__ import absolute_import, division, with_statement
 import functools
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
@@ -6,6 +7,7 @@ from tornado.util import b
 from tornado.web import Application, RequestHandler, asynchronous
 
 from tornado import gen
+
 
 class GenTest(AsyncTestCase):
     def run_gen(self, f):
@@ -31,7 +33,7 @@ class GenTest(AsyncTestCase):
         def f():
             (yield gen.Callback("k1"))()
             res = yield gen.Wait("k1")
-            assert res is None
+            self.assertTrue(res is None)
             self.stop()
         self.run_gen(f)
 
@@ -46,7 +48,7 @@ class GenTest(AsyncTestCase):
     def test_exception_phase1(self):
         @gen.engine
         def f():
-            1/0
+            1 / 0
         self.assertRaises(ZeroDivisionError, self.run_gen, f)
 
     def test_exception_phase2(self):
@@ -54,12 +56,12 @@ class GenTest(AsyncTestCase):
         def f():
             self.io_loop.add_callback((yield gen.Callback("k1")))
             yield gen.Wait("k1")
-            1/0
+            1 / 0
         self.assertRaises(ZeroDivisionError, self.run_gen, f)
 
     def test_exception_in_task_phase1(self):
         def fail_task(callback):
-            1/0
+            1 / 0
 
         @gen.engine
         def f():
@@ -71,8 +73,9 @@ class GenTest(AsyncTestCase):
         self.run_gen(f)
 
     def test_exception_in_task_phase2(self):
+        # This is the case that requires the use of stack_context in gen.engine
         def fail_task(callback):
-            self.io_loop.add_callback(lambda: 1/0)
+            self.io_loop.add_callback(lambda: 1 / 0)
 
         @gen.engine
         def f():
@@ -165,7 +168,7 @@ class GenTest(AsyncTestCase):
         def f():
             try:
                 yield gen.Wait("k1")
-                raise "did not get expected exception"
+                raise Exception("did not get expected exception")
             except gen.UnknownKeyError:
                 pass
             self.stop()
@@ -176,7 +179,7 @@ class GenTest(AsyncTestCase):
         def f():
             try:
                 yield gen.Wait("k1")
-                raise "did not get expected exception"
+                raise Exception("did not get expected exception")
             except gen.UnknownKeyError:
                 pass
             (yield gen.Callback("k2"))("v2")
@@ -190,7 +193,7 @@ class GenTest(AsyncTestCase):
             self.orphaned_callback = yield gen.Callback(1)
         try:
             self.run_gen(f)
-            raise "did not get expected exception"
+            raise Exception("did not get expected exception")
         except gen.LeakedCallbackError:
             pass
         self.orphaned_callback()
@@ -246,6 +249,26 @@ class GenTest(AsyncTestCase):
             self.stop()
         self.run_gen(f)
 
+    def test_stack_context_leak(self):
+        # regression test: repeated invocations of a gen-based
+        # function should not result in accumulated stack_contexts
+        from tornado import stack_context
+
+        @gen.engine
+        def inner(callback):
+            yield gen.Task(self.io_loop.add_callback)
+            callback()
+
+        @gen.engine
+        def outer():
+            for i in xrange(10):
+                yield gen.Task(inner)
+            stack_increase = len(stack_context._state.contexts) - initial_stack_depth
+            self.assertTrue(stack_increase <= 2)
+            self.stop()
+        initial_stack_depth = len(stack_context._state.contexts)
+        self.run_gen(outer)
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
@@ -263,6 +286,7 @@ class GenSequenceHandler(RequestHandler):
         yield gen.Wait("k1")
         self.finish("3")
 
+
 class GenTaskHandler(RequestHandler):
     @asynchronous
     @gen.engine
@@ -273,11 +297,40 @@ class GenTaskHandler(RequestHandler):
         response.rethrow()
         self.finish(b("got response: ") + response.body)
 
+
+class GenExceptionHandler(RequestHandler):
+    @asynchronous
+    @gen.engine
+    def get(self):
+        # This test depends on the order of the two decorators.
+        io_loop = self.request.connection.stream.io_loop
+        yield gen.Task(io_loop.add_callback)
+        raise Exception("oops")
+
+
+class GenYieldExceptionHandler(RequestHandler):
+    @asynchronous
+    @gen.engine
+    def get(self):
+        io_loop = self.request.connection.stream.io_loop
+        # Test the interaction of the two stack_contexts.
+
+        def fail_task(callback):
+            io_loop.add_callback(lambda: 1 / 0)
+        try:
+            yield gen.Task(fail_task)
+            raise Exception("did not get expected exception")
+        except ZeroDivisionError:
+            self.finish('ok')
+
+
 class GenWebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([
                 ('/sequence', GenSequenceHandler),
                 ('/task', GenTaskHandler),
+                ('/exception', GenExceptionHandler),
+                ('/yield_exception', GenYieldExceptionHandler),
                 ])
 
     def test_sequence_handler(self):
@@ -287,3 +340,12 @@ class GenWebTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_task_handler(self):
         response = self.fetch('/task?url=%s' % url_escape(self.get_url('/sequence')))
         self.assertEqual(response.body, b("got response: 123"))
+
+    def test_exception_handler(self):
+        # Make sure we get an error and not a timeout
+        response = self.fetch('/exception')
+        self.assertEqual(500, response.code)
+
+    def test_yield_exception_handler(self):
+        response = self.fetch('/yield_exception')
+        self.assertEqual(response.body, b('ok'))

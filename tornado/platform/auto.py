@@ -23,9 +23,12 @@ Most code that needs access to this functionality should do e.g.::
     from tornado.platform.auto import set_close_exec
 """
 
+from __future__ import absolute_import, division, with_statement
+
 import os
 
 if os.name == 'nt':
-    from tornado.platform.windows import set_close_exec, Waker
+    from tornado.platform.common import Waker
+    from tornado.platform.windows import set_close_exec
 else:
     from tornado.platform.posix import set_close_exec, Waker

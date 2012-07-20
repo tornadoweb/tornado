@@ -101,6 +101,11 @@ with ``{# ... #}``.
 
         {% apply linkify %}{{name}} said: {{message}}{% end %}
 
+    Note that as an implementation detail apply blocks are implemented
+    as nested functions and thus may interact strangely with variables
+    set via ``{% set %}``, or the use of ``{% break %}`` or ``{% continue %}``
+    within loops.
+
 ``{% autoescape *function* %}``
     Sets the autoescape mode for the current file.  This does not affect
     other files, even those referenced by ``{% include %}``.  Note that
@@ -134,8 +139,9 @@ with ``{# ... #}``.
     tag will be ignored.  For an example, see the ``{% block %}`` tag.
 
 ``{% for *var* in *expr* %}...{% end %}``
-    Same as the python ``for`` statement.
-    
+    Same as the python ``for`` statement.  ``{% break %}`` and
+    ``{% continue %}`` may be used inside the loop.
+
 ``{% from *x* import *y* %}``
     Same as the python ``import`` statement.
 
@@ -165,14 +171,15 @@ with ``{# ... #}``.
 ``{% set *x* = *y* %}``
     Sets a local variable.
 
-``{% try %}...{% except %}...{% finally %}...{% end %}``
+``{% try %}...{% except %}...{% finally %}...{% else %}...{% end %}``
     Same as the python ``try`` statement.
 
 ``{% while *condition* %}... {% end %}``
-    Same as the python ``while`` statement.
+    Same as the python ``while`` statement.  ``{% break %}`` and
+    ``{% continue %}`` may be used inside the loop.
 """
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import cStringIO
 import datetime
@@ -188,6 +195,7 @@ from tornado.util import bytes_type, ObjectDict
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()
+
 
 class Template(object):
     """A compiled template.
@@ -217,7 +225,7 @@ class Template(object):
             # the module name used in __name__ below.
             self.compiled = compile(
                 escape.to_unicode(self.code),
-                "%s.generated.py" % self.name.replace('.','_'),
+                "%s.generated.py" % self.name.replace('.', '_'),
                 "exec")
         except Exception:
             formatted_code = _format_code(self.code).rstrip()
@@ -326,6 +334,7 @@ class BaseLoader(object):
     def _create_template(self, name):
         raise NotImplementedError()
 
+
 class Loader(BaseLoader):
     """A template loader that loads from a single root directory.
 
@@ -350,7 +359,7 @@ class Loader(BaseLoader):
 
     def _create_template(self, name):
         path = os.path.join(self.root, name)
-        f = open(path, "r")
+        f = open(path, "rb")
         template = Template(f.read(), name=name, loader=self)
         f.close()
         return template
@@ -402,7 +411,6 @@ class _File(_Node):
 
     def each_child(self):
         return (self.body,)
-
 
 
 class _ChunkList(_Node):
@@ -531,10 +539,12 @@ class _Expression(_Node):
                               writer.current_template.autoescape, self.line)
         writer.write_line("_append(_tmp)", self.line)
 
+
 class _Module(_Expression):
     def __init__(self, expression, line):
         super(_Module, self).__init__("_modules." + expression, line,
                                       raw=True)
+
 
 class _Text(_Node):
     def __init__(self, value, line):
@@ -608,7 +618,7 @@ class _CodeWriter(object):
             ancestors = ["%s:%d" % (tmpl.name, lineno)
                          for (tmpl, lineno) in self.include_stack]
             line_comment += ' (via %s)' % ', '.join(reversed(ancestors))
-        print >> self.file, "    "*indent + line + line_comment
+        print >> self.file, "    " * indent + line + line_comment
 
 
 class _TemplateReader(object):
@@ -651,9 +661,12 @@ class _TemplateReader(object):
         if type(key) is slice:
             size = len(self)
             start, stop, step = key.indices(size)
-            if start is None: start = self.pos
-            else: start += self.pos
-            if stop is not None: stop += self.pos
+            if start is None:
+                start = self.pos
+            else:
+                start += self.pos
+            if stop is not None:
+                stop += self.pos
             return self.text[slice(start, stop, step)]
         elif key < 0:
             return self.text[key]
@@ -670,7 +683,7 @@ def _format_code(code):
     return "".join([format % (i + 1, line) for (i, line) in enumerate(lines)])
 
 
-def _parse(reader, template, in_block=None):
+def _parse(reader, template, in_block=None, in_loop=None):
     body = _ChunkList([])
     while True:
         # Find next template directive
@@ -751,7 +764,7 @@ def _parse(reader, template, in_block=None):
 
         # Intermediate ("else", "elif", etc) blocks
         intermediate_blocks = {
-            "else": set(["if", "for", "while"]),
+            "else": set(["if", "for", "while", "try"]),
             "elif": set(["if"]),
             "except": set(["try"]),
             "finally": set(["try"]),
@@ -796,7 +809,8 @@ def _parse(reader, template, in_block=None):
                 block = _Statement(suffix, line)
             elif operator == "autoescape":
                 fn = suffix.strip()
-                if fn == "None": fn = None
+                if fn == "None":
+                    fn = None
                 template.autoescape = fn
                 continue
             elif operator == "raw":
@@ -808,7 +822,15 @@ def _parse(reader, template, in_block=None):
 
         elif operator in ("apply", "block", "try", "if", "for", "while"):
             # parse inner body recursively
-            block_body = _parse(reader, template, operator)
+            if operator in ("for", "while"):
+                block_body = _parse(reader, template, operator, operator)
+            elif operator == "apply":
+                # apply creates a nested function so syntactically it's not
+                # in the loop.
+                block_body = _parse(reader, template, operator, None)
+            else:
+                block_body = _parse(reader, template, operator, in_loop)
+
             if operator == "apply":
                 if not suffix:
                     raise ParseError("apply missing method name on line %d" % line)
@@ -820,6 +842,12 @@ def _parse(reader, template, in_block=None):
             else:
                 block = _ControlBlock(contents, line, block_body)
             body.chunks.append(block)
+            continue
+
+        elif operator in ("break", "continue"):
+            if not in_loop:
+                raise ParseError("%s outside %s block" % (operator, set(["for", "while"])))
+            body.chunks.append(_Statement(contents, line))
             continue
 
         else:

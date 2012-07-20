@@ -20,7 +20,7 @@ WSGI is the Python standard for web servers, and allows for interoperability
 between Tornado and other Python web frameworks and servers.  This module
 provides WSGI support in two ways:
 
-* `WSGIApplication` is a version of `tornado.web.Application` that can run 
+* `WSGIApplication` is a version of `tornado.web.Application` that can run
   inside a WSGI server.  This is useful for running a Tornado app on another
   HTTP server, such as Google App Engine.  See the `WSGIApplication` class
   documentation for limitations that apply.
@@ -29,8 +29,9 @@ provides WSGI support in two ways:
   and Tornado handlers in a single server.
 """
 
+from __future__ import absolute_import, division, with_statement
+
 import Cookie
-import cgi
 import httplib
 import logging
 import sys
@@ -41,13 +42,36 @@ import urllib
 from tornado import escape
 from tornado import httputil
 from tornado import web
-from tornado.escape import native_str, utf8
-from tornado.util import b
+from tornado.escape import native_str, utf8, parse_qs_bytes
+from tornado.util import b, bytes_type
 
 try:
     from io import BytesIO  # python 3
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
+
+
+# PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
+# that are smuggled inside objects of type unicode (via the latin1 encoding).
+# These functions are like those in the tornado.escape module, but defined
+# here to minimize the temptation to use them in non-wsgi contexts.
+if str is unicode:
+    def to_wsgi_str(s):
+        assert isinstance(s, bytes_type)
+        return s.decode('latin1')
+
+    def from_wsgi_str(s):
+        assert isinstance(s, str)
+        return s.encode('latin1')
+else:
+    def to_wsgi_str(s):
+        assert isinstance(s, bytes_type)
+        return s
+
+    def from_wsgi_str(s):
+        assert isinstance(s, str)
+        return s
+
 
 class WSGIApplication(web.Application):
     """A WSGI equivalent of `tornado.web.Application`.
@@ -81,7 +105,7 @@ class WSGIApplication(web.Application):
     Since no asynchronous methods are available for WSGI applications, the
     httpclient and auth modules are both not available for WSGI applications.
     We support the same interface, but handlers running in a WSGIApplication
-    do not support flush() or asynchronous methods. 
+    do not support flush() or asynchronous methods.
     """
     def __init__(self, handlers=None, default_host="", **settings):
         web.Application.__init__(self, handlers, default_host, transforms=[],
@@ -92,12 +116,12 @@ class WSGIApplication(web.Application):
         assert handler._finished
         status = str(handler._status_code) + " " + \
             httplib.responses[handler._status_code]
-        headers = handler._headers.items()
-        for cookie_dict in getattr(handler, "_new_cookies", []):
-            for cookie in cookie_dict.values():
+        headers = handler._headers.items() + handler._list_headers
+        if hasattr(handler, "_new_cookie"):
+            for cookie in handler._new_cookie.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))
         start_response(status,
-                       [(native_str(k), native_str(v)) for (k,v) in headers])
+                       [(native_str(k), native_str(v)) for (k, v) in headers])
         return handler._write_buffer
 
 
@@ -106,17 +130,18 @@ class HTTPRequest(object):
     def __init__(self, environ):
         """Parses the given WSGI environ to construct the request."""
         self.method = environ["REQUEST_METHOD"]
-        self.path = urllib.quote(environ.get("SCRIPT_NAME", ""))
-        self.path += urllib.quote(environ.get("PATH_INFO", ""))
+        self.path = urllib.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
+        self.path += urllib.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
         self.uri = self.path
         self.arguments = {}
         self.query = environ.get("QUERY_STRING", "")
         if self.query:
             self.uri += "?" + self.query
-            arguments = cgi.parse_qs(self.query)
+            arguments = parse_qs_bytes(native_str(self.query))
             for name, values in arguments.iteritems():
                 values = [v for v in values if v]
-                if values: self.arguments[name] = values
+                if values:
+                    self.arguments[name] = values
         self.version = "HTTP/1.1"
         self.headers = httputil.HTTPHeaders()
         if environ.get("CONTENT_TYPE"):
@@ -140,18 +165,8 @@ class HTTPRequest(object):
 
         # Parse request body
         self.files = {}
-        content_type = self.headers.get("Content-Type", "")
-        if content_type.startswith("application/x-www-form-urlencoded"):
-            for name, values in cgi.parse_qs(self.body).iteritems():
-                self.arguments.setdefault(name, []).extend(values)
-        elif content_type.startswith("multipart/form-data"):
-            if 'boundary=' in content_type:
-                boundary = content_type.split('boundary=',1)[1]
-                if boundary:
-                    httputil.parse_multipart_form_data(
-                        utf8(boundary), self.body, self.arguments, self.files)
-            else:
-                logging.warning("Invalid multipart/form-data")
+        httputil.parse_body_arguments(self.headers.get("Content-Type", ""),
+                                      self.body, self.arguments, self.files)
 
         self._start_time = time.time()
         self._finish_time = None
@@ -215,6 +230,7 @@ class WSGIContainer(object):
     def __call__(self, request):
         data = {}
         response = []
+
         def start_response(status, response_headers, exc_info=None):
             data["status"] = status
             data["headers"] = response_headers
@@ -225,11 +241,12 @@ class WSGIContainer(object):
         body = b("").join(response)
         if hasattr(app_response, "close"):
             app_response.close()
-        if not data: raise Exception("WSGI app did not call start_response")
+        if not data:
+            raise Exception("WSGI app did not call start_response")
 
         status_code = int(data["status"].split()[0])
         headers = data["headers"]
-        header_set = set(k.lower() for (k,v) in headers)
+        header_set = set(k.lower() for (k, v) in headers)
         body = escape.utf8(body)
         if "content-length" not in header_set:
             headers.append(("Content-Length", str(len(body))))
@@ -261,7 +278,7 @@ class WSGIContainer(object):
         environ = {
             "REQUEST_METHOD": request.method,
             "SCRIPT_NAME": "",
-            "PATH_INFO": urllib.unquote(request.path),
+            "PATH_INFO": to_wsgi_str(escape.url_unescape(request.path, encoding=None)),
             "QUERY_STRING": request.query,
             "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,

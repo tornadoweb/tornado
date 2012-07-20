@@ -16,6 +16,8 @@ communication between the browser and server.
    overriding `WebSocketHandler.allow_draft76` (see that method's
    documentation for caveats).
 """
+
+from __future__ import absolute_import, division, with_statement
 # Author: Jacob Kristhammar, 2010
 
 import array
@@ -29,6 +31,7 @@ import tornado.escape
 import tornado.web
 
 from tornado.util import bytes_type, b
+
 
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
@@ -83,10 +86,38 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.open_args = args
         self.open_kwargs = kwargs
 
+        # Websocket only supports GET method
+        if self.request.method != 'GET':
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
+            ))
+            self.stream.close()
+            return
+
+        # Upgrade header should be present and should be equal to WebSocket
+        if self.request.headers.get("Upgrade", "").lower() != 'websocket':
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 400 Bad Request\r\n\r\n"
+                "Can \"Upgrade\" only to \"WebSocket\"."
+            ))
+            self.stream.close()
+            return
+
+        # Connection header should be upgrade. Some proxy servers/load balancers
+        # might mess with it.
+        headers = self.request.headers
+        connection = map(lambda s: s.strip().lower(), headers.get("Connection", "").split(","))
+        if 'upgrade' not in connection:
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 400 Bad Request\r\n\r\n"
+                "\"Connection\" must be \"Upgrade\"."
+            ))
+            self.stream.close()
+            return
+
         # The difference between version 8 and 13 is that in 8 the
         # client sends a "Sec-Websocket-Origin" header and in 13 it's
         # simply "Origin".
-        logging.info('starting websocket')
         if self.request.headers.get("Sec-WebSocket-Version") in ("7", "8", "13"):
             self.ws_connection = WebSocketProtocol13(self)
             self.ws_connection.accept_connection()
@@ -112,8 +143,26 @@ class WebSocketHandler(tornado.web.RequestHandler):
             message = tornado.escape.json_encode(message)
         self.ws_connection.write_message(message, binary=binary)
 
-    def open(self, *args, **kwargs):
-        """Invoked when a new WebSocket is opened."""
+    def select_subprotocol(self, subprotocols):
+        """Invoked when a new WebSocket requests specific subprotocols.
+
+        ``subprotocols`` is a list of strings identifying the
+        subprotocols proposed by the client.  This method may be
+        overridden to return one of those strings to select it, or
+        ``None`` to not select a subprotocol.  Failure to select a
+        subprotocol does not automatically abort the connection,
+        although clients may close the connection if none of their
+        proposed subprotocols was selected.
+        """
+        return None
+
+    def open(self):
+        """Invoked when a new WebSocket is opened.
+
+        The arguments to `open` are extracted from the `tornado.web.URLSpec`
+        regular expression, just like the arguments to
+        `tornado.web.RequestHandler.get`.
+        """
         pass
 
     def on_message(self, message):
@@ -149,11 +198,24 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         return False
 
+    def get_websocket_scheme(self):
+        """Return the url scheme used for this request, either "ws" or "wss".
+
+        This is normally decided by HTTPServer, but applications
+        may wish to override this if they are using an SSL proxy
+        that does not provide the X-Scheme header as understood
+        by HTTPServer.
+
+        Note that this is only used by the draft76 protocol.
+        """
+        return "wss" if self.request.protocol == "https" else "ws"
+
     def async_callback(self, callback, *args, **kwargs):
         """Wrap callbacks with this if they are used on asynchronous requests.
 
         Catches exceptions properly and closes this WebSocket if an exception
-        is uncaught.
+        is uncaught.  (Note that this is usually unnecessary thanks to
+        `tornado.stack_context`)
         """
         return self.ws_connection.async_callback(callback, *args, **kwargs)
 
@@ -162,14 +224,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def on_connection_close(self):
         if self.ws_connection:
-            self.ws_connection.client_terminated = True
+            self.ws_connection.on_connection_close()
+            self.ws_connection = None
             self.on_close()
-
-    def _set_client_terminated(self, value):
-        self.ws_connection.client_terminated = value
-
-    client_terminated = property(lambda self: self.ws_connection.client_terminated,
-                                 _set_client_terminated)
 
 
 for method in ["write", "redirect", "set_header", "send_error", "set_cookie",
@@ -185,6 +242,7 @@ class WebSocketProtocol(object):
         self.request = handler.request
         self.stream = handler.stream
         self.client_terminated = False
+        self.server_terminated = False
 
     def async_callback(self, callback, *args, **kwargs):
         """Wrap callbacks with this if they are used on asynchronous requests.
@@ -194,6 +252,7 @@ class WebSocketProtocol(object):
         """
         if args or kwargs:
             callback = functools.partial(callback, *args, **kwargs)
+
         def wrapper(*args, **kwargs):
             try:
                 return callback(*args, **kwargs)
@@ -203,10 +262,15 @@ class WebSocketProtocol(object):
                 self._abort()
         return wrapper
 
+    def on_connection_close(self):
+        self._abort()
+
     def _abort(self):
         """Instantly aborts the WebSocket connection by closing the socket"""
         self.client_terminated = True
-        self.stream.close()
+        self.server_terminated = True
+        self.stream.close()  # forcibly tear down the connection
+        self.close()  # let the subclass cleanup
 
 
 class WebSocketProtocol76(WebSocketProtocol):
@@ -228,7 +292,18 @@ class WebSocketProtocol76(WebSocketProtocol):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
-        scheme = "wss" if self.request.protocol == "https" else "ws"
+
+        scheme = self.handler.get_websocket_scheme()
+
+        # draft76 only allows a single subprotocol
+        subprotocol_header = ''
+        subprotocol = self.request.headers.get("Sec-WebSocket-Protocol", None)
+        if subprotocol:
+            selected = self.handler.select_subprotocol([subprotocol])
+            if selected:
+                assert selected == subprotocol
+                subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
+
         # Write the initial headers before attempting to read the challenge.
         # This is necessary when using proxies (such as HAProxy), which
         # need to see the Upgrade headers before passing through the
@@ -239,12 +314,15 @@ class WebSocketProtocol76(WebSocketProtocol):
             "Connection: Upgrade\r\n"
             "Server: TornadoServer/%(version)s\r\n"
             "Sec-WebSocket-Origin: %(origin)s\r\n"
-            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(uri)s\r\n\r\n" % (dict(
+            "Sec-WebSocket-Location: %(scheme)s://%(host)s%(uri)s\r\n"
+            "%(subprotocol)s"
+            "\r\n" % (dict(
                     version=tornado.version,
                     origin=self.request.headers["Origin"],
                     scheme=scheme,
                     host=self.request.host,
-                    uri=self.request.uri))))
+                    uri=self.request.uri,
+                    subprotocol=subprotocol_header))))
         self.stream.read_bytes(8, self._handle_challenge)
 
     def challenge_response(self, challenge):
@@ -282,12 +360,9 @@ class WebSocketProtocol76(WebSocketProtocol):
         If a header is missing or have an incorrect value ValueError will be
         raised
         """
-        headers = self.request.headers
         fields = ("Origin", "Host", "Sec-Websocket-Key1",
                   "Sec-Websocket-Key2")
-        if headers.get("Upgrade", '').lower() != "websocket" or \
-           headers.get("Connection", '').lower() != "upgrade" or \
-           not all(map(lambda f: self.request.headers.get(f), fields)):
+        if not all(map(lambda f: self.request.headers.get(f), fields)):
             raise ValueError("Missing/Invalid WebSocket headers")
 
     def _calculate_part(self, key):
@@ -347,13 +422,18 @@ class WebSocketProtocol76(WebSocketProtocol):
 
     def close(self):
         """Closes the WebSocket connection."""
-        if self.client_terminated and self._waiting:
-            tornado.ioloop.IOLoop.instance().remove_timeout(self._waiting)
+        if not self.server_terminated:
+            if not self.stream.closed():
+                self.stream.write("\xff\x00")
+            self.server_terminated = True
+        if self.client_terminated:
+            if self._waiting is not None:
+                self.stream.io_loop.remove_timeout(self._waiting)
+            self._waiting = None
             self.stream.close()
-        else:
-            self.stream.write("\xff\x00")
-            self._waiting = tornado.ioloop.IOLoop.instance().add_timeout(
-                                time.time() + 5, self._abort)
+        elif self._waiting is None:
+            self._waiting = self.stream.io_loop.add_timeout(
+                time.time() + 5, self._abort)
 
 
 class WebSocketProtocol13(WebSocketProtocol):
@@ -370,7 +450,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._frame_length = None
         self._fragmented_message_buffer = None
         self._fragmented_message_opcode = None
-        self._started_closing_handshake = False
+        self._waiting = None
 
     def accept_connection(self):
         try:
@@ -380,35 +460,41 @@ class WebSocketProtocol13(WebSocketProtocol):
             logging.debug("Malformed WebSocket request received")
             self._abort()
             return
-    
+
     def _handle_websocket_headers(self):
         """Verifies all invariant- and required headers
 
         If a header is missing or have an incorrect value ValueError will be
         raised
         """
-        headers = self.request.headers
         fields = ("Host", "Sec-Websocket-Key", "Sec-Websocket-Version")
-        connection = map(lambda s: s.strip().lower(), headers.get("Connection", '').split(","))
-        if (self.request.method != "GET" or
-            headers.get("Upgrade", '').lower() != "websocket" or
-            "upgrade" not in connection or
-            not all(map(lambda f: self.request.headers.get(f), fields))):
+        if not all(map(lambda f: self.request.headers.get(f), fields)):
             raise ValueError("Missing/Invalid WebSocket headers")
 
     def _challenge_response(self):
         sha1 = hashlib.sha1()
         sha1.update(tornado.escape.utf8(
                 self.request.headers.get("Sec-Websocket-Key")))
-        sha1.update(b("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")) # Magic value
+        sha1.update(b("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))  # Magic value
         return tornado.escape.native_str(base64.b64encode(sha1.digest()))
 
     def _accept_connection(self):
+        subprotocol_header = ''
+        subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", '')
+        subprotocols = [s.strip() for s in subprotocols.split(',')]
+        if subprotocols:
+            selected = self.handler.select_subprotocol(subprotocols)
+            if selected:
+                assert selected in subprotocols
+                subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
+
         self.stream.write(tornado.escape.utf8(
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: %s\r\n\r\n" % self._challenge_response()))
+            "Sec-WebSocket-Accept: %s\r\n"
+            "%s"
+            "\r\n" % (self._challenge_response(), subprotocol_header)))
 
         self.async_callback(self.handler.open)(*self.handler.open_args, **self.handler.open_kwargs)
         self._receive_frame()
@@ -470,12 +556,12 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.stream.read_bytes(8, self._on_frame_length_64)
 
     def _on_frame_length_16(self, data):
-        self._frame_length = struct.unpack("!H", data)[0];
-        self.stream.read_bytes(4, self._on_masking_key);
-        
+        self._frame_length = struct.unpack("!H", data)[0]
+        self.stream.read_bytes(4, self._on_masking_key)
+
     def _on_frame_length_64(self, data):
-        self._frame_length = struct.unpack("!Q", data)[0];
-        self.stream.read_bytes(4, self._on_masking_key);
+        self._frame_length = struct.unpack("!Q", data)[0]
+        self.stream.read_bytes(4, self._on_masking_key)
 
     def _on_masking_key(self, data):
         self._frame_mask = array.array("B", data)
@@ -521,10 +607,10 @@ class WebSocketProtocol13(WebSocketProtocol):
 
         if not self.client_terminated:
             self._receive_frame()
-        
 
     def _handle_message(self, opcode, data):
-        if self.client_terminated: return
+        if self.client_terminated:
+            return
 
         if opcode == 0x1:
             # UTF-8 data
@@ -540,9 +626,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         elif opcode == 0x8:
             # Close
             self.client_terminated = True
-            if not self._started_closing_handshake:
-                self._write_frame(True, 0x8, b(""))
-            self.stream.close()
+            self.close()
         elif opcode == 0x9:
             # Ping
             self._write_frame(True, 0xA, data)
@@ -551,10 +635,20 @@ class WebSocketProtocol13(WebSocketProtocol):
             pass
         else:
             self._abort()
-        
+
     def close(self):
         """Closes the WebSocket connection."""
-        self._write_frame(True, 0x8, b(""))
-        self._started_closing_handshake = True
-        self._waiting = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 5, self._abort)
-
+        if not self.server_terminated:
+            if not self.stream.closed():
+                self._write_frame(True, 0x8, b(""))
+            self.server_terminated = True
+        if self.client_terminated:
+            if self._waiting is not None:
+                self.stream.io_loop.remove_timeout(self._waiting)
+                self._waiting = None
+            self.stream.close()
+        elif self._waiting is None:
+            # Give the client a few seconds to complete a clean shutdown,
+            # otherwise just close the connection.
+            self._waiting = self.stream.io_loop.add_timeout(
+                time.time() + 5, self._abort)

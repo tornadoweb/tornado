@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 from tornado.escape import utf8, _unicode, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
 from tornado import stack_context
-from tornado.util import b
+from tornado.util import b, GzipDecompressor
 
 import base64
 import collections
@@ -17,9 +17,9 @@ import logging
 import os.path
 import re
 import socket
+import sys
 import time
 import urlparse
-import zlib
 
 try:
     from io import BytesIO  # python 3
@@ -27,11 +27,12 @@ except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
 
 try:
-    import ssl # python 2.6+
+    import ssl  # python 2.6+
 except ImportError:
     ssl = None
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
+
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -52,7 +53,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     Some features found in the curl-based AsyncHTTPClient are not yet
     supported.  In particular, proxies are not supported, connections
-    are not reused, and callers cannot select the network interface to be 
+    are not reused, and callers cannot select the network interface to be
     used.
 
     Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
@@ -92,8 +93,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
-        if not isinstance(request.headers, HTTPHeaders):
-            request.headers = HTTPHeaders(request.headers)
+        # We're going to modify this (to add Host, Accept-Encoding, etc),
+        # so make sure we don't modify the caller's object.  This is also
+        # where normal dicts get converted to HTTPHeaders objects.
+        request.headers = HTTPHeaders(request.headers)
         callback = stack_context.wrap(callback)
         self.queue.append((request, callback))
         self._process_queue()
@@ -118,9 +121,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self._process_queue()
 
 
-
 class _HTTPConnection(object):
-    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE"])
+    _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
     def __init__(self, io_loop, client, request, release_callback,
                  final_callback, max_buffer_size):
@@ -159,6 +161,7 @@ class _HTTPConnection(object):
             if re.match(r'^\[.*\]$', host):
                 # raw ipv6 addresses in urls are enclosed in brackets
                 host = host[1:-1]
+            parsed_hostname = host  # save final parsed host for _on_connect
             if self.client.hostname_mapping is not None:
                 host = self.client.hostname_mapping.get(host, host)
 
@@ -185,6 +188,26 @@ class _HTTPConnection(object):
                     ssl_options["keyfile"] = request.client_key
                 if request.client_cert is not None:
                     ssl_options["certfile"] = request.client_cert
+
+                # SSL interoperability is tricky.  We want to disable
+                # SSLv2 for security reasons; it wasn't disabled by default
+                # until openssl 1.0.  The best way to do this is to use
+                # the SSL_OP_NO_SSLv2, but that wasn't exposed to python
+                # until 3.2.  Python 2.7 adds the ciphers argument, which
+                # can also be used to disable SSLv2.  As a last resort
+                # on python 2.6, we set ssl_version to SSLv3.  This is
+                # more narrow than we'd like since it also breaks
+                # compatibility with servers configured for TLSv1 only,
+                # but nearly all servers support SSLv3:
+                # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
+                if sys.version_info >= (2, 7):
+                    ssl_options["ciphers"] = "DEFAULT:!SSLv2"
+                else:
+                    # This is really only necessary for pre-1.0 versions
+                    # of openssl, but python 2.6 doesn't expose version
+                    # information.
+                    ssl_options["ssl_version"] = ssl.PROTOCOL_SSLv3
+
                 self.stream = SSLIOStream(socket.socket(af, socktype, proto),
                                           io_loop=self.io_loop,
                                           ssl_options=ssl_options,
@@ -197,30 +220,33 @@ class _HTTPConnection(object):
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
-                    self._on_timeout)
+                    stack_context.wrap(self._on_timeout))
             self.stream.set_close_callback(self._on_close)
             self.stream.connect(sockaddr,
-                                functools.partial(self._on_connect, parsed))
+                                functools.partial(self._on_connect, parsed,
+                                                  parsed_hostname))
 
     def _on_timeout(self):
         self._timeout = None
-        self._run_callback(HTTPResponse(self.request, 599,
-                                        request_time=time.time() - self.start_time,
-                                        error=HTTPError(599, "Timeout")))
-        self.stream.close()
+        if self.final_callback is not None:
+            raise HTTPError(599, "Timeout")
 
-    def _on_connect(self, parsed):
+    def _on_connect(self, parsed, parsed_hostname):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
-                self._on_timeout)
+                stack_context.wrap(self._on_timeout))
         if (self.request.validate_cert and
             isinstance(self.stream, SSLIOStream)):
             match_hostname(self.stream.socket.getpeercert(),
-                           parsed.hostname)
+                           # ipv6 addresses are broken (in
+                           # parsed.hostname) until 2.7, here is
+                           # correctly parsed value calculated in
+                           # __init__
+                           parsed_hostname)
         if (self.request.method not in self._SUPPORTED_METHODS and
             not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
@@ -229,14 +255,19 @@ class _HTTPConnection(object):
                     'proxy_username', 'proxy_password'):
             if getattr(self.request, key, None):
                 raise NotImplementedError('%s not supported' % key)
+        if "Connection" not in self.request.headers:
+            self.request.headers["Connection"] = "close"
         if "Host" not in self.request.headers:
-            self.request.headers["Host"] = parsed.netloc
+            if '@' in parsed.netloc:
+                self.request.headers["Host"] = parsed.netloc.rpartition('@')[-1]
+            else:
+                self.request.headers["Host"] = parsed.netloc
         username, password = None, None
         if parsed.username is not None:
             username, password = parsed.username, parsed.password
         elif self.request.auth_username is not None:
             username = self.request.auth_username
-            password = self.request.auth_password
+            password = self.request.auth_password or ''
         if username is not None:
             auth = utf8(username) + b(":") + utf8(password)
             self.request.headers["Authorization"] = (b("Basic ") +
@@ -244,7 +275,7 @@ class _HTTPConnection(object):
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
-            if self.request.method in ("POST", "PUT"):
+            if self.request.method in ("POST", "PATCH", "PUT"):
                 assert self.request.body is not None
             else:
                 assert self.request.body is None
@@ -289,15 +320,15 @@ class _HTTPConnection(object):
             yield
         except Exception, e:
             logging.warning("uncaught exception", exc_info=True)
-            self._run_callback(HTTPResponse(self.request, 599, error=e, 
+            self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
+            if hasattr(self, "stream"):
+                self.stream.close()
 
     def _on_close(self):
-        self._run_callback(HTTPResponse(
-                self.request, 599,
-                request_time=time.time() - self.start_time,
-                error=HTTPError(599, "Connection closed")))
+        if self.final_callback is not None:
+            raise HTTPError(599, "Connection closed")
 
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
@@ -314,7 +345,7 @@ class _HTTPConnection(object):
                 # use them but if they differ it's an error.
                 pieces = re.split(r',\s*', self.headers["Content-Length"])
                 if any(i != pieces[0] for i in pieces):
-                    raise ValueError("Multiple unequal Content-Lengths: %r" % 
+                    raise ValueError("Multiple unequal Content-Lengths: %r" %
                                      self.headers["Content-Length"])
                 self.headers["Content-Length"] = pieces[0]
             content_length = int(self.headers["Content-Length"])
@@ -333,16 +364,16 @@ class _HTTPConnection(object):
         if 100 <= self.code < 200 or self.code in (204, 304):
             # These response codes never have bodies
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
-            assert "Transfer-Encoding" not in self.headers
-            assert content_length in (None, 0)
+            if ("Transfer-Encoding" in self.headers or
+                content_length not in (None, 0)):
+                raise ValueError("Response with code %d should not have body" %
+                                 self.code)
             self._on_body(b(""))
             return
 
         if (self.request.use_gzip and
             self.headers.get("Content-Encoding") == "gzip"):
-            # Magic parameter makes zlib module understand gzip header
-            # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
-            self._decompressor = zlib.decompressobj(16+zlib.MAX_WBITS)
+            self._decompressor = GzipDecompressor()
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
             self.stream.read_until(b("\r\n"), self._on_chunk_length)
@@ -359,12 +390,23 @@ class _HTTPConnection(object):
                                    self.request)
         if (self.request.follow_redirects and
             self.request.max_redirects > 0 and
-            self.code in (301, 302)):
+            self.code in (301, 302, 303, 307)):
             new_request = copy.copy(self.request)
             new_request.url = urlparse.urljoin(self.request.url,
                                                self.headers["Location"])
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
+            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
+            # client SHOULD make a GET request
+            if self.code == 303:
+                new_request.method = "GET"
+                new_request.body = None
+                for h in ["Content-Length", "Content-Type",
+                          "Content-Encoding", "Transfer-Encoding"]:
+                    try:
+                        del self.request.headers[h]
+                    except KeyError:
+                        pass
             new_request.original_request = original_request
             final_callback = self.final_callback
             self.final_callback = None
@@ -373,7 +415,8 @@ class _HTTPConnection(object):
             self.stream.close()
             return
         if self._decompressor:
-            data = self._decompressor.decompress(data)
+            data = (self._decompressor.decompress(data) +
+                    self._decompressor.flush())
         if self.request.streaming_callback:
             if self.chunks is None:
                 # if chunks is not None, we already called streaming_callback
@@ -381,7 +424,7 @@ class _HTTPConnection(object):
                 self.request.streaming_callback(data)
             buffer = BytesIO()
         else:
-            buffer = BytesIO(data) # TODO: don't require one big string?
+            buffer = BytesIO(data)  # TODO: don't require one big string?
         response = HTTPResponse(original_request,
                                 self.code, headers=self.headers,
                                 request_time=time.time() - self.start_time,
@@ -394,9 +437,21 @@ class _HTTPConnection(object):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         length = int(data.strip(), 16)
         if length == 0:
-            # all the data has been decompressed, so we don't need to
-            # decompress again in _on_body
-            self._decompressor = None
+            if self._decompressor is not None:
+                tail = self._decompressor.flush()
+                if tail:
+                    # I believe the tail will always be empty (i.e.
+                    # decompress will return all it can).  The purpose
+                    # of the flush call is to detect errors such
+                    # as truncated input.  But in case it ever returns
+                    # anything, treat it as an extra chunk
+                    if self.request.streaming_callback is not None:
+                        self.request.streaming_callback(tail)
+                    else:
+                        self.chunks.append(tail)
+                # all the data has been decompressed, so we don't need to
+                # decompress again in _on_body
+                self._decompressor = None
             self._on_body(b('').join(self.chunks))
         else:
             self.stream.read_bytes(length + 2,  # chunk ends with \r\n
@@ -420,6 +475,7 @@ class _HTTPConnection(object):
 class CertificateError(ValueError):
     pass
 
+
 def _dnsname_to_pat(dn):
     pats = []
     for frag in dn.split(r'.'):
@@ -432,6 +488,7 @@ def _dnsname_to_pat(dn):
             frag = re.escape(frag)
             pats.append(frag.replace(r'\*', '[^.]*'))
     return re.compile(r'\A' + r'\.'.join(pats) + r'\Z', re.IGNORECASE)
+
 
 def match_hostname(cert, hostname):
     """Verify that *cert* (in decoded format as returned by

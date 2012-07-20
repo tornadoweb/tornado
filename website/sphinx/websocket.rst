@@ -4,4 +4,28 @@
 .. automodule:: tornado.websocket
 
    .. autoclass:: WebSocketHandler
-      :members:  
+
+   Event handlers
+   --------------
+
+   .. automethod:: WebSocketHandler.open
+   .. automethod:: WebSocketHandler.on_message
+   .. automethod:: WebSocketHandler.on_close
+   .. automethod:: WebSocketHandler.select_subprotocol
+
+   Output
+   ------
+
+   .. automethod:: WebSocketHandler.write_message
+   .. automethod:: WebSocketHandler.close
+
+   Configuration
+   -------------
+
+   .. automethod:: WebSocketHandler.allow_draft76
+   .. automethod:: WebSocketHandler.get_websocket_scheme
+
+   Other
+   -----
+
+   .. automethod:: WebSocketHandler.async_callback

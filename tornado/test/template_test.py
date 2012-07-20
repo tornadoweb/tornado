@@ -1,11 +1,13 @@
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
+import os
 import traceback
 
-from tornado.escape import utf8, native_str
-from tornado.template import Template, DictLoader, ParseError
+from tornado.escape import utf8, native_str, to_unicode
+from tornado.template import Template, DictLoader, ParseError, Loader
 from tornado.testing import LogTrapTestCase
 from tornado.util import b, bytes_type, ObjectDict
+
 
 class TemplateTest(LogTrapTestCase):
     def test_simple(self):
@@ -85,11 +87,12 @@ class TemplateTest(LogTrapTestCase):
         self.assertEqual(template.generate(), utf8(u"\u00e9"))
 
     def test_custom_namespace(self):
-        loader = DictLoader({"test.html": "{{ inc(5) }}"}, namespace={"inc": lambda x: x+1})
+        loader = DictLoader({"test.html": "{{ inc(5) }}"}, namespace={"inc": lambda x: x + 1})
         self.assertEqual(loader.load("test.html").generate(), b("6"))
 
     def test_apply(self):
-        def upper(s): return s.upper()
+        def upper(s):
+            return s.upper()
         template = Template(utf8("{% apply upper %}foo{% end %}"))
         self.assertEqual(template.generate(upper=upper), b("FOO"))
 
@@ -98,9 +101,52 @@ class TemplateTest(LogTrapTestCase):
         self.assertEqual(template.generate(x=5), b("yes"))
         self.assertEqual(template.generate(x=3), b("no"))
 
+    def test_try(self):
+        template = Template(utf8("""{% try %}
+try{% set y = 1/x %}
+{% except %}-except
+{% else %}-else
+{% finally %}-finally
+{% end %}"""))
+        self.assertEqual(template.generate(x=1), b("\ntry\n-else\n-finally\n"))
+        self.assertEqual(template.generate(x=0), b("\ntry-except\n-finally\n"))
+
     def test_comment_directive(self):
         template = Template(utf8("{% comment blah blah %}foo"))
         self.assertEqual(template.generate(), b("foo"))
+
+    def test_break_continue(self):
+        template = Template(utf8("""\
+{% for i in range(10) %}
+    {% if i == 2 %}
+        {% continue %}
+    {% end %}
+    {{ i }}
+    {% if i == 6 %}
+        {% break %}
+    {% end %}
+{% end %}"""))
+        result = template.generate()
+        # remove extraneous whitespace
+        result = b('').join(result.split())
+        self.assertEqual(result, b("013456"))
+
+    def test_break_outside_loop(self):
+        try:
+            Template(utf8("{% break %}"))
+            raise Exception("Did not get expected exception")
+        except ParseError:
+            pass
+
+    def test_break_in_apply(self):
+        # This test verifies current behavior, although of course it would
+        # be nice if apply didn't cause seemingly unrelated breakage
+        try:
+            Template(utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}"))
+            raise Exception("Did not get expected exception")
+        except ParseError:
+            pass
+
 
 class StackTraceTest(LogTrapTestCase):
     def test_error_line_number_expression(self):
@@ -156,7 +202,6 @@ three{%end%}
         except ZeroDivisionError:
             exc_stack = traceback.format_exc()
         self.assertTrue("# base.html:1" in exc_stack)
-
 
     def test_error_line_number_extends_sub_error(self):
         loader = DictLoader({
@@ -228,7 +273,7 @@ default: {% include 'default.html' %}
 expr: {{ name }}
 raw: {% raw name %}""",
             }
-    
+
     def test_default_off(self):
         loader = DictLoader(self.templates, autoescape=None)
         name = "Bobby <table>s"
@@ -243,7 +288,7 @@ raw: {% raw name %}""",
                          b("escaped: Bobby &lt;table&gt;s\n"
                            "unescaped: Bobby <table>s\n"
                            "default: Bobby <table>s\n"))
-        
+
     def test_default_on(self):
         loader = DictLoader(self.templates, autoescape="xhtml_escape")
         name = "Bobby <table>s"
@@ -253,7 +298,7 @@ raw: {% raw name %}""",
                          b("Bobby <table>s"))
         self.assertEqual(loader.load("default.html").generate(name=name),
                          b("Bobby &lt;table&gt;s"))
-        
+
         self.assertEqual(loader.load("include.html").generate(name=name),
                          b("escaped: Bobby &lt;table&gt;s\n"
                            "unescaped: Bobby <table>s\n"
@@ -269,7 +314,9 @@ raw: {% raw name %}""",
 
     def test_extended_block(self):
         loader = DictLoader(self.templates)
-        def render(name): return loader.load(name).generate(name="<script>")
+
+        def render(name):
+            return loader.load(name).generate(name="<script>")
         self.assertEqual(render("escaped_extends_unescaped.html"),
                          b("base: <script>"))
         self.assertEqual(render("escaped_overrides_unescaped.html"),
@@ -282,19 +329,23 @@ raw: {% raw name %}""",
 
     def test_raw_expression(self):
         loader = DictLoader(self.templates)
-        def render(name): return loader.load(name).generate(name='<>&"')
+
+        def render(name):
+            return loader.load(name).generate(name='<>&"')
         self.assertEqual(render("raw_expression.html"),
                          b("expr: &lt;&gt;&amp;&quot;\n"
                            "raw: <>&\""))
 
     def test_custom_escape(self):
-        loader = DictLoader({"foo.py": 
+        loader = DictLoader({"foo.py":
                              "{% autoescape py_escape %}s = {{ name }}\n"})
+
         def py_escape(s):
             self.assertEqual(type(s), bytes_type)
             return repr(native_str(s))
+
         def render(template, name):
-            return loader.load(template).generate(py_escape=py_escape, 
+            return loader.load(template).generate(py_escape=py_escape,
                                                   name=name)
         self.assertEqual(render("foo.py", "<html>"),
                          b("s = '<html>'\n"))
@@ -302,3 +353,13 @@ raw: {% raw name %}""",
                          b("""s = "';sys.exit()"\n"""))
         self.assertEqual(render("foo.py", ["not a string"]),
                          b("""s = "['not a string']"\n"""))
+
+
+class TemplateLoaderTest(LogTrapTestCase):
+    def setUp(self):
+        self.loader = Loader(os.path.join(os.path.dirname(__file__), "templates"))
+
+    def test_utf8_in_file(self):
+        tmpl = self.loader.load("utf8.html")
+        result = tmpl.generate()
+        self.assertEqual(to_unicode(result).strip(), u"H\u00e9llo")
