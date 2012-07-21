@@ -105,6 +105,8 @@ class RequestHandler(object):
     _template_loader_lock = threading.Lock()
 
     def __init__(self, application, request, **kwargs):
+        super(RequestHandler, self).__init__()
+        
         self.application = application
         self.request = request
         self._headers_written = False
