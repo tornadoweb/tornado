@@ -289,7 +289,9 @@ class OAuthMixin(object):
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
-            if callback_uri:
+            if callback_uri == "oob":
+                args["oauth_callback"] = "oob"
+            elif callback_uri:
                 args["oauth_callback"] = urlparse.urljoin(
                     self.request.full_url(), callback_uri)
             if extra_params:
