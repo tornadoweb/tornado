@@ -127,6 +127,7 @@ class TornadoReactor(PosixReactorBase):
         self._fds = {}  # a map of fd to a (reader, writer) tuple
         self._delayedCalls = {}
         PosixReactorBase.__init__(self)
+        self.addSystemEventTrigger('during', 'shutdown', self.crash)
 
         # IOLoop.start() bypasses some of the reactor initialization.
         # Fire off the necessary events if they weren't already triggered
@@ -280,7 +281,7 @@ class TornadoReactor(PosixReactorBase):
     # IOLoop.start() instead of Reactor.run().
     def stop(self):
         PosixReactorBase.stop(self)
-        self._io_loop.stop()
+        self.fireSystemEvent("shutdown")
 
     def crash(self):
         PosixReactorBase.crash(self)
@@ -291,8 +292,6 @@ class TornadoReactor(PosixReactorBase):
 
     def mainLoop(self):
         self._io_loop.start()
-        if self._stopped:
-            self.fireSystemEvent("shutdown")
 TornadoReactor = implementer(IReactorTime, IReactorFDSet)(TornadoReactor)
 
 
