@@ -260,11 +260,12 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         server, client = self.make_iostream_pair()
         client.set_close_callback(self.stop)
         try:
-            server.write(OK, server.close)
+            server.write(OK)
             client.read_until(b("\r\n"), self.stop)
             res = self.wait()
             self.assertEqual(res, OK)
 
+            server.close()
             client.read_until(b("\r\n"), lambda x: x)
             # If _close_callback (self.stop) is not called,
             # an AssertionError: Async operation timed out after 5 seconds
