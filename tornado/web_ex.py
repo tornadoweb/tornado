@@ -42,7 +42,7 @@ class StaticFileExHandler(RequestHandler):
     you would add a line to your application like::
 
         application = web.Application([
-            (r"/static/(.*)", web.StaticFileHandler, 
+            (r"/static/(.*)", web.StaticFileExHandler, 
                 {"path": "/var/www", "dir_explore": True}),
         ])
 
@@ -72,6 +72,27 @@ class StaticFileExHandler(RequestHandler):
 
     def head(self, path):
         self.get(path, include_body=False)
+            
+    """templ.html:
+    
+        <div>head</div>
+        {% for url in urls %}
+            <li><a href="{{ url }}">{{ url }}</a></li>
+        {% end %}
+        <div>tail</div>
+        
+    class TestHandler(tornado.web_ex.StaticFileExHandler):
+    def show_urls(self, urls):
+        self.render("templ.html", urls=urls)
+                
+    (r"/testr/(.*)", TestHandler, 
+                {"path": r"/cygdrive/f/test/python", "dir_explore": True})
+    """         
+    def show_urls(self, urls):
+        a = []
+        for url in urls:
+            a.append('''<a href="%s">%s</a>''' % (url, url))            
+        self.finish("<br/>".join(a))
 
     def get(self, path, include_body=True):
         path = self.parse_url_path(path)
@@ -94,15 +115,15 @@ class StaticFileExHandler(RequestHandler):
             if(not self.dir_explore):
                 raise HTTPError(403, "%s is not a file", path)
             else:
-                file_list = []
+                urls = []
                 for root, dirs, files in os.walk(abspath): 
                     files.sort()
                     for file in files:
-                        url = self.request.path + file
-                        file_list.append('''<a href="%s">%s</a>''' % (url, url))
-                txt = "<br/>".join(file_list)
-                self.finish(txt)
-                return
+                        r = root.replace(abspath, self.request.path) + "/"
+                        url = r + file
+                        urls.append(url.replace("\\", "/").replace("//", "/"))
+                self.show_urls(urls)                
+            return
 
         stat_result = os.stat(abspath)
         modified = datetime.datetime.fromtimestamp(stat_result[stat.ST_MTIME])
