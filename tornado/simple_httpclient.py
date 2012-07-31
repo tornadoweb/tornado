@@ -335,7 +335,13 @@ class _HTTPConnection(object):
         first_line, _, header_data = data.partition("\n")
         match = re.match("HTTP/1.[01] ([0-9]+)", first_line)
         assert match
-        self.code = int(match.group(1))
+        code = int(match.group(1))
+        if code != 100:
+            self.code = code
+        else:
+            self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
+            return
+
         self.headers = HTTPHeaders.parse(header_data)
 
         if "Content-Length" in self.headers:
