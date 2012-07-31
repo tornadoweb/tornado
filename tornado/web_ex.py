@@ -95,10 +95,12 @@ class StaticFileExHandler(RequestHandler):
                 raise HTTPError(403, "%s is not a file", path)
             else:
                 file_list = []
-                for root, dirs, files in os.walk(dir): 
+                for root, dirs, files in os.walk(abspath): 
                     for file in files:
-                        file_list.append(root + file)
-                self.write("<br/>".join(file_list))
+                        url = self.request.path + file
+                        file_list.append('''<a href="%s">%s</a>''' % (url, url))
+                txt = "<br/>".join(file_list)
+                self.finish(txt)
                 return
 
         stat_result = os.stat(abspath)
