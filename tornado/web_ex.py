@@ -96,6 +96,7 @@ class StaticFileExHandler(RequestHandler):
             else:
                 file_list = []
                 for root, dirs, files in os.walk(abspath): 
+                    files.sort()
                     for file in files:
                         url = self.request.path + file
                         file_list.append('''<a href="%s">%s</a>''' % (url, url))
