@@ -1005,7 +1005,21 @@ class FacebookGraphMixin(OAuth2Mixin):
                         callback, fields, response):
         if response.error:
             logging.warning('Facebook auth error: %s' % str(response))
-            callback(None)
+            
+            try:
+                json = escape.json_decode(response.body)
+            except Exception:
+                logging.warning("Invalid JSON from Facebook: %r", response.body)
+                callback(None)
+                return
+                
+            if isinstance(json, dict) and json.get("error_code"):
+                logging.warning("Facebook error: %d: %r", json["error_code"],
+                                json.get("error_msg"))
+                callback(None)
+                return
+    
+            callback(json) 
             return
 
         args = escape.parse_qs_bytes(escape.native_str(response.body))
@@ -1089,8 +1103,24 @@ class FacebookGraphMixin(OAuth2Mixin):
         if response.error:
             logging.warning("Error response %s fetching %s", response.error,
                             response.request.url)
-            callback(None)
+                            
+            try:
+                json = escape.json_decode(response.body)
+            except Exception:
+                logging.warning("Invalid JSON from Facebook: %r", response.body)
+                callback(None)
+                return
+                
+            if isinstance(json, dict) and json.get("error_code"):
+                logging.warning("Facebook error: %d: %r", json["error_code"],
+                                json.get("error_msg"))
+                callback(None)
+                return
+    
+            callback(json)
             return
+
+        
         callback(escape.json_decode(response.body))
 
 
