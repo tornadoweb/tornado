@@ -333,9 +333,10 @@ class _HTTPConnection(object):
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
         first_line, _, header_data = data.partition("\n")
-        match = re.match("HTTP/1.[01] ([0-9]+)", first_line)
+        match = re.match("HTTP/1.[01] ([0-9]+) ([^\r]*)", first_line)
         assert match
         self.code = int(match.group(1))
+        self.reason = match.group(2)
         self.headers = HTTPHeaders.parse(header_data)
 
         if "Content-Length" in self.headers:
@@ -426,7 +427,8 @@ class _HTTPConnection(object):
         else:
             buffer = BytesIO(data)  # TODO: don't require one big string?
         response = HTTPResponse(original_request,
-                                self.code, headers=self.headers,
+                                self.code, reason=self.reason,
+                                headers=self.headers,
                                 request_time=time.time() - self.start_time,
                                 buffer=buffer,
                                 effective_url=self.request.url)
