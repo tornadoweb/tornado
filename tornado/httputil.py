@@ -25,6 +25,7 @@ import re
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.util import b, ObjectDict
 
+log = logging.getLogger('tornado')
 
 class HTTPHeaders(dict):
     """A dictionary that maintains Http-Header-Case for all keys.
@@ -221,7 +222,7 @@ def parse_body_arguments(content_type, body, arguments, files):
                 parse_multipart_form_data(utf8(v), body, arguments, files)
                 break
         else:
-            logging.warning("Invalid multipart/form-data")
+            log.warning("Invalid multipart/form-data")
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):
@@ -240,7 +241,7 @@ def parse_multipart_form_data(boundary, data, arguments, files):
         boundary = boundary[1:-1]
     final_boundary_index = data.rfind(b("--") + boundary + b("--"))
     if final_boundary_index == -1:
-        logging.warning("Invalid multipart/form-data: no final boundary")
+        log.warning("Invalid multipart/form-data: no final boundary")
         return
     parts = data[:final_boundary_index].split(b("--") + boundary + b("\r\n"))
     for part in parts:
@@ -248,17 +249,17 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             continue
         eoh = part.find(b("\r\n\r\n"))
         if eoh == -1:
-            logging.warning("multipart/form-data missing headers")
+            log.warning("multipart/form-data missing headers")
             continue
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
         if disposition != "form-data" or not part.endswith(b("\r\n")):
-            logging.warning("Invalid multipart/form-data")
+            log.warning("Invalid multipart/form-data")
             continue
         value = part[eoh + 4:-2]
         if not disp_params.get("name"):
-            logging.warning("multipart/form-data value missing name")
+            log.warning("multipart/form-data value missing name")
             continue
         name = disp_params["name"]
         if disp_params.get("filename"):

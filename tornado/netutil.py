@@ -34,6 +34,7 @@ try:
 except ImportError:
     ssl = None
 
+log = logging.getLogger('tornado')
 
 class TCPServer(object):
     r"""A non-blocking, single-threaded TCP server.
@@ -234,7 +235,7 @@ class TCPServer(object):
                 stream = IOStream(connection, io_loop=self.io_loop)
             self.handle_stream(stream, address)
         except Exception:
-            logging.error("Error in connection callback", exc_info=True)
+            log.error("Error in connection callback", exc_info=True)
 
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):

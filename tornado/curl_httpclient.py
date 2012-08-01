@@ -32,6 +32,7 @@ from tornado import stack_context
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 
+log = logging.getLogger('tornado')
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(self, io_loop=None, max_clients=10,
@@ -53,7 +54,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             # socket_action is found in pycurl since 7.18.2 (it's been
             # in libcurl longer than that but wasn't accessible to
             # python).
-            logging.warning("socket_action method missing from pycurl; "
+            log.warning("socket_action method missing from pycurl; "
                             "falling back to socket_all. Upgrading "
                             "libcurl and pycurl will improve performance")
             self._socket_action = \
@@ -389,11 +390,11 @@ def _curl_setup_request(curl, request, buffer, headers):
         userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
         curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
         curl.setopt(pycurl.USERPWD, utf8(userpwd))
-        logging.debug("%s %s (username: %r)", request.method, request.url,
+        log.debug("%s %s (username: %r)", request.method, request.url,
                       request.auth_username)
     else:
         curl.unsetopt(pycurl.USERPWD)
-        logging.debug("%s %s", request.method, request.url)
+        log.debug("%s %s", request.method, request.url)
 
     if request.client_cert is not None:
         curl.setopt(pycurl.SSLCERT, request.client_cert)
@@ -429,12 +430,12 @@ def _curl_header_callback(headers, header_line):
 def _curl_debug(debug_type, debug_msg):
     debug_types = ('I', '<', '>', '<', '>')
     if debug_type == 0:
-        logging.debug('%s', debug_msg.strip())
+        log.debug('%s', debug_msg.strip())
     elif debug_type in (1, 2):
         for line in debug_msg.splitlines():
-            logging.debug('%s %s', debug_types[debug_type], line)
+            log.debug('%s %s', debug_types[debug_type], line)
     elif debug_type == 4:
-        logging.debug('%s %r', debug_types[debug_type], debug_msg)
+        log.debug('%s %r', debug_types[debug_type], debug_msg)
 
 if __name__ == "__main__":
     AsyncHTTPClient.configure(CurlAsyncHTTPClient)

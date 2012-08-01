@@ -48,6 +48,7 @@ except ImportError:
 
 from tornado.platform.auto import set_close_exec, Waker
 
+log = logging.getLogger('tornado')
 
 class IOLoop(object):
     """A level-triggered I/O loop.
@@ -191,7 +192,7 @@ class IOLoop(object):
                 try:
                     os.close(fd)
                 except Exception:
-                    logging.debug("error closing fd %s", fd, exc_info=True)
+                    log.debug("error closing fd %s", fd, exc_info=True)
         self._waker.close()
         self._impl.close()
 
@@ -211,7 +212,7 @@ class IOLoop(object):
         try:
             self._impl.unregister(fd)
         except (OSError, IOError):
-            logging.debug("Error deleting fd from IOLoop", exc_info=True)
+            log.debug("Error deleting fd from IOLoop", exc_info=True)
 
     def set_blocking_signal_threshold(self, seconds, action):
         """Sends a signal if the ioloop is blocked for more than s seconds.
@@ -225,7 +226,7 @@ class IOLoop(object):
         too long.
         """
         if not hasattr(signal, "setitimer"):
-            logging.error("set_blocking_signal_threshold requires a signal module "
+            log.error("set_blocking_signal_threshold requires a signal module "
                        "with the setitimer method")
             return
         self._blocking_signal_threshold = seconds
@@ -244,7 +245,7 @@ class IOLoop(object):
 
         For use with set_blocking_signal_threshold.
         """
-        logging.warning('IOLoop blocked for %f seconds in\n%s',
+        log.warning('IOLoop blocked for %f seconds in\n%s',
                         self._blocking_signal_threshold,
                         ''.join(traceback.format_stack(frame)))
 
@@ -254,6 +255,11 @@ class IOLoop(object):
         The loop will run until one of the I/O handlers calls stop(), which
         will make the loop stop after the current event iteration completes.
         """
+        # don't start without some log handling enabled
+        if len(logging.getLogger().handlers) == 0:
+            logging.basicConfig()
+            # we could also use tornado.options.enable_pretty_logging()
+
         if self._stopped:
             self._stopped = False
             return
@@ -330,10 +336,10 @@ class IOLoop(object):
                         # Happens when the client closes the connection
                         pass
                     else:
-                        logging.error("Exception in I/O handler for fd %s",
+                        log.error("Exception in I/O handler for fd %s",
                                       fd, exc_info=True)
                 except Exception:
-                    logging.error("Exception in I/O handler for fd %s",
+                    log.error("Exception in I/O handler for fd %s",
                                   fd, exc_info=True)
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
@@ -432,7 +438,7 @@ class IOLoop(object):
         The exception itself is not passed explicitly, but is available
         in sys.exc_info.
         """
-        logging.error("Exception in callback %r", callback, exc_info=True)
+        log.error("Exception in callback %r", callback, exc_info=True)
 
 
 class _Timeout(object):
@@ -501,7 +507,7 @@ class PeriodicCallback(object):
         try:
             self.callback()
         except Exception:
-            logging.error("Error in periodic callback", exc_info=True)
+            log.error("Error in periodic callback", exc_info=True)
         self._schedule_next()
 
     def _schedule_next(self):
@@ -668,5 +674,5 @@ else:
         # All other systems
         import sys
         if "linux" in sys.platform:
-            logging.warning("epoll module not found; using select()")
+            log.warning("epoll module not found; using select()")
         _poll = _Select

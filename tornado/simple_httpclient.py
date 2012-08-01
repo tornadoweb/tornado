@@ -33,6 +33,7 @@ except ImportError:
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
 
+log = logging.getLogger('tornado')
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -101,7 +102,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.queue.append((request, callback))
         self._process_queue()
         if self.queue:
-            logging.debug("max_clients limit reached, request queued. "
+            log.debug("max_clients limit reached, request queued. "
                           "%d active, %d queued requests." % (
                     len(self.active), len(self.queue)))
 
@@ -319,7 +320,7 @@ class _HTTPConnection(object):
         try:
             yield
         except Exception, e:
-            logging.warning("uncaught exception", exc_info=True)
+            log.warning("uncaught exception", exc_info=True)
             self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
