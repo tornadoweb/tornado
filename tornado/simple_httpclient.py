@@ -328,7 +328,10 @@ class _HTTPConnection(object):
 
     def _on_close(self):
         if self.final_callback is not None:
-            raise HTTPError(599, "Connection closed")
+            message = "Connection closed"
+            if self.stream.error:
+                message = str(self.stream.error)
+            raise HTTPError(599, message)
 
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
