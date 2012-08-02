@@ -489,7 +489,7 @@ class RequestHandler(object):
             raise RuntimeError("Cannot write() after finish().  May be caused "
                                "by using async operations without the "
                                "@asynchronous decorator.")
-        if isinstance(chunk, dict):
+        if isinstance(chunk, dict) or isinstance(chunk, list):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
         chunk = utf8(chunk)
