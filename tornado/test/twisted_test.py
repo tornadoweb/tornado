@@ -196,6 +196,9 @@ class Reader(object):
     def fileno(self):
         return self._fd.fileno()
 
+    def readConnectionLost(self, reason):
+        self.close()
+
     def connectionLost(self, reason):
         self.close()
 
