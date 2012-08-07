@@ -1,13 +1,15 @@
 #!/usr/bin/env python
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 from tornado.stack_context import StackContext, wrap
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.util import b
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
 import logging
 import unittest
+
 
 class TestRequestHandler(RequestHandler):
     def __init__(self, app, request, io_loop):
@@ -37,6 +39,7 @@ class TestRequestHandler(RequestHandler):
         else:
             return 'unexpected failure'
 
+
 class HTTPStackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([('/', TestRequestHandler,
@@ -45,12 +48,13 @@ class HTTPStackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
     def test_stack_context(self):
         self.http_client.fetch(self.get_url('/'), self.handle_response)
         self.wait()
-        self.assertEquals(self.response.code, 500)
-        self.assertTrue('got expected exception' in self.response.body)
+        self.assertEqual(self.response.code, 500)
+        self.assertTrue(b('got expected exception') in self.response.body)
 
     def handle_response(self, response):
         self.response = response
         self.stop()
+
 
 class StackContextTest(AsyncTestCase, LogTrapTestCase):
     def setUp(self):
@@ -72,10 +76,12 @@ class StackContextTest(AsyncTestCase, LogTrapTestCase):
             with StackContext(functools.partial(self.context, 'library')):
                 self.io_loop.add_callback(
                   functools.partial(library_inner_callback, callback))
+
         def library_inner_callback(callback):
             self.assertEqual(self.active_contexts[-2:],
                              ['application', 'library'])
             callback()
+
         def final_callback():
             # implementation detail:  the full context stack at this point
             # is ['application', 'library', 'application'].  The 'library'
@@ -85,6 +91,38 @@ class StackContextTest(AsyncTestCase, LogTrapTestCase):
             self.stop()
         with StackContext(functools.partial(self.context, 'application')):
             library_function(final_callback)
+        self.wait()
+
+    def test_deactivate(self):
+        deactivate_callbacks = []
+
+        def f1():
+            with StackContext(functools.partial(self.context, 'c1')) as c1:
+                deactivate_callbacks.append(c1)
+                self.io_loop.add_callback(f2)
+
+        def f2():
+            with StackContext(functools.partial(self.context, 'c2')) as c2:
+                deactivate_callbacks.append(c2)
+                self.io_loop.add_callback(f3)
+
+        def f3():
+            with StackContext(functools.partial(self.context, 'c3')) as c3:
+                deactivate_callbacks.append(c3)
+                self.io_loop.add_callback(f4)
+
+        def f4():
+            self.assertEqual(self.active_contexts, ['c1', 'c2', 'c3'])
+            deactivate_callbacks[1]()
+            # deactivating a context doesn't remove it immediately,
+            # but it will be missing from the next iteration
+            self.assertEqual(self.active_contexts, ['c1', 'c2', 'c3'])
+            self.io_loop.add_callback(f5)
+
+        def f5():
+            self.assertEqual(self.active_contexts, ['c1', 'c3'])
+            self.stop()
+        self.io_loop.add_callback(f1)
         self.wait()
 
 if __name__ == '__main__':

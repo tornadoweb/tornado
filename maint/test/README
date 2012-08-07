@@ -1,0 +1,3 @@
+This directory contains additional tests that are not included in the main
+suite (because e.g. they have extra dependencies, run slowly, or produce
+more output than a simple pass/fail)

@@ -1,0 +1,2 @@
+{% import tornado.escape %}
+<div class="message" id="m{{ message["id"] }}">{{ tornado.escape.linkify(message["body"]) }}</div>

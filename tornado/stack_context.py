@@ -29,12 +29,13 @@ wrapping each AsyncHTTPClient callback in async_callback) to the mechanisms
 that transfer control from one context to another (e.g. AsyncHTTPClient
 itself, IOLoop, thread pools, etc).
 
-Example usage:
+Example usage::
+
     @contextlib.contextmanager
     def die_on_error():
         try:
             yield
-        except:
+        except Exception:
             logging.error("exception in asynchronous operation",exc_info=True)
             sys.exit(1)
 
@@ -44,48 +45,84 @@ Example usage:
         # in the ioloop.
         http_client.fetch(url, callback)
     ioloop.start()
+
+Most applications shouln't have to work with `StackContext` directly.
+Here are a few rules of thumb for when it's necessary:
+
+* If you're writing an asynchronous library that doesn't rely on a
+  stack_context-aware library like `tornado.ioloop` or `tornado.iostream`
+  (for example, if you're writing a thread pool), use
+  `stack_context.wrap()` before any asynchronous operations to capture the
+  stack context from where the operation was started.
+
+* If you're writing an asynchronous library that has some shared
+  resources (such as a connection pool), create those shared resources
+  within a ``with stack_context.NullContext():`` block.  This will prevent
+  ``StackContexts`` from leaking from one request to another.
+
+* If you want to write something like an exception handler that will
+  persist across asynchronous calls, create a new `StackContext` (or
+  `ExceptionStackContext`), and make your asynchronous calls in a ``with``
+  block that references your `StackContext`.
 '''
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import contextlib
 import functools
 import itertools
-import logging
+import operator
+import sys
 import threading
+
+from tornado.util import raise_exc_info
+
 
 class _State(threading.local):
     def __init__(self):
         self.contexts = ()
 _state = _State()
 
-class StackContext(object):
-    def __init__(self, context_factory):
-        '''Establishes the given context as a StackContext that will be transferred.
 
-        Note that the parameter is a callable that returns a context
-        manager, not the context itself.  That is, where for a
-        non-transferable context manager you would say
-          with my_context():
-        StackContext takes the function itself rather than its result:
-          with StackContext(my_context):
-        '''
+class StackContext(object):
+    '''Establishes the given context as a StackContext that will be transferred.
+
+    Note that the parameter is a callable that returns a context
+    manager, not the context itself.  That is, where for a
+    non-transferable context manager you would say::
+
+      with my_context():
+
+    StackContext takes the function itself rather than its result::
+
+      with StackContext(my_context):
+
+    The result of ``with StackContext() as cb:`` is a deactivation
+    callback.  Run this callback when the StackContext is no longer
+    needed to ensure that it is not propagated any further (note that
+    deactivating a context does not affect any instances of that
+    context that are currently pending).  This is an advanced feature
+    and not necessary in most applications.
+    '''
+    def __init__(self, context_factory, _active_cell=None):
         self.context_factory = context_factory
+        self.active_cell = _active_cell or [True]
 
     # Note that some of this code is duplicated in ExceptionStackContext
     # below.  ExceptionStackContext is more common and doesn't need
     # the full generality of this class.
     def __enter__(self):
         self.old_contexts = _state.contexts
-        # _state.contexts is a tuple of (class, arg) pairs
-        _state.contexts = (self.old_contexts + 
-                           ((StackContext, self.context_factory),))
+        # _state.contexts is a tuple of (class, arg, active_cell) tuples
+        _state.contexts = (self.old_contexts +
+                           ((StackContext, self.context_factory, self.active_cell),))
         try:
             self.context = self.context_factory()
             self.context.__enter__()
         except Exception:
             _state.contexts = self.old_contexts
             raise
+        return lambda: operator.setitem(self.active_cell, 0, False)
 
     def __exit__(self, type, value, traceback):
         try:
@@ -93,26 +130,30 @@ class StackContext(object):
         finally:
             _state.contexts = self.old_contexts
 
+
 class ExceptionStackContext(object):
-    def __init__(self, exception_handler):
-        '''Specialization of StackContext for exception handling.
+    '''Specialization of StackContext for exception handling.
 
-        The supplied exception_handler function will be called in the
-        event of an uncaught exception in this context.  The semantics are
-        similar to a try/finally clause, and intended use cases are to log
-        an error, close a socket, or similar cleanup actions.  The
-        exc_info triple (type, value, traceback) will be passed to the
-        exception_handler function.
+    The supplied exception_handler function will be called in the
+    event of an uncaught exception in this context.  The semantics are
+    similar to a try/finally clause, and intended use cases are to log
+    an error, close a socket, or similar cleanup actions.  The
+    exc_info triple (type, value, traceback) will be passed to the
+    exception_handler function.
 
-        If the exception handler returns true, the exception will be
-        consumed and will not be propagated to other exception handlers.
-        '''
+    If the exception handler returns true, the exception will be
+    consumed and will not be propagated to other exception handlers.
+    '''
+    def __init__(self, exception_handler, _active_cell=None):
         self.exception_handler = exception_handler
+        self.active_cell = _active_cell or [True]
 
     def __enter__(self):
         self.old_contexts = _state.contexts
         _state.contexts = (self.old_contexts +
-                           ((ExceptionStackContext, self.exception_handler),))
+                           ((ExceptionStackContext, self.exception_handler,
+                             self.active_cell),))
+        return lambda: operator.setitem(self.active_cell, 0, False)
 
     def __exit__(self, type, value, traceback):
         try:
@@ -120,6 +161,7 @@ class ExceptionStackContext(object):
                 return self.exception_handler(type, value, traceback)
         finally:
             _state.contexts = self.old_contexts
+
 
 class NullContext(object):
     '''Resets the StackContext.
@@ -135,46 +177,97 @@ class NullContext(object):
     def __exit__(self, type, value, traceback):
         _state.contexts = self.old_contexts
 
+
+class _StackContextWrapper(functools.partial):
+    pass
+
+
 def wrap(fn):
-    '''Returns a callable object that will resore the current StackContext
+    '''Returns a callable object that will restore the current StackContext
     when executed.
 
     Use this whenever saving a callback to be executed later in a
     different execution context (either in a different thread or
     asynchronously in the same thread).
     '''
-    if fn is None:
-      return None
+    if fn is None or fn.__class__ is _StackContextWrapper:
+        return fn
     # functools.wraps doesn't appear to work on functools.partial objects
     #@functools.wraps(fn)
-    def wrapped(callback, contexts, *args, **kwargs):
+
+    def wrapped(*args, **kwargs):
+        callback, contexts, args = args[0], args[1], args[2:]
+        
+        if contexts is _state.contexts or not contexts:
+            callback(*args, **kwargs)
+            return
+        if not _state.contexts:
+            new_contexts = [cls(arg, active_cell)
+                            for (cls, arg, active_cell) in contexts
+                            if active_cell[0]]
         # If we're moving down the stack, _state.contexts is a prefix
         # of contexts.  For each element of contexts not in that prefix,
         # create a new StackContext object.
         # If we're moving up the stack (or to an entirely different stack),
         # _state.contexts will have elements not in contexts.  Use
         # NullContext to clear the state and then recreate from contexts.
-        if (len(_state.contexts) > len(contexts) or
+        elif (len(_state.contexts) > len(contexts) or
             any(a[1] is not b[1]
                 for a, b in itertools.izip(_state.contexts, contexts))):
             # contexts have been removed or changed, so start over
             new_contexts = ([NullContext()] +
-                            [cls(arg) for (cls,arg) in contexts])
+                            [cls(arg, active_cell)
+                             for (cls, arg, active_cell) in contexts
+                             if active_cell[0]])
         else:
-            new_contexts = [cls(arg)
-                            for (cls, arg) in contexts[len(_state.contexts):]]
+            new_contexts = [cls(arg, active_cell)
+                            for (cls, arg, active_cell) in contexts[len(_state.contexts):]
+                            if active_cell[0]]
         if len(new_contexts) > 1:
-            with contextlib.nested(*new_contexts):
+            with _nested(*new_contexts):
                 callback(*args, **kwargs)
         elif new_contexts:
             with new_contexts[0]:
                 callback(*args, **kwargs)
         else:
             callback(*args, **kwargs)
-    if getattr(fn, 'stack_context_wrapped', False):
-        return fn
-    contexts = _state.contexts
-    result = functools.partial(wrapped, fn, contexts)
-    result.stack_context_wrapped = True
-    return result
+    if _state.contexts:
+        return _StackContextWrapper(wrapped, fn, _state.contexts)
+    else:
+        return _StackContextWrapper(fn)
 
+
+@contextlib.contextmanager
+def _nested(*managers):
+    """Support multiple context managers in a single with-statement.
+
+    Copied from the python 2.6 standard library.  It's no longer present
+    in python 3 because the with statement natively supports multiple
+    context managers, but that doesn't help if the list of context
+    managers is not known until runtime.
+    """
+    exits = []
+    vars = []
+    exc = (None, None, None)
+    try:
+        for mgr in managers:
+            exit = mgr.__exit__
+            enter = mgr.__enter__
+            vars.append(enter())
+            exits.append(exit)
+        yield vars
+    except:
+        exc = sys.exc_info()
+    finally:
+        while exits:
+            exit = exits.pop()
+            try:
+                if exit(*exc):
+                    exc = (None, None, None)
+            except:
+                exc = sys.exc_info()
+        if exc != (None, None, None):
+            # Don't rely on sys.exc_info() still containing
+            # the right information. Another exception may
+            # have been raised and caught by an exit method
+            raise_exc_info(exc)

@@ -1,0 +1,53 @@
+What's new in Tornado 1.1
+=========================
+
+Sep 7, 2010
+-----------
+
+::
+
+    We are pleased to announce the release of Tornado 1.1, available from
+    https://github.com/downloads/facebook/tornado/tornado-1.1.tar.gz
+
+    Changes in this release:
+    * RequestHandler.async_callback and related functions in other classes
+      are no longer needed in most cases (although it's harmless to continue
+      using them).  Uncaught exceptions will now cause the request to be closed
+      even in a callback.  If you're curious how this works, see the new
+      tornado.stack_context module.
+    * The new tornado.testing module contains support for unit testing
+      asynchronous IOLoop-based code.
+    * AsyncHTTPClient has been rewritten (the new implementation was
+      available as AsyncHTTPClient2 in Tornado 1.0; both names are
+      supported for backwards compatibility).
+    * The tornado.auth module has had a number of updates, including support
+      for OAuth 2.0 and the Facebook Graph API, and upgrading Twitter and
+      Google support to OAuth 1.0a.
+    * The websocket module is back and supports the latest version (76) of the
+      websocket protocol.  Note that this module's interface is different
+      from the websocket module that appeared in pre-1.0 versions of Tornado.
+    * New method RequestHandler.initialize() can be overridden in subclasses
+      to simplify handling arguments from URLSpecs.  The sequence of methods
+      called during initialization is documented at
+      http://tornadoweb.org/documentation#overriding-requesthandler-methods
+    * get_argument() and related methods now work on PUT requests in addition
+      to POST.
+    * The httpclient module now supports HTTP proxies.
+    * When HTTPServer is run in SSL mode, the SSL handshake is now non-blocking.
+    * Many smaller bug fixes and documentation updates
+
+    Backwards-compatibility notes:
+    * While most users of Tornado should not have to deal with the stack_context
+      module directly, users of worker thread pools and similar constructs may
+      need to use stack_context.wrap and/or NullContext to avoid memory leaks.
+    * The new AsyncHTTPClient still works with libcurl version 7.16.x, but it
+      performs better when both libcurl and pycurl are at least version 7.18.2.
+    * OAuth transactions started under previous versions of the auth module
+      cannot be completed under the new module.  This applies only to the
+      initial authorization process; once an authorized token is issued that
+      token works with either version.
+
+    Many thanks to everyone who contributed patches, bug reports, and feedback
+    that went into this release!
+
+    -Ben

@@ -1,0 +1,9 @@
+application: tornado-tests-appengine27
+version: 1
+runtime: python27
+threadsafe: false
+api_version: 1
+
+handlers:
+- url: /
+  script: cgi_runtests.py

@@ -1,0 +1,22 @@
+What's new in Tornado 1.1.1
+===========================
+
+Feb 8, 2011
+-----------
+
+::
+
+    Tornado 1.1.1 is a BACKWARDS-INCOMPATIBLE security update that fixes an
+    XSRF vulnerability.  It is available at
+    https://github.com/downloads/facebook/tornado/tornado-1.1.1.tar.gz
+
+    This is a backwards-incompatible change.  Applications that previously
+    relied on a blanket exception for XMLHTTPRequest may need to be modified
+    to explicitly include the XSRF token when making ajax requests.
+
+    The tornado chat demo application demonstrates one way of adding this
+    token (specifically the function postJSON in demos/chat/static/chat.js).
+
+    More information about this change and its justification can be found at
+    http://www.djangoproject.com/weblog/2011/feb/08/security/
+    http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
