@@ -33,6 +33,10 @@ if "linux" in sys.platform.lower() and not python_26:
     extensions.append(distutils.core.Extension(
         "tornado.epoll", ["tornado/epoll.c"]))
 
+# Build the WebSocket unmask optimization
+extensions.append(distutils.core.Extension(
+    "tornado._websocket_unmask", ["tornado/_websocket_unmask.c"]))
+
 version = "2.3.post1"
 
 if major >= 3:
