@@ -125,6 +125,27 @@ def engine(func):
     return wrapper
 
 
+def task(func):
+    """Decorator applying Task interface to the function.
+
+    It is shortcut to simplify usage of ``gen.Task``. If function only be used
+    through Task interface, then it can be decorated with ``gen.task`` decorator
+    and then used with yield directly:
+
+        @gen.task
+        def func(name, callback):
+            callback('Hello, %s!' % name)
+
+        result = yield func(*args, **kwargs)
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return Task(func, *args, **kwargs)
+
+    return wrapper
+
+
 class YieldPoint(object):
     """Base class for objects that may be yielded from the generator."""
     def start(self, runner):

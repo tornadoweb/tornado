@@ -8,6 +8,8 @@
 
    .. autofunction:: engine
 
+   .. autofunction:: task
+
    Yield points
    ------------
 
