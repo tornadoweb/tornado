@@ -192,7 +192,7 @@ There are three ways to return an error from a `RequestHandler`:
 The default error page includes a stack trace in debug mode and a one-line
 description of the error (e.g. "500: Internal Server Error") otherwise.
 To produce a custom error page, override `RequestHandler.write_error`.
-This method may produce output normally via methods such as 
+This method may produce output normally via methods such as
 `~RequestHandler.write` and `~RequestHandler.render`.  If the error was
 caused by an exception, an ``exc_info`` triple will be passed as a keyword
 argument (note that this exception is not guaranteed to be the current
@@ -203,7 +203,7 @@ In Tornado 2.0 and earlier, custom error pages were implemented by overriding
 ``RequestHandler.get_error_html``, which returned the error page as a string
 instead of calling the normal output methods (and had slightly different
 semantics for exceptions).  This method is still supported, but it is
-deprecated and applications are encouraged to switch to 
+deprecated and applications are encouraged to switch to
 `RequestHandler.write_error`.
 
 Redirection
@@ -527,7 +527,7 @@ function ``xsrf_form_html()``, available in all templates:
 ::
 
     <form action="/new_message" method="post">
-      {{ xsrf_form_html() }}
+      {% module xsrf_form_html() %}
       <input type="text" name="message"/>
       <input type="submit" value="Post"/>
     </form>
@@ -695,7 +695,7 @@ Here is a properly localized template:
            <div>{{ _("Username") }} <input type="text" name="username"/></div>
            <div>{{ _("Password") }} <input type="password" name="password"/></div>
            <div><input type="submit" value="{{ _("Sign in") }}"/></div>
-           {{ xsrf_form_html() }}
+           {% module xsrf_form_html() %}
          </form>
        </body>
      </html>
@@ -1105,4 +1105,3 @@ AppEngine <http://code.google.com/appengine/>`_ application:
 See the `appengine example application
 <https://github.com/facebook/tornado/tree/master/demos/appengine>`_ for a
 full-featured AppEngine app built on Tornado.
-
