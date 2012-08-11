@@ -153,6 +153,14 @@ class GenTest(AsyncTestCase):
             self.stop()
         self.run_gen(f)
 
+    def test_task_decorator(self):
+        @gen.engine
+        def f():
+            w = gen.task(self.io_loop.add_callback)
+            yield w()
+            self.stop()
+        self.run_gen(f)
+
     def test_wait_all(self):
         @gen.engine
         def f():
