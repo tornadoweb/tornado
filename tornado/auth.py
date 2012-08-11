@@ -285,7 +285,7 @@ class OAuthMixin(object):
             oauth_consumer_key=consumer_token["key"],
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes).decode('ascii'),
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
@@ -327,7 +327,7 @@ class OAuthMixin(object):
             oauth_token=request_token["key"],
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes).decode('ascii'),
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         if "verifier" in request_token:
@@ -376,7 +376,7 @@ class OAuthMixin(object):
             oauth_token=access_token["key"],
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes).decode('ascii'),
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         args = {}
