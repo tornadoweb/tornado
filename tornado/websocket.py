@@ -32,6 +32,18 @@ import tornado.web
 
 from tornado.util import bytes_type, b
 
+def unmask_frame_python(data, mask):
+    mask = array.array("B", mask)
+    unmasked = array.array("B", data)
+    for i in xrange(len(data)):
+        unmasked[i] = unmasked[i] ^ mask[i % 4]
+    return unmasked
+
+try:
+    from tornado._websocket_unmask import unmask_frame
+except ImportError:
+    # Optimized version is not available, use (slower) Python version
+    unmask_frame = unmask_frame_python
 
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
@@ -564,14 +576,11 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.stream.read_bytes(4, self._on_masking_key)
 
     def _on_masking_key(self, data):
-        self._frame_mask = array.array("B", data)
+        self._frame_mask = data
         self.stream.read_bytes(self._frame_length, self._on_frame_data)
 
     def _on_frame_data(self, data):
-        unmasked = array.array("B", data)
-        for i in xrange(len(data)):
-            unmasked[i] = unmasked[i] ^ self._frame_mask[i % 4]
-
+        unmasked = unmask_frame(data, self._frame_mask)
         if self._frame_opcode_is_control:
             # control frames may be interleaved with a series of fragmented
             # data frames, so control frames must not interact with

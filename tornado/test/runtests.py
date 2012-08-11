@@ -27,6 +27,7 @@ TEST_MODULES = [
     'tornado.test.twisted_test',
     'tornado.test.util_test',
     'tornado.test.web_test',
+    'tornado.test.websocket_test',
     'tornado.test.wsgi_test',
 ]
 
