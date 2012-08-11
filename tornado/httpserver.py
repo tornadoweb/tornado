@@ -29,14 +29,13 @@ from __future__ import absolute_import, division, with_statement
 import Cookie
 import logging
 import socket
-import time
 
 from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
 from tornado.netutil import TCPServer
 from tornado import stack_context
-from tornado.util import b, bytes_type
+from tornado.util import b, bytes_type, monotime
 
 try:
     import ssl  # Python 2.6+
@@ -378,7 +377,7 @@ class HTTPRequest(object):
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}
         self.connection = connection
-        self._start_time = time.time()
+        self._start_time = monotime()
         self._finish_time = None
 
         self.path, sep, self.query = uri.partition('?')
@@ -414,7 +413,7 @@ class HTTPRequest(object):
     def finish(self):
         """Finishes this HTTP request on the open connection."""
         self.connection.finish()
-        self._finish_time = time.time()
+        self._finish_time = monotime()
 
     def full_url(self):
         """Reconstructs the full URL for this request."""
@@ -423,7 +422,7 @@ class HTTPRequest(object):
     def request_time(self):
         """Returns the amount of time it took for this request to execute."""
         if self._finish_time is None:
-            return time.time() - self._start_time
+            return monotime() - self._start_time
         else:
             return self._finish_time - self._start_time
 

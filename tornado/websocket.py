@@ -21,11 +21,11 @@ from __future__ import absolute_import, division, with_statement
 # Author: Jacob Kristhammar, 2010
 
 import array
+import datetime
 import functools
 import hashlib
 import logging
 import struct
-import time
 import base64
 import tornado.escape
 import tornado.web
@@ -433,7 +433,7 @@ class WebSocketProtocol76(WebSocketProtocol):
             self.stream.close()
         elif self._waiting is None:
             self._waiting = self.stream.io_loop.add_timeout(
-                time.time() + 5, self._abort)
+                datetime.timedelta(seconds=5), self._abort)
 
 
 class WebSocketProtocol13(WebSocketProtocol):
@@ -651,4 +651,4 @@ class WebSocketProtocol13(WebSocketProtocol):
             # Give the client a few seconds to complete a clean shutdown,
             # otherwise just close the connection.
             self._waiting = self.stream.io_loop.add_timeout(
-                time.time() + 5, self._abort)
+                datetime.timedelta(seconds=5), self._abort)

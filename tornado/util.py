@@ -5,6 +5,26 @@ from __future__ import absolute_import, division, with_statement
 import zlib
 
 
+try:
+    # You can get the monotime module from:
+    # http://pypi.python.org/pypi/Monotime/
+    import monotime
+except ImportError:
+    pass
+import time
+try:
+    # python 3.3 has time.monotonic(), or the monotime module might have
+    # added it.
+    monotime_impl = time.monotonic
+except AttributeError:
+    import logging
+    logging.warning("time.monotonic() not available; using time.time()")
+    monotime_impl = time.time
+# wrap monotime_impl so that monotime_impl can be reassigned in unit tests
+def monotime():
+  return monotime_impl()
+
+
 class ObjectDict(dict):
     """Makes a dictionary behave like an object."""
     def __getattr__(self, name):

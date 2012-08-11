@@ -34,13 +34,12 @@ from __future__ import absolute_import, division, with_statement
 import calendar
 import email.utils
 import httplib
-import time
 import weakref
 
 from tornado.escape import utf8
 from tornado import httputil
 from tornado.ioloop import IOLoop
-from tornado.util import import_object, bytes_type
+from tornado.util import import_object, bytes_type, monotime
 
 
 class HTTPClient(object):
@@ -319,7 +318,7 @@ class HTTPRequest(object):
         self.allow_ipv6 = allow_ipv6
         self.client_key = client_key
         self.client_cert = client_cert
-        self.start_time = time.time()
+        self.start_time = monotime()
 
 
 class HTTPResponse(object):

@@ -48,7 +48,6 @@ from __future__ import absolute_import, division, with_statement
 
 import functools
 import logging
-import time
 
 from twisted.internet.posixbase import PosixReactorBase
 from twisted.internet.interfaces import \
@@ -62,6 +61,7 @@ import tornado
 import tornado.ioloop
 from tornado.stack_context import NullContext
 from tornado.ioloop import IOLoop
+from tornado.util import monotime
 
 
 class TornadoDelayedCall(object):
@@ -71,7 +71,8 @@ class TornadoDelayedCall(object):
         self._func = functools.partial(f, *args, **kw)
         self._time = self._reactor.seconds() + seconds
         self._timeout = self._reactor._io_loop.add_timeout(self._time,
-                                                           self._called)
+                                                           self._called,
+                                                           monotonic=True)
         self._active = True
 
     def _called(self):
@@ -139,7 +140,7 @@ class TornadoReactor(PosixReactorBase):
 
     # IReactorTime
     def seconds(self):
-        return time.time()
+        return monotime()
 
     def callLater(self, seconds, f, *args, **kw):
         dc = TornadoDelayedCall(self, seconds, f, *args, **kw)

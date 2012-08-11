@@ -5,10 +5,10 @@ from tornado.iostream import IOStream
 from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
 from tornado.util import b
 from tornado.web import RequestHandler, Application
+import datetime
 import errno
 import socket
 import sys
-import time
 
 
 class HelloHandler(RequestHandler):
@@ -226,7 +226,7 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
             # Allow the close to propagate to the client side of the
             # connection.  Using add_callback instead of add_timeout
             # doesn't seem to work, even with multiple iterations
-            self.io_loop.add_timeout(time.time() + 0.01, self.stop)
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01), self.stop)
             self.wait()
             client.read_bytes(256, self.stop)
             data = self.wait()
