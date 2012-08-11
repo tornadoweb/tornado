@@ -76,5 +76,5 @@ html_theme_options = dict(
     )
 
 latex_documents = [
-    ('index', 'tornado', 'Tornado Documentation', 'Facebook', 'manual', False),
+    ('index', 'tornado.tex', 'Tornado Documentation', 'Facebook', 'manual', False),
     ]
