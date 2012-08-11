@@ -527,7 +527,7 @@ function ``xsrf_form_html()``, available in all templates:
 ::
 
     <form action="/new_message" method="post">
-      {{ xsrf_form_html() }}
+      {% module xsrf_form_html() %}
       <input type="text" name="message"/>
       <input type="submit" value="Post"/>
     </form>
@@ -695,7 +695,7 @@ Here is a properly localized template:
            <div>{{ _("Username") }} <input type="text" name="username"/></div>
            <div>{{ _("Password") }} <input type="password" name="password"/></div>
            <div><input type="submit" value="{{ _("Sign in") }}"/></div>
-           {{ xsrf_form_html() }}
+           {% module xsrf_form_html() %}
          </form>
        </body>
      </html>
@@ -1113,4 +1113,3 @@ AppEngine <http://code.google.com/appengine/>`_ application:
 See the `appengine example application
 <https://github.com/facebook/tornado/tree/master/demos/appengine>`_ for a
 full-featured AppEngine app built on Tornado.
-
