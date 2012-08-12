@@ -282,10 +282,10 @@ class OAuthMixin(object):
         consumer_token = self._oauth_consumer_token()
         url = self._OAUTH_REQUEST_TOKEN_URL
         args = dict(
-            oauth_consumer_key=consumer_token["key"],
+            oauth_consumer_key=escape.to_basestring(consumer_token["key"]),
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_nonce=escape.to_basestring(binascii.b2a_hex(uuid.uuid4().bytes)),
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
@@ -312,7 +312,7 @@ class OAuthMixin(object):
         self.set_cookie("_oauth_request_token", data)
         args = dict(oauth_token=request_token["key"])
         if callback_uri == "oob":
-            self.finish(authorize_url + "?" + urllib.urlencode(args)) 
+            self.finish(authorize_url + "?" + urllib.urlencode(args))
             return
         elif callback_uri:
             args["oauth_callback"] = urlparse.urljoin(
@@ -323,11 +323,11 @@ class OAuthMixin(object):
         consumer_token = self._oauth_consumer_token()
         url = self._OAUTH_ACCESS_TOKEN_URL
         args = dict(
-            oauth_consumer_key=consumer_token["key"],
-            oauth_token=request_token["key"],
+            oauth_consumer_key=escape.to_basestring(consumer_token["key"]),
+            oauth_token=escape.to_basestring(request_token["key"]),
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_nonce=escape.to_basestring(binascii.b2a_hex(uuid.uuid4().bytes)),
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         if "verifier" in request_token:
@@ -372,11 +372,11 @@ class OAuthMixin(object):
         """
         consumer_token = self._oauth_consumer_token()
         base_args = dict(
-            oauth_consumer_key=consumer_token["key"],
-            oauth_token=access_token["key"],
+            oauth_consumer_key=escape.to_basestring(consumer_token["key"]),
+            oauth_token=escape.to_basestring(access_token["key"]),
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
-            oauth_nonce=binascii.b2a_hex(uuid.uuid4().bytes),
+            oauth_nonce=escape.to_basestring(binascii.b2a_hex(uuid.uuid4().bytes)),
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
         args = {}
