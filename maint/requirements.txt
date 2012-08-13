@@ -17,7 +17,7 @@ virtualenv==1.7.1.2
 # Indirect dependencies
 Jinja2==2.6
 Pygments==1.5
-docutils==0.9
+docutils==0.9.1
 py==1.4.9
 wsgiref==0.1.2
 zope.interface==4.0.1
