@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
+import datetime
 import unittest
-import time
 from tornado.testing import AsyncTestCase, LogTrapTestCase
 
 
@@ -20,9 +20,9 @@ class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):
         This test makes sure that a second call to wait()
         clears the first timeout.
         """
-        self.io_loop.add_timeout(time.time() + 0.01, self.stop)
+        self.io_loop.add_timeout(datetime.timedelta(seconds=0.01), self.stop)
         self.wait(timeout=0.02)
-        self.io_loop.add_timeout(time.time() + 0.03, self.stop)
+        self.io_loop.add_timeout(datetime.timedelta(seconds=0.03), self.stop)
         self.wait(timeout=0.1)
 
 

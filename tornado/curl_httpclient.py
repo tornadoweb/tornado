@@ -20,10 +20,10 @@ from __future__ import absolute_import, division, with_statement
 
 import cStringIO
 import collections
+import datetime
 import logging
 import pycurl
 import threading
-import time
 
 from tornado import httputil
 from tornado import ioloop
@@ -31,6 +31,7 @@ from tornado import stack_context
 
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+from tornado.util import monotime
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
@@ -108,7 +109,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
         self._timeout = self.io_loop.add_timeout(
-            time.time() + msecs / 1000.0, self._handle_timeout)
+            datetime.timedelta(milliseconds=msecs), self._handle_timeout)
 
     def _handle_events(self, fd, events):
         """Called by IOLoop when there is activity on one of our
@@ -200,7 +201,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                         "buffer": cStringIO.StringIO(),
                         "request": request,
                         "callback": callback,
-                        "curl_start_time": time.time(),
+                        "curl_start_time": monotime(),
                     }
                     # Disable IPv6 to mitigate the effects of this bug
                     # on curl versions <= 7.21.0
@@ -246,7 +247,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             info["callback"](HTTPResponse(
                 request=info["request"], code=code, headers=info["headers"],
                 buffer=buffer, effective_url=effective_url, error=error,
-                request_time=time.time() - info["curl_start_time"],
+                request_time=monotime() - info["curl_start_time"],
                 time_info=time_info))
         except Exception:
             self.handle_callback_exception(info["callback"])

@@ -47,6 +47,7 @@ except ImportError:
     signal = None
 
 from tornado.platform.auto import set_close_exec, Waker
+from tornado.util import monotime
 
 
 class IOLoop(object):
@@ -271,7 +272,7 @@ class IOLoop(object):
                 self._run_callback(callback)
 
             if self._timeouts:
-                now = time.time()
+                now = monotime()
                 while self._timeouts:
                     if self._timeouts[0].callback is None:
                         # the timeout was cancelled
@@ -366,7 +367,7 @@ class IOLoop(object):
         """Returns true if this IOLoop is currently running."""
         return self._running
 
-    def add_timeout(self, deadline, callback):
+    def add_timeout(self, deadline, callback, monotonic=None):
         """Calls the given callback at the time deadline from the I/O loop.
 
         Returns a handle that may be passed to remove_timeout to cancel.
@@ -378,8 +379,15 @@ class IOLoop(object):
         Note that it is not safe to call `add_timeout` from other threads.
         Instead, you must use `add_callback` to transfer control to the
         IOLoop's thread, and then call `add_timeout` from there.
+
+        Set monotonic=False if deadline is from time.time(), or monotonic=True
+        if it comes from tornado.util.monotime().  If deadline is a
+        datetime.timedelta, you can omit the monotonic flag.  For backward
+        compatibility, an unspecified monotonic flag acts like monotonic=False
+        but prints a warning.
         """
-        timeout = _Timeout(deadline, stack_context.wrap(callback))
+        timeout = _Timeout(deadline, stack_context.wrap(callback),
+                           monotonic=monotonic)
         heapq.heappush(self._timeouts, timeout)
         return timeout
 
@@ -441,11 +449,18 @@ class _Timeout(object):
     # Reduce memory overhead when there are lots of pending callbacks
     __slots__ = ['deadline', 'callback']
 
-    def __init__(self, deadline, callback):
+    def __init__(self, deadline, callback, monotonic):
         if isinstance(deadline, (int, long, float)):
-            self.deadline = deadline
+            if monotonic:
+                self.deadline = deadline
+            else:
+                if hasattr(time, 'monotonic'):
+                    import inspect
+                    logging.warning('non-monotonic time _Timeout() created at %s:%d',
+                                    inspect.stack()[2][1], inspect.stack()[2][2])
+                self.deadline = deadline - time.time() + monotime()
         elif isinstance(deadline, datetime.timedelta):
-            self.deadline = time.time() + _Timeout.timedelta_to_seconds(deadline)
+            self.deadline = monotime() + _Timeout.timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r" % deadline)
         self.callback = callback
@@ -485,7 +500,7 @@ class PeriodicCallback(object):
     def start(self):
         """Starts the timer."""
         self._running = True
-        self._next_timeout = time.time()
+        self._next_timeout = monotime()
         self._schedule_next()
 
     def stop(self):
@@ -506,10 +521,11 @@ class PeriodicCallback(object):
 
     def _schedule_next(self):
         if self._running:
-            current_time = time.time()
+            current_time = monotime()
             while self._next_timeout <= current_time:
                 self._next_timeout += self.callback_time / 1000.0
-            self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
+            self._timeout = self.io_loop.add_timeout(self._next_timeout,
+                                    self._run, monotonic=True)
 
 
 class _EPoll(object):

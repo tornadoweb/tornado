@@ -37,7 +37,7 @@ try:
     from tornado.platform.twisted import TornadoReactor
     from zope.interface import implementer
     have_twisted = True
-except ImportError:
+except (ImportError, TypeError):
     have_twisted = False
 
 from tornado.httpclient import AsyncHTTPClient

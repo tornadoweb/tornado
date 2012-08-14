@@ -23,6 +23,8 @@ import itertools
 import logging
 import time
 
+from tornado.util import monotime
+
 try:
     import MySQLdb.constants
     import MySQLdb.converters
@@ -79,7 +81,7 @@ class Connection(object):
 
         self._db = None
         self._db_args = args
-        self._last_use_time = time.time()
+        self._last_use_time = monotime()
         try:
             self.reconnect()
         except Exception:
@@ -195,9 +197,9 @@ class Connection(object):
         # case by preemptively closing and reopening the connection
         # if it has been idle for too long (7 hours by default).
         if (self._db is None or
-            (time.time() - self._last_use_time > self.max_idle_time)):
+            (monotime() - self._last_use_time > self.max_idle_time)):
             self.reconnect()
-        self._last_use_time = time.time()
+        self._last_use_time = monotime()
 
     def _cursor(self):
         self._ensure_connected()
