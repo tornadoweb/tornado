@@ -401,7 +401,8 @@ class IOStream(object):
         try:
             chunk = self.socket.recv(self.read_chunk_size)
         except socket.error, e:
-            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN,
+                             errno.ETIMEDOUT):
                 return None
             else:
                 raise
@@ -539,7 +540,8 @@ class IOStream(object):
                 _merge_prefix(self._write_buffer, num_bytes)
                 self._write_buffer.popleft()
             except socket.error, e:
-                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN,
+                                 errno.ETIMEDOUT):
                     self._write_buffer_frozen = True
                     break
                 else:
@@ -707,7 +709,8 @@ class SSLIOStream(IOStream):
             else:
                 raise
         except socket.error, e:
-            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN,
+                             errno.ETIMEDOUT):
                 return None
             else:
                 raise
