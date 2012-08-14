@@ -56,4 +56,7 @@ class ImportTest(unittest.TestCase):
         except ImportError:
             pass
         else:
-            import tornado.platform.twisted
+            try:
+                import tornado.platform.twisted
+            except TypeError:
+                pass
