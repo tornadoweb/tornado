@@ -12,7 +12,7 @@ from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
 
@@ -319,3 +319,23 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
         with closing(AsyncHTTPClient(
                 self.io_loop, max_clients=14, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 14)
+
+
+class HTTP100ContinueTestCase(AsyncTestCase, LogTrapTestCase):
+    def respond_100(self, request):
+        self.request = request
+        self.request.connection.stream.write(b("HTTP/1.1 100 CONTINUE\r\n\r\n"), self.respond_200)
+
+    def respond_200(self):
+        self.request.connection.stream.write(b("HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA"))
+
+    def test_100_continue(self):
+        from tornado.httpserver import HTTPServer
+
+        port   = get_unused_port()
+        server = HTTPServer(self.respond_100, io_loop = self.io_loop)
+        server.listen(port)
+        client = SimpleAsyncHTTPClient(io_loop = self.io_loop)
+        client.fetch('http://localhost:%d/' % port, self.stop)
+        res = self.wait()
+        self.assertEqual(res.body, b('A'))
