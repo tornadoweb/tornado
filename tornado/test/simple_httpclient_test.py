@@ -284,17 +284,15 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(host_re.match(response.body), response.body)
 
 
-class SaveAsyncHTTPClientConfigurationTestCase(AsyncTestCase, LogTrapTestCase):
+class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
     def setUp(self):
-        super(SaveAsyncHTTPClientConfigurationTestCase, self).setUp()
+        super(CreateAsyncHTTPClientTestCase, self).setUp()
         self.saved = AsyncHTTPClient._save_configuration()
 
     def tearDown(self):
         AsyncHTTPClient._restore_configuration(self.saved)
-        super(SaveAsyncHTTPClientConfigurationTestCase, self).tearDown()
+        super(CreateAsyncHTTPClientTestCase, self).tearDown()
 
-
-class CreateAsyncHTTPClientTestCase(SaveAsyncHTTPClientConfigurationTestCase):
     def test_max_clients(self):
         # The max_clients argument is tricky because it was originally
         # allowed to be passed positionally; newer arguments are keyword-only.
@@ -323,7 +321,7 @@ class CreateAsyncHTTPClientTestCase(SaveAsyncHTTPClientConfigurationTestCase):
             self.assertEqual(client.max_clients, 14)
 
 
-class HTTP100ContinueTestCase(SaveAsyncHTTPClientConfigurationTestCase):
+class HTTP100ContinueTestCase(AsyncTestCase, LogTrapTestCase):
     def respond_100(self, request):
         self.request = request
         self.request.connection.stream.write("HTTP/1.1 100 CONTINUE\r\n\r\n", self.respond_200)
