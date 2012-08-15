@@ -338,4 +338,4 @@ class HTTP100ContinueTestCase(AsyncTestCase, LogTrapTestCase):
         client = SimpleAsyncHTTPClient(io_loop = self.io_loop)
         client.fetch('http://localhost:%d/' % port, self.stop)
         res = self.wait()
-        self.assertEqual(res.body, 'A')
+        self.assertEqual(res.body, b('A'))
