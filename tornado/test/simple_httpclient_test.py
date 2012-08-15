@@ -321,21 +321,22 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
             self.assertEqual(client.max_clients, 14)
 
 
-class HTTP100ContinueTestCase(AsyncTestCase, LogTrapTestCase):
+class HTTP100ContinueTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def respond_100(self, request):
         self.request = request
-        self.request.connection.stream.write(b("HTTP/1.1 100 CONTINUE\r\n\r\n"), self.respond_200)
+        self.request.connection.stream.write(
+            b("HTTP/1.1 100 CONTINUE\r\n\r\n"),
+            self.respond_200)
 
     def respond_200(self):
-        self.request.connection.stream.write(b("HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA"))
+        self.request.connection.stream.write(
+            b("HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA"),
+            self.request.connection.stream.close)
+
+    def get_app(self):
+        # Not a full Application, but works as an HTTPServer callback
+        return self.respond_100
 
     def test_100_continue(self):
-        from tornado.httpserver import HTTPServer
-
-        port   = get_unused_port()
-        server = HTTPServer(self.respond_100, io_loop = self.io_loop)
-        server.listen(port)
-        client = SimpleAsyncHTTPClient(io_loop = self.io_loop)
-        client.fetch('http://localhost:%d/' % port, self.stop)
-        res = self.wait()
+        res = self.fetch('/')
         self.assertEqual(res.body, b('A'))
