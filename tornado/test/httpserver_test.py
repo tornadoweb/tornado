@@ -300,6 +300,11 @@ class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
         data = json_decode(response.body)
         self.assertEqual(data, {u"foo": [u"\u00e9"]})
 
+    def test_empty_query_string(self):
+        response = self.fetch("/echo?foo=&foo=")
+        data = json_decode(response.body)
+        self.assertEqual(data, {u"foo": [u"", u""]})
+
     def test_types(self):
         headers = {"Cookie": "foo=bar"}
         response = self.fetch("/typecheck?foo=bar", headers=headers)
