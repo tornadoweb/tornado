@@ -196,6 +196,9 @@ class Reader(object):
     def fileno(self):
         return self._fd.fileno()
 
+    def readConnectionLost(self, reason):
+        self.close()
+
     def connectionLost(self, reason):
         self.close()
 
@@ -478,6 +481,13 @@ else:
             # if we were running twisted's own test runner.
             'test_connectToLinuxAbstractNamespace',
             'test_listenOnLinuxAbstractNamespace',
+            # These tests use twisted's sendmsg.c extension and sometimes
+            # fail with what looks like uninitialized memory errors
+            # (more common on pypy than cpython, but I've seen it on both)
+            'test_sendFileDescriptor',
+            'test_sendFileDescriptorTriggersPauseProducing',
+            'test_descriptorDeliveredBeforeBytes',
+            'test_avoidLeakingFileDescriptors',
             ],
         'twisted.internet.test.test_unix.UNIXDatagramTestsBuilder': [
             'test_listenOnLinuxAbstractNamespace',

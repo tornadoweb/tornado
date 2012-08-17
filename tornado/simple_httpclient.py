@@ -61,7 +61,6 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     """
     def initialize(self, io_loop=None, max_clients=10,
-                   max_simultaneous_connections=None,
                    hostname_mapping=None, max_buffer_size=104857600):
         """Creates a AsyncHTTPClient.
 
@@ -69,11 +68,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         in order to provide limitations on the number of pending connections.
         force_instance=True may be used to suppress this behavior.
 
-        max_clients is the number of concurrent requests that can be in
-        progress.  max_simultaneous_connections has no effect and is accepted
-        only for compatibility with the curl-based AsyncHTTPClient.  Note
-        that these arguments are only used when the client is first created,
-        and will be ignored when an existing client is reused.
+        max_clients is the number of concurrent requests that can be
+        in progress.  Note that this arguments are only used when the
+        client is first created, and will be ignored when an existing
+        client is reused.
 
         hostname_mapping is a dictionary mapping hostnames to IP addresses.
         It can be used to make local DNS changes when modifying system-wide
@@ -335,7 +333,13 @@ class _HTTPConnection(object):
         first_line, _, header_data = data.partition("\n")
         match = re.match("HTTP/1.[01] ([0-9]+)", first_line)
         assert match
-        self.code = int(match.group(1))
+        code = int(match.group(1))
+        if 100 <= code < 200:
+            self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
+            return
+        else:
+            self.code = code
+
         self.headers = HTTPHeaders.parse(header_data)
 
         if "Content-Length" in self.headers:

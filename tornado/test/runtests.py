@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
+import sys
 import unittest
 
 TEST_MODULES = [
@@ -53,4 +54,12 @@ if __name__ == '__main__':
                             module=r"tornado\..*")
 
     import tornado.testing
-    tornado.testing.main()
+    kwargs = {}
+    if sys.version_info >= (3,2):
+        # HACK:  unittest.main will make its own changes to the warning
+        # configuration, which may conflict with the settings above
+        # or command-line flags like -bb.  Passing warnings=False
+        # suppresses this behavior, although this looks like an implementation
+        # detail.  http://bugs.python.org/issue15626
+        kwargs['warnings'] = False
+    tornado.testing.main(**kwargs)

@@ -34,14 +34,12 @@ from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPCl
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
-    def initialize(self, io_loop=None, max_clients=10,
-                   max_simultaneous_connections=None):
+    def initialize(self, io_loop=None, max_clients=10):
         self.io_loop = io_loop
         self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
-        self._curls = [_curl_create(max_simultaneous_connections)
-                       for i in xrange(max_clients)]
+        self._curls = [_curl_create() for i in xrange(max_clients)]
         self._free_list = self._curls[:]
         self._requests = collections.deque()
         self._fds = {}
@@ -263,12 +261,11 @@ class CurlError(HTTPError):
         self.errno = errno
 
 
-def _curl_create(max_simultaneous_connections=None):
+def _curl_create():
     curl = pycurl.Curl()
     if logging.getLogger().isEnabledFor(logging.DEBUG):
         curl.setopt(pycurl.VERBOSE, 1)
         curl.setopt(pycurl.DEBUGFUNCTION, _curl_debug)
-    curl.setopt(pycurl.MAXCONNECTS, max_simultaneous_connections or 5)
     return curl
 
 

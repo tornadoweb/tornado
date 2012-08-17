@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, with_statement
 from tornado import gen
-from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
+from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
 from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
@@ -66,7 +66,8 @@ class SecureCookieTest(LogTrapTestCase):
                               'foo', '1234', b('5678') + timestamp),
             sig)
         # tamper with the cookie
-        handler._cookies['foo'] = utf8('1234|5678%s|%s' % (timestamp, sig))
+        handler._cookies['foo'] = utf8('1234|5678%s|%s' % (
+                to_basestring(timestamp), to_basestring(sig)))
         # it gets rejected
         self.assertTrue(handler.get_secure_cookie('foo') is None)
 

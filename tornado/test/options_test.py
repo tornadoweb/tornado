@@ -1,13 +1,26 @@
 from __future__ import absolute_import, division, with_statement
+import contextlib
 import logging
 import os
 import re
 import tempfile
 import unittest
+import warnings
 
 from tornado.escape import utf8
 from tornado.options import _Options, _LogFormatter
 from tornado.util import b, bytes_type
+
+@contextlib.contextmanager
+def ignore_bytes_warning():
+    if not hasattr(warnings, 'catch_warnings'):
+        # python 2.5 doesn't have catch_warnings, but it doesn't have
+        # BytesWarning either so there's nothing to catch.
+        yield
+        return
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=BytesWarning)
+        yield
 
 
 class OptionsTest(unittest.TestCase):
@@ -56,7 +69,7 @@ class LogFormatterTest(unittest.TestCase):
         # Base case: default setup without explicit encoding.
         # In python 2, supports arbitrary byte strings and unicode objects
         # that contain only ascii.  In python 3, supports ascii-only unicode
-        # strings (but byte strings will be repr'd automatically.
+        # strings (but byte strings will be repr'd automatically).
         return logging.FileHandler(filename)
 
     def get_output(self):
@@ -73,9 +86,10 @@ class LogFormatterTest(unittest.TestCase):
         self.assertEqual(self.get_output(), b("foo"))
 
     def test_bytes_logging(self):
-        self.logger.error(b("\xe9"))
-        # This will be "\xe9" on python 2 or "b'\xe9'" on python 3
-        self.assertEqual(self.get_output(), utf8(repr(b("\xe9"))))
+        with ignore_bytes_warning():
+            # This will be "\xe9" on python 2 or "b'\xe9'" on python 3
+            self.logger.error(b("\xe9"))
+            self.assertEqual(self.get_output(), utf8(repr(b("\xe9"))))
 
     def test_utf8_logging(self):
         self.logger.error(u"\u00e9".encode("utf8"))
