@@ -6,6 +6,7 @@ from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase
 from tornado.util import b
 from tornado.web import RequestHandler, Application
 import errno
+import logging
 import os
 import platform
 import socket
@@ -74,6 +75,36 @@ class TestIOStreamWebMixin(object):
         self.assertEqual(data, b("200"))
 
         self.stream.close()
+
+    def test_write_while_connecting(self):
+        stream = self._make_client_iostream()
+        connected = [False]
+        def connected_callback():
+            connected[0] = True
+            self.stop()
+        stream.connect(("localhost", self.get_http_port()),
+                       callback=connected_callback)
+        # unlike the previous tests, try to write before the connection
+        # is complete.
+        written = [False]
+        def write_callback():
+            written[0] = True
+            self.stop()
+        stream.write(b("GET / HTTP/1.0\r\nConnection: close\r\n\r\n"),
+                     callback=write_callback)
+        self.assertTrue(not connected[0])
+        # by the time the write has flushed, the connection callback has
+        # also run
+        try:
+            self.wait(lambda: connected[0] and written[0])
+        finally:
+            logging.info((connected, written))
+
+        stream.read_until_close(self.stop)
+        data = self.wait()
+        self.assertTrue(data.endswith(b("Hello")))
+
+        stream.close()
 
 
 class TestIOStreamMixin(object):
