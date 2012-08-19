@@ -427,7 +427,7 @@ class HTTPRequest(object):
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(self):
+    def get_ssl_certificate(self, binary_form=False):
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer must have been constructed
@@ -440,12 +440,16 @@ class HTTPRequest(object):
                     cert_reqs=ssl.CERT_REQUIRED,
                     ca_certs="cacert.crt"))
 
-        The return value is a dictionary, see SSLSocket.getpeercert() in
-        the standard library for more details.
+        By default, the return value is a dictionary (or None, if no
+        client certificate is present).  If ``binary_form`` is true, a
+        DER-encoded form of the certificate is returned instead.  See
+        SSLSocket.getpeercert() in the standard library for more
+        details.
         http://docs.python.org/library/ssl.html#sslsocket-objects
         """
         try:
-            return self.connection.stream.socket.getpeercert()
+            return self.connection.stream.socket.getpeercert(
+                binary_form=binary_form)
         except ssl.SSLError:
             return None
 
