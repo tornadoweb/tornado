@@ -1,14 +1,21 @@
 from __future__ import absolute_import, division, with_statement
 from tornado import netutil
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
+from tornado.iostream import IOStream, SSLIOStream
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
 from tornado.util import b
 from tornado.web import RequestHandler, Application
 import errno
+import os
+import platform
 import socket
 import sys
 import time
+
+try:
+    import ssl
+except ImportError:
+    ssl = None
 
 
 class HelloHandler(RequestHandler):
@@ -16,38 +23,39 @@ class HelloHandler(RequestHandler):
         self.write("Hello")
 
 
-class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
+class TestIOStreamWebMixin(object):
+    def _make_client_iostream(self):
+        raise NotImplementedError()
+
     def get_app(self):
         return Application([('/', HelloHandler)])
 
-    def make_iostream_pair(self, **kwargs):
-        port = get_unused_port()
-        [listener] = netutil.bind_sockets(port, '127.0.0.1',
-                                          family=socket.AF_INET)
-        streams = [None, None]
+    def test_connection_closed(self):
+        # When a server sends a response and then closes the connection,
+        # the client must be allowed to read the data before the IOStream
+        # closes itself.  Epoll reports closed connections with a separate
+        # EPOLLRDHUP event delivered at the same time as the read event,
+        # while kqueue reports them as a second read/write event with an EOF
+        # flag.
+        response = self.fetch("/", headers={"Connection": "close"})
+        response.rethrow()
 
-        def accept_callback(connection, address):
-            streams[0] = IOStream(connection, io_loop=self.io_loop, **kwargs)
-            self.stop()
+    def test_read_until_close(self):
+        stream = self._make_client_iostream()
+        stream.connect(('localhost', self.get_http_port()), callback=self.stop)
+        self.wait()
+        stream.write(b("GET / HTTP/1.0\r\n\r\n"))
 
-        def connect_callback():
-            streams[1] = client_stream
-            self.stop()
-        netutil.add_accept_handler(listener, accept_callback,
-                                   io_loop=self.io_loop)
-        client_stream = IOStream(socket.socket(), io_loop=self.io_loop,
-                                 **kwargs)
-        client_stream.connect(('127.0.0.1', port),
-                              callback=connect_callback)
-        self.wait(condition=lambda: all(streams))
-        self.io_loop.remove_handler(listener.fileno())
-        listener.close()
-        return streams
+        stream.read_until_close(self.stop)
+        data = self.wait()
+        self.assertTrue(data.startswith(b("HTTP/1.0 200")))
+        self.assertTrue(data.endswith(b("Hello")))
 
     def test_read_zero_bytes(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
-        self.stream = IOStream(s, io_loop=self.io_loop)
+        self.stream = self._make_client_iostream()
+        self.stream.connect(("localhost", self.get_http_port()),
+                            callback=self.stop)
+        self.wait()
         self.stream.write(b("GET / HTTP/1.0\r\n\r\n"))
 
         # normal read
@@ -65,7 +73,48 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         data = self.wait()
         self.assertEqual(data, b("200"))
 
-        s.close()
+        self.stream.close()
+
+
+class TestIOStreamMixin(object):
+    def _make_server_iostream(self, connection, **kwargs):
+        raise NotImplementedError()
+
+    def _make_client_iostream(self, connection ,**kwargs):
+        raise NotImplementedError()
+
+    def make_iostream_pair(self, **kwargs):
+        port = get_unused_port()
+        [listener] = netutil.bind_sockets(port, '127.0.0.1',
+                                          family=socket.AF_INET)
+        streams = [None, None]
+
+        def accept_callback(connection, address):
+            streams[0] = self._make_server_iostream(connection, **kwargs)
+            if isinstance(streams[0], SSLIOStream):
+                # HACK: The SSL handshake won't complete (and
+                # therefore the client connect callback won't be
+                # run)until the server side has tried to do something
+                # with the connection.  For these tests we want both
+                # sides to connect before we do anything else with the
+                # connection, so we must cause some dummy activity on the
+                # server.  If this turns out to be useful for real apps
+                # it should have a cleaner interface.
+                streams[0]._add_io_state(IOLoop.READ)
+            self.stop()
+
+        def connect_callback():
+            streams[1] = client_stream
+            self.stop()
+        netutil.add_accept_handler(listener, accept_callback,
+                                   io_loop=self.io_loop)
+        client_stream = self._make_client_iostream(socket.socket(), **kwargs)
+        client_stream.connect(('127.0.0.1', port),
+                              callback=connect_callback)
+        self.wait(condition=lambda: all(streams))
+        self.io_loop.remove_handler(listener.fileno())
+        listener.close()
+        return streams
 
     def test_write_zero_bytes(self):
         # Attempting to write zero bytes should run the callback without
@@ -109,27 +158,6 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         # domains instead of the proper error codes).
         stream.connect(('an invalid domain', 54321))
         self.assertTrue(isinstance(stream.error, socket.gaierror), stream.error)
-
-    def test_connection_closed(self):
-        # When a server sends a response and then closes the connection,
-        # the client must be allowed to read the data before the IOStream
-        # closes itself.  Epoll reports closed connections with a separate
-        # EPOLLRDHUP event delivered at the same time as the read event,
-        # while kqueue reports them as a second read/write event with an EOF
-        # flag.
-        response = self.fetch("/", headers={"Connection": "close"})
-        response.rethrow()
-
-    def test_read_until_close(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
-        stream = IOStream(s, io_loop=self.io_loop)
-        stream.write(b("GET / HTTP/1.0\r\n\r\n"))
-
-        stream.read_until_close(self.stop)
-        data = self.wait()
-        self.assertTrue(data.startswith(b("HTTP/1.0 200")))
-        self.assertTrue(data.endswith(b("Hello")))
 
     def test_streaming_callback(self):
         server, client = self.make_iostream_pair()
@@ -241,6 +269,17 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         # seconds.
         server, client = self.make_iostream_pair()
         try:
+            try:
+                # This test fails on pypy with ssl.  I think it's because
+                # pypy's gc defeats moves objects, breaking the
+                # "frozen write buffer" assumption.
+                if (isinstance(server, SSLIOStream) and
+                    platform.python_implementation() == 'PyPy'):
+                    return
+            except AttributeError:
+                # python 2.5 didn't have platform.python_implementation,
+                # but there was no pypy for 2.5
+                pass
             NUM_KB = 4096
             for i in xrange(NUM_KB):
                 client.write(b("A") * 1024)
@@ -275,3 +314,39 @@ class TestIOStream(AsyncHTTPTestCase, LogTrapTestCase):
         finally:
             server.close()
             client.close()
+
+class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase,
+                          LogTrapTestCase):
+    def _make_client_iostream(self):
+        return IOStream(socket.socket(), io_loop=self.io_loop)
+
+class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase,
+                           LogTrapTestCase):
+    def _make_client_iostream(self):
+        return SSLIOStream(socket.socket(), io_loop=self.io_loop)
+
+class TestIOStream(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
+    def _make_server_iostream(self, connection, **kwargs):
+        return IOStream(connection, io_loop=self.io_loop, **kwargs)
+
+    def _make_client_iostream(self, connection, **kwargs):
+        return IOStream(connection, io_loop=self.io_loop, **kwargs)
+
+class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
+    def _make_server_iostream(self, connection, **kwargs):
+        ssl_options = dict(
+            certfile=os.path.join(os.path.dirname(__file__), 'test.crt'),
+            keyfile=os.path.join(os.path.dirname(__file__), 'test.key'),
+            )
+        connection = ssl.wrap_socket(connection,
+                                     server_side=True,
+                                     do_handshake_on_connect=False,
+                                     **ssl_options)
+        return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
+
+    def _make_client_iostream(self, connection, **kwargs):
+        return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
+
+if ssl is None:
+    del TestIOStreamWebHTTPS
+    del TestIOStreamSSL
