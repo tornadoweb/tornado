@@ -218,6 +218,7 @@ class HTTPConnection(object):
         self._request = None
         self._request_finished = False
         if disconnect:
+            self._header_callback = None
             self.stream.close()
             return
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
@@ -263,6 +264,7 @@ class HTTPConnection(object):
         except _BadRequestException, e:
             logging.info("Malformed HTTP request from %s: %s",
                          self.address[0], e)
+            self._header_callback = None
             self.stream.close()
             return
 
