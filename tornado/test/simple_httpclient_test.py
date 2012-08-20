@@ -287,7 +287,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.http_client.fetch("http://localhost:1/", self.stop)
         response = self.wait()
         self.assertEqual(599, response.code)
-        self.assertIn("Connection refused", str(response.error))
+        self.assertTrue("Connection refused" in str(response.error))
 
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
