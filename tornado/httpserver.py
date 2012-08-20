@@ -172,6 +172,12 @@ class HTTPConnection(object):
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
         self._write_callback = None
 
+    def close(self):
+        self.stream.close()
+        # Remove this reference to self, which would otherwise cause a
+        # cycle and delay garbage collection of this connection.
+        self._header_callback = None
+
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
         assert self._request, "Request closed"
@@ -218,7 +224,7 @@ class HTTPConnection(object):
         self._request = None
         self._request_finished = False
         if disconnect:
-            self.stream.close()
+            self.close()
             return
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
@@ -263,7 +269,7 @@ class HTTPConnection(object):
         except _BadRequestException, e:
             logging.info("Malformed HTTP request from %s: %s",
                          self.address[0], e)
-            self.stream.close()
+            self.close()
             return
 
     def _on_request_body(self, data):
