@@ -1512,8 +1512,9 @@ class StaticFileHandler(RequestHandler):
     
         application = web.Application([
             (r"/static/(.*)", web.StaticFileHandler, 
-                {"path": "/var/www", "folder_explore": True}),
+                {"path": "/var/www", "folder": True}),
         ])
+        
 
     The local root directory of the content should be passed as the "path"
     argument to the handler.
