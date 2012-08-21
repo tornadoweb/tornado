@@ -1555,11 +1555,12 @@ class StaticFileHandler(RequestHandler):
         <div>tail</div>
         
     class TestHandler(tornado.web.StaticFileHandler):
-      def render_folder(self, urls):
-          self.render("templ.html", folder_url_list=folder_url_list, file_url_list=file_url_list)
+      def render_folder(self, folder_url_list, file_url_list):
+          self.render("templ.html", 
+              folder_url_list=folder_url_list, file_url_list=file_url_list)
                 
-    (r"/testr/(.*)", TestHandler, 
-                {"path": r"/home/andy/test/python", "folder": True})
+    (r"/static_test/(.*)", TestHandler, 
+                {"path": r"/var/www", "folder": True}),
     """         
     def render_folder(self, folders, files):
         a = []
