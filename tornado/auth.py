@@ -203,6 +203,8 @@ class OpenIdMixin(object):
             user["locale"] = locale
         if username:
             user["username"] = username
+        if self.get_argument("openid.claimed_id"):
+            user["claimed_id"] = self.get_argument("openid.claimed_id")
         callback(user)
 
 
@@ -765,6 +767,79 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
     def _oauth_get_user(self, access_token, callback):
         OpenIdMixin.get_authenticated_user(self, callback)
 
+class YahooMixin(OpenIdMixin, OAuthMixin):
+    """Yahoo Open ID / OAuth authentication.
+
+    No application registration is necessary to use Yahoo for authentication.
+    
+    Registration is required to access Yahoo resources on behalf of a user. To authenticate with
+    Yahoo, redirect with authenticate_redirect(). On return, parse the
+    response with get_authenticated_user(). We send a dict containing the
+    values for the user, including 'email', 'name', and 'locale'.
+    Example usage::
+
+        class YahooHandler(tornado.web.RequestHandler, tornado.auth.YahooMixin):
+           @tornado.web.asynchronous
+           def get(self):
+               if self.get_argument("openid.mode", None):
+                   self.get_authenticated_user(self.async_callback(self._on_auth))
+                   return
+            self.authenticate_redirect()
+
+            def _on_auth(self, user):
+                if not user:
+                    raise tornado.web.HTTPError(500, "Yahoo auth failed")
+                # Save the user with, e.g., set_secure_cookie()
+
+    """
+    _OPENID_ENDPOINT = "https://open.login.yahooapis.com/openid/op/auth"
+    _OAUTH_ACCESS_TOKEN_URL = "https://api.login.yahoo.com/oauth/v2/get_token"
+    _OAUTH_VERSION = '1.0'
+    
+    def authorize_redirect(self, oauth_scope, callback_uri=None,
+                           ax_attrs=["name", "email", "language", "username"]):
+        """Authenticates and authorizes for the given Yahoo resources.
+        
+        Yahoo requires a key and secret that you can setup on their website.
+        place your key and secret in the application's settings with the keys 
+        yahoo_consumer_key and yahoo_consumer_secret
+        """
+        self.require_setting("yahoo_consumer_key", "Yahoo OAuth")
+        callback_uri = callback_uri or self.request.uri
+        args = self._openid_args(callback_uri, ax_attrs=ax_attrs,
+                                 oauth_scope=oauth_scope)
+        if oauth_scope:
+            del args['openid.oauth.scope']
+            args['openid.oauth.consumer'] = self.settings["yahoo_consumer_key"]
+        self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))
+
+    def get_authenticated_user(self, callback):
+        """Fetches the authenticated user data upon redirect."""
+        # Look to see if we are doing combined OpenID/OAuth
+        oauth_ns = ""
+        for name, values in self.request.arguments.iteritems():
+            if name.startswith("openid.ns.") and \
+               values[-1] == u"http://specs.openid.net/extensions/oauth/1.0":
+                oauth_ns = name[10:]
+                break
+        token = self.get_argument("openid." + oauth_ns + ".request_token", "")
+        if token:
+            http = httpclient.AsyncHTTPClient()
+            token = dict(key=token, secret="")
+            http.fetch(self._oauth_access_token_url(token),
+                       self.async_callback(self._on_access_token, callback))
+        else:
+            OpenIdMixin.get_authenticated_user(self, callback)
+
+    def _oauth_consumer_token(self):
+        self.require_setting("yahoo_consumer_key", "Yahoo OAuth")
+        self.require_setting("yahoo_consumer_secret", "Yahoo OAuth")
+        return dict(
+            key=self.settings["yahoo_consumer_key"],
+            secret=self.settings["yahoo_consumer_secret"])
+
+    def _oauth_get_user(self, access_token, callback):
+        OpenIdMixin.get_authenticated_user(self, callback)
 
 class FacebookMixin(object):
     """Facebook Connect authentication.
