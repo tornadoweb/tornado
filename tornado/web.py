@@ -106,7 +106,7 @@ class RequestHandler(object):
 
     def __init__(self, application, request, **kwargs):
         super(RequestHandler, self).__init__()
-        
+
         self.application = application
         self.request = request
         self._headers_written = False
@@ -602,7 +602,20 @@ class RequestHandler(object):
             else:
                 loader = RequestHandler._template_loaders[template_path]
         t = loader.load(template_name)
-        args = dict(
+        namespace = self.get_template_namespace()
+        namespace.update(kwargs)
+        return t.generate(**namespace)
+
+    def get_template_namespace(self):
+        """Returns a dictionary to be used as the default template namespace.
+
+        May be overridden by subclasses to add or modify values.
+
+        The results of this method will be combined with additional
+        defaults in the `tornado.template` module and keyword arguments
+        to `render` or `render_string`.
+        """
+        namespace = dict(
             handler=self,
             request=self.request,
             current_user=self.current_user,
@@ -612,9 +625,8 @@ class RequestHandler(object):
             xsrf_form_html=self.xsrf_form_html,
             reverse_url=self.reverse_url
         )
-        args.update(self.ui)
-        args.update(kwargs)
-        return t.generate(**args)
+        namespace.update(self.ui)
+        return namespace
 
     def create_template_loader(self, template_path):
         settings = self.application.settings

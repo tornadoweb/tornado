@@ -9,7 +9,7 @@
 
    Entry points
    ^^^^^^^^^^^^
-   
+
    .. automethod:: RequestHandler.initialize
    .. automethod:: RequestHandler.prepare
    .. automethod:: RequestHandler.on_finish
@@ -47,6 +47,7 @@
    .. automethod:: RequestHandler.finish
    .. automethod:: RequestHandler.render
    .. automethod:: RequestHandler.render_string
+   .. automethod:: RequestHandler.get_template_namespace
    .. automethod:: RequestHandler.redirect
    .. automethod:: RequestHandler.send_error
    .. automethod:: RequestHandler.write_error
