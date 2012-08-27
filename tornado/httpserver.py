@@ -30,6 +30,7 @@ import Cookie
 import logging
 import socket
 import time
+import urlparse
 
 from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
@@ -251,8 +252,10 @@ class HTTPConnection(object):
                 # Unix (or other) socket; fake the remote address
                 remote_ip = '0.0.0.0'
 
+            path, sep, query = uri.partition('?')
             self._request = HTTPRequest(
-                connection=self, method=method, uri=uri, version=version,
+                connection=self, method=method, path=path, query=query,
+                arguments=httputil.parse_query(query), version=version,
                 headers=headers, remote_ip=remote_ip)
 
             content_length = headers.get("Content-Length")
@@ -351,13 +354,19 @@ class HTTPRequest(object):
        An HTTP request is attached to a single HTTP connection, which can
        be accessed through the "connection" attribute. Since connections
        are typically kept open in HTTP/1.1, multiple requests can be handled
-       sequentially on a single connection.
+       sequentially on a single connection. This attribute is set to ``None``
+       in WSGI applications, which do not support asynchronous requests.
     """
-    def __init__(self, method, uri, version="HTTP/1.0", headers=None,
-                 body=None, remote_ip=None, protocol=None, host=None,
-                 files=None, connection=None):
+    def __init__(self, method, path, query="", arguments=None, version="HTTP/1.0",
+                 headers=None, body="", remote_ip=None, protocol=None,
+                 host=None, files=None, connection=None):
         self.method = method
-        self.uri = uri
+        self.uri = path
+        if query:
+            self.uri += '?' + query
+        self.path = path
+        self.query = query
+        self.arguments = arguments or {}
         self.version = version
         self.headers = headers or httputil.HTTPHeaders()
         self.body = body or ""
@@ -384,16 +393,10 @@ class HTTPRequest(object):
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}
         self.connection = connection
+
         self._start_time = time.time()
         self._finish_time = None
-
-        self.path, sep, self.query = uri.partition('?')
-        arguments = parse_qs_bytes(self.query)
-        self.arguments = {}
-        for name, values in arguments.iteritems():
-            values = [v for v in values if v]
-            if values:
-                self.arguments[name] = values
+        self._cookies = None
 
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""
@@ -402,7 +405,7 @@ class HTTPRequest(object):
     @property
     def cookies(self):
         """A dictionary of Cookie.Morsel objects."""
-        if not hasattr(self, "_cookies"):
+        if self._cookies is None:
             self._cookies = Cookie.SimpleCookie()
             if "Cookie" in self.headers:
                 try:

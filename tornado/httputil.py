@@ -224,6 +224,14 @@ def parse_body_arguments(content_type, body, arguments, files):
             logging.warning("Invalid multipart/form-data")
 
 
+def parse_query(query):
+    arguments = {}
+    for name, values in parse_qs_bytes(query).iteritems():
+        values = [v for v in values if v]
+        if values: arguments[name] = values
+    return arguments
+
+
 def parse_multipart_form_data(boundary, data, arguments, files):
     """Parses a multipart/form-data body.
 

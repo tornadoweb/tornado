@@ -42,7 +42,8 @@ import urllib
 from tornado import escape
 from tornado import httputil
 from tornado import web
-from tornado.escape import native_str, utf8, parse_qs_bytes
+from tornado.escape import native_str, utf8
+from tornado.httpserver import HTTPRequest
 from tornado.util import b, bytes_type
 
 try:
@@ -112,7 +113,36 @@ class WSGIApplication(web.Application):
                                  wsgi=True, **settings)
 
     def __call__(self, environ, start_response):
-        handler = web.Application.__call__(self, HTTPRequest(environ))
+        """Parses the given WSGI environ to construct the request."""
+        path = (urllib.quote(environ.get("SCRIPT_NAME", ""))
+              + urllib.quote(environ.get("PATH_INFO", "")))
+        query = environ.get("QUERY_STRING", "")
+
+        headers = httputil.HTTPHeaders()
+        if environ.get("CONTENT_TYPE"):
+            headers["Content-Type"] = environ["CONTENT_TYPE"]
+        if environ.get("CONTENT_LENGTH"):
+            headers["Content-Length"] = environ["CONTENT_LENGTH"]
+        for key, value in environ.iteritems():
+            if key.startswith("HTTP_"):
+                headers[key[5:].replace("_", "-")] = value
+
+        method = environ["REQUEST_METHOD"]
+        body = environ["wsgi.input"].read(int(headers["Content-Length"])) if "Content-Length" in headers else ""
+
+        arguments = httputil.parse_query(query)
+        files = {}
+
+        httputil.parse_body_arguments(headers.get("Content-Type", ""), body, arguments, files)
+
+        request = HTTPRequest(method=method, path=path, query=query,
+                              arguments=arguments, files=files,
+                              version="HTTP/1.1", headers=headers,
+                              protocol=environ["wsgi.url_scheme"], body=body,
+                              remote_ip=environ.get("REMOTE_ADDR", ""),
+                              host=environ.get("HTTP_HOST", environ["SERVER_NAME"]))
+
+        handler = web.Application.__call__(self, request)
         assert handler._finished
         status = str(handler._status_code) + " " + \
             httplib.responses[handler._status_code]
@@ -123,81 +153,6 @@ class WSGIApplication(web.Application):
         start_response(status,
                        [(native_str(k), native_str(v)) for (k, v) in headers])
         return handler._write_buffer
-
-
-class HTTPRequest(object):
-    """Mimics `tornado.httpserver.HTTPRequest` for WSGI applications."""
-    def __init__(self, environ):
-        """Parses the given WSGI environ to construct the request."""
-        self.method = environ["REQUEST_METHOD"]
-        self.path = urllib.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
-        self.path += urllib.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
-        self.uri = self.path
-        self.arguments = {}
-        self.query = environ.get("QUERY_STRING", "")
-        if self.query:
-            self.uri += "?" + self.query
-            arguments = parse_qs_bytes(native_str(self.query))
-            for name, values in arguments.iteritems():
-                values = [v for v in values if v]
-                if values:
-                    self.arguments[name] = values
-        self.version = "HTTP/1.1"
-        self.headers = httputil.HTTPHeaders()
-        if environ.get("CONTENT_TYPE"):
-            self.headers["Content-Type"] = environ["CONTENT_TYPE"]
-        if environ.get("CONTENT_LENGTH"):
-            self.headers["Content-Length"] = environ["CONTENT_LENGTH"]
-        for key in environ:
-            if key.startswith("HTTP_"):
-                self.headers[key[5:].replace("_", "-")] = environ[key]
-        if self.headers.get("Content-Length"):
-            self.body = environ["wsgi.input"].read(
-                int(self.headers["Content-Length"]))
-        else:
-            self.body = ""
-        self.protocol = environ["wsgi.url_scheme"]
-        self.remote_ip = environ.get("REMOTE_ADDR", "")
-        if environ.get("HTTP_HOST"):
-            self.host = environ["HTTP_HOST"]
-        else:
-            self.host = environ["SERVER_NAME"]
-
-        # Parse request body
-        self.files = {}
-        httputil.parse_body_arguments(self.headers.get("Content-Type", ""),
-                                      self.body, self.arguments, self.files)
-
-        self._start_time = time.time()
-        self._finish_time = None
-
-    def supports_http_1_1(self):
-        """Returns True if this request supports HTTP/1.1 semantics"""
-        return self.version == "HTTP/1.1"
-
-    @property
-    def cookies(self):
-        """A dictionary of Cookie.Morsel objects."""
-        if not hasattr(self, "_cookies"):
-            self._cookies = Cookie.SimpleCookie()
-            if "Cookie" in self.headers:
-                try:
-                    self._cookies.load(
-                        native_str(self.headers["Cookie"]))
-                except Exception:
-                    self._cookies = None
-        return self._cookies
-
-    def full_url(self):
-        """Reconstructs the full URL for this request."""
-        return self.protocol + "://" + self.host + self.uri
-
-    def request_time(self):
-        """Returns the amount of time it took for this request to execute."""
-        if self._finish_time is None:
-            return time.time() - self._start_time
-        else:
-            return self._finish_time - self._start_time
 
 
 class WSGIContainer(object):
