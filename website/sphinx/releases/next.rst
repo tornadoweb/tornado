@@ -39,3 +39,9 @@ In progress
   same as non-SSL `IOStream`.
 * tornado.util.GzipDecompressor, tornado.httputil.parse_body_arguments (TODO
   are these public?)
+* `OpenIDMixin` now also returns the ``claimed_id`` field for the user.
+* New method `RequestHandler.get_template_namespace` can be overridden to
+  add additional variables without modifying keyword arguments to
+  `render_string`.
+* It is no longer an error for an if/else/for/etc block in a template to
+  have an empty body.
