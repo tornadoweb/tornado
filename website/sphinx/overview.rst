@@ -486,6 +486,8 @@ for more details. Check out the `Tornado Blog example application <https://githu
 complete example that uses authentication (and stores user data in a
 MySQL database).
 
+.. _xsrf:
+
 Cross-site request forgery protection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -748,6 +750,8 @@ the user's locale is ``es_GT``, and the ``es`` locale is supported,
 See the `tornado.locale`
 documentation for detailed information on the CSV format and other
 localization methods.
+
+.. _ui-modules:
 
 UI modules
 ~~~~~~~~~~

@@ -629,6 +629,13 @@ class RequestHandler(object):
         return namespace
 
     def create_template_loader(self, template_path):
+        """Returns a new template loader for the given path.
+
+        May be overridden by subclasses.  By default returns a
+        directory-based loader on the given path, using the
+        ``autoescape`` application setting.  If a ``template_loader``
+        application setting is supplied, uses that instead.
+        """
         settings = self.application.settings
         if "template_loader" in settings:
             return settings["template_loader"]
@@ -1219,18 +1226,6 @@ class Application(object):
     and we will serve /favicon.ico and /robots.txt from the same directory.
     A custom subclass of StaticFileHandler can be specified with the
     static_handler_class setting.
-
-    .. attribute:: settings
-
-       Additional keyword arguments passed to the constructor are saved in the
-       `settings` dictionary, and are often referred to in documentation as
-       "application settings".
-
-    .. attribute:: debug
-
-       If `True` the application runs in debug mode, described in
-       :ref:`debug-mode`. This is an application setting in the `settings`
-       dictionary, so handlers can access it.
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
                  wsgi=False, **settings):
