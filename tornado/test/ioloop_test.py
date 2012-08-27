@@ -27,7 +27,7 @@ class TestIOLoop(AsyncTestCase, LogTrapTestCase):
             self.start_time = time.time()
         self.io_loop.add_timeout(time.time(), schedule_callback)
         self.wait()
-        self.assertAlmostEqual(time.time(), self.start_time, places=2)
+        self.assertAlmostEqual(time.time(), self.start_time, places=1)
         self.assertTrue(self.called)
 
     def test_add_timeout_timedelta(self):

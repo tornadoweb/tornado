@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, with_statement
 
 import errno
 import socket
+import zlib
 
 from tornado.platform import interface
 from tornado.util import b
@@ -87,3 +88,17 @@ class Waker(interface.Waker):
     def close(self):
         self.reader.close()
         self.writer.close()
+
+
+class GzipDecompressor(interface.GzipDecompressor):
+    def __init__(self):
+        # Magic parameter makes zlib module understand gzip header
+        # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
+        # This works on cpython and pypy, but not jython.
+        self._decompressobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+
+    def decompress(self, value):
+        return self._decompressobj.decompress(value)
+
+    def flush(self):
+        return self._decompressobj.flush()

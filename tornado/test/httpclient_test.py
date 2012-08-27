@@ -96,13 +96,24 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.body, b("Post arg1: foo, arg2: bar"))
 
     def test_chunked(self):
+        response = self.fetch("/chunk", use_gzip=False)
+        self.assertEqual(response.body, b("asdfqwer"))
+
+        chunks = []
+        response = self.fetch("/chunk",
+                              streaming_callback=chunks.append,
+                              use_gzip=False)
+        self.assertEqual(chunks, [b("asdf"), b("qwer")])
+        self.assertFalse(response.body)
+
+    def test_chunked_gzip(self):
         response = self.fetch("/chunk")
         self.assertEqual(response.body, b("asdfqwer"))
 
         chunks = []
         response = self.fetch("/chunk",
                               streaming_callback=chunks.append)
-        self.assertEqual(chunks, [b("asdf"), b("qwer")])
+        self.assertEqual(''.join(chunks), b("asdfqwer"))
         self.assertFalse(response.body)
 
     def test_chunked_close(self):

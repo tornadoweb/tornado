@@ -1,5 +1,6 @@
 Tornado
 =======
+
 Tornado is an open source version of the scalable, non-blocking web server
 and and tools that power FriendFeed. Documentation and downloads are
 available at http://www.tornadoweb.org/
@@ -10,7 +11,7 @@ Tornado is licensed under the Apache Licence, Version 2.0
 Automatic installation
 ----------------------
 
- Tornado is listed in PyPI and can be installed with pip or
+Tornado is listed in PyPI and can be installed with pip or
 easy_install. Note that the source distribution includes demo
 applications that are not present when Tornado is installed in this
 way, so you may wish to download a copy of the source tarball as well.
@@ -50,6 +51,11 @@ support is relatively new and may have bugs.
 Platforms
 ---------
 
- Tornado should run on any Unix-like platform, although for the best
+Tornado should run on any Unix-like platform, although for the best
 performance and scalability only Linux and BSD (including BSD
 derivatives like Mac OS X) are recommended.
+
+Interpreters
+------------
+
+Tornado runs on CPython, PyPy 1.9, and Jython 2.5.2.

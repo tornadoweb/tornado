@@ -5,8 +5,9 @@ from tornado.escape import utf8, _unicode, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.platform.auto import GzipDecompressor
 from tornado import stack_context
-from tornado.util import b, GzipDecompressor
+from tornado.util import b
 
 import base64
 import collections
