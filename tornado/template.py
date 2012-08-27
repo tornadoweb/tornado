@@ -106,6 +106,16 @@ with ``{# ... #}``.
     set via ``{% set %}``, or the use of ``{% break %}`` or ``{% continue %}``
     within loops.
 
+``{% asynchronous *boolean* %}``
+    Sets whether the template returns its result asynchronously. If ``False``
+    (the default), `Template.generate` will return synchronously. If ``True``,
+    the `callback` parameter passed to `Template.generate` will be called with
+    the result, the `Task` class from the `gen` module will be available, and
+    the template generation function will be wrapped with `gen.engine`.::
+
+        {% asynchronous True %}
+        {{ yield Task(foo, 'bar') }}
+
 ``{% autoescape *function* %}``
     Sets the autoescape mode for the current file.  This does not affect
     other files, even those referenced by ``{% include %}``.  Note that
@@ -190,7 +200,7 @@ import posixpath
 import re
 import threading
 
-from tornado import escape
+from tornado import escape, gen
 from tornado.util import bytes_type, ObjectDict
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
@@ -216,6 +226,7 @@ class Template(object):
         else:
             self.autoescape = _DEFAULT_AUTOESCAPE
         self.namespace = loader.namespace if loader else {}
+        self.asynchronous = False
         reader = _TemplateReader(name, escape.native_str(template_string))
         self.file = _File(self, _parse(reader, self))
         self.code = self._generate_python(loader, compress_whitespace)
@@ -249,6 +260,8 @@ class Template(object):
             "__name__": self.name.replace('.', '_'),
             "__loader__": ObjectDict(get_source=lambda name: self.code),
         }
+        if self.asynchronous:
+            namespace["Task"] = gen.Task
         namespace.update(self.namespace)
         namespace.update(kwargs)
         exec self.compiled in namespace
@@ -257,6 +270,9 @@ class Template(object):
         # we've generated a new template (mainly for this module's
         # unittests, where different tests reuse the same name).
         linecache.clearcache()
+        assert kwargs.get("callback") or not self.asynchronous
+        if self.asynchronous:
+            execute = gen.engine(execute)
         try:
             return execute()
         except Exception:
@@ -407,7 +423,10 @@ class _File(_Node):
             writer.write_line("_buffer = []", self.line)
             writer.write_line("_append = _buffer.append", self.line)
             self.body.generate(writer)
-            writer.write_line("return _utf8('').join(_buffer)", self.line)
+            if writer.current_template.asynchronous:
+                writer.write_line("callback(_utf8('').join(_buffer))", self.line)
+            else:
+                writer.write_line("return _utf8('').join(_buffer)", self.line)
 
     def each_child(self):
         return (self.body,)
@@ -786,7 +805,8 @@ def _parse(reader, template, in_block=None, in_loop=None):
             return body
 
         elif operator in ("extends", "include", "set", "import", "from",
-                          "comment", "autoescape", "raw", "module"):
+                          "comment", "autoescape", "asynchronous", "raw",
+                          "module"):
             if operator == "comment":
                 continue
             if operator == "extends":
@@ -812,6 +832,9 @@ def _parse(reader, template, in_block=None, in_loop=None):
                 if fn == "None":
                     fn = None
                 template.autoescape = fn
+                continue
+            elif operator == "asynchronous":
+                template.asynchronous = suffix.strip() == "True"
                 continue
             elif operator == "raw":
                 block = _Expression(suffix, line, raw=True)
