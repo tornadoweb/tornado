@@ -73,6 +73,7 @@ class WSGIConnectionTest(HTTPConnectionTest):
     def get_app(self):
         return WSGIContainer(validator(WSGIApplication(self.get_handlers())))
 
+
 class WSGIWebTest(WSGISafeWebTest):
     def get_app(self):
         self.app = WSGIApplication(self.get_handlers(), **self.get_app_kwargs())

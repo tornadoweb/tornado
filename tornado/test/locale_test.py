@@ -4,6 +4,7 @@ import os
 import tornado.locale
 import unittest
 
+
 class TranslationLoaderTest(unittest.TestCase):
     # TODO: less hacky way to get isolated tests
     SAVE_VARS = ['_translations', '_supported_locales', '_use_gettext']

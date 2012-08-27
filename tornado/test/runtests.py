@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     import tornado.testing
     kwargs = {}
-    if sys.version_info >= (3,2):
+    if sys.version_info >= (3, 2):
         # HACK:  unittest.main will make its own changes to the warning
         # configuration, which may conflict with the settings above
         # or command-line flags like -bb.  Passing warnings=False

@@ -11,6 +11,7 @@ from tornado.escape import utf8
 from tornado.options import _Options, _LogFormatter
 from tornado.util import b, bytes_type
 
+
 @contextlib.contextmanager
 def ignore_bytes_warning():
     if not hasattr(warnings, 'catch_warnings'):

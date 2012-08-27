@@ -79,6 +79,7 @@ class TestIOStreamWebMixin(object):
     def test_write_while_connecting(self):
         stream = self._make_client_iostream()
         connected = [False]
+
         def connected_callback():
             connected[0] = True
             self.stop()
@@ -87,6 +88,7 @@ class TestIOStreamWebMixin(object):
         # unlike the previous tests, try to write before the connection
         # is complete.
         written = [False]
+
         def write_callback():
             written[0] = True
             self.stop()
@@ -111,7 +113,7 @@ class TestIOStreamMixin(object):
     def _make_server_iostream(self, connection, **kwargs):
         raise NotImplementedError()
 
-    def _make_client_iostream(self, connection ,**kwargs):
+    def _make_client_iostream(self, connection, **kwargs):
         raise NotImplementedError()
 
     def make_iostream_pair(self, **kwargs):
@@ -346,15 +348,18 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase,
                           LogTrapTestCase):
     def _make_client_iostream(self):
         return IOStream(socket.socket(), io_loop=self.io_loop)
 
+
 class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase,
                            LogTrapTestCase):
     def _make_client_iostream(self):
         return SSLIOStream(socket.socket(), io_loop=self.io_loop)
+
 
 class TestIOStream(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
     def _make_server_iostream(self, connection, **kwargs):
@@ -362,6 +367,7 @@ class TestIOStream(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
 
     def _make_client_iostream(self, connection, **kwargs):
         return IOStream(connection, io_loop=self.io_loop, **kwargs)
+
 
 class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
     def _make_server_iostream(self, connection, **kwargs):

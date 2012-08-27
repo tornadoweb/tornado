@@ -230,6 +230,7 @@ class Writer(object):
 if have_twisted:
     Writer = implementer(IWriteDescriptor)(Writer)
 
+
 class ReactorReaderWriterTest(ReactorTestCase):
     def _set_nonblocking(self, fd):
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)

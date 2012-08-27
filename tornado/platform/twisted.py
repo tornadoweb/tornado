@@ -281,7 +281,7 @@ class TornadoReactor(PosixReactorBase):
     # IOLoop.start() instead of Reactor.run().
     def stop(self):
         PosixReactorBase.stop(self)
-        fire_shutdown = functools.partial(self.fireSystemEvent,"shutdown")
+        fire_shutdown = functools.partial(self.fireSystemEvent, "shutdown")
         self._io_loop.add_callback(fire_shutdown)
 
     def crash(self):

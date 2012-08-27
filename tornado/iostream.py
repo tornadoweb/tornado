@@ -670,7 +670,6 @@ class SSLIOStream(IOStream):
                 self._ssl_connect_callback = None
                 self._run_callback(callback)
 
-
     def _handle_read(self):
         if self._ssl_accepting:
             self._do_ssl_handshake()

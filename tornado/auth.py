@@ -862,7 +862,7 @@ class FacebookMixin(object):
                 self._on_get_user_info, callback, session),
             session_key=session["session_key"],
             uids=session["uid"],
-            fields="uid,first_name,last_name,name,locale,pic_square," \
+            fields="uid,first_name,last_name,name,locale,pic_square,"
                    "profile_url,username")
 
     def facebook_request(self, method, callback, **args):

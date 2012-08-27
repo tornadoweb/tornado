@@ -247,7 +247,6 @@ class AsyncHTTPTestCase(AsyncTestCase):
         return HTTPServer(self._app, io_loop=self.io_loop,
                           **self.get_httpserver_options())
 
-
     def get_app(self):
         """Should be overridden by subclasses to return a
         tornado.web.Application or other HTTPServer callback.
