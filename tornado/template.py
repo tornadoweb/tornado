@@ -501,6 +501,8 @@ class _ControlBlock(_Node):
         writer.write_line("%s:" % self.statement, self.line)
         with writer.indent():
             self.body.generate(writer)
+            # Just in case the body was empty
+            writer.write_line("pass", self.line)
 
 
 class _IntermediateControlBlock(_Node):
@@ -509,6 +511,8 @@ class _IntermediateControlBlock(_Node):
         self.line = line
 
     def generate(self, writer):
+        # In case the previous block was empty
+        writer.write_line("pass", self.line)
         writer.write_line("%s:" % self.statement, self.line, writer.indent_size() - 1)
 
 

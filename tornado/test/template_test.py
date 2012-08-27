@@ -101,6 +101,10 @@ class TemplateTest(LogTrapTestCase):
         self.assertEqual(template.generate(x=5), b("yes"))
         self.assertEqual(template.generate(x=3), b("no"))
 
+    def test_if_empty_body(self):
+        template = Template(utf8("{% if True %}{% else %}{% end %}"))
+        self.assertEqual(template.generate(), b(""))
+
     def test_try(self):
         template = Template(utf8("""{% try %}
 try{% set y = 1/x %}
