@@ -20,7 +20,9 @@ Unittest for the twisted-style reactor.
 from __future__ import absolute_import, division, with_statement
 
 import os
+import shutil
 import signal
+import tempfile
 import thread
 import threading
 import unittest
@@ -452,8 +454,6 @@ else:
         'twisted.internet.test.test_process.ProcessTestsBuilder': [
             # Doesn't work on python 2.5
             'test_systemCallUninterruptedByChildExit',
-            # Doesn't clean up its temp files
-            'test_shebang',
             ],
         # Process tests appear to work on OSX 10.7, but not 10.6
         #'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
@@ -509,6 +509,20 @@ else:
         def make_test_subclass(test_class):
             class TornadoTest(test_class):
                 _reactors = ["tornado.platform.twisted._TestReactor"]
+
+                def setUp(self):
+                    # Twisted's tests expect to be run from a temporary
+                    # directory; they create files in their working directory
+                    # and don't always clean up after themselves.
+                    self.__curdir = os.getcwd()
+                    self.__tempdir = tempfile.mkdtemp()
+                    os.chdir(self.__tempdir)
+                    super(TornadoTest, self).setUp()
+
+                def tearDown(self):
+                    super(TornadoTest, self).tearDown()
+                    os.chdir(self.__curdir)
+                    shutil.rmtree(self.__tempdir)
 
                 def buildReactor(self):
                     self.__saved_signals = save_signal_handlers()
