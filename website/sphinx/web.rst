@@ -41,6 +41,7 @@
    .. automethod:: RequestHandler.set_status
    .. automethod:: RequestHandler.set_header
    .. automethod:: RequestHandler.add_header
+   .. automethod:: RequestHandler.clear_header
    .. automethod:: RequestHandler.set_default_headers
    .. automethod:: RequestHandler.write
    .. automethod:: RequestHandler.flush

@@ -207,6 +207,13 @@ class HTTPFile(ObjectDict):
 
 
 def parse_body_arguments(content_type, body, arguments, files):
+    """Parses a form request body.
+
+    Supports "application/x-www-form-urlencoded" and "multipart/form-data".
+    The content_type parameter should be a string and body should be
+    a byte string.  The arguments and files parameters are dictionaries
+    that will be updated with the parsed contents.
+    """
     if content_type.startswith("application/x-www-form-urlencoded"):
         uri_arguments = parse_qs_bytes(native_str(body))
         for name, values in uri_arguments.iteritems():

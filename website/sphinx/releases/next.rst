@@ -36,9 +36,8 @@ In progress
 * `SSLIOStream.get_ssl_certificate` now has a ``binary_form`` argument
   which is passed to ``SSLSocket.getpeercert``.
 * `SSLIOStream.write` can now be called while the connection is in progress,
-  same as non-SSL `IOStream`.
-* tornado.util.GzipDecompressor, tornado.httputil.parse_body_arguments (TODO
-  are these public?)
+  same as non-SSL `IOStream` (but be careful not to send sensitive data until
+  the connection has completed and the certificate has been verified).
 * `OpenIDMixin` now also returns the ``claimed_id`` field for the user.
 * New method `RequestHandler.get_template_namespace` can be overridden to
   add additional variables without modifying keyword arguments to
