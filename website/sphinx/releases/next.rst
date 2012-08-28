@@ -61,7 +61,8 @@ HTTP clients
 * `RequestHandler.get_secure_cookie` now handles a potential error case.
 * `RequestHandler.__init__` now calls ``super().__init__`` to ensure that
   all constructors are called when multiple inheritance is used.
-
+* Docs have been updated with a description of all available
+  :py:attr:`Application settings <tornado.web.Application.settings>`
 
 Other modules
 ~~~~~~~~~~~~~
