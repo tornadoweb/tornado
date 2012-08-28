@@ -63,6 +63,7 @@ class LogFormatterTest(unittest.TestCase):
         self.logger.addHandler(self.handler)
 
     def tearDown(self):
+        self.handler.close()
         os.unlink(self.filename)
         os.rmdir(self.tempdir)
 

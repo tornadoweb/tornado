@@ -2,10 +2,13 @@ from __future__ import absolute_import, division, with_statement
 
 import collections
 from contextlib import closing
+import errno
 import gzip
 import logging
+import os
 import re
 import socket
+import sys
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
@@ -284,10 +287,20 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertTrue(host_re.match(response.body), response.body)
 
     def test_connection_refused(self):
-        self.http_client.fetch("http://localhost:1/", self.stop)
+        port = get_unused_port()
+        self.http_client.fetch("http://localhost:%d/" % port, self.stop)
         response = self.wait()
         self.assertEqual(599, response.code)
-        self.assertTrue("Connection refused" in str(response.error))
+
+        if sys.platform != 'cygwin':
+            # cygwin returns EPERM instead of ECONNREFUSED here
+            self.assertTrue(str(errno.ECONNREFUSED) in str(response.error),
+                            response.error)
+            # This is usually "Connection refused".
+            # On windows, strerror is broken and returns "Unknown error".
+            expected_message = os.strerror(errno.ECONNREFUSED)
+            self.assertTrue(expected_message in str(response.error),
+                            response.error)
 
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
