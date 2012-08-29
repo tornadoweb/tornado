@@ -33,6 +33,7 @@ except ImportError:
     HTTPServer = None
     IOLoop = None
     SimpleAsyncHTTPClient = None
+from tornado.netutil import bind_sockets
 from tornado.stack_context import StackContext, NullContext
 from tornado.util import raise_exc_info
 import contextlib
@@ -238,7 +239,11 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_client = self.get_http_client()
         self._app = self.get_app()
         self.http_server = self.get_http_server()
-        self.http_server.listen(self.get_http_port(), address="127.0.0.1")
+
+        sockets = bind_sockets(self.get_http_port(), address="127.0.0.1")
+        # by default, we bind to any port, so get port number from the socket
+        self.__port = sockets[0].getsockname()[1]
+        self.http_server.add_sockets(sockets)
 
     def get_http_client(self):
         return AsyncHTTPClient(io_loop=self.io_loop)
@@ -273,17 +278,17 @@ class AsyncHTTPTestCase(AsyncTestCase):
     def get_http_port(self):
         """Returns the port used by the server.
 
-        A new port is chosen for each test.
+        By default, returns 0 until the server is started; this
+        allows the server to bind to any open port.
         """
-        if self.__port is None:
-            self.__port = get_unused_port()
-        return self.__port
+        return self.__port or 0  # let socket bind an unused port
 
     def get_protocol(self):
         return 'http'
 
     def get_url(self, path):
         """Returns an absolute url for the given path on the test server."""
+        # infer port from HTTP server
         return '%s://localhost:%s%s' % (self.get_protocol(),
                                         self.get_http_port(), path)
 
