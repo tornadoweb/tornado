@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
+import textwrap
 import sys
 from tornado.test.util import unittest
 
@@ -35,6 +36,17 @@ TEST_MODULES = [
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 
+class TornadoTextTestRunner(unittest.TextTestRunner):
+    def run(self, test):
+        result = super(TornadoTextTestRunner, self).run(test)
+        if result.skipped:
+            skip_reasons = set(reason for (test, reason) in result.skipped)
+            self.stream.write(textwrap.fill(
+                    "Some tests were skipped because: %s" %
+                    ", ".join(sorted(skip_reasons))))
+            self.stream.write("\n")
+        return result
+
 if __name__ == '__main__':
     # The -W command-line option does not work in a virtualenv with
     # python 3 (as of virtualenv 1.7), so configure warnings
@@ -62,4 +74,5 @@ if __name__ == '__main__':
         # suppresses this behavior, although this looks like an implementation
         # detail.  http://bugs.python.org/issue15626
         kwargs['warnings'] = False
+    kwargs['testRunner'] = TornadoTextTestRunner
     tornado.testing.main(**kwargs)

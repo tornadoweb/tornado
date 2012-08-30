@@ -14,22 +14,20 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
-from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
+from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
+from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
 
 
-class SimpleHTTPClientCommonTestCase(HTTPClientCommonTestCase):
+class SimpleHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
         client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
                                        force_instance=True)
         self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
         return client
-
-# Remove the base class from our namespace so the unittest module doesn't
-# try to run it again.
-del HTTPClientCommonTestCase
 
 
 class TriggerHandler(RequestHandler):
@@ -218,10 +216,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
+    @unittest.skipIf(not socket.has_ipv6, 'ipv6 support not present')
     def test_ipv6(self):
-        if not socket.has_ipv6:
-            # python compiled without ipv6 support, so skip this test
-            return
         try:
             self.http_server.listen(self.get_http_port(), address='::1')
         except socket.gaierror, e:

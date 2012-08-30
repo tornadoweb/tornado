@@ -48,6 +48,17 @@ class HelloWorldRequestHandler(RequestHandler):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
 
+skipIfNoSSL = unittest.skipIf(ssl is None, "ssl module not present")
+# In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
+# ClientHello messages, which are rejected by SSLv3 and TLSv1
+# servers.  Note that while the OPENSSL_VERSION_INFO was formally
+# introduced in python3.2, it was present but undocumented in
+# python 2.7
+skipIfOldSSL = unittest.skipIf(
+    getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0),
+    "old version of ssl module and/or openssl")
+
+
 class BaseSSLTest(AsyncHTTPSTestCase, LogTrapTestCase):
     def get_app(self):
         return Application([('/', HelloWorldRequestHandler,
@@ -91,16 +102,18 @@ class SSLTestMixin(object):
 class SSLv23Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv23
+SSLv23Test = skipIfNoSSL(SSLv23Test)
 
 
 class SSLv3Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv3
-
+SSLv3Test = skipIfNoSSL(skipIfOldSSL(SSLv3Test))
 
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_TLSv1
+TLSv1Test = skipIfNoSSL(skipIfOldSSL(TLSv1Test))
 
 
 class BadSSLOptionsTest(unittest.TestCase):
@@ -130,19 +143,6 @@ class BadSSLOptionsTest(unittest.TestCase):
            "certfile": existing_certificate,
            "keyfile": existing_certificate
         })
-
-
-if ssl is None:
-    del BaseSSLTest
-    del SSLv23Test
-if getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0):
-    # In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
-    # ClientHello messages, which are rejected by SSLv3 and TLSv1
-    # servers.  Note that while the OPENSSL_VERSION_INFO was formally
-    # introduced in python3.2, it was present but undocumented in
-    # python 2.7
-    del SSLv3Test
-    del TLSv1Test
 
 
 class MultipartTestHandler(RequestHandler):
@@ -390,6 +390,6 @@ class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
         self.assertEqual(body, b("Hello world"))
         stream.close()
         server.stop()
-
-if not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin':
-    del UnixSocketTest
+UnixSocketTest = unittest.skipIf(
+    not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin',
+    "unix sockets not supported on this platform")
