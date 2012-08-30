@@ -25,7 +25,6 @@ import signal
 import tempfile
 import thread
 import threading
-import unittest
 
 try:
     import fcntl
@@ -46,6 +45,7 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 from tornado.testing import get_unused_port
+from tornado.test.util import unittest
 from tornado.util import import_object
 from tornado.web import RequestHandler, Application
 

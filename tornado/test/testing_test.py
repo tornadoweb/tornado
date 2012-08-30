@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
-import unittest
 import time
 from tornado.testing import AsyncTestCase, LogTrapTestCase
+from tornado.test.util import unittest
 
 
 class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):

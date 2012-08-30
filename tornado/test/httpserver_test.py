@@ -10,6 +10,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.test.util import unittest
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler
 import os
@@ -17,7 +18,6 @@ import shutil
 import socket
 import sys
 import tempfile
-import unittest
 
 try:
     import ssl

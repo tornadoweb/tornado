@@ -4,11 +4,11 @@ import logging
 import os
 import re
 import tempfile
-import unittest
 import warnings
 
 from tornado.escape import utf8
 from tornado.options import _Options, _LogFormatter
+from tornado.test.util import unittest
 from tornado.util import b, bytes_type
 
 

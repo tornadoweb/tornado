@@ -2,7 +2,7 @@
 
 from __future__ import absolute_import, division, with_statement
 import sys
-import unittest
+from tornado.test.util import unittest
 
 TEST_MODULES = [
     'tornado.httputil.doctests',
