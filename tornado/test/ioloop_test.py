@@ -11,6 +11,11 @@ from tornado.netutil import bind_sockets
 from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
 from tornado.test.util import unittest
 
+try:
+    from concurrent import futures
+except ImportError:
+    futures = None
+
 
 class TestIOLoop(AsyncTestCase, LogTrapTestCase):
     def test_add_callback_wakeup(self):
@@ -47,6 +52,18 @@ class TestIOLoop(AsyncTestCase, LogTrapTestCase):
                               IOLoop.READ)
         finally:
             sock.close()
+
+
+class TestIOLoopFutures(AsyncTestCase, LogTrapTestCase):
+    def test_add_future_threads(self):
+        with futures.ThreadPoolExecutor(1) as pool:
+            self.io_loop.add_future(pool.submit(lambda: None),
+                                    lambda future: self.stop(future))
+            future = self.wait()
+            self.assertTrue(future.done())
+            self.assertTrue(future.result() is None)
+TestIOLoopFutures = unittest.skipIf(
+    futures is None, "futures module is not present")(TestIOLoopFutures)
 
 
 if __name__ == "__main__":

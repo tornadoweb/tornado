@@ -30,6 +30,7 @@ from __future__ import absolute_import, division, with_statement
 
 import datetime
 import errno
+import functools
 import heapq
 import os
 import logging
@@ -45,6 +46,11 @@ try:
     import signal
 except ImportError:
     signal = None
+
+try:
+    from concurrent import futures
+except ImportError:
+    futures = None
 
 from tornado.platform.auto import set_close_exec, Waker
 
@@ -415,6 +421,17 @@ class IOLoop(object):
             # up a polling IOLoop is relatively expensive, so we try to
             # avoid it when we can.
             self._waker.wake()
+
+    def add_future(self, future, callback):
+        """Schedules a callback on the IOLoop when the given future is finished.
+
+        Requires the concurrent.futures module (standard in python 3.2+,
+        available via "pip install futures" in older versions).
+        """
+        assert isinstance(future, futures.Future)
+        future.add_done_callback(
+            lambda future: self.add_callback(
+                functools.partial(callback, future)))
 
     def _run_callback(self, callback):
         try:
