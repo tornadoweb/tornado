@@ -40,6 +40,7 @@ import threading
 import time
 import traceback
 
+from tornado.concurrent import DummyFuture
 from tornado import stack_context
 
 try:
@@ -422,13 +423,14 @@ class IOLoop(object):
             # avoid it when we can.
             self._waker.wake()
 
+    if futures is not None:
+        _FUTURE_TYPES = (futures.Future, DummyFuture)
+    else:
+        _FUTURE_TYPES = DummyFuture
     def add_future(self, future, callback):
         """Schedules a callback on the IOLoop when the given future is finished.
-
-        Requires the concurrent.futures module (standard in python 3.2+,
-        available via "pip install futures" in older versions).
         """
-        assert isinstance(future, futures.Future)
+        assert isinstance(future, IOLoop._FUTURE_TYPES)
         future.add_done_callback(
             lambda future: self.add_callback(
                 functools.partial(callback, future)))

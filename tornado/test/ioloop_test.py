@@ -63,7 +63,7 @@ class TestIOLoopFutures(AsyncTestCase, LogTrapTestCase):
             self.assertTrue(future.done())
             self.assertTrue(future.result() is None)
 TestIOLoopFutures = unittest.skipIf(
-    futures is None, "futures module is not present")(TestIOLoopFutures)
+    futures is None, "futures module not present")(TestIOLoopFutures)
 
 
 if __name__ == "__main__":

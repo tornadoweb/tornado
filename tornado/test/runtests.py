@@ -20,6 +20,7 @@ TEST_MODULES = [
     'tornado.test.ioloop_test',
     'tornado.test.iostream_test',
     'tornado.test.locale_test',
+    'tornado.test.netutil_test',
     'tornado.test.options_test',
     'tornado.test.process_test',
     'tornado.test.simple_httpclient_test',
