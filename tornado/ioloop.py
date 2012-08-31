@@ -431,6 +431,7 @@ class IOLoop(object):
         """Schedules a callback on the IOLoop when the given future is finished.
         """
         assert isinstance(future, IOLoop._FUTURE_TYPES)
+        callback = stack_context.wrap(callback)
         future.add_done_callback(
             lambda future: self.add_callback(
                 functools.partial(callback, future)))
