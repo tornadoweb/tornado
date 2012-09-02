@@ -10,6 +10,7 @@ TEST_MODULES = [
     'tornado.iostream.doctests',
     'tornado.util.doctests',
     'tornado.test.auth_test',
+    'tornado.test.concurrent_test',
     'tornado.test.curl_httpclient_test',
     'tornado.test.escape_test',
     'tornado.test.gen_test',
@@ -65,6 +66,11 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("error", category=DeprecationWarning,
                             module=r"tornado\..*")
+    # The unittest module is aggressive about deprecating redundant methods,
+    # leaving some without non-deprecated spellings that work on both
+    # 2.7 and 3.2
+    warnings.filterwarnings("ignore", category=DeprecationWarning,
+                            message="Please use assert.* instead")
 
     import tornado.testing
     kwargs = {}

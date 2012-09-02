@@ -18,6 +18,7 @@ from __future__ import absolute_import, division, with_statement
 import functools
 import sys
 
+from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info
 
 try:
@@ -27,9 +28,11 @@ except ImportError:
 
 
 class DummyFuture(object):
-    def __init__(self, result, exc_info=None):
-        self._result = result
-        self._exc_info = exc_info
+    def __init__(self):
+        self._done = False
+        self._result = None
+        self._exception = None
+        self._callbacks = []
 
     def cancel(self):
         return False
@@ -38,32 +41,62 @@ class DummyFuture(object):
         return False
 
     def running(self):
-        return False
+        return not self._done
 
     def done(self):
-        return True
+        return self._done
 
     def result(self, timeout=None):
-        if self._exc_info:
-            raise_exc_info(self._exc_info)
+        self._check_done()
+        if self._exception:
+            raise self._exception
         return self._result
 
     def exception(self, timeout=None):
-        if self._exc_info:
-            return self._exc_info[1]
+        self._check_done()
+        if self._exception:
+            return self._exception
         else:
             return None
 
     def add_done_callback(self, fn):
-        fn(self)
+        if self._done:
+            fn(self)
+        else:
+            self._callbacks.append(fn)
 
+    def set_result(self, result):
+        self._result = result
+        self._set_done()
+
+    def set_exception(self, exception):
+        self._exception = exception
+        self._set_done()
+
+    def _check_done(self):
+        if not self._done:
+            raise Exception("DummyFuture does not support blocking for results")
+
+    def _set_done(self):
+        self._done = True
+        for cb in self._callbacks:
+            # TODO: error handling
+            cb(self)
+        self._callbacks = None
+
+if futures is None:
+    Future = DummyFuture
+else:
+    Future = futures.Future
 
 class DummyExecutor(object):
     def submit(self, fn, *args, **kwargs):
+        future = Future()
         try:
-            return DummyFuture(fn(*args, **kwargs))
-        except Exception:
-            return DummyFuture(result=None, exc_info=sys.exc_info())
+            future.set_result(fn(*args, **kwargs))
+        except Exception, e:
+            future.set_exception(e)
+        return future
 
 dummy_executor = DummyExecutor()
 
@@ -74,5 +107,21 @@ def run_on_executor(fn):
         future = self.executor.submit(fn, self, *args, **kwargs)
         if callback:
             self.io_loop.add_future(future, callback)
+        return future
+    return wrapper
+
+# TODO: this needs a better name
+def future_wrap(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        future = Future()
+        if kwargs.get('callback') is not None:
+            future.add_done_callback(kwargs.pop('callback'))
+        kwargs['callback'] = future.set_result
+        def handle_error(typ, value, tb):
+            future.set_exception(value)
+            return True
+        with ExceptionStackContext(handle_error):
+            f(*args, **kwargs)
         return future
     return wrapper
