@@ -158,6 +158,26 @@ class ClientTestMixin(object):
         self.wait()
         self.assertRaisesRegexp(CapError, "already capitalized", future.result)
 
+    def test_generator(self):
+        @gen.engine
+        def f():
+            result = yield gen.YieldFuture(self.client.capitalize("hello"),
+                                           io_loop=self.io_loop)
+            self.assertEqual(result, "HELLO")
+            self.stop()
+        f()
+        self.wait()
+
+    def test_generator_error(self):
+        @gen.engine
+        def f():
+            with self.assertRaisesRegexp(CapError, "already capitalized"):
+                 yield gen.YieldFuture(self.client.capitalize("HELLO"),
+                                       io_loop=self.io_loop)
+            self.stop()
+        f()
+        self.wait()
+
 
 class ManualClientTest(ClientTestMixin, AsyncTestCase, LogTrapTestCase):
     client_class = ManualCapClient
