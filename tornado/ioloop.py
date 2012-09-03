@@ -114,6 +114,8 @@ class IOLoop(object):
     # Global lock for creating global IOLoop instance
     _instance_lock = threading.Lock()
 
+    _current = threading.local()
+
     def __init__(self, impl=None):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
@@ -172,6 +174,20 @@ class IOLoop(object):
         """
         assert not IOLoop.initialized()
         IOLoop._instance = self
+
+    @staticmethod
+    def current():
+        current = getattr(IOLoop._current, "instance", None)
+        if current is None:
+            raise ValueError("no current IOLoop")
+        return current
+
+    def make_current(self):
+        IOLoop._current.instance = self
+
+    def clear_current(self):
+        assert IOLoop._current.instance is self
+        IOLoop._current.instance = None
 
     def close(self, all_fds=False):
         """Closes the IOLoop, freeing any resources used.
@@ -264,6 +280,8 @@ class IOLoop(object):
         if self._stopped:
             self._stopped = False
             return
+        old_current = getattr(IOLoop._current, "instance", None)
+        IOLoop._current.instance = self
         self._thread_ident = thread.get_ident()
         self._running = True
         while True:
@@ -346,6 +364,7 @@ class IOLoop(object):
         self._stopped = False
         if self._blocking_signal_threshold is not None:
             signal.setitimer(signal.ITIMER_REAL, 0, 0)
+        IOLoop._current.instance = old_current
 
     def stop(self):
         """Stop the loop after the current event loop iteration is complete.

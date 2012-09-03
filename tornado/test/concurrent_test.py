@@ -161,8 +161,7 @@ class ClientTestMixin(object):
     def test_generator(self):
         @gen.engine
         def f():
-            result = yield gen.YieldFuture(self.client.capitalize("hello"),
-                                           io_loop=self.io_loop)
+            result = yield self.client.capitalize("hello")
             self.assertEqual(result, "HELLO")
             self.stop()
         f()
@@ -172,8 +171,7 @@ class ClientTestMixin(object):
         @gen.engine
         def f():
             with self.assertRaisesRegexp(CapError, "already capitalized"):
-                 yield gen.YieldFuture(self.client.capitalize("HELLO"),
-                                       io_loop=self.io_loop)
+                 yield self.client.capitalize("HELLO")
             self.stop()
         f()
         self.wait()

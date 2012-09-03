@@ -124,8 +124,10 @@ class AsyncTestCase(unittest.TestCase):
     def setUp(self):
         super(AsyncTestCase, self).setUp()
         self.io_loop = self.get_new_ioloop()
+        self.io_loop.make_current()
 
     def tearDown(self):
+        self.io_loop.clear_current()
         if (not IOLoop.initialized() or
             self.io_loop is not IOLoop.instance()):
             # Try to clean up any file descriptors left open in the ioloop.

@@ -69,6 +69,7 @@ import operator
 import sys
 import types
 
+from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 from tornado.stack_context import ExceptionStackContext
 
@@ -251,7 +252,7 @@ class Task(YieldPoint):
 class YieldFuture(YieldPoint):
     def __init__(self, future, io_loop=None):
         self.future = future
-        self.io_loop = io_loop or IOLoop.instance()
+        self.io_loop = io_loop or IOLoop.current()
 
     def start(self, runner):
         self.runner = runner
@@ -379,6 +380,9 @@ class Runner(object):
                     raise
                 if isinstance(yielded, list):
                     yielded = Multi(yielded)
+                if isinstance(yielded, Future):
+                    # TODO: lists of futures
+                    yielded = YieldFuture(yielded)
                 if isinstance(yielded, YieldPoint):
                     self.yield_point = yielded
                     try:
