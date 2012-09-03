@@ -8,6 +8,7 @@ General
 ~~~~~~~
 
 * Fixed Python 3 bugs in `tornado.auth`, `tornado.locale`, and `tornado.wsgi`.
+* Complete and up-to-date documentation with best practices and tutorials.
 
 HTTP clients
 ~~~~~~~~~~~~
