@@ -261,12 +261,6 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
         address = None
     if flags is None:
         flags = socket.AI_PASSIVE
-        if hasattr(socket, "AI_ADDRCONFIG"):
-            # AI_ADDRCONFIG ensures that we only try to bind on ipv6
-            # if the system is configured for it, but the flag doesn't
-            # exist on some platforms (specifically WinXP, although
-            # newer versions of windows have it)
-            flags |= socket.AI_ADDRCONFIG
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                   0, flags)):
         af, socktype, proto, canonname, sockaddr = res
