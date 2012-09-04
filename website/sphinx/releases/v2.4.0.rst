@@ -1,7 +1,7 @@
-What's new in the next release of Tornado
-=========================================
+What's new in Tornado 2.4
+=========================
 
-In progress
+Sep 4, 2012
 -----------
 
 General
