@@ -254,7 +254,8 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     The ``backlog`` argument has the same meaning as for
     ``socket.listen()``.
 
-    ``flags`` is a bitmask of AI_* flags to ``getaddrinfo``.
+    ``flags`` is a bitmask of AI_* flags to ``getaddrinfo``, like
+    ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
     """
     sockets = []
     if address == "":
