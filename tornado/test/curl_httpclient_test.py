@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, with_statement
-from tornado.test.httpclient_test import HTTPClientCommonTestCase
+from tornado.test import httpclient_test
+from tornado.test.util import unittest
 
 try:
     import pycurl
@@ -10,16 +11,12 @@ if pycurl is not None:
     from tornado.curl_httpclient import CurlAsyncHTTPClient
 
 
-class CurlHTTPClientCommonTestCase(HTTPClientCommonTestCase):
+class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
         client = CurlAsyncHTTPClient(io_loop=self.io_loop)
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
-
-# Remove the base class from our namespace so the unittest module doesn't
-# try to run it again.
-del HTTPClientCommonTestCase
-
-if pycurl is None:
-    del CurlHTTPClientCommonTestCase
+CurlHTTPClientCommonTestCase = unittest.skipIf(pycurl is None,
+                                               "pycurl module not present")(
+    CurlHTTPClientCommonTestCase)

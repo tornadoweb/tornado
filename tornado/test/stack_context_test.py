@@ -3,12 +3,12 @@ from __future__ import absolute_import, division, with_statement
 
 from tornado.stack_context import StackContext, wrap
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
 import logging
-import unittest
 
 
 class TestRequestHandler(RequestHandler):

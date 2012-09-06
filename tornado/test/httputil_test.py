@@ -5,9 +5,9 @@ from __future__ import absolute_import, division, with_statement
 from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders
 from tornado.escape import utf8
 from tornado.testing import LogTrapTestCase
+from tornado.test.util import unittest
 from tornado.util import b
 import logging
-import unittest
 
 
 class TestUrlConcat(unittest.TestCase):

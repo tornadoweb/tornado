@@ -41,7 +41,15 @@ import os
 import signal
 import sys
 import time
-import unittest
+
+# Tornado's own test suite requires the updated unittest module
+# (either py27+ or unittest2) so tornado.test.util enforces
+# this requirement, but for other users of tornado.testing we want
+# to allow the older version if unitest2 is not available.
+try:
+    import unittest2 as unittest
+except ImportError:
+    import unittest
 
 _next_port = 10000
 

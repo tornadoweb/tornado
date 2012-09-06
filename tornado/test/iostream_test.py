@@ -3,6 +3,7 @@ from tornado import netutil
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import RequestHandler, Application
 import errno
@@ -18,6 +19,7 @@ try:
 except ImportError:
     ssl = None
 
+skipIfNoSSL = unittest.skipIf(ssl is None, "ssl module not present")
 
 class HelloHandler(RequestHandler):
     def get(self):
@@ -308,7 +310,8 @@ class TestIOStreamMixin(object):
                 # "frozen write buffer" assumption.
                 if (isinstance(server, SSLIOStream) and
                     platform.python_implementation() == 'PyPy'):
-                    return
+                    raise unittest.SkipTest(
+                        "pypy gc causes problems with openssl")
             except AttributeError:
                 # python 2.5 didn't have platform.python_implementation,
                 # but there was no pypy for 2.5
@@ -359,6 +362,7 @@ class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase,
                            LogTrapTestCase):
     def _make_client_iostream(self):
         return SSLIOStream(socket.socket(), io_loop=self.io_loop)
+TestIOStreamWebHTTPS = skipIfNoSSL(TestIOStreamWebHTTPS)
 
 
 class TestIOStream(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
@@ -383,7 +387,4 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
 
     def _make_client_iostream(self, connection, **kwargs):
         return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
-
-if ssl is None:
-    del TestIOStreamWebHTTPS
-    del TestIOStreamSSL
+TestIOStreamSSL = skipIfNoSSL(TestIOStreamSSL)

@@ -5,11 +5,11 @@ from __future__ import absolute_import, division, with_statement
 import datetime
 import socket
 import time
-import unittest
 
 from tornado.ioloop import IOLoop
 from tornado.netutil import bind_sockets
 from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.test.util import unittest
 
 
 class TestIOLoop(AsyncTestCase, LogTrapTestCase):

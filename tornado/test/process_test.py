@@ -13,6 +13,7 @@ from tornado.netutil import bind_sockets
 from tornado.process import fork_processes, task_id
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import LogTrapTestCase, get_unused_port
+from tornado.test.util import unittest
 from tornado.web import RequestHandler, Application
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
@@ -123,8 +124,5 @@ class ProcessTest(LogTrapTestCase):
         except Exception:
             logging.error("exception in child process %d", id, exc_info=True)
             raise
-
-
-if os.name != 'posix' or sys.platform == 'cygwin':
-    # All sorts of unixisms here
-    del ProcessTest
+ProcessTest = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
+                              "non-unix platform")(ProcessTest)

@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, with_statement
 import sys
-import unittest
 
 from tornado.util import raise_exc_info
+from tornado.test.util import unittest
 
 
 class RaiseExcInfoTest(unittest.TestCase):
@@ -23,4 +23,4 @@ class RaiseExcInfoTest(unittest.TestCase):
             raise_exc_info(exc_info)
             self.fail("didn't get expected exception")
         except TwoArgException, e:
-            self.assertTrue(e is exc_info[1])
+            self.assertIs(e, exc_info[1])
