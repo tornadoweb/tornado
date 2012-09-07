@@ -239,7 +239,7 @@ class TCPServer(object):
             logging.error("Error in connection callback", exc_info=True)
 
 
-def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
+def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -255,17 +255,15 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
 
     The ``backlog`` argument has the same meaning as for
     ``socket.listen()``.
+
+    ``flags`` is a bitmask of AI_* flags to ``getaddrinfo``, like
+    ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
     """
     sockets = []
     if address == "":
         address = None
-    flags = socket.AI_PASSIVE
-    if hasattr(socket, "AI_ADDRCONFIG"):
-        # AI_ADDRCONFIG ensures that we only try to bind on ipv6
-        # if the system is configured for it, but the flag doesn't
-        # exist on some platforms (specifically WinXP, although
-        # newer versions of windows have it)
-        flags |= socket.AI_ADDRCONFIG
+    if flags is None:
+        flags = socket.AI_PASSIVE
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                   0, flags)):
         af, socktype, proto, canonname, sockaddr = res

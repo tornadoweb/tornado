@@ -34,7 +34,7 @@ class Application(tornado.web.Application):
             (r"/auth/logout", LogoutHandler),
         ]
         settings = dict(
-            cookie_secret="32oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+            cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
             login_url="/auth/login",
         )
         tornado.web.Application.__init__(self, handlers, **settings)

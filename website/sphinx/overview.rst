@@ -392,7 +392,7 @@ application settings as keyword arguments to your application:
 
     application = tornado.web.Application([
         (r"/", MainHandler),
-    ], cookie_secret="61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=")
+    ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
 Signed cookies contain the encoded value of the cookie in addition to a
 timestamp and an `HMAC <http://en.wikipedia.org/wiki/HMAC>`_ signature.
@@ -451,7 +451,7 @@ specifying a nickname, which is then saved in a cookie:
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/login", LoginHandler),
-    ], cookie_secret="61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=")
+    ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
 You can require that the user be logged in using the `Python
 decorator <http://www.python.org/dev/peps/pep-0318/>`_
@@ -469,7 +469,7 @@ rewritten:
             self.write("Hello, " + name)
 
     settings = {
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
     }
     application = tornado.web.Application([
@@ -510,7 +510,7 @@ include the application setting ``xsrf_cookies``:
 ::
 
     settings = {
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
         "xsrf_cookies": True,
     }
@@ -577,7 +577,7 @@ You can serve static files from Tornado by specifying the
 
     settings = {
         "static_path": os.path.join(os.path.dirname(__file__), "static"),
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
         "xsrf_cookies": True,
     }
