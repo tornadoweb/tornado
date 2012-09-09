@@ -5,7 +5,7 @@ import traceback
 
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
-from tornado.testing import LogTrapTestCase
+from tornado.testing import ExpectLog
 from tornado.test.util import unittest
 from tornado.util import b, bytes_type, ObjectDict
 
@@ -153,7 +153,7 @@ try{% set y = 1/x %}
             pass
 
 
-class StackTraceTest(LogTrapTestCase):
+class StackTraceTest(unittest.TestCase):
     def test_error_line_number_expression(self):
         loader = DictLoader({"test.html": """one
 two{{1/0}}

@@ -13,10 +13,11 @@ import sys
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
+from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, get_unused_port, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
@@ -37,7 +38,7 @@ class TriggerHandler(RequestHandler):
 
     @asynchronous
     def get(self):
-        logging.info("queuing trigger")
+        logging.debug("queuing trigger")
         self.queue.append(self.finish)
         if self.get_argument("wake", "true") == "true":
             self.wake_callback()
@@ -93,7 +94,7 @@ class HostEchoHandler(RequestHandler):
         self.write(self.request.headers["Host"])
 
 
-class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(SimpleHTTPClientTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(self.io_loop)
@@ -209,7 +210,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual("POST", response.request.method)
 
     def test_request_timeout(self):
-        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
+        with ExpectLog(gen_log, "uncaught exception"):
+            response = self.fetch('/trigger?wake=false', request_timeout=0.1)
         self.assertEqual(response.code, 599)
         self.assertTrue(0.099 < response.request_time < 0.12, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
@@ -229,8 +231,9 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         url = self.get_url("/hello").replace("localhost", "[::1]")
 
         # ipv6 is currently disabled by default and must be explicitly requested
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        with ExpectLog(gen_log, "uncaught exception"):
+            self.http_client.fetch(url, self.stop)
+            response = self.wait()
         self.assertEqual(response.code, 599)
 
         self.http_client.fetch(url, self.stop, allow_ipv6=True)
@@ -243,10 +246,11 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/content_length?value=2,%202,2")
         self.assertEqual(response.body, b("ok"))
 
-        response = self.fetch("/content_length?value=2,4")
-        self.assertEqual(response.code, 599)
-        response = self.fetch("/content_length?value=2,%202,3")
-        self.assertEqual(response.code, 599)
+        with ExpectLog(gen_log, "uncaught exception"):
+            response = self.fetch("/content_length?value=2,4")
+            self.assertEqual(response.code, 599)
+            response = self.fetch("/content_length?value=2,%202,3")
+            self.assertEqual(response.code, 599)
 
     def test_head_request(self):
         response = self.fetch("/head", method="HEAD")
@@ -269,8 +273,9 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.headers["Content-length"], "0")
 
         # 204 status with non-zero content length is malformed
-        response = self.fetch("/no_content?error=1")
-        self.assertEqual(response.code, 599)
+        with ExpectLog(gen_log, "uncaught exception"):
+            response = self.fetch("/no_content?error=1")
+            self.assertEqual(response.code, 599)
 
     def test_host_header(self):
         host_re = re.compile(b("^localhost:[0-9]+$"))
@@ -284,8 +289,9 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_connection_refused(self):
         port = get_unused_port()
-        self.http_client.fetch("http://localhost:%d/" % port, self.stop)
-        response = self.wait()
+        with ExpectLog(gen_log, ".*"):
+            self.http_client.fetch("http://localhost:%d/" % port, self.stop)
+            response = self.wait()
         self.assertEqual(599, response.code)
 
         if sys.platform != 'cygwin':

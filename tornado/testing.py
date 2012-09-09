@@ -39,6 +39,7 @@ from tornado.util import raise_exc_info
 import contextlib
 import logging
 import os
+import re
 import signal
 import sys
 import time
@@ -373,6 +374,31 @@ class LogTrapTestCase(unittest.TestCase):
                 old_stream.write(handler.stream.getvalue())
         finally:
             handler.stream = old_stream
+
+
+class ExpectLog(logging.Filter):
+    def __init__(self, logger, regex, required=True):
+        if isinstance(logger, basestring):
+            logger = logging.getLogger(logger)
+        self.logger = logger  # may be either a Logger or a Handler
+        self.regex = re.compile(regex)
+        self.required = required
+        self.matched = False
+
+    def filter(self, record):
+        message = record.getMessage()
+        if self.regex.match(message):
+            self.matched = True
+            return False
+        return True
+
+    def __enter__(self):
+        self.logger.addFilter(self)
+
+    def __exit__(self, typ, value, tb):
+        self.logger.removeFilter(self)
+        if not typ and self.required and not self.matched:
+            raise Exception("did not get expected log message")
 
 
 def main(**kwargs):

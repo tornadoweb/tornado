@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, with_statement
 from tornado import netutil
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.log import gen_log
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, get_unused_port, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import RequestHandler, Application
@@ -102,7 +103,7 @@ class TestIOStreamWebMixin(object):
         try:
             self.wait(lambda: connected[0] and written[0])
         finally:
-            logging.info((connected, written))
+            logging.debug((connected, written))
 
         stream.read_until_close(self.stop)
         data = self.wait()
@@ -174,8 +175,10 @@ class TestIOStreamMixin(object):
         def connect_callback():
             self.connect_called = True
         stream.set_close_callback(self.stop)
-        stream.connect(("localhost", port), connect_callback)
-        self.wait()
+        # log messages vary by platform and ioloop implementation
+        with ExpectLog(gen_log, ".*", required=False):
+            stream.connect(("localhost", port), connect_callback)
+            self.wait()
         self.assertFalse(self.connect_called)
         self.assertTrue(isinstance(stream.error, socket.error), stream.error)
         if sys.platform != 'cygwin':
@@ -191,8 +194,9 @@ class TestIOStreamMixin(object):
         # instead of a name that's simply unlikely to exist (since
         # opendns and some ISPs return bogus addresses for nonexistent
         # domains instead of the proper error codes).
-        stream.connect(('an invalid domain', 54321))
-        self.assertTrue(isinstance(stream.error, socket.gaierror), stream.error)
+        with ExpectLog(gen_log, "Connect error"):
+            stream.connect(('an invalid domain', 54321))
+            self.assertTrue(isinstance(stream.error, socket.gaierror), stream.error)
 
     def test_streaming_callback(self):
         server, client = self.make_iostream_pair()
@@ -352,20 +356,18 @@ class TestIOStreamMixin(object):
             client.close()
 
 
-class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase,
-                          LogTrapTestCase):
+class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):
         return IOStream(socket.socket(), io_loop=self.io_loop)
 
 
-class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase,
-                           LogTrapTestCase):
+class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase):
     def _make_client_iostream(self):
         return SSLIOStream(socket.socket(), io_loop=self.io_loop)
 TestIOStreamWebHTTPS = skipIfNoSSL(TestIOStreamWebHTTPS)
 
 
-class TestIOStream(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
+class TestIOStream(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
         return IOStream(connection, io_loop=self.io_loop, **kwargs)
 
@@ -373,7 +375,7 @@ class TestIOStream(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
         return IOStream(connection, io_loop=self.io_loop, **kwargs)
 
 
-class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase, LogTrapTestCase):
+class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
         ssl_options = dict(
             certfile=os.path.join(os.path.dirname(__file__), 'test.crt'),

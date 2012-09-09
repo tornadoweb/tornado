@@ -6,10 +6,10 @@ from tornado import httpclient, simple_httpclient, netutil
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
-from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
+from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler
@@ -59,7 +59,7 @@ skipIfOldSSL = unittest.skipIf(
     "old version of ssl module and/or openssl")
 
 
-class BaseSSLTest(AsyncHTTPSTestCase, LogTrapTestCase):
+class BaseSSLTest(AsyncHTTPSTestCase):
     def get_app(self):
         return Application([('/', HelloWorldRequestHandler,
                              dict(protocol="https"))])
@@ -87,10 +87,11 @@ class SSLTestMixin(object):
         # Make sure the server closes the connection when it gets a non-ssl
         # connection, rather than waiting for a timeout or otherwise
         # misbehaving.
-        self.http_client.fetch(self.get_url("/"), self.stop,
-                               request_timeout=3600,
-                               connect_timeout=3600)
-        response = self.wait()
+        with ExpectLog(gen_log, '(SSL Error|uncaught exception)'):
+            self.http_client.fetch(self.get_url("/"), self.stop,
+                                   request_timeout=3600,
+                                   connect_timeout=3600)
+            response = self.wait()
         self.assertEqual(response.code, 599)
 
 # Python's SSL implementation differs significantly between versions.

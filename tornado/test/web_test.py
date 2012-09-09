@@ -2,8 +2,10 @@ from __future__ import absolute_import, division, with_statement
 from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
 from tornado.iostream import IOStream
+from tornado.log import app_log, gen_log
 from tornado.template import DictLoader
-from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
+from tornado.testing import AsyncHTTPTestCase, ExpectLog
+from tornado.test.util import unittest
 from tornado.util import b, bytes_type, ObjectDict
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value
 
@@ -39,7 +41,7 @@ class CookieTestRequestHandler(RequestHandler):
         self._cookies[name] = value
 
 
-class SecureCookieTest(LogTrapTestCase):
+class SecureCookieTest(unittest.TestCase):
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
         handler.set_secure_cookie('foo', b('bar'))
@@ -69,7 +71,8 @@ class SecureCookieTest(LogTrapTestCase):
         handler._cookies['foo'] = utf8('1234|5678%s|%s' % (
                 to_basestring(timestamp), to_basestring(sig)))
         # it gets rejected
-        self.assertTrue(handler.get_secure_cookie('foo') is None)
+        with ExpectLog(gen_log, "Cookie timestamp in future"):
+            self.assertTrue(handler.get_secure_cookie('foo') is None)
 
     def test_arbitrary_bytes(self):
         # Secure cookies accept arbitrary data (which is base64 encoded).
@@ -79,7 +82,7 @@ class SecureCookieTest(LogTrapTestCase):
         self.assertEqual(handler.get_secure_cookie('foo'), b('\xe9'))
 
 
-class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
+class CookieTest(AsyncHTTPTestCase):
     def get_app(self):
         class SetCookieHandler(RequestHandler):
             def get(self):
@@ -164,7 +167,7 @@ class CookieTest(AsyncHTTPTestCase, LogTrapTestCase):
                 ('foo="a\\"b"', 'a"b'),
                 ]
         for header, expected in data:
-            logging.info("trying %r", header)
+            logging.debug("trying %r", header)
             response = self.fetch("/get", headers={"Cookie": header})
             self.assertEqual(response.body, utf8(expected))
 
@@ -224,7 +227,7 @@ class ConnectionCloseHandler(RequestHandler):
         self.test.on_connection_close()
 
 
-class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
+class ConnectionCloseTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([('/', ConnectionCloseHandler, dict(test=self))])
 
@@ -236,11 +239,11 @@ class ConnectionCloseTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.wait()
 
     def on_handler_waiting(self):
-        logging.info('handler waiting')
+        logging.debug('handler waiting')
         self.stream.close()
 
     def on_connection_close(self):
-        logging.info('connection closed')
+        logging.debug('connection closed')
         self.stop()
 
 
@@ -605,7 +608,7 @@ class NonWSGIWebTests(AsyncHTTPTestCase):
         self.assertEqual(response.body, b("ok"))
 
 
-class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
+class ErrorResponseTest(AsyncHTTPTestCase):
     def get_app(self):
         class DefaultHandler(RequestHandler):
             def get(self):
@@ -656,36 +659,40 @@ class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
                 ])
 
     def test_default(self):
-        response = self.fetch("/default")
-        self.assertEqual(response.code, 500)
-        self.assertTrue(b("500: Internal Server Error") in response.body)
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/default")
+            self.assertEqual(response.code, 500)
+            self.assertTrue(b("500: Internal Server Error") in response.body)
 
-        response = self.fetch("/default?status=503")
-        self.assertEqual(response.code, 503)
-        self.assertTrue(b("503: Service Unavailable") in response.body)
+            response = self.fetch("/default?status=503")
+            self.assertEqual(response.code, 503)
+            self.assertTrue(b("503: Service Unavailable") in response.body)
 
     def test_write_error(self):
-        response = self.fetch("/write_error")
-        self.assertEqual(response.code, 500)
-        self.assertEqual(b("Exception: ZeroDivisionError"), response.body)
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/write_error")
+            self.assertEqual(response.code, 500)
+            self.assertEqual(b("Exception: ZeroDivisionError"), response.body)
 
-        response = self.fetch("/write_error?status=503")
-        self.assertEqual(response.code, 503)
-        self.assertEqual(b("Status: 503"), response.body)
+            response = self.fetch("/write_error?status=503")
+            self.assertEqual(response.code, 503)
+            self.assertEqual(b("Status: 503"), response.body)
 
     def test_get_error_html(self):
-        response = self.fetch("/get_error_html")
-        self.assertEqual(response.code, 500)
-        self.assertEqual(b("Exception: ZeroDivisionError"), response.body)
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/get_error_html")
+            self.assertEqual(response.code, 500)
+            self.assertEqual(b("Exception: ZeroDivisionError"), response.body)
 
-        response = self.fetch("/get_error_html?status=503")
-        self.assertEqual(response.code, 503)
-        self.assertEqual(b("Status: 503"), response.body)
+            response = self.fetch("/get_error_html?status=503")
+            self.assertEqual(response.code, 503)
+            self.assertEqual(b("Status: 503"), response.body)
 
     def test_failed_write_error(self):
-        response = self.fetch("/failed_write_error")
-        self.assertEqual(response.code, 500)
-        self.assertEqual(b(""), response.body)
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/failed_write_error")
+            self.assertEqual(response.code, 500)
+            self.assertEqual(b(""), response.body)
 
 
 class StaticFileTest(AsyncHTTPTestCase):
@@ -760,7 +767,7 @@ class StaticFileTest(AsyncHTTPTestCase):
         self.assertTrue('Last-Modified' not in response2.headers)
 
 
-class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
+class CustomStaticFileTest(AsyncHTTPTestCase):
     def get_app(self):
         class MyStaticFileHandler(StaticFileHandler):
             def get(self, path):
@@ -797,8 +804,9 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.body, b("bar"))
 
     def test_static_url(self):
-        response = self.fetch("/static_url/foo.txt")
-        self.assertEqual(response.body, b("/static/foo.42.txt"))
+        with ExpectLog(gen_log, "Could not open static file"):
+            response = self.fetch("/static_url/foo.txt")
+            self.assertEqual(response.body, b("/static/foo.42.txt"))
 
 
 class NamedURLSpecGroupsTest(AsyncHTTPTestCase):
