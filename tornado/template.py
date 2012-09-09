@@ -257,12 +257,7 @@ class Template(object):
         # we've generated a new template (mainly for this module's
         # unittests, where different tests reuse the same name).
         linecache.clearcache()
-        try:
-            return execute()
-        except Exception:
-            formatted_code = _format_code(self.code).rstrip()
-            app_log.error("%s code:\n%s", self.name, formatted_code)
-            raise
+        return execute()
 
     def _generate_python(self, loader, compress_whitespace):
         buffer = cStringIO.StringIO()
