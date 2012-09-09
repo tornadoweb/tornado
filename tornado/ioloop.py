@@ -31,6 +31,7 @@ from __future__ import absolute_import, division, with_statement
 import datetime
 import errno
 import heapq
+import logging
 import os
 import select
 import thread
@@ -254,6 +255,15 @@ class IOLoop(object):
         The loop will run until one of the I/O handlers calls stop(), which
         will make the loop stop after the current event iteration completes.
         """
+        if not logging.getLogger().handlers:
+            # The IOLoop catches and logs exceptions, so it's
+            # important that log output be visible.  However, python's
+            # default behavior for non-root loggers (prior to python
+            # 3.2) is to print an unhelpful "no handlers could be
+            # found" message rather than the actual log entry, so we
+            # must explicitly configure logging if we've made it this
+            # far without anything.
+            logging.basicConfig()
         if self._stopped:
             self._stopped = False
             return
