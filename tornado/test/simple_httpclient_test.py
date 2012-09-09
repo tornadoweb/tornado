@@ -299,7 +299,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
                             response.error)
 
 
-class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
+class CreateAsyncHTTPClientTestCase(AsyncTestCase):
     def setUp(self):
         super(CreateAsyncHTTPClientTestCase, self).setUp()
         self.saved = AsyncHTTPClient._save_configuration()
@@ -336,7 +336,7 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
             self.assertEqual(client.max_clients, 14)
 
 
-class HTTP100ContinueTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+class HTTP100ContinueTestCase(AsyncHTTPTestCase):
     def respond_100(self, request):
         self.request = request
         self.request.connection.stream.write(

@@ -8,11 +8,11 @@ import time
 
 from tornado.ioloop import IOLoop
 from tornado.netutil import bind_sockets
-from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.testing import AsyncTestCase, get_unused_port
 from tornado.test.util import unittest
 
 
-class TestIOLoop(AsyncTestCase, LogTrapTestCase):
+class TestIOLoop(AsyncTestCase):
     def test_add_callback_wakeup(self):
         # Make sure that add_callback from inside a running IOLoop
         # wakes up the IOLoop immediately instead of waiting for a timeout.

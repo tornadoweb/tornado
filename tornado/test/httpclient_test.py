@@ -11,7 +11,7 @@ from tornado.escape import utf8
 from tornado.httpclient import AsyncHTTPClient
 from tornado.iostream import IOStream
 from tornado import netutil
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
+from tornado.testing import AsyncHTTPTestCase, get_unused_port
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler, url
 
@@ -59,7 +59,7 @@ class EchoPostHandler(RequestHandler):
 # test suite.
 
 
-class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+class HTTPClientCommonTestCase(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
             url("/hello", HelloWorldHandler),

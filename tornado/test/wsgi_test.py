@@ -3,13 +3,13 @@ from wsgiref.validate import validator
 
 from tornado.escape import json_decode
 from tornado.test.httpserver_test import TypeCheckHandler
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase
 from tornado.util import b
 from tornado.web import RequestHandler
 from tornado.wsgi import WSGIApplication, WSGIContainer
 
 
-class WSGIContainerTest(AsyncHTTPTestCase, LogTrapTestCase):
+class WSGIContainerTest(AsyncHTTPTestCase):
     def wsgi_app(self, environ, start_response):
         status = "200 OK"
         response_headers = [("Content-Type", "text/plain")]
@@ -24,7 +24,7 @@ class WSGIContainerTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.body, b("Hello world!"))
 
 
-class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
+class WSGIApplicationTest(AsyncHTTPTestCase):
     def get_app(self):
         class HelloHandler(RequestHandler):
             def get(self):

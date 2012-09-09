@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
+import logging
 import textwrap
 import sys
 from tornado.test.util import unittest
@@ -65,6 +66,8 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("error", category=DeprecationWarning,
                             module=r"tornado\..*")
+
+    logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
     import tornado.testing
     kwargs = {}

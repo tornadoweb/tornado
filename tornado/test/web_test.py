@@ -188,7 +188,7 @@ class AuthRedirectRequestHandler(RequestHandler):
         self.send_error(500)
 
 
-class AuthRedirectTest(AsyncHTTPTestCase, LogTrapTestCase):
+class AuthRedirectTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([('/relative', AuthRedirectRequestHandler,
                              dict(login_url='/login')),
@@ -269,7 +269,7 @@ class EchoHandler(RequestHandler):
                         args=recursive_unicode(self.request.arguments)))
 
 
-class RequestEncodingTest(AsyncHTTPTestCase, LogTrapTestCase):
+class RequestEncodingTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
                 ("/group/(.*)", EchoHandler),
@@ -449,7 +449,7 @@ class HeaderInjectionHandler(RequestHandler):
 
 
 # This test is shared with wsgi_test.py
-class WSGISafeWebTest(AsyncHTTPTestCase, LogTrapTestCase):
+class WSGISafeWebTest(AsyncHTTPTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
 
     def get_app(self):
@@ -589,7 +589,7 @@ js_embed()
         self.assertEqual(response.body, b("ok"))
 
 
-class NonWSGIWebTests(AsyncHTTPTestCase, LogTrapTestCase):
+class NonWSGIWebTests(AsyncHTTPTestCase):
     def get_app(self):
         urls = [
             ("/flow_control", FlowControlHandler),
@@ -688,7 +688,7 @@ class ErrorResponseTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(b(""), response.body)
 
 
-class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
+class StaticFileTest(AsyncHTTPTestCase):
     def get_app(self):
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
@@ -801,7 +801,7 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.body, b("/static/foo.42.txt"))
 
 
-class NamedURLSpecGroupsTest(AsyncHTTPTestCase, LogTrapTestCase):
+class NamedURLSpecGroupsTest(AsyncHTTPTestCase):
     def get_app(self):
         class EchoHandler(RequestHandler):
             def get(self, path):

@@ -2,11 +2,11 @@
 
 from __future__ import absolute_import, division, with_statement
 import time
-from tornado.testing import AsyncTestCase, LogTrapTestCase
+from tornado.testing import AsyncTestCase
 from tornado.test.util import unittest
 
 
-class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):
+class AsyncTestCaseTest(AsyncTestCase):
     def test_exception_in_callback(self):
         self.io_loop.add_callback(lambda: 1 / 0)
         try:

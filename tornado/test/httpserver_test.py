@@ -25,7 +25,7 @@ except ImportError:
     ssl = None
 
 
-class HandlerBaseTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+class HandlerBaseTestCase(AsyncHTTPTestCase):
     def get_app(self):
         return Application([('/', self.__class__.Handler)])
 
@@ -166,7 +166,7 @@ class RawRequestHTTPConnection(simple_httpclient._HTTPConnection):
 # This test is also called from wsgi_test
 
 
-class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
+class HTTPConnectionTest(AsyncHTTPTestCase):
     def get_handlers(self):
         return [("/multipart", MultipartTestHandler),
                 ("/hello", HelloWorldRequestHandler)]
@@ -288,7 +288,7 @@ class TypeCheckHandler(RequestHandler):
                                                          actual_type)
 
 
-class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
+class HTTPServerTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([("/echo", EchoHandler),
                             ("/typecheck", TypeCheckHandler),
@@ -352,7 +352,7 @@ class XHeaderTest(HandlerBaseTestCase):
             "127.0.0.1")
 
 
-class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
+class UnixSocketTest(AsyncTestCase):
     """HTTPServers can listen on Unix sockets too.
 
     Why would you want to do this?  Nginx can proxy to backends listening
