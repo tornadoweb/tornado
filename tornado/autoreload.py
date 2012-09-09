@@ -67,6 +67,7 @@ if __name__ == "__main__":
         del sys.path[0]
 
 import functools
+import logging
 import os
 import pkgutil
 import sys
@@ -272,12 +273,15 @@ def main():
                 # module) will see the right things.
                 exec f.read() in globals(), globals()
     except SystemExit, e:
+        logging.basicConfig()
         gen_log.info("Script exited with status %s", e.code)
     except Exception, e:
+        logging.basicConfig()
         gen_log.warning("Script exited with uncaught exception", exc_info=True)
         if isinstance(e, SyntaxError):
             watch(e.filename)
     else:
+        logging.basicConfig()
         gen_log.info("Script exited normally")
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
