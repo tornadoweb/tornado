@@ -33,7 +33,6 @@ from __future__ import absolute_import, division, with_statement
 
 import Cookie
 import httplib
-import logging
 import sys
 import time
 import tornado
@@ -41,6 +40,7 @@ import urllib
 
 from tornado import escape
 from tornado import httputil
+from tornado.log import access_log
 from tornado import web
 from tornado.escape import native_str, utf8, parse_qs_bytes
 from tornado.util import b, bytes_type
@@ -302,11 +302,11 @@ class WSGIContainer(object):
 
     def _log(self, status_code, request):
         if status_code < 400:
-            log_method = logging.info
+            log_method = access_log.info
         elif status_code < 500:
-            log_method = logging.warning
+            log_method = access_log.warning
         else:
-            log_method = logging.error
+            log_method = access_log.error
         request_time = 1000.0 * request.request_time()
         summary = request.method + " " + request.uri + " (" + \
             request.remote_ip + ")"

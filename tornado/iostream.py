@@ -20,13 +20,13 @@ from __future__ import absolute_import, division, with_statement
 
 import collections
 import errno
-import logging
 import os
 import socket
 import sys
 import re
 
 from tornado import ioloop
+from tornado.log import gen_log, app_log
 from tornado import stack_context
 from tornado.util import b, bytes_type
 
@@ -133,7 +133,7 @@ class IOStream(object):
             # localhost, so handle them the same way as an error
             # reported later in _handle_connect.
             if e.args[0] not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
-                logging.warning("Connect error on fd %d: %s",
+                gen_log.warning("Connect error on fd %d: %s",
                                 self.socket.fileno(), e)
                 self.close()
                 return
@@ -258,7 +258,7 @@ class IOStream(object):
 
     def _handle_events(self, fd, events):
         if not self.socket:
-            logging.warning("Got events for closed stream %d", fd)
+            gen_log.warning("Got events for closed stream %d", fd)
             return
         try:
             if events & self.io_loop.READ:
@@ -293,7 +293,7 @@ class IOStream(object):
                 self._state = state
                 self.io_loop.update_handler(self.socket.fileno(), self._state)
         except Exception:
-            logging.error("Uncaught exception, closing connection.",
+            gen_log.error("Uncaught exception, closing connection.",
                           exc_info=True)
             self.close()
             raise
@@ -304,7 +304,7 @@ class IOStream(object):
             try:
                 callback(*args)
             except Exception:
-                logging.error("Uncaught exception, closing connection.",
+                app_log.error("Uncaught exception, closing connection.",
                               exc_info=True)
                 # Close the socket on an uncaught exception from a user callback
                 # (It would eventually get closed when the socket object is
@@ -357,7 +357,7 @@ class IOStream(object):
             finally:
                 self._pending_callbacks -= 1
         except Exception:
-            logging.warning("error on read", exc_info=True)
+            gen_log.warning("error on read", exc_info=True)
             self.close()
             return
         if self._read_from_buffer():
@@ -422,7 +422,7 @@ class IOStream(object):
             chunk = self._read_from_socket()
         except socket.error, e:
             # ssl.SSLError is a subclass of socket.error
-            logging.warning("Read error on %d: %s",
+            gen_log.warning("Read error on %d: %s",
                             self.socket.fileno(), e)
             self.close()
             raise
@@ -431,7 +431,7 @@ class IOStream(object):
         self._read_buffer.append(chunk)
         self._read_buffer_size += len(chunk)
         if self._read_buffer_size >= self.max_buffer_size:
-            logging.error("Reached maximum read buffer size")
+            gen_log.error("Reached maximum read buffer size")
             self.close()
             raise IOError("Reached maximum read buffer size")
         return len(chunk)
@@ -504,7 +504,7 @@ class IOStream(object):
             # an error state before the socket becomes writable, so
             # in that case a connection failure would be handled by the
             # error path in _handle_events instead of here.
-            logging.warning("Connect error on fd %d: %s",
+            gen_log.warning("Connect error on fd %d: %s",
                             self.socket.fileno(), errno.errorcode[err])
             self.close()
             return
@@ -544,7 +544,7 @@ class IOStream(object):
                     self._write_buffer_frozen = True
                     break
                 else:
-                    logging.warning("Write error on %d: %s",
+                    gen_log.warning("Write error on %d: %s",
                                     self.socket.fileno(), e)
                     self.close()
                     return
@@ -656,7 +656,7 @@ class SSLIOStream(IOStream):
                     peer = self.socket.getpeername()
                 except:
                     peer = '(not connected)'
-                logging.warning("SSL Error on %d %s: %s",
+                gen_log.warning("SSL Error on %d %s: %s",
                                 self.socket.fileno(), peer, err)
                 return self.close()
             raise

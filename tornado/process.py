@@ -19,7 +19,6 @@
 from __future__ import absolute_import, division, with_statement
 
 import errno
-import logging
 import os
 import sys
 import time
@@ -27,6 +26,7 @@ import time
 from binascii import hexlify
 
 from tornado import ioloop
+from tornado.log import gen_log
 
 try:
     import multiprocessing  # Python 2.6+
@@ -45,7 +45,7 @@ def cpu_count():
         return os.sysconf("SC_NPROCESSORS_CONF")
     except ValueError:
         pass
-    logging.error("Could not detect number of processors; assuming 1")
+    gen_log.error("Could not detect number of processors; assuming 1")
     return 1
 
 
@@ -98,7 +98,7 @@ def fork_processes(num_processes, max_restarts=100):
         raise RuntimeError("Cannot run in multiple processes: IOLoop instance "
                            "has already been initialized. You cannot call "
                            "IOLoop.instance() before calling start_processes()")
-    logging.info("Starting %d processes", num_processes)
+    gen_log.info("Starting %d processes", num_processes)
     children = {}
 
     def start_child(i):
@@ -128,13 +128,13 @@ def fork_processes(num_processes, max_restarts=100):
             continue
         id = children.pop(pid)
         if os.WIFSIGNALED(status):
-            logging.warning("child %d (pid %d) killed by signal %d, restarting",
+            gen_log.warning("child %d (pid %d) killed by signal %d, restarting",
                             id, pid, os.WTERMSIG(status))
         elif os.WEXITSTATUS(status) != 0:
-            logging.warning("child %d (pid %d) exited with status %d, restarting",
+            gen_log.warning("child %d (pid %d) exited with status %d, restarting",
                             id, pid, os.WEXITSTATUS(status))
         else:
-            logging.info("child %d (pid %d) exited normally", id, pid)
+            gen_log.info("child %d (pid %d) exited normally", id, pid)
             continue
         num_restarts += 1
         if num_restarts > max_restarts:

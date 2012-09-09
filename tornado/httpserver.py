@@ -27,13 +27,13 @@ This module also defines the `HTTPRequest` class which is exposed via
 from __future__ import absolute_import, division, with_statement
 
 import Cookie
-import logging
 import socket
 import time
 
 from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
+from tornado.log import gen_log
 from tornado.netutil import TCPServer
 from tornado import stack_context
 from tornado.util import b, bytes_type
@@ -267,7 +267,7 @@ class HTTPConnection(object):
 
             self.request_callback(self._request)
         except _BadRequestException, e:
-            logging.info("Malformed HTTP request from %s: %s",
+            gen_log.info("Malformed HTTP request from %s: %s",
                          self.address[0], e)
             self.close()
             return

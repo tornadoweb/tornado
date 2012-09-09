@@ -33,6 +33,7 @@ except ImportError:
     HTTPServer = None
     IOLoop = None
     SimpleAsyncHTTPClient = None
+from tornado.log import gen_log
 from tornado.stack_context import StackContext, NullContext
 from tornado.util import raise_exc_info
 import contextlib
@@ -364,7 +365,7 @@ class LogTrapTestCase(unittest.TestCase):
         old_stream = handler.stream
         try:
             handler.stream = StringIO()
-            logging.info("RUNNING TEST: " + str(self))
+            gen_log.info("RUNNING TEST: " + str(self))
             old_error_count = len(result.failures) + len(result.errors)
             super(LogTrapTestCase, self).run(result)
             new_error_count = len(result.failures) + len(result.errors)
@@ -440,9 +441,9 @@ def main(**kwargs):
             unittest.main(defaultTest="all", argv=argv, **kwargs)
     except SystemExit, e:
         if e.code == 0:
-            logging.info('PASS')
+            gen_log.info('PASS')
         else:
-            logging.error('FAIL')
+            gen_log.error('FAIL')
         if not options.autoreload:
             raise
     if options.autoreload:

@@ -50,7 +50,6 @@ import base64
 import binascii
 import hashlib
 import hmac
-import logging
 import time
 import urllib
 import urlparse
@@ -59,6 +58,7 @@ import uuid
 from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
+from tornado.log import gen_log
 from tornado.util import bytes_type, b
 
 
@@ -150,7 +150,7 @@ class OpenIdMixin(object):
 
     def _on_authentication_verified(self, callback, response):
         if response.error or b("is_valid:true") not in response.body:
-            logging.warning("Invalid OpenID response: %s", response.error or
+            gen_log.warning("Invalid OpenID response: %s", response.error or
                             response.body)
             callback(None)
             return
@@ -263,14 +263,14 @@ class OAuthMixin(object):
         oauth_verifier = self.get_argument("oauth_verifier", None)
         request_cookie = self.get_cookie("_oauth_request_token")
         if not request_cookie:
-            logging.warning("Missing OAuth request token cookie")
+            gen_log.warning("Missing OAuth request token cookie")
             callback(None)
             return
         self.clear_cookie("_oauth_request_token")
         cookie_key, cookie_secret = [base64.b64decode(escape.utf8(i)) for i in request_cookie.split("|")]
         if cookie_key != request_key:
-            logging.info((cookie_key, request_key, request_cookie))
-            logging.warning("Request token does not match cookie")
+            gen_log.info((cookie_key, request_key, request_cookie))
+            gen_log.warning("Request token does not match cookie")
             callback(None)
             return
         token = dict(key=cookie_key, secret=cookie_secret)
@@ -348,7 +348,7 @@ class OAuthMixin(object):
 
     def _on_access_token(self, callback, response):
         if response.error:
-            logging.warning("Could not fetch access token")
+            gen_log.warning("Could not fetch access token")
             callback(None)
             return
 
@@ -547,7 +547,7 @@ class TwitterMixin(OAuthMixin):
 
     def _on_twitter_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            gen_log.warning("Error response %s fetching %s", response.error,
                             response.request.url)
             callback(None)
             return
@@ -669,7 +669,7 @@ class FriendFeedMixin(OAuthMixin):
 
     def _on_friendfeed_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            gen_log.warning("Error response %s fetching %s", response.error,
                             response.request.url)
             callback(None)
             return
@@ -930,17 +930,17 @@ class FacebookMixin(object):
 
     def _parse_response(self, callback, response):
         if response.error:
-            logging.warning("HTTP error from Facebook: %s", response.error)
+            gen_log.warning("HTTP error from Facebook: %s", response.error)
             callback(None)
             return
         try:
             json = escape.json_decode(response.body)
         except Exception:
-            logging.warning("Invalid JSON from Facebook: %r", response.body)
+            gen_log.warning("Invalid JSON from Facebook: %r", response.body)
             callback(None)
             return
         if isinstance(json, dict) and json.get("error_code"):
-            logging.warning("Facebook error: %d: %r", json["error_code"],
+            gen_log.warning("Facebook error: %d: %r", json["error_code"],
                             json.get("error_msg"))
             callback(None)
             return
@@ -1007,7 +1007,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     def _on_access_token(self, redirect_uri, client_id, client_secret,
                         callback, fields, response):
         if response.error:
-            logging.warning('Facebook auth error: %s' % str(response))
+            gen_log.warning('Facebook auth error: %s' % str(response))
             callback(None)
             return
 
@@ -1090,7 +1090,7 @@ class FacebookGraphMixin(OAuth2Mixin):
 
     def _on_facebook_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            gen_log.warning("Error response %s fetching %s", response.error,
                             response.request.url)
             callback(None)
             return
