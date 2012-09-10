@@ -451,6 +451,11 @@ class HeaderInjectionHandler(RequestHandler):
                 raise
 
 
+class GetArgumentHandler(RequestHandler):
+    def get(self):
+        self.write(self.get_argument("foo", "default"))
+
+
 # This test is shared with wsgi_test.py
 class WSGISafeWebTest(AsyncHTTPTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
@@ -487,6 +492,7 @@ class WSGISafeWebTest(AsyncHTTPTestCase):
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
             url("/header_injection", HeaderInjectionHandler),
+            url("/get_argument", GetArgumentHandler),
             ]
         return urls
 
@@ -590,6 +596,14 @@ js_embed()
     def test_header_injection(self):
         response = self.fetch("/header_injection")
         self.assertEqual(response.body, b("ok"))
+
+    def test_get_argument(self):
+        response = self.fetch("/get_argument?foo=bar")
+        self.assertEqual(response.body, b("bar"))
+        response = self.fetch("/get_argument?foo=")
+        self.assertEqual(response.body, b(""))
+        response = self.fetch("/get_argument")
+        self.assertEqual(response.body, b("default"))
 
 
 class NonWSGIWebTests(AsyncHTTPTestCase):

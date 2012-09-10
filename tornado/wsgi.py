@@ -137,11 +137,8 @@ class HTTPRequest(object):
         self.query = environ.get("QUERY_STRING", "")
         if self.query:
             self.uri += "?" + self.query
-            arguments = parse_qs_bytes(native_str(self.query))
-            for name, values in arguments.iteritems():
-                values = [v for v in values if v]
-                if values:
-                    self.arguments[name] = values
+            self.arguments = parse_qs_bytes(native_str(self.query),
+                                            keep_blank_values=True)
         self.version = "HTTP/1.1"
         self.headers = httputil.HTTPHeaders()
         if environ.get("CONTENT_TYPE"):

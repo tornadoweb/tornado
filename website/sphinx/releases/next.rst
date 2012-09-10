@@ -27,3 +27,6 @@ In progress
 * The command-line interface to `tornado.testing.main` now supports
   additional arguments from the underlying `unittest` module:
   ``verbose``, ``quiet``, ``failfast``, ``catch``, ``buffer``.
+* Empty HTTP request arguments are no longer ignored.  This applies to
+  ``HTTPRequest.arguments`` and ``RequestHandler.get_argument[s]``
+  in WSGI and non-WSGI modes.
