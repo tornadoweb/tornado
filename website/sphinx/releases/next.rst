@@ -30,3 +30,6 @@ In progress
 * Empty HTTP request arguments are no longer ignored.  This applies to
   ``HTTPRequest.arguments`` and ``RequestHandler.get_argument[s]``
   in WSGI and non-WSGI modes.
+* New function `tornado.testing.bind_unused_port` both chooses a port
+  and binds a socket to it, so there is no risk of another process
+  using the same port.  ``get_unused_port`` is now deprecated.

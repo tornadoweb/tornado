@@ -3,12 +3,10 @@
 
 from __future__ import absolute_import, division, with_statement
 import datetime
-import socket
 import time
 
 from tornado.ioloop import IOLoop
-from tornado.netutil import bind_sockets
-from tornado.testing import AsyncTestCase, get_unused_port
+from tornado.testing import AsyncTestCase, bind_unused_port
 from tornado.test.util import unittest
 
 
@@ -35,8 +33,7 @@ class TestIOLoop(AsyncTestCase):
         self.wait()
 
     def test_multiple_add(self):
-        [sock] = bind_sockets(get_unused_port(), '127.0.0.1',
-                              family=socket.AF_INET)
+        sock, port = bind_unused_port()
         try:
             self.io_loop.add_handler(sock.fileno(), lambda fd, events: None,
                                      IOLoop.READ)

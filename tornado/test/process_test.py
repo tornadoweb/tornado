@@ -10,10 +10,9 @@ from tornado.httpclient import HTTPClient, HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
-from tornado.netutil import bind_sockets
 from tornado.process import fork_processes, task_id
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import get_unused_port, ExpectLog
+from tornado.testing import bind_unused_port, ExpectLog
 from tornado.test.util import unittest
 from tornado.web import RequestHandler, Application
 
@@ -50,11 +49,10 @@ class ProcessTest(unittest.TestCase):
     def test_multi_process(self):
         with ExpectLog(gen_log, "(Starting .* processes|child .* exited|uncaught exception)"):
             self.assertFalse(IOLoop.initialized())
-            port = get_unused_port()
+            sock, port = bind_unused_port()
 
             def get_url(path):
                 return "http://127.0.0.1:%d%s" % (port, path)
-            sockets = bind_sockets(port, "127.0.0.1")
             # ensure that none of these processes live too long
             signal.alarm(5)  # master process
             try:
@@ -66,19 +64,17 @@ class ProcessTest(unittest.TestCase):
                 # finished with status 0
                 self.assertEqual(e.code, 0)
                 self.assertTrue(task_id() is None)
-                for sock in sockets:
-                    sock.close()
+                sock.close()
                 return
             try:
                 if id in (0, 1):
                     self.assertEqual(id, task_id())
                     server = HTTPServer(self.get_app())
-                    server.add_sockets(sockets)
+                    server.add_sockets([sock])
                     IOLoop.instance().start()
                 elif id == 2:
                     self.assertEqual(id, task_id())
-                    for sock in sockets:
-                        sock.close()
+                    sock.close()
                     # Always use SimpleAsyncHTTPClient here; the curl
                     # version appears to get confused sometimes if the
                     # connection gets closed before it's had a chance to

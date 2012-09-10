@@ -26,12 +26,14 @@ try:
     from tornado.httpserver import HTTPServer
     from tornado.simple_httpclient import SimpleAsyncHTTPClient
     from tornado.ioloop import IOLoop
+    from tornado import netutil
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
     # won't work, but e.g. LogTrapTestCase and main() will.
     AsyncHTTPClient = None
     HTTPServer = None
     IOLoop = None
+    netutil = None
     SimpleAsyncHTTPClient = None
 from tornado.log import gen_log
 from tornado.stack_context import StackContext, NullContext
@@ -41,6 +43,7 @@ import logging
 import os
 import re
 import signal
+import socket
 import sys
 import time
 
@@ -57,11 +60,29 @@ _next_port = 10000
 
 
 def get_unused_port():
-    """Returns a (hopefully) unused port number."""
+    """Returns a (hopefully) unused port number.
+
+    This function does not guarantee that the port it returns is available,
+    only that a series of get_unused_port calls in a single process return
+    distinct ports.
+
+    **Deprecated**.  Use bind_unused_port instead, which is guaranteed
+    to find an unused port.
+    """
     global _next_port
     port = _next_port
     _next_port = _next_port + 1
     return port
+
+
+def bind_unused_port():
+    """Binds a server socket to an available port on localhost.
+
+    Returns a tuple (socket, port).
+    """
+    [sock] = netutil.bind_sockets(0, 'localhost', family=socket.AF_INET)
+    port = sock.getsockname()[1]
+    return sock, port
 
 
 class AsyncTestCase(unittest.TestCase):
@@ -248,7 +269,9 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_client = self.get_http_client()
         self._app = self.get_app()
         self.http_server = self.get_http_server()
-        self.http_server.listen(self.get_http_port(), address="127.0.0.1")
+        sock, port = bind_unused_port()
+        self.http_server.add_sockets([sock])
+        self.__port = port
 
     def get_http_client(self):
         return AsyncHTTPClient(io_loop=self.io_loop)
@@ -285,8 +308,6 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
         A new port is chosen for each test.
         """
-        if self.__port is None:
-            self.__port = get_unused_port()
         return self.__port
 
     def get_protocol(self):

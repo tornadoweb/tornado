@@ -17,7 +17,7 @@ from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, get_unused_port, ExpectLog
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
@@ -288,7 +288,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
         self.assertTrue(host_re.match(response.body), response.body)
 
     def test_connection_refused(self):
-        port = get_unused_port()
+        server_socket, port = bind_unused_port()
+        server_socket.close()
         with ExpectLog(gen_log, ".*"):
             self.http_client.fetch("http://localhost:%d/" % port, self.stop)
             response = self.wait()

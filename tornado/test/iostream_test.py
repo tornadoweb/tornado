@@ -3,7 +3,7 @@ from tornado import netutil
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.log import gen_log
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, get_unused_port, ExpectLog
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import RequestHandler, Application
@@ -120,9 +120,7 @@ class TestIOStreamMixin(object):
         raise NotImplementedError()
 
     def make_iostream_pair(self, **kwargs):
-        port = get_unused_port()
-        [listener] = netutil.bind_sockets(port, '127.0.0.1',
-                                          family=socket.AF_INET)
+        listener, port = bind_unused_port()
         streams = [None, None]
 
         def accept_callback(connection, address):
@@ -168,7 +166,8 @@ class TestIOStreamMixin(object):
         # When a connection is refused, the connect callback should not
         # be run.  (The kqueue IOLoop used to behave differently from the
         # epoll IOLoop in this respect)
-        port = get_unused_port()
+        server_socket, port = bind_unused_port()
+        server_socket.close()
         stream = IOStream(socket.socket(), self.io_loop)
         self.connect_called = False
 
