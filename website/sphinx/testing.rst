@@ -18,6 +18,9 @@
    Controlling log output
    ----------------------
 
+   .. autoclass:: ExpectLog
+      :members:
+
    .. autoclass:: LogTrapTestCase
       :members:
 

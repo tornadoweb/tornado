@@ -13,6 +13,21 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+"""Logging support for Tornado.
+
+Tornado uses three logger streams:
+
+* ``tornado.access``: Per-request logging for Tornado's HTTP servers (and
+  potentially other servers in the future)
+* ``tornado.application``: Logging of errors from application code (i.e.
+  uncaught exceptions from callbacks)
+* ``tornado.general``: General-purpose logging, including any errors
+  or warnings from Tornado itself.
+
+These streams may be configured independently using the standard library's
+`logging` module.  For example, you may wish to send ``tornado.access`` logs
+to a separate file for analysis.
+"""
 from __future__ import absolute_import, division, with_statement
 
 import logging
@@ -26,15 +41,9 @@ try:
 except ImportError:
     curses = None
 
-# Per-request logging for Tornado's HTTP servers (and potentially other servers
-# in the future)
+# Logger objects for internal tornado use
 access_log = logging.getLogger("tornado.access")
-
-# Logging of errors from application code (i.e. uncaught exceptions from
-# callbacks
 app_log = logging.getLogger("tornado.application")
-
-# General logging, i.e. everything else
 gen_log = logging.getLogger("tornado.general")
 
 def _stderr_supports_color():
@@ -50,12 +59,22 @@ def _stderr_supports_color():
 
 
 class LogFormatter(logging.Formatter):
-    def __init__(self, color=None, *args, **kwargs):
+    """Log formatter used in Tornado.
+
+    Key features of this formatter are:
+
+    * Color support when logging to a terminal that supports it.
+    * Timestamps on every log line.
+    * Robust against str/bytes encoding problems.
+
+    This formatter is enabled automatically by
+    `tornado.options.parse_command_line` (unless ``--logging=none`` is
+    used).
+    """
+    def __init__(self, color=True, *args, **kwargs):
         logging.Formatter.__init__(self, *args, **kwargs)
-        if color is None:
-            color = _stderr_supports_color()
-        self._color = color
-        if color:
+        self._color = color and _stderr_supports_color()
+        if self._color:
             # The curses module has some str/bytes confusion in
             # python3.  Until version 3.2.3, most methods return
             # bytes, but only accept strings.  In addition, we want to

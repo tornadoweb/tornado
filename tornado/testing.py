@@ -377,10 +377,29 @@ class LogTrapTestCase(unittest.TestCase):
 
 
 class ExpectLog(logging.Filter):
+    """Context manager to capture and suppress expected log output.
+
+    Useful to make tests of error conditions less noisy, while still
+    leaving unexpected log entries visible.  *Not thread safe.*
+
+    Usage::
+
+        with ExpectLog('tornado.application', "Uncaught exception"):
+            error_response = self.fetch("/some_page")
+    """
     def __init__(self, logger, regex, required=True):
+        """Constructs an ExpectLog context manager.
+
+        :param logger: Logger object (or name of logger) to watch.  Pass
+            an empty string to watch the root logger.
+        :param regex: Regular expression to match.  Any log entries on
+            the specified logger that match this regex will be suppressed.
+        :param required: If true, an exeption will be raised if the end of
+            the ``with`` statement is reached without matching any log entries.
+        """
         if isinstance(logger, basestring):
             logger = logging.getLogger(logger)
-        self.logger = logger  # may be either a Logger or a Handler
+        self.logger = logger
         self.regex = re.compile(regex)
         self.required = required
         self.matched = False
