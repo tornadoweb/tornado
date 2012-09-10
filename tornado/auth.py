@@ -233,20 +233,14 @@ class OAuthMixin(object):
             raise Exception("This service does not support oauth_callback")
         if http_client is None:
             http_client = httpclient.AsyncHTTPClient()
-        if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
-            http_client.fetch(
-                self._oauth_request_token_url(callback_uri=callback_uri,
-                                              extra_params=extra_params),
-                self.async_callback(
-                    self._on_request_token,
-                    self._OAUTH_AUTHORIZE_URL,
-                callback_uri))
-        else:
-            http_client.fetch(
-                self._oauth_request_token_url(),
-                self.async_callback(
-                    self._on_request_token, self._OAUTH_AUTHORIZE_URL,
-                    callback_uri))
+
+        request_token_url = self._oauth_request_token_url(
+            callback_uri=callback_uri, extra_params=extra_params)
+
+        callback = self.async_callback(
+            self._on_request_token, self._OAUTH_AUTHORIZE_URL, callback_uri)
+
+        http_client.fetch(request_token_url, callback)
 
     def get_authenticated_user(self, callback, http_client=None):
         """Gets the OAuth authorized user and access token on callback.
@@ -291,14 +285,17 @@ class OAuthMixin(object):
             oauth_nonce=escape.to_basestring(binascii.b2a_hex(uuid.uuid4().bytes)),
             oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
         )
+
+        if callback_uri == "oob":
+            args["oauth_callback"] = "oob"
+        elif callback_uri:
+            args["oauth_callback"] = urlparse.urljoin(
+                self.request.full_url(), callback_uri)
+        
+        if extra_params:
+            args.update(extra_params)
+        
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
-            if callback_uri == "oob":
-                args["oauth_callback"] = "oob"
-            elif callback_uri:
-                args["oauth_callback"] = urlparse.urljoin(
-                    self.request.full_url(), callback_uri)
-            if extra_params:
-                args.update(extra_params)
             signature = _oauth10a_signature(consumer_token, "GET", url, args)
         else:
             signature = _oauth_signature(consumer_token, "GET", url, args)
