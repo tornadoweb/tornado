@@ -461,6 +461,14 @@ def main(**kwargs):
                  "exception.  This prints a stack trace but cannot interrupt "
                  "certain operations.  If false, the process is more reliably "
                  "killed, but does not print a stack trace."))
+
+    # support the same options as unittest's command-line interface
+    define('verbose', type=bool)
+    define('quiet', type=bool)
+    define('failfast', type=bool)
+    define('catch', type=bool)
+    define('buffer', type=bool)
+
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
 
     if options.httpclient:
@@ -469,6 +477,17 @@ def main(**kwargs):
 
     if not options.exception_on_interrupt:
         signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    if options.verbose is not None:
+        kwargs['verbosity'] = 2
+    if options.quiet is not None:
+        kwargs['verbosity'] = 0
+    if options.failfast is not None:
+        kwargs['failfast'] = True
+    if options.catch is not None:
+        kwargs['catchbreak'] = True
+    if options.buffer is not None:
+        kwargs['buffer'] = True
 
     if __name__ == '__main__' and len(argv) == 1:
         print >> sys.stderr, "No tests specified"

@@ -24,3 +24,6 @@ In progress
   unnecessary.
 * `tornado.testing.ExpectLog` can be used as a finer-grained alternative
   to `tornado.testing.LogTrapTestCase`
+* The command-line interface to `tornado.testing.main` now supports
+  additional arguments from the underlying `unittest` module:
+  ``verbose``, ``quiet``, ``failfast``, ``catch``, ``buffer``.
