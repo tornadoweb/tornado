@@ -245,10 +245,11 @@ class WSGIContainer(object):
         headers = data["headers"]
         header_set = set(k.lower() for (k, v) in headers)
         body = escape.utf8(body)
-        if "content-length" not in header_set:
-            headers.append(("Content-Length", str(len(body))))
-        if "content-type" not in header_set:
-            headers.append(("Content-Type", "text/html; charset=UTF-8"))
+        if status_code != 304:
+            if "content-length" not in header_set:
+                headers.append(("Content-Length", str(len(body))))
+            if "content-type" not in header_set:
+                headers.append(("Content-Type", "text/html; charset=UTF-8"))
         if "server" not in header_set:
             headers.append(("Server", "TornadoServer/%s" % tornado.version))
 

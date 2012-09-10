@@ -74,7 +74,14 @@ class WSGIConnectionTest(httpserver_test.HTTPConnectionTest):
         return WSGIContainer(validator(WSGIApplication(self.get_handlers())))
 
 
-class WSGIWebTest(web_test.WSGISafeWebTest):
-    def get_app(self):
-        self.app = WSGIApplication(self.get_handlers(), **self.get_app_kwargs())
-        return WSGIContainer(validator(self.app))
+def wrap_web_tests():
+    result = {}
+    for cls in web_test.wsgi_safe:
+        class WSGIWrappedTest(cls):
+            def get_app(self):
+                self.app = WSGIApplication(self.get_handlers(),
+                                           **self.get_app_kwargs())
+                return WSGIContainer(validator(self.app))
+        result["WSGIWrapped_" + cls.__name__] = WSGIWrappedTest
+    return result
+globals().update(wrap_web_tests())
