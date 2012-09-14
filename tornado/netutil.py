@@ -16,8 +16,9 @@
 
 """Miscellaneous network utility code."""
 
+from __future__ import absolute_import, division, with_statement
+
 import errno
-import logging
 import os
 import socket
 import stat
@@ -25,12 +26,14 @@ import stat
 from tornado import process
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.log import app_log
 from tornado.platform.auto import set_close_exec
 
 try:
-    import ssl # Python 2.6+
+    import ssl  # Python 2.6+
 except ImportError:
     ssl = None
+
 
 class TCPServer(object):
     r"""A non-blocking, single-threaded TCP server.
@@ -88,6 +91,23 @@ class TCPServer(object):
         self._sockets = {}  # fd -> socket object
         self._pending_sockets = []
         self._started = False
+
+        # Verify the SSL options. Otherwise we don't get errors until clients
+        # connect. This doesn't verify that the keys are legitimate, but
+        # the SSL module doesn't do that until there is a connected socket
+        # which seems like too much work
+        if self.ssl_options is not None:
+            # Only certfile is required: it can contain both keys
+            if 'certfile' not in self.ssl_options:
+                raise KeyError('missing key "certfile" in ssl_options')
+
+            if not os.path.exists(self.ssl_options['certfile']):
+                raise ValueError('certfile "%s" does not exist' %
+                    self.ssl_options['certfile'])
+            if ('keyfile' in self.ssl_options and
+                    not os.path.exists(self.ssl_options['keyfile'])):
+                raise ValueError('keyfile "%s" does not exist' %
+                    self.ssl_options['keyfile'])
 
     def listen(self, port, address=""):
         """Starts accepting connections on the given port.
@@ -214,10 +234,10 @@ class TCPServer(object):
                 stream = IOStream(connection, io_loop=self.io_loop)
             self.handle_stream(stream, address)
         except Exception:
-            logging.error("Error in connection callback", exc_info=True)
+            app_log.error("Error in connection callback", exc_info=True)
 
 
-def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
+def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -231,25 +251,24 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
     or socket.AF_INET6 to restrict to ipv4 or ipv6 addresses, otherwise
     both will be used if available.
 
-    The ``backlog`` argument has the same meaning as for 
+    The ``backlog`` argument has the same meaning as for
     ``socket.listen()``.
+
+    ``flags`` is a bitmask of AI_* flags to ``getaddrinfo``, like
+    ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
     """
     sockets = []
     if address == "":
         address = None
-    flags = socket.AI_PASSIVE
-    if hasattr(socket, "AI_ADDRCONFIG"):
-        # AI_ADDRCONFIG ensures that we only try to bind on ipv6
-        # if the system is configured for it, but the flag doesn't
-        # exist on some platforms (specifically WinXP, although
-        # newer versions of windows have it)
-        flags |= socket.AI_ADDRCONFIG
+    if flags is None:
+        flags = socket.AI_PASSIVE
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                   0, flags)):
         af, socktype, proto, canonname, sockaddr = res
         sock = socket.socket(af, socktype, proto)
         set_close_exec(sock.fileno())
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if os.name != 'nt':
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if af == socket.AF_INET6:
             # On linux, ipv6 sockets accept ipv4 too by default,
             # but this makes it impossible to bind to both
@@ -275,7 +294,7 @@ if hasattr(socket, 'AF_UNIX'):
         If any other file with that name exists, an exception will be
         raised.
 
-        Returns a socket object (not a list of socket objects like 
+        Returns a socket object (not a list of socket objects like
         `bind_sockets`)
         """
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -297,6 +316,7 @@ if hasattr(socket, 'AF_UNIX'):
         sock.listen(backlog)
         return sock
 
+
 def add_accept_handler(sock, callback, io_loop=None):
     """Adds an ``IOLoop`` event handler to accept new connections on ``sock``.
 
@@ -308,6 +328,7 @@ def add_accept_handler(sock, callback, io_loop=None):
     """
     if io_loop is None:
         io_loop = IOLoop.instance()
+
     def accept_handler(fd, events):
         while True:
             try:

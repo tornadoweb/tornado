@@ -16,8 +16,9 @@
 
 """Utilities for working with multiple processes."""
 
+from __future__ import absolute_import, division, with_statement
+
 import errno
-import logging
 import os
 import sys
 import time
@@ -25,11 +26,13 @@ import time
 from binascii import hexlify
 
 from tornado import ioloop
+from tornado.log import gen_log
 
 try:
-    import multiprocessing # Python 2.6+
+    import multiprocessing  # Python 2.6+
 except ImportError:
     multiprocessing = None
+
 
 def cpu_count():
     """Returns the number of processors on this machine."""
@@ -42,8 +45,9 @@ def cpu_count():
         return os.sysconf("SC_NPROCESSORS_CONF")
     except ValueError:
         pass
-    logging.error("Could not detect number of processors; assuming 1")
+    gen_log.error("Could not detect number of processors; assuming 1")
     return 1
+
 
 def _reseed_random():
     if 'random' not in sys.modules:
@@ -60,6 +64,7 @@ def _reseed_random():
 
 
 _task_id = None
+
 
 def fork_processes(num_processes, max_restarts=100):
     """Starts multiple worker processes.
@@ -93,8 +98,9 @@ def fork_processes(num_processes, max_restarts=100):
         raise RuntimeError("Cannot run in multiple processes: IOLoop instance "
                            "has already been initialized. You cannot call "
                            "IOLoop.instance() before calling start_processes()")
-    logging.info("Starting %d processes", num_processes)
+    gen_log.info("Starting %d processes", num_processes)
     children = {}
+
     def start_child(i):
         pid = os.fork()
         if pid == 0:
@@ -108,7 +114,8 @@ def fork_processes(num_processes, max_restarts=100):
             return None
     for i in range(num_processes):
         id = start_child(i)
-        if id is not None: return id
+        if id is not None:
+            return id
     num_restarts = 0
     while children:
         try:
@@ -121,24 +128,26 @@ def fork_processes(num_processes, max_restarts=100):
             continue
         id = children.pop(pid)
         if os.WIFSIGNALED(status):
-            logging.warning("child %d (pid %d) killed by signal %d, restarting",
+            gen_log.warning("child %d (pid %d) killed by signal %d, restarting",
                             id, pid, os.WTERMSIG(status))
         elif os.WEXITSTATUS(status) != 0:
-            logging.warning("child %d (pid %d) exited with status %d, restarting",
+            gen_log.warning("child %d (pid %d) exited with status %d, restarting",
                             id, pid, os.WEXITSTATUS(status))
         else:
-            logging.info("child %d (pid %d) exited normally", id, pid)
+            gen_log.info("child %d (pid %d) exited normally", id, pid)
             continue
         num_restarts += 1
         if num_restarts > max_restarts:
             raise RuntimeError("Too many child restarts, giving up")
         new_id = start_child(id)
-        if new_id is not None: return new_id
+        if new_id is not None:
+            return new_id
     # All child processes exited cleanly, so exit the master process
     # instead of just returning to right after the call to
     # fork_processes (which will probably just start up another IOLoop
     # unless the caller checks the return value).
     sys.exit(0)
+
 
 def task_id():
     """Returns the current task id, if any.

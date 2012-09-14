@@ -11,7 +11,7 @@ application is written using a web framework that looks a bit like
 but with additional tools and optimizations to take advantage of the
 non-blocking web server and tools.
 
-`Tornado <http://github.com/facebook/tornado>`_ is an open source
+`Tornado <https://github.com/facebook/tornado>`_ is an open source
 version of this web server and some of the tools we use most often at
 FriendFeed. The framework is distinct from most mainstream web server
 frameworks (and certainly most Python frameworks) because it is
@@ -81,9 +81,9 @@ You can get query string arguments and parse ``POST`` bodies with the
 
 ::
 
-    class MainHandler(tornado.web.RequestHandler):
+    class MyFormHandler(tornado.web.RequestHandler):
         def get(self):
-            self.write('<html><body><form action="/" method="post">'
+            self.write('<html><body><form action="/myform" method="post">'
                        '<input type="text" name="message">'
                        '<input type="submit" value="Submit">'
                        '</form></body></html>')
@@ -192,7 +192,7 @@ There are three ways to return an error from a `RequestHandler`:
 The default error page includes a stack trace in debug mode and a one-line
 description of the error (e.g. "500: Internal Server Error") otherwise.
 To produce a custom error page, override `RequestHandler.write_error`.
-This method may produce output normally via methods such as 
+This method may produce output normally via methods such as
 `~RequestHandler.write` and `~RequestHandler.render`.  If the error was
 caused by an exception, an ``exc_info`` triple will be passed as a keyword
 argument (note that this exception is not guaranteed to be the current
@@ -203,7 +203,7 @@ In Tornado 2.0 and earlier, custom error pages were implemented by overriding
 ``RequestHandler.get_error_html``, which returned the error page as a string
 instead of calling the normal output methods (and had slightly different
 semantics for exceptions).  This method is still supported, but it is
-deprecated and applications are encouraged to switch to 
+deprecated and applications are encouraged to switch to
 `RequestHandler.write_error`.
 
 Redirection
@@ -239,7 +239,7 @@ website:
     application = tornado.wsgi.WSGIApplication([
         (r"/([a-z]*)", ContentHandler),
         (r"/static/tornado-0.2.tar.gz", tornado.web.RedirectHandler,
-         dict(url="http://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz")),
+         dict(url="https://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz")),
     ], **settings)
 
 The default ``RedirectHandler`` status code is
@@ -392,7 +392,7 @@ application settings as keyword arguments to your application:
 
     application = tornado.web.Application([
         (r"/", MainHandler),
-    ], cookie_secret="61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=")
+    ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
 Signed cookies contain the encoded value of the cookie in addition to a
 timestamp and an `HMAC <http://en.wikipedia.org/wiki/HMAC>`_ signature.
@@ -451,7 +451,7 @@ specifying a nickname, which is then saved in a cookie:
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/login", LoginHandler),
-    ], cookie_secret="61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=")
+    ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
 You can require that the user be logged in using the `Python
 decorator <http://www.python.org/dev/peps/pep-0318/>`_
@@ -469,7 +469,7 @@ rewritten:
             self.write("Hello, " + name)
 
     settings = {
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
     }
     application = tornado.web.Application([
@@ -485,6 +485,8 @@ schemes like Google OAuth. See the `tornado.auth`
 for more details. Check out the `Tornado Blog example application <https://github.com/facebook/tornado/tree/master/demos/blog>`_ for a
 complete example that uses authentication (and stores user data in a
 MySQL database).
+
+.. _xsrf:
 
 Cross-site request forgery protection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -508,7 +510,7 @@ include the application setting ``xsrf_cookies``:
 ::
 
     settings = {
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
         "xsrf_cookies": True,
     }
@@ -527,7 +529,7 @@ function ``xsrf_form_html()``, available in all templates:
 ::
 
     <form action="/new_message" method="post">
-      {{ xsrf_form_html() }}
+      {% module xsrf_form_html() %}
       <input type="text" name="message"/>
       <input type="submit" value="Post"/>
     </form>
@@ -575,7 +577,7 @@ You can serve static files from Tornado by specifying the
 
     settings = {
         "static_path": os.path.join(os.path.dirname(__file__), "static"),
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
         "xsrf_cookies": True,
     }
@@ -695,7 +697,7 @@ Here is a properly localized template:
            <div>{{ _("Username") }} <input type="text" name="username"/></div>
            <div>{{ _("Password") }} <input type="password" name="password"/></div>
            <div><input type="submit" value="{{ _("Sign in") }}"/></div>
-           {{ xsrf_form_html() }}
+           {% module xsrf_form_html() %}
          </form>
        </body>
      </html>
@@ -748,6 +750,8 @@ the user's locale is ``es_GT``, and the ``es`` locale is supported,
 See the `tornado.locale`
 documentation for detailed information on the CSV format and other
 localization methods.
+
+.. _ui-modules:
 
 UI modules
 ~~~~~~~~~~
@@ -957,6 +961,8 @@ the Google credentials in a cookie for later access:
 
 See the `tornado.auth` module documentation for more details.
 
+.. _debug-mode:
+
 Debug mode and automatic reloading
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -975,6 +981,12 @@ are using debug mode.
 The automatic reloading feature of debug mode is available as a
 standalone module in ``tornado.autoreload``, and is optionally used by
 the test runner in ``tornado.testing.main``.
+
+Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
+because it re-executes Python using ``sys.executable`` and ``sys.argv``.
+Additionally, modifying these variables will cause reloading to behave
+incorrectly.
+
 
 Running Tornado in production
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1105,4 +1117,3 @@ AppEngine <http://code.google.com/appengine/>`_ application:
 See the `appengine example application
 <https://github.com/facebook/tornado/tree/master/demos/appengine>`_ for a
 full-featured AppEngine app built on Tornado.
-

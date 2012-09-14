@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+
+from __future__ import absolute_import, division, with_statement
 import logging
 import os
 import signal
@@ -7,16 +9,15 @@ import sys
 from tornado.httpclient import HTTPClient, HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
-from tornado.netutil import bind_sockets
+from tornado.log import gen_log
 from tornado.process import fork_processes, task_id
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import LogTrapTestCase, get_unused_port
+from tornado.testing import bind_unused_port, ExpectLog
+from tornado.test.util import unittest
 from tornado.web import RequestHandler, Application
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
-# Logging is tricky here so you may want to replace LogTrapTestCase
-# with unittest.TestCase when debugging.
-class ProcessTest(LogTrapTestCase):
+class ProcessTest(unittest.TestCase):
     def get_app(self):
         class ProcessHandler(RequestHandler):
             def get(self):
@@ -41,83 +42,81 @@ class ProcessTest(LogTrapTestCase):
             logging.error("aborting child process from tearDown")
             logging.shutdown()
             os._exit(1)
+        # In the surviving process, clear the alarm we set earlier
+        signal.alarm(0)
         super(ProcessTest, self).tearDown()
 
     def test_multi_process(self):
-        self.assertFalse(IOLoop.initialized())
-        port = get_unused_port()
-        def get_url(path):
-            return "http://127.0.0.1:%d%s" % (port, path)
-        sockets = bind_sockets(port, "127.0.0.1")
-        # ensure that none of these processes live too long
-        signal.alarm(5)  # master process
-        try:
-            id = fork_processes(3, max_restarts=3)
-        except SystemExit, e:
-            # if we exit cleanly from fork_processes, all the child processes
-            # finished with status 0
-            self.assertEqual(e.code, 0)
-            self.assertTrue(task_id() is None)
-            for sock in sockets: sock.close()
-            signal.alarm(0)
-            return
-        signal.alarm(5)  # child process
-        try:
-            if id in (0, 1):
-                signal.alarm(5)
-                self.assertEqual(id, task_id())
-                server = HTTPServer(self.get_app())
-                server.add_sockets(sockets)
-                IOLoop.instance().start()
-            elif id == 2:
-                signal.alarm(5)
-                self.assertEqual(id, task_id())
-                for sock in sockets: sock.close()
-                # Always use SimpleAsyncHTTPClient here; the curl
-                # version appears to get confused sometimes if the
-                # connection gets closed before it's had a chance to
-                # switch from writing mode to reading mode.
-                client = HTTPClient(SimpleAsyncHTTPClient)
+        with ExpectLog(gen_log, "(Starting .* processes|child .* exited|uncaught exception)"):
+            self.assertFalse(IOLoop.initialized())
+            sock, port = bind_unused_port()
 
-                def fetch(url, fail_ok=False):
-                    try:
-                        return client.fetch(get_url(url))
-                    except HTTPError, e:
-                        if not (fail_ok and e.code == 599):
-                            raise
+            def get_url(path):
+                return "http://127.0.0.1:%d%s" % (port, path)
+            # ensure that none of these processes live too long
+            signal.alarm(5)  # master process
+            try:
+                id = fork_processes(3, max_restarts=3)
+                self.assertTrue(id is not None)
+                signal.alarm(5)  # child processes
+            except SystemExit, e:
+                # if we exit cleanly from fork_processes, all the child processes
+                # finished with status 0
+                self.assertEqual(e.code, 0)
+                self.assertTrue(task_id() is None)
+                sock.close()
+                return
+            try:
+                if id in (0, 1):
+                    self.assertEqual(id, task_id())
+                    server = HTTPServer(self.get_app())
+                    server.add_sockets([sock])
+                    IOLoop.instance().start()
+                elif id == 2:
+                    self.assertEqual(id, task_id())
+                    sock.close()
+                    # Always use SimpleAsyncHTTPClient here; the curl
+                    # version appears to get confused sometimes if the
+                    # connection gets closed before it's had a chance to
+                    # switch from writing mode to reading mode.
+                    client = HTTPClient(SimpleAsyncHTTPClient)
 
-                # Make two processes exit abnormally
-                fetch("/?exit=2", fail_ok=True)
-                fetch("/?exit=3", fail_ok=True)
+                    def fetch(url, fail_ok=False):
+                        try:
+                            return client.fetch(get_url(url))
+                        except HTTPError, e:
+                            if not (fail_ok and e.code == 599):
+                                raise
 
-                # They've been restarted, so a new fetch will work
-                int(fetch("/").body)
+                    # Make two processes exit abnormally
+                    fetch("/?exit=2", fail_ok=True)
+                    fetch("/?exit=3", fail_ok=True)
 
-                # Now the same with signals
-                # Disabled because on the mac a process dying with a signal
-                # can trigger an "Application exited abnormally; send error
-                # report to Apple?" prompt.
-                #fetch("/?signal=%d" % signal.SIGTERM, fail_ok=True)
-                #fetch("/?signal=%d" % signal.SIGABRT, fail_ok=True)
-                #int(fetch("/").body)
+                    # They've been restarted, so a new fetch will work
+                    int(fetch("/").body)
 
-                # Now kill them normally so they won't be restarted
-                fetch("/?exit=0", fail_ok=True)
-                # One process left; watch it's pid change
-                pid = int(fetch("/").body)
-                fetch("/?exit=4", fail_ok=True)
-                pid2 = int(fetch("/").body)
-                self.assertNotEqual(pid, pid2)
+                    # Now the same with signals
+                    # Disabled because on the mac a process dying with a signal
+                    # can trigger an "Application exited abnormally; send error
+                    # report to Apple?" prompt.
+                    #fetch("/?signal=%d" % signal.SIGTERM, fail_ok=True)
+                    #fetch("/?signal=%d" % signal.SIGABRT, fail_ok=True)
+                    #int(fetch("/").body)
 
-                # Kill the last one so we shut down cleanly
-                fetch("/?exit=0", fail_ok=True)
+                    # Now kill them normally so they won't be restarted
+                    fetch("/?exit=0", fail_ok=True)
+                    # One process left; watch it's pid change
+                    pid = int(fetch("/").body)
+                    fetch("/?exit=4", fail_ok=True)
+                    pid2 = int(fetch("/").body)
+                    self.assertNotEqual(pid, pid2)
 
-                os._exit(0)
-        except Exception:
-            logging.error("exception in child process %d", id, exc_info=True)
-            raise
-            
+                    # Kill the last one so we shut down cleanly
+                    fetch("/?exit=0", fail_ok=True)
 
-if os.name != 'posix' or sys.platform == 'cygwin':
-    # All sorts of unixisms here
-    del ProcessTest
+                    os._exit(0)
+            except Exception:
+                logging.error("exception in child process %d", id, exc_info=True)
+                raise
+ProcessTest = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
+                              "non-unix platform")(ProcessTest)

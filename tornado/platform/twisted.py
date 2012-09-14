@@ -41,13 +41,12 @@ recommended to call::
 
 before closing the `IOLoop`.
 
-This module has been tested with Twisted versions 11.0.0 and 11.1.0.
+This module has been tested with Twisted versions 11.0.0, 11.1.0, and 12.0.0
 """
 
-from __future__ import with_statement, absolute_import
+from __future__ import absolute_import, division, with_statement
 
 import functools
-import logging
 import time
 
 from twisted.internet.posixbase import PosixReactorBase
@@ -56,18 +55,17 @@ from twisted.internet.interfaces import \
 from twisted.python import failure, log
 from twisted.internet import error
 
-from zope.interface import implements
+from zope.interface import implementer
 
 import tornado
 import tornado.ioloop
+from tornado.log import app_log
 from tornado.stack_context import NullContext
 from tornado.ioloop import IOLoop
 
 
 class TornadoDelayedCall(object):
     """DelayedCall object for Tornado."""
-    implements(IDelayedCall)
-
     def __init__(self, reactor, seconds, f, *args, **kw):
         self._reactor = reactor
         self._func = functools.partial(f, *args, **kw)
@@ -82,7 +80,7 @@ class TornadoDelayedCall(object):
         try:
             self._func()
         except:
-            logging.error("_called caught exception", exc_info=True)
+            app_log.error("_called caught exception", exc_info=True)
 
     def getTime(self):
         return self._time
@@ -106,6 +104,9 @@ class TornadoDelayedCall(object):
 
     def active(self):
         return self._active
+# Fake class decorator for python 2.5 compatibility
+TornadoDelayedCall = implementer(IDelayedCall)(TornadoDelayedCall)
+
 
 class TornadoReactor(PosixReactorBase):
     """Twisted reactor built on the Tornado IOLoop.
@@ -117,17 +118,16 @@ class TornadoReactor(PosixReactorBase):
     timed call functionality on top of `IOLoop.add_timeout` rather than
     using the implementation in `PosixReactorBase`.
     """
-    implements(IReactorTime, IReactorFDSet)
-
     def __init__(self, io_loop=None):
         if not io_loop:
             io_loop = tornado.ioloop.IOLoop.instance()
         self._io_loop = io_loop
         self._readers = {}  # map of reader objects to fd
         self._writers = {}  # map of writer objects to fd
-        self._fds = {} # a map of fd to a (reader, writer) tuple
+        self._fds = {}  # a map of fd to a (reader, writer) tuple
         self._delayedCalls = {}
         PosixReactorBase.__init__(self)
+        self.addSystemEventTrigger('during', 'shutdown', self.crash)
 
         # IOLoop.start() bypasses some of the reactor initialization.
         # Fire off the necessary events if they weren't already triggered
@@ -281,7 +281,8 @@ class TornadoReactor(PosixReactorBase):
     # IOLoop.start() instead of Reactor.run().
     def stop(self):
         PosixReactorBase.stop(self)
-        self._io_loop.stop()
+        fire_shutdown = functools.partial(self.fireSystemEvent, "shutdown")
+        self._io_loop.add_callback(fire_shutdown)
 
     def crash(self):
         PosixReactorBase.crash(self)
@@ -292,8 +293,8 @@ class TornadoReactor(PosixReactorBase):
 
     def mainLoop(self):
         self._io_loop.start()
-        if self._stopped:
-            self.fireSystemEvent("shutdown")
+TornadoReactor = implementer(IReactorTime, IReactorFDSet)(TornadoReactor)
+
 
 class _TestReactor(TornadoReactor):
     """Subclass of TornadoReactor for use in unittests.
@@ -317,7 +318,6 @@ class _TestReactor(TornadoReactor):
             interface = '127.0.0.1'
         return super(_TestReactor, self).listenUDP(
             port, protocol, interface=interface, maxPacketSize=maxPacketSize)
-
 
 
 def install(io_loop=None):

@@ -1,5 +1,7 @@
 *.pyc
+*.pyo
 *.so
+*.class
 *~
 build/
 /dist/

@@ -1,15 +1,30 @@
 #!/usr/bin/env python
-import unittest
-from tornado.testing import AsyncTestCase, LogTrapTestCase
 
-class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):
+from __future__ import absolute_import, division, with_statement
+import time
+from tornado.testing import AsyncTestCase
+from tornado.test.util import unittest
+
+
+class AsyncTestCaseTest(AsyncTestCase):
     def test_exception_in_callback(self):
-        self.io_loop.add_callback(lambda: 1/0)
+        self.io_loop.add_callback(lambda: 1 / 0)
         try:
             self.wait()
             self.fail("did not get expected exception")
         except ZeroDivisionError:
             pass
+
+    def test_subsequent_wait_calls(self):
+        """
+        This test makes sure that a second call to wait()
+        clears the first timeout.
+        """
+        self.io_loop.add_timeout(time.time() + 0.01, self.stop)
+        self.wait(timeout=0.02)
+        self.io_loop.add_timeout(time.time() + 0.03, self.stop)
+        self.wait(timeout=0.1)
+
 
 class SetUpTearDownTest(unittest.TestCase):
     def test_set_up_tear_down(self):

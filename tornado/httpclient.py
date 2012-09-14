@@ -29,6 +29,8 @@ you use a recent version of ``libcurl`` and ``pycurl``.  Currently the minimum
 supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
 """
 
+from __future__ import absolute_import, division, with_statement
+
 import calendar
 import email.utils
 import httplib
@@ -39,6 +41,7 @@ from tornado.escape import utf8
 from tornado import httputil
 from tornado.ioloop import IOLoop
 from tornado.util import import_object, bytes_type
+
 
 class HTTPClient(object):
     """A blocking HTTP client.
@@ -54,11 +57,11 @@ class HTTPClient(object):
         except httpclient.HTTPError, e:
             print "Error:", e
     """
-    def __init__(self, async_client_class=None):
+    def __init__(self, async_client_class=None, **kwargs):
         self._io_loop = IOLoop()
         if async_client_class is None:
             async_client_class = AsyncHTTPClient
-        self._async_client = async_client_class(self._io_loop)
+        self._async_client = async_client_class(self._io_loop, **kwargs)
         self._response = None
         self._closed = False
 
@@ -74,7 +77,7 @@ class HTTPClient(object):
 
     def fetch(self, request, **kwargs):
         """Executes a request, returning an `HTTPResponse`.
-        
+
         The request may be either a string URL or an `HTTPRequest` object.
         If it is a string, we construct an `HTTPRequest` using any additional
         kwargs: ``HTTPRequest(request, **kwargs)``
@@ -90,6 +93,7 @@ class HTTPClient(object):
         self._response = None
         response.rethrow()
         return response
+
 
 class AsyncHTTPClient(object):
     """An non-blocking HTTP client.
@@ -120,6 +124,8 @@ class AsyncHTTPClient(object):
     _impl_class = None
     _impl_kwargs = None
 
+    _DEFAULT_MAX_CLIENTS = 10
+
     @classmethod
     def _async_clients(cls):
         assert cls is not AsyncHTTPClient, "should only be called on subclasses"
@@ -127,7 +133,7 @@ class AsyncHTTPClient(object):
             cls._async_client_dict = weakref.WeakKeyDictionary()
         return cls._async_client_dict
 
-    def __new__(cls, io_loop=None, max_clients=10, force_instance=False, 
+    def __new__(cls, io_loop=None, max_clients=None, force_instance=False,
                 **kwargs):
         io_loop = io_loop or IOLoop.instance()
         if cls is AsyncHTTPClient:
@@ -145,7 +151,13 @@ class AsyncHTTPClient(object):
             if cls._impl_kwargs:
                 args.update(cls._impl_kwargs)
             args.update(kwargs)
-            instance.initialize(io_loop, max_clients, **args)
+            if max_clients is not None:
+                # max_clients is special because it may be passed
+                # positionally instead of by keyword
+                args["max_clients"] = max_clients
+            elif "max_clients" not in args:
+                args["max_clients"] = AsyncHTTPClient._DEFAULT_MAX_CLIENTS
+            instance.initialize(io_loop, **args)
             if not force_instance:
                 impl._async_clients()[io_loop] = instance
             return instance
@@ -200,6 +212,16 @@ class AsyncHTTPClient(object):
         AsyncHTTPClient._impl_class = impl
         AsyncHTTPClient._impl_kwargs = kwargs
 
+    @staticmethod
+    def _save_configuration():
+        return (AsyncHTTPClient._impl_class, AsyncHTTPClient._impl_kwargs)
+
+    @staticmethod
+    def _restore_configuration(saved):
+        AsyncHTTPClient._impl_class = saved[0]
+        AsyncHTTPClient._impl_kwargs = saved[1]
+
+
 class HTTPRequest(object):
     """HTTP client request object."""
     def __init__(self, url, method="GET", headers=None, body=None,
@@ -235,23 +257,23 @@ class HTTPRequest(object):
         :arg bool use_gzip: Request gzip encoding from the server
         :arg string network_interface: Network interface to use for request
         :arg callable streaming_callback: If set, `streaming_callback` will
-           be run with each chunk of data as it is received, and 
-           `~HTTPResponse.body` and `~HTTPResponse.buffer` will be empty in 
+           be run with each chunk of data as it is received, and
+           `~HTTPResponse.body` and `~HTTPResponse.buffer` will be empty in
            the final response.
         :arg callable header_callback: If set, `header_callback` will
-           be run with each header line as it is received, and 
+           be run with each header line as it is received, and
            `~HTTPResponse.headers` will be empty in the final response.
         :arg callable prepare_curl_callback: If set, will be called with
            a `pycurl.Curl` object to allow the application to make additional
            `setopt` calls.
-        :arg string proxy_host: HTTP proxy hostname.  To use proxies, 
-           `proxy_host` and `proxy_port` must be set; `proxy_username` and 
-           `proxy_pass` are optional.  Proxies are currently only support 
+        :arg string proxy_host: HTTP proxy hostname.  To use proxies,
+           `proxy_host` and `proxy_port` must be set; `proxy_username` and
+           `proxy_pass` are optional.  Proxies are currently only support
            with `curl_httpclient`.
         :arg int proxy_port: HTTP proxy port
         :arg string proxy_username: HTTP proxy username
         :arg string proxy_password: HTTP proxy password
-        :arg bool allow_nonstandard_methods: Allow unknown values for `method` 
+        :arg bool allow_nonstandard_methods: Allow unknown values for `method`
            argument?
         :arg bool validate_cert: For HTTPS requests, validate the server's
            certificate?
@@ -260,7 +282,7 @@ class HTTPRequest(object):
            any request uses a custom `ca_certs` file, they all must (they
            don't have to all use the same `ca_certs`, but it's not possible
            to mix requests with ca_certs and requests that use the defaults.
-        :arg bool allow_ipv6: Use IPv6 when available?  Default is false in 
+        :arg bool allow_ipv6: Use IPv6 when available?  Default is false in
            `simple_httpclient` and true in `curl_httpclient`
         :arg string client_key: Filename for client SSL key, if any
         :arg string client_cert: Filename for client SSL certificate, if any
@@ -325,12 +347,15 @@ class HTTPResponse(object):
         plus 'queue', which is the delay (if any) introduced by waiting for
         a slot under AsyncHTTPClient's max_clients setting.
     """
-    def __init__(self, request, code, headers={}, buffer=None,
+    def __init__(self, request, code, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
-                 time_info={}):
+                 time_info=None):
         self.request = request
         self.code = code
-        self.headers = headers
+        if headers is not None:
+            self.headers = headers
+        else:
+            self.headers = httputil.HTTPHeaders()
         self.buffer = buffer
         self._body = None
         if effective_url is None:
@@ -345,7 +370,7 @@ class HTTPResponse(object):
         else:
             self.error = error
         self.request_time = request_time
-        self.time_info = time_info
+        self.time_info = time_info or {}
 
     def _get_body(self):
         if self.buffer is None:
