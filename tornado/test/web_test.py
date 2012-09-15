@@ -1,11 +1,11 @@
 from __future__ import absolute_import, division, with_statement
-from tornado import gen
-from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
-from tornado.iostream import IOStream
-from tornado.template import DictLoader
-from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
-from tornado.util import b, bytes_type, ObjectDict
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value
+from .. import gen
+from ..escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
+from ..iostream import IOStream
+from ..template import DictLoader
+from ..testing import LogTrapTestCase, AsyncHTTPTestCase
+from ..util import b, bytes_type, ObjectDict
+from ..web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value
 
 import binascii
 import logging

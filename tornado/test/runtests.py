@@ -2,7 +2,11 @@
 
 from __future__ import absolute_import, division, with_statement
 import sys
+import os
 import unittest
+
+# adding '../../' to module path. This way "tornado" module is visible from this file.
+sys.path.append(os.path.abspath( os.path.join( os.path.dirname(__file__), '../../')))
 
 TEST_MODULES = [
     'tornado.httputil.doctests',
@@ -36,6 +40,7 @@ def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 
 if __name__ == '__main__':
+
     # The -W command-line option does not work in a virtualenv with
     # python 3 (as of virtualenv 1.7), so configure warnings
     # programmatically instead.
@@ -53,7 +58,7 @@ if __name__ == '__main__':
     warnings.filterwarnings("error", category=DeprecationWarning,
                             module=r"tornado\..*")
 
-    import tornado.testing
+    from tornado import testing
     kwargs = {}
     if sys.version_info >= (3, 2):
         # HACK:  unittest.main will make its own changes to the warning
@@ -62,4 +67,4 @@ if __name__ == '__main__':
         # suppresses this behavior, although this looks like an implementation
         # detail.  http://bugs.python.org/issue15626
         kwargs['warnings'] = False
-    tornado.testing.main(**kwargs)
+    testing.main(**kwargs)

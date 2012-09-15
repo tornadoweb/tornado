@@ -6,14 +6,14 @@ import logging
 import os
 import signal
 import sys
-from tornado.httpclient import HTTPClient, HTTPError
-from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop
-from tornado.netutil import bind_sockets
-from tornado.process import fork_processes, task_id
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import LogTrapTestCase, get_unused_port
-from tornado.web import RequestHandler, Application
+from ..httpclient import HTTPClient, HTTPError
+from ..httpserver import HTTPServer
+from ..ioloop import IOLoop
+from ..netutil import bind_sockets
+from ..process import fork_processes, task_id
+from ..simple_httpclient import SimpleAsyncHTTPClient
+from ..testing import LogTrapTestCase, get_unused_port
+from ..web import RequestHandler, Application
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
 # Logging is tricky here so you may want to replace LogTrapTestCase

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, with_statement
 
-from tornado.stack_context import StackContext, wrap
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
-from tornado.util import b
-from tornado.web import asynchronous, Application, RequestHandler
+from ..stack_context import StackContext, wrap
+from ..testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from ..util import b
+from ..web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
 import logging

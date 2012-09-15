@@ -1,10 +1,10 @@
 from __future__ import absolute_import, division, with_statement
-from tornado import netutil
-from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream, SSLIOStream
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
-from tornado.util import b
-from tornado.web import RequestHandler, Application
+from .. import netutil
+from ..ioloop import IOLoop
+from ..iostream import IOStream, SSLIOStream
+from ..testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
+from ..util import b
+from ..web import RequestHandler, Application
 import errno
 import logging
 import os

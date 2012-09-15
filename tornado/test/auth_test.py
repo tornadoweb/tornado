@@ -5,11 +5,11 @@
 
 
 from __future__ import absolute_import, division, with_statement
-from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin
-from tornado.escape import json_decode
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
-from tornado.util import b
-from tornado.web import RequestHandler, Application, asynchronous
+from ..auth import OpenIdMixin, OAuthMixin, OAuth2Mixin
+from ..escape import json_decode
+from ..testing import AsyncHTTPTestCase, LogTrapTestCase
+from ..util import b
+from ..web import RequestHandler, Application, asynchronous
 
 
 class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):

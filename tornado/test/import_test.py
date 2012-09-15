@@ -7,29 +7,29 @@ class ImportTest(unittest.TestCase):
         # Some of our modules are not otherwise tested.  Import them
         # all (unless they have external dependencies) here to at
         # least ensure that there are no syntax errors.
-        import tornado.auth
-        import tornado.autoreload
-        # import tornado.curl_httpclient  # depends on pycurl
-        # import tornado.database  # depends on MySQLdb
-        import tornado.escape
-        import tornado.httpclient
-        import tornado.httpserver
-        import tornado.httputil
-        import tornado.ioloop
-        import tornado.iostream
-        import tornado.locale
-        import tornado.options
-        import tornado.netutil
-        # import tornado.platform.twisted # depends on twisted
-        import tornado.process
-        import tornado.simple_httpclient
-        import tornado.stack_context
-        import tornado.template
-        import tornado.testing
-        import tornado.util
-        import tornado.web
-        import tornado.websocket
-        import tornado.wsgi
+        from .. import auth
+        from .. import autoreload
+        # from .. import curl_httpclient  # depends on pycurl
+        # from .. import database  # depends on MySQLdb
+        from .. import escape
+        from .. import httpclient
+        from .. import httpserver
+        from .. import httputil
+        from .. import ioloop
+        from .. import iostream
+        from .. import locale
+        from .. import options
+        from .. import netutil
+        # from .. import platform.twisted # depends on twisted
+        from .. import process
+        from .. import simple_httpclient
+        from .. import stack_context
+        from .. import template
+        from .. import testing
+        from .. import util
+        from .. import web
+        from .. import websocket
+        from .. import wsgi
 
     # for modules with dependencies, if those dependencies can be loaded,
     # load them too.
@@ -40,7 +40,7 @@ class ImportTest(unittest.TestCase):
         except ImportError:
             pass
         else:
-            import tornado.curl_httpclient
+            from .. import curl_httpclient
 
     def test_import_mysqldb(self):
         try:
@@ -48,7 +48,7 @@ class ImportTest(unittest.TestCase):
         except ImportError:
             pass
         else:
-            import tornado.database
+            from .. import database
 
     def test_import_twisted(self):
         try:
@@ -56,4 +56,4 @@ class ImportTest(unittest.TestCase):
         except ImportError:
             pass
         else:
-            import tornado.platform.twisted
+            from ..platform import twisted

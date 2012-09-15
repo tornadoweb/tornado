@@ -2,10 +2,10 @@
 
 
 from __future__ import absolute_import, division, with_statement
-from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders
-from tornado.escape import utf8
-from tornado.testing import LogTrapTestCase
-from tornado.util import b
+from ..httputil import url_concat, parse_multipart_form_data, HTTPHeaders
+from ..escape import utf8
+from ..testing import LogTrapTestCase
+from ..util import b
 import logging
 import unittest
 

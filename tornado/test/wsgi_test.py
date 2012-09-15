@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, with_statement
 from wsgiref.validate import validator
 
-from tornado.escape import json_decode
-from tornado.test.httpserver_test import TypeCheckHandler
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
-from tornado.util import b
-from tornado.web import RequestHandler
-from tornado.wsgi import WSGIApplication, WSGIContainer
+from ..escape import json_decode
+from .httpserver_test import TypeCheckHandler
+from ..testing import AsyncHTTPTestCase, LogTrapTestCase
+from ..util import b
+from ..web import RequestHandler
+from ..wsgi import WSGIApplication, WSGIContainer
 
 
 class WSGIContainerTest(AsyncHTTPTestCase, LogTrapTestCase):
@@ -65,8 +65,8 @@ class WSGIApplicationTest(AsyncHTTPTestCase, LogTrapTestCase):
 # This is kind of hacky, but run some of the HTTPServer tests through
 # WSGIContainer and WSGIApplication to make sure everything survives
 # repeated disassembly and reassembly.
-from tornado.test.httpserver_test import HTTPConnectionTest
-from tornado.test.web_test import WSGISafeWebTest
+from .httpserver_test import HTTPConnectionTest
+from .web_test import WSGISafeWebTest
 
 
 class WSGIConnectionTest(HTTPConnectionTest):

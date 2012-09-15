@@ -36,18 +36,18 @@ try:
     from twisted.web.resource import Resource
     from twisted.web.server import Site
     from twisted.python import log
-    from tornado.platform.twisted import TornadoReactor
+    from ..platform.twisted import TornadoReactor
     from zope.interface import implementer
     have_twisted = True
 except ImportError:
     have_twisted = False
 
-from tornado.httpclient import AsyncHTTPClient
-from tornado.ioloop import IOLoop
-from tornado.platform.auto import set_close_exec
-from tornado.testing import get_unused_port
-from tornado.util import import_object
-from tornado.web import RequestHandler, Application
+from ..httpclient import AsyncHTTPClient
+from ..ioloop import IOLoop
+from ..platform.auto import set_close_exec
+from ..testing import get_unused_port
+from ..util import import_object
+from ..web import RequestHandler, Application
 
 
 def save_signal_handlers():
@@ -343,7 +343,7 @@ class CompatibilityTests(unittest.TestCase):
     def start_tornado_server(self):
         class HelloHandler(RequestHandler):
             def get(self):
-                self.write("Hello from tornado!")
+                self.write("Hello from ...tornado!")
         app = Application([('/', HelloHandler)],
                           log_function=lambda x: None)
         self.tornado_port = get_unused_port()
@@ -417,13 +417,13 @@ class CompatibilityTests(unittest.TestCase):
         self.start_tornado_server()
         response = self.twisted_fetch(
             'http://localhost:%d' % self.tornado_port, self.run_ioloop)
-        self.assertEqual(response, 'Hello from tornado!')
+        self.assertEqual(response, 'Hello from ...tornado!')
 
     def testTornadoServerTwistedClientReactor(self):
         self.start_tornado_server()
         response = self.twisted_fetch(
             'http://localhost:%d' % self.tornado_port, self.run_reactor)
-        self.assertEqual(response, 'Hello from tornado!')
+        self.assertEqual(response, 'Hello from ...tornado!')
 
 
 if not have_twisted:

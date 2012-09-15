@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, with_statement
 import sys
 import unittest
 
-from tornado.util import raise_exc_info
+from ..util import raise_exc_info
 
 
 class RaiseExcInfoTest(unittest.TestCase):

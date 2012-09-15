@@ -10,14 +10,14 @@ import re
 import socket
 import sys
 
-from tornado.httpclient import AsyncHTTPClient
-from tornado.httputil import HTTPHeaders
-from tornado.ioloop import IOLoop
-from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
-from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
-from tornado.util import b
-from tornado.web import RequestHandler, Application, asynchronous, url
+from ..httpclient import AsyncHTTPClient
+from ..httputil import HTTPHeaders
+from ..ioloop import IOLoop
+from ..simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
+from .httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
+from ..testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
+from ..util import b
+from ..web import RequestHandler, Application, asynchronous, url
 
 
 class SimpleHTTPClientCommonTestCase(HTTPClientCommonTestCase):

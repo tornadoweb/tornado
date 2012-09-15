@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, with_statement
 
 import os
-import tornado.locale
+from .. import locale as tornado_locale
 import unittest
 
 
@@ -10,31 +10,31 @@ class TranslationLoaderTest(unittest.TestCase):
     SAVE_VARS = ['_translations', '_supported_locales', '_use_gettext']
 
     def clear_locale_cache(self):
-        if hasattr(tornado.locale.Locale, '_cache'):
-            del tornado.locale.Locale._cache
+        if hasattr(tornado_locale.Locale, '_cache'):
+            del tornado_locale.Locale._cache
 
     def setUp(self):
         self.saved = {}
         for var in TranslationLoaderTest.SAVE_VARS:
-            self.saved[var] = getattr(tornado.locale, var)
+            self.saved[var] = getattr(tornado_locale, var)
         self.clear_locale_cache()
 
     def tearDown(self):
         for k, v in self.saved.items():
-            setattr(tornado.locale, k, v)
+            setattr(tornado_locale, k, v)
         self.clear_locale_cache()
 
     def test_csv(self):
-        tornado.locale.load_translations(
+        tornado_locale.load_translations(
             os.path.join(os.path.dirname(__file__), 'csv_translations'))
-        locale = tornado.locale.get("fr_FR")
-        self.assertTrue(isinstance(locale, tornado.locale.CSVLocale))
+        locale = tornado_locale.get("fr_FR")
+        self.assertTrue(isinstance(locale, tornado_locale.CSVLocale))
         self.assertEqual(locale.translate("school"), u"\u00e9cole")
 
     def test_gettext(self):
-        tornado.locale.load_gettext_translations(
+        tornado_locale.load_gettext_translations(
             os.path.join(os.path.dirname(__file__), 'gettext_translations'),
             "tornado_test")
-        locale = tornado.locale.get("fr_FR")
-        self.assertTrue(isinstance(locale, tornado.locale.GettextLocale))
+        locale = tornado_locale.get("fr_FR")
+        self.assertTrue(isinstance(locale, tornado_locale.GettextLocale))
         self.assertEqual(locale.translate("school"), u"\u00e9cole")

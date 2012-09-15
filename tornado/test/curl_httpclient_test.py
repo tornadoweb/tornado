@@ -1,5 +1,5 @@
 from __future__ import absolute_import, division, with_statement
-from tornado.test.httpclient_test import HTTPClientCommonTestCase
+from .httpclient_test import HTTPClientCommonTestCase
 
 try:
     import pycurl
@@ -7,7 +7,7 @@ except ImportError:
     pycurl = None
 
 if pycurl is not None:
-    from tornado.curl_httpclient import CurlAsyncHTTPClient
+    from ..curl_httpclient import CurlAsyncHTTPClient
 
 
 class CurlHTTPClientCommonTestCase(HTTPClientCommonTestCase):

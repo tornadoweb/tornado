@@ -7,9 +7,9 @@ import socket
 import time
 import unittest
 
-from tornado.ioloop import IOLoop
-from tornado.netutil import bind_sockets
-from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
+from ..ioloop import IOLoop
+from ..netutil import bind_sockets
+from ..testing import AsyncTestCase, LogTrapTestCase, get_unused_port
 
 
 class TestIOLoop(AsyncTestCase, LogTrapTestCase):

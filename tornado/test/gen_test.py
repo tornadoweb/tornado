@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, with_statement
 import functools
-from tornado.escape import url_escape
-from tornado.httpclient import AsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
-from tornado.util import b
-from tornado.web import Application, RequestHandler, asynchronous
+from ..escape import url_escape
+from ..httpclient import AsyncHTTPClient
+from ..testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from ..util import b
+from ..web import Application, RequestHandler, asynchronous
 
-from tornado import gen
+from .. import gen
 
 
 class GenTest(AsyncTestCase):
@@ -252,7 +252,7 @@ class GenTest(AsyncTestCase):
     def test_stack_context_leak(self):
         # regression test: repeated invocations of a gen-based
         # function should not result in accumulated stack_contexts
-        from tornado import stack_context
+        from .. import stack_context
 
         @gen.engine
         def inner(callback):

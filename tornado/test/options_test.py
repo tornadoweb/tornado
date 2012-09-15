@@ -7,9 +7,9 @@ import tempfile
 import unittest
 import warnings
 
-from tornado.escape import utf8
-from tornado.options import _Options, _LogFormatter
-from tornado.util import b, bytes_type
+from ..escape import utf8
+from ..options import _Options, _LogFormatter
+from ..util import b, bytes_type
 
 
 @contextlib.contextmanager

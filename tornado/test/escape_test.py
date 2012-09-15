@@ -2,11 +2,10 @@
 
 
 from __future__ import absolute_import, division, with_statement
-import tornado.escape
 import unittest
 
-from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode
-from tornado.util import b
+from ..escape import linkify, utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode
+from ..util import b
 
 linkify_tests = [
     # (input, linkify_kwargs, expected_output)
@@ -135,7 +134,7 @@ linkify_tests = [
 class EscapeTestCase(unittest.TestCase):
     def test_linkify(self):
         for text, kwargs, html in linkify_tests:
-            linked = tornado.escape.linkify(text, **kwargs)
+            linked = linkify(text, **kwargs)
             self.assertEqual(linked, html)
 
     def test_xhtml_escape(self):

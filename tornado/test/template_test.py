@@ -3,10 +3,10 @@ from __future__ import absolute_import, division, with_statement
 import os
 import traceback
 
-from tornado.escape import utf8, native_str, to_unicode
-from tornado.template import Template, DictLoader, ParseError, Loader
-from tornado.testing import LogTrapTestCase
-from tornado.util import b, bytes_type, ObjectDict
+from ..escape import utf8, native_str, to_unicode
+from ..template import Template, DictLoader, ParseError, Loader
+from ..testing import LogTrapTestCase
+from ..util import b, bytes_type, ObjectDict
 
 
 class TemplateTest(LogTrapTestCase):

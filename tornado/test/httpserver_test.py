@@ -2,16 +2,16 @@
 
 
 from __future__ import absolute_import, division, with_statement
-from tornado import httpclient, simple_httpclient, netutil
-from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
-from tornado.httpserver import HTTPServer
-from tornado.httputil import HTTPHeaders
-from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase
-from tornado.util import b, bytes_type
-from tornado.web import Application, RequestHandler
+from .. import httpclient, simple_httpclient, netutil
+from ..escape import json_decode, utf8, _unicode, recursive_unicode, native_str
+from ..httpserver import HTTPServer
+from ..httputil import HTTPHeaders
+from ..ioloop import IOLoop
+from ..iostream import IOStream
+from ..simple_httpclient import SimpleAsyncHTTPClient
+from ..testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase
+from ..util import b, bytes_type
+from ..web import Application, RequestHandler
 import os
 import shutil
 import socket

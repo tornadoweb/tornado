@@ -7,13 +7,13 @@ import binascii
 from contextlib import closing
 import functools
 
-from tornado.escape import utf8
-from tornado.httpclient import AsyncHTTPClient
-from tornado.iostream import IOStream
-from tornado import netutil
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
-from tornado.util import b, bytes_type
-from tornado.web import Application, RequestHandler, url
+from ..escape import utf8
+from ..httpclient import AsyncHTTPClient
+from ..iostream import IOStream
+from .. import netutil
+from ..testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
+from ..util import b, bytes_type
+from ..web import Application, RequestHandler, url
 
 
 class HelloWorldHandler(RequestHandler):

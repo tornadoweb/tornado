@@ -3,7 +3,7 @@
 from __future__ import absolute_import, division, with_statement
 import unittest
 import time
-from tornado.testing import AsyncTestCase, LogTrapTestCase
+from ..testing import AsyncTestCase, LogTrapTestCase
 
 
 class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):
