@@ -18,7 +18,7 @@
 
 Each module defines its own options, e.g.::
 
-    from tornado.options import define, options
+    from .options import define, options
 
     define("mysql_host", default="127.0.0.1:3306", help="Main user DB")
     define("memcache_hosts", default="127.0.0.1:11011", multiple=True,
@@ -59,7 +59,7 @@ import os
 import time
 import textwrap
 
-from tornado.escape import _unicode
+from .escape import _unicode
 
 # For pretty log messages, if available
 try:

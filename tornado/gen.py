@@ -69,7 +69,7 @@ import operator
 import sys
 import types
 
-from tornado.stack_context import ExceptionStackContext
+from .stack_context import ExceptionStackContext
 
 
 class KeyReuseError(Exception):

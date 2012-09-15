@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, with_statement
 
-from tornado.escape import utf8, _unicode, native_str
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
-from tornado.httputil import HTTPHeaders
-from tornado.iostream import IOStream, SSLIOStream
-from tornado import stack_context
-from tornado.util import b, GzipDecompressor
+from .escape import utf8, _unicode, native_str
+from .httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+from .httputil import HTTPHeaders
+from .iostream import IOStream, SSLIOStream
+from . import stack_context
+from .util import b, GzipDecompressor
 
 import base64
 import collections

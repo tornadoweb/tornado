@@ -27,13 +27,12 @@ import logging
 import struct
 import time
 import base64
-import tornado.escape
-import tornado.web
 
-from tornado.util import bytes_type, b
+from . import escape as tornado_escape
+from .util import bytes_type, b
+from .web import RequestHandler
 
-
-class WebSocketHandler(tornado.web.RequestHandler):
+class WebSocketHandler(RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
 
     Override on_message to handle incoming messages. You can also override
@@ -77,7 +76,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     This script pops up an alert box that says "You said: Hello, world".
     """
     def __init__(self, application, request, **kwargs):
-        tornado.web.RequestHandler.__init__(self, application, request,
+        RequestHandler.__init__(self, application, request,
                                             **kwargs)
         self.stream = request.connection.stream
         self.ws_connection = None
@@ -88,7 +87,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         # Websocket only supports GET method
         if self.request.method != 'GET':
-            self.stream.write(tornado.escape.utf8(
+            self.stream.write(tornado_escape.utf8(
                 "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
             ))
             self.stream.close()
@@ -96,7 +95,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':
-            self.stream.write(tornado.escape.utf8(
+            self.stream.write(tornado_escape.utf8(
                 "HTTP/1.1 400 Bad Request\r\n\r\n"
                 "Can \"Upgrade\" only to \"WebSocket\"."
             ))
@@ -108,7 +107,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         headers = self.request.headers
         connection = map(lambda s: s.strip().lower(), headers.get("Connection", "").split(","))
         if 'upgrade' not in connection:
-            self.stream.write(tornado.escape.utf8(
+            self.stream.write(tornado_escape.utf8(
                 "HTTP/1.1 400 Bad Request\r\n\r\n"
                 "\"Connection\" must be \"Upgrade\"."
             ))
@@ -126,7 +125,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.ws_connection = WebSocketProtocol76(self)
             self.ws_connection.accept_connection()
         else:
-            self.stream.write(tornado.escape.utf8(
+            self.stream.write(tornado_escape.utf8(
                 "HTTP/1.1 426 Upgrade Required\r\n"
                 "Sec-WebSocket-Version: 8\r\n\r\n"))
             self.stream.close()
@@ -140,7 +139,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         is allowed.
         """
         if isinstance(message, dict):
-            message = tornado.escape.json_encode(message)
+            message = tornado_escape.json_encode(message)
         self.ws_connection.write_message(message, binary=binary)
 
     def select_subprotocol(self, subprotocols):
@@ -308,7 +307,7 @@ class WebSocketProtocol76(WebSocketProtocol):
         # This is necessary when using proxies (such as HAProxy), which
         # need to see the Upgrade headers before passing through the
         # non-HTTP traffic that follows.
-        self.stream.write(tornado.escape.utf8(
+        self.stream.write(tornado_escape.utf8(
             "HTTP/1.1 101 WebSocket Protocol Handshake\r\n"
             "Upgrade: WebSocket\r\n"
             "Connection: Upgrade\r\n"
@@ -473,10 +472,10 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def _challenge_response(self):
         sha1 = hashlib.sha1()
-        sha1.update(tornado.escape.utf8(
+        sha1.update(tornado_escape.utf8(
                 self.request.headers.get("Sec-Websocket-Key")))
         sha1.update(b("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))  # Magic value
-        return tornado.escape.native_str(base64.b64encode(sha1.digest()))
+        return tornado_escape.native_str(base64.b64encode(sha1.digest()))
 
     def _accept_connection(self):
         subprotocol_header = ''
@@ -488,7 +487,7 @@ class WebSocketProtocol13(WebSocketProtocol):
                 assert selected in subprotocols
                 subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
 
-        self.stream.write(tornado.escape.utf8(
+        self.stream.write(tornado_escape.utf8(
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
@@ -521,7 +520,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             opcode = 0x2
         else:
             opcode = 0x1
-        message = tornado.escape.utf8(message)
+        message = tornado_escape.utf8(message)
         assert isinstance(message, bytes_type)
         self._write_frame(True, opcode, message)
 

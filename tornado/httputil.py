@@ -22,8 +22,8 @@ import logging
 import urllib
 import re
 
-from tornado.escape import native_str, parse_qs_bytes, utf8
-from tornado.util import b, ObjectDict
+from .escape import native_str, parse_qs_bytes, utf8
+from .util import b, ObjectDict
 
 
 class HTTPHeaders(dict):

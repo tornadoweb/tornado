@@ -39,14 +39,14 @@ import threading
 import time
 import traceback
 
-from tornado import stack_context
+from . import stack_context
 
 try:
     import signal
 except ImportError:
     signal = None
 
-from tornado.platform.auto import set_close_exec, Waker
+from .platform.auto import set_close_exec, Waker
 
 
 class IOLoop(object):
@@ -662,7 +662,7 @@ elif hasattr(select, "kqueue"):
 else:
     try:
         # Linux systems with our C module installed
-        from tornado import epoll
+        from . import epoll
         _poll = _EPoll
     except Exception:
         # All other systems

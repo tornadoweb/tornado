@@ -47,7 +47,7 @@ import logging
 import os
 import re
 
-from tornado import escape
+from . import escape
 
 _default_locale = "en_US"
 _translations = {}

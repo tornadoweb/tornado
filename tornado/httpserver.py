@@ -31,12 +31,12 @@ import logging
 import socket
 import time
 
-from tornado.escape import native_str, parse_qs_bytes
-from tornado import httputil
-from tornado import iostream
-from tornado.netutil import TCPServer
-from tornado import stack_context
-from tornado.util import b, bytes_type
+from .escape import native_str, parse_qs_bytes
+from . import httputil
+from . import iostream
+from .netutil import TCPServer
+from . import stack_context
+from .util import b, bytes_type
 
 try:
     import ssl  # Python 2.6+

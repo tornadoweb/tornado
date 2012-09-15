@@ -4,9 +4,8 @@ from __future__ import absolute_import, division, with_statement
 import errno
 import socket
 
-from tornado.platform import interface
-from tornado.util import b
-
+from . import interface
+from ..util import b
 
 class Waker(interface.Waker):
     """Create an OS independent asynchronous pipe.

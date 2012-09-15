@@ -22,10 +22,10 @@ from __future__ import absolute_import, division, with_statement
 
 from cStringIO import StringIO
 try:
-    from tornado.httpclient import AsyncHTTPClient
-    from tornado.httpserver import HTTPServer
-    from tornado.simple_httpclient import SimpleAsyncHTTPClient
-    from tornado.ioloop import IOLoop
+    from .httpclient import AsyncHTTPClient
+    from .httpserver import HTTPServer
+    from .simple_httpclient import SimpleAsyncHTTPClient
+    from .ioloop import IOLoop
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
     # won't work, but e.g. LogTrapTestCase and main() will.
@@ -33,8 +33,8 @@ except ImportError:
     HTTPServer = None
     IOLoop = None
     SimpleAsyncHTTPClient = None
-from tornado.stack_context import StackContext, NullContext
-from tornado.util import raise_exc_info
+from .stack_context import StackContext, NullContext
+from .util import raise_exc_info
 import contextlib
 import logging
 import os
@@ -410,7 +410,7 @@ def main(**kwargs):
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
 
     if options.httpclient:
-        from tornado.httpclient import AsyncHTTPClient
+        from .httpclient import AsyncHTTPClient
         AsyncHTTPClient.configure(options.httpclient)
 
     if not options.exception_on_interrupt:
@@ -438,8 +438,8 @@ def main(**kwargs):
         if not options.autoreload:
             raise
     if options.autoreload:
-        import tornado.autoreload
-        tornado.autoreload.wait()
+        from . import autoreload
+        autoreload.wait()
 
 if __name__ == '__main__':
     main()

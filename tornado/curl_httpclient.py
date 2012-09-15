@@ -25,12 +25,12 @@ import pycurl
 import threading
 import time
 
-from tornado import httputil
-from tornado import ioloop
-from tornado import stack_context
+from . import httputil
+from . import ioloop
+from . import stack_context
 
-from tornado.escape import utf8
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+from .escape import utf8
+from .httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):

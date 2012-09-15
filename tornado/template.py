@@ -190,8 +190,8 @@ import posixpath
 import re
 import threading
 
-from tornado import escape
-from tornado.util import bytes_type, ObjectDict
+from . import escape
+from .util import bytes_type, ObjectDict
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()

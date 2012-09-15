@@ -58,10 +58,8 @@ from twisted.internet import error
 
 from zope.interface import implementer
 
-import tornado
-import tornado.ioloop
-from tornado.stack_context import NullContext
-from tornado.ioloop import IOLoop
+from ..stack_context import NullContext
+from ..ioloop import IOLoop
 
 
 class TornadoDelayedCall(object):
@@ -120,7 +118,7 @@ class TornadoReactor(PosixReactorBase):
     """
     def __init__(self, io_loop=None):
         if not io_loop:
-            io_loop = tornado.ioloop.IOLoop.instance()
+            io_loop = IOLoop.instance()
         self._io_loop = io_loop
         self._readers = {}  # map of reader objects to fd
         self._writers = {}  # map of writer objects to fd
@@ -323,7 +321,7 @@ class _TestReactor(TornadoReactor):
 def install(io_loop=None):
     """Install this package as the default Twisted reactor."""
     if not io_loop:
-        io_loop = tornado.ioloop.IOLoop.instance()
+        io_loop = IOLoop.instance()
     reactor = TornadoReactor(io_loop)
     from twisted.internet.main import installReactor
     installReactor(reactor)

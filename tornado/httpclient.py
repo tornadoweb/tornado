@@ -37,10 +37,10 @@ import httplib
 import time
 import weakref
 
-from tornado.escape import utf8
-from tornado import httputil
-from tornado.ioloop import IOLoop
-from tornado.util import import_object, bytes_type
+from .escape import utf8
+from . import httputil
+from .ioloop import IOLoop
+from .util import import_object, bytes_type
 
 
 class HTTPClient(object):
@@ -138,7 +138,7 @@ class AsyncHTTPClient(object):
         io_loop = io_loop or IOLoop.instance()
         if cls is AsyncHTTPClient:
             if cls._impl_class is None:
-                from tornado.simple_httpclient import SimpleAsyncHTTPClient
+                from .simple_httpclient import SimpleAsyncHTTPClient
                 AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
             impl = AsyncHTTPClient._impl_class
         else:
@@ -414,7 +414,7 @@ class HTTPError(Exception):
 
 
 def main():
-    from tornado.options import define, options, parse_command_line
+    from .options import define, options, parse_command_line
     define("print_headers", type=bool, default=False)
     define("print_body", type=bool, default=True)
     define("follow_redirects", type=bool, default=True)

@@ -26,9 +26,9 @@ import socket
 import sys
 import re
 
-from tornado import ioloop
-from tornado import stack_context
-from tornado.util import b, bytes_type
+from . import ioloop
+from . import stack_context
+from .util import b, bytes_type
 
 try:
     import ssl  # Python 2.6+
@@ -54,8 +54,8 @@ class IOStream(object):
 
     A very simple (and broken) HTTP client using this class::
 
-        from tornado import ioloop
-        from tornado import iostream
+        from . import ioloop
+        from . import iostream
         import socket
 
         def send_request():

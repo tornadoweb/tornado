@@ -74,8 +74,8 @@ import sys
 import types
 import subprocess
 
-from tornado import ioloop
-from tornado import process
+from . import ioloop
+from . import process
 
 try:
     import signal

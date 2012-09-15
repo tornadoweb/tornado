@@ -24,10 +24,10 @@ import os
 import socket
 import stat
 
-from tornado import process
-from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream, SSLIOStream
-from tornado.platform.auto import set_close_exec
+from . import process
+from .ioloop import IOLoop
+from .iostream import IOStream, SSLIOStream
+from .platform.auto import set_close_exec
 
 try:
     import ssl  # Python 2.6+

@@ -21,8 +21,8 @@ from __future__ import absolute_import, division, with_statement
 import fcntl
 import os
 
-from tornado.platform import interface
-from tornado.util import b
+from . import interface
+from ..util import b
 
 
 def set_close_exec(fd):

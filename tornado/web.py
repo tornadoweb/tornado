@@ -71,19 +71,19 @@ import stat
 import sys
 import threading
 import time
-import tornado
 import traceback
 import types
 import urllib
 import urlparse
 import uuid
 
-from tornado import escape
-from tornado import locale
-from tornado import stack_context
-from tornado import template
-from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info
+from . import version as VERSION
+from . import escape
+from . import locale
+from . import stack_context
+from . import template
+from .escape import utf8, _unicode
+from .util import b, bytes_type, import_object, ObjectDict, raise_exc_info
 
 try:
     from io import BytesIO  # python 3
@@ -219,7 +219,7 @@ class RequestHandler(object):
         # headers we generate on the server side, so use a plain dict
         # and list instead.
         self._headers = {
-            "Server": "TornadoServer/%s" % tornado.version,
+            "Server": "TornadoServer/%s" % VERSION,
             "Content-Type": "text/html; charset=UTF-8",
         }
         self._list_headers = []
@@ -1266,7 +1266,7 @@ class Application(object):
 
         # Automatically reload modified modules
         if self.settings.get("debug") and not wsgi:
-            from tornado import autoreload
+            from . import autoreload
             autoreload.start()
 
     def listen(self, port, address="", **kwargs):
@@ -1284,7 +1284,7 @@ class Application(object):
         """
         # import is here rather than top level because HTTPServer
         # is not importable on appengine
-        from tornado.httpserver import HTTPServer
+        from .httpserver import HTTPServer
         server = HTTPServer(self, **kwargs)
         server.listen(port, address)
 

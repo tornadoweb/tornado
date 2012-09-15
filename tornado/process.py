@@ -26,7 +26,7 @@ import time
 
 from binascii import hexlify
 
-from tornado import ioloop
+from . import ioloop
 
 try:
     import multiprocessing  # Python 2.6+

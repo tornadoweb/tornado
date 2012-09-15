@@ -36,14 +36,14 @@ import httplib
 import logging
 import sys
 import time
-import tornado
 import urllib
 
-from tornado import escape
-from tornado import httputil
-from tornado import web
-from tornado.escape import native_str, utf8, parse_qs_bytes
-from tornado.util import b, bytes_type
+from . import version as VERSION
+from . import escape
+from . import httputil
+from . import web
+from .escape import native_str, utf8, parse_qs_bytes
+from .util import b, bytes_type
 
 try:
     from io import BytesIO  # python 3
@@ -253,7 +253,7 @@ class WSGIContainer(object):
         if "content-type" not in header_set:
             headers.append(("Content-Type", "text/html; charset=UTF-8"))
         if "server" not in header_set:
-            headers.append(("Server", "TornadoServer/%s" % tornado.version))
+            headers.append(("Server", "TornadoServer/%s" % VERSION))
 
         parts = [escape.utf8("HTTP/1.1 " + data["status"] + "\r\n")]
         for key, value in headers:

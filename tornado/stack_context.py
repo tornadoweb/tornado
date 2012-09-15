@@ -75,7 +75,7 @@ import operator
 import sys
 import threading
 
-from tornado.util import raise_exc_info
+from .util import raise_exc_info
 
 
 class _State(threading.local):

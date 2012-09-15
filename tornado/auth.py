@@ -56,10 +56,10 @@ import urllib
 import urlparse
 import uuid
 
-from tornado import httpclient
-from tornado import escape
-from tornado.httputil import url_concat
-from tornado.util import bytes_type, b
+from . import httpclient
+from . import escape
+from .httputil import url_concat
+from .util import bytes_type, b
 
 
 class OpenIdMixin(object):
