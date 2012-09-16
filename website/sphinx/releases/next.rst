@@ -33,3 +33,5 @@ In progress
 * New function `tornado.testing.bind_unused_port` both chooses a port
   and binds a socket to it, so there is no risk of another process
   using the same port.  ``get_unused_port`` is now deprecated.
+* The `tornado.database` module has been removed.  It is now available
+  as a separate package, `torndb <https://github.com/bdarnell/torndb>`_
