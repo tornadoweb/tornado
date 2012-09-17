@@ -269,6 +269,36 @@ class IOLoop(object):
             return
         self._thread_ident = thread.get_ident()
         self._running = True
+
+        # signal.set_wakeup_fd closes a race condition in event loops:
+        # a signal may arrive at the beginning of select/poll/etc
+        # before it goes into its interruptible sleep, so the signal
+        # will be consumed without waking the select.  The solution is
+        # for the (C, synchronous) signal handler to write to a pipe,
+        # which will then be seen by select.
+        #
+        # In python's signal handling semantics, this only matters on the
+        # main thread (fortunately, set_wakeup_fd only works on the main
+        # thread and will raise a ValueError otherwise).
+        #
+        # If someone has already set a wakeup fd, we don't want to
+        # disturb it.  This is an issue for twisted, which does its
+        # SIGCHILD processing in response to its own wakeup fd being
+        # written to.  As long as the wakeup fd is registered on the IOLoop,
+        # the loop will still wake up and everything should work.
+        old_wakeup_fd = None
+        if hasattr(signal, 'set_wakeup_fd'):  # requires python 2.6+, unix
+            try:
+                old_wakeup_fd = signal.set_wakeup_fd(self._waker.write_fileno())
+            except ValueError:  # non-main thread
+                pass
+            if old_wakeup_fd != -1:
+                # Already set, restore previous value.  This is a little racy,
+                # but there's no clean get_wakeup_fd and in real use the
+                # IOLoop is just started once at the beginning.
+                signal.set_wakeup_fd(old_wakeup_fd)
+                old_wakeup_fd = None
+
         while True:
             poll_timeout = 3600.0
 
@@ -349,6 +379,8 @@ class IOLoop(object):
         self._stopped = False
         if self._blocking_signal_threshold is not None:
             signal.setitimer(signal.ITIMER_REAL, 0, 0)
+        if old_wakeup_fd is not None:
+            signal.set_wakeup_fd(old_wakeup_fd)
 
     def stop(self):
         """Stop the loop after the current event loop iteration is complete.
