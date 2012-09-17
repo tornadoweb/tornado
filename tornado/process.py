@@ -20,12 +20,14 @@ from __future__ import absolute_import, division, with_statement
 
 import errno
 import os
+import subprocess
 import sys
 import time
 
 from binascii import hexlify
 
 from tornado import ioloop
+from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 
 try:
@@ -156,3 +158,41 @@ def task_id():
     """
     global _task_id
     return _task_id
+
+class Subprocess(object):
+    """Wraps ``subprocess.Popen`` with IOStream support.
+
+    The constructor is the same as ``subprocess.Popen`` with the following
+    additions:
+
+    * ``stdin``, ``stdout``, and ``stderr`` may have the value
+      `tornado.process.Subprocess.STREAM`, which will make the corresponding
+      attribute of the resulting Subprocess a `PipeIOStream`.
+    * A new keyword argument ``io_loop`` may be used to pass in an IOLoop.
+    """
+    STREAM = object()
+
+    def __init__(self, *args, **kwargs):
+        io_loop = kwargs.pop('io_loop', None)
+        to_close = []
+        if kwargs.get('stdin') is Subprocess.STREAM:
+            in_r, in_w = os.pipe()
+            kwargs['stdin'] = in_r
+            to_close.append(in_r)
+            self.stdin = PipeIOStream(in_w, io_loop=io_loop)
+        if kwargs.get('stdout') is Subprocess.STREAM:
+            out_r, out_w = os.pipe()
+            kwargs['stdout'] = out_w
+            to_close.append(out_w)
+            self.stdout = PipeIOStream(out_r, io_loop=io_loop)
+        if kwargs.get('stderr') is Subprocess.STREAM:
+            err_r, err_w = os.pipe()
+            kwargs['stderr'] = err_w
+            to_close.append(err_w)
+            self.stdout = PipeIOStream(err_r, io_loop=io_loop)
+        self.proc = subprocess.Popen(*args, **kwargs)
+        for fd in to_close:
+            os.close(fd)
+        for attr in ['stdin', 'stdout', 'stderr', 'pid']:
+            if not hasattr(self, attr):  # don't clobber streams set above
+                setattr(self, attr, getattr(self.proc, attr))

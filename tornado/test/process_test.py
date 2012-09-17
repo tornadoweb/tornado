@@ -5,15 +5,17 @@ from __future__ import absolute_import, division, with_statement
 import logging
 import os
 import signal
+import subprocess
 import sys
 from tornado.httpclient import HTTPClient, HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
-from tornado.process import fork_processes, task_id
+from tornado.process import fork_processes, task_id, Subprocess
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import bind_unused_port, ExpectLog
+from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase
 from tornado.test.util import unittest
+from tornado.util import b
 from tornado.web import RequestHandler, Application
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
@@ -120,3 +122,25 @@ class ProcessTest(unittest.TestCase):
                 raise
 ProcessTest = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
                               "non-unix platform")(ProcessTest)
+
+
+class SubprocessTest(AsyncTestCase):
+    def test_subprocess(self):
+        subproc = Subprocess([sys.executable, '-u', '-i'],
+                             stdin=Subprocess.STREAM,
+                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
+                             io_loop=self.io_loop)
+        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
+        subproc.stdout.read_until(b('>>> '), self.stop)
+        self.wait()
+        subproc.stdin.write(b("print('hello')\n"))
+        subproc.stdout.read_until(b('\n'), self.stop)
+        data = self.wait()
+        self.assertEqual(data, b("hello\n"))
+
+        subproc.stdout.read_until(b(">>> "), self.stop)
+        self.wait()
+        subproc.stdin.write(b("raise SystemExit\n"))
+        subproc.stdout.read_until_close(self.stop)
+        data = self.wait()
+        self.assertEqual(data, b(""))

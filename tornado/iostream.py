@@ -379,7 +379,7 @@ class BaseIOStream(object):
         """
         try:
             chunk = self.read_from_fd()
-        except socket.error, e:
+        except (socket.error, IOError, OSError), e:
             # ssl.SSLError is a subclass of socket.error
             gen_log.warning("Read error on %d: %s",
                             self.fileno(), e)
@@ -823,6 +823,11 @@ class PipeIOStream(BaseIOStream):
             chunk = os.read(self.fd, self.read_chunk_size)
         except (IOError, OSError), e:
             if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                return None
+            elif e.args[0] == errno.EBADF:
+                # If the writing half of a pipe is closed, select will
+                # report it as readable but reads will fail with EBADF.
+                self.close()
                 return None
             else:
                 raise
