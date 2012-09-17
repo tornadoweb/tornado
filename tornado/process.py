@@ -270,9 +270,13 @@ class Subprocess(object):
         subproc.io_loop.add_callback(
             functools.partial(subproc._set_returncode, status))
 
-    def _set_returncode(self, ret):
-        self.returncode = ret
+    def _set_returncode(self, status):
+        if os.WIFSIGNALED(status):
+            self.returncode = -os.WTERMSIG(status)
+        else:
+            assert os.WIFEXITED(status)
+            self.returncode = os.WEXITSTATUS(status)
         if self._exit_callback:
             callback = self._exit_callback
             self._exit_callback = None
-            callback(ret)
+            callback(self.returncode)

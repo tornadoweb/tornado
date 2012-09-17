@@ -164,6 +164,5 @@ class SubprocessTest(AsyncTestCase):
         os.kill(subproc.pid, signal.SIGTERM)
         ret = self.wait()
         self.assertEqual(subproc.returncode, ret)
-        self.assertTrue(os.WIFSIGNALED(ret))
-        self.assertEqual(os.WTERMSIG(ret), signal.SIGTERM)
+        self.assertEqual(ret, -signal.SIGTERM)
 SubprocessTest = skipIfNonUnix(SubprocessTest)
