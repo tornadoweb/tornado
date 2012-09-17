@@ -144,3 +144,26 @@ class SubprocessTest(AsyncTestCase):
         subproc.stdout.read_until_close(self.stop)
         data = self.wait()
         self.assertEqual(data, b(""))
+
+    def test_sigchild(self):
+        Subprocess.initialize(io_loop=self.io_loop)
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, '-c', 'pass'],
+                             io_loop=self.io_loop)
+        subproc.set_exit_callback(self.stop)
+        ret = self.wait()
+        self.assertEqual(ret, 0)
+        self.assertEqual(subproc.returncode, ret)
+
+    def test_sigchild_signal(self):
+        Subprocess.initialize(io_loop=self.io_loop)
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, '-c',
+                              'import time; time.sleep(30)'],
+                             io_loop=self.io_loop)
+        subproc.set_exit_callback(self.stop)
+        os.kill(subproc.pid, signal.SIGTERM)
+        ret = self.wait()
+        self.assertEqual(subproc.returncode, ret)
+        self.assertTrue(os.WIFSIGNALED(ret))
+        self.assertEqual(os.WTERMSIG(ret), signal.SIGTERM)
