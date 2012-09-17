@@ -4,7 +4,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream, PipeIOStream
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipIfNonUnix
 from tornado.util import b
 from tornado.web import RequestHandler, Application
 import errno
@@ -415,3 +415,4 @@ class TestPipeIOStream(AsyncTestCase):
         self.assertEqual(data, b("ld"))
 
         rs.close()
+TestPipeIOStream = skipIfNonUnix(TestPipeIOStream)

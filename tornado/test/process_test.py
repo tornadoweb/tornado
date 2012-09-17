@@ -14,7 +14,7 @@ from tornado.log import gen_log
 from tornado.process import fork_processes, task_id, Subprocess
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipIfNonUnix
 from tornado.util import b
 from tornado.web import RequestHandler, Application
 
@@ -120,8 +120,7 @@ class ProcessTest(unittest.TestCase):
             except Exception:
                 logging.error("exception in child process %d", id, exc_info=True)
                 raise
-ProcessTest = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
-                              "non-unix platform")(ProcessTest)
+ProcessTest = skipIfNonUnix(ProcessTest)
 
 
 class SubprocessTest(AsyncTestCase):
@@ -167,3 +166,4 @@ class SubprocessTest(AsyncTestCase):
         self.assertEqual(subproc.returncode, ret)
         self.assertTrue(os.WIFSIGNALED(ret))
         self.assertEqual(os.WTERMSIG(ret), signal.SIGTERM)
+SubprocessTest = skipIfNonUnix(SubprocessTest)

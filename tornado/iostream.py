@@ -43,6 +43,11 @@ try:
 except ImportError:
     ssl = None
 
+try:
+    from tornado.platform.posix import _set_nonblocking
+except ImportError:
+    _set_nonblocking = None
+
 
 class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
@@ -804,7 +809,6 @@ class PipeIOStream(BaseIOStream):
     by `os.pipe`) rather than an open file object.
     """
     def __init__(self, fd, *args, **kwargs):
-        from tornado.platform.posix import _set_nonblocking
         self.fd = fd
         _set_nonblocking(fd)
         super(PipeIOStream, self).__init__(*args, **kwargs)
