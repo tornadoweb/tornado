@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, with_statement
 from tornado import netutil
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream, SSLIOStream
+from tornado.iostream import IOStream, SSLIOStream, PipeIOStream
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest
@@ -389,3 +389,29 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
     def _make_client_iostream(self, connection, **kwargs):
         return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
 TestIOStreamSSL = skipIfNoSSL(TestIOStreamSSL)
+
+class TestPipeIOStream(AsyncTestCase):
+    def test_pipe_iostream(self):
+        r, w = os.pipe()
+
+        rs = PipeIOStream(r, io_loop=self.io_loop)
+        ws = PipeIOStream(w, io_loop=self.io_loop)
+
+        ws.write(b("hel"))
+        ws.write(b("lo world"))
+
+        rs.read_until(b(' '), callback=self.stop)
+        data = self.wait()
+        self.assertEqual(data, b("hello "))
+
+        rs.read_bytes(3, self.stop)
+        data = self.wait()
+        self.assertEqual(data, b("wor"))
+
+        ws.close()
+
+        rs.read_until_close(self.stop)
+        data = self.wait()
+        self.assertEqual(data, b("ld"))
+
+        rs.close()

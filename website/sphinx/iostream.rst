@@ -39,3 +39,6 @@
 
    .. autoclass:: SSLIOStream
       :members:
+
+   .. autoclass:: PipeIOStream
+      :members:

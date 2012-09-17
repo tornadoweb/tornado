@@ -21,6 +21,7 @@ Contents:
 * `BaseIOStream`: Generic interface for reading and writing.
 * `IOStream`: Implementation of BaseIOStream using non-blocking sockets.
 * `SSLIOStream`: SSL-aware version of IOStream.
+* `PipeIOStream`: Pipe-based IOStream implementation.
 """
 
 from __future__ import absolute_import, division, with_statement
@@ -787,6 +788,40 @@ class SSLIOStream(IOStream):
             else:
                 raise
         except socket.error, e:
+            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                return None
+            else:
+                raise
+        if not chunk:
+            self.close()
+            return None
+        return chunk
+
+class PipeIOStream(BaseIOStream):
+    """Pipe-based IOStream implementation.
+
+    The constructor takes an integer file descriptor (such as one returned
+    by `os.pipe`) rather than an open file object.
+    """
+    def __init__(self, fd, *args, **kwargs):
+        from tornado.platform.posix import _set_nonblocking
+        self.fd = fd
+        _set_nonblocking(fd)
+        super(PipeIOStream, self).__init__(*args, **kwargs)
+
+    def fileno(self):
+        return self.fd
+
+    def close_fd(self):
+        os.close(self.fd)
+
+    def write_to_fd(self, data):
+        return os.write(self.fd, data)
+
+    def read_from_fd(self):
+        try:
+            chunk = os.read(self.fd, self.read_chunk_size)
+        except (IOError, OSError), e:
             if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                 return None
             else:
