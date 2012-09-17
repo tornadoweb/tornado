@@ -35,3 +35,9 @@ In progress
   using the same port.  ``get_unused_port`` is now deprecated.
 * The `tornado.database` module has been removed.  It is now available
   as a separate package, `torndb <https://github.com/bdarnell/torndb>`_
+* New class `tornado.iostream.PipeIOStream` provides the IOStream
+  interface on pipe file descriptors.
+* Much of `IOStream` has been refactored into a separate class
+  `BaseIOStream`.
+* New class `tornado.process.Subprocess` wraps `subprocess.Popen` with
+  `PipeIOStream` access to the child's file descriptors.
