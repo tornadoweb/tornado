@@ -221,6 +221,8 @@ class RequestHandler(object):
         self._headers = {
             "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
+            "Date": datetime.datetime.utcnow().strftime(
+                "%a, %d %b %Y %H:%M:%S GMT"),
         }
         self._list_headers = []
         self.set_default_headers()

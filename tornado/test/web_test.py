@@ -10,6 +10,7 @@ from tornado.util import b, bytes_type, ObjectDict
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value
 
 import binascii
+import datetime
 import logging
 import os
 import re
@@ -890,3 +891,16 @@ class Header304Test(SimpleHandlerTestCase):
         # Not an entity header, but should not be added to 304s by chunking
         self.assertTrue("Transfer-Encoding" not in response2.headers)
 wsgi_safe.append(Header304Test)
+
+class DateHeaderTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write("hello")
+
+    def test_date_header(self):
+        response = self.fetch('/')
+        header_date = datetime.datetime.strptime(response.headers['Date'],
+                                                 "%a, %d %b %Y %H:%M:%S GMT")
+        self.assertTrue(header_date - datetime.datetime.utcnow() <
+                        datetime.timedelta(seconds=2))
+wsgi_safe.append(DateHeaderTest)
