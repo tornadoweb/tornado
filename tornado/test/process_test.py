@@ -57,9 +57,11 @@ class ProcessTest(LogTrapTestCase):
             return "http://127.0.0.1:%d%s" % (port, path)
         sockets = bind_sockets(port, "127.0.0.1")
         # ensure that none of these processes live too long
-        signal.alarm(5)
+        signal.alarm(5)  # master process
         try:
             id = fork_processes(3, max_restarts=3)
+            self.assertTrue(id is not None)
+            signal.alarm(5)  # child processes
         except SystemExit, e:
             # if we exit cleanly from fork_processes, all the child processes
             # finished with status 0

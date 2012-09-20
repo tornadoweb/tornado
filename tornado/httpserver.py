@@ -31,7 +31,7 @@ import logging
 import socket
 import time
 
-from tornado.escape import utf8, native_str, parse_qs_bytes
+from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
 from tornado.netutil import TCPServer
@@ -172,6 +172,12 @@ class HTTPConnection(object):
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
         self._write_callback = None
 
+    def close(self):
+        self.stream.close()
+        # Remove this reference to self, which would otherwise cause a
+        # cycle and delay garbage collection of this connection.
+        self._header_callback = None
+
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
         assert self._request, "Request closed"
@@ -218,7 +224,7 @@ class HTTPConnection(object):
         self._request = None
         self._request_finished = False
         if disconnect:
-            self.stream.close()
+            self.close()
             return
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
 
@@ -260,7 +266,7 @@ class HTTPConnection(object):
         except _BadRequestException, e:
             logging.info("Malformed HTTP request from %s: %s",
                          self.address[0], e)
-            self.stream.close()
+            self.close()
             return
 
 
@@ -390,27 +396,10 @@ class HTTPRequest(object):
 
     def _on_request_body(self, data, exec_req_cb):
         self.body = data
-        content_type = self.headers.get("Content-Type", "")
         if self.method in ("POST", "PATCH", "PUT"):
-            if content_type.startswith("application/x-www-form-urlencoded"):
-                arguments = parse_qs_bytes(native_str(self.body))
-                for name, values in arguments.iteritems():
-                    values = [v for v in values if v]
-                    if values:
-                        self.arguments.setdefault(name, []).extend(
-                            values)
-            elif content_type.startswith("multipart/form-data"):
-                fields = content_type.split(";")
-                for field in fields:
-                    k, sep, v = field.strip().partition("=")
-                    if k == "boundary" and v:
-                        httputil.parse_multipart_form_data(
-                            utf8(v), data,
-                            self.arguments,
-                            self.files)
-                        break
-                else:
-                    logging.warning("Invalid multipart/form-data")
+            httputil.parse_body_arguments(
+                self.headers.get("Content-Type", ""), data,
+                self.arguments, self.files)
         exec_req_cb()
 
     def supports_http_1_1(self):
@@ -451,7 +440,7 @@ class HTTPRequest(object):
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(self):
+    def get_ssl_certificate(self, binary_form=False):
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer must have been constructed
@@ -464,12 +453,16 @@ class HTTPRequest(object):
                     cert_reqs=ssl.CERT_REQUIRED,
                     ca_certs="cacert.crt"))
 
-        The return value is a dictionary, see SSLSocket.getpeercert() in
-        the standard library for more details.
+        By default, the return value is a dictionary (or None, if no
+        client certificate is present).  If ``binary_form`` is true, a
+        DER-encoded form of the certificate is returned instead.  See
+        SSLSocket.getpeercert() in the standard library for more
+        details.
         http://docs.python.org/library/ssl.html#sslsocket-objects
         """
         try:
-            return self.connection.stream.socket.getpeercert()
+            return self.connection.stream.socket.getpeercert(
+                binary_form=binary_form)
         except ssl.SSLError:
             return None
 

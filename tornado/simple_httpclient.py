@@ -6,7 +6,7 @@ from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPCl
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
 from tornado import stack_context
-from tornado.util import b
+from tornado.util import b, GzipDecompressor
 
 import base64
 import collections
@@ -20,7 +20,6 @@ import socket
 import sys
 import time
 import urlparse
-import zlib
 
 try:
     from io import BytesIO  # python 3
@@ -62,7 +61,6 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     """
     def initialize(self, io_loop=None, max_clients=10,
-                   max_simultaneous_connections=None,
                    hostname_mapping=None, max_buffer_size=104857600):
         """Creates a AsyncHTTPClient.
 
@@ -70,11 +68,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         in order to provide limitations on the number of pending connections.
         force_instance=True may be used to suppress this behavior.
 
-        max_clients is the number of concurrent requests that can be in
-        progress.  max_simultaneous_connections has no effect and is accepted
-        only for compatibility with the curl-based AsyncHTTPClient.  Note
-        that these arguments are only used when the client is first created,
-        and will be ignored when an existing client is reused.
+        max_clients is the number of concurrent requests that can be
+        in progress.  Note that this arguments are only used when the
+        client is first created, and will be ignored when an existing
+        client is reused.
 
         hostname_mapping is a dictionary mapping hostnames to IP addresses.
         It can be used to make local DNS changes when modifying system-wide
@@ -221,7 +218,7 @@ class _HTTPConnection(object):
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
-                    self._on_timeout)
+                    stack_context.wrap(self._on_timeout))
             self.stream.set_close_callback(self._on_close)
             self.stream.connect(sockaddr,
                                 functools.partial(self._on_connect, parsed,
@@ -229,10 +226,8 @@ class _HTTPConnection(object):
 
     def _on_timeout(self):
         self._timeout = None
-        self._run_callback(HTTPResponse(self.request, 599,
-                                        request_time=time.time() - self.start_time,
-                                        error=HTTPError(599, "Timeout")))
-        self.stream.close()
+        if self.final_callback is not None:
+            raise HTTPError(599, "Timeout")
 
     def _on_connect(self, parsed, parsed_hostname):
         if self._timeout is not None:
@@ -241,7 +236,7 @@ class _HTTPConnection(object):
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
-                self._on_timeout)
+                stack_context.wrap(self._on_timeout))
         if (self.request.validate_cert and
             isinstance(self.stream, SSLIOStream)):
             match_hostname(self.stream.socket.getpeercert(),
@@ -330,17 +325,24 @@ class _HTTPConnection(object):
                 self.stream.close()
 
     def _on_close(self):
-        self._run_callback(HTTPResponse(
-                self.request, 599,
-                request_time=time.time() - self.start_time,
-                error=HTTPError(599, "Connection closed")))
+        if self.final_callback is not None:
+            message = "Connection closed"
+            if self.stream.error:
+                message = str(self.stream.error)
+            raise HTTPError(599, message)
 
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
         first_line, _, header_data = data.partition("\n")
         match = re.match("HTTP/1.[01] ([0-9]+)", first_line)
         assert match
-        self.code = int(match.group(1))
+        code = int(match.group(1))
+        if 100 <= code < 200:
+            self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
+            return
+        else:
+            self.code = code
+
         self.headers = HTTPHeaders.parse(header_data)
 
         if "Content-Length" in self.headers:
@@ -369,16 +371,16 @@ class _HTTPConnection(object):
         if 100 <= self.code < 200 or self.code in (204, 304):
             # These response codes never have bodies
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
-            assert "Transfer-Encoding" not in self.headers
-            assert content_length in (None, 0)
+            if ("Transfer-Encoding" in self.headers or
+                content_length not in (None, 0)):
+                raise ValueError("Response with code %d should not have body" %
+                                 self.code)
             self._on_body(b(""))
             return
 
         if (self.request.use_gzip and
             self.headers.get("Content-Encoding") == "gzip"):
-            # Magic parameter makes zlib module understand gzip header
-            # http://stackoverflow.com/questions/1838699/how-can-i-decompress-a-gzip-stream-with-zlib
-            self._decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            self._decompressor = GzipDecompressor()
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
             self.stream.read_until(b("\r\n"), self._on_chunk_length)
@@ -420,7 +422,8 @@ class _HTTPConnection(object):
             self.stream.close()
             return
         if self._decompressor:
-            data = self._decompressor.decompress(data)
+            data = (self._decompressor.decompress(data) +
+                    self._decompressor.flush())
         if self.request.streaming_callback:
             if self.chunks is None:
                 # if chunks is not None, we already called streaming_callback
@@ -441,9 +444,21 @@ class _HTTPConnection(object):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         length = int(data.strip(), 16)
         if length == 0:
-            # all the data has been decompressed, so we don't need to
-            # decompress again in _on_body
-            self._decompressor = None
+            if self._decompressor is not None:
+                tail = self._decompressor.flush()
+                if tail:
+                    # I believe the tail will always be empty (i.e.
+                    # decompress will return all it can).  The purpose
+                    # of the flush call is to detect errors such
+                    # as truncated input.  But in case it ever returns
+                    # anything, treat it as an extra chunk
+                    if self.request.streaming_callback is not None:
+                        self.request.streaming_callback(tail)
+                    else:
+                        self.chunks.append(tail)
+                # all the data has been decompressed, so we don't need to
+                # decompress again in _on_body
+                self._decompressor = None
             self._on_body(b('').join(self.chunks))
         else:
             self.stream.read_bytes(length + 2,  # chunk ends with \r\n

@@ -101,6 +101,11 @@ with ``{# ... #}``.
 
         {% apply linkify %}{{name}} said: {{message}}{% end %}
 
+    Note that as an implementation detail apply blocks are implemented
+    as nested functions and thus may interact strangely with variables
+    set via ``{% set %}``, or the use of ``{% break %}`` or ``{% continue %}``
+    within loops.
+
 ``{% autoescape *function* %}``
     Sets the autoescape mode for the current file.  This does not affect
     other files, even those referenced by ``{% include %}``.  Note that
@@ -134,7 +139,8 @@ with ``{# ... #}``.
     tag will be ignored.  For an example, see the ``{% block %}`` tag.
 
 ``{% for *var* in *expr* %}...{% end %}``
-    Same as the python ``for`` statement.
+    Same as the python ``for`` statement.  ``{% break %}`` and
+    ``{% continue %}`` may be used inside the loop.
 
 ``{% from *x* import *y* %}``
     Same as the python ``import`` statement.
@@ -169,7 +175,8 @@ with ``{# ... #}``.
     Same as the python ``try`` statement.
 
 ``{% while *condition* %}... {% end %}``
-    Same as the python ``while`` statement.
+    Same as the python ``while`` statement.  ``{% break %}`` and
+    ``{% continue %}`` may be used inside the loop.
 """
 
 from __future__ import absolute_import, division, with_statement
@@ -494,6 +501,8 @@ class _ControlBlock(_Node):
         writer.write_line("%s:" % self.statement, self.line)
         with writer.indent():
             self.body.generate(writer)
+            # Just in case the body was empty
+            writer.write_line("pass", self.line)
 
 
 class _IntermediateControlBlock(_Node):
@@ -502,6 +511,8 @@ class _IntermediateControlBlock(_Node):
         self.line = line
 
     def generate(self, writer):
+        # In case the previous block was empty
+        writer.write_line("pass", self.line)
         writer.write_line("%s:" % self.statement, self.line, writer.indent_size() - 1)
 
 
@@ -676,7 +687,7 @@ def _format_code(code):
     return "".join([format % (i + 1, line) for (i, line) in enumerate(lines)])
 
 
-def _parse(reader, template, in_block=None):
+def _parse(reader, template, in_block=None, in_loop=None):
     body = _ChunkList([])
     while True:
         # Find next template directive
@@ -815,7 +826,15 @@ def _parse(reader, template, in_block=None):
 
         elif operator in ("apply", "block", "try", "if", "for", "while"):
             # parse inner body recursively
-            block_body = _parse(reader, template, operator)
+            if operator in ("for", "while"):
+                block_body = _parse(reader, template, operator, operator)
+            elif operator == "apply":
+                # apply creates a nested function so syntactically it's not
+                # in the loop.
+                block_body = _parse(reader, template, operator, None)
+            else:
+                block_body = _parse(reader, template, operator, in_loop)
+
             if operator == "apply":
                 if not suffix:
                     raise ParseError("apply missing method name on line %d" % line)
@@ -827,6 +846,12 @@ def _parse(reader, template, in_block=None):
             else:
                 block = _ControlBlock(contents, line, block_body)
             body.chunks.append(block)
+            continue
+
+        elif operator in ("break", "continue"):
+            if not in_loop:
+                raise ParseError("%s outside %s block" % (operator, set(["for", "while"])))
+            body.chunks.append(_Statement(contents, line))
             continue
 
         else:

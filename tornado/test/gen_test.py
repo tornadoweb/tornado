@@ -33,7 +33,7 @@ class GenTest(AsyncTestCase):
         def f():
             (yield gen.Callback("k1"))()
             res = yield gen.Wait("k1")
-            assert res is None
+            self.assertTrue(res is None)
             self.stop()
         self.run_gen(f)
 

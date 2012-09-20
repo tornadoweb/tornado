@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, with_statement
 from tornado import gen
-from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
+from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
 from tornado.iostream import IOStream
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
@@ -51,7 +51,7 @@ class SecureCookieTest(LogTrapTestCase):
         handler.set_secure_cookie('foo', binascii.a2b_hex(b('d76df8e7aefc')))
         cookie = handler._cookies['foo']
         match = re.match(b(r'12345678\|([0-9]+)\|([0-9a-f]+)'), cookie)
-        assert match
+        self.assertTrue(match)
         timestamp = match.group(1)
         sig = match.group(2)
         self.assertEqual(
@@ -66,9 +66,10 @@ class SecureCookieTest(LogTrapTestCase):
                               'foo', '1234', b('5678') + timestamp),
             sig)
         # tamper with the cookie
-        handler._cookies['foo'] = utf8('1234|5678%s|%s' % (timestamp, sig))
+        handler._cookies['foo'] = utf8('1234|5678%s|%s' % (
+                to_basestring(timestamp), to_basestring(sig)))
         # it gets rejected
-        assert handler.get_secure_cookie('foo') is None
+        self.assertTrue(handler.get_secure_cookie('foo') is None)
 
     def test_arbitrary_bytes(self):
         # Secure cookies accept arbitrary data (which is base64 encoded).
@@ -250,13 +251,19 @@ class EchoHandler(RequestHandler):
         # In httpserver.py (i.e. self.request.arguments), they're left
         # as bytes.  Keys are always native strings.
         for key in self.request.arguments:
-            assert type(key) == str, repr(key)
+            if type(key) != str:
+                raise Exception("incorrect type for key: %r" % type(key))
             for value in self.request.arguments[key]:
-                assert type(value) == bytes_type, repr(value)
+                if type(value) != bytes_type:
+                    raise Exception("incorrect type for value: %r" %
+                                    type(value))
             for value in self.get_arguments(key):
-                assert type(value) == unicode, repr(value)
+                if type(value) != unicode:
+                    raise Exception("incorrect type for value: %r" %
+                                    type(value))
         for arg in path_args:
-            assert type(arg) == unicode, repr(arg)
+            if type(arg) != unicode:
+                raise Exception("incorrect type for path arg: %r" % type(arg))
         self.write(dict(path=self.request.path,
                         path_args=path_args,
                         args=recursive_unicode(self.request.arguments)))
@@ -313,7 +320,9 @@ class TypeCheckHandler(RequestHandler):
 
         # Secure cookies return bytes because they can contain arbitrary
         # data, but regular cookies are native strings.
-        assert self.cookies.keys() == ['asdf']
+        if self.cookies.keys() != ['asdf']:
+            raise Exception("unexpected values for cookie keys: %r" %
+                            self.cookies.keys())
         self.check_type('get_secure_cookie', self.get_secure_cookie('asdf'), bytes_type)
         self.check_type('get_cookie', self.get_cookie('asdf'), str)
 
@@ -343,7 +352,8 @@ class TypeCheckHandler(RequestHandler):
 
 class DecodeArgHandler(RequestHandler):
     def decode_argument(self, value, name=None):
-        assert type(value) == bytes_type, repr(value)
+        if type(value) != bytes_type:
+            raise Exception("unexpected type for value: %r" % type(value))
         # use self.request.arguments directly to avoid recursion
         if 'encoding' in self.request.arguments:
             return value.decode(to_unicode(self.request.arguments['encoding'][0]))
@@ -432,14 +442,21 @@ class HeaderInjectionHandler(RequestHandler):
             self.set_header("X-Foo", "foo\r\nX-Bar: baz")
             raise Exception("Didn't get expected exception")
         except ValueError, e:
-            assert "Unsafe header value" in str(e)
-            self.finish(b("ok"))
+            if "Unsafe header value" in str(e):
+                self.finish(b("ok"))
+            else:
+                raise
 
 
-class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
+# This test is shared with wsgi_test.py
+class WSGISafeWebTest(AsyncHTTPTestCase, LogTrapTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
 
     def get_app(self):
+        self.app = Application(self.get_handlers(), **self.get_app_kwargs())
+        return self.app
+
+    def get_app_kwargs(self):
         loader = DictLoader({
                 "linkify.html": "{% module linkify(message) %}",
                 "page.html": """\
@@ -452,6 +469,11 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
 {{ set_resources(embedded_css=".entry { margin-bottom: 1em; }", embedded_javascript="js_embed()", css_files=["/base.css", "/foo.css"], javascript_files="/common.js", html_head="<meta>", html_body='<script src="/analytics.js"/>') }}
 <div class="entry">...</div>""",
                 })
+        return dict(template_loader=loader,
+                    autoescape="xhtml_escape",
+                    cookie_secret=self.COOKIE_SECRET)
+
+    def get_handlers(self):
         urls = [
             url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
             url("/decode_arg/(.*)", DecodeArgHandler, name='decode_arg'),
@@ -459,17 +481,11 @@ class WebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/linkify", LinkifyHandler),
             url("/uimodule_resources", UIModuleResourceHandler),
             url("/optional_path/(.+)?", OptionalPathHandler),
-            url("/flow_control", FlowControlHandler),
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
-            url("/empty_flush", EmptyFlushCallbackHandler),
             url("/header_injection", HeaderInjectionHandler),
             ]
-        self.app = Application(urls,
-                               template_loader=loader,
-                               autoescape="xhtml_escape",
-                               cookie_secret=self.COOKIE_SECRET)
-        return self.app
+        return urls
 
     def fetch_json(self, *args, **kwargs):
         response = self.fetch(*args, **kwargs)
@@ -555,9 +571,6 @@ js_embed()
         self.assertEqual(self.fetch_json("/optional_path/"),
                          {u"path": None})
 
-    def test_flow_control(self):
-        self.assertEqual(self.fetch("/flow_control").body, b("123"))
-
     def test_multi_header(self):
         response = self.fetch("/multi_header")
         self.assertEqual(response.headers["x-overwrite"], "2")
@@ -571,12 +584,24 @@ js_embed()
         response = self.fetch("/redirect?status=307", follow_redirects=False)
         self.assertEqual(response.code, 307)
 
-    def test_empty_flush(self):
-        response = self.fetch("/empty_flush")
-        self.assertEqual(response.body, b("ok"))
-
     def test_header_injection(self):
         response = self.fetch("/header_injection")
+        self.assertEqual(response.body, b("ok"))
+
+
+class NonWSGIWebTests(AsyncHTTPTestCase, LogTrapTestCase):
+    def get_app(self):
+        urls = [
+            ("/flow_control", FlowControlHandler),
+            ("/empty_flush", EmptyFlushCallbackHandler),
+            ]
+        return Application(urls)
+
+    def test_flow_control(self):
+        self.assertEqual(self.fetch("/flow_control").body, b("123"))
+
+    def test_empty_flush(self):
+        response = self.fetch("/empty_flush")
         self.assertEqual(response.body, b("ok"))
 
 
@@ -703,10 +728,10 @@ class StaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_static_files(self):
         response = self.fetch('/robots.txt')
-        assert b("Disallow: /") in response.body
+        self.assertTrue(b("Disallow: /") in response.body)
 
         response = self.fetch('/static/robots.txt')
-        assert b("Disallow: /") in response.body
+        self.assertTrue(b("Disallow: /") in response.body)
 
     def test_static_url(self):
         response = self.fetch("/static_url/robots.txt")
@@ -740,7 +765,8 @@ class CustomStaticFileTest(AsyncHTTPTestCase, LogTrapTestCase):
         class MyStaticFileHandler(StaticFileHandler):
             def get(self, path):
                 path = self.parse_url_path(path)
-                assert path == "foo.txt"
+                if path != "foo.txt":
+                    raise Exception("unexpected path: %r" % path)
                 self.write("bar")
 
             @classmethod

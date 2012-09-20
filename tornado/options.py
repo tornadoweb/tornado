@@ -421,6 +421,7 @@ class _LogFormatter(logging.Formatter):
             record.message = record.getMessage()
         except Exception, e:
             record.message = "Bad message (%r): %r" % (e, record.__dict__)
+        assert isinstance(record.message, basestring)  # guaranteed by logging
         record.asctime = time.strftime(
             "%y%m%d %H:%M:%S", self.converter(record.created))
         prefix = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]' % \
@@ -428,7 +429,29 @@ class _LogFormatter(logging.Formatter):
         if self._color:
             prefix = (self._colors.get(record.levelno, self._normal) +
                       prefix + self._normal)
-        formatted = prefix + " " + record.message
+
+        # Encoding notes:  The logging module prefers to work with character
+        # strings, but only enforces that log messages are instances of
+        # basestring.  In python 2, non-ascii bytestrings will make
+        # their way through the logging framework until they blow up with
+        # an unhelpful decoding error (with this formatter it happens
+        # when we attach the prefix, but there are other opportunities for
+        # exceptions further along in the framework).
+        #
+        # If a byte string makes it this far, convert it to unicode to
+        # ensure it will make it out to the logs.  Use repr() as a fallback
+        # to ensure that all byte strings can be converted successfully,
+        # but don't do it by default so we don't add extra quotes to ascii
+        # bytestrings.  This is a bit of a hacky place to do this, but
+        # it's worth it since the encoding errors that would otherwise
+        # result are so useless (and tornado is fond of using utf8-encoded
+        # byte strings whereever possible).
+        try:
+            message = _unicode(record.message)
+        except UnicodeDecodeError:
+            message = repr(record.message)
+
+        formatted = prefix + " " + message
         if record.exc_info:
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)

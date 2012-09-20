@@ -47,6 +47,8 @@ import logging
 import os
 import re
 
+from tornado import escape
+
 _default_locale = "en_US"
 _translations = {}
 _supported_locales = frozenset([_default_locale])
@@ -119,12 +121,21 @@ def load_translations(directory):
             logging.error("Unrecognized locale %r (path: %s)", locale,
                           os.path.join(directory, path))
             continue
-        f = open(os.path.join(directory, path), "r")
+        full_path = os.path.join(directory, path)
+        try:
+            # python 3: csv.reader requires a file open in text mode.
+            # Force utf8 to avoid dependence on $LANG environment variable.
+            f = open(full_path, "r", encoding="utf-8")
+        except TypeError:
+            # python 2: files return byte strings, which are decoded below.
+            # Once we drop python 2.5, this could use io.open instead
+            # on both 2 and 3.
+            f = open(full_path, "r")
         _translations[locale] = {}
         for i, row in enumerate(csv.reader(f)):
             if not row or len(row) < 2:
                 continue
-            row = [c.decode("utf-8").strip() for c in row]
+            row = [escape.to_unicode(c).strip() for c in row]
             english, translation = row[:2]
             if len(row) > 2:
                 plural = row[2] or "unknown"
@@ -137,7 +148,7 @@ def load_translations(directory):
             _translations[locale].setdefault(plural, {})[english] = translation
         f.close()
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
-    logging.info("Supported locales: %s", sorted(_supported_locales))
+    logging.debug("Supported locales: %s", sorted(_supported_locales))
 
 
 def load_gettext_translations(directory, domain):
@@ -177,7 +188,7 @@ def load_gettext_translations(directory, domain):
             continue
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
     _use_gettext = True
-    logging.info("Supported locales: %s", sorted(_supported_locales))
+    logging.debug("Supported locales: %s", sorted(_supported_locales))
 
 
 def get_supported_locales():
@@ -412,12 +423,25 @@ class CSVLocale(Locale):
 
 class GettextLocale(Locale):
     """Locale implementation using the gettext module."""
+    def __init__(self, code, translations):
+        try:
+            # python 2
+            self.ngettext = translations.ungettext
+            self.gettext = translations.ugettext
+        except AttributeError:
+            # python 3
+            self.ngettext = translations.ngettext
+            self.gettext = translations.gettext
+        # self.gettext must exist before __init__ is called, since it
+        # calls into self.translate
+        super(GettextLocale, self).__init__(code, translations)
+
     def translate(self, message, plural_message=None, count=None):
         if plural_message is not None:
             assert count is not None
-            return self.translations.ungettext(message, plural_message, count)
+            return self.ngettext(message, plural_message, count)
         else:
-            return self.translations.ugettext(message)
+            return self.gettext(message)
 
 LOCALE_NAMES = {
     "af_ZA": {"name_en": u"Afrikaans", "name": u"Afrikaans"},

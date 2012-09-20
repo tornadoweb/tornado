@@ -101,6 +101,10 @@ class TemplateTest(LogTrapTestCase):
         self.assertEqual(template.generate(x=5), b("yes"))
         self.assertEqual(template.generate(x=3), b("no"))
 
+    def test_if_empty_body(self):
+        template = Template(utf8("{% if True %}{% else %}{% end %}"))
+        self.assertEqual(template.generate(), b(""))
+
     def test_try(self):
         template = Template(utf8("""{% try %}
 try{% set y = 1/x %}
@@ -114,6 +118,38 @@ try{% set y = 1/x %}
     def test_comment_directive(self):
         template = Template(utf8("{% comment blah blah %}foo"))
         self.assertEqual(template.generate(), b("foo"))
+
+    def test_break_continue(self):
+        template = Template(utf8("""\
+{% for i in range(10) %}
+    {% if i == 2 %}
+        {% continue %}
+    {% end %}
+    {{ i }}
+    {% if i == 6 %}
+        {% break %}
+    {% end %}
+{% end %}"""))
+        result = template.generate()
+        # remove extraneous whitespace
+        result = b('').join(result.split())
+        self.assertEqual(result, b("013456"))
+
+    def test_break_outside_loop(self):
+        try:
+            Template(utf8("{% break %}"))
+            raise Exception("Did not get expected exception")
+        except ParseError:
+            pass
+
+    def test_break_in_apply(self):
+        # This test verifies current behavior, although of course it would
+        # be nice if apply didn't cause seemingly unrelated breakage
+        try:
+            Template(utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}"))
+            raise Exception("Did not get expected exception")
+        except ParseError:
+            pass
 
 
 class StackTraceTest(LogTrapTestCase):

@@ -2,17 +2,20 @@ from __future__ import absolute_import, division, with_statement
 
 import collections
 from contextlib import closing
+import errno
 import gzip
 import logging
+import os
 import re
 import socket
+import sys
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase, get_unused_port
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
 
@@ -74,14 +77,16 @@ class NoContentHandler(RequestHandler):
 
 class SeeOther303PostHandler(RequestHandler):
     def post(self):
-        assert self.request.body == b("blah")
+        if self.request.body != b("blah"):
+            raise Exception("unexpected body %r" % self.request.body)
         self.set_header("Location", "/303_get")
         self.set_status(303)
 
 
 class SeeOther303GetHandler(RequestHandler):
     def get(self):
-        assert not self.request.body
+        if self.request.body:
+            raise Exception("unexpected body %r" % self.request.body)
         self.write("ok")
 
 
@@ -208,7 +213,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def test_request_timeout(self):
         response = self.fetch('/trigger?wake=false', request_timeout=0.1)
         self.assertEqual(response.code, 599)
-        self.assertTrue(0.099 < response.request_time < 0.11, response.request_time)
+        self.assertTrue(0.099 < response.request_time < 0.12, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
@@ -281,6 +286,22 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.wait()
         self.assertTrue(host_re.match(response.body), response.body)
 
+    def test_connection_refused(self):
+        port = get_unused_port()
+        self.http_client.fetch("http://localhost:%d/" % port, self.stop)
+        response = self.wait()
+        self.assertEqual(599, response.code)
+
+        if sys.platform != 'cygwin':
+            # cygwin returns EPERM instead of ECONNREFUSED here
+            self.assertTrue(str(errno.ECONNREFUSED) in str(response.error),
+                            response.error)
+            # This is usually "Connection refused".
+            # On windows, strerror is broken and returns "Unknown error".
+            expected_message = os.strerror(errno.ECONNREFUSED)
+            self.assertTrue(expected_message in str(response.error),
+                            response.error)
+
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
     def setUp(self):
@@ -317,3 +338,24 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
         with closing(AsyncHTTPClient(
                 self.io_loop, max_clients=14, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 14)
+
+
+class HTTP100ContinueTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+    def respond_100(self, request):
+        self.request = request
+        self.request.connection.stream.write(
+            b("HTTP/1.1 100 CONTINUE\r\n\r\n"),
+            self.respond_200)
+
+    def respond_200(self):
+        self.request.connection.stream.write(
+            b("HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA"),
+            self.request.connection.stream.close)
+
+    def get_app(self):
+        # Not a full Application, but works as an HTTPServer callback
+        return self.respond_100
+
+    def test_100_continue(self):
+        res = self.fetch('/')
+        self.assertEqual(res.body, b('A'))

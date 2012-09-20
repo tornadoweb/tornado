@@ -11,7 +11,10 @@
 
    .. autoclass:: AsyncHTTPTestCase
       :members:
-   
+
+   .. autoclass:: AsyncHTTPSTestCase
+      :members:
+
    Controlling log output
    ----------------------
 

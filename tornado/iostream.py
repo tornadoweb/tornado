@@ -207,10 +207,11 @@ class IOStream(object):
             else:
                 self._write_buffer.append(data)
         self._write_callback = stack_context.wrap(callback)
-        self._handle_write()
-        if self._write_buffer:
-            self._add_io_state(self.io_loop.WRITE)
-        self._maybe_add_error_listener()
+        if not self._connecting:
+            self._handle_write()
+            if self._write_buffer:
+                self._add_io_state(self.io_loop.WRITE)
+            self._maybe_add_error_listener()
 
     def set_close_callback(self, callback):
         """Call the given callback when the stream is closed."""
@@ -390,7 +391,7 @@ class IOStream(object):
             self._pending_callbacks -= 1
         if self._read_from_buffer():
             return
-        self._add_io_state(self.io_loop.READ)
+        self._maybe_add_error_listener()
 
     def _read_from_socket(self):
         """Attempts to read from the socket.
@@ -626,6 +627,7 @@ class SSLIOStream(IOStream):
         self._ssl_accepting = True
         self._handshake_reading = False
         self._handshake_writing = False
+        self._ssl_connect_callback = None
 
     def reading(self):
         return self._handshake_reading or super(SSLIOStream, self).reading()
@@ -650,15 +652,23 @@ class SSLIOStream(IOStream):
                                  ssl.SSL_ERROR_ZERO_RETURN):
                 return self.close()
             elif err.args[0] == ssl.SSL_ERROR_SSL:
-                logging.warning("SSL Error on %d: %s", self.socket.fileno(), err)
+                try:
+                    peer = self.socket.getpeername()
+                except:
+                    peer = '(not connected)'
+                logging.warning("SSL Error on %d %s: %s",
+                                self.socket.fileno(), peer, err)
                 return self.close()
             raise
         except socket.error, err:
-            if err.args[0] == errno.ECONNABORTED:
+            if err.args[0] in (errno.ECONNABORTED, errno.ECONNRESET):
                 return self.close()
         else:
             self._ssl_accepting = False
-            super(SSLIOStream, self)._handle_connect()
+            if self._ssl_connect_callback is not None:
+                callback = self._ssl_connect_callback
+                self._ssl_connect_callback = None
+                self._run_callback(callback)
 
     def _handle_read(self):
         if self._ssl_accepting:
@@ -672,14 +682,23 @@ class SSLIOStream(IOStream):
             return
         super(SSLIOStream, self)._handle_write()
 
+    def connect(self, address, callback=None):
+        # Save the user's callback and run it after the ssl handshake
+        # has completed.
+        self._ssl_connect_callback = callback
+        super(SSLIOStream, self).connect(address, callback=None)
+
     def _handle_connect(self):
+        # When the connection is complete, wrap the socket for SSL
+        # traffic.  Note that we do this by overriding _handle_connect
+        # instead of by passing a callback to super().connect because
+        # user callbacks are enqueued asynchronously on the IOLoop,
+        # but since _handle_events calls _handle_connect immediately
+        # followed by _handle_write we need this to be synchronous.
         self.socket = ssl.wrap_socket(self.socket,
                                       do_handshake_on_connect=False,
                                       **self._ssl_options)
-        # Don't call the superclass's _handle_connect (which is responsible
-        # for telling the application that the connection is complete)
-        # until we've completed the SSL handshake (so certificates are
-        # available, etc).
+        super(SSLIOStream, self)._handle_connect()
 
     def _read_from_socket(self):
         if self._ssl_accepting:
