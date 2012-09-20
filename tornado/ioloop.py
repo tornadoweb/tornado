@@ -287,7 +287,9 @@ class IOLoop(object):
         # written to.  As long as the wakeup fd is registered on the IOLoop,
         # the loop will still wake up and everything should work.
         old_wakeup_fd = None
-        if hasattr(signal, 'set_wakeup_fd'):  # requires python 2.6+, unix
+        if hasattr(signal, 'set_wakeup_fd') and os.name == 'posix':
+            # requires python 2.6+, unix.  set_wakeup_fd exists but crashes
+            # the python process on windows.
             try:
                 old_wakeup_fd = signal.set_wakeup_fd(self._waker.write_fileno())
             except ValueError:  # non-main thread
