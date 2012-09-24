@@ -6,10 +6,11 @@ from tornado import httpclient, simple_httpclient, netutil
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
-from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
+from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
+from tornado.test.util import unittest
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler
 import os
@@ -17,7 +18,6 @@ import shutil
 import socket
 import sys
 import tempfile
-import unittest
 
 try:
     import ssl
@@ -25,7 +25,7 @@ except ImportError:
     ssl = None
 
 
-class HandlerBaseTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+class HandlerBaseTestCase(AsyncHTTPTestCase):
     def get_app(self):
         return Application([('/', self.__class__.Handler)])
 
@@ -48,7 +48,18 @@ class HelloWorldRequestHandler(RequestHandler):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
 
-class BaseSSLTest(AsyncHTTPSTestCase, LogTrapTestCase):
+skipIfNoSSL = unittest.skipIf(ssl is None, "ssl module not present")
+# In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
+# ClientHello messages, which are rejected by SSLv3 and TLSv1
+# servers.  Note that while the OPENSSL_VERSION_INFO was formally
+# introduced in python3.2, it was present but undocumented in
+# python 2.7
+skipIfOldSSL = unittest.skipIf(
+    getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0),
+    "old version of ssl module and/or openssl")
+
+
+class BaseSSLTest(AsyncHTTPSTestCase):
     def get_app(self):
         return Application([('/', HelloWorldRequestHandler,
                              dict(protocol="https"))])
@@ -56,7 +67,7 @@ class BaseSSLTest(AsyncHTTPSTestCase, LogTrapTestCase):
 
 class SSLTestMixin(object):
     def get_ssl_options(self):
-        return dict(ssl_version = self.get_ssl_version(),
+        return dict(ssl_version=self.get_ssl_version(),
                     **AsyncHTTPSTestCase.get_ssl_options())
 
     def get_ssl_version(self):
@@ -76,10 +87,11 @@ class SSLTestMixin(object):
         # Make sure the server closes the connection when it gets a non-ssl
         # connection, rather than waiting for a timeout or otherwise
         # misbehaving.
-        self.http_client.fetch(self.get_url("/"), self.stop,
-                               request_timeout=3600,
-                               connect_timeout=3600)
-        response = self.wait()
+        with ExpectLog(gen_log, '(SSL Error|uncaught exception)'):
+            self.http_client.fetch(self.get_url("/"), self.stop,
+                                   request_timeout=3600,
+                                   connect_timeout=3600)
+            response = self.wait()
         self.assertEqual(response.code, 599)
 
 # Python's SSL implementation differs significantly between versions.
@@ -91,16 +103,18 @@ class SSLTestMixin(object):
 class SSLv23Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv23
+SSLv23Test = skipIfNoSSL(SSLv23Test)
 
 
 class SSLv3Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv3
-
+SSLv3Test = skipIfNoSSL(skipIfOldSSL(SSLv3Test))
 
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_TLSv1
+TLSv1Test = skipIfNoSSL(skipIfOldSSL(TLSv1Test))
 
 
 class BadSSLOptionsTest(unittest.TestCase):
@@ -132,19 +146,6 @@ class BadSSLOptionsTest(unittest.TestCase):
         })
 
 
-if ssl is None:
-    del BaseSSLTest
-    del SSLv23Test
-if getattr(ssl, 'OPENSSL_VERSION_INFO', (0, 0)) < (1, 0):
-    # In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
-    # ClientHello messages, which are rejected by SSLv3 and TLSv1
-    # servers.  Note that while the OPENSSL_VERSION_INFO was formally
-    # introduced in python3.2, it was present but undocumented in
-    # python 2.7
-    del SSLv3Test
-    del TLSv1Test
-
-
 class MultipartTestHandler(RequestHandler):
     def post(self):
         self.finish({"header": self.request.headers["X-Header-Encoding-Test"],
@@ -166,7 +167,7 @@ class RawRequestHTTPConnection(simple_httpclient._HTTPConnection):
 # This test is also called from wsgi_test
 
 
-class HTTPConnectionTest(AsyncHTTPTestCase, LogTrapTestCase):
+class HTTPConnectionTest(AsyncHTTPTestCase):
     def get_handlers(self):
         return [("/multipart", MultipartTestHandler),
                 ("/hello", HelloWorldRequestHandler)]
@@ -288,7 +289,7 @@ class TypeCheckHandler(RequestHandler):
                                                          actual_type)
 
 
-class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
+class HTTPServerTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([("/echo", EchoHandler),
                             ("/typecheck", TypeCheckHandler),
@@ -299,6 +300,11 @@ class HTTPServerTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/echo?foo=%C3%A9")
         data = json_decode(response.body)
         self.assertEqual(data, {u"foo": [u"\u00e9"]})
+
+    def test_empty_query_string(self):
+        response = self.fetch("/echo?foo=&foo=")
+        data = json_decode(response.body)
+        self.assertEqual(data, {u"foo": [u"", u""]})
 
     def test_types(self):
         headers = {"Cookie": "foo=bar"}
@@ -352,7 +358,7 @@ class XHeaderTest(HandlerBaseTestCase):
             "127.0.0.1")
 
 
-class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
+class UnixSocketTest(AsyncTestCase):
     """HTTPServers can listen on Unix sockets too.
 
     Why would you want to do this?  Nginx can proxy to backends listening
@@ -390,6 +396,6 @@ class UnixSocketTest(AsyncTestCase, LogTrapTestCase):
         self.assertEqual(body, b("Hello world"))
         stream.close()
         server.stop()
-
-if not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin':
-    del UnixSocketTest
+UnixSocketTest = unittest.skipIf(
+    not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin',
+    "unix sockets not supported on this platform")

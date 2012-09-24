@@ -5,6 +5,7 @@ from tornado.escape import utf8, _unicode, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.log import gen_log
 from tornado import stack_context
 from tornado.util import b, GzipDecompressor
 
@@ -13,7 +14,6 @@ import collections
 import contextlib
 import copy
 import functools
-import logging
 import os.path
 import re
 import socket
@@ -61,7 +61,6 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     """
     def initialize(self, io_loop=None, max_clients=10,
-                   max_simultaneous_connections=None,
                    hostname_mapping=None, max_buffer_size=104857600):
         """Creates a AsyncHTTPClient.
 
@@ -69,11 +68,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         in order to provide limitations on the number of pending connections.
         force_instance=True may be used to suppress this behavior.
 
-        max_clients is the number of concurrent requests that can be in
-        progress.  max_simultaneous_connections has no effect and is accepted
-        only for compatibility with the curl-based AsyncHTTPClient.  Note
-        that these arguments are only used when the client is first created,
-        and will be ignored when an existing client is reused.
+        max_clients is the number of concurrent requests that can be
+        in progress.  Note that this arguments are only used when the
+        client is first created, and will be ignored when an existing
+        client is reused.
 
         hostname_mapping is a dictionary mapping hostnames to IP addresses.
         It can be used to make local DNS changes when modifying system-wide
@@ -101,7 +99,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.queue.append((request, callback))
         self._process_queue()
         if self.queue:
-            logging.debug("max_clients limit reached, request queued. "
+            gen_log.debug("max_clients limit reached, request queued. "
                           "%d active, %d queued requests." % (
                     len(self.active), len(self.queue)))
 
@@ -319,7 +317,7 @@ class _HTTPConnection(object):
         try:
             yield
         except Exception, e:
-            logging.warning("uncaught exception", exc_info=True)
+            gen_log.warning("uncaught exception", exc_info=True)
             self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
@@ -328,15 +326,23 @@ class _HTTPConnection(object):
 
     def _on_close(self):
         if self.final_callback is not None:
-            raise HTTPError(599, "Connection closed")
+            message = "Connection closed"
+            if self.stream.error:
+                message = str(self.stream.error)
+            raise HTTPError(599, message)
 
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
         first_line, _, header_data = data.partition("\n")
         match = re.match("HTTP/1.[01] ([0-9]+) ([^\r]*)", first_line)
         assert match
-        self.code = int(match.group(1))
-        self.reason = match.group(2)
+        code = int(match.group(1))
+        if 100 <= code < 200:
+            self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
+            return
+        else:
+            self.code = code
+            self.reason = match.group(2)
         self.headers = HTTPHeaders.parse(header_data)
 
         if "Content-Length" in self.headers:

@@ -197,7 +197,7 @@ def wrap(fn):
 
     def wrapped(*args, **kwargs):
         callback, contexts, args = args[0], args[1], args[2:]
-        
+
         if contexts is _state.contexts or not contexts:
             callback(*args, **kwargs)
             return

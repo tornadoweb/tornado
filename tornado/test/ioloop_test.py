@@ -3,16 +3,14 @@
 
 from __future__ import absolute_import, division, with_statement
 import datetime
-import socket
 import time
-import unittest
 
 from tornado.ioloop import IOLoop
-from tornado.netutil import bind_sockets
-from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.testing import AsyncTestCase, bind_unused_port
+from tornado.test.util import unittest
 
 
-class TestIOLoop(AsyncTestCase, LogTrapTestCase):
+class TestIOLoop(AsyncTestCase):
     def test_add_callback_wakeup(self):
         # Make sure that add_callback from inside a running IOLoop
         # wakes up the IOLoop immediately instead of waiting for a timeout.
@@ -35,8 +33,7 @@ class TestIOLoop(AsyncTestCase, LogTrapTestCase):
         self.wait()
 
     def test_multiple_add(self):
-        [sock] = bind_sockets(get_unused_port(), '127.0.0.1',
-                              family=socket.AF_INET)
+        sock, port = bind_unused_port()
         try:
             self.io_loop.add_handler(sock.fileno(), lambda fd, events: None,
                                      IOLoop.READ)

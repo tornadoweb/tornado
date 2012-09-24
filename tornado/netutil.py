@@ -19,7 +19,6 @@
 from __future__ import absolute_import, division, with_statement
 
 import errno
-import logging
 import os
 import socket
 import stat
@@ -27,6 +26,7 @@ import stat
 from tornado import process
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.log import app_log
 from tornado.platform.auto import set_close_exec
 
 try:
@@ -234,10 +234,10 @@ class TCPServer(object):
                 stream = IOStream(connection, io_loop=self.io_loop)
             self.handle_stream(stream, address)
         except Exception:
-            logging.error("Error in connection callback", exc_info=True)
+            app_log.error("Error in connection callback", exc_info=True)
 
 
-def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
+def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -253,17 +253,15 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
 
     The ``backlog`` argument has the same meaning as for
     ``socket.listen()``.
+
+    ``flags`` is a bitmask of AI_* flags to ``getaddrinfo``, like
+    ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
     """
     sockets = []
     if address == "":
         address = None
-    flags = socket.AI_PASSIVE
-    if hasattr(socket, "AI_ADDRCONFIG"):
-        # AI_ADDRCONFIG ensures that we only try to bind on ipv6
-        # if the system is configured for it, but the flag doesn't
-        # exist on some platforms (specifically WinXP, although
-        # newer versions of windows have it)
-        flags |= socket.AI_ADDRCONFIG
+    if flags is None:
+        flags = socket.AI_PASSIVE
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                   0, flags)):
         af, socktype, proto, canonname, sockaddr = res

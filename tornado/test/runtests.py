@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
-import unittest
+import logging
+import textwrap
+import sys
+from tornado.test.util import unittest
 
 TEST_MODULES = [
     'tornado.httputil.doctests',
@@ -18,6 +21,7 @@ TEST_MODULES = [
     'tornado.test.ioloop_test',
     'tornado.test.iostream_test',
     'tornado.test.locale_test',
+    'tornado.test.log_test',
     'tornado.test.options_test',
     'tornado.test.process_test',
     'tornado.test.simple_httpclient_test',
@@ -33,6 +37,17 @@ TEST_MODULES = [
 
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
+
+class TornadoTextTestRunner(unittest.TextTestRunner):
+    def run(self, test):
+        result = super(TornadoTextTestRunner, self).run(test)
+        if result.skipped:
+            skip_reasons = set(reason for (test, reason) in result.skipped)
+            self.stream.write(textwrap.fill(
+                    "Some tests were skipped because: %s" %
+                    ", ".join(sorted(skip_reasons))))
+            self.stream.write("\n")
+        return result
 
 if __name__ == '__main__':
     # The -W command-line option does not work in a virtualenv with
@@ -52,5 +67,16 @@ if __name__ == '__main__':
     warnings.filterwarnings("error", category=DeprecationWarning,
                             module=r"tornado\..*")
 
+    logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
+
     import tornado.testing
-    tornado.testing.main()
+    kwargs = {}
+    if sys.version_info >= (3, 2):
+        # HACK:  unittest.main will make its own changes to the warning
+        # configuration, which may conflict with the settings above
+        # or command-line flags like -bb.  Passing warnings=False
+        # suppresses this behavior, although this looks like an implementation
+        # detail.  http://bugs.python.org/issue15626
+        kwargs['warnings'] = False
+    kwargs['testRunner'] = TornadoTextTestRunner
+    tornado.testing.main(**kwargs)

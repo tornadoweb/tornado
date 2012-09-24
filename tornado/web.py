@@ -63,7 +63,6 @@ import hashlib
 import hmac
 import httplib
 import itertools
-import logging
 import mimetypes
 import os.path
 import re
@@ -80,6 +79,7 @@ import uuid
 
 from tornado import escape
 from tornado import locale
+from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
@@ -105,6 +105,8 @@ class RequestHandler(object):
     _template_loader_lock = threading.Lock()
 
     def __init__(self, application, request, **kwargs):
+        super(RequestHandler, self).__init__()
+
         self.application = application
         self.request = request
         self._headers_written = False
@@ -219,6 +221,8 @@ class RequestHandler(object):
         self._headers = {
             "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
+            "Date": datetime.datetime.utcnow().strftime(
+                "%a, %d %b %Y %H:%M:%S GMT"),
         }
         self._list_headers = []
         self.set_default_headers()
@@ -609,7 +613,20 @@ class RequestHandler(object):
             else:
                 loader = RequestHandler._template_loaders[template_path]
         t = loader.load(template_name)
-        args = dict(
+        namespace = self.get_template_namespace()
+        namespace.update(kwargs)
+        return t.generate(**namespace)
+
+    def get_template_namespace(self):
+        """Returns a dictionary to be used as the default template namespace.
+
+        May be overridden by subclasses to add or modify values.
+
+        The results of this method will be combined with additional
+        defaults in the `tornado.template` module and keyword arguments
+        to `render` or `render_string`.
+        """
+        namespace = dict(
             handler=self,
             request=self.request,
             current_user=self.current_user,
@@ -619,11 +636,17 @@ class RequestHandler(object):
             xsrf_form_html=self.xsrf_form_html,
             reverse_url=self.reverse_url
         )
-        args.update(self.ui)
-        args.update(kwargs)
-        return t.generate(**args)
+        namespace.update(self.ui)
+        return namespace
 
     def create_template_loader(self, template_path):
+        """Returns a new template loader for the given path.
+
+        May be overridden by subclasses.  By default returns a
+        directory-based loader on the given path, using the
+        ``autoescape`` application setting.  If a ``template_loader``
+        application setting is supplied, uses that instead.
+        """
         settings = self.application.settings
         if "template_loader" in settings:
             return settings["template_loader"]
@@ -724,7 +747,7 @@ class RequestHandler(object):
         Additional keyword arguments are passed through to `write_error`.
         """
         if self._headers_written:
-            logging.error("Cannot send error response after headers written")
+            gen_log.error("Cannot send error response after headers written")
             if not self._finished:
                 self.finish()
             return
@@ -733,7 +756,7 @@ class RequestHandler(object):
         try:
             self.write_error(status_code, **kwargs)
         except Exception:
-            logging.error("Uncaught exception in write_error", exc_info=True)
+            app_log.error("Uncaught exception in write_error", exc_info=True)
         if not self._finished:
             self.finish()
 
@@ -743,10 +766,11 @@ class RequestHandler(object):
         ``write_error`` may call `write`, `render`, `set_header`, etc
         to produce output as usual.
 
-        If this error was caused by an uncaught exception, an ``exc_info``
-        triple will be available as ``kwargs["exc_info"]``.  Note that this
-        exception may not be the "current" exception for purposes of
-        methods like ``sys.exc_info()`` or ``traceback.format_exc``.
+        If this error was caused by an uncaught exception (including
+        HTTPError), an ``exc_info`` triple will be available as
+        ``kwargs["exc_info"]``.  Note that this exception may not be
+        the "current" exception for purposes of methods like
+        ``sys.exc_info()`` or ``traceback.format_exc``.
 
         For historical reasons, if a method ``get_error_html`` exists,
         it will be used instead of the default ``write_error`` implementation.
@@ -973,7 +997,7 @@ class RequestHandler(object):
                 return callback(*args, **kwargs)
             except Exception, e:
                 if self._headers_written:
-                    logging.error("Exception after headers written",
+                    app_log.error("Exception after headers written",
                                   exc_info=True)
                 else:
                     self._handle_request_exception(e)
@@ -1065,14 +1089,14 @@ class RequestHandler(object):
             if e.log_message:
                 format = "%d %s: " + e.log_message
                 args = [e.status_code, self._request_summary()] + list(e.args)
-                logging.warning(format, *args)
+                gen_log.warning(format, *args)
             if e.status_code not in httplib.responses:
-                logging.error("Bad HTTP status code: %d", e.status_code)
+                gen_log.error("Bad HTTP status code: %d", e.status_code)
                 self.send_error(500, exc_info=sys.exc_info())
             else:
                 self.send_error(e.status_code, exc_info=sys.exc_info())
         else:
-            logging.error("Uncaught exception %s\n%r", self._request_summary(),
+            app_log.error("Uncaught exception %s\n%r", self._request_summary(),
                           self.request, exc_info=True)
             self.send_error(500, exc_info=sys.exc_info())
 
@@ -1217,18 +1241,6 @@ class Application(object):
     and we will serve /favicon.ico and /robots.txt from the same directory.
     A custom subclass of StaticFileHandler can be specified with the
     static_handler_class setting.
-
-    .. attribute:: settings
-
-       Additional keyword arguments passed to the constructor are saved in the
-       `settings` dictionary, and are often referred to in documentation as
-       "application settings".
-
-    .. attribute:: debug
-
-       If `True` the application runs in debug mode, described in
-       :ref:`debug-mode`. This is an application setting in the `settings`
-       dictionary, so handlers can access it.
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
                  wsgi=False, **settings):
@@ -1331,7 +1343,7 @@ class Application(object):
             handlers.append(spec)
             if spec.name:
                 if spec.name in self.named_handlers:
-                    logging.warning(
+                    app_log.warning(
                         "Multiple handlers named %s; replacing previous value",
                         spec.name)
                 self.named_handlers[spec.name] = spec
@@ -1455,11 +1467,11 @@ class Application(object):
             self.settings["log_function"](handler)
             return
         if handler.get_status() < 400:
-            log_method = logging.info
+            log_method = access_log.info
         elif handler.get_status() < 500:
-            log_method = logging.warning
+            log_method = access_log.warning
         else:
-            log_method = logging.error
+            log_method = access_log.error
         request_time = 1000.0 * handler.request.request_time()
         log_method("%d %s %.2fms", handler.get_status(),
                    handler._request_summary(), request_time)
@@ -1575,7 +1587,7 @@ class StaticFileHandler(RequestHandler):
         cache_time = self.get_cache_time(path, modified, mime_type)
 
         if cache_time > 0:
-            self.set_header("Expires", datetime.datetime.utcnow() + \
+            self.set_header("Expires", datetime.datetime.utcnow() +
                                        datetime.timedelta(seconds=cache_time))
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
         else:
@@ -1658,7 +1670,7 @@ class StaticFileHandler(RequestHandler):
                     hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
                     f.close()
                 except Exception:
-                    logging.error("Could not open static file %r", path)
+                    gen_log.error("Could not open static file %r", path)
                     hashes[abs_path] = None
             hsh = hashes.get(abs_path)
             if hsh:
@@ -2042,11 +2054,11 @@ def decode_signed_value(secret, name, value, max_age_days=31):
         return None
     signature = _create_signature(secret, name, parts[0], parts[1])
     if not _time_independent_equals(parts[2], signature):
-        logging.warning("Invalid cookie signature %r", value)
+        gen_log.warning("Invalid cookie signature %r", value)
         return None
     timestamp = int(parts[1])
     if timestamp < time.time() - max_age_days * 86400:
-        logging.warning("Expired cookie %r", value)
+        gen_log.warning("Expired cookie %r", value)
         return None
     if timestamp > time.time() + 31 * 86400:
         # _cookie_signature does not hash a delimiter between the
@@ -2054,10 +2066,11 @@ def decode_signed_value(secret, name, value, max_age_days=31):
         # digits from the payload to the timestamp without altering the
         # signature.  For backwards compatibility, sanity-check timestamp
         # here instead of modifying _cookie_signature.
-        logging.warning("Cookie timestamp in future; possible tampering %r", value)
+        gen_log.warning("Cookie timestamp in future; possible tampering %r", value)
         return None
     if parts[1].startswith(b("0")):
-        logging.warning("Tampered cookie %r", value)
+        gen_log.warning("Tampered cookie %r", value)
+        return None
     try:
         return base64.b64decode(parts[0])
     except Exception:

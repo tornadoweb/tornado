@@ -47,7 +47,6 @@ This module has been tested with Twisted versions 11.0.0, 11.1.0, and 12.0.0
 from __future__ import absolute_import, division, with_statement
 
 import functools
-import logging
 import time
 
 from twisted.internet.posixbase import PosixReactorBase
@@ -60,6 +59,7 @@ from zope.interface import implementer
 
 import tornado
 import tornado.ioloop
+from tornado.log import app_log
 from tornado.stack_context import NullContext
 from tornado.ioloop import IOLoop
 
@@ -80,7 +80,7 @@ class TornadoDelayedCall(object):
         try:
             self._func()
         except:
-            logging.error("_called caught exception", exc_info=True)
+            app_log.error("_called caught exception", exc_info=True)
 
     def getTime(self):
         return self._time
@@ -127,6 +127,7 @@ class TornadoReactor(PosixReactorBase):
         self._fds = {}  # a map of fd to a (reader, writer) tuple
         self._delayedCalls = {}
         PosixReactorBase.__init__(self)
+        self.addSystemEventTrigger('during', 'shutdown', self.crash)
 
         # IOLoop.start() bypasses some of the reactor initialization.
         # Fire off the necessary events if they weren't already triggered
@@ -280,7 +281,8 @@ class TornadoReactor(PosixReactorBase):
     # IOLoop.start() instead of Reactor.run().
     def stop(self):
         PosixReactorBase.stop(self)
-        self._io_loop.stop()
+        fire_shutdown = functools.partial(self.fireSystemEvent, "shutdown")
+        self._io_loop.add_callback(fire_shutdown)
 
     def crash(self):
         PosixReactorBase.crash(self)
@@ -291,8 +293,6 @@ class TornadoReactor(PosixReactorBase):
 
     def mainLoop(self):
         self._io_loop.start()
-        if self._stopped:
-            self.fireSystemEvent("shutdown")
 TornadoReactor = implementer(IReactorTime, IReactorFDSet)(TornadoReactor)
 
 
