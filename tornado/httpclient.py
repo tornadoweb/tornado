@@ -332,6 +332,8 @@ class HTTPResponse(object):
     * code: numeric HTTP status code, e.g. 200 or 404
 
     * reason: human-readable reason phrase describing the status code
+        (with curl_httpclient, this is a default value rather than the
+        server's actual response)
 
     * headers: httputil.HTTPHeaders object
 
@@ -349,12 +351,12 @@ class HTTPResponse(object):
         plus 'queue', which is the delay (if any) introduced by waiting for
         a slot under AsyncHTTPClient's max_clients setting.
     """
-    def __init__(self, request, code, reason=None, headers=None, buffer=None,
+    def __init__(self, request, code, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
-                 time_info=None):
+                 time_info=None, reason=None):
         self.request = request
         self.code = code
-        self.reason = reason
+        self.reason = reason or httplib.responses.get(code, "Unknown")
         if headers is not None:
             self.headers = headers
         else:

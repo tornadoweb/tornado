@@ -231,7 +231,7 @@ class RequestHandler(object):
                 self.set_header("Connection", "Keep-Alive")
         self._write_buffer = []
         self._status_code = 200
-        self._reason = None
+        self._reason = httplib.responses[200]
 
     def set_default_headers(self):
         """Override this to set HTTP headers at the beginning of the request.
@@ -251,10 +251,14 @@ class RequestHandler(object):
         :arg string reason: Human-readable reason phrase describing the status
             code. If ``None``, it will be filled in from `httplib.responses`.
         """
-        if reason is None and status_code not in httplib.responses:
-            raise ValueError("unknown status code %d", status_code)
         self._status_code = status_code
-        self._reason = escape.native_str(reason)
+        if reason is not None:
+            self._reason = escape.native_str(reason)
+        else:
+            try:
+                self._reason = httplib.responses[status_code]
+            except KeyError:
+                raise ValueError("unknown status code %d", status_code)
 
     def get_status(self):
         """Returns the status code for our response."""
@@ -807,7 +811,7 @@ class RequestHandler(object):
             self.finish("<html><title>%(code)d: %(message)s</title>"
                         "<body>%(code)d: %(message)s</body></html>" % {
                     "code": status_code,
-                    "message": self._reason or httplib.responses[status_code],
+                    "message": self._reason,
                     })
 
     @property
@@ -1065,8 +1069,6 @@ class RequestHandler(object):
 
     def _generate_headers(self):
         reason = self._reason
-        if reason is None:
-            reason = httplib.responses[self._status_code]
         lines = [utf8(self.request.version + " " +
                       str(self._status_code) +
                       " " + reason)]
@@ -1506,7 +1508,7 @@ class HTTPError(Exception):
     def __str__(self):
         message = "HTTP %d: %s" % (
             self.status_code,
-            self.reason or httplib.responses[self.status_code])
+            self.reason or httplib.responses.get(self.status_code, 'Unknown'))
         if self.log_message:
             return message + " (" + (self.log_message % self.args) + ")"
         else:
