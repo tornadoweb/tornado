@@ -933,3 +933,23 @@ class DateHeaderTest(SimpleHandlerTestCase):
         self.assertTrue(header_date - datetime.datetime.utcnow() <
                         datetime.timedelta(seconds=2))
 wsgi_safe.append(DateHeaderTest)
+
+
+class RaiseWithReasonTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            raise HTTPError(682, reason="Foo")
+
+    def get_http_client(self):
+        # simple_httpclient only: curl doesn't expose the reason string
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+
+    def test_raise_with_reason(self):
+        response = self.fetch("/")
+        self.assertEqual(response.code, 682)
+        self.assertEqual(response.reason, "Foo")
+        self.assertIn(b('682: Foo'), response.body)
+
+    def test_httperror_str(self):
+        self.assertEqual(str(HTTPError(682, reason="Foo")), "HTTP 682: Foo")
+wsgi_safe.append(RaiseWithReasonTest)

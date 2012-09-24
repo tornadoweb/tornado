@@ -752,7 +752,13 @@ class RequestHandler(object):
                 self.finish()
             return
         self.clear()
-        self.set_status(status_code)
+
+        reason = None
+        if 'exc_info' in kwargs:
+            exception = kwargs['exc_info'][1]
+            if isinstance(exception, HTTPError) and exception.reason:
+                reason = exception.reason
+        self.set_status(status_code, reason=reason)
         try:
             self.write_error(status_code, **kwargs)
         except Exception:
@@ -801,7 +807,7 @@ class RequestHandler(object):
             self.finish("<html><title>%(code)d: %(message)s</title>"
                         "<body>%(code)d: %(message)s</body></html>" % {
                     "code": status_code,
-                    "message": httplib.responses[status_code],
+                    "message": self._reason or httplib.responses[status_code],
                     })
 
     @property
@@ -1090,7 +1096,7 @@ class RequestHandler(object):
                 format = "%d %s: " + e.log_message
                 args = [e.status_code, self._request_summary()] + list(e.args)
                 gen_log.warning(format, *args)
-            if e.status_code not in httplib.responses:
+            if e.status_code not in httplib.responses and not e.reason:
                 gen_log.error("Bad HTTP status code: %d", e.status_code)
                 self.send_error(500, exc_info=sys.exc_info())
             else:
@@ -1478,15 +1484,29 @@ class Application(object):
 
 
 class HTTPError(Exception):
-    """An exception that will turn into an HTTP error response."""
-    def __init__(self, status_code, log_message=None, *args):
+    """An exception that will turn into an HTTP error response.
+
+    :arg int status_code: HTTP status code.  Must be listed in
+        `httplib.responses` unless the ``reason`` keyword argument is given.
+    :arg string log_message: Message to be written to the log for this error
+        (will not be shown to the user unless the `Application` is in debug
+        mode).  May contain ``%s``-style placeholders, which will be filled
+        in with remaining positional parameters.
+    :arg string reason: Keyword-only argument.  The HTTP "reason" phrase
+        to pass in the status line along with ``status_code``.  Normally
+        determined automatically from ``status_code``, but can be used
+        to use a non-standard numeric code.
+    """
+    def __init__(self, status_code, log_message=None, *args, **kwargs):
         self.status_code = status_code
         self.log_message = log_message
         self.args = args
+        self.reason = kwargs.get('reason', None)
 
     def __str__(self):
         message = "HTTP %d: %s" % (
-            self.status_code, httplib.responses[self.status_code])
+            self.status_code,
+            self.reason or httplib.responses[self.status_code])
         if self.log_message:
             return message + " (" + (self.log_message % self.args) + ")"
         else:
