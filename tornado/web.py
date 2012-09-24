@@ -247,9 +247,10 @@ class RequestHandler(object):
         :arg string reason: Human-readable reason phrase describing the status
             code. If ``None``, it will be filled in from `httplib.responses`.
         """
-        assert reason is not None or status_code in httplib.responses
+        if reason is None and status_code not in httplib.responses:
+            raise ValueError("unknown status code %d", status_code)
         self._status_code = status_code
-        self._reason = reason
+        self._reason = escape.native_str(reason)
 
     def get_status(self):
         """Returns the status code for our response."""

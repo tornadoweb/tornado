@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, with_statement
 from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str
 from tornado.iostream import IOStream
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import LogTrapTestCase, AsyncHTTPTestCase
 from tornado.util import b, bytes_type, ObjectDict
@@ -447,12 +448,6 @@ class HeaderInjectionHandler(RequestHandler):
                 raise
 
 
-class StatusHandler(RequestHandler):
-    def get(self):
-        reason = self.request.arguments.get('reason', [])
-        self.set_status(int(self.get_argument('code')), reason=reason[0] if reason else None)
-
-
 # This test is shared with wsgi_test.py
 class WSGISafeWebTest(AsyncHTTPTestCase, LogTrapTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
@@ -489,7 +484,6 @@ class WSGISafeWebTest(AsyncHTTPTestCase, LogTrapTestCase):
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
             url("/header_injection", HeaderInjectionHandler),
-            url("/status", StatusHandler),
             ]
         return urls
 
@@ -593,19 +587,6 @@ js_embed()
     def test_header_injection(self):
         response = self.fetch("/header_injection")
         self.assertEqual(response.body, b("ok"))
-
-    def test_status(self):
-        response = self.fetch("/status?code=304")
-        self.assertEqual(response.code, 304)
-        self.assertEqual(response.reason, "Not Modified")
-        response = self.fetch("/status?code=304&reason=Foo")
-        self.assertEqual(response.code, 304)
-        self.assertEqual(response.reason, "Foo")
-        response = self.fetch("/status?code=682&reason=Bar")
-        self.assertEqual(response.code, 682)
-        self.assertEqual(response.reason, "Bar")
-        response = self.fetch("/status?code=682")
-        self.assertEqual(response.code, 500)
 
 
 class NonWSGIWebTests(AsyncHTTPTestCase, LogTrapTestCase):
@@ -869,3 +850,28 @@ class Header304Test(SimpleHandlerTestCase):
         self.assertTrue("Content-Language" not in response2.headers)
         # Not an entity header, but should not be added to 304s by chunking
         self.assertTrue("Transfer-Encoding" not in response2.headers)
+
+class StatusReasonTest(SimpleHandlerTestCase, LogTrapTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            reason = self.request.arguments.get('reason', [])
+            self.set_status(int(self.get_argument('code')),
+                            reason=reason[0] if reason else None)
+
+    def get_http_client(self):
+        # simple_httpclient only: curl doesn't expose the reason string
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+
+    def test_status(self):
+        response = self.fetch("/?code=304")
+        self.assertEqual(response.code, 304)
+        self.assertEqual(response.reason, "Not Modified")
+        response = self.fetch("/?code=304&reason=Foo")
+        self.assertEqual(response.code, 304)
+        self.assertEqual(response.reason, "Foo")
+        response = self.fetch("/?code=682&reason=Bar")
+        self.assertEqual(response.code, 682)
+        self.assertEqual(response.reason, "Bar")
+        response = self.fetch("/?code=682")
+        self.assertEqual(response.code, 500)
+
