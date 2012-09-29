@@ -522,6 +522,8 @@ class IOLoop(object):
         _FUTURE_TYPES = DummyFuture
     def add_future(self, future, callback):
         """Schedules a callback on the IOLoop when the given future is finished.
+
+        The callback is invoked with one argument, the future.
         """
         assert isinstance(future, IOLoop._FUTURE_TYPES)
         callback = stack_context.wrap(callback)

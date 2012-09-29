@@ -30,6 +30,8 @@
    ^^^^^^^^
 
    .. automethod:: IOLoop.add_callback
+   .. automethod:: IOLoop.add_callback_from_signal
+   .. automethod:: IOLoop.add_future
    .. automethod:: IOLoop.add_timeout
    .. automethod:: IOLoop.remove_timeout
    .. autoclass:: PeriodicCallback

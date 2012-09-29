@@ -29,3 +29,5 @@
    -----
 
    .. automethod:: WebSocketHandler.async_callback
+   .. automethod:: WebSocketHandler.ping
+   .. automethod:: WebSocketHandler.on_pong
