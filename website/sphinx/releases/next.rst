@@ -41,3 +41,15 @@ In progress
   `BaseIOStream`.
 * New class `tornado.process.Subprocess` wraps `subprocess.Popen` with
   `PipeIOStream` access to the child's file descriptors.
+* `IOLoop` now uses `signal.set_wakeup_fd` where available (Python 2.6+
+  on Unix) to avoid a race condition that could result in Python signal
+  handlers being delayed.
+* `WebSocketHandler` has new methods `ping` and `on_pong` to send pings
+  to the browser (not supported on the ``draft76`` protocol)
+* The ``Date`` HTTP header is now set by default on all responses.
+* Several methods related to HTTP status codes now take a ``reason`` keyword
+  argument to specify an alternate "reason" string (i.e. the "Not Found" in
+  "HTTP/1.1 404 Not Found").  It is now possible to set status codes other
+  than those defined in the spec, as long as a reason string is given.
+* New method `IOLoop.add_callback_from_signal` is safe to use in a signal
+  handler (the regular `add_callback` method may deadlock).
