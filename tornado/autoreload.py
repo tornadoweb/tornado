@@ -71,6 +71,7 @@ import logging
 import os
 import pkgutil
 import sys
+import traceback
 import types
 import subprocess
 
@@ -278,7 +279,16 @@ def main():
     except Exception, e:
         logging.basicConfig()
         gen_log.warning("Script exited with uncaught exception", exc_info=True)
+        # If an exception occurred at import time, the file with the error
+        # never made it into sys.modules and so we won't know to watch it.
+        # Just to make sure we've covered everything, walk the stack trace
+        # from the exception and watch every file.
+        for (filename, lineno, name, line) in traceback.extract_tb(sys.exc_info()[2]):
+            watch(filename)
         if isinstance(e, SyntaxError):
+            # SyntaxErrors are special:  their innermost stack frame is fake
+            # so extract_tb won't see it and we have to get the filename
+            # from the exception object.
             watch(e.filename)
     else:
         logging.basicConfig()

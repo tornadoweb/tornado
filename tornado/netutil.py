@@ -24,6 +24,7 @@ import socket
 import stat
 
 from tornado import process
+from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.log import app_log
@@ -339,3 +340,13 @@ def add_accept_handler(sock, callback, io_loop=None):
                 raise
             callback(connection, address)
     io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
+
+
+class Resolver(object):
+    def __init__(self, io_loop=None, executor=None):
+        self.io_loop = io_loop or IOLoop.instance()
+        self.executor = executor or dummy_executor
+
+    @run_on_executor
+    def getaddrinfo(self, *args, **kwargs):
+        return socket.getaddrinfo(*args, **kwargs)

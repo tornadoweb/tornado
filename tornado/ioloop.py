@@ -30,6 +30,7 @@ from __future__ import absolute_import, division, with_statement
 
 import datetime
 import errno
+import functools
 import heapq
 import logging
 import os
@@ -39,6 +40,7 @@ import threading
 import time
 import traceback
 
+from tornado.concurrent import DummyFuture
 from tornado.log import app_log, gen_log
 from tornado import stack_context
 
@@ -46,6 +48,11 @@ try:
     import signal
 except ImportError:
     signal = None
+
+try:
+    from concurrent import futures
+except ImportError:
+    futures = None
 
 from tornado.platform.auto import set_close_exec, Waker
 
@@ -108,6 +115,8 @@ class IOLoop(object):
     # Global lock for creating global IOLoop instance
     _instance_lock = threading.Lock()
 
+    _current = threading.local()
+
     def __init__(self, impl=None):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
@@ -166,6 +175,20 @@ class IOLoop(object):
         """
         assert not IOLoop.initialized()
         IOLoop._instance = self
+
+    @staticmethod
+    def current():
+        current = getattr(IOLoop._current, "instance", None)
+        if current is None:
+            raise ValueError("no current IOLoop")
+        return current
+
+    def make_current(self):
+        IOLoop._current.instance = self
+
+    def clear_current(self):
+        assert IOLoop._current.instance is self
+        IOLoop._current.instance = None
 
     def close(self, all_fds=False):
         """Closes the IOLoop, freeing any resources used.
@@ -267,6 +290,8 @@ class IOLoop(object):
         if self._stopped:
             self._stopped = False
             return
+        old_current = getattr(IOLoop._current, "instance", None)
+        IOLoop._current.instance = self
         self._thread_ident = thread.get_ident()
         self._running = True
 
@@ -381,6 +406,7 @@ class IOLoop(object):
         self._stopped = False
         if self._blocking_signal_threshold is not None:
             signal.setitimer(signal.ITIMER_REAL, 0, 0)
+        IOLoop._current.instance = old_current
         if old_wakeup_fd is not None:
             signal.set_wakeup_fd(old_wakeup_fd)
 
@@ -489,6 +515,19 @@ class IOLoop(object):
                 # either the old or new version of self._callbacks,
                 # but either way will work.
                 self._callbacks.append(stack_context.wrap(callback))
+
+    if futures is not None:
+        _FUTURE_TYPES = (futures.Future, DummyFuture)
+    else:
+        _FUTURE_TYPES = DummyFuture
+    def add_future(self, future, callback):
+        """Schedules a callback on the IOLoop when the given future is finished.
+        """
+        assert isinstance(future, IOLoop._FUTURE_TYPES)
+        callback = stack_context.wrap(callback)
+        future.add_done_callback(
+            lambda future: self.add_callback(
+                functools.partial(callback, future)))
 
     def _run_callback(self, callback):
         try:
