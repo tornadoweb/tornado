@@ -53,3 +53,8 @@ In progress
   than those defined in the spec, as long as a reason string is given.
 * New method `IOLoop.add_callback_from_signal` is safe to use in a signal
   handler (the regular `add_callback` method may deadlock).
+* `stack_context.wrap` now runs the wrapped callback in a more consistent
+  environment by recreating contexts even if they already exist on the
+  stack.
+* Fixed a bug in which stack contexts could leak from one callback
+  chain to another.
