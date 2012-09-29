@@ -292,14 +292,14 @@ class IOLoop(object):
             # the python process on windows.
             try:
                 old_wakeup_fd = signal.set_wakeup_fd(self._waker.write_fileno())
+                if old_wakeup_fd != -1:
+                    # Already set, restore previous value.  This is a little racy,
+                    # but there's no clean get_wakeup_fd and in real use the
+                    # IOLoop is just started once at the beginning.
+                    signal.set_wakeup_fd(old_wakeup_fd)
+                    old_wakeup_fd = None
             except ValueError:  # non-main thread
                 pass
-            if old_wakeup_fd != -1:
-                # Already set, restore previous value.  This is a little racy,
-                # but there's no clean get_wakeup_fd and in real use the
-                # IOLoop is just started once at the beginning.
-                signal.set_wakeup_fd(old_wakeup_fd)
-                old_wakeup_fd = None
 
         while True:
             poll_timeout = 3600.0
@@ -442,11 +442,15 @@ class IOLoop(object):
     def add_callback(self, callback):
         """Calls the given callback on the next I/O loop iteration.
 
-        It is safe to call this method from any thread at any time.
-        Note that this is the *only* method in IOLoop that makes this
-        guarantee; all other interaction with the IOLoop must be done
-        from that IOLoop's thread.  add_callback() may be used to transfer
+        It is safe to call this method from any thread at any time,
+        except from a signal handler.  Note that this is the *only*
+        method in IOLoop that makes this thread-safety guarantee; all
+        other interaction with the IOLoop must be done from that
+        IOLoop's thread.  add_callback() may be used to transfer
         control from other threads to the IOLoop's thread.
+
+        To add a callback from a signal handler, see
+        `add_callback_from_signal`.
         """
         with self._callback_lock:
             list_empty = not self._callbacks
@@ -459,6 +463,32 @@ class IOLoop(object):
             # up a polling IOLoop is relatively expensive, so we try to
             # avoid it when we can.
             self._waker.wake()
+
+    def add_callback_from_signal(self, callback):
+        """Calls the given callback on the next I/O loop iteration.
+
+        Safe for use from a Python signal handler; should not be used
+        otherwise.
+
+        Callbacks added with this method will be run without any
+        stack_context, to avoid picking up the context of the function
+        that was interrupted by the signal.
+        """
+        with stack_context.NullContext():
+            if thread.get_ident() != self._thread_ident:
+                # if the signal is handled on another thread, we can add
+                # it normally (modulo the NullContext)
+                self.add_callback(callback)
+            else:
+                # If we're on the IOLoop's thread, we cannot use
+                # the regular add_callback because it may deadlock on
+                # _callback_lock.  Blindly insert into self._callbacks.
+                # This is safe because the GIL makes list.append atomic.
+                # One subtlety is that if the signal interrupted the
+                # _callback_lock block in IOLoop.start, we may modify
+                # either the old or new version of self._callbacks,
+                # but either way will work.
+                self._callbacks.append(stack_context.wrap(callback))
 
     def _run_callback(self, callback):
         try:

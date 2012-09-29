@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import, division, with_statement
 import datetime
+import threading
 import time
 
 from tornado.ioloop import IOLoop
@@ -28,6 +29,18 @@ class TestIOLoop(AsyncTestCase):
         self.assertAlmostEqual(time.time(), self.start_time, places=2)
         self.assertTrue(self.called)
 
+    def test_add_callback_wakeup_other_thread(self):
+        def target():
+            # sleep a bit to let the ioloop go into its poll loop
+            time.sleep(0.01)
+            self.stop_time = time.time()
+            self.io_loop.add_callback(self.stop)
+        thread = threading.Thread(target=target)
+        self.io_loop.add_callback(thread.start)
+        self.wait()
+        self.assertAlmostEqual(time.time(), self.stop_time, places=2)
+        thread.join()
+
     def test_add_timeout_timedelta(self):
         self.io_loop.add_timeout(datetime.timedelta(microseconds=1), self.stop)
         self.wait()
@@ -44,6 +57,23 @@ class TestIOLoop(AsyncTestCase):
                               IOLoop.READ)
         finally:
             sock.close()
+
+    def test_add_callback_from_signal(self):
+        # cheat a little bit and just run this normally, since we can't
+        # easily simulate the races that happen with real signal handlers
+        self.io_loop.add_callback_from_signal(self.stop)
+        self.wait()
+
+    def test_add_callback_from_signal_other_thread(self):
+        # Very crude test, just to make sure that we cover this case.
+        # This also happens to be the first test where we run an IOLoop in
+        # a non-main thread.
+        other_ioloop = IOLoop()
+        thread = threading.Thread(target=other_ioloop.start)
+        thread.start()
+        other_ioloop.add_callback_from_signal(other_ioloop.stop)
+        thread.join()
+        other_ioloop.close()
 
 
 if __name__ == "__main__":
