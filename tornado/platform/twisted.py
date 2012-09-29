@@ -47,7 +47,6 @@ This module has been tested with Twisted versions 11.0.0, 11.1.0, and 12.0.0
 from __future__ import absolute_import, division, with_statement
 
 import functools
-import logging
 import time
 
 from twisted.internet.posixbase import PosixReactorBase
@@ -60,6 +59,7 @@ from zope.interface import implementer
 
 import tornado
 import tornado.ioloop
+from tornado.log import app_log
 from tornado.stack_context import NullContext
 from tornado.ioloop import IOLoop
 
@@ -80,7 +80,7 @@ class TornadoDelayedCall(object):
         try:
             self._func()
         except:
-            logging.error("_called caught exception", exc_info=True)
+            app_log.error("_called caught exception", exc_info=True)
 
     def getTime(self):
         return self._time

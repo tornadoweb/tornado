@@ -3,14 +3,12 @@
 
 from __future__ import absolute_import, division, with_statement
 import datetime
-import socket
 import threading
 import time
 
 from tornado.ioloop import IOLoop
-from tornado.netutil import bind_sockets
 from tornado.stack_context import ExceptionStackContext
-from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.testing import AsyncTestCase, bind_unused_port
 from tornado.test.util import unittest
 
 try:
@@ -19,7 +17,7 @@ except ImportError:
     futures = None
 
 
-class TestIOLoop(AsyncTestCase, LogTrapTestCase):
+class TestIOLoop(AsyncTestCase):
     def test_add_callback_wakeup(self):
         # Make sure that add_callback from inside a running IOLoop
         # wakes up the IOLoop immediately instead of waiting for a timeout.
@@ -37,13 +35,24 @@ class TestIOLoop(AsyncTestCase, LogTrapTestCase):
         self.assertAlmostEqual(time.time(), self.start_time, places=2)
         self.assertTrue(self.called)
 
+    def test_add_callback_wakeup_other_thread(self):
+        def target():
+            # sleep a bit to let the ioloop go into its poll loop
+            time.sleep(0.01)
+            self.stop_time = time.time()
+            self.io_loop.add_callback(self.stop)
+        thread = threading.Thread(target=target)
+        self.io_loop.add_callback(thread.start)
+        self.wait()
+        self.assertAlmostEqual(time.time(), self.stop_time, places=2)
+        thread.join()
+
     def test_add_timeout_timedelta(self):
         self.io_loop.add_timeout(datetime.timedelta(microseconds=1), self.stop)
         self.wait()
 
     def test_multiple_add(self):
-        [sock] = bind_sockets(get_unused_port(), '127.0.0.1',
-                              family=socket.AF_INET)
+        sock, port = bind_unused_port()
         try:
             self.io_loop.add_handler(sock.fileno(), lambda fd, events: None,
                                      IOLoop.READ)
@@ -55,8 +64,25 @@ class TestIOLoop(AsyncTestCase, LogTrapTestCase):
         finally:
             sock.close()
 
+    def test_add_callback_from_signal(self):
+        # cheat a little bit and just run this normally, since we can't
+        # easily simulate the races that happen with real signal handlers
+        self.io_loop.add_callback_from_signal(self.stop)
+        self.wait()
 
-class TestIOLoopFutures(AsyncTestCase, LogTrapTestCase):
+    def test_add_callback_from_signal_other_thread(self):
+        # Very crude test, just to make sure that we cover this case.
+        # This also happens to be the first test where we run an IOLoop in
+        # a non-main thread.
+        other_ioloop = IOLoop()
+        thread = threading.Thread(target=other_ioloop.start)
+        thread.start()
+        other_ioloop.add_callback_from_signal(other_ioloop.stop)
+        thread.join()
+        other_ioloop.close()
+
+
+class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):
         with futures.ThreadPoolExecutor(1) as pool:
             self.io_loop.add_future(pool.submit(lambda: None),

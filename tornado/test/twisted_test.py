@@ -42,9 +42,10 @@ except ImportError:
     have_twisted = False
 
 from tornado.httpclient import AsyncHTTPClient
+from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.testing import get_unused_port
+from tornado.testing import bind_unused_port
 from tornado.test.util import unittest
 from tornado.util import import_object
 from tornado.web import RequestHandler, Application
@@ -344,8 +345,8 @@ class CompatibilityTests(unittest.TestCase):
             def render_GET(self, request):
                 return "Hello from twisted!"
         site = Site(HelloResource())
-        self.twisted_port = get_unused_port()
-        self.reactor.listenTCP(self.twisted_port, site, interface='127.0.0.1')
+        port = self.reactor.listenTCP(0, site, interface='127.0.0.1')
+        self.twisted_port = port.getHost().port
 
     def start_tornado_server(self):
         class HelloHandler(RequestHandler):
@@ -353,8 +354,9 @@ class CompatibilityTests(unittest.TestCase):
                 self.write("Hello from tornado!")
         app = Application([('/', HelloHandler)],
                           log_function=lambda x: None)
-        self.tornado_port = get_unused_port()
-        app.listen(self.tornado_port, address='127.0.0.1', io_loop=self.io_loop)
+        server = HTTPServer(app, io_loop=self.io_loop)
+        sock, self.tornado_port = bind_unused_port()
+        server.add_sockets([sock])
 
     def run_ioloop(self):
         self.stop_loop = self.io_loop.stop

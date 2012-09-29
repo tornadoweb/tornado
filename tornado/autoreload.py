@@ -76,6 +76,7 @@ import types
 import subprocess
 
 from tornado import ioloop
+from tornado.log import gen_log
 from tornado import process
 
 try:
@@ -178,7 +179,7 @@ def _check_file(modify_times, path):
         modify_times[path] = modified
         return
     if modify_times[path] != modified:
-        logging.info("%s modified; restarting server", path)
+        gen_log.info("%s modified; restarting server", path)
         _reload()
 
 
@@ -273,9 +274,11 @@ def main():
                 # module) will see the right things.
                 exec f.read() in globals(), globals()
     except SystemExit, e:
-        logging.info("Script exited with status %s", e.code)
+        logging.basicConfig()
+        gen_log.info("Script exited with status %s", e.code)
     except Exception, e:
-        logging.warning("Script exited with uncaught exception", exc_info=True)
+        logging.basicConfig()
+        gen_log.warning("Script exited with uncaught exception", exc_info=True)
         # If an exception occurred at import time, the file with the error
         # never made it into sys.modules and so we won't know to watch it.
         # Just to make sure we've covered everything, walk the stack trace
@@ -288,7 +291,8 @@ def main():
             # from the exception object.
             watch(e.filename)
     else:
-        logging.info("Script exited normally")
+        logging.basicConfig()
+        gen_log.info("Script exited normally")
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
 

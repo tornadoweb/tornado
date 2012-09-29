@@ -33,7 +33,6 @@ def import_everything():
     # import tornado.auth
     # import tornado.autoreload
     # import tornado.curl_httpclient  # depends on pycurl
-    # import tornado.database  # depends on MySQLdb
     import tornado.escape
     # import tornado.httpclient
     # import tornado.httpserver
@@ -53,7 +52,7 @@ def import_everything():
     import tornado.web
     # import tornado.websocket
     import tornado.wsgi
-    
+
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 
@@ -72,4 +71,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

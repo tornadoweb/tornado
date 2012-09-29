@@ -19,16 +19,15 @@
 from __future__ import absolute_import, division, with_statement
 
 import errno
-import functools
-import logging
 import os
 import socket
 import stat
 
 from tornado import process
-from tornado.concurrent import DummyFuture, dummy_executor, run_on_executor
+from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.log import app_log
 from tornado.platform.auto import set_close_exec
 
 try:
@@ -236,7 +235,7 @@ class TCPServer(object):
                 stream = IOStream(connection, io_loop=self.io_loop)
             self.handle_stream(stream, address)
         except Exception:
-            logging.error("Error in connection callback", exc_info=True)
+            app_log.error("Error in connection callback", exc_info=True)
 
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):

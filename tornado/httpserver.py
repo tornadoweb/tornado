@@ -27,13 +27,13 @@ This module also defines the `HTTPRequest` class which is exposed via
 from __future__ import absolute_import, division, with_statement
 
 import Cookie
-import logging
 import socket
 import time
 
 from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
+from tornado.log import gen_log
 from tornado.netutil import TCPServer
 from tornado import stack_context
 from tornado.util import b, bytes_type
@@ -267,7 +267,7 @@ class HTTPConnection(object):
 
             self.request_callback(self._request)
         except _BadRequestException, e:
-            logging.info("Malformed HTTP request from %s: %s",
+            gen_log.info("Malformed HTTP request from %s: %s",
                          self.address[0], e)
             self.close()
             return
@@ -388,12 +388,7 @@ class HTTPRequest(object):
         self._finish_time = None
 
         self.path, sep, self.query = uri.partition('?')
-        arguments = parse_qs_bytes(self.query)
-        self.arguments = {}
-        for name, values in arguments.iteritems():
-            values = [v for v in values if v]
-            if values:
-                self.arguments[name] = values
+        self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
 
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""

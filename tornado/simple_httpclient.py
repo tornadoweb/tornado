@@ -6,6 +6,7 @@ from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPCl
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.netutil import Resolver
+from tornado.log import gen_log
 from tornado import stack_context
 from tornado.util import b, GzipDecompressor
 
@@ -14,7 +15,6 @@ import collections
 import contextlib
 import copy
 import functools
-import logging
 import os.path
 import re
 import socket
@@ -102,7 +102,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.queue.append((request, callback))
         self._process_queue()
         if self.queue:
-            logging.debug("max_clients limit reached, request queued. "
+            gen_log.debug("max_clients limit reached, request queued. "
                           "%d active, %d queued requests." % (
                     len(self.active), len(self.queue)))
 
@@ -322,7 +322,7 @@ class _HTTPConnection(object):
         try:
             yield
         except Exception, e:
-            logging.warning("uncaught exception", exc_info=True)
+            gen_log.warning("uncaught exception", exc_info=True)
             self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
@@ -339,7 +339,7 @@ class _HTTPConnection(object):
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
         first_line, _, header_data = data.partition("\n")
-        match = re.match("HTTP/1.[01] ([0-9]+)", first_line)
+        match = re.match("HTTP/1.[01] ([0-9]+) ([^\r]*)", first_line)
         assert match
         code = int(match.group(1))
         if 100 <= code < 200:
@@ -347,7 +347,7 @@ class _HTTPConnection(object):
             return
         else:
             self.code = code
-
+            self.reason = match.group(2)
         self.headers = HTTPHeaders.parse(header_data)
 
         if "Content-Length" in self.headers:
@@ -438,7 +438,8 @@ class _HTTPConnection(object):
         else:
             buffer = BytesIO(data)  # TODO: don't require one big string?
         response = HTTPResponse(original_request,
-                                self.code, headers=self.headers,
+                                self.code, reason=self.reason,
+                                headers=self.headers,
                                 request_time=time.time() - self.start_time,
                                 buffer=buffer,
                                 effective_url=self.request.url)

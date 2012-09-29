@@ -26,19 +26,24 @@ try:
     from tornado.httpserver import HTTPServer
     from tornado.simple_httpclient import SimpleAsyncHTTPClient
     from tornado.ioloop import IOLoop
+    from tornado import netutil
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
     # won't work, but e.g. LogTrapTestCase and main() will.
     AsyncHTTPClient = None
     HTTPServer = None
     IOLoop = None
+    netutil = None
     SimpleAsyncHTTPClient = None
-from tornado.stack_context import StackContext, NullContext
+from tornado.log import gen_log
+from tornado.stack_context import StackContext
 from tornado.util import raise_exc_info
 import contextlib
 import logging
 import os
+import re
 import signal
+import socket
 import sys
 import time
 
@@ -55,11 +60,29 @@ _next_port = 10000
 
 
 def get_unused_port():
-    """Returns a (hopefully) unused port number."""
+    """Returns a (hopefully) unused port number.
+
+    This function does not guarantee that the port it returns is available,
+    only that a series of get_unused_port calls in a single process return
+    distinct ports.
+
+    **Deprecated**.  Use bind_unused_port instead, which is guaranteed
+    to find an unused port.
+    """
     global _next_port
     port = _next_port
     _next_port = _next_port + 1
     return port
+
+
+def bind_unused_port():
+    """Binds a server socket to an available port on localhost.
+
+    Returns a tuple (socket, port).
+    """
+    [sock] = netutil.bind_sockets(0, 'localhost', family=socket.AF_INET)
+    port = sock.getsockname()[1]
+    return sock, port
 
 
 class AsyncTestCase(unittest.TestCase):
@@ -202,11 +225,7 @@ class AsyncTestCase(unittest.TestCase):
                 self.__timeout = self.io_loop.add_timeout(time.time() + timeout, timeout_func)
             while True:
                 self.__running = True
-                with NullContext():
-                    # Wipe out the StackContext that was established in
-                    # self.run() so that all callbacks executed inside the
-                    # IOLoop will re-run it.
-                    self.io_loop.start()
+                self.io_loop.start()
                 if (self.__failure is not None or
                     condition is None or condition()):
                     break
@@ -248,7 +267,9 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_client = self.get_http_client()
         self._app = self.get_app()
         self.http_server = self.get_http_server()
-        self.http_server.listen(self.get_http_port(), address="127.0.0.1")
+        sock, port = bind_unused_port()
+        self.http_server.add_sockets([sock])
+        self.__port = port
 
     def get_http_client(self):
         return AsyncHTTPClient(io_loop=self.io_loop)
@@ -285,8 +306,6 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
         A new port is chosen for each test.
         """
-        if self.__port is None:
-            self.__port = get_unused_port()
         return self.__port
 
     def get_protocol(self):
@@ -366,7 +385,7 @@ class LogTrapTestCase(unittest.TestCase):
         old_stream = handler.stream
         try:
             handler.stream = StringIO()
-            logging.info("RUNNING TEST: " + str(self))
+            gen_log.info("RUNNING TEST: " + str(self))
             old_error_count = len(result.failures) + len(result.errors)
             super(LogTrapTestCase, self).run(result)
             new_error_count = len(result.failures) + len(result.errors)
@@ -374,6 +393,50 @@ class LogTrapTestCase(unittest.TestCase):
                 old_stream.write(handler.stream.getvalue())
         finally:
             handler.stream = old_stream
+
+
+class ExpectLog(logging.Filter):
+    """Context manager to capture and suppress expected log output.
+
+    Useful to make tests of error conditions less noisy, while still
+    leaving unexpected log entries visible.  *Not thread safe.*
+
+    Usage::
+
+        with ExpectLog('tornado.application', "Uncaught exception"):
+            error_response = self.fetch("/some_page")
+    """
+    def __init__(self, logger, regex, required=True):
+        """Constructs an ExpectLog context manager.
+
+        :param logger: Logger object (or name of logger) to watch.  Pass
+            an empty string to watch the root logger.
+        :param regex: Regular expression to match.  Any log entries on
+            the specified logger that match this regex will be suppressed.
+        :param required: If true, an exeption will be raised if the end of
+            the ``with`` statement is reached without matching any log entries.
+        """
+        if isinstance(logger, basestring):
+            logger = logging.getLogger(logger)
+        self.logger = logger
+        self.regex = re.compile(regex)
+        self.required = required
+        self.matched = False
+
+    def filter(self, record):
+        message = record.getMessage()
+        if self.regex.match(message):
+            self.matched = True
+            return False
+        return True
+
+    def __enter__(self):
+        self.logger.addFilter(self)
+
+    def __exit__(self, typ, value, tb):
+        self.logger.removeFilter(self)
+        if not typ and self.required and not self.matched:
+            raise Exception("did not get expected log message")
 
 
 def main(**kwargs):
@@ -417,6 +480,14 @@ def main(**kwargs):
                  "exception.  This prints a stack trace but cannot interrupt "
                  "certain operations.  If false, the process is more reliably "
                  "killed, but does not print a stack trace."))
+
+    # support the same options as unittest's command-line interface
+    define('verbose', type=bool)
+    define('quiet', type=bool)
+    define('failfast', type=bool)
+    define('catch', type=bool)
+    define('buffer', type=bool)
+
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
 
     if options.httpclient:
@@ -425,6 +496,17 @@ def main(**kwargs):
 
     if not options.exception_on_interrupt:
         signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    if options.verbose is not None:
+        kwargs['verbosity'] = 2
+    if options.quiet is not None:
+        kwargs['verbosity'] = 0
+    if options.failfast is not None:
+        kwargs['failfast'] = True
+    if options.catch is not None:
+        kwargs['catchbreak'] = True
+    if options.buffer is not None:
+        kwargs['buffer'] = True
 
     if __name__ == '__main__' and len(argv) == 1:
         print >> sys.stderr, "No tests specified"
@@ -442,9 +524,9 @@ def main(**kwargs):
             unittest.main(defaultTest="all", argv=argv, **kwargs)
     except SystemExit, e:
         if e.code == 0:
-            logging.info('PASS')
+            gen_log.info('PASS')
         else:
-            logging.error('FAIL')
+            gen_log.error('FAIL')
         if not options.autoreload:
             raise
     if options.autoreload:

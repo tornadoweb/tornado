@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
+import logging
 import textwrap
 import sys
 from tornado.test.util import unittest
@@ -22,6 +23,7 @@ TEST_MODULES = [
     'tornado.test.iostream_test',
     'tornado.test.locale_test',
     'tornado.test.netutil_test',
+    'tornado.test.log_test',
     'tornado.test.options_test',
     'tornado.test.process_test',
     'tornado.test.simple_httpclient_test',
@@ -71,6 +73,8 @@ if __name__ == '__main__':
     # 2.7 and 3.2
     warnings.filterwarnings("ignore", category=DeprecationWarning,
                             message="Please use assert.* instead")
+
+    logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
     import tornado.testing
     kwargs = {}

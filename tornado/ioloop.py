@@ -32,8 +32,8 @@ import datetime
 import errno
 import functools
 import heapq
-import os
 import logging
+import os
 import select
 import thread
 import threading
@@ -41,6 +41,7 @@ import time
 import traceback
 
 from tornado.concurrent import DummyFuture
+from tornado.log import app_log, gen_log
 from tornado import stack_context
 
 try:
@@ -214,7 +215,7 @@ class IOLoop(object):
                 try:
                     os.close(fd)
                 except Exception:
-                    logging.debug("error closing fd %s", fd, exc_info=True)
+                    gen_log.debug("error closing fd %s", fd, exc_info=True)
         self._waker.close()
         self._impl.close()
 
@@ -234,7 +235,7 @@ class IOLoop(object):
         try:
             self._impl.unregister(fd)
         except (OSError, IOError):
-            logging.debug("Error deleting fd from IOLoop", exc_info=True)
+            gen_log.debug("Error deleting fd from IOLoop", exc_info=True)
 
     def set_blocking_signal_threshold(self, seconds, action):
         """Sends a signal if the ioloop is blocked for more than s seconds.
@@ -248,8 +249,8 @@ class IOLoop(object):
         too long.
         """
         if not hasattr(signal, "setitimer"):
-            logging.error("set_blocking_signal_threshold requires a signal module "
-                       "with the setitimer method")
+            gen_log.error("set_blocking_signal_threshold requires a signal module "
+                           "with the setitimer method")
             return
         self._blocking_signal_threshold = seconds
         if seconds is not None:
@@ -267,9 +268,9 @@ class IOLoop(object):
 
         For use with set_blocking_signal_threshold.
         """
-        logging.warning('IOLoop blocked for %f seconds in\n%s',
-                        self._blocking_signal_threshold,
-                        ''.join(traceback.format_stack(frame)))
+        gen_log.warning('IOLoop blocked for %f seconds in\n%s',
+                         self._blocking_signal_threshold,
+                         ''.join(traceback.format_stack(frame)))
 
     def start(self):
         """Starts the I/O loop.
@@ -277,6 +278,15 @@ class IOLoop(object):
         The loop will run until one of the I/O handlers calls stop(), which
         will make the loop stop after the current event iteration completes.
         """
+        if not logging.getLogger().handlers:
+            # The IOLoop catches and logs exceptions, so it's
+            # important that log output be visible.  However, python's
+            # default behavior for non-root loggers (prior to python
+            # 3.2) is to print an unhelpful "no handlers could be
+            # found" message rather than the actual log entry, so we
+            # must explicitly configure logging if we've made it this
+            # far without anything.
+            logging.basicConfig()
         if self._stopped:
             self._stopped = False
             return
@@ -284,6 +294,38 @@ class IOLoop(object):
         IOLoop._current.instance = self
         self._thread_ident = thread.get_ident()
         self._running = True
+
+        # signal.set_wakeup_fd closes a race condition in event loops:
+        # a signal may arrive at the beginning of select/poll/etc
+        # before it goes into its interruptible sleep, so the signal
+        # will be consumed without waking the select.  The solution is
+        # for the (C, synchronous) signal handler to write to a pipe,
+        # which will then be seen by select.
+        #
+        # In python's signal handling semantics, this only matters on the
+        # main thread (fortunately, set_wakeup_fd only works on the main
+        # thread and will raise a ValueError otherwise).
+        #
+        # If someone has already set a wakeup fd, we don't want to
+        # disturb it.  This is an issue for twisted, which does its
+        # SIGCHILD processing in response to its own wakeup fd being
+        # written to.  As long as the wakeup fd is registered on the IOLoop,
+        # the loop will still wake up and everything should work.
+        old_wakeup_fd = None
+        if hasattr(signal, 'set_wakeup_fd') and os.name == 'posix':
+            # requires python 2.6+, unix.  set_wakeup_fd exists but crashes
+            # the python process on windows.
+            try:
+                old_wakeup_fd = signal.set_wakeup_fd(self._waker.write_fileno())
+                if old_wakeup_fd != -1:
+                    # Already set, restore previous value.  This is a little racy,
+                    # but there's no clean get_wakeup_fd and in real use the
+                    # IOLoop is just started once at the beginning.
+                    signal.set_wakeup_fd(old_wakeup_fd)
+                    old_wakeup_fd = None
+            except ValueError:  # non-main thread
+                pass
+
         while True:
             poll_timeout = 3600.0
 
@@ -355,16 +397,18 @@ class IOLoop(object):
                         # Happens when the client closes the connection
                         pass
                     else:
-                        logging.error("Exception in I/O handler for fd %s",
+                        app_log.error("Exception in I/O handler for fd %s",
                                       fd, exc_info=True)
                 except Exception:
-                    logging.error("Exception in I/O handler for fd %s",
+                    app_log.error("Exception in I/O handler for fd %s",
                                   fd, exc_info=True)
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
         if self._blocking_signal_threshold is not None:
             signal.setitimer(signal.ITIMER_REAL, 0, 0)
         IOLoop._current.instance = old_current
+        if old_wakeup_fd is not None:
+            signal.set_wakeup_fd(old_wakeup_fd)
 
     def stop(self):
         """Stop the loop after the current event loop iteration is complete.
@@ -424,11 +468,15 @@ class IOLoop(object):
     def add_callback(self, callback):
         """Calls the given callback on the next I/O loop iteration.
 
-        It is safe to call this method from any thread at any time.
-        Note that this is the *only* method in IOLoop that makes this
-        guarantee; all other interaction with the IOLoop must be done
-        from that IOLoop's thread.  add_callback() may be used to transfer
+        It is safe to call this method from any thread at any time,
+        except from a signal handler.  Note that this is the *only*
+        method in IOLoop that makes this thread-safety guarantee; all
+        other interaction with the IOLoop must be done from that
+        IOLoop's thread.  add_callback() may be used to transfer
         control from other threads to the IOLoop's thread.
+
+        To add a callback from a signal handler, see
+        `add_callback_from_signal`.
         """
         with self._callback_lock:
             list_empty = not self._callbacks
@@ -441,6 +489,32 @@ class IOLoop(object):
             # up a polling IOLoop is relatively expensive, so we try to
             # avoid it when we can.
             self._waker.wake()
+
+    def add_callback_from_signal(self, callback):
+        """Calls the given callback on the next I/O loop iteration.
+
+        Safe for use from a Python signal handler; should not be used
+        otherwise.
+
+        Callbacks added with this method will be run without any
+        stack_context, to avoid picking up the context of the function
+        that was interrupted by the signal.
+        """
+        with stack_context.NullContext():
+            if thread.get_ident() != self._thread_ident:
+                # if the signal is handled on another thread, we can add
+                # it normally (modulo the NullContext)
+                self.add_callback(callback)
+            else:
+                # If we're on the IOLoop's thread, we cannot use
+                # the regular add_callback because it may deadlock on
+                # _callback_lock.  Blindly insert into self._callbacks.
+                # This is safe because the GIL makes list.append atomic.
+                # One subtlety is that if the signal interrupted the
+                # _callback_lock block in IOLoop.start, we may modify
+                # either the old or new version of self._callbacks,
+                # but either way will work.
+                self._callbacks.append(stack_context.wrap(callback))
 
     if futures is not None:
         _FUTURE_TYPES = (futures.Future, DummyFuture)
@@ -471,7 +545,7 @@ class IOLoop(object):
         The exception itself is not passed explicitly, but is available
         in sys.exc_info.
         """
-        logging.error("Exception in callback %r", callback, exc_info=True)
+        app_log.error("Exception in callback %r", callback, exc_info=True)
 
 
 class _Timeout(object):
@@ -540,7 +614,7 @@ class PeriodicCallback(object):
         try:
             self.callback()
         except Exception:
-            logging.error("Error in periodic callback", exc_info=True)
+            app_log.error("Error in periodic callback", exc_info=True)
         self._schedule_next()
 
     def _schedule_next(self):
@@ -707,5 +781,5 @@ else:
         # All other systems
         import sys
         if "linux" in sys.platform:
-            logging.warning("epoll module not found; using select()")
+            gen_log.warning("epoll module not found; using select()")
         _poll = _Select

@@ -331,11 +331,15 @@ class HTTPResponse(object):
 
     * code: numeric HTTP status code, e.g. 200 or 404
 
+    * reason: human-readable reason phrase describing the status code
+        (with curl_httpclient, this is a default value rather than the
+        server's actual response)
+
     * headers: httputil.HTTPHeaders object
 
     * buffer: cStringIO object for response body
 
-    * body: respose body as string (created on demand from self.buffer)
+    * body: response body as string (created on demand from self.buffer)
 
     * error: Exception object, if any
 
@@ -349,9 +353,10 @@ class HTTPResponse(object):
     """
     def __init__(self, request, code, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
-                 time_info=None):
+                 time_info=None, reason=None):
         self.request = request
         self.code = code
+        self.reason = reason or httplib.responses.get(code, "Unknown")
         if headers is not None:
             self.headers = headers
         else:

@@ -184,13 +184,13 @@ from __future__ import absolute_import, division, with_statement
 import cStringIO
 import datetime
 import linecache
-import logging
 import os.path
 import posixpath
 import re
 import threading
 
 from tornado import escape
+from tornado.log import app_log
 from tornado.util import bytes_type, ObjectDict
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
@@ -229,7 +229,7 @@ class Template(object):
                 "exec")
         except Exception:
             formatted_code = _format_code(self.code).rstrip()
-            logging.error("%s code:\n%s", self.name, formatted_code)
+            app_log.error("%s code:\n%s", self.name, formatted_code)
             raise
 
     def generate(self, **kwargs):
@@ -257,12 +257,7 @@ class Template(object):
         # we've generated a new template (mainly for this module's
         # unittests, where different tests reuse the same name).
         linecache.clearcache()
-        try:
-            return execute()
-        except Exception:
-            formatted_code = _format_code(self.code).rstrip()
-            logging.error("%s code:\n%s", self.name, formatted_code)
-            raise
+        return execute()
 
     def _generate_python(self, loader, compress_whitespace):
         buffer = cStringIO.StringIO()

@@ -10,7 +10,6 @@ class ImportTest(unittest.TestCase):
         import tornado.auth
         import tornado.autoreload
         # import tornado.curl_httpclient  # depends on pycurl
-        # import tornado.database  # depends on MySQLdb
         import tornado.escape
         import tornado.httpclient
         import tornado.httpserver
@@ -41,14 +40,6 @@ class ImportTest(unittest.TestCase):
             pass
         else:
             import tornado.curl_httpclient
-
-    def test_import_mysqldb(self):
-        try:
-            import MySQLdb
-        except ImportError:
-            pass
-        else:
-            import tornado.database
 
     def test_import_twisted(self):
         try:

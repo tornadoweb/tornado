@@ -1,7 +1,6 @@
 # Frozen pip requirements for tools used in the development of tornado
 
 # Tornado's optional dependencies
-MySQL-python==1.2.3
 Twisted==12.1.0
 pycurl==7.19.0
 
