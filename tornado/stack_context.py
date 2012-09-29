@@ -198,7 +198,7 @@ def wrap(fn):
     def wrapped(*args, **kwargs):
         callback, contexts, args = args[0], args[1], args[2:]
 
-        if contexts is _state.contexts or not contexts:
+        if contexts is _state.contexts:
             callback(*args, **kwargs)
             return
         if not _state.contexts:
@@ -231,10 +231,7 @@ def wrap(fn):
                 callback(*args, **kwargs)
         else:
             callback(*args, **kwargs)
-    if _state.contexts:
-        return _StackContextWrapper(wrapped, fn, _state.contexts)
-    else:
-        return _StackContextWrapper(fn)
+    return _StackContextWrapper(wrapped, fn, _state.contexts)
 
 
 @contextlib.contextmanager
