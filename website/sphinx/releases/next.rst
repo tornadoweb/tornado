@@ -58,3 +58,26 @@ In progress
   stack.
 * Fixed a bug in which stack contexts could leak from one callback
   chain to another.
+* `tornado.autoreload` is now more reliable when there are errors at import
+  time.
+* New optional dependency on `concurrent.futures` to provide better support
+  for working with threads.  `concurrent.futures` is in the standard library
+  for Python 3.2+, and can be installed on older versions with
+  ``pip install futures``.
+* New module `tornado.concurrent` contains code to support working with
+  `concurrent.futures`, or to emulate future-based interface when that module
+  is not available.
+* New method `IOLoop.add_future` to run a callback on the IOLoop when
+  an asynchronous ``Future`` finishes.
+* New class `tornado.netutil.Resolver` provides an asynchronous
+  interface to `socket.getaddrinfo`.  The interface is based on (but
+  does not require) `concurrent.futures`.  When used with
+  `concurrent.futures.ThreadPoolExecutor`, it allows for DNS
+  resolution without blocking the main thread.
+* `SimpleAsyncHTTPClient` now takes a ``resolver`` keyword argument (which
+  may be passed to either the constructor or ``configure``), to allow it to
+  use the new non-blocking `tornado.netutil.Resolver`.
+* Functions using `gen.engine` may now yield ``Future`` objects.
+* New function `IOLoop.current` returns the ``IOLoop`` that is running
+  on the current thread (as opposed to `IOLoop.instance`, which returns a
+  specific thread's (usually the main thread's) IOLoop).
