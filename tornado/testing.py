@@ -36,7 +36,7 @@ except ImportError:
     netutil = None
     SimpleAsyncHTTPClient = None
 from tornado.log import gen_log
-from tornado.stack_context import StackContext, NullContext
+from tornado.stack_context import StackContext
 from tornado.util import raise_exc_info
 import contextlib
 import logging
@@ -223,11 +223,7 @@ class AsyncTestCase(unittest.TestCase):
                 self.__timeout = self.io_loop.add_timeout(time.time() + timeout, timeout_func)
             while True:
                 self.__running = True
-                with NullContext():
-                    # Wipe out the StackContext that was established in
-                    # self.run() so that all callbacks executed inside the
-                    # IOLoop will re-run it.
-                    self.io_loop.start()
+                self.io_loop.start()
                 if (self.__failure is not None or
                     condition is None or condition()):
                     break
