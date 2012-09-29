@@ -2047,17 +2047,20 @@ class URLSpec(object):
 url = URLSpec
 
 
-def _time_independent_equals(a, b):
-    if len(a) != len(b):
-        return False
-    result = 0
-    if type(a[0]) is int:  # python3 byte strings
-        for x, y in zip(a, b):
-            result |= x ^ y
-    else:  # python2
-        for x, y in zip(a, b):
-            result |= ord(x) ^ ord(y)
-    return result == 0
+if hasattr(hmac, 'compare_digest'):  # python 3.3
+    _time_independent_equals = hmac.compare_digest
+else:
+    def _time_independent_equals(a, b):
+        if len(a) != len(b):
+            return False
+        result = 0
+        if type(a[0]) is int:  # python3 byte strings
+            for x, y in zip(a, b):
+                result |= x ^ y
+        else:  # python2
+            for x, y in zip(a, b):
+                result |= ord(x) ^ ord(y)
+        return result == 0
 
 
 def create_signed_value(secret, name, value):
