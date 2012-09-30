@@ -262,14 +262,13 @@ class AsyncHTTPTestCase(AsyncTestCase):
     '''
     def setUp(self):
         super(AsyncHTTPTestCase, self).setUp()
-        self.__port = None
+        sock, port = bind_unused_port()
+        self.__port = port
 
         self.http_client = self.get_http_client()
         self._app = self.get_app()
         self.http_server = self.get_http_server()
-        sock, port = bind_unused_port()
         self.http_server.add_sockets([sock])
-        self.__port = port
 
     def get_http_client(self):
         return AsyncHTTPClient(io_loop=self.io_loop)
