@@ -29,7 +29,7 @@ from __future__ import absolute_import, division, with_statement
 import Cookie
 import copy
 import socket
-import request_time
+import time
 
 from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
