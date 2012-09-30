@@ -66,14 +66,14 @@ class Error(Exception):
     pass
 
 
-class _Options(dict):
+class OptionParser(dict):
     """A collection of options, a dictionary with object-like access.
 
     Normally accessed via static functions in the `tornado.options` module,
     which reference a global instance.
     """
     def __init__(self):
-        super(_Options, self).__init__()
+        super(OptionParser, self).__init__()
         self.__dict__['_parse_callbacks'] = []
         self.define("help", type=bool, help="show this help information",
                     callback=self._help_callback)
@@ -128,7 +128,7 @@ class _Options(dict):
             name, equals, value = arg.partition("=")
             name = name.replace('-', '_')
             if not name in self:
-                print_help()
+                self.print_help()
                 raise Error('Unrecognized command line option: %r' % name)
             option = self[name]
             if not equals:
@@ -321,7 +321,7 @@ class _Option(object):
         return _unicode(value)
 
 
-options = _Options()
+options = OptionParser()
 """Global options dictionary.
 
 Supports both attribute-style and dict-style access.
@@ -392,7 +392,7 @@ def parse_config_file(path, final=True):
     return options.parse_config_file(path, final=final)
 
 
-def print_help(file=sys.stdout):
+def print_help(file=None):
     """Prints all the command line options to stdout."""
     return options.print_help(file)
 

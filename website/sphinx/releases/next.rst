@@ -95,3 +95,6 @@ In progress
   from a config file.
 * `tornado.option.parse_command_line` ``--help`` output now goes to ``stderr``
   rather than ``stdout``.
+* The class underlying the functions in `tornado.options` is now public
+  (`tornado.options.OptionParser`).  This can be used to create multiple
+  independent option sets, such as for subcommands.
