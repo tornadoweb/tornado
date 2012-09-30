@@ -75,6 +75,8 @@ class _Options(dict):
     def __init__(self):
         super(_Options, self).__init__()
         self.__dict__['_parse_callbacks'] = []
+        self.define("help", type=bool, help="show this help information",
+                    callback=self._help_callback)
 
     def __getattr__(self, name):
         if isinstance(self.get(name), _Option):
@@ -87,7 +89,7 @@ class _Options(dict):
         raise AttributeError("Unrecognized option %r" % name)
 
     def define(self, name, default=None, type=None, help=None, metavar=None,
-               multiple=False, group=None):
+               multiple=False, group=None, callback=None):
         if name in self:
             raise Error("Option %r already defined in %s", name,
                         self[name].file_name)
@@ -107,7 +109,8 @@ class _Options(dict):
             group_name = file_name
         self[name] = _Option(name, file_name=file_name, default=default,
                              type=type, help=help, metavar=metavar,
-                             multiple=multiple, group_name=group_name)
+                             multiple=multiple, group_name=group_name,
+                             callback=callback)
 
     def parse_command_line(self, args=None, final=True):
         if args is None:
@@ -134,9 +137,6 @@ class _Options(dict):
                 else:
                     raise Error('Option %r requires a value' % name)
             option.parse(value)
-        if self.help:
-            print_help()
-            sys.exit(0)
 
         if final:
             self.run_parse_callbacks()
@@ -153,8 +153,10 @@ class _Options(dict):
         if final:
             self.run_parse_callbacks()
 
-    def print_help(self, file=sys.stdout):
-        """Prints all the command line options to stdout."""
+    def print_help(self, file=None):
+        """Prints all the command line options to stderr (or another file)."""
+        if file is None:
+            file = sys.stderr
         print >> file, "Usage: %s [OPTIONS]" % sys.argv[0]
         print >> file, "\nOptions:\n"
         by_group = {}
@@ -180,6 +182,11 @@ class _Options(dict):
                     print >> file, "%-34s %s" % (' ', line)
         print >> file
 
+    def _help_callback(self, value):
+        if value:
+            self.print_help()
+            sys.exit(0)
+
     def add_parse_callback(self, callback):
         self._parse_callbacks.append(stack_context.wrap(callback))
 
@@ -189,8 +196,9 @@ class _Options(dict):
 
 
 class _Option(object):
-    def __init__(self, name, default=None, type=basestring, help=None, metavar=None,
-                 multiple=False, file_name=None, group_name=None):
+    def __init__(self, name, default=None, type=basestring, help=None,
+                 metavar=None, multiple=False, file_name=None, group_name=None,
+                 callback=None):
         if default is None and multiple:
             default = []
         self.name = name
@@ -200,6 +208,7 @@ class _Option(object):
         self.multiple = multiple
         self.file_name = file_name
         self.group_name = group_name
+        self.callback = callback
         self.default = default
         self._value = None
 
@@ -226,6 +235,8 @@ class _Option(object):
                     self._value.append(_parse(part))
         else:
             self._value = _parse(value)
+        if self.callback is not None:
+            self.callback(self._value)
         return self.value()
 
     def set(self, value):
@@ -242,6 +253,8 @@ class _Option(object):
                 raise Error("Option %r is required to be a %s (%s given)" %
                             (self.name, self.type.__name__, type(value)))
         self._value = value
+        if self.callback is not None:
+            self.callback(self._value)
 
     # Supported date/time formats in our options
     _DATETIME_FORMATS = [
@@ -316,7 +329,7 @@ Supports both attribute-style and dict-style access.
 
 
 def define(name, default=None, type=None, help=None, metavar=None,
-           multiple=False, group=None):
+           multiple=False, group=None, callback=None):
     """Defines a new command line option.
 
     If type is given (one of str, float, int, datetime, or timedelta)
@@ -338,9 +351,21 @@ def define(name, default=None, type=None, help=None, metavar=None,
     Command line option names must be unique globally. They can be parsed
     from the command line with parse_command_line() or parsed from a
     config file with parse_config_file.
+
+    If a callback is given, it will be run with the new value whenever
+    the option is changed.  This can be used to combine command-line
+    and file-based options::
+
+        define("config", type=str, help="path to config file",
+               callback=lambda path: parse_config_file(path, final=False))
+
+    With this definition, options in the file specified by ``--config`` will
+    override options set earlier on the command line, but can be overridden
+    by later flags.
     """
     return options.define(name, default=default, type=type, help=help,
-                          metavar=metavar, multiple=multiple, group=group)
+                          metavar=metavar, multiple=multiple, group=group,
+                          callback=callback)
 
 
 def parse_command_line(args=None, final=True):
@@ -377,5 +402,4 @@ def add_parse_callback(callback):
 
 
 # Default options
-define("help", type=bool, help="show this help information")
 define_logging_options(options)

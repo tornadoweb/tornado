@@ -89,3 +89,9 @@ In progress
   to supress these callbacks.
 * Function `tornado.options.enable_pretty_logging` has been moved to the
   `tornado.log` module.
+* `tornado.options.define` now takes a ``callback`` argument.  This callback
+  will be run with the new value whenever the option is changed.  This is
+  especially useful for options that set other options, such as by reading
+  from a config file.
+* `tornado.option.parse_command_line` ``--help`` output now goes to ``stderr``
+  rather than ``stdout``.
