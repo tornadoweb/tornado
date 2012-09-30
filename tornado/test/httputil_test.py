@@ -72,8 +72,9 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 Foo
 --1234--""").replace(b("\n"), b("\r\n"))
         args = {}
+        post = {}
         files = {}
-        parse_multipart_form_data(b("1234"), data, args, files)
+        parse_multipart_form_data(b("1234"), data, args, post, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b("Foo"))
@@ -88,7 +89,8 @@ Foo
 --1234--""").replace(b("\n"), b("\r\n"))
         args = {}
         files = {}
-        parse_multipart_form_data(b("1234"), data, args, files)
+        post = {}
+        parse_multipart_form_data(b("1234"), data, args, post, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b("Foo"))
@@ -113,7 +115,8 @@ Foo
             data = utf8(data.replace("\n", "\r\n"))
             args = {}
             files = {}
-            parse_multipart_form_data(b("1234"), data, args, files)
+            post = {}
+            parse_multipart_form_data(b("1234"), data, args, post, files)
             file = files["files"][0]
             self.assertEqual(file["filename"], filename)
             self.assertEqual(file["body"], b("Foo"))
@@ -127,7 +130,8 @@ Foo
 --1234--''').replace(b("\n"), b("\r\n"))
         args = {}
         files = {}
-        parse_multipart_form_data(b('"1234"'), data, args, files)
+        post = {}
+        parse_multipart_form_data(b('"1234"'), data, args, post ,files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b("Foo"))
@@ -140,8 +144,9 @@ Foo
 --1234--''').replace(b("\n"), b("\r\n"))
         args = {}
         files = {}
+        post = {}
         with ExpectLog(gen_log, "multipart/form-data missing headers"):
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b("1234"), data, args, post, files)
         self.assertEqual(files, {})
 
     def test_invalid_content_disposition(self):
@@ -153,8 +158,9 @@ Foo
 --1234--''').replace(b("\n"), b("\r\n"))
         args = {}
         files = {}
+        post = {}
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b("1234"), data, args, post, files)
         self.assertEqual(files, {})
 
     def test_line_does_not_end_with_correct_line_break(self):
@@ -165,8 +171,9 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 Foo--1234--''').replace(b("\n"), b("\r\n"))
         args = {}
         files = {}
+        post = {}
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b("1234"), data, args, post, files)
         self.assertEqual(files, {})
 
     def test_content_disposition_header_without_name_parameter(self):
@@ -178,8 +185,9 @@ Foo
 --1234--""").replace(b("\n"), b("\r\n"))
         args = {}
         files = {}
+        post = {}
         with ExpectLog(gen_log, "multipart/form-data value missing name"):
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b("1234"), data, args, post, files)
         self.assertEqual(files, {})
 
     def test_data_after_final_boundary(self):
@@ -195,7 +203,8 @@ Foo
 """).replace(b("\n"), b("\r\n"))
         args = {}
         files = {}
-        parse_multipart_form_data(b("1234"), data, args, files)
+        post = {}
+        parse_multipart_form_data(b("1234"), data, args, post, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
         self.assertEqual(file["body"], b("Foo"))
