@@ -51,15 +51,14 @@ for define() below.
 from __future__ import absolute_import, division, with_statement
 
 import datetime
-import logging
-import logging.handlers
 import re
 import sys
 import os
 import textwrap
 
 from tornado.escape import _unicode
-from tornado.log import LogFormatter
+from tornado.log import define_logging_options
+from tornado import stack_context
 
 
 class Error(Exception):
@@ -73,6 +72,10 @@ class _Options(dict):
     Normally accessed via static functions in the `tornado.options` module,
     which reference a global instance.
     """
+    def __init__(self):
+        super(_Options, self).__init__()
+        self.__dict__['_parse_callbacks'] = []
+
     def __getattr__(self, name):
         if isinstance(self.get(name), _Option):
             return self[name].value()
@@ -106,7 +109,7 @@ class _Options(dict):
                              type=type, help=help, metavar=metavar,
                              multiple=multiple, group_name=group_name)
 
-    def parse_command_line(self, args=None):
+    def parse_command_line(self, args=None, final=True):
         if args is None:
             args = sys.argv
         remaining = []
@@ -135,19 +138,20 @@ class _Options(dict):
             print_help()
             sys.exit(0)
 
-        # Set up log level and pretty console logging by default
-        if self.logging != 'none':
-            logging.getLogger().setLevel(getattr(logging, self.logging.upper()))
-            enable_pretty_logging()
+        if final:
+            self.run_parse_callbacks()
 
         return remaining
 
-    def parse_config_file(self, path):
+    def parse_config_file(self, path, final=True):
         config = {}
         execfile(path, config, config)
         for name in config:
             if name in self:
                 self[name].set(config[name])
+
+        if final:
+            self.run_parse_callbacks()
 
     def print_help(self, file=sys.stdout):
         """Prints all the command line options to stdout."""
@@ -175,6 +179,13 @@ class _Options(dict):
                 for line in lines[1:]:
                     print >> file, "%-34s %s" % (' ', line)
         print >> file
+
+    def add_parse_callback(self, callback):
+        self._parse_callbacks.append(stack_context.wrap(callback))
+
+    def run_parse_callbacks(self):
+        for callback in self._parse_callbacks:
+            callback()
 
 
 class _Option(object):
@@ -332,65 +343,39 @@ def define(name, default=None, type=None, help=None, metavar=None,
                           metavar=metavar, multiple=multiple, group=group)
 
 
-def parse_command_line(args=None):
+def parse_command_line(args=None, final=True):
     """Parses all options given on the command line (defaults to sys.argv).
 
     Note that args[0] is ignored since it is the program name in sys.argv.
 
     We return a list of all arguments that are not parsed as options.
+
+    If ``final`` is ``False``, parse callbacks will not be run.
+    This is useful for applications that wish to combine configurations
+    from multiple sources.
     """
-    return options.parse_command_line(args)
+    return options.parse_command_line(args, final=final)
 
 
-def parse_config_file(path):
-    """Parses and loads the Python config file at the given path."""
-    return options.parse_config_file(path)
+def parse_config_file(path, final=True):
+    """Parses and loads the Python config file at the given path.
+
+    If ``final`` is ``False``, parse callbacks will not be run.
+    This is useful for applications that wish to combine configurations
+    from multiple sources.
+    """
+    return options.parse_config_file(path, final=final)
 
 
 def print_help(file=sys.stdout):
     """Prints all the command line options to stdout."""
     return options.print_help(file)
 
-
-def enable_pretty_logging(options=options):
-    """Turns on formatted logging output as configured.
-
-    This is called automatically by `parse_command_line`.
-    """
-    root_logger = logging.getLogger()
-    if options.log_file_prefix:
-        channel = logging.handlers.RotatingFileHandler(
-            filename=options.log_file_prefix,
-            maxBytes=options.log_file_max_size,
-            backupCount=options.log_file_num_backups)
-        channel.setFormatter(LogFormatter(color=False))
-        root_logger.addHandler(channel)
-
-    if (options.log_to_stderr or
-        (options.log_to_stderr is None and not root_logger.handlers)):
-        # Set up color if we are in a tty and curses is installed
-        channel = logging.StreamHandler()
-        channel.setFormatter(LogFormatter())
-        root_logger.addHandler(channel)
-
+def add_parse_callback(callback):
+    """Adds a parse callback, to be invoked when option parsing is done."""
+    options.add_parse_callback(callback)
 
 
 # Default options
 define("help", type=bool, help="show this help information")
-define("logging", default="info",
-       help=("Set the Python log level. If 'none', tornado won't touch the "
-             "logging configuration."),
-       metavar="debug|info|warning|error|none")
-define("log_to_stderr", type=bool, default=None,
-       help=("Send log output to stderr (colorized if possible). "
-             "By default use stderr if --log_file_prefix is not set and "
-             "no other logging is configured."))
-define("log_file_prefix", type=str, default=None, metavar="PATH",
-       help=("Path prefix for log files. "
-             "Note that if you are running multiple tornado processes, "
-             "log_file_prefix must be different for each of them (e.g. "
-             "include the port number)"))
-define("log_file_max_size", type=int, default=100 * 1000 * 1000,
-       help="max size of log files before rollover")
-define("log_file_num_backups", type=int, default=10,
-       help="number of log files to keep")
+define_logging_options(options)

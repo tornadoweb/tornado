@@ -81,3 +81,11 @@ In progress
 * New function `IOLoop.current` returns the ``IOLoop`` that is running
   on the current thread (as opposed to `IOLoop.instance`, which returns a
   specific thread's (usually the main thread's) IOLoop).
+* `tornado.options.parse_config_file` now configures logging automatically
+  by default, in the same way that `parse_command_line` does.
+* New function `tornado.options.add_parse_callback` schedules a callback
+  to be run after the command line or config file has been parsed.  The
+  keyword argument ``final=False`` can be used on either parsing function
+  to supress these callbacks.
+* Function `tornado.options.enable_pretty_logging` has been moved to the
+  `tornado.log` module.

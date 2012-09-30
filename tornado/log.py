@@ -140,3 +140,55 @@ class LogFormatter(logging.Formatter):
         if record.exc_text:
             formatted = formatted.rstrip() + "\n" + record.exc_text
         return formatted.replace("\n", "\n    ")
+
+def enable_pretty_logging(options=None):
+    """Turns on formatted logging output as configured.
+
+    This is called automaticaly by `tornado.options.parse_command_line`
+    and `tornado.options.parse_config_file`.
+    """
+    if options is None:
+        from tornado.options import options
+    if options.logging == 'none':
+        return
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, options.logging.upper()))
+    if options.log_file_prefix:
+        channel = logging.handlers.RotatingFileHandler(
+            filename=options.log_file_prefix,
+            maxBytes=options.log_file_max_size,
+            backupCount=options.log_file_num_backups)
+        channel.setFormatter(LogFormatter(color=False))
+        root_logger.addHandler(channel)
+
+    if (options.log_to_stderr or
+        (options.log_to_stderr is None and not root_logger.handlers)):
+        # Set up color if we are in a tty and curses is installed
+        channel = logging.StreamHandler()
+        channel.setFormatter(LogFormatter())
+        root_logger.addHandler(channel)
+
+
+def define_logging_options(options=None):
+    if options is None:
+        # late import to prevent cycle
+        from tornado.options import options
+    options.define("logging", default="info",
+           help=("Set the Python log level. If 'none', tornado won't touch the "
+                 "logging configuration."),
+           metavar="debug|info|warning|error|none")
+    options.define("log_to_stderr", type=bool, default=None,
+           help=("Send log output to stderr (colorized if possible). "
+                 "By default use stderr if --log_file_prefix is not set and "
+                 "no other logging is configured."))
+    options.define("log_file_prefix", type=str, default=None, metavar="PATH",
+           help=("Path prefix for log files. "
+                 "Note that if you are running multiple tornado processes, "
+                 "log_file_prefix must be different for each of them (e.g. "
+                 "include the port number)"))
+    options.define("log_file_max_size", type=int, default=100 * 1000 * 1000,
+           help="max size of log files before rollover")
+    options.define("log_file_num_backups", type=int, default=10,
+           help="number of log files to keep")
+
+    options.add_parse_callback(enable_pretty_logging)
