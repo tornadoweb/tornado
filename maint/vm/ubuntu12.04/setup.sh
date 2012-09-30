@@ -35,10 +35,11 @@ apt-get -y install $DEADSNAKES_PACKAGES
 
 
 PIP_PACKAGES="
-virtualenv
-tox
+futures
 pycurl
+tox
 twisted
+virtualenv
 "
 
 pip install $PIP_PACKAGES
