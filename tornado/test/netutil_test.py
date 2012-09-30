@@ -32,6 +32,11 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(ThreadedResolverTest, self).setUp()
         from concurrent.futures import ThreadPoolExecutor
-        self.resolver = Resolver(self.io_loop, ThreadPoolExecutor(2))
+        self.executor = ThreadPoolExecutor(2)
+        self.resolver = Resolver(self.io_loop, self.executor)
+
+    def tearDown(self):
+        self.executor.shutdown()
+        super(ThreadedResolverTest, self).tearDown()
 ThreadedResolverTest = unittest.skipIf(
     futures is None, "futures module not present")(ThreadedResolverTest)
