@@ -16,7 +16,8 @@
 
 """A command line parsing module that lets modules define their own options.
 
-Each module defines its own options, e.g.::
+Each module defines its own options which are added to the global
+option namespace, e.g.::
 
     from tornado.options import define, options
 
@@ -30,12 +31,15 @@ Each module defines its own options, e.g.::
 
 The main() method of your application does not need to be aware of all of
 the options used throughout your program; they are all automatically loaded
-when the modules are loaded. Your main() method can parse the command line
-or parse a config file with::
+when the modules are loaded.  However, all modules that define options
+must have been imported before the command line is parsed.
 
-    import tornado.options
-    tornado.options.parse_config_file("/etc/server.conf")
+Your main() method can parse the command line or parse a config file with
+either::
+
     tornado.options.parse_command_line()
+    # or
+    tornado.options.parse_config_file("/etc/server.conf")
 
 Command line formats are what you would expect ("--myoption=myvalue").
 Config files are just Python files. Global names become options, e.g.::
@@ -46,6 +50,11 @@ Config files are just Python files. Global names become options, e.g.::
 We support datetimes, timedeltas, ints, and floats (just pass a 'type'
 kwarg to define). We also accept multi-value options. See the documentation
 for define() below.
+
+`tornado.options.options` is a singleton instance of `OptionParser`, and
+the top-level functions in this module (`define`, `parse_command_line`, etc)
+simply call methods on it.  You may create additional `OptionParser`
+instances to define isolated sets of options, such as for subcommands.
 """
 
 from __future__ import absolute_import, division, with_statement
@@ -90,6 +99,40 @@ class OptionParser(dict):
 
     def define(self, name, default=None, type=None, help=None, metavar=None,
                multiple=False, group=None, callback=None):
+        """Defines a new command line option.
+
+        If type is given (one of str, float, int, datetime, or timedelta)
+        or can be inferred from the default, we parse the command line
+        arguments based on the given type. If multiple is True, we accept
+        comma-separated values, and the option value is always a list.
+
+        For multi-value integers, we also accept the syntax x:y, which
+        turns into range(x, y) - very useful for long integer ranges.
+
+        help and metavar are used to construct the automatically generated
+        command line help string. The help message is formatted like::
+
+           --name=METAVAR      help string
+
+        group is used to group the defined options in logical
+        groups. By default, command line options are grouped by the
+        file in which they are defined.
+
+        Command line option names must be unique globally. They can be parsed
+        from the command line with parse_command_line() or parsed from a
+        config file with parse_config_file.
+
+        If a callback is given, it will be run with the new value whenever
+        the option is changed.  This can be used to combine command-line
+        and file-based options::
+
+            define("config", type=str, help="path to config file",
+                   callback=lambda path: parse_config_file(path, final=False))
+
+        With this definition, options in the file specified by ``--config`` will
+        override options set earlier on the command line, but can be overridden
+        by later flags.
+        """
         if name in self:
             raise Error("Option %r already defined in %s", name,
                         self[name].file_name)
@@ -113,6 +156,16 @@ class OptionParser(dict):
                              callback=callback)
 
     def parse_command_line(self, args=None, final=True):
+        """Parses all options given on the command line (defaults to sys.argv).
+
+        Note that args[0] is ignored since it is the program name in sys.argv.
+
+        We return a list of all arguments that are not parsed as options.
+
+        If ``final`` is ``False``, parse callbacks will not be run.
+        This is useful for applications that wish to combine configurations
+        from multiple sources.
+        """
         if args is None:
             args = sys.argv
         remaining = []
@@ -144,6 +197,12 @@ class OptionParser(dict):
         return remaining
 
     def parse_config_file(self, path, final=True):
+        """Parses and loads the Python config file at the given path.
+
+        If ``final`` is ``False``, parse callbacks will not be run.
+        This is useful for applications that wish to combine configurations
+        from multiple sources.
+        """
         config = {}
         execfile(path, config, config)
         for name in config:
@@ -188,6 +247,7 @@ class OptionParser(dict):
             sys.exit(0)
 
     def add_parse_callback(self, callback):
+        """Adds a parse callback, to be invoked when option parsing is done."""
         self._parse_callbacks.append(stack_context.wrap(callback))
 
     def run_parse_callbacks(self):
@@ -322,46 +382,17 @@ class _Option(object):
 
 
 options = OptionParser()
-"""Global options dictionary.
+"""Global options object.
 
-Supports both attribute-style and dict-style access.
+All defined options are available as attributes on this object.
 """
 
 
 def define(name, default=None, type=None, help=None, metavar=None,
            multiple=False, group=None, callback=None):
-    """Defines a new command line option.
+    """Defines an option in the global namespace.
 
-    If type is given (one of str, float, int, datetime, or timedelta)
-    or can be inferred from the default, we parse the command line
-    arguments based on the given type. If multiple is True, we accept
-    comma-separated values, and the option value is always a list.
-
-    For multi-value integers, we also accept the syntax x:y, which
-    turns into range(x, y) - very useful for long integer ranges.
-
-    help and metavar are used to construct the automatically generated
-    command line help string. The help message is formatted like::
-
-       --name=METAVAR      help string
-
-    group is used to group the defined options in logical groups. By default,
-    command line options are grouped by the defined file.
-
-    Command line option names must be unique globally. They can be parsed
-    from the command line with parse_command_line() or parsed from a
-    config file with parse_config_file.
-
-    If a callback is given, it will be run with the new value whenever
-    the option is changed.  This can be used to combine command-line
-    and file-based options::
-
-        define("config", type=str, help="path to config file",
-               callback=lambda path: parse_config_file(path, final=False))
-
-    With this definition, options in the file specified by ``--config`` will
-    override options set earlier on the command line, but can be overridden
-    by later flags.
+    See `OptionParser.define`.
     """
     return options.define(name, default=default, type=type, help=help,
                           metavar=metavar, multiple=multiple, group=group,
@@ -369,35 +400,33 @@ def define(name, default=None, type=None, help=None, metavar=None,
 
 
 def parse_command_line(args=None, final=True):
-    """Parses all options given on the command line (defaults to sys.argv).
+    """Parses global options from the command line.
 
-    Note that args[0] is ignored since it is the program name in sys.argv.
-
-    We return a list of all arguments that are not parsed as options.
-
-    If ``final`` is ``False``, parse callbacks will not be run.
-    This is useful for applications that wish to combine configurations
-    from multiple sources.
+    See `OptionParser.parse_command_line`.
     """
     return options.parse_command_line(args, final=final)
 
 
 def parse_config_file(path, final=True):
-    """Parses and loads the Python config file at the given path.
+    """Parses global options from a config file.
 
-    If ``final`` is ``False``, parse callbacks will not be run.
-    This is useful for applications that wish to combine configurations
-    from multiple sources.
+    See `OptionParser.parse_config_file`.
     """
     return options.parse_config_file(path, final=final)
 
 
 def print_help(file=None):
-    """Prints all the command line options to stdout."""
+    """Prints all the command line options to stderr (or another file).
+
+    See `OptionParser.print_help`.
+    """
     return options.print_help(file)
 
 def add_parse_callback(callback):
-    """Adds a parse callback, to be invoked when option parsing is done."""
+    """Adds a parse callback, to be invoked when option parsing is done.
+
+    See `OptionParser.add_parse_callback`
+    """
     options.add_parse_callback(callback)
 
 
