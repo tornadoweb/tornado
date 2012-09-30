@@ -206,7 +206,7 @@ class HTTPFile(ObjectDict):
     pass
 
 
-def parse_body_arguments(content_type, body, arguments, files):
+def parse_body_arguments(content_type, body, arguments, form_arguments, files):
     """Parses a form request body.
 
     Supports "application/x-www-form-urlencoded" and "multipart/form-data".
@@ -220,18 +220,20 @@ def parse_body_arguments(content_type, body, arguments, files):
             values = [v for v in values if v]
             if values:
                 arguments.setdefault(name, []).extend(values)
+                form_arguments.setdefault(name, []).extend(values)
     elif content_type.startswith("multipart/form-data"):
         fields = content_type.split(";")
         for field in fields:
             k, sep, v = field.strip().partition("=")
             if k == "boundary" and v:
-                parse_multipart_form_data(utf8(v), body, arguments, files)
+                parse_multipart_form_data(utf8(v), body, arguments,
+                    form_arguments, files)
                 break
         else:
             gen_log.warning("Invalid multipart/form-data")
 
 
-def parse_multipart_form_data(boundary, data, arguments, files):
+def parse_multipart_form_data(boundary, data, arguments, form_arguments, files):
     """Parses a multipart/form-data body.
 
     The boundary and data parameters are both byte strings.
@@ -275,6 +277,7 @@ def parse_multipart_form_data(boundary, data, arguments, files):
                 content_type=ctype))
         else:
             arguments.setdefault(name, []).append(value)
+            form_arguments.setdefault(name, []).append(value)
 
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py

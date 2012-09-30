@@ -27,8 +27,9 @@ This module also defines the `HTTPRequest` class which is exposed via
 from __future__ import absolute_import, division, with_statement
 
 import Cookie
+import copy
 import socket
-import time
+import request_time
 
 from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
@@ -277,7 +278,8 @@ class HTTPConnection(object):
         if self._request.method in ("POST", "PATCH", "PUT"):
             httputil.parse_body_arguments(
                 self._request.headers.get("Content-Type", ""), data,
-                self._request.arguments, self._request.files)
+                self._request.arguments, self._request.form_arguments,
+                self._request.files)
         self.request_callback(self._request)
 
 
@@ -389,6 +391,8 @@ class HTTPRequest(object):
 
         self.path, sep, self.query = uri.partition('?')
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
+        self.url_arguments = copy.copy(self.arguments)
+        self.form_arguments = {}
 
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""
