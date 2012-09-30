@@ -75,26 +75,27 @@ class Error(Exception):
     pass
 
 
-class OptionParser(dict):
+class OptionParser(object):
     """A collection of options, a dictionary with object-like access.
 
     Normally accessed via static functions in the `tornado.options` module,
     which reference a global instance.
     """
     def __init__(self):
-        super(OptionParser, self).__init__()
+        # we have to use self.__dict__ because we override setattr.
+        self.__dict__['_options'] = {}
         self.__dict__['_parse_callbacks'] = []
         self.define("help", type=bool, help="show this help information",
                     callback=self._help_callback)
 
     def __getattr__(self, name):
-        if isinstance(self.get(name), _Option):
-            return self[name].value()
+        if isinstance(self._options.get(name), _Option):
+            return self._options[name].value()
         raise AttributeError("Unrecognized option %r" % name)
 
     def __setattr__(self, name, value):
-        if isinstance(self.get(name), _Option):
-            return self[name].set(value)
+        if isinstance(self._options.get(name), _Option):
+            return self._options[name].set(value)
         raise AttributeError("Unrecognized option %r" % name)
 
     def define(self, name, default=None, type=None, help=None, metavar=None,
@@ -133,9 +134,9 @@ class OptionParser(dict):
         override options set earlier on the command line, but can be overridden
         by later flags.
         """
-        if name in self:
+        if name in self._options:
             raise Error("Option %r already defined in %s", name,
-                        self[name].file_name)
+                        self._options[name].file_name)
         frame = sys._getframe(0)
         options_file = frame.f_code.co_filename
         file_name = frame.f_back.f_code.co_filename
@@ -150,10 +151,11 @@ class OptionParser(dict):
             group_name = group
         else:
             group_name = file_name
-        self[name] = _Option(name, file_name=file_name, default=default,
-                             type=type, help=help, metavar=metavar,
-                             multiple=multiple, group_name=group_name,
-                             callback=callback)
+        self._options[name] = _Option(name, file_name=file_name,
+                                      default=default, type=type, help=help,
+                                      metavar=metavar, multiple=multiple,
+                                      group_name=group_name,
+                                      callback=callback)
 
     def parse_command_line(self, args=None, final=True):
         """Parses all options given on the command line (defaults to sys.argv).
@@ -180,10 +182,10 @@ class OptionParser(dict):
             arg = args[i].lstrip("-")
             name, equals, value = arg.partition("=")
             name = name.replace('-', '_')
-            if not name in self:
+            if not name in self._options:
                 self.print_help()
                 raise Error('Unrecognized command line option: %r' % name)
-            option = self[name]
+            option = self._options[name]
             if not equals:
                 if option.type == bool:
                     value = "true"
@@ -206,8 +208,8 @@ class OptionParser(dict):
         config = {}
         execfile(path, config, config)
         for name in config:
-            if name in self:
-                self[name].set(config[name])
+            if name in self._options:
+                self._options[name].set(config[name])
 
         if final:
             self.run_parse_callbacks()
@@ -219,7 +221,7 @@ class OptionParser(dict):
         print >> file, "Usage: %s [OPTIONS]" % sys.argv[0]
         print >> file, "\nOptions:\n"
         by_group = {}
-        for option in self.itervalues():
+        for option in self._options.itervalues():
             by_group.setdefault(option.group_name, []).append(option)
 
         for filename, o in sorted(by_group.items()):

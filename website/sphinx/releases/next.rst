@@ -98,3 +98,5 @@ In progress
 * The class underlying the functions in `tornado.options` is now public
   (`tornado.options.OptionParser`).  This can be used to create multiple
   independent option sets, such as for subcommands.
+* `tornado.options.options` is no longer a subclass of `dict`; attribute-style
+  access is now required.
