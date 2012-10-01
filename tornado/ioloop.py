@@ -43,6 +43,7 @@ import traceback
 from tornado.concurrent import DummyFuture
 from tornado.log import app_log, gen_log
 from tornado import stack_context
+from tornado.util import Configurable
 
 try:
     import signal
@@ -57,7 +58,7 @@ except ImportError:
 from tornado.platform.auto import set_close_exec, Waker
 
 
-class IOLoop(object):
+class IOLoop(Configurable):
     """A level-triggered I/O loop.
 
     We use epoll (Linux) or kqueue (BSD and Mac OS X; requires python
@@ -96,6 +97,14 @@ class IOLoop(object):
         io_loop.start()
 
     """
+    @classmethod
+    def configurable_base(cls):
+        return IOLoop
+
+    @classmethod
+    def configurable_default(cls):
+        return IOLoop
+
     # Constants from the epoll module
     _EPOLLIN = 0x001
     _EPOLLPRI = 0x002
@@ -117,7 +126,7 @@ class IOLoop(object):
 
     _current = threading.local()
 
-    def __init__(self, impl=None):
+    def initialize(self, impl=None):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
             set_close_exec(self._impl.fileno())

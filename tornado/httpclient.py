@@ -40,7 +40,7 @@ import weakref
 from tornado.escape import utf8
 from tornado import httputil
 from tornado.ioloop import IOLoop
-from tornado.util import import_object, bytes_type
+from tornado.util import import_object, bytes_type, Configurable
 
 
 class HTTPClient(object):
@@ -95,7 +95,7 @@ class HTTPClient(object):
         return response
 
 
-class AsyncHTTPClient(object):
+class AsyncHTTPClient(Configurable):
     """An non-blocking HTTP client.
 
     Example usage::
@@ -121,37 +121,31 @@ class AsyncHTTPClient(object):
     are deprecated.  The implementation subclass as well as arguments to
     its constructor can be set with the static method configure()
     """
-    _impl_class = None
-    _impl_kwargs = None
+    @classmethod
+    def configurable_base(cls):
+        return AsyncHTTPClient
+
+    @classmethod
+    def configurable_default(cls):
+        from tornado.simple_httpclient import SimpleAsyncHTTPClient
+        return SimpleAsyncHTTPClient
 
     @classmethod
     def _async_clients(cls):
-        assert cls is not AsyncHTTPClient, "should only be called on subclasses"
-        if not hasattr(cls, '_async_client_dict'):
-            cls._async_client_dict = weakref.WeakKeyDictionary()
-        return cls._async_client_dict
+        attr_name = '_async_client_dict_' + cls.__name__
+        if not hasattr(cls, attr_name):
+            setattr(cls, attr_name,  weakref.WeakKeyDictionary())
+        return getattr(cls, attr_name)
 
     def __new__(cls, io_loop=None, force_instance=False, **kwargs):
         io_loop = io_loop or IOLoop.instance()
-        args = {}
-        if cls is AsyncHTTPClient:
-            if cls._impl_class is None:
-                from tornado.simple_httpclient import SimpleAsyncHTTPClient
-                AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
-            impl = AsyncHTTPClient._impl_class
-            if cls._impl_kwargs:
-                args.update(cls._impl_kwargs)
-        else:
-            impl = cls
-        if io_loop in impl._async_clients() and not force_instance:
-            return impl._async_clients()[io_loop]
-        else:
-            instance = super(AsyncHTTPClient, cls).__new__(impl)
-            args.update(kwargs)
-            instance.initialize(io_loop, **args)
-            if not force_instance:
-                impl._async_clients()[io_loop] = instance
-            return instance
+        if io_loop in cls._async_clients() and not force_instance:
+            return cls._async_clients()[io_loop]
+        instance = super(AsyncHTTPClient, cls).__new__(cls, io_loop=io_loop,
+                                                       **kwargs)
+        if not force_instance:
+            cls._async_clients()[io_loop] = instance
+        return instance
 
     def close(self):
         """Destroys this http client, freeing any file descriptors used.
@@ -176,8 +170,8 @@ class AsyncHTTPClient(object):
         """
         raise NotImplementedError()
 
-    @staticmethod
-    def configure(impl, **kwargs):
+    @classmethod
+    def configure(cls, impl, **kwargs):
         """Configures the AsyncHTTPClient subclass to use.
 
         AsyncHTTPClient() actually creates an instance of a subclass.
@@ -196,21 +190,7 @@ class AsyncHTTPClient(object):
 
            AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
         """
-        if isinstance(impl, (unicode, bytes_type)):
-            impl = import_object(impl)
-        if impl is not None and not issubclass(impl, AsyncHTTPClient):
-            raise ValueError("Invalid AsyncHTTPClient implementation")
-        AsyncHTTPClient._impl_class = impl
-        AsyncHTTPClient._impl_kwargs = kwargs
-
-    @staticmethod
-    def _save_configuration():
-        return (AsyncHTTPClient._impl_class, AsyncHTTPClient._impl_kwargs)
-
-    @staticmethod
-    def _restore_configuration(saved):
-        AsyncHTTPClient._impl_class = saved[0]
-        AsyncHTTPClient._impl_kwargs = saved[1]
+        super(AsyncHTTPClient, cls).configure(impl, **kwargs)
 
 
 class HTTPRequest(object):
