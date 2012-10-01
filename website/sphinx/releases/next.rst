@@ -119,3 +119,15 @@ In progress
   option namespace.  The `tornado.options` module's new callback
   support now makes it easy to add options from a wrapper script
   instead of putting all possible options in `tornado.testing.main`.
+* The `IOLoop` constructor has a new keyword argument ``time_func``,
+  which can be used to set the time function used when scheduling callbacks.
+  This is most useful with the `time.monotonic()` function, introduced
+  in Python 3.3 and backported to older versions via the ``monotime``
+  module.  Using a monotonic clock here avoids problems when the system
+  clock is changed.
+* New function `IOLoop.time` returns the current time according to the
+  IOLoop.  To use the new monotonic clock functionality, all calls to
+  `IOLoop.add_timeout` must be either pass a `datetime.timedelta` or
+  a time relative to `IOLoop.time`, not `time.time`.  (`time.time` will
+  continue to work only as long as the IOLoop's ``time_func`` argument
+  is not used).

@@ -32,3 +32,14 @@ if os.name == 'nt':
     from tornado.platform.windows import set_close_exec
 else:
     from tornado.platform.posix import set_close_exec, Waker
+
+try:
+    # monotime monkey-patches the time module to have a monotonic function
+    # in versions of python before 3.3.
+    import monotime
+except ImportError:
+    pass
+try:
+    from time import monotonic as monotonic_time
+except ImportError:
+    monotonic_time = None

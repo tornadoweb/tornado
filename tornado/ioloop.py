@@ -139,10 +139,11 @@ class IOLoop(Configurable):
 
     _current = threading.local()
 
-    def initialize(self, impl):
+    def initialize(self, impl, time_func=None):
         self._impl = impl
         if hasattr(self._impl, 'fileno'):
             set_close_exec(self._impl.fileno())
+        self.time_func = time_func or time.time
         self._handlers = {}
         self._events = {}
         self._callbacks = []
@@ -360,7 +361,7 @@ class IOLoop(Configurable):
                 self._run_callback(callback)
 
             if self._timeouts:
-                now = time.time()
+                now = self.time()
                 while self._timeouts:
                     if self._timeouts[0].callback is None:
                         # the timeout was cancelled
@@ -458,20 +459,35 @@ class IOLoop(Configurable):
         """Returns true if this IOLoop is currently running."""
         return self._running
 
+    def time(self):
+        """Returns the current time according to the IOLoop's clock.
+
+        The return value is a floating-point number relative to an
+        unspecified time in the past.
+
+        By default, the IOLoop's time function is `time.time`.  However,
+        it may be configured to use e.g. `time.monotonic` instead.
+        Calls to `add_timeout` that pass a number instead of a
+        `datetime.timedelta` should use this function to compute the
+        appropriate time, so they can work no matter what time function
+        is chosen.
+        """
+        return self.time_func()
+
     def add_timeout(self, deadline, callback):
         """Calls the given callback at the time deadline from the I/O loop.
 
         Returns a handle that may be passed to remove_timeout to cancel.
 
-        ``deadline`` may be a number denoting a unix timestamp (as returned
-        by ``time.time()`` or a ``datetime.timedelta`` object for a deadline
-        relative to the current time.
+        ``deadline`` may be a number denoting a time relative to
+        `IOLoop.time`, or a ``datetime.timedelta`` object for a
+        deadline relative to the current time.
 
         Note that it is not safe to call `add_timeout` from other threads.
         Instead, you must use `add_callback` to transfer control to the
         IOLoop's thread, and then call `add_timeout` from there.
         """
-        timeout = _Timeout(deadline, stack_context.wrap(callback))
+        timeout = _Timeout(deadline, stack_context.wrap(callback), self)
         heapq.heappush(self._timeouts, timeout)
         return timeout
 
@@ -578,11 +594,11 @@ class _Timeout(object):
     # Reduce memory overhead when there are lots of pending callbacks
     __slots__ = ['deadline', 'callback']
 
-    def __init__(self, deadline, callback):
+    def __init__(self, deadline, callback, io_loop):
         if isinstance(deadline, (int, long, float)):
             self.deadline = deadline
         elif isinstance(deadline, datetime.timedelta):
-            self.deadline = time.time() + _Timeout.timedelta_to_seconds(deadline)
+            self.deadline = io_loop.time() + _Timeout.timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r" % deadline)
         self.callback = callback
@@ -622,7 +638,7 @@ class PeriodicCallback(object):
     def start(self):
         """Starts the timer."""
         self._running = True
-        self._next_timeout = time.time()
+        self._next_timeout = self.io_loop.time()
         self._schedule_next()
 
     def stop(self):
@@ -643,7 +659,7 @@ class PeriodicCallback(object):
 
     def _schedule_next(self):
         if self._running:
-            current_time = time.time()
+            current_time = self.io_loop.time()
             while self._next_timeout <= current_time:
                 self._next_timeout += self.callback_time / 1000.0
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)

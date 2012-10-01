@@ -127,7 +127,7 @@ class _HTTPConnection(object):
 
     def __init__(self, io_loop, client, request, release_callback,
                  final_callback, max_buffer_size):
-        self.start_time = time.time()
+        self.start_time = io_loop.time()
         self.io_loop = io_loop
         self.client = client
         self.request = request
@@ -324,7 +324,7 @@ class _HTTPConnection(object):
         except Exception, e:
             gen_log.warning("uncaught exception", exc_info=True)
             self._run_callback(HTTPResponse(self.request, 599, error=e,
-                                request_time=time.time() - self.start_time,
+                                request_time=self.io_loop.time() - self.start_time,
                                 ))
             if hasattr(self, "stream"):
                 self.stream.close()
@@ -440,7 +440,7 @@ class _HTTPConnection(object):
         response = HTTPResponse(original_request,
                                 self.code, reason=self.reason,
                                 headers=self.headers,
-                                request_time=time.time() - self.start_time,
+                                request_time=self.io_loop.time() - self.start_time,
                                 buffer=buffer,
                                 effective_url=self.request.url)
         self._run_callback(response)

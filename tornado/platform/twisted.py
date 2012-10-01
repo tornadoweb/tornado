@@ -139,7 +139,7 @@ class TornadoReactor(PosixReactorBase):
 
     # IReactorTime
     def seconds(self):
-        return time.time()
+        return self._io_loop.time()
 
     def callLater(self, seconds, f, *args, **kw):
         dc = TornadoDelayedCall(self, seconds, f, *args, **kw)

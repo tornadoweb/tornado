@@ -668,4 +668,4 @@ class WebSocketProtocol13(WebSocketProtocol):
             # Give the client a few seconds to complete a clean shutdown,
             # otherwise just close the connection.
             self._waiting = self.stream.io_loop.add_timeout(
-                time.time() + 5, self._abort)
+                self.stream.io_loop.time() + 5, self._abort)

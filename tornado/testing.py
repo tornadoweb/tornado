@@ -222,7 +222,7 @@ class AsyncTestCase(unittest.TestCase):
                     self.stop()
                 if self.__timeout is not None:
                     self.io_loop.remove_timeout(self.__timeout)
-                self.__timeout = self.io_loop.add_timeout(time.time() + timeout, timeout_func)
+                self.__timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout, timeout_func)
             while True:
                 self.__running = True
                 self.io_loop.start()

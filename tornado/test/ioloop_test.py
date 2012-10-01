@@ -30,7 +30,7 @@ class TestIOLoop(AsyncTestCase):
             self.io_loop.add_callback(callback)
             # Store away the time so we can check if we woke up immediately
             self.start_time = time.time()
-        self.io_loop.add_timeout(time.time(), schedule_callback)
+        self.io_loop.add_timeout(self.io_loop.time(), schedule_callback)
         self.wait()
         self.assertAlmostEqual(time.time(), self.start_time, places=2)
         self.assertTrue(self.called)

@@ -292,7 +292,7 @@ class TestIOStreamMixin(object):
             # Allow the close to propagate to the client side of the
             # connection.  Using add_callback instead of add_timeout
             # doesn't seem to work, even with multiple iterations
-            self.io_loop.add_timeout(time.time() + 0.01, self.stop)
+            self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
             self.wait()
             client.read_bytes(256, self.stop)
             data = self.wait()

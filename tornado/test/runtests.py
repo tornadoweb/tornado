@@ -6,7 +6,7 @@ import textwrap
 import sys
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
-from tornado.options import define
+from tornado.options import define, options, add_parse_callback
 from tornado.test.util import unittest
 
 TEST_MODULES = [
@@ -81,8 +81,18 @@ if __name__ == '__main__':
 
     define('httpclient', type=str, default=None,
            callback=AsyncHTTPClient.configure)
-    define('ioloop', type=str, default=None,
-           callback=IOLoop.configure)
+    define('ioloop', type=str, default=None)
+    define('ioloop_time_monotonic', default=False)
+    def configure_ioloop():
+        kwargs = {}
+        if options.ioloop_time_monotonic:
+            from tornado.platform.auto import monotonic_time
+            if monotonic_time is None:
+                raise RuntimeError("monotonic clock not found")
+            kwargs['time_func'] = monotonic_time
+        if options.ioloop or kwargs:
+            IOLoop.configure(options.ioloop, **kwargs)
+    add_parse_callback(configure_ioloop)
 
     import tornado.testing
     kwargs = {}
