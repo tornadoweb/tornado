@@ -100,3 +100,7 @@ In progress
   independent option sets, such as for subcommands.
 * `tornado.options.options` is no longer a subclass of `dict`; attribute-style
   access is now required.
+* The ``max_clients`` argument to `AsyncHTTPClient` is now a keyword-only
+  argument.
+* Keyword arguments to `AsyncHTTPClient.configure` are no longer used
+  when instantiating an implementation subclass directly.

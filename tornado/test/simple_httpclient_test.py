@@ -316,15 +316,10 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase):
         super(CreateAsyncHTTPClientTestCase, self).tearDown()
 
     def test_max_clients(self):
-        # The max_clients argument is tricky because it was originally
-        # allowed to be passed positionally; newer arguments are keyword-only.
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
         with closing(AsyncHTTPClient(
                 self.io_loop, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 10)
-        with closing(AsyncHTTPClient(
-                self.io_loop, 11, force_instance=True)) as client:
-            self.assertEqual(client.max_clients, 11)
         with closing(AsyncHTTPClient(
                 self.io_loop, max_clients=11, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 11)

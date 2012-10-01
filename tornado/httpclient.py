@@ -124,8 +124,6 @@ class AsyncHTTPClient(object):
     _impl_class = None
     _impl_kwargs = None
 
-    _DEFAULT_MAX_CLIENTS = 10
-
     @classmethod
     def _async_clients(cls):
         assert cls is not AsyncHTTPClient, "should only be called on subclasses"
@@ -133,30 +131,23 @@ class AsyncHTTPClient(object):
             cls._async_client_dict = weakref.WeakKeyDictionary()
         return cls._async_client_dict
 
-    def __new__(cls, io_loop=None, max_clients=None, force_instance=False,
-                **kwargs):
+    def __new__(cls, io_loop=None, force_instance=False, **kwargs):
         io_loop = io_loop or IOLoop.instance()
+        args = {}
         if cls is AsyncHTTPClient:
             if cls._impl_class is None:
                 from tornado.simple_httpclient import SimpleAsyncHTTPClient
                 AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
             impl = AsyncHTTPClient._impl_class
+            if cls._impl_kwargs:
+                args.update(cls._impl_kwargs)
         else:
             impl = cls
         if io_loop in impl._async_clients() and not force_instance:
             return impl._async_clients()[io_loop]
         else:
             instance = super(AsyncHTTPClient, cls).__new__(impl)
-            args = {}
-            if cls._impl_kwargs:
-                args.update(cls._impl_kwargs)
             args.update(kwargs)
-            if max_clients is not None:
-                # max_clients is special because it may be passed
-                # positionally instead of by keyword
-                args["max_clients"] = max_clients
-            elif "max_clients" not in args:
-                args["max_clients"] = AsyncHTTPClient._DEFAULT_MAX_CLIENTS
             instance.initialize(io_loop, **args)
             if not force_instance:
                 impl._async_clients()[io_loop] = instance
