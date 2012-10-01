@@ -4,6 +4,9 @@ from __future__ import absolute_import, division, with_statement
 import logging
 import textwrap
 import sys
+from tornado.httpclient import AsyncHTTPClient
+from tornado.ioloop import IOLoop
+from tornado.options import define
 from tornado.test.util import unittest
 
 TEST_MODULES = [
@@ -75,6 +78,11 @@ if __name__ == '__main__':
                             message="Please use assert.* instead")
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
+
+    define('httpclient', type=str, default=None,
+           callback=AsyncHTTPClient.configure)
+    define('ioloop', type=str, default=None,
+           callback=IOLoop.configure)
 
     import tornado.testing
     kwargs = {}

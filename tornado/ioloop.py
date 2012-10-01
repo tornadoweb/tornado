@@ -103,7 +103,20 @@ class IOLoop(Configurable):
 
     @classmethod
     def configurable_default(cls):
-        return IOLoop
+        if hasattr(select, "epoll"):
+            # Python 2.6+ on Linux
+            return EPollIOLoop
+        elif hasattr(select, "kqueue"):
+            # Python 2.6+ on BSD or Mac
+            return KQueueIOLoop
+        else:
+            try:
+                # Python 2.5 on Linux with our C module installed
+                from tornado import epoll
+                return EPoll25IOLoop
+            except Exception:
+                # Everything else
+                return SelectIOLoop
 
     # Constants from the epoll module
     _EPOLLIN = 0x001
@@ -126,8 +139,8 @@ class IOLoop(Configurable):
 
     _current = threading.local()
 
-    def initialize(self, impl=None):
-        self._impl = impl or _poll()
+    def initialize(self, impl):
+        self._impl = impl
         if hasattr(self._impl, 'fileno'):
             set_close_exec(self._impl.fileno())
         self._handlers = {}
@@ -643,6 +656,8 @@ class _EPoll(object):
     _EPOLL_CTL_MOD = 3
 
     def __init__(self):
+        from tornado import epoll
+        self.epoll = epoll
         self._epoll_fd = epoll.epoll_create()
 
     def fileno(self):
@@ -652,16 +667,21 @@ class _EPoll(object):
         os.close(self._epoll_fd)
 
     def register(self, fd, events):
-        epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_ADD, fd, events)
+        self.epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_ADD, fd, events)
 
     def modify(self, fd, events):
-        epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_MOD, fd, events)
+        self.epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_MOD, fd, events)
 
     def unregister(self, fd):
-        epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_DEL, fd, 0)
+        self.epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_DEL, fd, 0)
 
     def poll(self, timeout):
-        return epoll.epoll_wait(self._epoll_fd, int(timeout * 1000))
+        return self.epoll.epoll_wait(self._epoll_fd, int(timeout * 1000))
+
+
+class EPoll25IOLoop(IOLoop):
+    def initialize(self, **kwargs):
+        super(EPoll25IOLoop, self).initialize(impl=_EPoll(), **kwargs)
 
 
 class _KQueue(object):
@@ -728,6 +748,11 @@ class _KQueue(object):
         return events.items()
 
 
+class KQueueIOLoop(IOLoop):
+    def initialize(self, **kwargs):
+        super(KQueueIOLoop, self).initialize(impl=_KQueue(), **kwargs)
+
+
 class _Select(object):
     """A simple, select()-based IOLoop implementation for non-Linux systems"""
     def __init__(self):
@@ -774,23 +799,11 @@ class _Select(object):
             events[fd] = events.get(fd, 0) | IOLoop.ERROR
         return events.items()
 
+class SelectIOLoop(IOLoop):
+    def initialize(self, **kwargs):
+        super(SelectIOLoop, self).initialize(impl=_Select(), **kwargs)
 
-# Choose a poll implementation. Use epoll if it is available, fall back to
-# select() for non-Linux platforms
-if hasattr(select, "epoll"):
-    # Python 2.6+ on Linux
-    _poll = select.epoll
-elif hasattr(select, "kqueue"):
-    # Python 2.6+ on BSD or Mac
-    _poll = _KQueue
-else:
-    try:
-        # Linux systems with our C module installed
-        from tornado import epoll
-        _poll = _EPoll
-    except Exception:
-        # All other systems
-        import sys
-        if "linux" in sys.platform:
-            gen_log.warning("epoll module not found; using select()")
-        _poll = _Select
+
+class EPollIOLoop(IOLoop):
+    def initialize(self, **kwargs):
+        super(EPollIOLoop, self).initialize(impl=select.epoll(), **kwargs)

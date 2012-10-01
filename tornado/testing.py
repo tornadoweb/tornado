@@ -471,9 +471,6 @@ def main(**kwargs):
     """
     from tornado.options import define, options, parse_command_line
 
-    define('autoreload', type=bool, default=False,
-           help="DEPRECATED: use tornado.autoreload.main instead")
-    define('httpclient', type=str, default=None)
     define('exception_on_interrupt', type=bool, default=True,
            help=("If true (default), ctrl-c raises a KeyboardInterrupt "
                  "exception.  This prints a stack trace but cannot interrupt "
@@ -488,10 +485,6 @@ def main(**kwargs):
     define('buffer', type=bool)
 
     argv = [sys.argv[0]] + parse_command_line(sys.argv)
-
-    if options.httpclient:
-        from tornado.httpclient import AsyncHTTPClient
-        AsyncHTTPClient.configure(options.httpclient)
 
     if not options.exception_on_interrupt:
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -526,11 +519,7 @@ def main(**kwargs):
             gen_log.info('PASS')
         else:
             gen_log.error('FAIL')
-        if not options.autoreload:
-            raise
-    if options.autoreload:
-        import tornado.autoreload
-        tornado.autoreload.wait()
+        raise
 
 if __name__ == '__main__':
     main()

@@ -104,3 +104,18 @@ In progress
   argument.
 * Keyword arguments to `AsyncHTTPClient.configure` are no longer used
   when instantiating an implementation subclass directly.
+* The `IOLoop` poller implementations (``select``, ``epoll``, ``kqueue``)
+  are now available as distinct subclasses of `IOLoop`.  Instantiating
+  `IOLoop` will continue to automatically choose the best available
+  implementation.
+* `IOLoop` now has a static ``configure`` method like the one on
+  `AsyncHTTPClient`, which can be used to select an IOLoop implementation
+  other than the default.
+* The deprecated ``--autoreload`` option of `tornado.testing.main` has
+  been removed.  Use ``python -m tornado.autoreload`` as a prefix command
+  instead.
+* The ``--httpclient`` option of `tornado.testing.main` has been moved
+  to `tornado.test.runtests` so as not to pollute the application
+  option namespace.  The `tornado.options` module's new callback
+  support now makes it easy to add options from a wrapper script
+  instead of putting all possible options in `tornado.testing.main`.
