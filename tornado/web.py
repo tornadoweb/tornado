@@ -112,6 +112,8 @@ class RequestHandler(object):
         self._headers_written = False
         self._finished = False
         self._auto_finish = True
+        self._prepared = False
+        self._auto_run = True
         self._transforms = None  # will be set in _execute
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
@@ -1056,7 +1058,17 @@ class RequestHandler(object):
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
                self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
+            self._method_args = ( args, kwargs )
             self.prepare()
+            if self._auto_run:
+                self.end_prepare()
+        except Exception, e:
+            self._handle_request_exception(e)
+
+    def end_prepare( self ):
+        self._prepared = True
+        try:
+            args, kwargs = self._method_args
             if not self._finished:
                 args = [self.decode_argument(arg) for arg in args]
                 kwargs = dict((k, self.decode_argument(v, name=k))
@@ -1156,7 +1168,10 @@ def asynchronous(method):
     def wrapper(self, *args, **kwargs):
         if self.application._wsgi:
             raise Exception("@asynchronous is not supported for WSGI apps")
-        self._auto_finish = False
+        if not self._prepared:
+            self._auto_run = False
+        else:
+            self._auto_finish = False
         with stack_context.ExceptionStackContext(
             self._stack_context_handle_exception):
             return method(self, *args, **kwargs)
