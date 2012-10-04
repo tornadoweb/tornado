@@ -1066,7 +1066,7 @@ class RequestHandler(object):
         except Exception, e:
             self._handle_request_exception(e)
 
-    def _end_prepare( self ):
+    def end_prepare( self ):
         try:
             args, kwargs = self._method_args
             if not self._finished:
