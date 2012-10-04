@@ -1058,9 +1058,9 @@ class RequestHandler(object):
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
                self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
+            self._method_args = ( args, kwargs )
             self.prepare()
             self._prepared = True
-            self._method_args = ( args, kwargs )
             if self._auto_run:
                 self.end_prepare()
         except Exception, e:
