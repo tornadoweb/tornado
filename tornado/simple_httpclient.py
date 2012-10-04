@@ -23,6 +23,11 @@ import time
 import urlparse
 
 try:
+    from http import cookies as Cookie  # python 3
+except ImportError:
+    import Cookie  # python 2
+
+try:
     from io import BytesIO  # python 3
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
@@ -406,6 +411,13 @@ class _HTTPConnection(object):
             new_request = copy.copy(self.request)
             new_request.url = urlparse.urljoin(self.request.url,
                                                self.headers["Location"])
+            try:
+                new_request.headers["Cookie"] = "; ".join(
+                    [ '%s=%s' % (cookie_name, cookie_value.value) for cookie_name, cookie_value in Cookie.SimpleCookie(self.headers.get("Set-Cookie", "").replace(',', ', ')).items() ]
+                )
+            except Cookie.CookieError:
+                gen_log.debug("unable to parse cookie %s" % (self.headers.get("Set-Cookie")))
+
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
