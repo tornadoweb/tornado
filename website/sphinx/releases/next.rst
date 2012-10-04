@@ -131,3 +131,10 @@ In progress
   a time relative to `IOLoop.time`, not `time.time`.  (`time.time` will
   continue to work only as long as the IOLoop's ``time_func`` argument
   is not used).
+* `IOStream` now raises a new exception
+  `tornado.iostream.StreamClosedException` when you attempt to read or
+  write after the stream has been closed (by either side).
+* `IOStream` now simply closes the connection when it gets an
+  ``ECONNRESET`` error, rather than logging it as an error.
+* `HTTPServer` no longer logs an error when it is unable to read a second
+  request from an HTTP 1.1 keep-alive connection.

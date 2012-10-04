@@ -48,6 +48,8 @@ try:
 except ImportError:
     _set_nonblocking = None
 
+class StreamClosedError(IOError):
+    pass
 
 class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
@@ -386,6 +388,12 @@ class BaseIOStream(object):
             chunk = self.read_from_fd()
         except (socket.error, IOError, OSError), e:
             # ssl.SSLError is a subclass of socket.error
+            if e.args[0] == errno.ECONNRESET:
+                # Treat ECONNRESET as a connection close rather than
+                # an error to minimize log spam  (the exception will
+                # be available on self.error for apps that care).
+                self.close()
+                return
             gen_log.warning("Read error on %d: %s",
                             self.fileno(), e)
             self.close()
@@ -508,7 +516,7 @@ class BaseIOStream(object):
 
     def _check_closed(self):
         if self.closed():
-            raise IOError("Stream is closed")
+            raise StreamClosedError("Stream is closed")
 
     def _maybe_add_error_listener(self):
         if self._state is None and self._pending_callbacks == 0:

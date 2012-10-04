@@ -226,7 +226,13 @@ class HTTPConnection(object):
         if disconnect:
             self.close()
             return
-        self.stream.read_until(b("\r\n\r\n"), self._header_callback)
+        try:
+            # Use a try/except instead of checking stream.closed()
+            # directly, because in some cases the stream doesn't discover
+            # that it's closed until you try to read from it.
+            self.stream.read_until(b("\r\n\r\n"), self._header_callback)
+        except iostream.StreamClosedError:
+            self.close()
 
     def _on_headers(self, data):
         try:
