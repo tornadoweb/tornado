@@ -1163,6 +1163,19 @@ def asynchronous(method):
               self.write("Downloaded!")
               self.finish()
 
+    This decorator also allows to execute the prepare method asynchronously.
+    The request handler has to call self.end_prepare() to continue the request
+    processing.
+
+        class MyRequestHandler(web.RequestHandler):
+           @web.asynchronous
+           def prepare(self):
+              doSomeStuff( "somevalue" , callback = self._on_done)
+
+           def _on_done(self):
+              #This is the end of prepare
+              self.end_prepare()
+
     """
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
