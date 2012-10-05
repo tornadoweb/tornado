@@ -97,6 +97,18 @@ class TemplateTest(unittest.TestCase):
         template = Template(utf8("{% apply upper %}foo{% end %}"))
         self.assertEqual(template.generate(upper=upper), b("FOO"))
 
+    def test_unicode_apply(self):
+        def upper(s):
+            return to_unicode(s).upper()
+        template = Template(utf8(u"{% apply upper %}foo \u00e9{% end %}"))
+        self.assertEqual(template.generate(upper=upper), utf8(u"FOO \u00c9"))
+
+    def test_bytes_apply(self):
+        def upper(s):
+            return utf8(to_unicode(s).upper())
+        template = Template(utf8(u"{% apply upper %}foo \u00e9{% end %}"))
+        self.assertEqual(template.generate(upper=upper), utf8(u"FOO \u00c9"))
+
     def test_if(self):
         template = Template(utf8("{% if x > 4 %}yes{% else %}no{% end %}"))
         self.assertEqual(template.generate(x=5), b("yes"))

@@ -138,3 +138,6 @@ In progress
   ``ECONNRESET`` error, rather than logging it as an error.
 * `HTTPServer` no longer logs an error when it is unable to read a second
   request from an HTTP 1.1 keep-alive connection.
+* The ``{% apply %}`` directive now works properly with functions that return
+  both unicode strings and byte strings (previously only byte strings were
+  supported).
