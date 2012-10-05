@@ -132,7 +132,7 @@ In progress
   continue to work only as long as the IOLoop's ``time_func`` argument
   is not used).
 * `IOStream` now raises a new exception
-  `tornado.iostream.StreamClosedException` when you attempt to read or
+  `tornado.iostream.StreamClosedError` when you attempt to read or
   write after the stream has been closed (by either side).
 * `IOStream` now simply closes the connection when it gets an
   ``ECONNRESET`` error, rather than logging it as an error.
