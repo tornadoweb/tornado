@@ -479,7 +479,7 @@ class _ApplyBlock(_Node):
             writer.write_line("_append = _buffer.append", self.line)
             self.body.generate(writer)
             writer.write_line("return _utf8('').join(_buffer)", self.line)
-        writer.write_line("_append(%s(%s()))" % (
+        writer.write_line("_append(_utf8(%s(%s())))" % (
             self.method, method_name), self.line)
 
 
