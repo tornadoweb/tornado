@@ -23,7 +23,7 @@ class AsyncTestCaseTest(AsyncTestCase):
         self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
         self.wait(timeout=0.02)
         self.io_loop.add_timeout(self.io_loop.time() + 0.03, self.stop)
-        self.wait(timeout=0.1)
+        self.wait(timeout=0.15)
 
 
 class SetUpTearDownTest(unittest.TestCase):
