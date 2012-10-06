@@ -74,6 +74,7 @@ import sys
 import traceback
 import types
 import subprocess
+import weakref
 
 from tornado import ioloop
 from tornado.log import gen_log
@@ -85,6 +86,11 @@ except ImportError:
     signal = None
 
 
+_watched_files = set()
+_reload_hooks = []
+_reload_attempted = False
+_io_loops = weakref.WeakKeyDictionary()
+
 def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
 
@@ -92,6 +98,11 @@ def start(io_loop=None, check_time=500):
     so will terminate any pending requests.
     """
     io_loop = io_loop or ioloop.IOLoop.instance()
+    if io_loop in _io_loops:
+        return
+    _io_loops[io_loop] = True
+    if len(_io_loops) > 1:
+        gen_log.warning("tornado.autoreload started more than once in the same process")
     add_reload_hook(functools.partial(_close_all_fds, io_loop))
     modify_times = {}
     callback = functools.partial(_reload_on_update, modify_times)
@@ -110,8 +121,6 @@ def wait():
     start(io_loop)
     io_loop.start()
 
-_watched_files = set()
-
 
 def watch(filename):
     """Add a file to the watch list.
@@ -119,8 +128,6 @@ def watch(filename):
     All imported modules are watched by default.
     """
     _watched_files.add(filename)
-
-_reload_hooks = []
 
 
 def add_reload_hook(fn):
@@ -140,8 +147,6 @@ def _close_all_fds(io_loop):
             os.close(fd)
         except Exception:
             pass
-
-_reload_attempted = False
 
 
 def _reload_on_update(modify_times):

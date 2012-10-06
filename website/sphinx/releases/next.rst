@@ -141,3 +141,7 @@ In progress
 * The ``{% apply %}`` directive now works properly with functions that return
   both unicode strings and byte strings (previously only byte strings were
   supported).
+* Calling `tornado.autoreload.start` (or creating an `Application` with
+  ``debug=True``) twice on the same `IOLoop` now does nothing (instead of
+  creating multiple periodic callbacks).  Starting autoreload on
+  more than one `IOLoop` in the same process now logs a warning.
