@@ -146,3 +146,7 @@ In progress
   creating multiple periodic callbacks).  Starting autoreload on
   more than one `IOLoop` in the same process now logs a warning.
 * Method `IOLoop.running()` has been removed.
+* `IOLoop` has been refactored to better support subclassing.
+* New class `tornado.platform.twisted.TwistedIOLoop` allows Tornado
+  code to be run on the Twisted reactor (as opposed to the existing
+  `TornadoReactor`, which bridges the gap in the other direction).

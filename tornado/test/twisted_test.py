@@ -35,7 +35,7 @@ try:
     from twisted.web.resource import Resource
     from twisted.web.server import Site
     from twisted.python import log
-    from tornado.platform.twisted import TornadoReactor
+    from tornado.platform.twisted import TornadoReactor, TwistedIOLoop
     from zope.interface import implementer
     have_twisted = True
 except ImportError:
@@ -58,7 +58,11 @@ def save_signal_handlers():
     for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:
         saved[sig] = signal.getsignal(sig)
     if "twisted" in repr(saved):
-        raise Exception("twisted signal handlers already installed")
+        if not issubclass(IOLoop.configured_class(), TwistedIOLoop):
+            # when the global ioloop is twisted, we expect the signal
+            # handlers to be installed.  Otherwise, it means we're not
+            # cleaning up after twisted properly.
+            raise Exception("twisted signal handlers already installed")
     return saved
 
 
@@ -448,6 +452,9 @@ if have_twisted:
     twisted_tests = {
         'twisted.internet.test.test_core.ObjectModelIntegrationTest': [],
         'twisted.internet.test.test_core.SystemEventTestsBuilder': [
+            'test_iterate',  # deliberately not supported
+            'test_runAfterCrash',  # fails because TwistedIOLoop uses the global reactor
+            ] if issubclass(IOLoop.configured_class(), TwistedIOLoop) else [
             'test_iterate',  # deliberately not supported
             ],
         'twisted.internet.test.test_fdset.ReactorFDSetTestsBuilder': [

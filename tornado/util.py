@@ -122,9 +122,7 @@ class Configurable(object):
         base = cls.configurable_base()
         args = {}
         if cls is base:
-            if cls.__impl_class is None:
-                base.__impl_class = cls.configurable_default()
-            impl = base.__impl_class
+            impl = cls.configured_class()
             if base.__impl_kwargs:
                 args.update(base.__impl_kwargs)
         else:
@@ -172,6 +170,15 @@ class Configurable(object):
             raise ValueError("Invalid subclass of %s" % cls)
         base.__impl_class = impl
         base.__impl_kwargs = kwargs
+
+    @classmethod
+    def configured_class(cls):
+        """Returns the currently configured class."""
+        base = cls.configurable_base()
+        if cls.__impl_class is None:
+            base.__impl_class = cls.configurable_default()
+        return base.__impl_class
+
 
     @classmethod
     def _save_configuration(cls):

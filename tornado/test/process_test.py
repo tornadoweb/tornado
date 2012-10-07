@@ -144,7 +144,12 @@ class SubprocessTest(AsyncTestCase):
         data = self.wait()
         self.assertEqual(data, b(""))
 
+    def skip_if_twisted(self):
+        if self.io_loop.__class__.__name__ == 'TwistedIOLoop':
+            raise unittest.SkipTest("SIGCHLD not compatible with Twisted IOLoop")
+
     def test_sigchild(self):
+        self.skip_if_twisted()
         Subprocess.initialize(io_loop=self.io_loop)
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c', 'pass'],
@@ -155,6 +160,7 @@ class SubprocessTest(AsyncTestCase):
         self.assertEqual(subproc.returncode, ret)
 
     def test_sigchild_signal(self):
+        self.skip_if_twisted()
         Subprocess.initialize(io_loop=self.io_loop)
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c',
