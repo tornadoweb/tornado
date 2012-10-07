@@ -283,10 +283,6 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def running(self):
-        """Returns true if this IOLoop is currently running."""
-        raise NotImplementedError()
-
     def time(self):
         """Returns the current time according to the IOLoop's clock.
 
@@ -593,9 +589,6 @@ class PollIOLoop(IOLoop):
         self._running = False
         self._stopped = True
         self._waker.wake()
-
-    def running(self):
-        return self._running
 
     def time(self):
         return self.time_func()

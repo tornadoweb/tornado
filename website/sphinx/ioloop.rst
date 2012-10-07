@@ -15,7 +15,6 @@
    .. automethod:: IOLoop.initialized
    .. automethod:: IOLoop.install
    .. automethod:: IOLoop.start
-   .. automethod:: IOLoop.running
    .. automethod:: IOLoop.stop
    .. automethod:: IOLoop.close
 

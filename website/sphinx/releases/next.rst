@@ -145,3 +145,4 @@ In progress
   ``debug=True``) twice on the same `IOLoop` now does nothing (instead of
   creating multiple periodic callbacks).  Starting autoreload on
   more than one `IOLoop` in the same process now logs a warning.
+* Method `IOLoop.running()` has been removed.
