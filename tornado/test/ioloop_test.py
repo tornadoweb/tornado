@@ -62,6 +62,7 @@ class TestIOLoop(AsyncTestCase):
                               sock.fileno(), lambda fd, events: None,
                               IOLoop.READ)
         finally:
+            self.io_loop.remove_handler(sock.fileno())
             sock.close()
 
     def test_add_callback_from_signal(self):

@@ -191,6 +191,8 @@ class TornadoReactor(PosixReactorBase):
 
     # IReactorFDSet
     def _invoke_callback(self, fd, events):
+        if fd not in self._fds:
+            return
         (reader, writer) = self._fds[fd]
         if reader:
             err = None
@@ -356,18 +358,23 @@ class _FD(object):
         self.handler = handler
         self.reading = False
         self.writing = False
+        self.lost = False
 
     def fileno(self):
         return self.fd
 
     def doRead(self):
-        self.handler(self.fd, tornado.ioloop.IOLoop.READ)
+        if not self.lost:
+            self.handler(self.fd, tornado.ioloop.IOLoop.READ)
 
     def doWrite(self):
-        self.handler(self.fd, tornado.ioloop.IOLoop.WRITE)
+        if not self.lost:
+            self.handler(self.fd, tornado.ioloop.IOLoop.WRITE)
 
     def connectionLost(self, reason):
-        self.handler(self.fd, tornado.ioloop.IOLoop.ERROR)
+        if not self.lost:
+            self.handler(self.fd, tornado.ioloop.IOLoop.ERROR)
+            self.lost = True
 
     def logPrefix(self):
         return ''
@@ -424,6 +431,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
                 self.reactor.removeWriter(self.fds[fd])
 
     def remove_handler(self, fd):
+        self.fds[fd].lost = True
         if self.fds[fd].reading:
             self.reactor.removeReader(self.fds[fd])
         if self.fds[fd].writing:

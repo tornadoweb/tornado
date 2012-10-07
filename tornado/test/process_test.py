@@ -18,6 +18,11 @@ from tornado.test.util import unittest, skipIfNonUnix
 from tornado.util import b
 from tornado.web import RequestHandler, Application
 
+
+def skip_if_twisted():
+    if IOLoop.configured_class().__name__ == 'TwistedIOLoop':
+        raise unittest.SkipTest("Process tests not compatible with TwistedIOLoop")
+
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
 class ProcessTest(unittest.TestCase):
     def get_app(self):
@@ -49,6 +54,9 @@ class ProcessTest(unittest.TestCase):
         super(ProcessTest, self).tearDown()
 
     def test_multi_process(self):
+        # This test can't work on twisted because we use the global reactor
+        # and have no way to get it back into a sane state after the fork.
+        skip_if_twisted()
         with ExpectLog(gen_log, "(Starting .* processes|child .* exited|uncaught exception)"):
             self.assertFalse(IOLoop.initialized())
             sock, port = bind_unused_port()
@@ -144,12 +152,9 @@ class SubprocessTest(AsyncTestCase):
         data = self.wait()
         self.assertEqual(data, b(""))
 
-    def skip_if_twisted(self):
-        if self.io_loop.__class__.__name__ == 'TwistedIOLoop':
-            raise unittest.SkipTest("SIGCHLD not compatible with Twisted IOLoop")
-
     def test_sigchild(self):
-        self.skip_if_twisted()
+        # Twisted's SIGCHLD handler and Subprocess's conflict with each other.
+        skip_if_twisted()
         Subprocess.initialize(io_loop=self.io_loop)
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c', 'pass'],
@@ -160,7 +165,7 @@ class SubprocessTest(AsyncTestCase):
         self.assertEqual(subproc.returncode, ret)
 
     def test_sigchild_signal(self):
-        self.skip_if_twisted()
+        skip_if_twisted()
         Subprocess.initialize(io_loop=self.io_loop)
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c',

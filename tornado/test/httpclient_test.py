@@ -133,6 +133,7 @@ Transfer-Encoding: chunked
             resp = self.wait()
             resp.rethrow()
             self.assertEqual(resp.body, b("12"))
+            self.io_loop.remove_handler(sock.fileno())
 
     def test_basic_auth(self):
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
