@@ -21,7 +21,7 @@ from __future__ import absolute_import, division, with_statement
 
 import select
 
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PollIOLoop
 
 class _Select(object):
     """A simple, select()-based IOLoop implementation for non-Linux systems"""
@@ -69,7 +69,7 @@ class _Select(object):
             events[fd] = events.get(fd, 0) | IOLoop.ERROR
         return events.items()
 
-class SelectIOLoop(IOLoop):
+class SelectIOLoop(PollIOLoop):
     def initialize(self, **kwargs):
         super(SelectIOLoop, self).initialize(impl=_Select(), **kwargs)
 

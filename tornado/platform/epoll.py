@@ -23,11 +23,11 @@ from __future__ import absolute_import, division, with_statement
 import os
 import select
 
-from tornado.ioloop import IOLoop
+from tornado.ioloop import PollIOLoop
 
 if hasattr(select, 'epoll'):
     # Python 2.6+
-    class EPollIOLoop(IOLoop):
+    class EPollIOLoop(PollIOLoop):
         def initialize(self, **kwargs):
             super(EPollIOLoop, self).initialize(impl=select.epoll(), **kwargs)
 else:
@@ -62,7 +62,7 @@ else:
             return epoll.epoll_wait(self._epoll_fd, int(timeout * 1000))
 
 
-    class EPollIOLoop(IOLoop):
+    class EPollIOLoop(PollIOLoop):
         def initialize(self, **kwargs):
             super(EPollIOLoop, self).initialize(impl=_EPoll(), **kwargs)
 

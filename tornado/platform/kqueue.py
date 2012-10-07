@@ -18,7 +18,7 @@ from __future__ import absolute_import, division, with_statement
 
 import select
 
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PollIOLoop
 
 assert hasattr(select, 'kqueue'), 'kqueue not supported'
 
@@ -86,6 +86,6 @@ class _KQueue(object):
         return events.items()
 
 
-class KQueueIOLoop(IOLoop):
+class KQueueIOLoop(PollIOLoop):
     def initialize(self, **kwargs):
         super(KQueueIOLoop, self).initialize(impl=_KQueue(), **kwargs)
