@@ -330,7 +330,7 @@ class BaseIOStream(object):
                 # clause below (which calls `close` and does need to
                 # trigger the callback)
                 self._pending_callbacks += 1
-                while True:
+                while not self.closed():
                     # Read from the socket until we get EWOULDBLOCK or equivalent.
                     # SSL sockets do some internal buffering, and if the data is
                     # sitting in the SSL object's buffer select() and friends
@@ -367,10 +367,9 @@ class BaseIOStream(object):
         try:
             # See comments in _handle_read about incrementing _pending_callbacks
             self._pending_callbacks += 1
-            while True:
+            while not self.closed():
                 if self._read_to_buffer() == 0:
                     break
-                self._check_closed()
         finally:
             self._pending_callbacks -= 1
         if self._read_from_buffer():
