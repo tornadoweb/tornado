@@ -240,7 +240,7 @@ class Subprocess(object):
             io_loop = ioloop.IOLoop.instance()
         cls._old_sigchld = signal.signal(
             signal.SIGCHLD,
-            lambda sig, frame: io_loop.add_callback(cls._cleanup))
+            lambda sig, frame: io_loop.add_callback_from_signal(cls._cleanup))
         cls._initialized = True
 
     @classmethod
