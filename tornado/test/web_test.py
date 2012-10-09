@@ -953,3 +953,68 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
     def test_httperror_str(self):
         self.assertEqual(str(HTTPError(682, reason="Foo")), "HTTP 682: Foo")
 wsgi_safe.append(RaiseWithReasonTest)
+
+
+
+class BasePrepareTestHandler(RequestHandler):
+
+    def initialize( self, test ):
+        self.test = test
+
+    def on_finish(self):
+        self.test.on_finish()
+
+class AsyncPrepareAsyncHandler(BasePrepareTestHandler):
+
+    @asynchronous
+    def prepare( self ):
+        self.flush(callback=self.end_prepare)
+
+    @asynchronous
+    def get(self):
+        self.write( "hello" )
+        self.flush(callback=self.finish)
+
+class AsyncPrepareSyncHandler(BasePrepareTestHandler):
+
+    @asynchronous
+    def prepare( self ):
+        self.set_header( "X-Test", "hello" )
+        self.flush(callback=self.end_prepare)
+
+    def get(self):
+        self.write( "hello" )
+
+class SyncPrepareAsyncHandler(BasePrepareTestHandler):
+
+    @asynchronous
+    def get(self):
+        self.write( "hello" )
+        self.flush(callback=self.finish)
+
+class SyncPrepareSyncHandler(BasePrepareTestHandler):
+
+    def get(self):
+        self.write( "hello" )
+
+class AsyncPrepareTest(WebTestCase):
+
+    def get_handlers(self):
+        return [('/aa', AsyncPrepareAsyncHandler, dict(test=self)),
+                ('/as', AsyncPrepareSyncHandler, dict(test=self)),
+                ('/sa', SyncPrepareAsyncHandler, dict(test=self)),
+                ('/ss', SyncPrepareSyncHandler, dict(test=self))]
+
+    def test_async(self):
+        for url in ( '/aa', '/as', '/sa', '/ss' ):
+          logging.debug( "Trying connection to %s" % url )
+          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+          s.connect(("localhost", self.get_http_port()))
+          self.stream = IOStream(s, io_loop=self.io_loop)
+          self.stream.write(b("GET %s HTTP/1.0\r\n\r\n") % url)
+          self.wait()
+
+    def on_finish(self):
+        logging.debug('connection closed')
+        self.stream.close()
+        self.stop()
