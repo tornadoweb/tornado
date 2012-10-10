@@ -1011,7 +1011,7 @@ class AsyncPrepareTest(WebTestCase):
           s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
           s.connect(("localhost", self.get_http_port()))
           self.stream = IOStream(s, io_loop=self.io_loop)
-          self.stream.write(b("GET %s HTTP/1.0\r\n\r\n") % url)
+          self.stream.write(b("GET %s HTTP/1.0\r\n\r\n" % url))
           self.wait()
 
     def on_finish(self):
