@@ -225,9 +225,16 @@ class _HTTPConnection(object):
         if timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + timeout,
-                stack_context.wrap(self._on_timeout))
+                stack_context.wrap(self._on_connect_timeout))
         self.stream.set_close_callback(self._on_close)
         self.stream.connect(sockaddr, self._on_connect)
+        
+    def _on_connect_timeout(self):
+        self._timeout = None
+        self._run_callback(HTTPResponse(self.request, 599,
+                                        request_time=time.time() - self.start_time,
+                                        error=HTTPError(599, "Connect timeout")))
+        self.stream.close()
 
     def _on_timeout(self):
         self._timeout = None
