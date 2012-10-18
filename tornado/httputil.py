@@ -215,9 +215,8 @@ def parse_body_arguments(content_type, body, arguments, files):
     that will be updated with the parsed contents.
     """
     if content_type.startswith("application/x-www-form-urlencoded"):
-        uri_arguments = parse_qs_bytes(native_str(body))
+        uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
         for name, values in uri_arguments.iteritems():
-            values = [v for v in values if v]
             if values:
                 arguments.setdefault(name, []).extend(values)
     elif content_type.startswith("multipart/form-data"):
