@@ -679,6 +679,8 @@ class PeriodicCallback(object):
     """
     def __init__(self, callback, callback_time, io_loop=None):
         self.callback = callback
+        if callback_time == 0:
+            raise ValueError("Periodic callback cannot have a period of 0ms")
         self.callback_time = callback_time
         self.io_loop = io_loop or IOLoop.instance()
         self._running = False
