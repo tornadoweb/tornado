@@ -206,7 +206,9 @@ class HTTPRequest(object):
                  proxy_password='', allow_nonstandard_methods=False,
                  validate_cert=True, ca_certs=None,
                  allow_ipv6=None,
-                 client_key=None, client_cert=None):
+                 client_key=None, client_cert=None, 
+                 contentCallback = None,
+                 contentLength = None):
         """Creates an `HTTPRequest`.
 
         All parameters except `url` are optional.
@@ -272,6 +274,8 @@ class HTTPRequest(object):
         self.method = method
         self.headers = headers
         self.body = utf8(body)
+        self.contentCallback = contentCallback
+        self.contentLength = contentLength
         self.auth_username = auth_username
         self.auth_password = auth_password
         self.connect_timeout = connect_timeout
