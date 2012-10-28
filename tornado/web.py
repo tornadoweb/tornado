@@ -480,7 +480,7 @@ class RequestHandler(object):
             assert isinstance(status, int) and 300 <= status <= 399
         self.set_status(status)
         # Remove whitespace
-        url = re.sub(b(r"[\x00-\x20]+"), "", utf8(url))
+        url = re.sub(b(r"[\x00-\x20]+"), b(""), utf8(url))
         self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
                                                      url))
         self.finish()
