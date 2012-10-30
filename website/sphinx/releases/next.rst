@@ -150,3 +150,5 @@ In progress
 * New class `tornado.platform.twisted.TwistedIOLoop` allows Tornado
   code to be run on the Twisted reactor (as opposed to the existing
   `TornadoReactor`, which bridges the gap in the other direction).
+* `AsyncHTTPTestCase` no longer calls `AsyncHTTPClient.close` for tests
+  that use the singletion `IOLoop.instance`.
