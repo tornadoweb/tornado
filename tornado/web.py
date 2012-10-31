@@ -1449,8 +1449,9 @@ class Application(object):
         else:
             log_method = logging.error
         request_time = 1000.0 * handler.request.request_time()
-        log_method("%d %s %.2fms", handler.get_status(),
-                   handler._request_summary(), request_time)
+        error_msg = "%d %s %%.2fms" % (handler.get_status(),
+                                       handler._request_summary())
+        log_method(error_msg, request_time)
 
 
 class HTTPError(Exception):
