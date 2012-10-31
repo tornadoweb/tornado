@@ -30,26 +30,36 @@ from __future__ import absolute_import, division, with_statement
 
 import datetime
 import errno
+import functools
 import heapq
-import os
 import logging
+import os
 import select
+import sys
 import thread
 import threading
 import time
 import traceback
 
+from tornado.concurrent import DummyFuture
+from tornado.log import app_log, gen_log
 from tornado import stack_context
+from tornado.util import Configurable
 
 try:
     import signal
 except ImportError:
     signal = None
 
+try:
+    from concurrent import futures
+except ImportError:
+    futures = None
+
 from tornado.platform.auto import set_close_exec, Waker
 
 
-class IOLoop(object):
+class IOLoop(Configurable):
     """A level-triggered I/O loop.
 
     We use epoll (Linux) or kqueue (BSD and Mac OS X; requires python
@@ -107,26 +117,7 @@ class IOLoop(object):
     # Global lock for creating global IOLoop instance
     _instance_lock = threading.Lock()
 
-    def __init__(self, impl=None):
-        self._impl = impl or _poll()
-        if hasattr(self._impl, 'fileno'):
-            set_close_exec(self._impl.fileno())
-        self._handlers = {}
-        self._events = {}
-        self._callbacks = []
-        self._callback_lock = threading.Lock()
-        self._timeouts = []
-        self._running = False
-        self._stopped = False
-        self._thread_ident = None
-        self._blocking_signal_threshold = None
-
-        # Create a pipe that we send bogus data to when we want to wake
-        # the I/O loop when it is idle
-        self._waker = Waker()
-        self.add_handler(self._waker.fileno(),
-                         lambda fd, events: self._waker.consume(),
-                         self.READ)
+    _current = threading.local()
 
     @staticmethod
     def instance():
@@ -166,6 +157,43 @@ class IOLoop(object):
         assert not IOLoop.initialized()
         IOLoop._instance = self
 
+    @staticmethod
+    def current():
+        current = getattr(IOLoop._current, "instance", None)
+        if current is None:
+            raise ValueError("no current IOLoop")
+        return current
+
+    def make_current(self):
+        IOLoop._current.instance = self
+
+    def clear_current(self):
+        assert IOLoop._current.instance is self
+        IOLoop._current.instance = None
+
+    @classmethod
+    def configurable_base(cls):
+        return IOLoop
+
+    @classmethod
+    def configurable_default(cls):
+        if hasattr(select, "epoll") or sys.platform.startswith('linux'):
+            try:
+                from tornado.platform.epoll import EPollIOLoop
+                return EPollIOLoop
+            except ImportError:
+                gen_log.warning("unable to import EPollIOLoop, falling back to SelectIOLoop")
+                pass
+        if hasattr(select, "kqueue"):
+            # Python 2.6+ on BSD or Mac
+            from tornado.platform.kqueue import KQueueIOLoop
+            return KQueueIOLoop
+        from tornado.platform.select import SelectIOLoop
+        return SelectIOLoop
+
+    def initialize(self):
+        pass
+
     def close(self, all_fds=False):
         """Closes the IOLoop, freeing any resources used.
 
@@ -185,33 +213,19 @@ class IOLoop(object):
         Therefore the call to `close` will usually appear just after
         the call to `start` rather than near the call to `stop`.
         """
-        self.remove_handler(self._waker.fileno())
-        if all_fds:
-            for fd in self._handlers.keys()[:]:
-                try:
-                    os.close(fd)
-                except Exception:
-                    logging.debug("error closing fd %s", fd, exc_info=True)
-        self._waker.close()
-        self._impl.close()
+        raise NotImplementedError()
 
     def add_handler(self, fd, handler, events):
         """Registers the given handler to receive the given events for fd."""
-        self._handlers[fd] = stack_context.wrap(handler)
-        self._impl.register(fd, events | self.ERROR)
+        raise NotImplementedError()
 
     def update_handler(self, fd, events):
         """Changes the events we listen for fd."""
-        self._impl.modify(fd, events | self.ERROR)
+        raise NotImplementedError()
 
     def remove_handler(self, fd):
         """Stop listening for events on fd."""
-        self._handlers.pop(fd, None)
-        self._events.pop(fd, None)
-        try:
-            self._impl.unregister(fd)
-        except (OSError, IOError):
-            logging.debug("Error deleting fd from IOLoop", exc_info=True)
+        raise NotImplementedError()
 
     def set_blocking_signal_threshold(self, seconds, action):
         """Sends a signal if the ioloop is blocked for more than s seconds.
@@ -224,14 +238,7 @@ class IOLoop(object):
         If action is None, the process will be killed if it is blocked for
         too long.
         """
-        if not hasattr(signal, "setitimer"):
-            logging.error("set_blocking_signal_threshold requires a signal module "
-                       "with the setitimer method")
-            return
-        self._blocking_signal_threshold = seconds
-        if seconds is not None:
-            signal.signal(signal.SIGALRM,
-                          action if action is not None else signal.SIG_DFL)
+        raise NotImplementedError()
 
     def set_blocking_log_threshold(self, seconds):
         """Logs a stack trace if the ioloop is blocked for more than s seconds.
@@ -244,9 +251,9 @@ class IOLoop(object):
 
         For use with set_blocking_signal_threshold.
         """
-        logging.warning('IOLoop blocked for %f seconds in\n%s',
-                        self._blocking_signal_threshold,
-                        ''.join(traceback.format_stack(frame)))
+        gen_log.warning('IOLoop blocked for %f seconds in\n%s',
+                         self._blocking_signal_threshold,
+                         ''.join(traceback.format_stack(frame)))
 
     def start(self):
         """Starts the I/O loop.
@@ -254,11 +261,246 @@ class IOLoop(object):
         The loop will run until one of the I/O handlers calls stop(), which
         will make the loop stop after the current event iteration completes.
         """
+        raise NotImplementedError()
+
+    def stop(self):
+        """Stop the loop after the current event loop iteration is complete.
+        If the event loop is not currently running, the next call to start()
+        will return immediately.
+
+        To use asynchronous methods from otherwise-synchronous code (such as
+        unit tests), you can start and stop the event loop like this::
+
+          ioloop = IOLoop()
+          async_method(ioloop=ioloop, callback=ioloop.stop)
+          ioloop.start()
+
+        ioloop.start() will return after async_method has run its callback,
+        whether that callback was invoked before or after ioloop.start.
+
+        Note that even after `stop` has been called, the IOLoop is not
+        completely stopped until `IOLoop.start` has also returned.
+        """
+        raise NotImplementedError()
+
+    def time(self):
+        """Returns the current time according to the IOLoop's clock.
+
+        The return value is a floating-point number relative to an
+        unspecified time in the past.
+
+        By default, the IOLoop's time function is `time.time`.  However,
+        it may be configured to use e.g. `time.monotonic` instead.
+        Calls to `add_timeout` that pass a number instead of a
+        `datetime.timedelta` should use this function to compute the
+        appropriate time, so they can work no matter what time function
+        is chosen.
+        """
+        return time.time()
+
+    def add_timeout(self, deadline, callback):
+        """Calls the given callback at the time deadline from the I/O loop.
+
+        Returns a handle that may be passed to remove_timeout to cancel.
+
+        ``deadline`` may be a number denoting a time relative to
+        `IOLoop.time`, or a ``datetime.timedelta`` object for a
+        deadline relative to the current time.
+
+        Note that it is not safe to call `add_timeout` from other threads.
+        Instead, you must use `add_callback` to transfer control to the
+        IOLoop's thread, and then call `add_timeout` from there.
+        """
+        raise NotImplementedError()
+
+    def remove_timeout(self, timeout):
+        """Cancels a pending timeout.
+
+        The argument is a handle as returned by add_timeout.
+        """
+        raise NotImplementedError()
+
+    def add_callback(self, callback):
+        """Calls the given callback on the next I/O loop iteration.
+
+        It is safe to call this method from any thread at any time,
+        except from a signal handler.  Note that this is the *only*
+        method in IOLoop that makes this thread-safety guarantee; all
+        other interaction with the IOLoop must be done from that
+        IOLoop's thread.  add_callback() may be used to transfer
+        control from other threads to the IOLoop's thread.
+
+        To add a callback from a signal handler, see
+        `add_callback_from_signal`.
+        """
+        raise NotImplementedError()
+
+    def add_callback_from_signal(self, callback):
+        """Calls the given callback on the next I/O loop iteration.
+
+        Safe for use from a Python signal handler; should not be used
+        otherwise.
+
+        Callbacks added with this method will be run without any
+        stack_context, to avoid picking up the context of the function
+        that was interrupted by the signal.
+        """
+        raise NotImplementedError()
+
+    if futures is not None:
+        _FUTURE_TYPES = (futures.Future, DummyFuture)
+    else:
+        _FUTURE_TYPES = DummyFuture
+    def add_future(self, future, callback):
+        """Schedules a callback on the IOLoop when the given future is finished.
+
+        The callback is invoked with one argument, the future.
+        """
+        assert isinstance(future, IOLoop._FUTURE_TYPES)
+        callback = stack_context.wrap(callback)
+        future.add_done_callback(
+            lambda future: self.add_callback(
+                functools.partial(callback, future)))
+
+    def _run_callback(self, callback):
+        """Runs a callback with error handling.
+
+        For use in subclasses.
+        """
+        try:
+            callback()
+        except Exception:
+            self.handle_callback_exception(callback)
+
+    def handle_callback_exception(self, callback):
+        """This method is called whenever a callback run by the IOLoop
+        throws an exception.
+
+        By default simply logs the exception as an error.  Subclasses
+        may override this method to customize reporting of exceptions.
+
+        The exception itself is not passed explicitly, but is available
+        in sys.exc_info.
+        """
+        app_log.error("Exception in callback %r", callback, exc_info=True)
+
+
+
+class PollIOLoop(IOLoop):
+    """Base class for IOLoops built around a select-like function.
+
+    For concrete implementations, see `tornado.platform.epoll.EPollIOLoop`
+    (Linux), `tornado.platform.kqueue.KQueueIOLoop` (BSD and Mac), or
+    `tornado.platform.select.SelectIOLoop` (all platforms).
+    """
+    def initialize(self, impl, time_func=None):
+        super(PollIOLoop, self).initialize()
+        self._impl = impl
+        if hasattr(self._impl, 'fileno'):
+            set_close_exec(self._impl.fileno())
+        self.time_func = time_func or time.time
+        self._handlers = {}
+        self._events = {}
+        self._callbacks = []
+        self._callback_lock = threading.Lock()
+        self._timeouts = []
+        self._running = False
+        self._stopped = False
+        self._thread_ident = None
+        self._blocking_signal_threshold = None
+
+        # Create a pipe that we send bogus data to when we want to wake
+        # the I/O loop when it is idle
+        self._waker = Waker()
+        self.add_handler(self._waker.fileno(),
+                         lambda fd, events: self._waker.consume(),
+                         self.READ)
+
+    def close(self, all_fds=False):
+        self.remove_handler(self._waker.fileno())
+        if all_fds:
+            for fd in self._handlers.keys()[:]:
+                try:
+                    os.close(fd)
+                except Exception:
+                    gen_log.debug("error closing fd %s", fd, exc_info=True)
+        self._waker.close()
+        self._impl.close()
+
+    def add_handler(self, fd, handler, events):
+        self._handlers[fd] = stack_context.wrap(handler)
+        self._impl.register(fd, events | self.ERROR)
+
+    def update_handler(self, fd, events):
+        self._impl.modify(fd, events | self.ERROR)
+
+    def remove_handler(self, fd):
+        self._handlers.pop(fd, None)
+        self._events.pop(fd, None)
+        try:
+            self._impl.unregister(fd)
+        except (OSError, IOError):
+            gen_log.debug("Error deleting fd from IOLoop", exc_info=True)
+
+    def set_blocking_signal_threshold(self, seconds, action):
+        if not hasattr(signal, "setitimer"):
+            gen_log.error("set_blocking_signal_threshold requires a signal module "
+                           "with the setitimer method")
+            return
+        self._blocking_signal_threshold = seconds
+        if seconds is not None:
+            signal.signal(signal.SIGALRM,
+                          action if action is not None else signal.SIG_DFL)
+
+    def start(self):
+        if not logging.getLogger().handlers:
+            # The IOLoop catches and logs exceptions, so it's
+            # important that log output be visible.  However, python's
+            # default behavior for non-root loggers (prior to python
+            # 3.2) is to print an unhelpful "no handlers could be
+            # found" message rather than the actual log entry, so we
+            # must explicitly configure logging if we've made it this
+            # far without anything.
+            logging.basicConfig()
         if self._stopped:
             self._stopped = False
             return
+        old_current = getattr(IOLoop._current, "instance", None)
+        IOLoop._current.instance = self
         self._thread_ident = thread.get_ident()
         self._running = True
+
+        # signal.set_wakeup_fd closes a race condition in event loops:
+        # a signal may arrive at the beginning of select/poll/etc
+        # before it goes into its interruptible sleep, so the signal
+        # will be consumed without waking the select.  The solution is
+        # for the (C, synchronous) signal handler to write to a pipe,
+        # which will then be seen by select.
+        #
+        # In python's signal handling semantics, this only matters on the
+        # main thread (fortunately, set_wakeup_fd only works on the main
+        # thread and will raise a ValueError otherwise).
+        #
+        # If someone has already set a wakeup fd, we don't want to
+        # disturb it.  This is an issue for twisted, which does its
+        # SIGCHILD processing in response to its own wakeup fd being
+        # written to.  As long as the wakeup fd is registered on the IOLoop,
+        # the loop will still wake up and everything should work.
+        old_wakeup_fd = None
+        if hasattr(signal, 'set_wakeup_fd') and os.name == 'posix':
+            # requires python 2.6+, unix.  set_wakeup_fd exists but crashes
+            # the python process on windows.
+            try:
+                old_wakeup_fd = signal.set_wakeup_fd(self._waker.write_fileno())
+                if old_wakeup_fd != -1:
+                    # Already set, restore previous value.  This is a little racy,
+                    # but there's no clean get_wakeup_fd and in real use the
+                    # IOLoop is just started once at the beginning.
+                    signal.set_wakeup_fd(old_wakeup_fd)
+                    old_wakeup_fd = None
+            except ValueError:  # non-main thread
+                pass
+
         while True:
             poll_timeout = 3600.0
 
@@ -271,7 +513,7 @@ class IOLoop(object):
                 self._run_callback(callback)
 
             if self._timeouts:
-                now = time.time()
+                now = self.time()
                 while self._timeouts:
                     if self._timeouts[0].callback is None:
                         # the timeout was cancelled
@@ -330,64 +572,33 @@ class IOLoop(object):
                         # Happens when the client closes the connection
                         pass
                     else:
-                        logging.error("Exception in I/O handler for fd %s",
+                        app_log.error("Exception in I/O handler for fd %s",
                                       fd, exc_info=True)
                 except Exception:
-                    logging.error("Exception in I/O handler for fd %s",
+                    app_log.error("Exception in I/O handler for fd %s",
                                   fd, exc_info=True)
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
         if self._blocking_signal_threshold is not None:
             signal.setitimer(signal.ITIMER_REAL, 0, 0)
+        IOLoop._current.instance = old_current
+        if old_wakeup_fd is not None:
+            signal.set_wakeup_fd(old_wakeup_fd)
 
     def stop(self):
-        """Stop the loop after the current event loop iteration is complete.
-        If the event loop is not currently running, the next call to start()
-        will return immediately.
-
-        To use asynchronous methods from otherwise-synchronous code (such as
-        unit tests), you can start and stop the event loop like this::
-
-          ioloop = IOLoop()
-          async_method(ioloop=ioloop, callback=ioloop.stop)
-          ioloop.start()
-
-        ioloop.start() will return after async_method has run its callback,
-        whether that callback was invoked before or after ioloop.start.
-
-        Note that even after `stop` has been called, the IOLoop is not
-        completely stopped until `IOLoop.start` has also returned.
-        """
         self._running = False
         self._stopped = True
         self._waker.wake()
 
-    def running(self):
-        """Returns true if this IOLoop is currently running."""
-        return self._running
+    def time(self):
+        return self.time_func()
 
     def add_timeout(self, deadline, callback):
-        """Calls the given callback at the time deadline from the I/O loop.
-
-        Returns a handle that may be passed to remove_timeout to cancel.
-
-        ``deadline`` may be a number denoting a unix timestamp (as returned
-        by ``time.time()`` or a ``datetime.timedelta`` object for a deadline
-        relative to the current time.
-
-        Note that it is not safe to call `add_timeout` from other threads.
-        Instead, you must use `add_callback` to transfer control to the
-        IOLoop's thread, and then call `add_timeout` from there.
-        """
-        timeout = _Timeout(deadline, stack_context.wrap(callback))
+        timeout = _Timeout(deadline, stack_context.wrap(callback), self)
         heapq.heappush(self._timeouts, timeout)
         return timeout
 
     def remove_timeout(self, timeout):
-        """Cancels a pending timeout.
-
-        The argument is a handle as returned by add_timeout.
-        """
         # Removing from a heap is complicated, so just leave the defunct
         # timeout object in the queue (see discussion in
         # http://docs.python.org/library/heapq.html).
@@ -396,14 +607,6 @@ class IOLoop(object):
         timeout.callback = None
 
     def add_callback(self, callback):
-        """Calls the given callback on the next I/O loop iteration.
-
-        It is safe to call this method from any thread at any time.
-        Note that this is the *only* method in IOLoop that makes this
-        guarantee; all other interaction with the IOLoop must be done
-        from that IOLoop's thread.  add_callback() may be used to transfer
-        control from other threads to the IOLoop's thread.
-        """
         with self._callback_lock:
             list_empty = not self._callbacks
             self._callbacks.append(stack_context.wrap(callback))
@@ -416,23 +619,22 @@ class IOLoop(object):
             # avoid it when we can.
             self._waker.wake()
 
-    def _run_callback(self, callback):
-        try:
-            callback()
-        except Exception:
-            self.handle_callback_exception(callback)
-
-    def handle_callback_exception(self, callback):
-        """This method is called whenever a callback run by the IOLoop
-        throws an exception.
-
-        By default simply logs the exception as an error.  Subclasses
-        may override this method to customize reporting of exceptions.
-
-        The exception itself is not passed explicitly, but is available
-        in sys.exc_info.
-        """
-        logging.error("Exception in callback %r", callback, exc_info=True)
+    def add_callback_from_signal(self, callback):
+        with stack_context.NullContext():
+            if thread.get_ident() != self._thread_ident:
+                # if the signal is handled on another thread, we can add
+                # it normally (modulo the NullContext)
+                self.add_callback(callback)
+            else:
+                # If we're on the IOLoop's thread, we cannot use
+                # the regular add_callback because it may deadlock on
+                # _callback_lock.  Blindly insert into self._callbacks.
+                # This is safe because the GIL makes list.append atomic.
+                # One subtlety is that if the signal interrupted the
+                # _callback_lock block in IOLoop.start, we may modify
+                # either the old or new version of self._callbacks,
+                # but either way will work.
+                self._callbacks.append(stack_context.wrap(callback))
 
 
 class _Timeout(object):
@@ -441,11 +643,11 @@ class _Timeout(object):
     # Reduce memory overhead when there are lots of pending callbacks
     __slots__ = ['deadline', 'callback']
 
-    def __init__(self, deadline, callback):
+    def __init__(self, deadline, callback, io_loop):
         if isinstance(deadline, (int, long, float)):
             self.deadline = deadline
         elif isinstance(deadline, datetime.timedelta):
-            self.deadline = time.time() + _Timeout.timedelta_to_seconds(deadline)
+            self.deadline = io_loop.time() + _Timeout.timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r" % deadline)
         self.callback = callback
@@ -477,6 +679,8 @@ class PeriodicCallback(object):
     """
     def __init__(self, callback, callback_time, io_loop=None):
         self.callback = callback
+        if callback_time <= 0:
+            raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
         self.io_loop = io_loop or IOLoop.instance()
         self._running = False
@@ -485,7 +689,7 @@ class PeriodicCallback(object):
     def start(self):
         """Starts the timer."""
         self._running = True
-        self._next_timeout = time.time()
+        self._next_timeout = self.io_loop.time()
         self._schedule_next()
 
     def stop(self):
@@ -501,172 +705,12 @@ class PeriodicCallback(object):
         try:
             self.callback()
         except Exception:
-            logging.error("Error in periodic callback", exc_info=True)
+            app_log.error("Error in periodic callback", exc_info=True)
         self._schedule_next()
 
     def _schedule_next(self):
         if self._running:
-            current_time = time.time()
+            current_time = self.io_loop.time()
             while self._next_timeout <= current_time:
                 self._next_timeout += self.callback_time / 1000.0
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
-
-
-class _EPoll(object):
-    """An epoll-based event loop using our C module for Python 2.5 systems"""
-    _EPOLL_CTL_ADD = 1
-    _EPOLL_CTL_DEL = 2
-    _EPOLL_CTL_MOD = 3
-
-    def __init__(self):
-        self._epoll_fd = epoll.epoll_create()
-
-    def fileno(self):
-        return self._epoll_fd
-
-    def close(self):
-        os.close(self._epoll_fd)
-
-    def register(self, fd, events):
-        epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_ADD, fd, events)
-
-    def modify(self, fd, events):
-        epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_MOD, fd, events)
-
-    def unregister(self, fd):
-        epoll.epoll_ctl(self._epoll_fd, self._EPOLL_CTL_DEL, fd, 0)
-
-    def poll(self, timeout):
-        return epoll.epoll_wait(self._epoll_fd, int(timeout * 1000))
-
-
-class _KQueue(object):
-    """A kqueue-based event loop for BSD/Mac systems."""
-    def __init__(self):
-        self._kqueue = select.kqueue()
-        self._active = {}
-
-    def fileno(self):
-        return self._kqueue.fileno()
-
-    def close(self):
-        self._kqueue.close()
-
-    def register(self, fd, events):
-        if fd in self._active:
-            raise IOError("fd %d already registered" % fd)
-        self._control(fd, events, select.KQ_EV_ADD)
-        self._active[fd] = events
-
-    def modify(self, fd, events):
-        self.unregister(fd)
-        self.register(fd, events)
-
-    def unregister(self, fd):
-        events = self._active.pop(fd)
-        self._control(fd, events, select.KQ_EV_DELETE)
-
-    def _control(self, fd, events, flags):
-        kevents = []
-        if events & IOLoop.WRITE:
-            kevents.append(select.kevent(
-                    fd, filter=select.KQ_FILTER_WRITE, flags=flags))
-        if events & IOLoop.READ or not kevents:
-            # Always read when there is not a write
-            kevents.append(select.kevent(
-                    fd, filter=select.KQ_FILTER_READ, flags=flags))
-        # Even though control() takes a list, it seems to return EINVAL
-        # on Mac OS X (10.6) when there is more than one event in the list.
-        for kevent in kevents:
-            self._kqueue.control([kevent], 0)
-
-    def poll(self, timeout):
-        kevents = self._kqueue.control(None, 1000, timeout)
-        events = {}
-        for kevent in kevents:
-            fd = kevent.ident
-            if kevent.filter == select.KQ_FILTER_READ:
-                events[fd] = events.get(fd, 0) | IOLoop.READ
-            if kevent.filter == select.KQ_FILTER_WRITE:
-                if kevent.flags & select.KQ_EV_EOF:
-                    # If an asynchronous connection is refused, kqueue
-                    # returns a write event with the EOF flag set.
-                    # Turn this into an error for consistency with the
-                    # other IOLoop implementations.
-                    # Note that for read events, EOF may be returned before
-                    # all data has been consumed from the socket buffer,
-                    # so we only check for EOF on write events.
-                    events[fd] = IOLoop.ERROR
-                else:
-                    events[fd] = events.get(fd, 0) | IOLoop.WRITE
-            if kevent.flags & select.KQ_EV_ERROR:
-                events[fd] = events.get(fd, 0) | IOLoop.ERROR
-        return events.items()
-
-
-class _Select(object):
-    """A simple, select()-based IOLoop implementation for non-Linux systems"""
-    def __init__(self):
-        self.read_fds = set()
-        self.write_fds = set()
-        self.error_fds = set()
-        self.fd_sets = (self.read_fds, self.write_fds, self.error_fds)
-
-    def close(self):
-        pass
-
-    def register(self, fd, events):
-        if fd in self.read_fds or fd in self.write_fds or fd in self.error_fds:
-            raise IOError("fd %d already registered" % fd)
-        if events & IOLoop.READ:
-            self.read_fds.add(fd)
-        if events & IOLoop.WRITE:
-            self.write_fds.add(fd)
-        if events & IOLoop.ERROR:
-            self.error_fds.add(fd)
-            # Closed connections are reported as errors by epoll and kqueue,
-            # but as zero-byte reads by select, so when errors are requested
-            # we need to listen for both read and error.
-            self.read_fds.add(fd)
-
-    def modify(self, fd, events):
-        self.unregister(fd)
-        self.register(fd, events)
-
-    def unregister(self, fd):
-        self.read_fds.discard(fd)
-        self.write_fds.discard(fd)
-        self.error_fds.discard(fd)
-
-    def poll(self, timeout):
-        readable, writeable, errors = select.select(
-            self.read_fds, self.write_fds, self.error_fds, timeout)
-        events = {}
-        for fd in readable:
-            events[fd] = events.get(fd, 0) | IOLoop.READ
-        for fd in writeable:
-            events[fd] = events.get(fd, 0) | IOLoop.WRITE
-        for fd in errors:
-            events[fd] = events.get(fd, 0) | IOLoop.ERROR
-        return events.items()
-
-
-# Choose a poll implementation. Use epoll if it is available, fall back to
-# select() for non-Linux platforms
-if hasattr(select, "epoll"):
-    # Python 2.6+ on Linux
-    _poll = select.epoll
-elif hasattr(select, "kqueue"):
-    # Python 2.6+ on BSD or Mac
-    _poll = _KQueue
-else:
-    try:
-        # Linux systems with our C module installed
-        from tornado import epoll
-        _poll = _EPoll
-    except Exception:
-        # All other systems
-        import sys
-        if "linux" in sys.platform:
-            logging.warning("epoll module not found; using select()")
-        _poll = _Select

@@ -184,13 +184,13 @@ from __future__ import absolute_import, division, with_statement
 import cStringIO
 import datetime
 import linecache
-import logging
 import os.path
 import posixpath
 import re
 import threading
 
 from tornado import escape
+from tornado.log import app_log
 from tornado.util import bytes_type, ObjectDict
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
@@ -229,7 +229,7 @@ class Template(object):
                 "exec")
         except Exception:
             formatted_code = _format_code(self.code).rstrip()
-            logging.error("%s code:\n%s", self.name, formatted_code)
+            app_log.error("%s code:\n%s", self.name, formatted_code)
             raise
 
     def generate(self, **kwargs):
@@ -257,12 +257,7 @@ class Template(object):
         # we've generated a new template (mainly for this module's
         # unittests, where different tests reuse the same name).
         linecache.clearcache()
-        try:
-            return execute()
-        except Exception:
-            formatted_code = _format_code(self.code).rstrip()
-            logging.error("%s code:\n%s", self.name, formatted_code)
-            raise
+        return execute()
 
     def _generate_python(self, loader, compress_whitespace):
         buffer = cStringIO.StringIO()
@@ -484,7 +479,7 @@ class _ApplyBlock(_Node):
             writer.write_line("_append = _buffer.append", self.line)
             self.body.generate(writer)
             writer.write_line("return _utf8('').join(_buffer)", self.line)
-        writer.write_line("_append(%s(%s()))" % (
+        writer.write_line("_append(_utf8(%s(%s())))" % (
             self.method, method_name), self.line)
 
 
@@ -501,6 +496,8 @@ class _ControlBlock(_Node):
         writer.write_line("%s:" % self.statement, self.line)
         with writer.indent():
             self.body.generate(writer)
+            # Just in case the body was empty
+            writer.write_line("pass", self.line)
 
 
 class _IntermediateControlBlock(_Node):
@@ -509,6 +506,8 @@ class _IntermediateControlBlock(_Node):
         self.line = line
 
     def generate(self, writer):
+        # In case the previous block was empty
+        writer.write_line("pass", self.line)
         writer.write_line("%s:" % self.statement, self.line, writer.indent_size() - 1)
 
 

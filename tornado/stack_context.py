@@ -70,7 +70,6 @@ from __future__ import absolute_import, division, with_statement
 
 import contextlib
 import functools
-import itertools
 import operator
 import sys
 import threading
@@ -197,32 +196,15 @@ def wrap(fn):
 
     def wrapped(*args, **kwargs):
         callback, contexts, args = args[0], args[1], args[2:]
-        
-        if contexts is _state.contexts or not contexts:
-            callback(*args, **kwargs)
-            return
-        if not _state.contexts:
-            new_contexts = [cls(arg, active_cell)
-                            for (cls, arg, active_cell) in contexts
-                            if active_cell[0]]
-        # If we're moving down the stack, _state.contexts is a prefix
-        # of contexts.  For each element of contexts not in that prefix,
-        # create a new StackContext object.
-        # If we're moving up the stack (or to an entirely different stack),
-        # _state.contexts will have elements not in contexts.  Use
-        # NullContext to clear the state and then recreate from contexts.
-        elif (len(_state.contexts) > len(contexts) or
-            any(a[1] is not b[1]
-                for a, b in itertools.izip(_state.contexts, contexts))):
-            # contexts have been removed or changed, so start over
-            new_contexts = ([NullContext()] +
-                            [cls(arg, active_cell)
-                             for (cls, arg, active_cell) in contexts
-                             if active_cell[0]])
+
+        if _state.contexts:
+            new_contexts = [NullContext()]
         else:
-            new_contexts = [cls(arg, active_cell)
-                            for (cls, arg, active_cell) in contexts[len(_state.contexts):]
-                            if active_cell[0]]
+            new_contexts = []
+        if contexts:
+            new_contexts.extend(cls(arg, active_cell)
+                                for (cls, arg, active_cell) in contexts
+                                if active_cell[0])
         if len(new_contexts) > 1:
             with _nested(*new_contexts):
                 callback(*args, **kwargs)
@@ -231,10 +213,7 @@ def wrap(fn):
                 callback(*args, **kwargs)
         else:
             callback(*args, **kwargs)
-    if _state.contexts:
-        return _StackContextWrapper(wrapped, fn, _state.contexts)
-    else:
-        return _StackContextWrapper(fn)
+    return _StackContextWrapper(wrapped, fn, _state.contexts)
 
 
 @contextlib.contextmanager

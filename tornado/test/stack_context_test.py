@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, with_statement
 
-from tornado.stack_context import StackContext, wrap
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.log import app_log
+from tornado.stack_context import StackContext, wrap, NullContext
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog
+from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
 import logging
-import unittest
 
 
 class TestRequestHandler(RequestHandler):
@@ -18,19 +19,19 @@ class TestRequestHandler(RequestHandler):
 
     @asynchronous
     def get(self):
-        logging.info('in get()')
+        logging.debug('in get()')
         # call self.part2 without a self.async_callback wrapper.  Its
         # exception should still get thrown
         self.io_loop.add_callback(self.part2)
 
     def part2(self):
-        logging.info('in part2()')
+        logging.debug('in part2()')
         # Go through a third layer to make sure that contexts once restored
         # are again passed on to future callbacks
         self.io_loop.add_callback(self.part3)
 
     def part3(self):
-        logging.info('in part3()')
+        logging.debug('in part3()')
         raise Exception('test exception')
 
     def get_error_html(self, status_code, **kwargs):
@@ -40,14 +41,15 @@ class TestRequestHandler(RequestHandler):
             return 'unexpected failure'
 
 
-class HTTPStackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
+class HTTPStackContextTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([('/', TestRequestHandler,
                              dict(io_loop=self.io_loop))])
 
     def test_stack_context(self):
-        self.http_client.fetch(self.get_url('/'), self.handle_response)
-        self.wait()
+        with ExpectLog(app_log, "Uncaught exception GET /"):
+            self.http_client.fetch(self.get_url('/'), self.handle_response)
+            self.wait()
         self.assertEqual(self.response.code, 500)
         self.assertTrue(b('got expected exception') in self.response.body)
 
@@ -56,7 +58,7 @@ class HTTPStackContextTest(AsyncHTTPTestCase, LogTrapTestCase):
         self.stop()
 
 
-class StackContextTest(AsyncTestCase, LogTrapTestCase):
+class StackContextTest(AsyncTestCase):
     def setUp(self):
         super(StackContextTest, self).setUp()
         self.active_contexts = []
@@ -122,6 +124,48 @@ class StackContextTest(AsyncTestCase, LogTrapTestCase):
         def f5():
             self.assertEqual(self.active_contexts, ['c1', 'c3'])
             self.stop()
+        self.io_loop.add_callback(f1)
+        self.wait()
+
+    def test_isolation_nonempty(self):
+        # f2 and f3 are a chain of operations started in context c1.
+        # f2 is incidentally run under context c2, but that context should
+        # not be passed along to f3.
+        def f1():
+            with StackContext(functools.partial(self.context, 'c1')):
+                wrapped = wrap(f2)
+            with StackContext(functools.partial(self.context, 'c2')):
+                wrapped()
+
+        def f2():
+            self.assertIn('c1', self.active_contexts)
+            self.io_loop.add_callback(f3)
+
+        def f3():
+            self.assertIn('c1', self.active_contexts)
+            self.assertNotIn('c2', self.active_contexts)
+            self.stop()
+
+        self.io_loop.add_callback(f1)
+        self.wait()
+
+    def test_isolation_empty(self):
+        # Similar to test_isolation_nonempty, but here the f2/f3 chain
+        # is started without any context.  Behavior should be equivalent
+        # to the nonempty case (although historically it was not)
+        def f1():
+            with NullContext():
+                wrapped = wrap(f2)
+            with StackContext(functools.partial(self.context, 'c2')):
+                wrapped()
+
+        def f2():
+            self.io_loop.add_callback(f3)
+
+        def f3():
+            self.assertNotIn('c2', self.active_contexts)
+            self.stop()
+
         self.io_loop.add_callback(f1)
         self.wait()
 

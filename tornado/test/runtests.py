@@ -1,13 +1,20 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, with_statement
-import unittest
+import logging
+import textwrap
+import sys
+from tornado.httpclient import AsyncHTTPClient
+from tornado.ioloop import IOLoop
+from tornado.options import define, options, add_parse_callback
+from tornado.test.util import unittest
 
 TEST_MODULES = [
     'tornado.httputil.doctests',
     'tornado.iostream.doctests',
     'tornado.util.doctests',
     'tornado.test.auth_test',
+    'tornado.test.concurrent_test',
     'tornado.test.curl_httpclient_test',
     'tornado.test.escape_test',
     'tornado.test.gen_test',
@@ -18,6 +25,8 @@ TEST_MODULES = [
     'tornado.test.ioloop_test',
     'tornado.test.iostream_test',
     'tornado.test.locale_test',
+    'tornado.test.netutil_test',
+    'tornado.test.log_test',
     'tornado.test.options_test',
     'tornado.test.process_test',
     'tornado.test.simple_httpclient_test',
@@ -33,6 +42,17 @@ TEST_MODULES = [
 
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
+
+class TornadoTextTestRunner(unittest.TextTestRunner):
+    def run(self, test):
+        result = super(TornadoTextTestRunner, self).run(test)
+        if result.skipped:
+            skip_reasons = set(reason for (test, reason) in result.skipped)
+            self.stream.write(textwrap.fill(
+                    "Some tests were skipped because: %s" %
+                    ", ".join(sorted(skip_reasons))))
+            self.stream.write("\n")
+        return result
 
 if __name__ == '__main__':
     # The -W command-line option does not work in a virtualenv with
@@ -51,6 +71,37 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("error", category=DeprecationWarning,
                             module=r"tornado\..*")
+    # The unittest module is aggressive about deprecating redundant methods,
+    # leaving some without non-deprecated spellings that work on both
+    # 2.7 and 3.2
+    warnings.filterwarnings("ignore", category=DeprecationWarning,
+                            message="Please use assert.* instead")
+
+    logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
+
+    define('httpclient', type=str, default=None,
+           callback=AsyncHTTPClient.configure)
+    define('ioloop', type=str, default=None)
+    define('ioloop_time_monotonic', default=False)
+    def configure_ioloop():
+        kwargs = {}
+        if options.ioloop_time_monotonic:
+            from tornado.platform.auto import monotonic_time
+            if monotonic_time is None:
+                raise RuntimeError("monotonic clock not found")
+            kwargs['time_func'] = monotonic_time
+        if options.ioloop or kwargs:
+            IOLoop.configure(options.ioloop, **kwargs)
+    add_parse_callback(configure_ioloop)
 
     import tornado.testing
-    tornado.testing.main()
+    kwargs = {}
+    if sys.version_info >= (3, 2):
+        # HACK:  unittest.main will make its own changes to the warning
+        # configuration, which may conflict with the settings above
+        # or command-line flags like -bb.  Passing warnings=False
+        # suppresses this behavior, although this looks like an implementation
+        # detail.  http://bugs.python.org/issue15626
+        kwargs['warnings'] = False
+    kwargs['testRunner'] = TornadoTextTestRunner
+    tornado.testing.main(**kwargs)

@@ -16,19 +16,25 @@
 # Note:  This module's docs are not currently extracted automatically,
 # so changes must be made manually to twisted.rst
 # TODO: refactor doc build process to use an appropriate virtualenv
-"""A Twisted reactor built on the Tornado IOLoop.
+"""Bridges between the Twisted reactor and Tornado IOLoop.
 
 This module lets you run applications and libraries written for
-Twisted in a Tornado application.  To use it, simply call `install` at
-the beginning of the application::
+Twisted in a Tornado application.  It can be used in two modes,
+depending on which library's underlying event loop you want to use.
+
+Twisted on Tornado
+------------------
+
+`TornadoReactor` implements the Twisted reactor interface on top of
+the Tornado IOLoop.  To use it, simply call `install` at the beginning
+of the application::
 
     import tornado.platform.twisted
     tornado.platform.twisted.install()
     from twisted.internet import reactor
 
 When the app is ready to start, call `IOLoop.instance().start()`
-instead of `reactor.run()`.  This will allow you to use a mixture of
-Twisted and Tornado code in the same process.
+instead of `reactor.run()`.
 
 It is also possible to create a non-global reactor by calling
 `tornado.platform.twisted.TornadoReactor(io_loop)`.  However, if
@@ -41,18 +47,32 @@ recommended to call::
 
 before closing the `IOLoop`.
 
-This module has been tested with Twisted versions 11.0.0, 11.1.0, and 12.0.0
+Tornado on Twisted
+------------------
+
+`TwistedIOLoop` implements the Tornado IOLoop interface on top of the Twisted
+reactor.  Recommended usage::
+
+    from tornado.platform.twisted import TwistedIOLoop
+    from twisted.internet import reactor
+    TwistedIOLoop().install()
+    # Set up your tornado application as usual using `IOLoop.instance`
+    reactor.run()
+
+`TwistedIOLoop` always uses the global Twisted reactor.
+
+This module has been tested with Twisted versions 11.0.0 and newer.
 """
 
 from __future__ import absolute_import, division, with_statement
 
 import functools
-import logging
+import datetime
 import time
 
 from twisted.internet.posixbase import PosixReactorBase
 from twisted.internet.interfaces import \
-    IReactorFDSet, IDelayedCall, IReactorTime
+    IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor
 from twisted.python import failure, log
 from twisted.internet import error
 
@@ -60,7 +80,8 @@ from zope.interface import implementer
 
 import tornado
 import tornado.ioloop
-from tornado.stack_context import NullContext
+from tornado.log import app_log
+from tornado.stack_context import NullContext, wrap
 from tornado.ioloop import IOLoop
 
 
@@ -80,7 +101,7 @@ class TornadoDelayedCall(object):
         try:
             self._func()
         except:
-            logging.error("_called caught exception", exc_info=True)
+            app_log.error("_called caught exception", exc_info=True)
 
     def getTime(self):
         return self._time
@@ -127,6 +148,7 @@ class TornadoReactor(PosixReactorBase):
         self._fds = {}  # a map of fd to a (reader, writer) tuple
         self._delayedCalls = {}
         PosixReactorBase.__init__(self)
+        self.addSystemEventTrigger('during', 'shutdown', self.crash)
 
         # IOLoop.start() bypasses some of the reactor initialization.
         # Fire off the necessary events if they weren't already triggered
@@ -138,7 +160,7 @@ class TornadoReactor(PosixReactorBase):
 
     # IReactorTime
     def seconds(self):
-        return time.time()
+        return self._io_loop.time()
 
     def callLater(self, seconds, f, *args, **kw):
         dc = TornadoDelayedCall(self, seconds, f, *args, **kw)
@@ -169,6 +191,8 @@ class TornadoReactor(PosixReactorBase):
 
     # IReactorFDSet
     def _invoke_callback(self, fd, events):
+        if fd not in self._fds:
+            return
         (reader, writer) = self._fds[fd]
         if reader:
             err = None
@@ -280,7 +304,8 @@ class TornadoReactor(PosixReactorBase):
     # IOLoop.start() instead of Reactor.run().
     def stop(self):
         PosixReactorBase.stop(self)
-        self._io_loop.stop()
+        fire_shutdown = functools.partial(self.fireSystemEvent, "shutdown")
+        self._io_loop.add_callback(fire_shutdown)
 
     def crash(self):
         PosixReactorBase.crash(self)
@@ -291,8 +316,6 @@ class TornadoReactor(PosixReactorBase):
 
     def mainLoop(self):
         self._io_loop.start()
-        if self._stopped:
-            self.fireSystemEvent("shutdown")
 TornadoReactor = implementer(IReactorTime, IReactorFDSet)(TornadoReactor)
 
 
@@ -328,3 +351,113 @@ def install(io_loop=None):
     from twisted.internet.main import installReactor
     installReactor(reactor)
     return reactor
+
+class _FD(object):
+    def __init__(self, fd, handler):
+        self.fd = fd
+        self.handler = handler
+        self.reading = False
+        self.writing = False
+        self.lost = False
+
+    def fileno(self):
+        return self.fd
+
+    def doRead(self):
+        if not self.lost:
+            self.handler(self.fd, tornado.ioloop.IOLoop.READ)
+
+    def doWrite(self):
+        if not self.lost:
+            self.handler(self.fd, tornado.ioloop.IOLoop.WRITE)
+
+    def connectionLost(self, reason):
+        if not self.lost:
+            self.handler(self.fd, tornado.ioloop.IOLoop.ERROR)
+            self.lost = True
+
+    def logPrefix(self):
+        return ''
+_FD = implementer(IReadDescriptor, IWriteDescriptor)(_FD)
+
+class TwistedIOLoop(tornado.ioloop.IOLoop):
+    """IOLoop implementation that runs on Twisted.
+
+    Uses the global Twisted reactor.  It is possible to create multiple
+    TwistedIOLoops in the same process, but it doesn't really make sense
+    because they will all run in the same thread.
+
+    Not compatible with `tornado.process.Subprocess.set_exit_callback`
+    because the ``SIGCHLD`` handlers used by Tornado and Twisted conflict
+    with each other.
+    """
+    def initialize(self):
+        from twisted.internet import reactor
+        self.reactor = reactor
+        self.fds = {}
+
+    def close(self, all_fds=False):
+        self.reactor.removeAll()
+        for c in self.reactor.getDelayedCalls():
+            c.cancel()
+
+    def add_handler(self, fd, handler, events):
+        if fd in self.fds:
+            raise ValueError('fd %d added twice' % fd)
+        self.fds[fd] = _FD(fd, wrap(handler))
+        if events | tornado.ioloop.IOLoop.READ:
+            self.fds[fd].reading = True
+            self.reactor.addReader(self.fds[fd])
+        if events | tornado.ioloop.IOLoop.WRITE:
+            self.fds[fd].writing = True
+            self.reactor.addWriter(self.fds[fd])
+
+    def update_handler(self, fd, events):
+        if events | tornado.ioloop.IOLoop.READ:
+            if not self.fds[fd].reading:
+                self.fds[fd].reading = True
+                self.reactor.addReader(self.fds[fd])
+        else:
+            if self.fds[fd].reading:
+                self.fds[fd].reading = False
+                self.reactor.removeReader(self.fds[fd])
+        if events | tornado.ioloop.IOLoop.WRITE:
+            if not self.fds[fd].writing:
+                self.fds[fd].writing = True
+                self.reactor.addWriter(self.fds[fd])
+        else:
+            if self.fds[fd].writing:
+                self.fds[fd].writing = False
+                self.reactor.removeWriter(self.fds[fd])
+
+    def remove_handler(self, fd):
+        self.fds[fd].lost = True
+        if self.fds[fd].reading:
+            self.reactor.removeReader(self.fds[fd])
+        if self.fds[fd].writing:
+            self.reactor.removeWriter(self.fds[fd])
+        del self.fds[fd]
+
+    def start(self):
+        self.reactor.run()
+
+    def stop(self):
+        self.reactor.crash()
+
+    def add_timeout(self, deadline, callback):
+        if isinstance(deadline, (int, long, float)):
+            delay = max(deadline - self.time(), 0)
+        elif isinstance(deadline, datetime.timedelta):
+            delay = deadline.total_seconds()
+        else:
+            raise TypeError("Unsupported deadline %r")
+        return self.reactor.callLater(delay, wrap(callback))
+
+    def remove_timeout(self, timeout):
+        timeout.cancel()
+
+    def add_callback(self, callback):
+        self.reactor.callFromThread(wrap(callback))
+
+    def add_callback_from_signal(self, callback):
+        self.add_callback(callback)

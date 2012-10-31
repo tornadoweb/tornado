@@ -7,7 +7,7 @@
 from __future__ import absolute_import, division, with_statement
 from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin
 from tornado.escape import json_decode
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous
 
@@ -101,7 +101,7 @@ class OAuth2ClientLoginHandler(RequestHandler, OAuth2Mixin):
         self.authorize_redirect()
 
 
-class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
+class AuthTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application(
             [
