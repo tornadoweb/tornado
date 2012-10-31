@@ -409,8 +409,10 @@ class _HTTPConnection(object):
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
-            # client SHOULD make a GET request
-            if self.code == 303:
+            # Client SHOULD make a GET request.
+            # The 302 status may be used by some servers for compatiblity
+            # with pre-HTTP/1.1 user agents which don't understand the 303 status.
+            if self.code in (302, 303):
                 new_request.method = "GET"
                 new_request.body = None
                 for h in ["Content-Length", "Content-Type",
