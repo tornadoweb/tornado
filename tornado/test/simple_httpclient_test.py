@@ -74,15 +74,15 @@ class NoContentHandler(RequestHandler):
         self.set_status(204)
 
 
-class SeeOther303PostHandler(RequestHandler):
+class SeeOtherPostHandler(RequestHandler):
     def post(self):
-        if self.request.body != b("blah"):
-            raise Exception("unexpected body %r" % self.request.body)
-        self.set_header("Location", "/303_get")
-        self.set_status(303)
+        redirect_code = int(self.request.body)
+        assert redirect_code in (302, 303), "unexpected body %r" % self.request.body
+        self.set_header("Location", "/see_other_get")
+        self.set_status(redirect_code)
 
 
-class SeeOther303GetHandler(RequestHandler):
+class SeeOtherGetHandler(RequestHandler):
     def get(self):
         if self.request.body:
             raise Exception("unexpected body %r" % self.request.body)
@@ -113,8 +113,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             url("/head", HeadHandler),
             url("/options", OptionsHandler),
             url("/no_content", NoContentHandler),
-            url("/303_post", SeeOther303PostHandler),
-            url("/303_get", SeeOther303GetHandler),
+            url("/see_other_post", SeeOtherPostHandler),
+            url("/see_other_get", SeeOtherGetHandler),
             url("/host_echo", HostEchoHandler),
             ], gzip=True)
 
@@ -201,13 +201,14 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
         self.fetch("/hello", headers=headers)
         self.assertEqual(list(headers.get_all()), [('User-Agent', 'Foo')])
 
-    def test_303_redirect(self):
-        response = self.fetch("/303_post", method="POST", body="blah")
-        self.assertEqual(200, response.code)
-        self.assertTrue(response.request.url.endswith("/303_post"))
-        self.assertTrue(response.effective_url.endswith("/303_get"))
-        #request is the original request, is a POST still
-        self.assertEqual("POST", response.request.method)
+    def test_see_other_redirect(self):
+        for code in (302, 303):
+            response = self.fetch("/see_other_post", method="POST", body="%d" % code)
+            self.assertEqual(200, response.code)
+            self.assertTrue(response.request.url.endswith("/see_other_post"))
+            self.assertTrue(response.effective_url.endswith("/see_other_get"))
+            #request is the original request, is a POST still
+            self.assertEqual("POST", response.request.method)
 
     def test_request_timeout(self):
         with ExpectLog(gen_log, "uncaught exception"):
