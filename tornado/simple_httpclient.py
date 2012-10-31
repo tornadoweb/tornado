@@ -336,11 +336,11 @@ class _HTTPConnection(object):
         match = re.match("HTTP/1.[01] ([0-9]+)", first_line)
         assert match
         code = int(match.group(1))
-        if code != 100:
-            self.code = code
-        else:
+        if 100 <= code < 200:
             self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
             return
+        else:
+            self.code = code
 
         self.headers = HTTPHeaders.parse(header_data)
 
