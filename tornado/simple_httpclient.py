@@ -409,8 +409,13 @@ class _HTTPConnection(object):
             new_request.max_redirects -= 1
             del new_request.headers["Host"]
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
-            # client SHOULD make a GET request
-            if self.code == 303:
+            # Client SHOULD make a GET request after a 303.
+            # According to the spec, 302 should be followed by the same
+            # method as the original request, but in practice browsers
+            # treat 302 the same as 303, and many servers use 302 for
+            # compatibility with pre-HTTP/1.1 user agents which don't
+            # understand the 303 status.
+            if self.code in (302, 303):
                 new_request.method = "GET"
                 new_request.body = None
                 for h in ["Content-Length", "Content-Type",
