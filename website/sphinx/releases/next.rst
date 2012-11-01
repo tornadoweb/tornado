@@ -152,3 +152,7 @@ In progress
   `TornadoReactor`, which bridges the gap in the other direction).
 * `AsyncHTTPTestCase` no longer calls `AsyncHTTPClient.close` for tests
   that use the singletion `IOLoop.instance`.
+* When following redirects, `SimpleAsyncHTTPClient` now treats a 302
+  response code the same as a 303.  This is contrary to the HTTP spec
+  but consistent with all browsers and other major HTTP clients
+  (including `CurlAsyncHTTPClient`).
