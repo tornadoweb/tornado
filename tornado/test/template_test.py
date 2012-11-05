@@ -109,6 +109,18 @@ class TemplateTest(unittest.TestCase):
         template = Template(utf8(u"{% apply upper %}foo \u00e9{% end %}"))
         self.assertEqual(template.generate(upper=upper), utf8(u"FOO \u00c9"))
 
+    def test_macro(self):
+        template = Template(utf8("{% macro plus(a, b) %}{{ a }} + {{ b }} = {{ a + b }}{% end %}{{ plus(1, 1) }}"))
+        self.assertEqual(template.generate(), b("1 + 1 = 2"))
+
+    def test_unicode_macro(self):
+        template = Template(utf8(u"{% macro plus(a, b) %}{{ a }} + {{ b }} = {{ a + b }}{% end %}{{ plus(1, 1) }} ~ \u00e9"))
+        self.assertEqual(template.generate(), utf8(u"1 + 1 = 2 ~ \u00e9"))
+
+    def test_bytes_macro(self):
+        template = Template(utf8(b"{% macro plus(a, b) %}{{ a }} + {{ b }} = {{ a + b }}{% end %}{{ plus(1, 1) }} ~ \u00e9"))
+        self.assertEqual(template.generate(), utf8(b"1 + 1 = 2 ~ \u00e9"))
+
     def test_if(self):
         template = Template(utf8("{% if x > 4 %}yes{% else %}no{% end %}"))
         self.assertEqual(template.generate(x=5), b("yes"))

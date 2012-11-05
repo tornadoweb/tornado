@@ -483,6 +483,24 @@ class _ApplyBlock(_Node):
             self.method, method_name), self.line)
 
 
+class _MacroBlock(_Node):
+    def __init__(self, signature, line, body=None):
+        self.signature = signature
+        self.line = line
+        self.body = body
+
+    def each_child(self):
+        return (self.body,)
+
+    def generate(self, writer):
+        writer.write_line("def %s:" % self.signature, self.line)
+        with writer.indent():
+            writer.write_line("_buffer = []", self.line)
+            writer.write_line("_append = _buffer.append", self.line)
+            self.body.generate(writer)
+            writer.write_line("return _utf8('').join(_buffer)", self.line)
+
+
 class _ControlBlock(_Node):
     def __init__(self, statement, line, body=None):
         self.statement = statement
@@ -819,7 +837,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
             body.chunks.append(block)
             continue
 
-        elif operator in ("apply", "block", "try", "if", "for", "while"):
+        elif operator in ("apply", "macro", "block", "try", "if", "for", "while"):
             # parse inner body recursively
             if operator in ("for", "while"):
                 block_body = _parse(reader, template, operator, operator)
@@ -834,6 +852,10 @@ def _parse(reader, template, in_block=None, in_loop=None):
                 if not suffix:
                     raise ParseError("apply missing method name on line %d" % line)
                 block = _ApplyBlock(suffix, line, block_body)
+            elif operator == "macro":
+                if not suffix:
+                    raise ParseError("apply missing macro signature on line %d" % line)
+                block = _MacroBlock(suffix, line, block_body)
             elif operator == "block":
                 if not suffix:
                     raise ParseError("block missing name on line %d" % line)
