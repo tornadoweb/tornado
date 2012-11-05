@@ -43,11 +43,11 @@ from __future__ import absolute_import, division, with_statement
 
 import csv
 import datetime
-import logging
 import os
 import re
 
 from tornado import escape
+from tornado.log import gen_log
 
 _default_locale = "en_US"
 _translations = {}
@@ -118,7 +118,7 @@ def load_translations(directory):
             continue
         locale, extension = path.split(".")
         if not re.match("[a-z]+(_[A-Z]+)?$", locale):
-            logging.error("Unrecognized locale %r (path: %s)", locale,
+            gen_log.error("Unrecognized locale %r (path: %s)", locale,
                           os.path.join(directory, path))
             continue
         full_path = os.path.join(directory, path)
@@ -142,13 +142,13 @@ def load_translations(directory):
             else:
                 plural = "unknown"
             if plural not in ("plural", "singular", "unknown"):
-                logging.error("Unrecognized plural indicator %r in %s line %d",
+                gen_log.error("Unrecognized plural indicator %r in %s line %d",
                               plural, path, i + 1)
                 continue
             _translations[locale].setdefault(plural, {})[english] = translation
         f.close()
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
-    logging.debug("Supported locales: %s", sorted(_supported_locales))
+    gen_log.debug("Supported locales: %s", sorted(_supported_locales))
 
 
 def load_gettext_translations(directory, domain):
@@ -184,11 +184,11 @@ def load_gettext_translations(directory, domain):
             _translations[lang] = gettext.translation(domain, directory,
                                                       languages=[lang])
         except Exception, e:
-            logging.error("Cannot load translation for '%s': %s", lang, str(e))
+            gen_log.error("Cannot load translation for '%s': %s", lang, str(e))
             continue
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
     _use_gettext = True
-    logging.debug("Supported locales: %s", sorted(_supported_locales))
+    gen_log.debug("Supported locales: %s", sorted(_supported_locales))
 
 
 def get_supported_locales():

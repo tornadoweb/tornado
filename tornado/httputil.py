@@ -18,10 +18,11 @@
 
 from __future__ import absolute_import, division, with_statement
 
-import logging
 import urllib
 import re
 
+from tornado.escape import native_str, parse_qs_bytes, utf8
+from tornado.log import gen_log
 from tornado.util import b, ObjectDict
 
 
@@ -205,6 +206,31 @@ class HTTPFile(ObjectDict):
     pass
 
 
+def parse_body_arguments(content_type, body, arguments, files):
+    """Parses a form request body.
+
+    Supports "application/x-www-form-urlencoded" and "multipart/form-data".
+    The content_type parameter should be a string and body should be
+    a byte string.  The arguments and files parameters are dictionaries
+    that will be updated with the parsed contents.
+    """
+    if content_type.startswith("application/x-www-form-urlencoded"):
+        uri_arguments = parse_qs_bytes(native_str(body))
+        for name, values in uri_arguments.iteritems():
+            values = [v for v in values if v]
+            if values:
+                arguments.setdefault(name, []).extend(values)
+    elif content_type.startswith("multipart/form-data"):
+        fields = content_type.split(";")
+        for field in fields:
+            k, sep, v = field.strip().partition("=")
+            if k == "boundary" and v:
+                parse_multipart_form_data(utf8(v), body, arguments, files)
+                break
+        else:
+            gen_log.warning("Invalid multipart/form-data")
+
+
 def parse_multipart_form_data(boundary, data, arguments, files):
     """Parses a multipart/form-data body.
 
@@ -221,7 +247,7 @@ def parse_multipart_form_data(boundary, data, arguments, files):
         boundary = boundary[1:-1]
     final_boundary_index = data.rfind(b("--") + boundary + b("--"))
     if final_boundary_index == -1:
-        logging.warning("Invalid multipart/form-data: no final boundary")
+        gen_log.warning("Invalid multipart/form-data: no final boundary")
         return
     parts = data[:final_boundary_index].split(b("--") + boundary + b("\r\n"))
     for part in parts:
@@ -229,17 +255,17 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             continue
         eoh = part.find(b("\r\n\r\n"))
         if eoh == -1:
-            logging.warning("multipart/form-data missing headers")
+            gen_log.warning("multipart/form-data missing headers")
             continue
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
         if disposition != "form-data" or not part.endswith(b("\r\n")):
-            logging.warning("Invalid multipart/form-data")
+            gen_log.warning("Invalid multipart/form-data")
             continue
         value = part[eoh + 4:-2]
         if not disp_params.get("name"):
-            logging.warning("multipart/form-data value missing name")
+            gen_log.warning("multipart/form-data value missing name")
             continue
         name = disp_params["name"]
         if disp_params.get("filename"):

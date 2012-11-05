@@ -69,6 +69,8 @@ import operator
 import sys
 import types
 
+from tornado.concurrent import Future
+from tornado.ioloop import IOLoop
 from tornado.stack_context import ExceptionStackContext
 
 
@@ -247,6 +249,24 @@ class Task(YieldPoint):
         return self.runner.pop_result(self.key)
 
 
+class YieldFuture(YieldPoint):
+    def __init__(self, future, io_loop=None):
+        self.future = future
+        self.io_loop = io_loop or IOLoop.current()
+
+    def start(self, runner):
+        self.runner = runner
+        self.key = object()
+        runner.register_callback(self.key)
+        self.io_loop.add_future(self.future, runner.result_callback(self.key))
+
+    def is_ready(self):
+        return self.runner.is_ready(self.key)
+
+    def get_result(self):
+        return self.runner.pop_result(self.key).result()
+
+
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
 
@@ -360,6 +380,9 @@ class Runner(object):
                     raise
                 if isinstance(yielded, list):
                     yielded = Multi(yielded)
+                if isinstance(yielded, Future):
+                    # TODO: lists of futures
+                    yielded = YieldFuture(yielded)
                 if isinstance(yielded, YieldPoint):
                     self.yield_point = yielded
                     try:

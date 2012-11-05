@@ -392,7 +392,7 @@ application settings as keyword arguments to your application:
 
     application = tornado.web.Application([
         (r"/", MainHandler),
-    ], cookie_secret="61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=")
+    ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
 Signed cookies contain the encoded value of the cookie in addition to a
 timestamp and an `HMAC <http://en.wikipedia.org/wiki/HMAC>`_ signature.
@@ -451,7 +451,7 @@ specifying a nickname, which is then saved in a cookie:
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/login", LoginHandler),
-    ], cookie_secret="61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=")
+    ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
 You can require that the user be logged in using the `Python
 decorator <http://www.python.org/dev/peps/pep-0318/>`_
@@ -469,7 +469,7 @@ rewritten:
             self.write("Hello, " + name)
 
     settings = {
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
     }
     application = tornado.web.Application([
@@ -485,6 +485,8 @@ schemes like Google OAuth. See the `tornado.auth`
 for more details. Check out the `Tornado Blog example application <https://github.com/facebook/tornado/tree/master/demos/blog>`_ for a
 complete example that uses authentication (and stores user data in a
 MySQL database).
+
+.. _xsrf:
 
 Cross-site request forgery protection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -508,7 +510,7 @@ include the application setting ``xsrf_cookies``:
 ::
 
     settings = {
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
         "xsrf_cookies": True,
     }
@@ -527,7 +529,7 @@ function ``xsrf_form_html()``, available in all templates:
 ::
 
     <form action="/new_message" method="post">
-      {{ xsrf_form_html() }}
+      {% module xsrf_form_html() %}
       <input type="text" name="message"/>
       <input type="submit" value="Post"/>
     </form>
@@ -575,7 +577,7 @@ You can serve static files from Tornado by specifying the
 
     settings = {
         "static_path": os.path.join(os.path.dirname(__file__), "static"),
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
         "xsrf_cookies": True,
     }
@@ -695,7 +697,7 @@ Here is a properly localized template:
            <div>{{ _("Username") }} <input type="text" name="username"/></div>
            <div>{{ _("Password") }} <input type="password" name="password"/></div>
            <div><input type="submit" value="{{ _("Sign in") }}"/></div>
-           {{ xsrf_form_html() }}
+           {% module xsrf_form_html() %}
          </form>
        </body>
      </html>
@@ -748,6 +750,8 @@ the user's locale is ``es_GT``, and the ``es`` locale is supported,
 See the `tornado.locale`
 documentation for detailed information on the CSV format and other
 localization methods.
+
+.. _ui-modules:
 
 UI modules
 ~~~~~~~~~~
@@ -1113,4 +1117,3 @@ AppEngine <http://code.google.com/appengine/>`_ application:
 See the `appengine example application
 <https://github.com/facebook/tornado/tree/master/demos/appengine>`_ for a
 full-featured AppEngine app built on Tornado.
-

@@ -2,31 +2,33 @@ from __future__ import absolute_import, division, with_statement
 
 import collections
 from contextlib import closing
+import errno
 import gzip
 import logging
+import os
 import re
 import socket
+import sys
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
+from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
-from tornado.test.httpclient_test import HTTPClientCommonTestCase, ChunkHandler, CountdownHandler, HelloWorldHandler
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
+from tornado.test import httpclient_test
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, ExpectLog
+from tornado.test.util import unittest
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
 
 
-class SimpleHTTPClientCommonTestCase(HTTPClientCommonTestCase):
+class SimpleHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
         client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
                                        force_instance=True)
         self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
         return client
-
-# Remove the base class from our namespace so the unittest module doesn't
-# try to run it again.
-del HTTPClientCommonTestCase
 
 
 class TriggerHandler(RequestHandler):
@@ -36,7 +38,7 @@ class TriggerHandler(RequestHandler):
 
     @asynchronous
     def get(self):
-        logging.info("queuing trigger")
+        logging.debug("queuing trigger")
         self.queue.append(self.finish)
         if self.get_argument("wake", "true") == "true":
             self.wake_callback()
@@ -72,15 +74,15 @@ class NoContentHandler(RequestHandler):
         self.set_status(204)
 
 
-class SeeOther303PostHandler(RequestHandler):
+class SeeOtherPostHandler(RequestHandler):
     def post(self):
-        if self.request.body != b("blah"):
-            raise Exception("unexpected body %r" % self.request.body)
-        self.set_header("Location", "/303_get")
-        self.set_status(303)
+        redirect_code = int(self.request.body)
+        assert redirect_code in (302, 303), "unexpected body %r" % self.request.body
+        self.set_header("Location", "/see_other_get")
+        self.set_status(redirect_code)
 
 
-class SeeOther303GetHandler(RequestHandler):
+class SeeOtherGetHandler(RequestHandler):
     def get(self):
         if self.request.body:
             raise Exception("unexpected body %r" % self.request.body)
@@ -92,7 +94,7 @@ class HostEchoHandler(RequestHandler):
         self.write(self.request.headers["Host"])
 
 
-class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(SimpleHTTPClientTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(self.io_loop)
@@ -111,8 +113,8 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
             url("/head", HeadHandler),
             url("/options", OptionsHandler),
             url("/no_content", NoContentHandler),
-            url("/303_post", SeeOther303PostHandler),
-            url("/303_get", SeeOther303GetHandler),
+            url("/see_other_post", SeeOtherPostHandler),
+            url("/see_other_get", SeeOtherGetHandler),
             url("/host_echo", HostEchoHandler),
             ], gzip=True)
 
@@ -199,26 +201,26 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.fetch("/hello", headers=headers)
         self.assertEqual(list(headers.get_all()), [('User-Agent', 'Foo')])
 
-    def test_303_redirect(self):
-        response = self.fetch("/303_post", method="POST", body="blah")
-        self.assertEqual(200, response.code)
-        self.assertTrue(response.request.url.endswith("/303_post"))
-        self.assertTrue(response.effective_url.endswith("/303_get"))
-        #request is the original request, is a POST still
-        self.assertEqual("POST", response.request.method)
+    def test_see_other_redirect(self):
+        for code in (302, 303):
+            response = self.fetch("/see_other_post", method="POST", body="%d" % code)
+            self.assertEqual(200, response.code)
+            self.assertTrue(response.request.url.endswith("/see_other_post"))
+            self.assertTrue(response.effective_url.endswith("/see_other_get"))
+            #request is the original request, is a POST still
+            self.assertEqual("POST", response.request.method)
 
     def test_request_timeout(self):
-        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
+        with ExpectLog(gen_log, "uncaught exception"):
+            response = self.fetch('/trigger?wake=false', request_timeout=0.1)
         self.assertEqual(response.code, 599)
         self.assertTrue(0.099 < response.request_time < 0.12, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
+    @unittest.skipIf(not socket.has_ipv6, 'ipv6 support not present')
     def test_ipv6(self):
-        if not socket.has_ipv6:
-            # python compiled without ipv6 support, so skip this test
-            return
         try:
             self.http_server.listen(self.get_http_port(), address='::1')
         except socket.gaierror, e:
@@ -230,8 +232,9 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         url = self.get_url("/hello").replace("localhost", "[::1]")
 
         # ipv6 is currently disabled by default and must be explicitly requested
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        with ExpectLog(gen_log, "uncaught exception"):
+            self.http_client.fetch(url, self.stop)
+            response = self.wait()
         self.assertEqual(response.code, 599)
 
         self.http_client.fetch(url, self.stop, allow_ipv6=True)
@@ -244,10 +247,11 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch("/content_length?value=2,%202,2")
         self.assertEqual(response.body, b("ok"))
 
-        response = self.fetch("/content_length?value=2,4")
-        self.assertEqual(response.code, 599)
-        response = self.fetch("/content_length?value=2,%202,3")
-        self.assertEqual(response.code, 599)
+        with ExpectLog(gen_log, "uncaught exception"):
+            response = self.fetch("/content_length?value=2,4")
+            self.assertEqual(response.code, 599)
+            response = self.fetch("/content_length?value=2,%202,3")
+            self.assertEqual(response.code, 599)
 
     def test_head_request(self):
         response = self.fetch("/head", method="HEAD")
@@ -270,8 +274,9 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         self.assertEqual(response.headers["Content-length"], "0")
 
         # 204 status with non-zero content length is malformed
-        response = self.fetch("/no_content?error=1")
-        self.assertEqual(response.code, 599)
+        with ExpectLog(gen_log, "uncaught exception"):
+            response = self.fetch("/no_content?error=1")
+            self.assertEqual(response.code, 599)
 
     def test_host_header(self):
         host_re = re.compile(b("^localhost:[0-9]+$"))
@@ -283,8 +288,26 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.wait()
         self.assertTrue(host_re.match(response.body), response.body)
 
+    def test_connection_refused(self):
+        server_socket, port = bind_unused_port()
+        server_socket.close()
+        with ExpectLog(gen_log, ".*"):
+            self.http_client.fetch("http://localhost:%d/" % port, self.stop)
+            response = self.wait()
+        self.assertEqual(599, response.code)
 
-class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
+        if sys.platform != 'cygwin':
+            # cygwin returns EPERM instead of ECONNREFUSED here
+            self.assertTrue(str(errno.ECONNREFUSED) in str(response.error),
+                            response.error)
+            # This is usually "Connection refused".
+            # On windows, strerror is broken and returns "Unknown error".
+            expected_message = os.strerror(errno.ECONNREFUSED)
+            self.assertTrue(expected_message in str(response.error),
+                            response.error)
+
+
+class CreateAsyncHTTPClientTestCase(AsyncTestCase):
     def setUp(self):
         super(CreateAsyncHTTPClientTestCase, self).setUp()
         self.saved = AsyncHTTPClient._save_configuration()
@@ -294,15 +317,10 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
         super(CreateAsyncHTTPClientTestCase, self).tearDown()
 
     def test_max_clients(self):
-        # The max_clients argument is tricky because it was originally
-        # allowed to be passed positionally; newer arguments are keyword-only.
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
         with closing(AsyncHTTPClient(
                 self.io_loop, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 10)
-        with closing(AsyncHTTPClient(
-                self.io_loop, 11, force_instance=True)) as client:
-            self.assertEqual(client.max_clients, 11)
         with closing(AsyncHTTPClient(
                 self.io_loop, max_clients=11, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 11)
@@ -319,3 +337,24 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase, LogTrapTestCase):
         with closing(AsyncHTTPClient(
                 self.io_loop, max_clients=14, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 14)
+
+
+class HTTP100ContinueTestCase(AsyncHTTPTestCase):
+    def respond_100(self, request):
+        self.request = request
+        self.request.connection.stream.write(
+            b("HTTP/1.1 100 CONTINUE\r\n\r\n"),
+            self.respond_200)
+
+    def respond_200(self):
+        self.request.connection.stream.write(
+            b("HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA"),
+            self.request.connection.stream.close)
+
+    def get_app(self):
+        # Not a full Application, but works as an HTTPServer callback
+        return self.respond_100
+
+    def test_100_continue(self):
+        res = self.fetch('/')
+        self.assertEqual(res.body, b('A'))

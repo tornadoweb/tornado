@@ -71,10 +71,13 @@ import logging
 import os
 import pkgutil
 import sys
+import traceback
 import types
 import subprocess
+import weakref
 
 from tornado import ioloop
+from tornado.log import gen_log
 from tornado import process
 
 try:
@@ -83,6 +86,11 @@ except ImportError:
     signal = None
 
 
+_watched_files = set()
+_reload_hooks = []
+_reload_attempted = False
+_io_loops = weakref.WeakKeyDictionary()
+
 def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
 
@@ -90,6 +98,11 @@ def start(io_loop=None, check_time=500):
     so will terminate any pending requests.
     """
     io_loop = io_loop or ioloop.IOLoop.instance()
+    if io_loop in _io_loops:
+        return
+    _io_loops[io_loop] = True
+    if len(_io_loops) > 1:
+        gen_log.warning("tornado.autoreload started more than once in the same process")
     add_reload_hook(functools.partial(_close_all_fds, io_loop))
     modify_times = {}
     callback = functools.partial(_reload_on_update, modify_times)
@@ -108,8 +121,6 @@ def wait():
     start(io_loop)
     io_loop.start()
 
-_watched_files = set()
-
 
 def watch(filename):
     """Add a file to the watch list.
@@ -117,8 +128,6 @@ def watch(filename):
     All imported modules are watched by default.
     """
     _watched_files.add(filename)
-
-_reload_hooks = []
 
 
 def add_reload_hook(fn):
@@ -138,8 +147,6 @@ def _close_all_fds(io_loop):
             os.close(fd)
         except Exception:
             pass
-
-_reload_attempted = False
 
 
 def _reload_on_update(modify_times):
@@ -177,7 +184,7 @@ def _check_file(modify_times, path):
         modify_times[path] = modified
         return
     if modify_times[path] != modified:
-        logging.info("%s modified; restarting server", path)
+        gen_log.info("%s modified; restarting server", path)
         _reload()
 
 
@@ -272,13 +279,25 @@ def main():
                 # module) will see the right things.
                 exec f.read() in globals(), globals()
     except SystemExit, e:
-        logging.info("Script exited with status %s", e.code)
+        logging.basicConfig()
+        gen_log.info("Script exited with status %s", e.code)
     except Exception, e:
-        logging.warning("Script exited with uncaught exception", exc_info=True)
+        logging.basicConfig()
+        gen_log.warning("Script exited with uncaught exception", exc_info=True)
+        # If an exception occurred at import time, the file with the error
+        # never made it into sys.modules and so we won't know to watch it.
+        # Just to make sure we've covered everything, walk the stack trace
+        # from the exception and watch every file.
+        for (filename, lineno, name, line) in traceback.extract_tb(sys.exc_info()[2]):
+            watch(filename)
         if isinstance(e, SyntaxError):
+            # SyntaxErrors are special:  their innermost stack frame is fake
+            # so extract_tb won't see it and we have to get the filename
+            # from the exception object.
             watch(e.filename)
     else:
-        logging.info("Script exited normally")
+        logging.basicConfig()
+        gen_log.info("Script exited normally")
     # restore sys.argv so subsequent executions will include autoreload
     sys.argv = original_argv
 

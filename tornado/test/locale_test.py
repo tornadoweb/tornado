@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, with_statement
 
 import os
 import tornado.locale
-import unittest
+from tornado.test.util import unittest
+
 
 class TranslationLoaderTest(unittest.TestCase):
     # TODO: less hacky way to get isolated tests

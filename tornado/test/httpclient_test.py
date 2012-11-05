@@ -8,10 +8,9 @@ from contextlib import closing
 import functools
 
 from tornado.escape import utf8
-from tornado.httpclient import AsyncHTTPClient
 from tornado.iostream import IOStream
 from tornado import netutil
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase, get_unused_port
+from tornado.testing import AsyncHTTPTestCase, bind_unused_port
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler, url
 
@@ -59,7 +58,7 @@ class EchoPostHandler(RequestHandler):
 # test suite.
 
 
-class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
+class HTTPClientCommonTestCase(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
             url("/hello", HelloWorldHandler),
@@ -108,8 +107,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase, LogTrapTestCase):
     def test_chunked_close(self):
         # test case in which chunks spread read-callback processing
         # over several ioloop iterations, but the connection is already closed.
-        port = get_unused_port()
-        (sock,) = netutil.bind_sockets(port, address="127.0.0.1")
+        sock, port = bind_unused_port()
         with closing(sock):
             def write_response(stream, request_data):
                 stream.write(b("""\
@@ -135,6 +133,7 @@ Transfer-Encoding: chunked
             resp = self.wait()
             resp.rethrow()
             self.assertEqual(resp.body, b("12"))
+            self.io_loop.remove_handler(sock.fileno())
 
     def test_basic_auth(self):
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",

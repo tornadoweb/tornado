@@ -16,6 +16,10 @@ need to set up MySQL and the database schema for the demo to run.
    can run "apt-get install mysql". Under OS X you can download the
    MySQL PKG file from http://dev.mysql.com/downloads/mysql/
 
+3. Install Python prerequisites
+
+   Install the packages MySQL-python and torndb (e.g. using pip or easy_install)
+
 3. Connect to MySQL and create a database and user for the blog.
 
    Connect to MySQL as a user that can create databases and users:
@@ -51,7 +55,7 @@ need to set up MySQL and the database schema for the demo to run.
    authentication.
 
    Currently the first user to connect will automatically be given the
-   ability to create and edit posts. 
+   ability to create and edit posts.
 
    Once you've created one blog post, subsequent users will not be
    prompted to sign in.

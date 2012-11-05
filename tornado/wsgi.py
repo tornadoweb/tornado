@@ -33,7 +33,6 @@ from __future__ import absolute_import, division, with_statement
 
 import Cookie
 import httplib
-import logging
 import sys
 import time
 import tornado
@@ -41,14 +40,37 @@ import urllib
 
 from tornado import escape
 from tornado import httputil
+from tornado.log import access_log
 from tornado import web
 from tornado.escape import native_str, utf8, parse_qs_bytes
-from tornado.util import b
+from tornado.util import b, bytes_type
 
 try:
     from io import BytesIO  # python 3
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
+
+
+# PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
+# that are smuggled inside objects of type unicode (via the latin1 encoding).
+# These functions are like those in the tornado.escape module, but defined
+# here to minimize the temptation to use them in non-wsgi contexts.
+if str is unicode:
+    def to_wsgi_str(s):
+        assert isinstance(s, bytes_type)
+        return s.decode('latin1')
+
+    def from_wsgi_str(s):
+        assert isinstance(s, str)
+        return s.encode('latin1')
+else:
+    def to_wsgi_str(s):
+        assert isinstance(s, bytes_type)
+        return s
+
+    def from_wsgi_str(s):
+        assert isinstance(s, str)
+        return s
 
 
 class WSGIApplication(web.Application):
@@ -92,9 +114,9 @@ class WSGIApplication(web.Application):
     def __call__(self, environ, start_response):
         handler = web.Application.__call__(self, HTTPRequest(environ))
         assert handler._finished
-        status = str(handler._status_code) + " " + \
-            httplib.responses[handler._status_code]
-        headers = handler._headers.items()
+        reason = handler._reason
+        status = str(handler._status_code) + " " + reason
+        headers = handler._headers.items() + handler._list_headers
         if hasattr(handler, "_new_cookie"):
             for cookie in handler._new_cookie.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))
@@ -108,18 +130,15 @@ class HTTPRequest(object):
     def __init__(self, environ):
         """Parses the given WSGI environ to construct the request."""
         self.method = environ["REQUEST_METHOD"]
-        self.path = urllib.quote(environ.get("SCRIPT_NAME", ""))
-        self.path += urllib.quote(environ.get("PATH_INFO", ""))
+        self.path = urllib.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
+        self.path += urllib.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
         self.uri = self.path
         self.arguments = {}
         self.query = environ.get("QUERY_STRING", "")
         if self.query:
             self.uri += "?" + self.query
-            arguments = parse_qs_bytes(native_str(self.query))
-            for name, values in arguments.iteritems():
-                values = [v for v in values if v]
-                if values:
-                    self.arguments[name] = values
+            self.arguments = parse_qs_bytes(native_str(self.query),
+                                            keep_blank_values=True)
         self.version = "HTTP/1.1"
         self.headers = httputil.HTTPHeaders()
         if environ.get("CONTENT_TYPE"):
@@ -143,18 +162,8 @@ class HTTPRequest(object):
 
         # Parse request body
         self.files = {}
-        content_type = self.headers.get("Content-Type", "")
-        if content_type.startswith("application/x-www-form-urlencoded"):
-            for name, values in parse_qs_bytes(native_str(self.body)).iteritems():
-                self.arguments.setdefault(name, []).extend(values)
-        elif content_type.startswith("multipart/form-data"):
-            if 'boundary=' in content_type:
-                boundary = content_type.split('boundary=', 1)[1]
-                if boundary:
-                    httputil.parse_multipart_form_data(
-                        utf8(boundary), self.body, self.arguments, self.files)
-            else:
-                logging.warning("Invalid multipart/form-data")
+        httputil.parse_body_arguments(self.headers.get("Content-Type", ""),
+                                      self.body, self.arguments, self.files)
 
         self._start_time = time.time()
         self._finish_time = None
@@ -236,10 +245,11 @@ class WSGIContainer(object):
         headers = data["headers"]
         header_set = set(k.lower() for (k, v) in headers)
         body = escape.utf8(body)
-        if "content-length" not in header_set:
-            headers.append(("Content-Length", str(len(body))))
-        if "content-type" not in header_set:
-            headers.append(("Content-Type", "text/html; charset=UTF-8"))
+        if status_code != 304:
+            if "content-length" not in header_set:
+                headers.append(("Content-Length", str(len(body))))
+            if "content-type" not in header_set:
+                headers.append(("Content-Type", "text/html; charset=UTF-8"))
         if "server" not in header_set:
             headers.append(("Server", "TornadoServer/%s" % tornado.version))
 
@@ -266,7 +276,7 @@ class WSGIContainer(object):
         environ = {
             "REQUEST_METHOD": request.method,
             "SCRIPT_NAME": "",
-            "PATH_INFO": urllib.unquote(request.path),
+            "PATH_INFO": to_wsgi_str(escape.url_unescape(request.path, encoding=None)),
             "QUERY_STRING": request.query,
             "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,
@@ -290,11 +300,11 @@ class WSGIContainer(object):
 
     def _log(self, status_code, request):
         if status_code < 400:
-            log_method = logging.info
+            log_method = access_log.info
         elif status_code < 500:
-            log_method = logging.warning
+            log_method = access_log.warning
         else:
-            log_method = logging.error
+            log_method = access_log.error
         request_time = 1000.0 * request.request_time()
         summary = request.method + " " + request.uri + " (" + \
             request.remote_ip + ")"
