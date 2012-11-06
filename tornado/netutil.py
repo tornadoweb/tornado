@@ -19,10 +19,12 @@
 from __future__ import absolute_import, division, with_statement
 
 import errno
+import functools
 import os
 import socket
 import stat
 
+from datetime import timedelta
 from tornado import process
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
@@ -350,3 +352,44 @@ class Resolver(object):
     @run_on_executor
     def getaddrinfo(self, *args, **kwargs):
         return socket.getaddrinfo(*args, **kwargs)
+
+
+class CachedResolver(object):
+    """
+    Adds a resolve cache for same-domain requests. This resolver improves the
+    fetch speed by a fair margin when fetching more than one target on a single
+    domain.
+    """
+
+    def __init__(self, io_loop=None, executor=None, expire_minutes=60):
+        self.io_loop = io_loop or IOLoop.instance()
+        self.executor = executor or dummy_executor
+        self.expire_minutes = expire_minutes
+        self.resolve_cache = {}
+
+
+    def _on_cache_expire(self, cached_host):
+        """
+        Cached host are removed from cache after a deadline to avoid conflict
+        with the global dns system and to fill the memory on long-running
+        systems
+        """
+        del self.resolve_cache[cached_host]
+
+
+    @run_on_executor
+    def getaddrinfo(self, *args, **kwargs):
+        resolved_infos = self.resolve_cache.get(args[0])
+
+        if not resolved_infos:
+            resolved_infos = socket.getaddrinfo(*args, **kwargs)
+            self.resolve_cache[args[0]] = resolved_infos
+            expire_callback = functools.partial(self._on_cache_expire, args[0])
+            self.io_loop.add_timeout(timedelta(minutes=self.expire_minutes),
+                expire_callback)
+
+        return resolved_infos
+
+
+
+
