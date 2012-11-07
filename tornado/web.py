@@ -1316,21 +1316,30 @@ class Application(object):
 
         Note that host patterns are processed sequentially in the
         order they were added, and only the first matching pattern is
-        used.  This means that all handlers for a given host must be
-        added in a single add_handlers call.
+        used.
         """
         if not host_pattern.endswith("$"):
             host_pattern += "$"
-        handlers = []
-        # The handlers with the wildcard host_pattern are a special
-        # case - they're added in the constructor but should have lower
-        # precedence than the more-precise handlers added later.
-        # If a wildcard handler group exists, it should always be last
-        # in the list, so insert new groups just before it.
-        if self.handlers and self.handlers[-1][0].pattern == '.*$':
-            self.handlers.insert(-1, (re.compile(host_pattern), handlers))
-        else:
-            self.handlers.append((re.compile(host_pattern), handlers))
+
+        # Search for an existing handlers entry for this host pattern.
+        handlers = None
+        for entry in self.handlers:
+            if entry[0].pattern == host_pattern:
+                handlers = entry[1]
+                break
+
+        # Otherwise, add a new handlers entry for this host pattern.
+        if handlers is None:
+            handlers = []
+            # The handlers with the wildcard host_pattern are a special
+            # case - they're added in the constructor but should have lower
+            # precedence than the more-precise handlers added later.
+            # If a wildcard handler group exists, it should always be last
+            # in the list, so insert new groups just before it.
+            if self.handlers and self.handlers[-1][0].pattern == '.*$':
+                self.handlers.insert(-1, (re.compile(host_pattern), handlers))
+            else:
+                self.handlers.append((re.compile(host_pattern), handlers))
 
         for spec in host_handlers:
             if type(spec) is type(()):
