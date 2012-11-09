@@ -176,8 +176,14 @@ class IOStream(object):
         a ``streaming_callback`` is not used.
         """
         self._set_read_callback(callback)
+        self._streaming_callback = stack_context.wrap(streaming_callback)
         if self.closed():
-            self._run_callback(callback, self._consume(self._read_buffer_size))
+            if self._streaming_callback is not None:
+                self._run_callback(self._streaming_callback,
+                                   self._consume(self._read_buffer_size))
+            self._run_callback(self._read_callback,
+                               self._consume(self._read_buffer_size))
+            self._streaming_callback = None
             self._read_callback = None
             return
         self._read_until_close = True
