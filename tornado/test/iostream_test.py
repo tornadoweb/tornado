@@ -301,6 +301,42 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    def test_read_until_close_after_close(self):
+        # Similar to test_delayed_close_callback, but read_until_close takes
+        # a separate code path so test it separately.
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(self.stop)
+        try:
+            server.write(b("1234"))
+            server.close()
+            self.wait()
+            client.read_until_close(self.stop)
+            data = self.wait()
+            self.assertEqual(data, b("1234"))
+        finally:
+            server.close()
+            client.close()
+
+    def test_streaming_read_until_close_after_close(self):
+        # Same as the preceding test but with a streaming_callback.
+        # All data should go through the streaming callback,
+        # and the final read callback just gets an empty string.
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(self.stop)
+        try:
+            server.write(b("1234"))
+            server.close()
+            self.wait()
+            streaming_data = []
+            client.read_until_close(self.stop,
+                                    streaming_callback=streaming_data.append)
+            data = self.wait()
+            self.assertEqual(b(''), data)
+            self.assertEqual(b('').join(streaming_data), b("1234"))
+        finally:
+            server.close()
+            client.close()
+
     def test_large_read_until(self):
         # Performance test: read_until used to have a quadratic component
         # so a read_until of 4MB would take 8 seconds; now it takes 0.25

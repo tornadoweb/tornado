@@ -156,3 +156,6 @@ In progress
   response code the same as a 303.  This is contrary to the HTTP spec
   but consistent with all browsers and other major HTTP clients
   (including `CurlAsyncHTTPClient`).
+* Fixed a bug with `IOStream.read_until_close` with a ``streaming_callback``,
+  which would cause some data to be passed to the final callback instead
+  of the streaming callback.
