@@ -2002,6 +2002,11 @@ class URLSpec(object):
         self.name = name
         self._path, self._group_count = self._find_groups()
 
+    def __repr__(self):
+        return '%s(%r, %s, kwargs=%r, name=%r)' % \
+                (self.__class__.__name__, self.regex.pattern,
+                 self.handler_class, self.kwargs, self.name)
+
     def _find_groups(self):
         """Returns a tuple (reverse string, group count) for a url.
 
