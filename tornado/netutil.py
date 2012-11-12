@@ -361,7 +361,7 @@ class CachedResolver(object):
     domain.
     """
 
-    def __init__(self, io_loop=None, executor=None, expire_minutes=60):
+    def __init__(self, io_loop=None, executor=None, expire_minutes=1):
         self.io_loop = io_loop or IOLoop.instance()
         self.executor = executor or dummy_executor
         self.expire_minutes = expire_minutes
