@@ -562,9 +562,19 @@ class TwitterMixin(OAuthMixin):
 
     def _oauth_get_user(self, access_token, callback):
         callback = self.async_callback(self._parse_user_response, callback)
-        self.twitter_request(
-            "/users/show/" + access_token["screen_name"],
-            access_token=access_token, callback=callback)
+        try:
+            self.twitter_request(
+                "/users/show/" + access_token["screen_name"],
+                access_token=access_token, callback=callback)
+        except KeyError:
+            try:
+                self.twitter_request(
+                    "/users/show/" + access_token.get(b"screen_name").decode("utf-8"),
+                    access_token=access_token, callback=callback)
+            except SyntaxError:
+                self.twitter_request(
+                    "/users/show/" + access_token["screen_name"],
+                    access_token=access_token, callback=callback)
 
     def _parse_user_response(self, callback, user):
         if user:
