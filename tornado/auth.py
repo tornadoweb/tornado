@@ -567,9 +567,14 @@ class TwitterMixin(OAuthMixin):
                 "/users/show/" + access_token["screen_name"],
                 access_token=access_token, callback=callback)
         except KeyError:
-            self.twitter_request(
-                "/users/show/" + access_token.get(b"screen_name").decode("utf-8"),
-                access_token=access_token, callback=callback)
+            try:
+                self.twitter_request(
+                    "/users/show/" + access_token.get(b"screen_name").decode("utf-8"),
+                    access_token=access_token, callback=callback)
+            except SyntaxError:
+                self.twitter_request(
+                    "/users/show/" + access_token["screen_name"],
+                    access_token=access_token, callback=callback)
 
     def _parse_user_response(self, callback, user):
         if user:
