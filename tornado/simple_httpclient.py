@@ -98,7 +98,13 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         # so make sure we don't modify the caller's object.  This is also
         # where normal dicts get converted to HTTPHeaders objects.
         request.headers = HTTPHeaders(request.headers)
+
         callback = stack_context.wrap(callback)
+        if request.header_callback:
+            request.header_callback = stack_context.wrap(request.header_callback)
+        if request.streaming_callback:
+            request.streaming_callback = stack_context.wrap(request.streaming_callback)
+
         self.queue.append((request, callback))
         self._process_queue()
         if self.queue:
