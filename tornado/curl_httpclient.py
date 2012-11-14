@@ -77,6 +77,14 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
+        
+        if request.header_callback:
+            request.header_callback = stack_context.wrap(request.header_callback)
+        if request.streaming_callback:
+            request.streaming_callback = stack_context.wrap(request.streaming_callback)
+        if request.prepare_curl_callback:
+            request.prepare_curl_callback = stack_context.wrap(request.prepare_curl_callback)
+        
         self._requests.append((request, stack_context.wrap(callback)))
         self._process_queue()
         self._set_timeout(0)
