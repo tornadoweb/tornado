@@ -354,6 +354,7 @@ class Runner(object):
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
                     self.deactivate_stack_context()
+                    self.deactivate_stack_context = None
                     return
                 except Exception:
                     self.finished = True

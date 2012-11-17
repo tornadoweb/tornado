@@ -269,6 +269,28 @@ class GenTest(AsyncTestCase):
         initial_stack_depth = len(stack_context._state.contexts)
         self.run_gen(outer)
 
+    def test_stack_context_leak_exception(self):
+        # same as previous, but with a function that exits with an exception
+        from tornado import stack_context
+
+        @gen.engine
+        def inner(callback):
+            yield gen.Task(self.io_loop.add_callback)
+            1 / 0
+
+        @gen.engine
+        def outer():
+            for i in xrange(10):
+                try:
+                    yield gen.Task(inner)
+                except ZeroDivisionError:
+                    pass
+            stack_increase = len(stack_context._state.contexts) - initial_stack_depth
+            self.assertTrue(stack_increase <= 2)
+            self.stop()
+        initial_stack_depth = len(stack_context._state.contexts)
+        self.run_gen(outer)
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous

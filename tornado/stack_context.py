@@ -161,6 +161,7 @@ class ExceptionStackContext(object):
                 return self.exception_handler(type, value, traceback)
         finally:
             _state.contexts = self.old_contexts
+            self.old_contexts = None
 
 
 class NullContext(object):
