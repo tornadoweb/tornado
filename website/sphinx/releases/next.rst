@@ -159,3 +159,7 @@ In progress
 * Fixed a bug with `IOStream.read_until_close` with a ``streaming_callback``,
   which would cause some data to be passed to the final callback instead
   of the streaming callback.
+* The `tornado.auth` mixin classes now define a method
+  ``get_auth_http_client``, which can be overridden to use a non-default
+  `AsyncHTTPClient` instance (e.g. to use a different `IOLoop`)
+* `tornado.auth.TwitterMixin` now works on Python 3.
