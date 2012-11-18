@@ -1621,8 +1621,6 @@ class StaticFileHandler(RequestHandler):
             self.set_header("Expires", datetime.datetime.utcnow() +
                                        datetime.timedelta(seconds=cache_time))
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
-        else:
-            self.set_header("Cache-Control", "public")
 
         self.set_extra_headers(path)
 
@@ -1638,9 +1636,6 @@ class StaticFileHandler(RequestHandler):
 
         with open(abspath, "rb") as file:
             data = file.read()
-            hasher = hashlib.sha1()
-            hasher.update(data)
-            self.set_header("Etag", '"%s"' % hasher.hexdigest())
             if include_body:
                 self.write(data)
             else:
@@ -2010,6 +2005,11 @@ class URLSpec(object):
         self.kwargs = kwargs or {}
         self.name = name
         self._path, self._group_count = self._find_groups()
+
+    def __repr__(self):
+        return '%s(%r, %s, kwargs=%r, name=%r)' % \
+                (self.__class__.__name__, self.regex.pattern,
+                 self.handler_class, self.kwargs, self.name)
 
     def _find_groups(self):
         """Returns a tuple (reverse string, group count) for a url.

@@ -365,8 +365,11 @@ class _HTTPConnection(object):
             content_length = None
 
         if self.request.header_callback is not None:
+            # re-attach the newline we split on earlier
+            self.request.header_callback(first_line + _)
             for k, v in self.headers.get_all():
                 self.request.header_callback("%s: %s\r\n" % (k, v))
+            self.request.header_callback('\r\n')
 
         if self.request.method == "HEAD":
             # HEAD requests never have content, even though they may have

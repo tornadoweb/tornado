@@ -82,6 +82,25 @@ class TestIOLoop(AsyncTestCase):
         thread.join()
         other_ioloop.close()
 
+    def test_add_callback_while_closing(self):
+        # Issue #635: add_callback() should raise a clean exception
+        # if called while another thread is closing the IOLoop.
+        closing = threading.Event()
+        def target():
+            other_ioloop.add_callback(other_ioloop.stop)
+            other_ioloop.start()
+            closing.set()
+            other_ioloop.close(all_fds=True)
+        other_ioloop = IOLoop()
+        thread = threading.Thread(target=target)
+        thread.start()
+        closing.wait()
+        for i in range(1000):
+            try:
+                other_ioloop.add_callback(lambda: None)
+            except RuntimeError, e:
+                self.assertEqual("IOLoop is closing", str(e))
+                break
 
 class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):

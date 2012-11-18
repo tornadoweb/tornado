@@ -406,6 +406,7 @@ class PollIOLoop(IOLoop):
         self._timeouts = []
         self._running = False
         self._stopped = False
+        self._closing = False
         self._thread_ident = None
         self._blocking_signal_threshold = None
 
@@ -417,6 +418,8 @@ class PollIOLoop(IOLoop):
                          self.READ)
 
     def close(self, all_fds=False):
+        with self._callback_lock:
+            self._closing = True
         self.remove_handler(self._waker.fileno())
         if all_fds:
             for fd in self._handlers.keys()[:]:
@@ -608,6 +611,8 @@ class PollIOLoop(IOLoop):
 
     def add_callback(self, callback):
         with self._callback_lock:
+            if self._closing:
+                raise RuntimeError("IOLoop is closing")
             list_empty = not self._callbacks
             self._callbacks.append(stack_context.wrap(callback))
         if list_empty and thread.get_ident() != self._thread_ident:
