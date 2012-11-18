@@ -1314,32 +1314,21 @@ class Application(object):
     def add_handlers(self, host_pattern, host_handlers):
         """Appends the given handlers to our handler list.
 
-        Note that host patterns are processed sequentially in the
-        order they were added, and only the first matching pattern is
-        used.
+        Host patterns are processed sequentially in the order they were
+        added. All matching patterns will be considered.
         """
         if not host_pattern.endswith("$"):
             host_pattern += "$"
-
-        # Search for an existing handlers entry for this host pattern.
-        handlers = None
-        for entry in self.handlers:
-            if entry[0].pattern == host_pattern:
-                handlers = entry[1]
-                break
-
-        # Otherwise, add a new handlers entry for this host pattern.
-        if handlers is None:
-            handlers = []
-            # The handlers with the wildcard host_pattern are a special
-            # case - they're added in the constructor but should have lower
-            # precedence than the more-precise handlers added later.
-            # If a wildcard handler group exists, it should always be last
-            # in the list, so insert new groups just before it.
-            if self.handlers and self.handlers[-1][0].pattern == '.*$':
-                self.handlers.insert(-1, (re.compile(host_pattern), handlers))
-            else:
-                self.handlers.append((re.compile(host_pattern), handlers))
+        handlers = []
+        # The handlers with the wildcard host_pattern are a special
+        # case - they're added in the constructor but should have lower
+        # precedence than the more-precise handlers added later.
+        # If a wildcard handler group exists, it should always be last
+        # in the list, so insert new groups just before it.
+        if self.handlers and self.handlers[-1][0].pattern == '.*$':
+            self.handlers.insert(-1, (re.compile(host_pattern), handlers))
+        else:
+            self.handlers.append((re.compile(host_pattern), handlers))
 
         for spec in host_handlers:
             if type(spec) is type(()):
@@ -1371,15 +1360,16 @@ class Application(object):
 
     def _get_host_handlers(self, request):
         host = request.host.lower().split(':')[0]
+        matches = []
         for pattern, handlers in self.handlers:
             if pattern.match(host):
-                return handlers
+                matches.extend(handlers)
         # Look for default host if not behind load balancer (for debugging)
-        if "X-Real-Ip" not in request.headers:
+        if not matches and "X-Real-Ip" not in request.headers:
             for pattern, handlers in self.handlers:
                 if pattern.match(self.default_host):
-                    return handlers
-        return None
+                    matches.extend(handlers)
+        return matches or None
 
     def _load_ui_methods(self, methods):
         if type(methods) is types.ModuleType:
