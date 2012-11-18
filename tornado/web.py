@@ -1612,8 +1612,6 @@ class StaticFileHandler(RequestHandler):
             self.set_header("Expires", datetime.datetime.utcnow() +
                                        datetime.timedelta(seconds=cache_time))
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
-        else:
-            self.set_header("Cache-Control", "public")
 
         self.set_extra_headers(path)
 
@@ -1629,9 +1627,6 @@ class StaticFileHandler(RequestHandler):
 
         with open(abspath, "rb") as file:
             data = file.read()
-            hasher = hashlib.sha1()
-            hasher.update(data)
-            self.set_header("Etag", '"%s"' % hasher.hexdigest())
             if include_body:
                 self.write(data)
             else:

@@ -163,3 +163,5 @@ In progress
   ``get_auth_http_client``, which can be overridden to use a non-default
   `AsyncHTTPClient` instance (e.g. to use a different `IOLoop`)
 * `tornado.auth.TwitterMixin` now works on Python 3.
+* ``Etag``/``If-None-Match`` requests now work with `StaticFileHandler`.
+* `StaticFileHandler` no longer sets ``Cache-Control: public`` unnecessarily.

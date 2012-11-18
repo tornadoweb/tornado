@@ -785,13 +785,19 @@ class StaticFileTest(WebTestCase):
         response = self.fetch(path % int(include_host))
         self.assertEqual(response.body, utf8(str(True)))
 
-    def test_static_304(self):
+    def test_static_304_if_modified_since(self):
         response1 = self.fetch("/static/robots.txt")
         response2 = self.fetch("/static/robots.txt", headers={
                 'If-Modified-Since': response1.headers['Last-Modified']})
         self.assertEqual(response2.code, 304)
         self.assertTrue('Content-Length' not in response2.headers)
         self.assertTrue('Last-Modified' not in response2.headers)
+
+    def test_static_304_if_none_match(self):
+        response1 = self.fetch("/static/robots.txt")
+        response2 = self.fetch("/static/robots.txt", headers={
+                'If-None-Match': response1.headers['Etag']})
+        self.assertEqual(response2.code, 304)
 wsgi_safe.append(StaticFileTest)
 
 class CustomStaticFileTest(WebTestCase):
