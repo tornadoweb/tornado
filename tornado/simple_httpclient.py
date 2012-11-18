@@ -62,8 +62,9 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     """
     def initialize(self, io_loop=None, max_clients=10,
+                   max_simultaneous_connections=None,
                    hostname_mapping=None, max_buffer_size=104857600,
-                   resolver=None):
+                   ca_certs=_DEFAULT_CA_CERTS, resolver=None):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -89,6 +90,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.active = {}
         self.hostname_mapping = hostname_mapping
         self.max_buffer_size = max_buffer_size
+        self.ca_certs = ca_certs
         self.resolver = resolver or Resolver(io_loop=io_loop)
 
     def fetch(self, request, callback, **kwargs):
@@ -115,7 +117,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 _HTTPConnection(self.io_loop, self, request,
                                 functools.partial(self._release_fetch, key),
                                 callback,
-                                self.max_buffer_size)
+                                self.max_buffer_size,
+                                self.ca_certs)
 
     def _release_fetch(self, key):
         del self.active[key]
@@ -126,7 +129,7 @@ class _HTTPConnection(object):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
     def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size):
+                 final_callback, max_buffer_size, ca_certs=None):
         self.start_time = io_loop.time()
         self.io_loop = io_loop
         self.client = client
@@ -138,6 +141,7 @@ class _HTTPConnection(object):
         self.headers = None
         self.chunks = None
         self._decompressor = None
+        self.ca_certs = ca_certs
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None
         with stack_context.StackContext(self.cleanup):
@@ -188,7 +192,7 @@ class _HTTPConnection(object):
             if self.request.ca_certs is not None:
                 ssl_options["ca_certs"] = self.request.ca_certs
             else:
-                ssl_options["ca_certs"] = _DEFAULT_CA_CERTS
+                ssl_options["ca_certs"] = self.ca_certs
             if self.request.client_key is not None:
                 ssl_options["keyfile"] = self.request.client_key
             if self.request.client_cert is not None:
