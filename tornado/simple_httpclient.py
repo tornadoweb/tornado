@@ -225,9 +225,16 @@ class _HTTPConnection(object):
         if timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + timeout,
-                stack_context.wrap(self._on_timeout))
+                stack_context.wrap(self._on_connect_timeout))
         self.stream.set_close_callback(self._on_close)
         self.stream.connect(sockaddr, self._on_connect)
+        
+    def _on_connect_timeout(self):
+        self._timeout = None
+        self._run_callback(HTTPResponse(self.request, 599,
+                                        request_time=time.time() - self.start_time,
+                                        error=HTTPError(599, "Connect timeout")))
+        self.stream.close()
 
     def _on_timeout(self):
         self._timeout = None
@@ -279,12 +286,14 @@ class _HTTPConnection(object):
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
             if self.request.method in ("POST", "PATCH", "PUT"):
-                assert self.request.body is not None
+                assert (self.request.body is not None) or ((self.request.contentCallback is not None) and (self.request.contentLength is not None))
             else:
                 assert self.request.body is None
         if self.request.body is not None:
-            self.request.headers["Content-Length"] = str(len(
-                    self.request.body))
+            self.request.headers["Content-Length"] = str(len(self.request.body))
+        elif self.request.contentCallback is not None:
+            self.request.headers["Content-Length"] = str(self.request.contentLength)
+        
         if (self.request.method == "POST" and
             "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
@@ -302,6 +311,10 @@ class _HTTPConnection(object):
         self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
         if self.request.body is not None:
             self.stream.write(self.request.body)
+        
+        elif self.request.contentCallback is not None:
+            self.request.contentCallback(self.stream) 
+        
         self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
 
     def _release(self):
