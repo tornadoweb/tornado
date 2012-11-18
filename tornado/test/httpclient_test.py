@@ -6,10 +6,12 @@ import base64
 import binascii
 from contextlib import closing
 import functools
+import re
 
 from tornado.escape import utf8
 from tornado.iostream import IOStream
 from tornado import netutil
+from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler, url
@@ -135,6 +137,25 @@ Transfer-Encoding: chunked
             self.assertEqual(resp.body, b("12"))
             self.io_loop.remove_handler(sock.fileno())
 
+    def test_streaming_stack_context(self):
+        chunks = []
+        exc_info = []
+        def error_handler(typ, value, tb):
+            exc_info.append((typ, value, tb))
+            return True
+
+        def streaming_cb(chunk):
+            chunks.append(chunk)
+            if chunk == b('qwer'):
+                1 / 0
+
+        with ExceptionStackContext(error_handler):
+            self.fetch('/chunk', streaming_callback=streaming_cb)
+
+        self.assertEqual(chunks, [b('asdf'), b('qwer')])
+        self.assertEqual(1, len(exc_info))
+        self.assertIs(exc_info[0][0], ZeroDivisionError)
+
     def test_basic_auth(self):
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
                                     auth_password="open sesame").body,
@@ -188,3 +209,43 @@ Transfer-Encoding: chunked
         self.assertEqual(type(response.headers["Content-Type"]), str)
         self.assertEqual(type(response.code), int)
         self.assertEqual(type(response.effective_url), str)
+
+    def test_header_callback(self):
+        first_line = []
+        headers = {}
+        chunks = []
+
+        def header_callback(header_line):
+            if header_line.startswith('HTTP/'):
+                first_line.append(header_line)
+            elif header_line != '\r\n':
+                k, v = header_line.split(':', 1)
+                headers[k] = v.strip()
+
+        def streaming_callback(chunk):
+            # All header callbacks are run before any streaming callbacks,
+            # so the header data is available to process the data as it
+            # comes in.
+            self.assertEqual(headers['Content-Type'], 'text/html; charset=UTF-8')
+            chunks.append(chunk)
+
+        self.fetch('/chunk', header_callback=header_callback,
+                   streaming_callback=streaming_callback)
+        self.assertEqual(len(first_line), 1)
+        self.assertRegexpMatches(first_line[0], 'HTTP/1.[01] 200 OK\r\n')
+        self.assertEqual(chunks, [b('asdf'), b('qwer')])
+
+    def test_header_callback_stack_context(self):
+        exc_info = []
+        def error_handler(typ, value, tb):
+            exc_info.append((typ, value, tb))
+            return True
+
+        def header_callback(header_line):
+            if header_line.startswith('Content-Type:'):
+                1 / 0
+
+        with ExceptionStackContext(error_handler):
+            self.fetch('/chunk', header_callback=header_callback)
+        self.assertEqual(len(exc_info), 1)
+        self.assertIs(exc_info[0][0], ZeroDivisionError)

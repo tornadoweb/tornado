@@ -38,9 +38,9 @@ import time
 import weakref
 
 from tornado.escape import utf8
-from tornado import httputil
+from tornado import httputil, stack_context
 from tornado.ioloop import IOLoop
-from tornado.util import import_object, bytes_type, Configurable
+from tornado.util import import_object, Configurable
 
 
 class HTTPClient(object):
@@ -232,8 +232,13 @@ class HTTPRequest(object):
            `~HTTPResponse.body` and `~HTTPResponse.buffer` will be empty in
            the final response.
         :arg callable header_callback: If set, `header_callback` will
-           be run with each header line as it is received, and
-           `~HTTPResponse.headers` will be empty in the final response.
+           be run with each header line as it is received (including the
+           first line, e.g. ``HTTP/1.0 200 OK\r\n``, and a final line
+           containing only ``\r\n``.  All lines include the trailing newline
+           characters).  `~HTTPResponse.headers` will be empty in the final
+           response.  This is most useful in conjunction with
+           `streaming_callback`, because it's the only way to get access to
+           header data while the request is in progress.
         :arg callable prepare_curl_callback: If set, will be called with
            a `pycurl.Curl` object to allow the application to make additional
            `setopt` calls.
@@ -281,9 +286,9 @@ class HTTPRequest(object):
         self.user_agent = user_agent
         self.use_gzip = use_gzip
         self.network_interface = network_interface
-        self.streaming_callback = streaming_callback
-        self.header_callback = header_callback
-        self.prepare_curl_callback = prepare_curl_callback
+        self.streaming_callback = stack_context.wrap(streaming_callback)
+        self.header_callback = stack_context.wrap(header_callback)
+        self.prepare_curl_callback = stack_context.wrap(prepare_curl_callback)
         self.allow_nonstandard_methods = allow_nonstandard_methods
         self.validate_cert = validate_cert
         self.ca_certs = ca_certs

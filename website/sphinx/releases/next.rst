@@ -165,3 +165,10 @@ In progress
 * `tornado.auth.TwitterMixin` now works on Python 3.
 * ``Etag``/``If-None-Match`` requests now work with `StaticFileHandler`.
 * `StaticFileHandler` no longer sets ``Cache-Control: public`` unnecessarily.
+* The behavior of ``header_callback`` with `SimpleAsyncHTTPClient` has
+  changed and is now the same as that of `CurlAsyncHTTPClient`.  The
+  header callback now receives the first line of the response (e.g.
+  ``HTTP/1.0 200 OK``) and the final empty line.
+* Secondary `AsyncHTTPClient` callbacks (``streaming_callback``,
+  ``header_callback``, and ``prepare_curl_callback``) now respect
+  `StackContext`.
