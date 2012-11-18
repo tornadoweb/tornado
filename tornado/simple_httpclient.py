@@ -40,17 +40,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     This class implements an HTTP 1.1 client on top of Tornado's IOStreams.
     It does not currently implement all applicable parts of the HTTP
-    specification, but it does enough to work with major web service APIs
-    (mostly tested against the Twitter API so far).
-
-    This class has not been tested extensively in production and
-    should be considered somewhat experimental as of the release of
-    tornado 1.2.  It is intended to become the default AsyncHTTPClient
-    implementation in a future release.  It may either be used
-    directly, or to facilitate testing of this class with an existing
-    application, setting the environment variable
-    USE_SIMPLE_HTTPCLIENT=1 will cause this class to transparently
-    replace tornado.httpclient.AsyncHTTPClient.
+    specification, but it does enough to work with major web service APIs.
 
     Some features found in the curl-based AsyncHTTPClient are not yet
     supported.  In particular, proxies are not supported, connections
