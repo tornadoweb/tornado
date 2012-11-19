@@ -399,8 +399,6 @@ class BaseIOStream(object):
                 # be available on self.error for apps that care).
                 self.close()
                 return
-            gen_log.warning("Read error on %d: %s",
-                            self.fileno(), e)
             self.close()
             raise
         if chunk is None:

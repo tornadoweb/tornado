@@ -390,6 +390,39 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    def test_inline_read_error(self):
+        # An error on an inline read is raised without logging (on the
+        # assumption that it will eventually be noticed or logged further
+        # up the stack).
+        server, client = self.make_iostream_pair()
+        try:
+            os.close(server.socket.fileno())
+            with self.assertRaises(socket.error):
+                server.read_bytes(1, lambda data: None)
+        finally:
+            server.close()
+            client.close()
+
+    def test_async_read_error_logging(self):
+        # Socket errors on asynchronous reads should be logged (but only
+        # once).
+        server, client = self.make_iostream_pair()
+        server.set_close_callback(self.stop)
+        try:
+            # Start a read that will be fullfilled asynchronously.
+            server.read_bytes(1, lambda data: None)
+            client.write(b('a'))
+            # Stub out read_from_fd to make it fail.
+            def fake_read_from_fd():
+                os.close(server.socket.fileno())
+                server.__class__.read_from_fd(server)
+            server.read_from_fd = fake_read_from_fd
+            # This log message is from _handle_read (not read_from_fd).
+            with ExpectLog(gen_log, "error on read"):
+                self.wait()
+        finally:
+            server.close()
+            client.close()
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):
