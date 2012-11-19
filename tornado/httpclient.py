@@ -40,7 +40,7 @@ import weakref
 from tornado.escape import utf8
 from tornado import httputil, stack_context
 from tornado.ioloop import IOLoop
-from tornado.util import import_object, Configurable
+from tornado.util import Configurable
 
 
 class HTTPClient(object):
@@ -195,16 +195,30 @@ class AsyncHTTPClient(Configurable):
 
 class HTTPRequest(object):
     """HTTP client request object."""
+
+    # Default values for HTTPRequest parameters.
+    # Merged with the values on the request object by AsyncHTTPClient
+    # implementations.
+    _DEFAULTS = dict(
+        connect_timeout=20.0,
+        request_timeout=20.0,
+        follow_redirects=True,
+        max_redirects=5,
+        use_gzip=True,
+        proxy_password='',
+        allow_nonstandard_methods=False,
+        validate_cert=True)
+
     def __init__(self, url, method="GET", headers=None, body=None,
                  auth_username=None, auth_password=None,
-                 connect_timeout=20.0, request_timeout=20.0,
-                 if_modified_since=None, follow_redirects=True,
-                 max_redirects=5, user_agent=None, use_gzip=True,
+                 connect_timeout=None, request_timeout=None,
+                 if_modified_since=None, follow_redirects=None,
+                 max_redirects=None, user_agent=None, use_gzip=None,
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
                  proxy_host=None, proxy_port=None, proxy_username=None,
-                 proxy_password='', allow_nonstandard_methods=False,
-                 validate_cert=True, ca_certs=None,
+                 proxy_password=None, allow_nonstandard_methods=None,
+                 validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
                  client_key=None, client_cert=None):
         """Creates an `HTTPRequest`.
@@ -392,6 +406,24 @@ class HTTPError(Exception):
         message = message or httplib.responses.get(code, "Unknown")
         self.response = response
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
+
+class _RequestProxy(object):
+    """Combines an object with a dictionary of defaults.
+
+    Used internally by AsyncHTTPClient implementations.
+    """
+    def __init__(self, request, defaults):
+        self.request = request
+        self.defaults = defaults
+
+    def __getattr__(self, name):
+        request_attr = getattr(self.request, name)
+        if request_attr is not None:
+            return request_attr
+        elif self.defaults is not None:
+            return self.defaults.get(name, None)
+        else:
+            return None
 
 
 def main():

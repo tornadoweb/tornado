@@ -2,7 +2,7 @@
 from __future__ import absolute_import, division, with_statement
 
 from tornado.escape import utf8, _unicode, native_str
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.netutil import Resolver
@@ -53,7 +53,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """
     def initialize(self, io_loop=None, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
-                   resolver=None):
+                   resolver=None, defaults=None):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -80,6 +80,9 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.hostname_mapping = hostname_mapping
         self.max_buffer_size = max_buffer_size
         self.resolver = resolver or Resolver(io_loop=io_loop)
+        self.defaults = dict(HTTPRequest._DEFAULTS)
+        if defaults is not None:
+            self.defaults.update(defaults)
 
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
@@ -88,6 +91,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         # so make sure we don't modify the caller's object.  This is also
         # where normal dicts get converted to HTTPHeaders objects.
         request.headers = HTTPHeaders(request.headers)
+        request = _RequestProxy(request, self.defaults)
         callback = stack_context.wrap(callback)
         self.queue.append((request, callback))
         self._process_queue()
@@ -396,10 +400,11 @@ class _HTTPConnection(object):
         if (self.request.follow_redirects and
             self.request.max_redirects > 0 and
             self.code in (301, 302, 303, 307)):
-            new_request = copy.copy(self.request)
+            assert isinstance(self.request, _RequestProxy)
+            new_request = copy.copy(self.request.request)
             new_request.url = urlparse.urljoin(self.request.url,
                                                self.headers["Location"])
-            new_request.max_redirects -= 1
+            new_request.max_redirects = self.request.max_redirects - 1
             del new_request.headers["Host"]
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
             # Client SHOULD make a GET request after a 303.

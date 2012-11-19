@@ -172,3 +172,13 @@ In progress
 * Secondary `AsyncHTTPClient` callbacks (``streaming_callback``,
   ``header_callback``, and ``prepare_curl_callback``) now respect
   `StackContext`.
+* `AsyncHTTPClient.configure` and all `AsyncHTTPClient` constructors
+  now take a ``defaults`` keyword argument.  This argument should be a
+  dictionary, and its values will be used in place of corresponding
+  attributes of `HTTPRequest` that are not set.
+* All unset attributes of `tornado.httpclient.HTTPRequest` are now ``None``.
+  The default values of some attributes (``connect_timeout``,
+  ``request_timeout``, ``follow_redirects``, ``max_redirects``,
+  ``use_gzip``, ``proxy_password``, ``allow_nonstandard_methods``,
+  and ``validate_cert`` have been moved from `HTTPRequest` to the
+  client implementations.

@@ -178,10 +178,13 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
 
     def raw_fetch(self, headers, body):
         client = SimpleAsyncHTTPClient(self.io_loop)
-        conn = RawRequestHTTPConnection(self.io_loop, client,
-                                        httpclient.HTTPRequest(self.get_url("/")),
-                                        None, self.stop,
-                                        1024 * 1024)
+        conn = RawRequestHTTPConnection(
+            self.io_loop, client,
+            httpclient._RequestProxy(
+                httpclient.HTTPRequest(self.get_url("/")),
+                dict(httpclient.HTTPRequest._DEFAULTS)),
+            None, self.stop,
+            1024 * 1024)
         conn.set_request(
             b("\r\n").join(headers +
                            [utf8("Content-Length: %d\r\n" % len(body))]) +

@@ -9,10 +9,12 @@ import functools
 import re
 
 from tornado.escape import utf8
+from tornado.httpclient import HTTPRequest, _RequestProxy
 from tornado.iostream import IOStream
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port
+from tornado.test.util import unittest
 from tornado.util import b, bytes_type
 from tornado.web import Application, RequestHandler, url
 
@@ -55,6 +57,12 @@ class EchoPostHandler(RequestHandler):
     def post(self):
         self.write(self.request.body)
 
+
+class UserAgentHandler(RequestHandler):
+    def get(self):
+        self.write(self.request.headers.get('User-Agent', 'User agent not set'))
+
+
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
@@ -69,6 +77,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/auth", AuthHandler),
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
             url("/echopost", EchoPostHandler),
+            url("/user_agent", UserAgentHandler),
             ], gzip=True)
 
     def test_hello_world(self):
@@ -249,3 +258,46 @@ Transfer-Encoding: chunked
             self.fetch('/chunk', header_callback=header_callback)
         self.assertEqual(len(exc_info), 1)
         self.assertIs(exc_info[0][0], ZeroDivisionError)
+
+    def test_configure_defaults(self):
+        defaults = dict(user_agent='TestDefaultUserAgent')
+        # Construct a new instance of the configured client class
+        client = self.http_client.__class__(self.io_loop, force_instance=True,
+                                            defaults=defaults)
+        client.fetch(self.get_url('/user_agent'), callback=self.stop)
+        response = self.wait()
+        self.assertEqual(response.body, b('TestDefaultUserAgent'))
+
+
+class RequestProxyTest(unittest.TestCase):
+    def test_request_set(self):
+        proxy = _RequestProxy(HTTPRequest('http://example.com/',
+                                          user_agent='foo'),
+                              dict())
+        self.assertEqual(proxy.user_agent, 'foo')
+
+    def test_default_set(self):
+        proxy = _RequestProxy(HTTPRequest('http://example.com/'),
+                              dict(network_interface='foo'))
+        self.assertEqual(proxy.network_interface, 'foo')
+
+    def test_both_set(self):
+        proxy = _RequestProxy(HTTPRequest('http://example.com/',
+                                          proxy_host='foo'),
+                              dict(proxy_host='bar'))
+        self.assertEqual(proxy.proxy_host, 'foo')
+
+    def test_neither_set(self):
+        proxy = _RequestProxy(HTTPRequest('http://example.com/'),
+                              dict())
+        self.assertIs(proxy.auth_username, None)
+
+    def test_bad_attribute(self):
+        proxy = _RequestProxy(HTTPRequest('http://example.com/'),
+                              dict())
+        with self.assertRaises(AttributeError):
+            proxy.foo
+
+    def test_defaults_none(self):
+        proxy = _RequestProxy(HTTPRequest('http://example.com/'), None)
+        self.assertIs(proxy.auth_username, None)
