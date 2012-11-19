@@ -89,7 +89,8 @@ class SSLTestMixin(object):
         # connection, rather than waiting for a timeout or otherwise
         # misbehaving.
         with ExpectLog(gen_log, '(SSL Error|uncaught exception)'):
-            self.http_client.fetch(self.get_url("/"), self.stop,
+            self.http_client.fetch(self.get_url("/").replace('https:', 'http:'),
+                                   self.stop,
                                    request_timeout=3600,
                                    connect_timeout=3600)
             response = self.wait()
