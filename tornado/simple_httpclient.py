@@ -373,8 +373,7 @@ class _HTTPConnection(object):
         if 100 <= self.code < 200 or self.code in (204, 304):
             # These response codes never have bodies
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
-            if ("Transfer-Encoding" in self.headers or
-                content_length not in (None, 0)):
+            if "Transfer-Encoding" in self.headers:
                 raise ValueError("Response with code %d should not have body" %
                                  self.code)
             self._on_body(b(""))
