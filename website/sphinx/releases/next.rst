@@ -183,3 +183,6 @@ In progress
 * `HTTPServer` now takes a ``protocol`` keyword argument which can be set
   to ``https`` if the server is behind an SSL-decoding proxy that does not
   set any supported X-headers.
+* `tornado.web.ErrorHandler` no longer requires XSRF tokens on ``POST``
+  requests, so posts to an unknown url will always return 404 instead of
+  complaining about XSRF tokens.

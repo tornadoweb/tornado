@@ -1523,6 +1523,12 @@ class ErrorHandler(RequestHandler):
     def prepare(self):
         raise HTTPError(self._status_code)
 
+    def check_xsrf_cookie(self):
+        # POSTs to an ErrorHandler don't actually have side effects,
+        # so we don't need to check the xsrf token.  This allows POSTs
+        # to the wrong url to return a 404 instead of 403.
+        pass
+
 
 class RedirectHandler(RequestHandler):
     """Redirects the client to the given URL for all GET requests.

@@ -8,7 +8,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import b, bytes_type, ObjectDict
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler
 
 import binascii
 import datetime
@@ -959,3 +959,23 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
     def test_httperror_str(self):
         self.assertEqual(str(HTTPError(682, reason="Foo")), "HTTP 682: Foo")
 wsgi_safe.append(RaiseWithReasonTest)
+
+
+class ErrorHandlerXSRFTest(WebTestCase):
+    def get_handlers(self):
+        # note that if the handlers list is empty we get the default_host
+        # redirect fallback instead of a 404, so test with both an
+        # explicitly defined error handler and an implicit 404.
+        return [('/error', ErrorHandler, dict(status_code=417))]
+
+    def get_app_kwargs(self):
+        return dict(xsrf_cookies=True)
+
+    def test_error_xsrf(self):
+        response = self.fetch('/error', method='POST', body='')
+        self.assertEqual(response.code, 417)
+
+    def test_404_xsrf(self):
+        response = self.fetch('/404', method='POST', body='')
+        self.assertEqual(response.code, 404)
+wsgi_safe.append(ErrorHandlerXSRFTest)
