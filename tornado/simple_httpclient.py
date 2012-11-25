@@ -365,12 +365,12 @@ class _HTTPConnection(object):
                 self.request.header_callback("%s: %s\r\n" % (k, v))
             self.request.header_callback('\r\n')
 
-        if self.request.method == "HEAD":
-            # HEAD requests never have content, even though they may have
-            # content-length headers
+        if self.request.method == "HEAD" or self.code == 304:
+            # HEAD requests and 304 responses never have content, even
+            # though they may have content-length headers
             self._on_body(b(""))
             return
-        if 100 <= self.code < 200 or self.code in (204, 304):
+        if 100 <= self.code < 200 or self.code == 204:
             # These response codes never have bodies
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
             if ("Transfer-Encoding" in self.headers or

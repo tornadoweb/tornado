@@ -63,6 +63,17 @@ class UserAgentHandler(RequestHandler):
         self.write(self.request.headers.get('User-Agent', 'User agent not set'))
 
 
+class ContentLength304Handler(RequestHandler):
+    def get(self):
+        self.set_status(304)
+        self.set_header('Content-Length', 42)
+
+    def _clear_headers_for_304(self):
+        # Tornado strips content-length from 304 responses, but here we
+        # want to simulate servers that include the headers anyway.
+        pass
+
+
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
@@ -78,6 +89,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
             url("/echopost", EchoPostHandler),
             url("/user_agent", UserAgentHandler),
+            url("/304_with_content_length", ContentLength304Handler),
             ], gzip=True)
 
     def test_hello_world(self):
@@ -268,6 +280,14 @@ Transfer-Encoding: chunked
         response = self.wait()
         self.assertEqual(response.body, b('TestDefaultUserAgent'))
 
+    def test_304_with_content_length(self):
+        # According to the spec 304 responses SHOULD NOT include
+        # Content-Length or other entity headers, but some servers do it
+        # anyway.
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.5
+        response = self.fetch('/304_with_content_length')
+        self.assertEqual(response.code, 304)
+        self.assertEqual(response.headers['Content-Length'], '42')
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):

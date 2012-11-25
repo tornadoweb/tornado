@@ -178,3 +178,5 @@ In progress
   ``use_gzip``, ``proxy_password``, ``allow_nonstandard_methods``,
   and ``validate_cert`` have been moved from `HTTPRequest` to the
   client implementations.
+* `simple_httpclient` now accepts responses with a 304 status code that
+  include a ``Content-Length`` header.
