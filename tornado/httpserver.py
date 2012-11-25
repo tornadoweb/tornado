@@ -78,10 +78,14 @@ class HTTPServer(TCPServer):
     ensure the connection is closed on every request no matter what HTTP
     version the client is using.
 
-    If ``xheaders`` is ``True``, we support the ``X-Real-Ip`` and ``X-Scheme``
-    headers, which override the remote IP and HTTP scheme for all requests.
-    These headers are useful when running Tornado behind a reverse proxy or
-    load balancer.
+    If ``xheaders`` is ``True``, we support the
+    ``X-Real-Ip``/``X-Forwarded-For`` and
+    ``X-Scheme``/``X-Forwarded-Proto`` headers, which override the
+    remote IP and URI scheme/protocol for all requests.  These headers
+    are useful when running Tornado behind a reverse proxy or load
+    balancer.  The ``protocol`` argument can also be set to ``https``
+    if Tornado is run behind an SSL-decoding proxy that does not set one of
+    the supported ``xheaders``.
 
     `HTTPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
     To make this server serve SSL traffic, send the ssl_options dictionary
@@ -134,16 +138,17 @@ class HTTPServer(TCPServer):
 
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, **kwargs):
+                 xheaders=False, ssl_options=None, protocol=None, **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
+        self.protocol = protocol
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
     def handle_stream(self, stream, address):
         HTTPConnection(stream, address, self.request_callback,
-                       self.no_keep_alive, self.xheaders)
+                       self.no_keep_alive, self.xheaders, self.protocol)
 
 
 class _BadRequestException(Exception):
@@ -158,12 +163,13 @@ class HTTPConnection(object):
     until the HTTP conection is closed.
     """
     def __init__(self, stream, address, request_callback, no_keep_alive=False,
-                 xheaders=False):
+                 xheaders=False, protocol=None):
         self.stream = stream
         self.address = address
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
+        self.protocol = protocol
         self._request = None
         self._request_finished = False
         # Save stack context here, outside of any request.  This keeps
@@ -259,7 +265,7 @@ class HTTPConnection(object):
 
             self._request = HTTPRequest(
                 connection=self, method=method, uri=uri, version=version,
-                headers=headers, remote_ip=remote_ip)
+                headers=headers, remote_ip=remote_ip, protocol=self.protocol)
 
             content_length = headers.get("Content-Length")
             if content_length:

@@ -180,3 +180,6 @@ In progress
   client implementations.
 * `simple_httpclient` now accepts responses with a 304 status code that
   include a ``Content-Length`` header.
+* `HTTPServer` now takes a ``protocol`` keyword argument which can be set
+  to ``https`` if the server is behind an SSL-decoding proxy that does not
+  set any supported X-headers.

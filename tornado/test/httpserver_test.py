@@ -370,6 +370,17 @@ class XHeaderTest(HandlerBaseTestCase):
             self.fetch_json("/", headers=invalid_host)["remote_ip"],
             "127.0.0.1")
 
+class ManualProtocolTest(HandlerBaseTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write(dict(protocol=self.request.protocol))
+
+    def get_httpserver_options(self):
+        return dict(protocol='https')
+
+    def test_manual_protocol(self):
+        self.assertEqual(self.fetch_json('/')['protocol'], 'https')
+
 
 class UnixSocketTest(AsyncTestCase):
     """HTTPServers can listen on Unix sockets too.
