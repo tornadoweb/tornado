@@ -70,6 +70,7 @@ import functools
 import datetime
 import time
 
+from twisted.internet.base import BlockingResolver
 from twisted.internet.posixbase import PosixReactorBase
 from twisted.internet.interfaces import \
     IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor
@@ -148,6 +149,10 @@ class TornadoReactor(PosixReactorBase):
         self._fds = {}  # a map of fd to a (reader, writer) tuple
         self._delayedCalls = {}
         PosixReactorBase.__init__(self)
+        # The default is a ThreadedResolver which spawns worker threads
+        # from a thread pool which is probably *correct* but was quite
+        # confusing and inconsistent with default Tornado behavior.
+        self.installResolver(BlockingResolver())
         self.addSystemEventTrigger('during', 'shutdown', self.crash)
 
         # IOLoop.start() bypasses some of the reactor initialization.
