@@ -25,14 +25,15 @@
    .. automethod:: IOLoop.update_handler
    .. automethod:: IOLoop.remove_handler
 
-   Timeouts
-   ^^^^^^^^
+   Callbacks and timeouts
+   ^^^^^^^^^^^^^^^^^^^^^^
 
    .. automethod:: IOLoop.add_callback
    .. automethod:: IOLoop.add_callback_from_signal
    .. automethod:: IOLoop.add_future
    .. automethod:: IOLoop.add_timeout
    .. automethod:: IOLoop.remove_timeout
+   .. automethod:: IOLoop.time
    .. autoclass:: PeriodicCallback
       :members:
 

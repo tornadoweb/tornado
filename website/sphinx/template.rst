@@ -6,7 +6,7 @@
    Class reference
    ---------------
 
-   .. autoclass:: Template
+   .. autoclass:: Template(template_string, name="<string>", loader=None, compress_whitespace=None, autoescape="xhtml_escape")
       :members:
 
    .. autoclass:: BaseLoader

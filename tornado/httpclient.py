@@ -221,7 +221,7 @@ class HTTPRequest(object):
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
                  client_key=None, client_cert=None):
-        """Creates an `HTTPRequest`.
+        r"""Creates an `HTTPRequest`.
 
         All parameters except `url` are optional.
 

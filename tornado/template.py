@@ -203,6 +203,9 @@ class Template(object):
     We compile into Python from the given template_string. You can generate
     the template from variables with generate().
     """
+    # note that the constructor's signature is not extracted with
+    # autodoc because _UNSET looks like garbage.  When changing
+    # this signature update website/sphinx/template.rst too.
     def __init__(self, template_string, name="<string>", loader=None,
                  compress_whitespace=None, autoescape=_UNSET):
         self.name = name
