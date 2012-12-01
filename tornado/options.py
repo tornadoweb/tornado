@@ -256,6 +256,49 @@ class OptionParser(object):
         for callback in self._parse_callbacks:
             callback()
 
+    def mockable(self):
+        """Returns a wrapper around self that is compatible with `mock.patch`.
+
+        The `mock.patch` function (included in the standard library
+        `unittest.mock` package since Python 3.3, or in the
+        third-party `mock` package for older versions of Python) is
+        incompatible with objects like ``options`` that override
+        ``__getattr__`` and ``__setattr__``.  This function returns an
+        object that can be used with `mock.patch.object` to modify
+        option values::
+
+            with mock.patch.object(options.mockable(), 'name', value):
+                assert options.name == value
+        """
+        return _Mockable(self)
+
+class _Mockable(object):
+    """`mock.patch` compatible wrapper for `OptionParser`.
+
+    As of ``mock`` version 1.0.1, when an object uses ``__getattr__``
+    hooks instead of ``__dict__``, ``patch.__exit__`` tries to delete
+    the attribute it set instead of setting a new one (assuming that
+    the object does not catpure ``__setattr__``, so the patch
+    created a new attribute in ``__dict__``).
+
+    _Mockable's getattr and setattr pass through to the underlying
+    OptionParser, and delattr undoes the effect of a previous setattr.
+    """
+    def __init__(self, options):
+        # Modify __dict__ directly to bypass __setattr__
+        self.__dict__['_options'] = options
+        self.__dict__['_originals'] = {}
+
+    def __getattr__(self, name):
+        return getattr(self._options, name)
+
+    def __setattr__(self, name, value):
+        assert name not in self._originals, "don't reuse mockable objects"
+        self._originals[name] = getattr(self._options, name)
+        setattr(self._options, name, value)
+
+    def __delattr__(self, name):
+        setattr(self._options, name, self._originals.pop(name))
 
 class _Option(object):
     def __init__(self, name, default=None, type=basestring, help=None,

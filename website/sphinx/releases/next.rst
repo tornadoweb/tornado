@@ -186,3 +186,6 @@ In progress
 * `tornado.web.ErrorHandler` no longer requires XSRF tokens on ``POST``
   requests, so posts to an unknown url will always return 404 instead of
   complaining about XSRF tokens.
+* `tornado.options.options` (and `OptionParser` instances generally) now
+  have a `mockable()` method that returns a wrapper object compatible with
+  `mock.patch`.

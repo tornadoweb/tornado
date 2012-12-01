@@ -10,6 +10,14 @@ try:
 except ImportError:
     from io import StringIO  # python 3
 
+try:
+    from unittest import mock  # python 3.3
+except ImportError:
+    try:
+        import mock  # third-party mock package
+    except ImportError:
+        mock = None
+
 class OptionsTest(unittest.TestCase):
     def test_parse_command_line(self):
         options = OptionParser()
@@ -71,3 +79,46 @@ class OptionsTest(unittest.TestCase):
                 sub_options.parse_command_line(["subcommand", "--verbose"])
         finally:
             sys.stderr = orig_stderr
+
+    def test_setattr(self):
+        options = OptionParser()
+        options.define('foo', default=1, type=int)
+        options.foo = 2
+        self.assertEqual(options.foo, 2)
+
+    def test_setattr_type_check(self):
+        # setattr requires that options be the right type and doesn't
+        # parse from string formats.
+        options = OptionParser()
+        options.define('foo', default=1, type=int)
+        with self.assertRaises(Error):
+            options.foo = '2'
+
+    def test_setattr_with_callback(self):
+        values = []
+        options = OptionParser()
+        options.define('foo', default=1, type=int, callback=values.append)
+        options.foo = 2
+        self.assertEqual(values, [2])
+
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_mock_patch(self):
+        # ensure that our setattr hooks don't interfere with mock.patch
+        options = OptionParser()
+        options.define('foo', default=1)
+        options.parse_command_line(['main.py', '--foo=2'])
+        self.assertEqual(options.foo, 2)
+
+        with mock.patch.object(options.mockable(), 'foo', 3):
+            self.assertEqual(options.foo, 3)
+        self.assertEqual(options.foo, 2)
+
+        # Try nested patches mixed with explicit sets
+        with mock.patch.object(options.mockable(), 'foo', 4):
+            self.assertEqual(options.foo, 4)
+            options.foo = 5
+            self.assertEqual(options.foo, 5)
+            with mock.patch.object(options.mockable(), 'foo', 6):
+                self.assertEqual(options.foo, 6)
+            self.assertEqual(options.foo, 5)
+        self.assertEqual(options.foo, 2)
