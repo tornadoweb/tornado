@@ -67,16 +67,21 @@ class HTTPServer(TCPServer):
         http_server.listen(8888)
         ioloop.IOLoop.instance().start()
 
-    `HTTPServer` is a very basic connection handler. Beyond parsing the
-    HTTP request body and headers, the only HTTP semantics implemented
-    in `HTTPServer` is HTTP/1.1 keep-alive connections. We do not, however,
-    implement chunked encoding, so the request callback must provide a
-    ``Content-Length`` header or implement chunked encoding for HTTP/1.1
-    requests for the server to run correctly for HTTP/1.1 clients. If
-    the request handler is unable to do this, you can provide the
-    ``no_keep_alive`` argument to the `HTTPServer` constructor, which will
-    ensure the connection is closed on every request no matter what HTTP
-    version the client is using.
+    `HTTPServer` is a very basic connection handler.  It parses the request
+    headers and body, but the request callback is responsible for producing
+    the response exactly as it will appear on the wire.  This affords
+    maximum flexibility for applications to implement whatever parts
+    of HTTP responses are required.
+
+    `HTTPServer` supports keep-alive connections by default
+    (automatically for HTTP/1.1, or for HTTP/1.0 when the client
+    requests ``Connection: keep-alive``).  This means that the request
+    callback must generate a properly-framed response, using either
+    the ``Content-Length`` header or ``Transfer-Encoding: chunked``.
+    Applications that are unable to frame their responses properly
+    should instead return a ``Connection: close`` header in each
+    response and pass ``no_keep_alive=True`` to the `HTTPServer`
+    constructor.
 
     If ``xheaders`` is ``True``, we support the
     ``X-Real-Ip``/``X-Forwarded-For`` and
