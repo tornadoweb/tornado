@@ -1768,6 +1768,10 @@ class GZipContentEncoding(OutputTransform):
             "gzip" in request.headers.get("Accept-Encoding", "")
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
+        if 'Vary' in headers:
+            headers['Vary'] += b(', Accept-Encoding')
+        else:
+            headers['Vary'] = b('Accept-Encoding')
         if self._gzipping:
             ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = (ctype in self.CONTENT_TYPES) and \

@@ -46,8 +46,22 @@ class TestMixin(object):
     def get_app_kwargs(self):
         return dict(static_path='.')
 
+    def get_allowed_warnings(self):
+        return [
+            # We can't set a non-heuristic freshness at the framework level,
+            # so just ignore this warning
+            rs.FRESHNESS_HEURISTIC,
+            # For our small test responses the Content-Encoding header
+            # wipes out any gains from compression
+            rs.CONNEG_GZIP_BAD,
+            ]
+
+    def get_allowed_errors(self):
+        return []
+
     def check_url(self, path, method='GET', body=None, headers=None,
-                  expected_status=200, allowed_warnings=None):
+                  expected_status=200, allowed_warnings=None,
+                  allowed_errors=None):
         url = self.get_url(path)
         state = self.run_redbot(url, method, body, headers)
         if not state.res_complete:
@@ -59,20 +73,19 @@ class TestMixin(object):
 
         self.assertEqual(int(state.res_status), expected_status)
 
-        allowed_warnings = tuple(allowed_warnings or ())
-        # We can't set a non-heuristic freshness at the framework level,
-        # so just ignore this error.
-        allowed_warnings += (rs.FRESHNESS_HEURISTIC,)
+        allowed_warnings = (allowed_warnings or []) + self.get_allowed_warnings()
+        allowed_errors = (allowed_errors or []) + self.get_allowed_errors()
 
         errors = []
         warnings = []
         for msg in state.messages:
             if msg.level == 'bad':
                 logger = logging.error
-                errors.append(msg)
+                if not isinstance(msg, tuple(allowed_errors)):
+                    errors.append(msg)
             elif msg.level == 'warning':
                 logger = logging.warning
-                if not isinstance(msg, allowed_warnings):
+                if not isinstance(msg, tuple(allowed_warnings)):
                     warnings.append(msg)
             elif msg.level in ('good', 'info', 'uri'):
                 logger = logging.info
@@ -139,6 +152,20 @@ class TestMixin(object):
 class DefaultHTTPTest(AsyncHTTPTestCase, LogTrapTestCase, TestMixin):
     def get_app(self):
         return Application(self.get_handlers(), **self.get_app_kwargs())
+
+class GzipHTTPTest(AsyncHTTPTestCase, LogTrapTestCase, TestMixin):
+    def get_app(self):
+        return Application(self.get_handlers(), gzip=True, **self.get_app_kwargs())
+
+    def get_allowed_errors(self):
+        return super(GzipHTTPTest, self).get_allowed_errors() + [
+            # TODO: The Etag is supposed to change when Content-Encoding is
+            # used.  This should be fixed, but it's difficult to do with the
+            # way GZipContentEncoding fits into the pipeline, and in practice
+            # it doesn't seem likely to cause any problems as long as we're
+            # using the correct Vary header.
+            rs.VARY_ETAG_DOESNT_CHANGE,
+            ]
 
 if __name__ == '__main__':
     parse_command_line()

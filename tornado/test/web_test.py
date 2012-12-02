@@ -616,6 +616,11 @@ js_embed()
         self.assertEqual(response.body, b(""))
         response = self.fetch("/get_argument")
         self.assertEqual(response.body, b("default"))
+
+    def test_no_gzip(self):
+        response = self.fetch('/get_argument')
+        self.assertNotIn('Accept-Encoding', response.headers.get('Vary', ''))
+        self.assertNotIn('gzip', response.headers.get('Content-Encoding', ''))
 wsgi_safe.append(WSGISafeWebTest)
 
 
@@ -979,3 +984,29 @@ class ErrorHandlerXSRFTest(WebTestCase):
         response = self.fetch('/404', method='POST', body='')
         self.assertEqual(response.code, 404)
 wsgi_safe.append(ErrorHandlerXSRFTest)
+
+
+class GzipTestCase(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            if self.get_argument('vary', None):
+                self.set_header('Vary', self.get_argument('vary'))
+            self.write('hello world')
+
+    def get_app_kwargs(self):
+        return dict(gzip=True)
+
+    def test_gzip(self):
+        response = self.fetch('/')
+        self.assertEqual(response.headers['Content-Encoding'], 'gzip')
+        self.assertEqual(response.headers['Vary'], 'Accept-Encoding')
+
+    def test_gzip_not_requested(self):
+        response = self.fetch('/', use_gzip=False)
+        self.assertNotIn('Content-Encoding', response.headers)
+        self.assertEqual(response.headers['Vary'], 'Accept-Encoding')
+
+    def test_vary_already_present(self):
+        response = self.fetch('/?vary=Accept-Language')
+        self.assertEqual(response.headers['Vary'],
+                         'Accept-Language, Accept-Encoding')
