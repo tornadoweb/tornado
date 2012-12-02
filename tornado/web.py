@@ -113,6 +113,8 @@ class RequestHandler(object):
         self._finished = False
         self._auto_finish = True
         self._transforms = None  # will be set in _execute
+        self.path_args = None
+        self.path_kwargs = None
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
         # UIModules are available as both `modules` and `_modules` in the
@@ -1051,6 +1053,9 @@ class RequestHandler(object):
         try:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
+            self.path_args = [self.decode_argument(arg) for arg in args]
+            self.path_kwargs = dict((k, self.decode_argument(v, name=k))
+                                    for (k, v) in kwargs.iteritems())
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
@@ -1058,10 +1063,8 @@ class RequestHandler(object):
                 self.check_xsrf_cookie()
             self.prepare()
             if not self._finished:
-                args = [self.decode_argument(arg) for arg in args]
-                kwargs = dict((k, self.decode_argument(v, name=k))
-                              for (k, v) in kwargs.iteritems())
-                getattr(self, self.request.method.lower())(*args, **kwargs)
+                getattr(self, self.request.method.lower())(
+                    *self.path_args, **self.path_kwargs)
                 if self._auto_finish and not self._finished:
                     self.finish()
         except Exception, e:

@@ -1010,3 +1010,28 @@ class GzipTestCase(SimpleHandlerTestCase):
         response = self.fetch('/?vary=Accept-Language')
         self.assertEqual(response.headers['Vary'],
                          'Accept-Language, Accept-Encoding')
+
+class PathArgsInPrepareTest(WebTestCase):
+    class Handler(RequestHandler):
+        def prepare(self):
+            self.write(dict(args=self.path_args, kwargs=self.path_kwargs))
+
+        def get(self, path):
+            assert path == 'foo'
+            self.finish()
+
+    def get_app(self):
+        return Application([('/pos/(.*)', self.Handler),
+                            ('/kw/(?P<path>.*)', self.Handler)])
+
+    def test_pos(self):
+        response = self.fetch('/pos/foo')
+        response.rethrow()
+        data = json_decode(response.body)
+        self.assertEqual(data, {'args': ['foo'], 'kwargs': {}})
+
+    def test_kw(self):
+        response = self.fetch('/kw/foo')
+        response.rethrow()
+        data = json_decode(response.body)
+        self.assertEqual(data, {'args': [], 'kwargs': {'path': 'foo'}})

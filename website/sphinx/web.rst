@@ -35,6 +35,14 @@
       The `tornado.httpserver.HTTPRequest` object containing additional
       request parameters including e.g. headers and body data.
 
+   .. attribute:: RequestHandler.path_args
+   .. attribute:: RequestHandler.path_kwargs
+
+      The ``path_args`` and ``path_kwargs`` attributes contain the positional
+      and keyword arguments that are passed to the `get`/`post`/etc methods.
+      These attributes are set before those methods are called, so the values
+      are available during `prepare`.
+
    Output
    ^^^^^^
 

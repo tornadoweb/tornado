@@ -189,3 +189,8 @@ In progress
 * `tornado.options.options` (and `OptionParser` instances generally) now
   have a `mockable()` method that returns a wrapper object compatible with
   `mock.patch`.
+* `tornado.web.RequestHandler` has new attributes ``path_args`` and
+  ``path_kwargs``, which contain the positional and keyword arguments
+  that are passed to the ``get``/``post``/etc method.  These attributes
+  are set before those methods are called, so they are available during
+  ``prepare()``
