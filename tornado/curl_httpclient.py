@@ -96,17 +96,18 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             pycurl.POLL_INOUT: ioloop.IOLoop.READ | ioloop.IOLoop.WRITE
         }
         if event == pycurl.POLL_REMOVE:
-            self.io_loop.remove_handler(fd)
-            del self._fds[fd]
+            if fd in self._fds:
+                self.io_loop.remove_handler(fd)
+                del self._fds[fd]
         else:
             ioloop_event = event_map[event]
             if fd not in self._fds:
-                self._fds[fd] = ioloop_event
                 self.io_loop.add_handler(fd, self._handle_events,
                                          ioloop_event)
-            else:
                 self._fds[fd] = ioloop_event
+            else:
                 self.io_loop.update_handler(fd, ioloop_event)
+                self._fds[fd] = ioloop_event
 
     def _set_timeout(self, msecs):
         """Called by libcurl to schedule a timeout."""
