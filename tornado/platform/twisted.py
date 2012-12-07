@@ -431,6 +431,8 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
                 self.reactor.removeWriter(self.fds[fd])
 
     def remove_handler(self, fd):
+        if fd not in self.fds:
+            return
         self.fds[fd].lost = True
         if self.fds[fd].reading:
             self.reactor.removeReader(self.fds[fd])

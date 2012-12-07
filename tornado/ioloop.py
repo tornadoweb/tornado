@@ -442,7 +442,7 @@ class PollIOLoop(IOLoop):
         self._events.pop(fd, None)
         try:
             self._impl.unregister(fd)
-        except (OSError, IOError):
+        except Exception:
             gen_log.debug("Error deleting fd from IOLoop", exc_info=True)
 
     def set_blocking_signal_threshold(self, seconds, action):

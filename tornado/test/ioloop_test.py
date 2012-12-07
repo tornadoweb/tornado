@@ -65,6 +65,15 @@ class TestIOLoop(AsyncTestCase):
             self.io_loop.remove_handler(sock.fileno())
             sock.close()
 
+    def test_remove_without_add(self):
+        # remove_handler should not throw an exception if called on an fd
+        # was never added.
+        sock, port = bind_unused_port()
+        try:
+            self.io_loop.remove_handler(sock.fileno())
+        finally:
+            sock.close()
+
     def test_add_callback_from_signal(self):
         # cheat a little bit and just run this normally, since we can't
         # easily simulate the races that happen with real signal handlers
