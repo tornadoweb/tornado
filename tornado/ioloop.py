@@ -359,8 +359,7 @@ class IOLoop(Configurable):
         assert isinstance(future, IOLoop._FUTURE_TYPES)
         callback = stack_context.wrap(callback)
         future.add_done_callback(
-            lambda future: self.add_callback(
-                functools.partial(callback, future)))
+            lambda future: self.add_callback(callback, future))
 
     def _run_callback(self, callback):
         """Runs a callback with error handling.

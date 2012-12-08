@@ -268,7 +268,7 @@ class Subprocess(object):
         assert ret_pid == pid
         subproc = cls._waiting.pop(pid)
         subproc.io_loop.add_callback_from_signal(
-            functools.partial(subproc._set_returncode, status))
+            subproc._set_returncode, status)
 
     def _set_returncode(self, status):
         if os.WIFSIGNALED(status):
