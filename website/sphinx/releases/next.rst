@@ -196,3 +196,5 @@ In progress
   ``prepare()``
 * `IOLoop.add_callback` and `add_callback_from_signal` now take
   ``*args, **kwargs`` to pass along to the callback.
+* When gzip is enabled in a `tornado.web.Application`, appropriate
+  ``Vary: Accept-Encoding`` headers are now sent.
