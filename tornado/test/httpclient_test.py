@@ -7,12 +7,13 @@ import binascii
 from contextlib import closing
 import functools
 import re
+import sys
 
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, _RequestProxy
 from tornado.iostream import IOStream
 from tornado import netutil
-from tornado.stack_context import ExceptionStackContext
+from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port
 from tornado.test.util import unittest
 from tornado.util import b, bytes_type
@@ -288,6 +289,26 @@ Transfer-Encoding: chunked
         response = self.fetch('/304_with_content_length')
         self.assertEqual(response.code, 304)
         self.assertEqual(response.headers['Content-Length'], '42')
+
+    def test_final_callback_stack_context(self):
+        # The final callback should be run outside of the httpclient's
+        # stack_context.  We want to ensure that there is not stack_context
+        # between the user's callback and the IOLoop, so monkey-patch
+        # IOLoop.handle_callback_exception and disable the test harness's
+        # context with a NullContext.
+        # Note that this does not apply to secondary callbacks (header
+        # and streaming_callback), as errors there must be seen as errors
+        # by the http client so it can clean up the connection.
+        exc_info = []
+        def handle_callback_exception(callback):
+            exc_info.append(sys.exc_info())
+            self.stop()
+        self.io_loop.handle_callback_exception = handle_callback_exception
+        with NullContext():
+            self.http_client.fetch(self.get_url('/hello'),
+                                   lambda response: 1 / 0)
+        self.wait()
+        self.assertEqual(exc_info[0][0], ZeroDivisionError)
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):

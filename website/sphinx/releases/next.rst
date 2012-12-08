@@ -198,3 +198,5 @@ In progress
   ``*args, **kwargs`` to pass along to the callback.
 * When gzip is enabled in a `tornado.web.Application`, appropriate
   ``Vary: Accept-Encoding`` headers are now sent.
+* Fixed a bug in which `SimpleAsyncHTTPClient` callbacks were being run in the
+  client's ``stack_context``.

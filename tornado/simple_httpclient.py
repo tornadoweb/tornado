@@ -309,7 +309,7 @@ class _HTTPConnection(object):
         if self.final_callback is not None:
             final_callback = self.final_callback
             self.final_callback = None
-            final_callback(response)
+            self.io_loop.add_callback(final_callback, response)
 
     @contextlib.contextmanager
     def cleanup(self):
