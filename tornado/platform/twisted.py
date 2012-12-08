@@ -458,8 +458,9 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
     def remove_timeout(self, timeout):
         timeout.cancel()
 
-    def add_callback(self, callback):
-        self.reactor.callFromThread(wrap(callback))
+    def add_callback(self, callback, *args, **kwargs):
+        self.reactor.callFromThread(functools.partial(wrap(callback),
+                                                      *args, **kwargs))
 
-    def add_callback_from_signal(self, callback):
-        self.add_callback(callback)
+    def add_callback_from_signal(self, callback, *args, **kwargs):
+        self.add_callback(callback, *args, **kwargs)

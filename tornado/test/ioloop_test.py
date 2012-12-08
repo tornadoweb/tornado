@@ -2,12 +2,14 @@
 
 
 from __future__ import absolute_import, division, with_statement
+import contextlib
 import datetime
+import functools
 import threading
 import time
 
 from tornado.ioloop import IOLoop
-from tornado.stack_context import ExceptionStackContext
+from tornado.stack_context import ExceptionStackContext, StackContext, wrap
 from tornado.testing import AsyncTestCase, bind_unused_port
 from tornado.test.util import unittest
 
@@ -110,6 +112,63 @@ class TestIOLoop(AsyncTestCase):
             except RuntimeError, e:
                 self.assertEqual("IOLoop is closing", str(e))
                 break
+
+
+class TestIOLoopAddCallback(AsyncTestCase):
+    def setUp(self):
+        super(TestIOLoopAddCallback, self).setUp()
+        self.active_contexts = []
+
+    def add_callback(self, callback, *args, **kwargs):
+        self.io_loop.add_callback(callback, *args, **kwargs)
+
+    @contextlib.contextmanager
+    def context(self, name):
+        self.active_contexts.append(name)
+        yield
+        self.assertEqual(self.active_contexts.pop(), name)
+
+    def test_pre_wrap(self):
+        # A pre-wrapped callback is run in the context in which it was
+        # wrapped, not when it was added to the IOLoop.
+        def f1():
+            self.assertIn('c1', self.active_contexts)
+            self.assertNotIn('c2', self.active_contexts)
+            self.stop()
+
+        with StackContext(functools.partial(self.context, 'c1')):
+            wrapped = wrap(f1)
+
+        with StackContext(functools.partial(self.context, 'c2')):
+            self.add_callback(wrapped)
+
+        self.wait()
+
+    def test_pre_wrap_with_args(self):
+        # Same as test_pre_wrap, but the function takes arguments.
+        # Implementation note: The function must not be wrapped in a
+        # functools.partial until after it has been passed through
+        # stack_context.wrap
+        def f1(foo, bar):
+            self.assertIn('c1', self.active_contexts)
+            self.assertNotIn('c2', self.active_contexts)
+            self.stop((foo, bar))
+
+        with StackContext(functools.partial(self.context, 'c1')):
+            wrapped = wrap(f1)
+
+        with StackContext(functools.partial(self.context, 'c2')):
+            self.add_callback(wrapped, 1, bar=2)
+
+        result = self.wait()
+        self.assertEqual(result, (1, 2))
+
+
+class TestIOLoopAddCallbackFromSignal(TestIOLoopAddCallback):
+    # Repeat the add_callback tests using add_callback_from_signal
+    def add_callback(self, callback, *args, **kwargs):
+        self.io_loop.add_callback_from_signal(callback, *args, **kwargs)
+
 
 class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):

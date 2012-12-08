@@ -320,7 +320,7 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def add_callback(self, callback):
+    def add_callback(self, callback, *args, **kwargs):
         """Calls the given callback on the next I/O loop iteration.
 
         It is safe to call this method from any thread at any time,
@@ -335,7 +335,7 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def add_callback_from_signal(self, callback):
+    def add_callback_from_signal(self, callback, *args, **kwargs):
         """Calls the given callback on the next I/O loop iteration.
 
         Safe for use from a Python signal handler; should not be used
@@ -609,12 +609,13 @@ class PollIOLoop(IOLoop):
         # collection pass whenever there are too many dead timeouts.
         timeout.callback = None
 
-    def add_callback(self, callback):
+    def add_callback(self, callback, *args, **kwargs):
         with self._callback_lock:
             if self._closing:
                 raise RuntimeError("IOLoop is closing")
             list_empty = not self._callbacks
-            self._callbacks.append(stack_context.wrap(callback))
+            self._callbacks.append(functools.partial(
+                    stack_context.wrap(callback), *args, **kwargs))
         if list_empty and thread.get_ident() != self._thread_ident:
             # If we're in the IOLoop's thread, we know it's not currently
             # polling.  If we're not, and we added the first callback to an
@@ -624,12 +625,12 @@ class PollIOLoop(IOLoop):
             # avoid it when we can.
             self._waker.wake()
 
-    def add_callback_from_signal(self, callback):
+    def add_callback_from_signal(self, callback, *args, **kwargs):
         with stack_context.NullContext():
             if thread.get_ident() != self._thread_ident:
                 # if the signal is handled on another thread, we can add
                 # it normally (modulo the NullContext)
-                self.add_callback(callback)
+                self.add_callback(callback, *args, **kwargs)
             else:
                 # If we're on the IOLoop's thread, we cannot use
                 # the regular add_callback because it may deadlock on
@@ -639,7 +640,8 @@ class PollIOLoop(IOLoop):
                 # _callback_lock block in IOLoop.start, we may modify
                 # either the old or new version of self._callbacks,
                 # but either way will work.
-                self._callbacks.append(stack_context.wrap(callback))
+                self._callbacks.append(functools.partial(
+                        stack_context.wrap(callback), *args, **kwargs))
 
 
 class _Timeout(object):

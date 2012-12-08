@@ -194,3 +194,5 @@ In progress
   that are passed to the ``get``/``post``/etc method.  These attributes
   are set before those methods are called, so they are available during
   ``prepare()``
+* `IOLoop.add_callback` and `add_callback_from_signal` now take
+  ``*args, **kwargs`` to pass along to the callback.

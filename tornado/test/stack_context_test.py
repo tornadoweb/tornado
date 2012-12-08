@@ -169,5 +169,6 @@ class StackContextTest(AsyncTestCase):
         self.io_loop.add_callback(f1)
         self.wait()
 
+
 if __name__ == '__main__':
     unittest.main()
