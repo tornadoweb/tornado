@@ -316,12 +316,20 @@ class _HTTPConnection(object):
         try:
             yield
         except Exception, e:
-            gen_log.warning("uncaught exception", exc_info=True)
-            self._run_callback(HTTPResponse(self.request, 599, error=e,
-                                request_time=self.io_loop.time() - self.start_time,
-                                ))
-            if hasattr(self, "stream"):
-                self.stream.close()
+            if self.final_callback:
+                gen_log.warning("uncaught exception", exc_info=True)
+                self._run_callback(HTTPResponse(self.request, 599, error=e,
+                                    request_time=self.io_loop.time() - self.start_time,
+                                    ))
+
+                if hasattr(self, "stream"):
+                    self.stream.close()
+            else:
+                # If our callback has already been called, we are probably
+                # catching an exception that is not caused by us but rather
+                # some child of our callback. Rather than drop it on the floor,
+                # pass it along.
+                raise
 
     def _on_close(self):
         if self.final_callback is not None:
