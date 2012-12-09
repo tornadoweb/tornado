@@ -36,9 +36,8 @@ except ImportError:
     netutil = None
     SimpleAsyncHTTPClient = None
 from tornado.log import gen_log
-from tornado.stack_context import StackContext
+from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info
-import contextlib
 import logging
 import os
 import re
@@ -167,13 +166,10 @@ class AsyncTestCase(unittest.TestCase):
         '''
         return IOLoop()
 
-    @contextlib.contextmanager
-    def _stack_context(self):
-        try:
-            yield
-        except Exception:
-            self.__failure = sys.exc_info()
-            self.stop()
+    def _handle_exception(self, typ, value, tb):
+        self.__failure = sys.exc_info()
+        self.stop()
+        return True
 
     def __rethrow(self):
         if self.__failure is not None:
@@ -182,7 +178,7 @@ class AsyncTestCase(unittest.TestCase):
             raise_exc_info(failure)
 
     def run(self, result=None):
-        with StackContext(self._stack_context):
+        with ExceptionStackContext(self._handle_exception):
             super(AsyncTestCase, self).run(result)
         # In case an exception escaped super.run or the StackContext caught
         # an exception when there wasn't a wait() to re-raise it, do so here.

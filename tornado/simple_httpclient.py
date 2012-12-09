@@ -12,7 +12,6 @@ from tornado.util import b, GzipDecompressor
 
 import base64
 import collections
-import contextlib
 import copy
 import functools
 import os.path
@@ -134,7 +133,7 @@ class _HTTPConnection(object):
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None
-        with stack_context.StackContext(self.cleanup):
+        with stack_context.ExceptionStackContext(self._handle_exception):
             self.parsed = urlparse.urlsplit(_unicode(self.request.url))
             if ssl is None and self.parsed.scheme == "https":
                 raise ValueError("HTTPS requires either python2.6+ or "
@@ -311,25 +310,22 @@ class _HTTPConnection(object):
             self.final_callback = None
             self.io_loop.add_callback(final_callback, response)
 
-    @contextlib.contextmanager
-    def cleanup(self):
-        try:
-            yield
-        except Exception, e:
-            if self.final_callback:
-                gen_log.warning("uncaught exception", exc_info=True)
-                self._run_callback(HTTPResponse(self.request, 599, error=e,
-                                    request_time=self.io_loop.time() - self.start_time,
-                                    ))
+    def _handle_exception(self, typ, value, tb):
+        if self.final_callback:
+            gen_log.warning("uncaught exception", exc_info=(typ, value, tb))
+            self._run_callback(HTTPResponse(self.request, 599, error=value,
+                                request_time=self.io_loop.time() - self.start_time,
+                                ))
 
-                if hasattr(self, "stream"):
-                    self.stream.close()
-            else:
-                # If our callback has already been called, we are probably
-                # catching an exception that is not caused by us but rather
-                # some child of our callback. Rather than drop it on the floor,
-                # pass it along.
-                raise
+            if hasattr(self, "stream"):
+                self.stream.close()
+            return True
+        else:
+            # If our callback has already been called, we are probably
+            # catching an exception that is not caused by us but rather
+            # some child of our callback. Rather than drop it on the floor,
+            # pass it along.
+            return False
 
     def _on_close(self):
         if self.final_callback is not None:
