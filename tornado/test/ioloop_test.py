@@ -5,11 +5,12 @@ from __future__ import absolute_import, division, with_statement
 import contextlib
 import datetime
 import functools
+import sys
 import threading
 import time
 
 from tornado.ioloop import IOLoop
-from tornado.stack_context import ExceptionStackContext, StackContext, wrap
+from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port
 from tornado.test.util import unittest
 
@@ -112,6 +113,19 @@ class TestIOLoop(AsyncTestCase):
             except RuntimeError, e:
                 self.assertEqual("IOLoop is closing", str(e))
                 break
+
+    def test_handle_callback_exception(self):
+        # IOLoop.handle_callback_exception can be overridden to catch
+        # exceptions in callbacks.
+        def handle_callback_exception(callback):
+            self.assertIs(sys.exc_info()[0], ZeroDivisionError)
+            self.stop()
+        self.io_loop.handle_callback_exception = handle_callback_exception
+        with NullContext():
+            # remove the test StackContext that would see this uncaught
+            # exception as a test failure.
+            self.io_loop.add_callback(lambda: 1 / 0)
+        self.wait()
 
 
 class TestIOLoopAddCallback(AsyncTestCase):
