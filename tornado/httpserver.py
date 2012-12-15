@@ -382,6 +382,8 @@ class HTTPRequest(object):
             # Squid uses X-Forwarded-For, others use X-Real-Ip
             self.remote_ip = self.headers.get(
                 "X-Real-Ip", self.headers.get("X-Forwarded-For", remote_ip))
+            # use first IP address in comma separated list
+            self.remote_ip = self.remote_ip.split(',')[0]
             if not self._valid_ip(self.remote_ip):
                 self.remote_ip = remote_ip
             # AWS uses X-Forwarded-Proto
