@@ -23,13 +23,13 @@ from __future__ import absolute_import, division, with_statement
 import array
 import functools
 import hashlib
-import logging
 import struct
 import time
 import base64
 import tornado.escape
 import tornado.web
 
+from tornado.log import gen_log, app_log
 from tornado.util import bytes_type, b
 
 
@@ -172,6 +172,14 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         raise NotImplementedError
 
+    def ping(self, data):
+        """Send ping frame to the remote end."""
+        self.ws_connection.write_ping(data)
+
+    def on_pong(self, data):
+        """Invoked when the response to a ping frame is received."""
+        pass
+
     def on_close(self):
         """Invoked when the WebSocket is closed."""
         pass
@@ -257,7 +265,7 @@ class WebSocketProtocol(object):
             try:
                 return callback(*args, **kwargs)
             except Exception:
-                logging.error("Uncaught exception in %s",
+                app_log.error("Uncaught exception in %s",
                               self.request.path, exc_info=True)
                 self._abort()
         return wrapper
@@ -289,7 +297,7 @@ class WebSocketProtocol76(WebSocketProtocol):
         try:
             self._handle_websocket_headers()
         except ValueError:
-            logging.debug("Malformed WebSocket request received")
+            gen_log.debug("Malformed WebSocket request received")
             self._abort()
             return
 
@@ -344,7 +352,7 @@ class WebSocketProtocol76(WebSocketProtocol):
         try:
             challenge_response = self.challenge_response(challenge)
         except ValueError:
-            logging.debug("Malformed key data in WebSocket request")
+            gen_log.debug("Malformed key data in WebSocket request")
             self._abort()
             return
         self._write_response(challenge_response)
@@ -420,6 +428,10 @@ class WebSocketProtocol76(WebSocketProtocol):
         assert isinstance(message, bytes_type)
         self.stream.write(b("\x00") + message + b("\xff"))
 
+    def write_ping(self, data):
+        """Send ping frame."""
+        raise ValueError("Ping messages not supported by this version of websockets")
+
     def close(self):
         """Closes the WebSocket connection."""
         if not self.server_terminated:
@@ -457,7 +469,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._handle_websocket_headers()
             self._accept_connection()
         except ValueError:
-            logging.debug("Malformed WebSocket request received")
+            gen_log.debug("Malformed WebSocket request received")
             self._abort()
             return
 
@@ -524,6 +536,11 @@ class WebSocketProtocol13(WebSocketProtocol):
         message = tornado.escape.utf8(message)
         assert isinstance(message, bytes_type)
         self._write_frame(True, opcode, message)
+
+    def write_ping(self, data):
+        """Send ping frame."""
+        assert isinstance(data, bytes_type)
+        self._write_frame(True, 0x9, data)
 
     def _receive_frame(self):
         self.stream.read_bytes(2, self._on_frame_start)
@@ -632,7 +649,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._write_frame(True, 0xA, data)
         elif opcode == 0xA:
             # Pong
-            pass
+            self.async_callback(self.handler.on_pong)(data)
         else:
             self._abort()
 
@@ -651,4 +668,4 @@ class WebSocketProtocol13(WebSocketProtocol):
             # Give the client a few seconds to complete a clean shutdown,
             # otherwise just close the connection.
             self._waiting = self.stream.io_loop.add_timeout(
-                time.time() + 5, self._abort)
+                self.stream.io_loop.time() + 5, self._abort)

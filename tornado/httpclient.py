@@ -38,9 +38,9 @@ import time
 import weakref
 
 from tornado.escape import utf8
-from tornado import httputil
+from tornado import httputil, stack_context
 from tornado.ioloop import IOLoop
-from tornado.util import import_object, bytes_type
+from tornado.util import Configurable
 
 
 class HTTPClient(object):
@@ -95,7 +95,7 @@ class HTTPClient(object):
         return response
 
 
-class AsyncHTTPClient(object):
+class AsyncHTTPClient(Configurable):
     """An non-blocking HTTP client.
 
     Example usage::
@@ -121,46 +121,31 @@ class AsyncHTTPClient(object):
     are deprecated.  The implementation subclass as well as arguments to
     its constructor can be set with the static method configure()
     """
-    _impl_class = None
-    _impl_kwargs = None
+    @classmethod
+    def configurable_base(cls):
+        return AsyncHTTPClient
 
-    _DEFAULT_MAX_CLIENTS = 10
+    @classmethod
+    def configurable_default(cls):
+        from tornado.simple_httpclient import SimpleAsyncHTTPClient
+        return SimpleAsyncHTTPClient
 
     @classmethod
     def _async_clients(cls):
-        assert cls is not AsyncHTTPClient, "should only be called on subclasses"
-        if not hasattr(cls, '_async_client_dict'):
-            cls._async_client_dict = weakref.WeakKeyDictionary()
-        return cls._async_client_dict
+        attr_name = '_async_client_dict_' + cls.__name__
+        if not hasattr(cls, attr_name):
+            setattr(cls, attr_name,  weakref.WeakKeyDictionary())
+        return getattr(cls, attr_name)
 
-    def __new__(cls, io_loop=None, max_clients=None, force_instance=False,
-                **kwargs):
+    def __new__(cls, io_loop=None, force_instance=False, **kwargs):
         io_loop = io_loop or IOLoop.instance()
-        if cls is AsyncHTTPClient:
-            if cls._impl_class is None:
-                from tornado.simple_httpclient import SimpleAsyncHTTPClient
-                AsyncHTTPClient._impl_class = SimpleAsyncHTTPClient
-            impl = AsyncHTTPClient._impl_class
-        else:
-            impl = cls
-        if io_loop in impl._async_clients() and not force_instance:
-            return impl._async_clients()[io_loop]
-        else:
-            instance = super(AsyncHTTPClient, cls).__new__(impl)
-            args = {}
-            if cls._impl_kwargs:
-                args.update(cls._impl_kwargs)
-            args.update(kwargs)
-            if max_clients is not None:
-                # max_clients is special because it may be passed
-                # positionally instead of by keyword
-                args["max_clients"] = max_clients
-            elif "max_clients" not in args:
-                args["max_clients"] = AsyncHTTPClient._DEFAULT_MAX_CLIENTS
-            instance.initialize(io_loop, **args)
-            if not force_instance:
-                impl._async_clients()[io_loop] = instance
-            return instance
+        if io_loop in cls._async_clients() and not force_instance:
+            return cls._async_clients()[io_loop]
+        instance = super(AsyncHTTPClient, cls).__new__(cls, io_loop=io_loop,
+                                                       **kwargs)
+        if not force_instance:
+            cls._async_clients()[io_loop] = instance
+        return instance
 
     def close(self):
         """Destroys this http client, freeing any file descriptors used.
@@ -185,8 +170,8 @@ class AsyncHTTPClient(object):
         """
         raise NotImplementedError()
 
-    @staticmethod
-    def configure(impl, **kwargs):
+    @classmethod
+    def configure(cls, impl, **kwargs):
         """Configures the AsyncHTTPClient subclass to use.
 
         AsyncHTTPClient() actually creates an instance of a subclass.
@@ -205,38 +190,38 @@ class AsyncHTTPClient(object):
 
            AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
         """
-        if isinstance(impl, (unicode, bytes_type)):
-            impl = import_object(impl)
-        if impl is not None and not issubclass(impl, AsyncHTTPClient):
-            raise ValueError("Invalid AsyncHTTPClient implementation")
-        AsyncHTTPClient._impl_class = impl
-        AsyncHTTPClient._impl_kwargs = kwargs
-
-    @staticmethod
-    def _save_configuration():
-        return (AsyncHTTPClient._impl_class, AsyncHTTPClient._impl_kwargs)
-
-    @staticmethod
-    def _restore_configuration(saved):
-        AsyncHTTPClient._impl_class = saved[0]
-        AsyncHTTPClient._impl_kwargs = saved[1]
+        super(AsyncHTTPClient, cls).configure(impl, **kwargs)
 
 
 class HTTPRequest(object):
     """HTTP client request object."""
+
+    # Default values for HTTPRequest parameters.
+    # Merged with the values on the request object by AsyncHTTPClient
+    # implementations.
+    _DEFAULTS = dict(
+        connect_timeout=20.0,
+        request_timeout=20.0,
+        follow_redirects=True,
+        max_redirects=5,
+        use_gzip=True,
+        proxy_password='',
+        allow_nonstandard_methods=False,
+        validate_cert=True)
+
     def __init__(self, url, method="GET", headers=None, body=None,
                  auth_username=None, auth_password=None,
-                 connect_timeout=20.0, request_timeout=20.0,
-                 if_modified_since=None, follow_redirects=True,
-                 max_redirects=5, user_agent=None, use_gzip=True,
+                 connect_timeout=None, request_timeout=None,
+                 if_modified_since=None, follow_redirects=None,
+                 max_redirects=None, user_agent=None, use_gzip=None,
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
                  proxy_host=None, proxy_port=None, proxy_username=None,
-                 proxy_password='', allow_nonstandard_methods=False,
-                 validate_cert=True, ca_certs=None,
+                 proxy_password=None, allow_nonstandard_methods=None,
+                 validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
                  client_key=None, client_cert=None):
-        """Creates an `HTTPRequest`.
+        r"""Creates an `HTTPRequest`.
 
         All parameters except `url` are optional.
 
@@ -261,8 +246,13 @@ class HTTPRequest(object):
            `~HTTPResponse.body` and `~HTTPResponse.buffer` will be empty in
            the final response.
         :arg callable header_callback: If set, `header_callback` will
-           be run with each header line as it is received, and
-           `~HTTPResponse.headers` will be empty in the final response.
+           be run with each header line as it is received (including the
+           first line, e.g. ``HTTP/1.0 200 OK\r\n``, and a final line
+           containing only ``\r\n``.  All lines include the trailing newline
+           characters).  `~HTTPResponse.headers` will be empty in the final
+           response.  This is most useful in conjunction with
+           `streaming_callback`, because it's the only way to get access to
+           header data while the request is in progress.
         :arg callable prepare_curl_callback: If set, will be called with
            a `pycurl.Curl` object to allow the application to make additional
            `setopt` calls.
@@ -310,9 +300,9 @@ class HTTPRequest(object):
         self.user_agent = user_agent
         self.use_gzip = use_gzip
         self.network_interface = network_interface
-        self.streaming_callback = streaming_callback
-        self.header_callback = header_callback
-        self.prepare_curl_callback = prepare_curl_callback
+        self.streaming_callback = stack_context.wrap(streaming_callback)
+        self.header_callback = stack_context.wrap(header_callback)
+        self.prepare_curl_callback = stack_context.wrap(prepare_curl_callback)
         self.allow_nonstandard_methods = allow_nonstandard_methods
         self.validate_cert = validate_cert
         self.ca_certs = ca_certs
@@ -331,11 +321,15 @@ class HTTPResponse(object):
 
     * code: numeric HTTP status code, e.g. 200 or 404
 
+    * reason: human-readable reason phrase describing the status code
+        (with curl_httpclient, this is a default value rather than the
+        server's actual response)
+
     * headers: httputil.HTTPHeaders object
 
     * buffer: cStringIO object for response body
 
-    * body: respose body as string (created on demand from self.buffer)
+    * body: response body as string (created on demand from self.buffer)
 
     * error: Exception object, if any
 
@@ -349,9 +343,10 @@ class HTTPResponse(object):
     """
     def __init__(self, request, code, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
-                 time_info=None):
+                 time_info=None, reason=None):
         self.request = request
         self.code = code
+        self.reason = reason or httplib.responses.get(code, "Unknown")
         if headers is not None:
             self.headers = headers
         else:
@@ -411,6 +406,24 @@ class HTTPError(Exception):
         message = message or httplib.responses.get(code, "Unknown")
         self.response = response
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
+
+class _RequestProxy(object):
+    """Combines an object with a dictionary of defaults.
+
+    Used internally by AsyncHTTPClient implementations.
+    """
+    def __init__(self, request, defaults):
+        self.request = request
+        self.defaults = defaults
+
+    def __getattr__(self, name):
+        request_attr = getattr(self.request, name)
+        if request_attr is not None:
+            return request_attr
+        elif self.defaults is not None:
+            return self.defaults.get(name, None)
+        else:
+            return None
 
 
 def main():

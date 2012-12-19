@@ -5,9 +5,9 @@
 
 
 from __future__ import absolute_import, division, with_statement
-from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin
+from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin
 from tornado.escape import json_decode
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase
 from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous
 
@@ -101,7 +101,38 @@ class OAuth2ClientLoginHandler(RequestHandler, OAuth2Mixin):
         self.authorize_redirect()
 
 
-class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
+class TwitterClientLoginHandler(RequestHandler, TwitterMixin):
+    def initialize(self, test):
+        self._OAUTH_REQUEST_TOKEN_URL = test.get_url('/oauth1/server/request_token')
+        self._OAUTH_ACCESS_TOKEN_URL = test.get_url('/twitter/server/access_token')
+        self._OAUTH_AUTHORIZE_URL = test.get_url('/oauth1/server/authorize')
+        self._TWITTER_BASE_URL = test.get_url('/twitter/api')
+
+    @asynchronous
+    def get(self):
+        if self.get_argument("oauth_token", None):
+            self.get_authenticated_user(self.on_user)
+            return
+        self.authorize_redirect()
+
+    def on_user(self, user):
+        if user is None:
+            raise Exception("user is None")
+        self.finish(user)
+
+    def get_auth_http_client(self):
+        return self.settings['http_client']
+
+
+class TwitterServerAccessTokenHandler(RequestHandler):
+    def get(self):
+        self.write('oauth_token=hjkl&oauth_token_secret=vbnm&screen_name=foo')
+
+class TwitterServerShowUserHandler(RequestHandler):
+    def get(self, screen_name):
+        self.write(dict(screen_name=screen_name, name=screen_name.capitalize()))
+
+class AuthTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application(
             [
@@ -119,12 +150,19 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
                  dict(version='1.0a')),
                 ('/oauth2/client/login', OAuth2ClientLoginHandler, dict(test=self)),
 
+                ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
+
                 # simulated servers
                 ('/openid/server/authenticate', OpenIdServerAuthenticateHandler),
                 ('/oauth1/server/request_token', OAuth1ServerRequestTokenHandler),
                 ('/oauth1/server/access_token', OAuth1ServerAccessTokenHandler),
+
+                ('/twitter/server/access_token', TwitterServerAccessTokenHandler),
+                (r'/twitter/api/users/show/(.*)\.json', TwitterServerShowUserHandler),
                 ],
-            http_client=self.http_client)
+            http_client=self.http_client,
+            twitter_consumer_key='test_twitter_consumer_key',
+            twitter_consumer_secret='test_twitter_consumer_secret')
 
     def test_openid_redirect(self):
         response = self.fetch('/openid/client/login', follow_redirects=False)
@@ -198,3 +236,28 @@ class AuthTest(AsyncHTTPTestCase, LogTrapTestCase):
         response = self.fetch('/oauth2/client/login', follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertTrue('/oauth2/server/authorize?' in response.headers['Location'])
+
+    def test_twitter_redirect(self):
+        # Same as test_oauth10a_redirect
+        response = self.fetch('/twitter/client/login', follow_redirects=False)
+        self.assertEqual(response.code, 302)
+        self.assertTrue(response.headers['Location'].endswith(
+            '/oauth1/server/authorize?oauth_token=zxcv'))
+        # the cookie is base64('zxcv')|base64('1234')
+        self.assertTrue(
+            '_oauth_request_token="enhjdg==|MTIzNA=="' in response.headers['Set-Cookie'],
+            response.headers['Set-Cookie'])
+
+    def test_twitter_get_user(self):
+        response = self.fetch(
+            '/twitter/client/login?oauth_token=zxcv',
+            headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
+        response.rethrow()
+        parsed = json_decode(response.body)
+        self.assertEqual(parsed,
+                         {u'access_token': {u'key': u'hjkl',
+                                            u'screen_name': u'foo',
+                                            u'secret': u'vbnm'},
+                          u'name': u'Foo',
+                          u'screen_name': u'foo',
+                          u'username': u'foo'})

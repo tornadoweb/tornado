@@ -33,7 +33,6 @@ from __future__ import absolute_import, division, with_statement
 
 import Cookie
 import httplib
-import logging
 import sys
 import time
 import tornado
@@ -41,6 +40,7 @@ import urllib
 
 from tornado import escape
 from tornado import httputil
+from tornado.log import access_log
 from tornado import web
 from tornado.escape import native_str, utf8, parse_qs_bytes
 from tornado.util import b, bytes_type
@@ -114,8 +114,8 @@ class WSGIApplication(web.Application):
     def __call__(self, environ, start_response):
         handler = web.Application.__call__(self, HTTPRequest(environ))
         assert handler._finished
-        status = str(handler._status_code) + " " + \
-            httplib.responses[handler._status_code]
+        reason = handler._reason
+        status = str(handler._status_code) + " " + reason
         headers = handler._headers.items() + handler._list_headers
         if hasattr(handler, "_new_cookie"):
             for cookie in handler._new_cookie.values():
@@ -137,11 +137,8 @@ class HTTPRequest(object):
         self.query = environ.get("QUERY_STRING", "")
         if self.query:
             self.uri += "?" + self.query
-            arguments = parse_qs_bytes(native_str(self.query))
-            for name, values in arguments.iteritems():
-                values = [v for v in values if v]
-                if values:
-                    self.arguments[name] = values
+            self.arguments = parse_qs_bytes(native_str(self.query),
+                                            keep_blank_values=True)
         self.version = "HTTP/1.1"
         self.headers = httputil.HTTPHeaders()
         if environ.get("CONTENT_TYPE"):
@@ -248,10 +245,11 @@ class WSGIContainer(object):
         headers = data["headers"]
         header_set = set(k.lower() for (k, v) in headers)
         body = escape.utf8(body)
-        if "content-length" not in header_set:
-            headers.append(("Content-Length", str(len(body))))
-        if "content-type" not in header_set:
-            headers.append(("Content-Type", "text/html; charset=UTF-8"))
+        if status_code != 304:
+            if "content-length" not in header_set:
+                headers.append(("Content-Length", str(len(body))))
+            if "content-type" not in header_set:
+                headers.append(("Content-Type", "text/html; charset=UTF-8"))
         if "server" not in header_set:
             headers.append(("Server", "TornadoServer/%s" % tornado.version))
 
@@ -302,11 +300,11 @@ class WSGIContainer(object):
 
     def _log(self, status_code, request):
         if status_code < 400:
-            log_method = logging.info
+            log_method = access_log.info
         elif status_code < 500:
-            log_method = logging.warning
+            log_method = access_log.warning
         else:
-            log_method = logging.error
+            log_method = access_log.error
         request_time = 1000.0 * request.request_time()
         summary = request.method + " " + request.uri + " (" + \
             request.remote_ip + ")"

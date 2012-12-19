@@ -5,11 +5,12 @@ import traceback
 
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
-from tornado.testing import LogTrapTestCase
+from tornado.testing import ExpectLog
+from tornado.test.util import unittest
 from tornado.util import b, bytes_type, ObjectDict
 
 
-class TemplateTest(LogTrapTestCase):
+class TemplateTest(unittest.TestCase):
     def test_simple(self):
         template = Template("Hello {{ name }}!")
         self.assertEqual(template.generate(name="Ben"),
@@ -96,6 +97,18 @@ class TemplateTest(LogTrapTestCase):
         template = Template(utf8("{% apply upper %}foo{% end %}"))
         self.assertEqual(template.generate(upper=upper), b("FOO"))
 
+    def test_unicode_apply(self):
+        def upper(s):
+            return to_unicode(s).upper()
+        template = Template(utf8(u"{% apply upper %}foo \u00e9{% end %}"))
+        self.assertEqual(template.generate(upper=upper), utf8(u"FOO \u00c9"))
+
+    def test_bytes_apply(self):
+        def upper(s):
+            return utf8(to_unicode(s).upper())
+        template = Template(utf8(u"{% apply upper %}foo \u00e9{% end %}"))
+        self.assertEqual(template.generate(upper=upper), utf8(u"FOO \u00c9"))
+
     def test_if(self):
         template = Template(utf8("{% if x > 4 %}yes{% else %}no{% end %}"))
         self.assertEqual(template.generate(x=5), b("yes"))
@@ -152,7 +165,7 @@ try{% set y = 1/x %}
             pass
 
 
-class StackTraceTest(LogTrapTestCase):
+class StackTraceTest(unittest.TestCase):
     def test_error_line_number_expression(self):
         loader = DictLoader({"test.html": """one
 two{{1/0}}
@@ -235,7 +248,7 @@ three{%end%}
                             traceback.format_exc())
 
 
-class AutoEscapeTest(LogTrapTestCase):
+class AutoEscapeTest(unittest.TestCase):
     def setUp(self):
         self.templates = {
             "escaped.html": "{% autoescape xhtml_escape %}{{ name }}",
@@ -359,7 +372,7 @@ raw: {% raw name %}""",
                          b("""s = "['not a string']"\n"""))
 
 
-class TemplateLoaderTest(LogTrapTestCase):
+class TemplateLoaderTest(unittest.TestCase):
     def setUp(self):
         self.loader = Loader(os.path.join(os.path.dirname(__file__), "templates"))
 

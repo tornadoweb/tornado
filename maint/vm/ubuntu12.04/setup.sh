@@ -12,7 +12,6 @@ apt-get update
 APT_PACKAGES="
 python-pip
 python-dev
-libmysqlclient-dev
 libcurl4-openssl-dev
 python-software-properties
 "
@@ -36,11 +35,11 @@ apt-get -y install $DEADSNAKES_PACKAGES
 
 
 PIP_PACKAGES="
-virtualenv
-tox
-MySQL-python
+futures
 pycurl
+tox
 twisted
+virtualenv
 "
 
 pip install $PIP_PACKAGES

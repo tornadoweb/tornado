@@ -63,7 +63,6 @@ import hashlib
 import hmac
 import httplib
 import itertools
-import logging
 import mimetypes
 import os.path
 import re
@@ -80,6 +79,7 @@ import uuid
 
 from tornado import escape
 from tornado import locale
+from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
@@ -113,6 +113,8 @@ class RequestHandler(object):
         self._finished = False
         self._auto_finish = True
         self._transforms = None  # will be set in _execute
+        self.path_args = None
+        self.path_kwargs = None
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
                      application.ui_methods.iteritems())
         # UIModules are available as both `modules` and `_modules` in the
@@ -221,6 +223,8 @@ class RequestHandler(object):
         self._headers = {
             "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
+            "Date": datetime.datetime.utcnow().strftime(
+                "%a, %d %b %Y %H:%M:%S GMT"),
         }
         self._list_headers = []
         self.set_default_headers()
@@ -229,6 +233,7 @@ class RequestHandler(object):
                 self.set_header("Connection", "Keep-Alive")
         self._write_buffer = []
         self._status_code = 200
+        self._reason = httplib.responses[200]
 
     def set_default_headers(self):
         """Override this to set HTTP headers at the beginning of the request.
@@ -240,10 +245,22 @@ class RequestHandler(object):
         """
         pass
 
-    def set_status(self, status_code):
-        """Sets the status code for our response."""
-        assert status_code in httplib.responses
+    def set_status(self, status_code, reason=None):
+        """Sets the status code for our response.
+
+        :arg int status_code: Response status code. If `reason` is ``None``,
+            it must be present in `httplib.responses`.
+        :arg string reason: Human-readable reason phrase describing the status
+            code. If ``None``, it will be filled in from `httplib.responses`.
+        """
         self._status_code = status_code
+        if reason is not None:
+            self._reason = escape.native_str(reason)
+        else:
+            try:
+                self._reason = httplib.responses[status_code]
+            except KeyError:
+                raise ValueError("unknown status code %d", status_code)
 
     def get_status(self):
         """Returns the status code for our response."""
@@ -736,16 +753,22 @@ class RequestHandler(object):
         Additional keyword arguments are passed through to `write_error`.
         """
         if self._headers_written:
-            logging.error("Cannot send error response after headers written")
+            gen_log.error("Cannot send error response after headers written")
             if not self._finished:
                 self.finish()
             return
         self.clear()
-        self.set_status(status_code)
+
+        reason = None
+        if 'exc_info' in kwargs:
+            exception = kwargs['exc_info'][1]
+            if isinstance(exception, HTTPError) and exception.reason:
+                reason = exception.reason
+        self.set_status(status_code, reason=reason)
         try:
             self.write_error(status_code, **kwargs)
         except Exception:
-            logging.error("Uncaught exception in write_error", exc_info=True)
+            app_log.error("Uncaught exception in write_error", exc_info=True)
         if not self._finished:
             self.finish()
 
@@ -755,10 +778,11 @@ class RequestHandler(object):
         ``write_error`` may call `write`, `render`, `set_header`, etc
         to produce output as usual.
 
-        If this error was caused by an uncaught exception, an ``exc_info``
-        triple will be available as ``kwargs["exc_info"]``.  Note that this
-        exception may not be the "current" exception for purposes of
-        methods like ``sys.exc_info()`` or ``traceback.format_exc``.
+        If this error was caused by an uncaught exception (including
+        HTTPError), an ``exc_info`` triple will be available as
+        ``kwargs["exc_info"]``.  Note that this exception may not be
+        the "current" exception for purposes of methods like
+        ``sys.exc_info()`` or ``traceback.format_exc``.
 
         For historical reasons, if a method ``get_error_html`` exists,
         it will be used instead of the default ``write_error`` implementation.
@@ -789,7 +813,7 @@ class RequestHandler(object):
             self.finish("<html><title>%(code)d: %(message)s</title>"
                         "<body>%(code)d: %(message)s</body></html>" % {
                     "code": status_code,
-                    "message": httplib.responses[status_code],
+                    "message": self._reason,
                     })
 
     @property
@@ -985,7 +1009,7 @@ class RequestHandler(object):
                 return callback(*args, **kwargs)
             except Exception, e:
                 if self._headers_written:
-                    logging.error("Exception after headers written",
+                    app_log.error("Exception after headers written",
                                   exc_info=True)
                 else:
                     self._handle_request_exception(e)
@@ -1041,26 +1065,28 @@ class RequestHandler(object):
 
     def _execute_request(self, *args, **kwargs):
         try:
+            self.path_args = [self.decode_argument(arg) for arg in args]
+            self.path_kwargs = dict((k, self.decode_argument(v, name=k))
+                                    for (k, v) in kwargs.iteritems())
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
-            if (self.request.method not in ("GET", "HEAD", "OPTIONS") and
-                    self.application.settings.get("xsrf_cookies")):
+            if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
+               self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
             self.prepare()
             if not self._finished:
-                args = [self.decode_argument(arg) for arg in args]
-                kwargs = dict((k, self.decode_argument(v, name=k))
-                              for (k, v) in kwargs.iteritems())
-                getattr(self, self.request.method.lower())(*args, **kwargs)
+                getattr(self, self.request.method.lower())(
+                    *self.path_args, **self.path_kwargs)
                 if self._auto_finish and not self._finished:
                     self.finish()
         except Exception, e:
             self._handle_request_exception(e)
 
     def _generate_headers(self):
+        reason = self._reason
         lines = [utf8(self.request.version + " " +
                       str(self._status_code) +
-                      " " + httplib.responses[self._status_code])]
+                      " " + reason)]
         lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in
                       itertools.chain(self._headers.iteritems(), self._list_headers)])
         if hasattr(self, "_new_cookie"):
@@ -1086,14 +1112,14 @@ class RequestHandler(object):
             if e.log_message:
                 format = "%d %s: " + e.log_message
                 args = [e.status_code, self._request_summary()] + list(e.args)
-                logging.warning(format, *args)
-            if e.status_code not in httplib.responses:
-                logging.error("Bad HTTP status code: %d", e.status_code)
+                gen_log.warning(format, *args)
+            if e.status_code not in httplib.responses and not e.reason:
+                gen_log.error("Bad HTTP status code: %d", e.status_code)
                 self.send_error(500, exc_info=sys.exc_info())
             else:
                 self.send_error(e.status_code, exc_info=sys.exc_info())
         else:
-            logging.error("Uncaught exception %s\n%r", self._request_summary(),
+            app_log.error("Uncaught exception %s\n%r", self._request_summary(),
                           self.request, exc_info=True)
             self.send_error(500, exc_info=sys.exc_info())
 
@@ -1390,7 +1416,7 @@ class Application(object):
             handlers.append(spec)
             if spec.name:
                 if spec.name in self.named_handlers:
-                    logging.warning(
+                    app_log.warning(
                         "Multiple handlers named %s; replacing previous value",
                         spec.name)
                 self.named_handlers[spec.name] = spec
@@ -1514,26 +1540,40 @@ class Application(object):
             self.settings["log_function"](handler)
             return
         if handler.get_status() < 400:
-            log_method = logging.info
+            log_method = access_log.info
         elif handler.get_status() < 500:
-            log_method = logging.warning
+            log_method = access_log.warning
         else:
-            log_method = logging.error
+            log_method = access_log.error
         request_time = 1000.0 * handler.request.request_time()
         log_method("%d %s %.2fms", handler.get_status(),
                    handler._request_summary(), request_time)
 
 
 class HTTPError(Exception):
-    """An exception that will turn into an HTTP error response."""
-    def __init__(self, status_code, log_message=None, *args):
+    """An exception that will turn into an HTTP error response.
+
+    :arg int status_code: HTTP status code.  Must be listed in
+        `httplib.responses` unless the ``reason`` keyword argument is given.
+    :arg string log_message: Message to be written to the log for this error
+        (will not be shown to the user unless the `Application` is in debug
+        mode).  May contain ``%s``-style placeholders, which will be filled
+        in with remaining positional parameters.
+    :arg string reason: Keyword-only argument.  The HTTP "reason" phrase
+        to pass in the status line along with ``status_code``.  Normally
+        determined automatically from ``status_code``, but can be used
+        to use a non-standard numeric code.
+    """
+    def __init__(self, status_code, log_message=None, *args, **kwargs):
         self.status_code = status_code
         self.log_message = log_message
         self.args = args
+        self.reason = kwargs.get('reason', None)
 
     def __str__(self):
         message = "HTTP %d: %s" % (
-            self.status_code, httplib.responses[self.status_code])
+            self.status_code,
+            self.reason or httplib.responses.get(self.status_code, 'Unknown'))
         if self.log_message:
             return message + " (" + (self.log_message % self.args) + ")"
         else:
@@ -1547,6 +1587,12 @@ class ErrorHandler(RequestHandler):
 
     def prepare(self):
         raise HTTPError(self._status_code)
+
+    def check_xsrf_cookie(self):
+        # POSTs to an ErrorHandler don't actually have side effects,
+        # so we don't need to check the xsrf token.  This allows POSTs
+        # to the wrong url to return a 404 instead of 403.
+        pass
 
 
 class RedirectHandler(RequestHandler):
@@ -1637,8 +1683,6 @@ class StaticFileHandler(RequestHandler):
             self.set_header("Expires", datetime.datetime.utcnow() +
                                        datetime.timedelta(seconds=cache_time))
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
-        else:
-            self.set_header("Cache-Control", "public")
 
         self.set_extra_headers(path)
 
@@ -1654,9 +1698,6 @@ class StaticFileHandler(RequestHandler):
 
         with open(abspath, "rb") as file:
             data = file.read()
-            hasher = hashlib.sha1()
-            hasher.update(data)
-            self.set_header("Etag", '"%s"' % hasher.hexdigest())
             if include_body:
                 self.write(data)
             else:
@@ -1717,7 +1758,7 @@ class StaticFileHandler(RequestHandler):
                     hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
                     f.close()
                 except Exception:
-                    logging.error("Could not open static file %r", path)
+                    gen_log.error("Could not open static file %r", path)
                     hashes[abs_path] = None
             hsh = hashes.get(abs_path)
             if hsh:
@@ -1792,6 +1833,10 @@ class GZipContentEncoding(OutputTransform):
             "gzip" in request.headers.get("Accept-Encoding", "")
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
+        if 'Vary' in headers:
+            headers['Vary'] += b(', Accept-Encoding')
+        else:
+            headers['Vary'] = b('Accept-Encoding')
         if self._gzipping:
             ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = (ctype in self.CONTENT_TYPES) and \
@@ -2027,6 +2072,11 @@ class URLSpec(object):
         self.name = name
         self._path, self._group_count = self._find_groups()
 
+    def __repr__(self):
+        return '%s(%r, %s, kwargs=%r, name=%r)' % \
+                (self.__class__.__name__, self.regex.pattern,
+                 self.handler_class, self.kwargs, self.name)
+
     def _find_groups(self):
         """Returns a tuple (reverse string, group count) for a url.
 
@@ -2072,17 +2122,20 @@ class URLSpec(object):
 url = URLSpec
 
 
-def _time_independent_equals(a, b):
-    if len(a) != len(b):
-        return False
-    result = 0
-    if type(a[0]) is int:  # python3 byte strings
-        for x, y in zip(a, b):
-            result |= x ^ y
-    else:  # python2
-        for x, y in zip(a, b):
-            result |= ord(x) ^ ord(y)
-    return result == 0
+if hasattr(hmac, 'compare_digest'):  # python 3.3
+    _time_independent_equals = hmac.compare_digest
+else:
+    def _time_independent_equals(a, b):
+        if len(a) != len(b):
+            return False
+        result = 0
+        if type(a[0]) is int:  # python3 byte strings
+            for x, y in zip(a, b):
+                result |= x ^ y
+        else:  # python2
+            for x, y in zip(a, b):
+                result |= ord(x) ^ ord(y)
+        return result == 0
 
 
 def create_signed_value(secret, name, value):
@@ -2101,11 +2154,11 @@ def decode_signed_value(secret, name, value, max_age_days=31):
         return None
     signature = _create_signature(secret, name, parts[0], parts[1])
     if not _time_independent_equals(parts[2], signature):
-        logging.warning("Invalid cookie signature %r", value)
+        gen_log.warning("Invalid cookie signature %r", value)
         return None
     timestamp = int(parts[1])
     if timestamp < time.time() - max_age_days * 86400:
-        logging.warning("Expired cookie %r", value)
+        gen_log.warning("Expired cookie %r", value)
         return None
     if timestamp > time.time() + 31 * 86400:
         # _cookie_signature does not hash a delimiter between the
@@ -2113,10 +2166,10 @@ def decode_signed_value(secret, name, value, max_age_days=31):
         # digits from the payload to the timestamp without altering the
         # signature.  For backwards compatibility, sanity-check timestamp
         # here instead of modifying _cookie_signature.
-        logging.warning("Cookie timestamp in future; possible tampering %r", value)
+        gen_log.warning("Cookie timestamp in future; possible tampering %r", value)
         return None
     if parts[1].startswith(b("0")):
-        logging.warning("Tampered cookie %r", value)
+        gen_log.warning("Tampered cookie %r", value)
         return None
     try:
         return base64.b64decode(parts[0])

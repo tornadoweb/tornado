@@ -1,0 +1,7 @@
+Redbot is an HTTP validator that checks for common problems, especially
+related to cacheability.  These tests ensure that Tornado's default behavior
+is correct (but note that this guarantee does not automatically extend
+to applications built on Tornado since application behavior can impact
+cacheability.
+
+http://redbot.org/about

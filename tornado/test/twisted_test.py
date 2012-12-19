@@ -25,7 +25,6 @@ import signal
 import tempfile
 import thread
 import threading
-import unittest
 
 try:
     import fcntl
@@ -36,26 +35,34 @@ try:
     from twisted.web.resource import Resource
     from twisted.web.server import Site
     from twisted.python import log
-    from tornado.platform.twisted import TornadoReactor
+    from tornado.platform.twisted import TornadoReactor, TwistedIOLoop
     from zope.interface import implementer
     have_twisted = True
 except ImportError:
     have_twisted = False
 
 from tornado.httpclient import AsyncHTTPClient
+from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.testing import get_unused_port
+from tornado.testing import bind_unused_port
+from tornado.test.util import unittest
 from tornado.util import import_object
 from tornado.web import RequestHandler, Application
 
+skipIfNoTwisted = unittest.skipUnless(have_twisted,
+                                      "twisted module not present")
 
 def save_signal_handlers():
     saved = {}
     for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:
         saved[sig] = signal.getsignal(sig)
     if "twisted" in repr(saved):
-        raise Exception("twisted signal handlers already installed")
+        if not issubclass(IOLoop.configured_class(), TwistedIOLoop):
+            # when the global ioloop is twisted, we expect the signal
+            # handlers to be installed.  Otherwise, it means we're not
+            # cleaning up after twisted properly.
+            raise Exception("twisted signal handlers already installed")
     return saved
 
 
@@ -91,7 +98,7 @@ class ReactorWhenRunningTest(ReactorTestCase):
 
     def anotherWhenRunningCallback(self):
         self._anotherWhenRunningCalled = True
-
+ReactorWhenRunningTest = skipIfNoTwisted(ReactorWhenRunningTest)
 
 class ReactorCallLaterTest(ReactorTestCase):
     def test_callLater(self):
@@ -109,6 +116,7 @@ class ReactorCallLaterTest(ReactorTestCase):
         self._laterCalled = True
         self._called = self._reactor.seconds()
         self._reactor.stop()
+ReactorCallLaterTest = skipIfNoTwisted(ReactorCallLaterTest)
 
 
 class ReactorTwoCallLaterTest(ReactorTestCase):
@@ -137,6 +145,7 @@ class ReactorTwoCallLaterTest(ReactorTestCase):
         self._later2Called = True
         self._called2 = self._reactor.seconds()
         self._reactor.stop()
+ReactorTwoCallLaterTest = skipIfNoTwisted(ReactorTwoCallLaterTest)
 
 
 class ReactorCallFromThreadTest(ReactorTestCase):
@@ -165,6 +174,7 @@ class ReactorCallFromThreadTest(ReactorTestCase):
     def testCallFromThread(self):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
+ReactorCallFromThreadTest = skipIfNoTwisted(ReactorCallFromThreadTest)
 
 
 class ReactorCallInThread(ReactorTestCase):
@@ -182,6 +192,7 @@ class ReactorCallInThread(ReactorTestCase):
     def testCallInThread(self):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
+ReactorCallInThread = skipIfNoTwisted(ReactorCallInThread)
 
 
 class Reader(object):
@@ -314,6 +325,7 @@ class ReactorReaderWriterTest(ReactorTestCase):
     def testNoWriter(self):
         self._reactor.callWhenRunning(self._testNoWriter)
         self._reactor.run()
+ReactorReaderWriterTest = skipIfNoTwisted(ReactorReaderWriterTest)
 
 # Test various combinations of twisted and tornado http servers,
 # http clients, and event loop interfaces.
@@ -337,8 +349,8 @@ class CompatibilityTests(unittest.TestCase):
             def render_GET(self, request):
                 return "Hello from twisted!"
         site = Site(HelloResource())
-        self.twisted_port = get_unused_port()
-        self.reactor.listenTCP(self.twisted_port, site, interface='127.0.0.1')
+        port = self.reactor.listenTCP(0, site, interface='127.0.0.1')
+        self.twisted_port = port.getHost().port
 
     def start_tornado_server(self):
         class HelloHandler(RequestHandler):
@@ -346,8 +358,9 @@ class CompatibilityTests(unittest.TestCase):
                 self.write("Hello from tornado!")
         app = Application([('/', HelloHandler)],
                           log_function=lambda x: None)
-        self.tornado_port = get_unused_port()
-        app.listen(self.tornado_port, address='127.0.0.1', io_loop=self.io_loop)
+        server = HTTPServer(app, io_loop=self.io_loop)
+        sock, self.tornado_port = bind_unused_port()
+        server.add_sockets([sock])
 
     def run_ioloop(self):
         self.stop_loop = self.io_loop.stop
@@ -424,17 +437,10 @@ class CompatibilityTests(unittest.TestCase):
         response = self.twisted_fetch(
             'http://localhost:%d' % self.tornado_port, self.run_reactor)
         self.assertEqual(response, 'Hello from tornado!')
+CompatibilityTests = skipIfNoTwisted(CompatibilityTests)
 
 
-if not have_twisted:
-    del ReactorWhenRunningTest
-    del ReactorCallLaterTest
-    del ReactorTwoCallLaterTest
-    del ReactorCallFromThreadTest
-    del ReactorCallInThread
-    del ReactorReaderWriterTest
-    del CompatibilityTests
-else:
+if have_twisted:
     # Import and run as much of twisted's test suite as possible.
     # This is unfortunately rather dependent on implementation details,
     # but there doesn't appear to be a clean all-in-one conformance test
@@ -446,6 +452,9 @@ else:
     twisted_tests = {
         'twisted.internet.test.test_core.ObjectModelIntegrationTest': [],
         'twisted.internet.test.test_core.SystemEventTestsBuilder': [
+            'test_iterate',  # deliberately not supported
+            'test_runAfterCrash',  # fails because TwistedIOLoop uses the global reactor
+            ] if issubclass(IOLoop.configured_class(), TwistedIOLoop) else [
             'test_iterate',  # deliberately not supported
             ],
         'twisted.internet.test.test_fdset.ReactorFDSetTestsBuilder': [

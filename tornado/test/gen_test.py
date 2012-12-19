@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, with_statement
 import functools
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, LogTrapTestCase
+from tornado.log import app_log
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog
 from tornado.util import b
 from tornado.web import Application, RequestHandler, asynchronous
 
@@ -269,6 +270,28 @@ class GenTest(AsyncTestCase):
         initial_stack_depth = len(stack_context._state.contexts)
         self.run_gen(outer)
 
+    def test_stack_context_leak_exception(self):
+        # same as previous, but with a function that exits with an exception
+        from tornado import stack_context
+
+        @gen.engine
+        def inner(callback):
+            yield gen.Task(self.io_loop.add_callback)
+            1 / 0
+
+        @gen.engine
+        def outer():
+            for i in xrange(10):
+                try:
+                    yield gen.Task(inner)
+                except ZeroDivisionError:
+                    pass
+            stack_increase = len(stack_context._state.contexts) - initial_stack_depth
+            self.assertTrue(stack_increase <= 2)
+            self.stop()
+        initial_stack_depth = len(stack_context._state.contexts)
+        self.run_gen(outer)
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
@@ -324,7 +347,7 @@ class GenYieldExceptionHandler(RequestHandler):
             self.finish('ok')
 
 
-class GenWebTest(AsyncHTTPTestCase, LogTrapTestCase):
+class GenWebTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
                 ('/sequence', GenSequenceHandler),
@@ -343,7 +366,8 @@ class GenWebTest(AsyncHTTPTestCase, LogTrapTestCase):
 
     def test_exception_handler(self):
         # Make sure we get an error and not a timeout
-        response = self.fetch('/exception')
+        with ExpectLog(app_log, "Uncaught exception GET /exception"):
+            response = self.fetch('/exception')
         self.assertEqual(500, response.code)
 
     def test_yield_exception_handler(self):

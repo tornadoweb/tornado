@@ -184,13 +184,13 @@ from __future__ import absolute_import, division, with_statement
 import cStringIO
 import datetime
 import linecache
-import logging
 import os.path
 import posixpath
 import re
 import threading
 
 from tornado import escape
+from tornado.log import app_log
 from tornado.util import bytes_type, ObjectDict
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
@@ -203,6 +203,9 @@ class Template(object):
     We compile into Python from the given template_string. You can generate
     the template from variables with generate().
     """
+    # note that the constructor's signature is not extracted with
+    # autodoc because _UNSET looks like garbage.  When changing
+    # this signature update website/sphinx/template.rst too.
     def __init__(self, template_string, name="<string>", loader=None,
                  compress_whitespace=None, autoescape=_UNSET):
         self.name = name
@@ -229,7 +232,7 @@ class Template(object):
                 "exec")
         except Exception:
             formatted_code = _format_code(self.code).rstrip()
-            logging.error("%s code:\n%s", self.name, formatted_code)
+            app_log.error("%s code:\n%s", self.name, formatted_code)
             raise
 
     def generate(self, **kwargs):
@@ -257,12 +260,7 @@ class Template(object):
         # we've generated a new template (mainly for this module's
         # unittests, where different tests reuse the same name).
         linecache.clearcache()
-        try:
-            return execute()
-        except Exception:
-            formatted_code = _format_code(self.code).rstrip()
-            logging.error("%s code:\n%s", self.name, formatted_code)
-            raise
+        return execute()
 
     def _generate_python(self, loader, compress_whitespace):
         buffer = cStringIO.StringIO()
@@ -484,7 +482,7 @@ class _ApplyBlock(_Node):
             writer.write_line("_append = _buffer.append", self.line)
             self.body.generate(writer)
             writer.write_line("return _utf8('').join(_buffer)", self.line)
-        writer.write_line("_append(%s(%s()))" % (
+        writer.write_line("_append(_utf8(%s(%s())))" % (
             self.method, method_name), self.line)
 
 

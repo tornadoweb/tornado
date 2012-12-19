@@ -18,6 +18,9 @@
    Controlling log output
    ----------------------
 
+   .. autoclass:: ExpectLog
+      :members:
+
    .. autoclass:: LogTrapTestCase
       :members:
 
@@ -28,5 +31,7 @@
 
    Helper functions
    ----------------
+
+   .. autofunction:: bind_unused_port
 
    .. autofunction:: get_unused_port

@@ -48,6 +48,9 @@ class Waker(interface.Waker):
     def fileno(self):
         return self.reader.fileno()
 
+    def write_fileno(self):
+        return self.writer.fileno()
+
     def wake(self):
         try:
             self.writer.write(b("x"))

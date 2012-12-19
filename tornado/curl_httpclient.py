@@ -27,15 +27,19 @@ import time
 
 from tornado import httputil
 from tornado import ioloop
+from tornado.log import gen_log
 from tornado import stack_context
 
 from tornado.escape import utf8
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
-    def initialize(self, io_loop=None, max_clients=10):
+    def initialize(self, io_loop=None, max_clients=10, defaults=None):
         self.io_loop = io_loop
+        self.defaults = dict(HTTPRequest._DEFAULTS)
+        if defaults is not None:
+            self.defaults.update(defaults)
         self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
@@ -51,7 +55,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             # socket_action is found in pycurl since 7.18.2 (it's been
             # in libcurl longer than that but wasn't accessible to
             # python).
-            logging.warning("socket_action method missing from pycurl; "
+            gen_log.warning("socket_action method missing from pycurl; "
                             "falling back to socket_all. Upgrading "
                             "libcurl and pycurl will improve performance")
             self._socket_action = \
@@ -76,6 +80,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
+        request = _RequestProxy(request, self.defaults)
         self._requests.append((request, stack_context.wrap(callback)))
         self._process_queue()
         self._set_timeout(0)
@@ -91,24 +96,25 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             pycurl.POLL_INOUT: ioloop.IOLoop.READ | ioloop.IOLoop.WRITE
         }
         if event == pycurl.POLL_REMOVE:
-            self.io_loop.remove_handler(fd)
-            del self._fds[fd]
+            if fd in self._fds:
+                self.io_loop.remove_handler(fd)
+                del self._fds[fd]
         else:
             ioloop_event = event_map[event]
             if fd not in self._fds:
-                self._fds[fd] = ioloop_event
                 self.io_loop.add_handler(fd, self._handle_events,
                                          ioloop_event)
-            else:
                 self._fds[fd] = ioloop_event
+            else:
                 self.io_loop.update_handler(fd, ioloop_event)
+                self._fds[fd] = ioloop_event
 
     def _set_timeout(self, msecs):
         """Called by libcurl to schedule a timeout."""
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
         self._timeout = self.io_loop.add_timeout(
-            time.time() + msecs / 1000.0, self._handle_timeout)
+            self.io_loop.time() + msecs / 1000.0, self._handle_timeout)
 
     def _handle_events(self, fd, events):
         """Called by IOLoop when there is activity on one of our
@@ -263,7 +269,7 @@ class CurlError(HTTPError):
 
 def _curl_create():
     curl = pycurl.Curl()
-    if logging.getLogger().isEnabledFor(logging.DEBUG):
+    if gen_log.isEnabledFor(logging.DEBUG):
         curl.setopt(pycurl.VERBOSE, 1)
         curl.setopt(pycurl.DEBUGFUNCTION, _curl_debug)
     return curl
@@ -386,11 +392,11 @@ def _curl_setup_request(curl, request, buffer, headers):
         userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
         curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
         curl.setopt(pycurl.USERPWD, utf8(userpwd))
-        logging.debug("%s %s (username: %r)", request.method, request.url,
+        gen_log.debug("%s %s (username: %r)", request.method, request.url,
                       request.auth_username)
     else:
         curl.unsetopt(pycurl.USERPWD)
-        logging.debug("%s %s", request.method, request.url)
+        gen_log.debug("%s %s", request.method, request.url)
 
     if request.client_cert is not None:
         curl.setopt(pycurl.SSLCERT, request.client_cert)
@@ -426,12 +432,12 @@ def _curl_header_callback(headers, header_line):
 def _curl_debug(debug_type, debug_msg):
     debug_types = ('I', '<', '>', '<', '>')
     if debug_type == 0:
-        logging.debug('%s', debug_msg.strip())
+        gen_log.debug('%s', debug_msg.strip())
     elif debug_type in (1, 2):
         for line in debug_msg.splitlines():
-            logging.debug('%s %s', debug_types[debug_type], line)
+            gen_log.debug('%s %s', debug_types[debug_type], line)
     elif debug_type == 4:
-        logging.debug('%s %r', debug_types[debug_type], debug_msg)
+        gen_log.debug('%s %r', debug_types[debug_type], debug_msg)
 
 if __name__ == "__main__":
     AsyncHTTPClient.configure(CurlAsyncHTTPClient)
