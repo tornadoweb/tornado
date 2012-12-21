@@ -16,7 +16,7 @@ In progress
 * Tornado no longer logs to the root logger.  Details on the new logging
   scheme can be found under the `tornado.log` module.  Note that in some
   cases this will require that you add an explicit logging configuration
-  in ordre to see any output (perhaps just calling ``logging.basicConfig()``),
+  in order to see any output (perhaps just calling ``logging.basicConfig()``),
   although both `IOLoop.start()` and `tornado.options.parse_command_line`
   will do this for you.
 * Errors while rendering templates no longer log the generated code,
