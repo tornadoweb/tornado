@@ -852,6 +852,41 @@ class CustomStaticFileTest(WebTestCase):
 wsgi_safe.append(CustomStaticFileTest)
 
 
+class HostMatchingTest(WebTestCase):
+    class Handler(RequestHandler):
+        def initialize(self, reply):
+            self.reply = reply
+
+        def get(self):
+            self.write(self.reply)
+
+    def get_handlers(self):
+        return [("/foo", HostMatchingTest.Handler, {"reply": "wildcard"})]
+
+    def test_host_matching(self):
+        self.app.add_handlers("www.example.com",
+            [("/foo", HostMatchingTest.Handler, {"reply": "[0]"})])
+        self.app.add_handlers(r"www\.example\.com",
+            [("/bar", HostMatchingTest.Handler, {"reply": "[1]"})])
+        self.app.add_handlers("www.example.com",
+            [("/baz", HostMatchingTest.Handler, {"reply": "[2]"})])
+
+        response = self.fetch("/foo")
+        self.assertEqual(response.body, b("wildcard"))
+        response = self.fetch("/bar")
+        self.assertEqual(response.code, 404)
+        response = self.fetch("/baz")
+        self.assertEqual(response.code, 404)
+
+        response = self.fetch("/foo", headers={'Host': 'www.example.com'})
+        self.assertEqual(response.body, b("[0]"))
+        response = self.fetch("/bar", headers={'Host': 'www.example.com'})
+        self.assertEqual(response.body, b("[1]"))
+        response = self.fetch("/baz", headers={'Host': 'www.example.com'})
+        self.assertEqual(response.body, b("[2]"))
+wsgi_safe.append(HostMatchingTest)
+
+
 class NamedURLSpecGroupsTest(WebTestCase):
     def get_handlers(self):
         class EchoHandler(RequestHandler):
