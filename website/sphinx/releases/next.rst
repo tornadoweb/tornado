@@ -200,3 +200,7 @@ In progress
   ``Vary: Accept-Encoding`` headers are now sent.
 * Fixed a bug in which `SimpleAsyncHTTPClient` callbacks were being run in the
   client's ``stack_context``.
+* It is no longer necessary to pass all handlers for a host in a single
+  `Application.add_handlers` call.  Now the request will be matched
+  against the handlers for any ``host_pattern`` that includes the request's
+  ``Host`` header.
