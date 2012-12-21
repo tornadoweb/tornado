@@ -1317,10 +1317,8 @@ class Application(object):
     def add_handlers(self, host_pattern, host_handlers):
         """Appends the given handlers to our handler list.
 
-        Note that host patterns are processed sequentially in the
-        order they were added, and only the first matching pattern is
-        used.  This means that all handlers for a given host must be
-        added in a single add_handlers call.
+        Host patterns are processed sequentially in the order they were
+        added. All matching patterns will be considered.
         """
         if not host_pattern.endswith("$"):
             host_pattern += "$"
@@ -1365,15 +1363,16 @@ class Application(object):
 
     def _get_host_handlers(self, request):
         host = request.host.lower().split(':')[0]
+        matches = []
         for pattern, handlers in self.handlers:
             if pattern.match(host):
-                return handlers
+                matches.extend(handlers)
         # Look for default host if not behind load balancer (for debugging)
-        if "X-Real-Ip" not in request.headers:
+        if not matches and "X-Real-Ip" not in request.headers:
             for pattern, handlers in self.handlers:
                 if pattern.match(self.default_host):
-                    return handlers
-        return None
+                    matches.extend(handlers)
+        return matches or None
 
     def _load_ui_methods(self, methods):
         if type(methods) is types.ModuleType:
