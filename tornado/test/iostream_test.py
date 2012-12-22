@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, with_statement
 from tornado import netutil
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream, PipeIOStream
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
+from tornado.stack_context import NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipIfNonUnix
 from tornado.util import b
@@ -196,6 +197,24 @@ class TestIOStreamMixin(object):
         with ExpectLog(gen_log, "Connect error"):
             stream.connect(('an invalid domain', 54321))
             self.assertTrue(isinstance(stream.error, socket.gaierror), stream.error)
+
+    def test_read_callback_error(self):
+        # Test that IOStream sets its exc_info when a read callback throws
+        server, client = self.make_iostream_pair()
+        try:
+            server.set_close_callback(self.stop)
+            with ExpectLog(
+                app_log, "(Uncaught exception|Exception in callback)"
+            ):
+                # Clear ExceptionStackContext so IOStream catches error
+                with NullContext():
+                    server.read_bytes(1, callback=lambda data: 1 / 0)
+                client.write(b("1"))
+                self.wait()
+            self.assertTrue(isinstance(server.error, ZeroDivisionError))
+        finally:
+            server.close()
+            client.close()
 
     def test_streaming_callback(self):
         server, client = self.make_iostream_pair()
