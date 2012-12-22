@@ -212,12 +212,16 @@ class BaseIOStream(object):
     def close(self, exc_info=False):
         """Close this stream.
 
-        If `exc_info` is true, set the `error` attribute to the current
-        exception from ``sys.exc_info()``.
+        If ``exc_info`` is true, set the ``error`` attribute to the current
+        exception from `sys.exc_info()` (or if ``exc_info`` is a tuple,
+        use that instead of `sys.exc_info`).
         """
         if not self.closed():
-            if exc_info and any(sys.exc_info()):
-                self.error = sys.exc_info()[1]
+            if exc_info:
+                if not isinstance(exc_info, tuple):
+                    exc_info = sys.exc_info()
+                if any(exc_info):
+                    self.error = exc_info[1]
             if self._read_until_close:
                 callback = self._read_callback
                 self._read_callback = None

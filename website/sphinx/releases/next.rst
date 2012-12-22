@@ -204,3 +204,7 @@ In progress
   `Application.add_handlers` call.  Now the request will be matched
   against the handlers for any ``host_pattern`` that includes the request's
   ``Host`` header.
+* `IOStream.error` no longer picks up unrelated exceptions.
+* `IOStream.close` now has an ``exc_info`` argument (similar to the
+  one used in the `logging` module) that can be used to set the stream's
+  ``error`` attribute when closing it.
