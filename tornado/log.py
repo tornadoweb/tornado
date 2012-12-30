@@ -31,6 +31,7 @@ to a separate file for analysis.
 from __future__ import absolute_import, division, with_statement
 
 import logging
+import logging.handlers
 import sys
 import time
 
@@ -141,7 +142,7 @@ class LogFormatter(logging.Formatter):
             formatted = formatted.rstrip() + "\n" + record.exc_text
         return formatted.replace("\n", "\n    ")
 
-def enable_pretty_logging(options=None):
+def enable_pretty_logging(options=None, logger=None):
     """Turns on formatted logging output as configured.
 
     This is called automaticaly by `tornado.options.parse_command_line`
@@ -151,22 +152,23 @@ def enable_pretty_logging(options=None):
         from tornado.options import options
     if options.logging == 'none':
         return
-    root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, options.logging.upper()))
+    if logger is None:
+        logger = logging.getLogger()
+    logger.setLevel(getattr(logging, options.logging.upper()))
     if options.log_file_prefix:
         channel = logging.handlers.RotatingFileHandler(
             filename=options.log_file_prefix,
             maxBytes=options.log_file_max_size,
             backupCount=options.log_file_num_backups)
         channel.setFormatter(LogFormatter(color=False))
-        root_logger.addHandler(channel)
+        logger.addHandler(channel)
 
     if (options.log_to_stderr or
-        (options.log_to_stderr is None and not root_logger.handlers)):
+        (options.log_to_stderr is None and not logger.handlers)):
         # Set up color if we are in a tty and curses is installed
         channel = logging.StreamHandler()
         channel.setFormatter(LogFormatter())
-        root_logger.addHandler(channel)
+        logger.addHandler(channel)
 
 
 def define_logging_options(options=None):
