@@ -293,7 +293,7 @@ class Template(object):
 
 class BaseLoader(object):
     """Base class for template loaders."""
-    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None):
+    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None, debug=False):
         """Creates a template loader.
 
         root_directory may be the empty string if this loader does not
@@ -305,6 +305,7 @@ class BaseLoader(object):
         self.autoescape = autoescape
         self.namespace = namespace or {}
         self.templates = {}
+        self.debug = debug
         # self.lock protects self.templates.  It's a reentrant lock
         # because templates may load other templates via `include` or
         # `extends`.  Note that thanks to the GIL this code would be safe
@@ -326,6 +327,8 @@ class BaseLoader(object):
         name = self.resolve_path(name, parent_path=parent_path)
         with self.lock:
             if name not in self.templates:
+                if self.debug:
+                    return self._create_template(name)
                 self.templates[name] = self._create_template(name)
             return self.templates[name]
 

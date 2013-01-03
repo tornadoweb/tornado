@@ -380,3 +380,9 @@ class TemplateLoaderTest(unittest.TestCase):
         tmpl = self.loader.load("utf8.html")
         result = tmpl.generate()
         self.assertEqual(to_unicode(result).strip(), u"H\u00e9llo")
+
+    def test_debug_loader(self):
+        debug_loader = Loader(os.path.join(os.path.dirname(__file__), "templates"), debug=True)
+        self.assertEqual(debug_loader.load("utf8.html").generate(),
+                         self.loader.load("utf8.html").generate())
+        
