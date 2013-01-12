@@ -483,7 +483,7 @@ class RequestHandler(object):
         self.set_status(status)
         # Remove whitespace
         url = re.sub(b(r"[\x00-\x20]+"), "", utf8(url))
-        self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
+        self.set_header("Location", urlparse.urljoin(utf8(self.request.full_url()),
                                                      url))
         self.finish()
 
