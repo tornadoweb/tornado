@@ -66,7 +66,7 @@ class IOLoop(Configurable):
     2.6+) if they are available, or else we fall back on select(). If
     you are implementing a system that needs to handle thousands of
     simultaneous connections, you should use a system that supports either
-    epoll or queue.
+    epoll or kqueue.
 
     Example usage for a simple TCP server::
 
