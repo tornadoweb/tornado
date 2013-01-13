@@ -1,7 +1,9 @@
+# coding: utf-8
 from __future__ import absolute_import, division, with_statement
 import sys
 
-from tornado.util import raise_exc_info, Configurable
+from tornado.escape import utf8
+from tornado.util import raise_exc_info, Configurable, u, b
 from tornado.test.util import unittest
 
 
@@ -112,3 +114,8 @@ class ConfigurableTest(unittest.TestCase):
         # args bound in configure don't apply when using the subclass directly
         obj = TestConfig2()
         self.assertIs(obj.b, None)
+
+
+class UnicodeLiteralTest(unittest.TestCase):
+    def test_unicode_escapes(self):
+        self.assertEqual(utf8(u('\u00e9')), b('\xc3\xa9'))

@@ -68,13 +68,23 @@ def import_object(name):
 # to convert our string literals.  b() should only be applied to literal
 # latin1 strings.  Once we drop support for 2.5, we can remove this function
 # and just use byte literals.
+#
+# Fake unicode literal support:  Python 3.2 doesn't have the u'' marker for
+# literal strings, and alternative solutions like "from __future__ import
+# unicode_literals" have other problems (see PEP 414).  u() can be applied
+# to ascii strings that include \u escapes (but they must not contain
+# literal non-ascii characters).
 if str is unicode:
     def b(s):
         return s.encode('latin1')
+    def u(s):
+        return s
     bytes_type = bytes
 else:
     def b(s):
         return s
+    def u(s):
+        return s.decode('unicode_escape')
     bytes_type = str
 
 
