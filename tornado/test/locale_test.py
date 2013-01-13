@@ -2,7 +2,9 @@ from __future__ import absolute_import, division, with_statement
 
 import os
 import tornado.locale
+from tornado.escape import utf8
 from tornado.test.util import unittest
+from tornado.util import b
 
 
 class TranslationLoaderTest(unittest.TestCase):
@@ -38,3 +40,11 @@ class TranslationLoaderTest(unittest.TestCase):
         locale = tornado.locale.get("fr_FR")
         self.assertTrue(isinstance(locale, tornado.locale.GettextLocale))
         self.assertEqual(locale.translate("school"), u"\u00e9cole")
+
+
+class LocaleDataTest(unittest.TestCase):
+    def test_non_ascii_name(self):
+        name = tornado.locale.LOCALE_NAMES['es_LA']['name']
+        self.assertTrue(isinstance(name, unicode))
+        self.assertEqual(name, u'Espa\u00f1ol')
+        self.assertEqual(utf8(name), b('Espa\xc3\xb1ol'))
