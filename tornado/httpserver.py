@@ -283,7 +283,7 @@ class HTTPConnection(object):
                 return
 
             self.request_callback(self._request)
-        except _BadRequestException, e:
+        except _BadRequestException as e:
             gen_log.info("Malformed HTTP request from %s: %s",
                          self.address[0], e)
             self.close()
@@ -484,7 +484,7 @@ class HTTPRequest(object):
                                      socket.SOCK_STREAM,
                                      0, socket.AI_NUMERICHOST)
             return bool(res)
-        except socket.gaierror, e:
+        except socket.gaierror as e:
             if e.args[0] == socket.EAI_NONAME:
                 return False
             raise

@@ -509,7 +509,7 @@ def main(**kwargs):
             unittest.main(module=None, argv=argv, **kwargs)
         else:
             unittest.main(defaultTest="all", argv=argv, **kwargs)
-    except SystemExit, e:
+    except SystemExit as e:
         if e.code == 0:
             gen_log.info('PASS')
         else:

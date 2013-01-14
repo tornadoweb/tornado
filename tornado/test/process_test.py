@@ -69,7 +69,7 @@ class ProcessTest(unittest.TestCase):
                 id = fork_processes(3, max_restarts=3)
                 self.assertTrue(id is not None)
                 signal.alarm(5)  # child processes
-            except SystemExit, e:
+            except SystemExit as e:
                 # if we exit cleanly from fork_processes, all the child processes
                 # finished with status 0
                 self.assertEqual(e.code, 0)
@@ -94,7 +94,7 @@ class ProcessTest(unittest.TestCase):
                     def fetch(url, fail_ok=False):
                         try:
                             return client.fetch(get_url(url))
-                        except HTTPError, e:
+                        except HTTPError as e:
                             if not (fail_ok and e.code == 599):
                                 raise
 

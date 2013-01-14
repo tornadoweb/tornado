@@ -83,7 +83,7 @@ class ManualCapClient(BaseCapClient):
         self.stream.close()
         try:
             self.future.set_result(self.process_response(data))
-        except CapError, e:
+        except CapError as e:
             self.future.set_exception(e)
 
 

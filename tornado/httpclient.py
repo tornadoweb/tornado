@@ -440,7 +440,7 @@ def main():
                                     follow_redirects=options.follow_redirects,
                                     validate_cert=options.validate_cert,
                                     )
-        except HTTPError, e:
+        except HTTPError as e:
             if e.response is not None:
                 response = e.response
             else:

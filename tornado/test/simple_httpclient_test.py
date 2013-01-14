@@ -223,7 +223,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
     def test_ipv6(self):
         try:
             self.http_server.listen(self.get_http_port(), address='::1')
-        except socket.gaierror, e:
+        except socket.gaierror as e:
             if e.args[0] == socket.EAI_ADDRFAMILY:
                 # python supports ipv6, but it's not configured on the network
                 # interface, so skip this test.

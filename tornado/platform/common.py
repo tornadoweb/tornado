@@ -43,7 +43,7 @@ class Waker(interface.Waker):
             try:
                 self.writer.connect(connect_address)
                 break    # success
-            except socket.error, detail:
+            except socket.error as detail:
                 if (not hasattr(errno, 'WSAEADDRINUSE') or
                     detail[0] != errno.WSAEADDRINUSE):
                     # "Address already in use" is the only error

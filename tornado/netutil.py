@@ -218,12 +218,12 @@ class TCPServer(object):
                                              server_side=True,
                                              do_handshake_on_connect=False,
                                              **self.ssl_options)
-            except ssl.SSLError, err:
+            except ssl.SSLError as err:
                 if err.args[0] == ssl.SSL_ERROR_EOF:
                     return connection.close()
                 else:
                     raise
-            except socket.error, err:
+            except socket.error as err:
                 if err.args[0] == errno.ECONNABORTED:
                     return connection.close()
                 else:
@@ -304,7 +304,7 @@ if hasattr(socket, 'AF_UNIX'):
         sock.setblocking(0)
         try:
             st = os.stat(file)
-        except OSError, err:
+        except OSError as err:
             if err.errno != errno.ENOENT:
                 raise
         else:
@@ -334,7 +334,7 @@ def add_accept_handler(sock, callback, io_loop=None):
         while True:
             try:
                 connection, address = sock.accept()
-            except socket.error, e:
+            except socket.error as e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     return
                 raise

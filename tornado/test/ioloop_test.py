@@ -110,7 +110,7 @@ class TestIOLoop(AsyncTestCase):
         for i in range(1000):
             try:
                 other_ioloop.add_callback(lambda: None)
-            except RuntimeError, e:
+            except RuntimeError as e:
                 self.assertEqual("IOLoop is closing", str(e))
                 break
 

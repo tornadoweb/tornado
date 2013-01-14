@@ -399,7 +399,7 @@ class BaseIOStream(object):
         """
         try:
             chunk = self.read_from_fd()
-        except (socket.error, IOError, OSError), e:
+        except (socket.error, IOError, OSError) as e:
             # ssl.SSLError is a subclass of socket.error
             if e.args[0] == errno.ECONNRESET:
                 # Treat ECONNRESET as a connection close rather than
@@ -504,7 +504,7 @@ class BaseIOStream(object):
                 self._write_buffer_frozen = False
                 _merge_prefix(self._write_buffer, num_bytes)
                 self._write_buffer.popleft()
-            except socket.error, e:
+            except socket.error as e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     self._write_buffer_frozen = True
                     break
@@ -630,7 +630,7 @@ class IOStream(BaseIOStream):
     def read_from_fd(self):
         try:
             chunk = self.socket.recv(self.read_chunk_size)
-        except socket.error, e:
+        except socket.error as e:
             if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                 return None
             else:
@@ -661,7 +661,7 @@ class IOStream(BaseIOStream):
         self._connecting = True
         try:
             self.socket.connect(address)
-        except socket.error, e:
+        except socket.error as e:
             # In non-blocking mode we expect connect() to raise an
             # exception with EINPROGRESS or EWOULDBLOCK.
             #
@@ -732,7 +732,7 @@ class SSLIOStream(IOStream):
             self._handshake_reading = False
             self._handshake_writing = False
             self.socket.do_handshake()
-        except ssl.SSLError, err:
+        except ssl.SSLError as err:
             if err.args[0] == ssl.SSL_ERROR_WANT_READ:
                 self._handshake_reading = True
                 return
@@ -751,7 +751,7 @@ class SSLIOStream(IOStream):
                                 self.socket.fileno(), peer, err)
                 return self.close(exc_info=True)
             raise
-        except socket.error, err:
+        except socket.error as err:
             if err.args[0] in (errno.ECONNABORTED, errno.ECONNRESET):
                 return self.close(exc_info=True)
         else:
@@ -804,14 +804,14 @@ class SSLIOStream(IOStream):
             # called when there is nothing to read, so we have to use
             # read() instead.
             chunk = self.socket.read(self.read_chunk_size)
-        except ssl.SSLError, e:
+        except ssl.SSLError as e:
             # SSLError is a subclass of socket.error, so this except
             # block must come first.
             if e.args[0] == ssl.SSL_ERROR_WANT_READ:
                 return None
             else:
                 raise
-        except socket.error, e:
+        except socket.error as e:
             if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                 return None
             else:
@@ -844,7 +844,7 @@ class PipeIOStream(BaseIOStream):
     def read_from_fd(self):
         try:
             chunk = os.read(self.fd, self.read_chunk_size)
-        except (IOError, OSError), e:
+        except (IOError, OSError) as e:
             if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                 return None
             elif e.args[0] == errno.EBADF:

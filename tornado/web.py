@@ -1007,7 +1007,7 @@ class RequestHandler(object):
         def wrapper(*args, **kwargs):
             try:
                 return callback(*args, **kwargs)
-            except Exception, e:
+            except Exception as e:
                 if self._headers_written:
                     app_log.error("Exception after headers written",
                                   exc_info=True)
@@ -1067,7 +1067,7 @@ class RequestHandler(object):
                     *self.path_args, **self.path_kwargs)
                 if self._auto_finish and not self._finished:
                     self.finish()
-        except Exception, e:
+        except Exception as e:
             self._handle_request_exception(e)
 
     def _generate_headers(self):

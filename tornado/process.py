@@ -125,7 +125,7 @@ def fork_processes(num_processes, max_restarts=100):
     while children:
         try:
             pid, status = os.wait()
-        except OSError, e:
+        except OSError as e:
             if e.errno == errno.EINTR:
                 continue
             raise
@@ -260,7 +260,7 @@ class Subprocess(object):
     def _try_cleanup_process(cls, pid):
         try:
             ret_pid, status = os.waitpid(pid, os.WNOHANG)
-        except OSError, e:
+        except OSError as e:
             if e.args[0] == errno.ECHILD:
                 return
         if ret_pid == 0:

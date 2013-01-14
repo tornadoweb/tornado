@@ -94,7 +94,7 @@ class DummyExecutor(object):
         future = Future()
         try:
             future.set_result(fn(*args, **kwargs))
-        except Exception, e:
+        except Exception as e:
             future.set_exception(e)
         return future
 
