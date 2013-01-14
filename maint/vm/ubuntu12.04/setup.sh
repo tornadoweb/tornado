@@ -20,14 +20,10 @@ apt-get -y install $APT_PACKAGES
 
 
 # Ubuntu 12.04 has python 2.7 as default; install more from here.
-# The most important thing is to have both 2.5 and a later version so we
-# test with both tornado.epoll and 2.6+ stdlib's select.epoll.
 add-apt-repository ppa:fkrull/deadsnakes
 apt-get update
 
 DEADSNAKES_PACKAGES="
-python2.5
-python2.5-dev
 python3.2
 python3.2-dev
 "

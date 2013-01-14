@@ -1,1 +1,0 @@
-../common/cgi_runtests.py
