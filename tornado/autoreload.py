@@ -79,6 +79,7 @@ import weakref
 from tornado import ioloop
 from tornado.log import gen_log
 from tornado import process
+from tornado.util import exec_in
 
 try:
     import signal
@@ -277,7 +278,7 @@ def main():
                 # Use globals as our "locals" dictionary so that
                 # something that tries to import __main__ (e.g. the unittest
                 # module) will see the right things.
-                exec f.read() in globals(), globals()
+                exec_in(f.read(), globals(), globals())
     except SystemExit as e:
         logging.basicConfig()
         gen_log.info("Script exited with status %s", e.code)

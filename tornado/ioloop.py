@@ -33,6 +33,7 @@ import errno
 import functools
 import heapq
 import logging
+import numbers
 import os
 import select
 import sys
@@ -654,7 +655,7 @@ class _Timeout(object):
     __slots__ = ['deadline', 'callback']
 
     def __init__(self, deadline, callback, io_loop):
-        if isinstance(deadline, (int, long, float)):
+        if isinstance(deadline, numbers.Real):
             self.deadline = deadline
         elif isinstance(deadline, datetime.timedelta):
             self.deadline = io_loop.time() + _Timeout.timedelta_to_seconds(deadline)
