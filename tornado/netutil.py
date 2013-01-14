@@ -288,7 +288,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     return sockets
 
 if hasattr(socket, 'AF_UNIX'):
-    def bind_unix_socket(file, mode=0600, backlog=128):
+    def bind_unix_socket(file, mode=int('600', 8), backlog=128):
         """Creates a listening unix socket.
 
         If a socket with the given name already exists, it will be deleted.

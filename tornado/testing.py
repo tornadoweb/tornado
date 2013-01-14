@@ -20,7 +20,6 @@ information.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-from cStringIO import StringIO
 try:
     from tornado.httpclient import AsyncHTTPClient
     from tornado.httpserver import HTTPServer
@@ -45,6 +44,11 @@ import signal
 import socket
 import sys
 import time
+
+try:
+    from io import StringIO  # py3
+except ImportError:
+    from cStringIO import StringIO  # py2
 
 # Tornado's own test suite requires the updated unittest module
 # (either py27+ or unittest2) so tornado.test.util enforces

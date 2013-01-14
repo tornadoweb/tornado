@@ -25,6 +25,10 @@ from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
 from tornado.util import b, ObjectDict
 
+try:
+    from httplib import responses  # py2
+except ImportError:
+    from http.client import responses  # py3
 
 class HTTPHeaders(dict):
     """A dictionary that maintains Http-Header-Case for all keys.

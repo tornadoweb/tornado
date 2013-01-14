@@ -19,7 +19,6 @@ import re
 import socket
 import sys
 import time
-import urlparse
 
 try:
     from io import BytesIO  # python 3
@@ -30,6 +29,11 @@ try:
     import ssl  # python 2.6+
 except ImportError:
     ssl = None
+
+try:
+    import urlparse  # py2
+except ImportError:
+    import urllib.parse as urlparse  # py3
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
 

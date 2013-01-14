@@ -2,6 +2,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import sys
 import zlib
 
 
@@ -74,37 +75,56 @@ def import_object(name):
 # unicode_literals" have other problems (see PEP 414).  u() can be applied
 # to ascii strings that include \u escapes (but they must not contain
 # literal non-ascii characters).
-if str is unicode:
+if type('') is not type(b''):
     def b(s):
         return s.encode('latin1')
     def u(s):
         return s
     bytes_type = bytes
+    unicode_type = str
+    basestring_type = str
 else:
     def b(s):
         return s
     def u(s):
         return s.decode('unicode_escape')
     bytes_type = str
+    unicode_type = unicode
+    basestring_type = basestring
 
 
+# def raise_exc_info(exc_info):
+#     """Re-raise an exception (with original traceback) from an exc_info tuple.
+
+#     The argument is a ``(type, value, traceback)`` tuple as returned by
+#     `sys.exc_info`.
+#     """
+#     # 2to3 isn't smart enough to convert three-argument raise
+#     # statements correctly in some cases.
+#     if isinstance(exc_info[1], exc_info[0]):
+#         raise exc_info[1], None, exc_info[2]
+#         # After 2to3: raise exc_info[1].with_traceback(exc_info[2])
+#     else:
+#         # I think this branch is only taken for string exceptions,
+#         # which were removed in Python 2.6.
+#         raise exc_info[0], exc_info[1], exc_info[2]
+#         # After 2to3: raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
+if sys.version_info > (3,):
+    exec("""
 def raise_exc_info(exc_info):
-    """Re-raise an exception (with original traceback) from an exc_info tuple.
+    raise exc_info[1].with_traceback(exc_info[2])
 
-    The argument is a ``(type, value, traceback)`` tuple as returned by
-    `sys.exc_info`.
-    """
-    # 2to3 isn't smart enough to convert three-argument raise
-    # statements correctly in some cases.
-    if isinstance(exc_info[1], exc_info[0]):
-        raise exc_info[1], None, exc_info[2]
-        # After 2to3: raise exc_info[1].with_traceback(exc_info[2])
-    else:
-        # I think this branch is only taken for string exceptions,
-        # which were removed in Python 2.6.
-        raise exc_info[0], exc_info[1], exc_info[2]
-        # After 2to3: raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
+def exec_in(code, namespace):
+    exec(code, namespace)
+""")
+else:
+    exec("""
+def raise_exc_info(exc_info):
+    raise exc_info[0], exc_info[1], exc_info[2]
 
+def exec_in(code, namespace):
+    exec code in namespace
+""")
 
 class Configurable(object):
     """Base class for configurable interfaces.
@@ -174,7 +194,7 @@ class Configurable(object):
         some parameters.
         """
         base = cls.configurable_base()
-        if isinstance(impl, (unicode, bytes_type)):
+        if isinstance(impl, (unicode_type, bytes_type)):
             impl = import_object(impl)
         if impl is not None and not issubclass(impl, cls):
             raise ValueError("Invalid subclass of %s" % cls)

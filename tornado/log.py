@@ -36,6 +36,7 @@ import sys
 import time
 
 from tornado.escape import _unicode
+from tornado.util import unicode_type, basestring_type
 
 try:
     import curses
@@ -86,25 +87,25 @@ class LogFormatter(logging.Formatter):
             fg_color = (curses.tigetstr("setaf") or
                         curses.tigetstr("setf") or "")
             if (3, 0) < sys.version_info < (3, 2, 3):
-                fg_color = unicode(fg_color, "ascii")
+                fg_color = unicode_type(fg_color, "ascii")
             self._colors = {
-                logging.DEBUG: unicode(curses.tparm(fg_color, 4),  # Blue
+                logging.DEBUG: unicode_type(curses.tparm(fg_color, 4),  # Blue
                                        "ascii"),
-                logging.INFO: unicode(curses.tparm(fg_color, 2),  # Green
+                logging.INFO: unicode_type(curses.tparm(fg_color, 2),  # Green
                                       "ascii"),
-                logging.WARNING: unicode(curses.tparm(fg_color, 3),  # Yellow
+                logging.WARNING: unicode_type(curses.tparm(fg_color, 3),  # Yellow
                                          "ascii"),
-                logging.ERROR: unicode(curses.tparm(fg_color, 1),  # Red
+                logging.ERROR: unicode_type(curses.tparm(fg_color, 1),  # Red
                                        "ascii"),
             }
-            self._normal = unicode(curses.tigetstr("sgr0"), "ascii")
+            self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
 
     def format(self, record):
         try:
             record.message = record.getMessage()
         except Exception as e:
             record.message = "Bad message (%r): %r" % (e, record.__dict__)
-        assert isinstance(record.message, basestring)  # guaranteed by logging
+        assert isinstance(record.message, basestring_type)  # guaranteed by logging
         record.asctime = time.strftime(
             "%y%m%d %H:%M:%S", self.converter(record.created))
         prefix = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]' % \

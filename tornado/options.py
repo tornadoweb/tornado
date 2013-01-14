@@ -68,6 +68,7 @@ import textwrap
 from tornado.escape import _unicode
 from tornado.log import define_logging_options
 from tornado import stack_context
+from tornado.util import basestring_type
 
 
 class Error(Exception):
@@ -171,7 +172,7 @@ class OptionParser(object):
         if args is None:
             args = sys.argv
         remaining = []
-        for i in xrange(1, len(args)):
+        for i in range(1, len(args)):
             # All things after the last option are command line arguments
             if not args[i].startswith("-"):
                 remaining = args[i:]
@@ -301,7 +302,7 @@ class _Mockable(object):
         setattr(self._options, name, self._originals.pop(name))
 
 class _Option(object):
-    def __init__(self, name, default=None, type=basestring, help=None,
+    def __init__(self, name, default=None, type=basestring_type, help=None,
                  metavar=None, multiple=False, file_name=None, group_name=None,
                  callback=None):
         if default is None and multiple:
@@ -325,7 +326,7 @@ class _Option(object):
             datetime.datetime: self._parse_datetime,
             datetime.timedelta: self._parse_timedelta,
             bool: self._parse_bool,
-            basestring: self._parse_string,
+            basestring_type: self._parse_string,
         }.get(self.type, self.type)
         if self.multiple:
             self._value = []

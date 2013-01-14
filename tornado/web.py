@@ -51,7 +51,6 @@ back to the main thread before finishing the request.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import Cookie
 import base64
 import binascii
 import calendar
@@ -61,7 +60,6 @@ import functools
 import gzip
 import hashlib
 import hmac
-import httplib
 import itertools
 import mimetypes
 import os.path
@@ -74,10 +72,10 @@ import tornado
 import traceback
 import types
 import urllib
-import urlparse
 import uuid
 
 from tornado import escape
+from tornado import httputil
 from tornado import locale
 from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
@@ -90,6 +88,15 @@ try:
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
 
+try:
+    import Cookie  # py2
+except ImportError:
+    import http.cookies as Cookie  # py3
+
+try:
+    import urlparse  # py2
+except ImportError:
+    import urllib.parse as urlparse  # py3
 
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
@@ -233,7 +240,7 @@ class RequestHandler(object):
                 self.set_header("Connection", "Keep-Alive")
         self._write_buffer = []
         self._status_code = 200
-        self._reason = httplib.responses[200]
+        self._reason = httputil.responses[200]
 
     def set_default_headers(self):
         """Override this to set HTTP headers at the beginning of the request.
@@ -258,7 +265,7 @@ class RequestHandler(object):
             self._reason = escape.native_str(reason)
         else:
             try:
-                self._reason = httplib.responses[status_code]
+                self._reason = httputil.responses[status_code]
             except KeyError:
                 raise ValueError("unknown status code %d", status_code)
 
@@ -861,7 +868,7 @@ class RequestHandler(object):
                     score = 1.0
                 locales.append((parts[0], score))
             if locales:
-                locales.sort(key=lambda (l, s): s, reverse=True)
+                locales.sort(key=lambda pair: pair[1], reverse=True)
                 codes = [l[0] for l in locales]
                 return locale.get(*codes)
         return locale.get(default)
@@ -1101,7 +1108,7 @@ class RequestHandler(object):
                 format = "%d %s: " + e.log_message
                 args = [e.status_code, self._request_summary()] + list(e.args)
                 gen_log.warning(format, *args)
-            if e.status_code not in httplib.responses and not e.reason:
+            if e.status_code not in httputil.responses and not e.reason:
                 gen_log.error("Bad HTTP status code: %d", e.status_code)
                 self.send_error(500, exc_info=sys.exc_info())
             else:
@@ -1510,7 +1517,7 @@ class HTTPError(Exception):
     def __str__(self):
         message = "HTTP %d: %s" % (
             self.status_code,
-            self.reason or httplib.responses.get(self.status_code, 'Unknown'))
+            self.reason or httputil.responses.get(self.status_code, 'Unknown'))
         if self.log_message:
             return message + " (" + (self.log_message % self.args) + ")"
         else:

@@ -26,7 +26,6 @@ This module also defines the `HTTPRequest` class which is exposed via
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import Cookie
 import socket
 import time
 
@@ -43,6 +42,10 @@ try:
 except ImportError:
     ssl = None
 
+try:
+    import Cookie  # py2
+except ImportError:
+    import http.cookies as Cookie  # py3
 
 class HTTPServer(TCPServer):
     r"""A non-blocking, single-threaded HTTP server.

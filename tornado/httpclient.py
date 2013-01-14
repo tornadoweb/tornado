@@ -33,7 +33,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import calendar
 import email.utils
-import httplib
 import time
 import weakref
 
@@ -346,7 +345,7 @@ class HTTPResponse(object):
                  time_info=None, reason=None):
         self.request = request
         self.code = code
-        self.reason = reason or httplib.responses.get(code, "Unknown")
+        self.reason = reason or httputil.responses.get(code, "Unknown")
         if headers is not None:
             self.headers = headers
         else:
@@ -403,7 +402,7 @@ class HTTPError(Exception):
     """
     def __init__(self, code, message=None, response=None):
         self.code = code
-        message = message or httplib.responses.get(code, "Unknown")
+        message = message or httputil.responses.get(code, "Unknown")
         self.response = response
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
 

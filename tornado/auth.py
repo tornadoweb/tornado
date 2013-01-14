@@ -52,7 +52,6 @@ import hashlib
 import hmac
 import time
 import urllib
-import urlparse
 import uuid
 
 from tornado import httpclient
@@ -60,6 +59,11 @@ from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
 from tornado.util import bytes_type, b, u
+
+try:
+    import urlparse  # py2
+except ImportError:
+    import urllib.parse as urlparse  # py3
 
 
 class OpenIdMixin(object):

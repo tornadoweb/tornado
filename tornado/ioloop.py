@@ -36,7 +36,6 @@ import logging
 import os
 import select
 import sys
-import thread
 import threading
 import time
 import traceback
@@ -55,6 +54,11 @@ try:
     from concurrent import futures
 except ImportError:
     futures = None
+
+try:
+    import thread  # py2
+except ImportError:
+    import _thread as thread  # py3
 
 from tornado.platform.auto import set_close_exec, Waker
 

@@ -181,7 +181,6 @@ with ``{# ... #}``.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import cStringIO
 import datetime
 import linecache
 import os.path
@@ -191,7 +190,12 @@ import threading
 
 from tornado import escape
 from tornado.log import app_log
-from tornado.util import bytes_type, ObjectDict
+from tornado.util import bytes_type, ObjectDict, exec_in
+
+try:
+    from cStringIO import StringIO  # py2
+except ImportError:
+    from io import StringIO  # py3
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()
@@ -254,7 +258,7 @@ class Template(object):
         }
         namespace.update(self.namespace)
         namespace.update(kwargs)
-        exec self.compiled in namespace
+        exec_in(self.compiled, namespace)
         execute = namespace["_execute"]
         # Clear the traceback module's cache of source data now that
         # we've generated a new template (mainly for this module's
@@ -263,7 +267,7 @@ class Template(object):
         return execute()
 
     def _generate_python(self, loader, compress_whitespace):
-        buffer = cStringIO.StringIO()
+        buffer = StringIO()
         try:
             # named_blocks maps from names to _NamedBlock objects
             named_blocks = {}

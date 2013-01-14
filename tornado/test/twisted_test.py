@@ -23,7 +23,6 @@ import os
 import shutil
 import signal
 import tempfile
-import thread
 import threading
 
 try:
@@ -40,6 +39,11 @@ try:
     have_twisted = True
 except ImportError:
     have_twisted = False
+
+try:
+    import thread  # py2
+except ImportError:
+    import _thread as thread  # py3
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
