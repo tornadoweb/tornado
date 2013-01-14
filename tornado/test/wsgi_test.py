@@ -4,7 +4,7 @@ from wsgiref.validate import validator
 from tornado.escape import json_decode
 from tornado.test.httpserver_test import TypeCheckHandler
 from tornado.testing import AsyncHTTPTestCase
-from tornado.util import b
+from tornado.util import b, u
 from tornado.web import RequestHandler
 from tornado.wsgi import WSGIApplication, WSGIContainer
 
@@ -50,7 +50,7 @@ class WSGIApplicationTest(AsyncHTTPTestCase):
 
     def test_path_quoting(self):
         response = self.fetch("/path/foo%20bar%C3%A9")
-        self.assertEqual(response.body, u"foo bar\u00e9".encode("utf-8"))
+        self.assertEqual(response.body, u("foo bar\u00e9").encode("utf-8"))
 
     def test_types(self):
         headers = {"Cookie": "foo=bar"}

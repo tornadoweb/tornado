@@ -8,7 +8,7 @@ from __future__ import absolute_import, division, with_statement
 from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin
 from tornado.escape import json_decode
 from tornado.testing import AsyncHTTPTestCase
-from tornado.util import b
+from tornado.util import b, u
 from tornado.web import RequestHandler, Application, asynchronous
 
 
@@ -255,9 +255,9 @@ class AuthTest(AsyncHTTPTestCase):
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed,
-                         {u'access_token': {u'key': u'hjkl',
-                                            u'screen_name': u'foo',
-                                            u'secret': u'vbnm'},
-                          u'name': u'Foo',
-                          u'screen_name': u'foo',
-                          u'username': u'foo'})
+                         {u('access_token'): {u('key'): u('hjkl'),
+                                            u('screen_name'): u('foo'),
+                                            u('secret'): u('vbnm')},
+                          u('name'): u('Foo'),
+                          u('screen_name'): u('foo'),
+                          u('username'): u('foo')})

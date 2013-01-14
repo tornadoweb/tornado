@@ -27,7 +27,7 @@ from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
 from tornado.options import OptionParser
 from tornado.test.util import unittest
-from tornado.util import b, bytes_type
+from tornado.util import b, u, bytes_type
 
 @contextlib.contextmanager
 def ignore_bytes_warning():
@@ -51,9 +51,9 @@ class LogFormatterTest(unittest.TestCase):
         # for testing.  (testing with color off fails to expose some potential
         # encoding issues from the control characters)
         self.formatter._colors = {
-            logging.ERROR: u"\u0001",
+            logging.ERROR: u("\u0001"),
             }
-        self.formatter._normal = u"\u0002"
+        self.formatter._normal = u("\u0002")
         self.formatter._color = True
         # construct a Logger directly to bypass getLogger's caching
         self.logger = logging.Logger('LogFormatterTest')
@@ -96,16 +96,16 @@ class LogFormatterTest(unittest.TestCase):
             self.assertEqual(self.get_output(), utf8(repr(b("\xe9"))))
 
     def test_utf8_logging(self):
-        self.logger.error(u"\u00e9".encode("utf8"))
+        self.logger.error(u("\u00e9").encode("utf8"))
         if issubclass(bytes_type, basestring):
             # on python 2, utf8 byte strings (and by extension ascii byte
             # strings) are passed through as-is.
-            self.assertEqual(self.get_output(), utf8(u"\u00e9"))
+            self.assertEqual(self.get_output(), utf8(u("\u00e9")))
         else:
             # on python 3, byte strings always get repr'd even if
             # they're ascii-only, so this degenerates into another
             # copy of test_bytes_logging.
-            self.assertEqual(self.get_output(), utf8(repr(utf8(u"\u00e9"))))
+            self.assertEqual(self.get_output(), utf8(repr(utf8(u("\u00e9")))))
 
 
 class UnicodeLogFormatterTest(LogFormatterTest):
@@ -116,8 +116,8 @@ class UnicodeLogFormatterTest(LogFormatterTest):
         return logging.FileHandler(filename, encoding="utf8")
 
     def test_unicode_logging(self):
-        self.logger.error(u"\u00e9")
-        self.assertEqual(self.get_output(), utf8(u"\u00e9"))
+        self.logger.error(u("\u00e9"))
+        self.assertEqual(self.get_output(), utf8(u("\u00e9")))
 
 
 class EnablePrettyLoggingTest(unittest.TestCase):

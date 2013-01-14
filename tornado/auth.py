@@ -59,7 +59,7 @@ from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
-from tornado.util import bytes_type, b
+from tornado.util import bytes_type, b, u
 
 
 class OpenIdMixin(object):
@@ -92,7 +92,7 @@ class OpenIdMixin(object):
         """
         # Verify the OpenID response via direct request to the OP
         args = dict((k, v[-1]) for k, v in self.request.arguments.iteritems())
-        args["openid.mode"] = u"check_authentication"
+        args["openid.mode"] = u("check_authentication")
         url = self._OPENID_ENDPOINT
         if http_client is None:
             http_client = self.get_auth_http_client()
@@ -159,13 +159,13 @@ class OpenIdMixin(object):
         ax_ns = None
         for name in self.request.arguments.iterkeys():
             if name.startswith("openid.ns.") and \
-               self.get_argument(name) == u"http://openid.net/srv/ax/1.0":
+               self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
                 ax_ns = name[10:]
                 break
 
         def get_ax_arg(uri):
             if not ax_ns:
-                return u""
+                return u("")
             prefix = "openid." + ax_ns + ".type."
             ax_name = None
             for name in self.request.arguments.iterkeys():
@@ -174,8 +174,8 @@ class OpenIdMixin(object):
                     ax_name = "openid." + ax_ns + ".value." + part
                     break
             if not ax_name:
-                return u""
-            return self.get_argument(ax_name, u"")
+                return u("")
+            return self.get_argument(ax_name, u(""))
 
         email = get_ax_arg("http://axschema.org/contact/email")
         name = get_ax_arg("http://axschema.org/namePerson")
@@ -194,7 +194,7 @@ class OpenIdMixin(object):
         if name:
             user["name"] = name
         elif name_parts:
-            user["name"] = u" ".join(name_parts)
+            user["name"] = u(" ").join(name_parts)
         elif email:
             user["name"] = email.split("@")[0]
         if email:
@@ -763,7 +763,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
         oauth_ns = ""
         for name, values in self.request.arguments.iteritems():
             if name.startswith("openid.ns.") and \
-               values[-1] == u"http://specs.openid.net/extensions/oauth/1.0":
+               values[-1] == u("http://specs.openid.net/extensions/oauth/1.0"):
                 oauth_ns = name[10:]
                 break
         token = self.get_argument("openid." + oauth_ns + ".request_token", "")

@@ -7,7 +7,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b, bytes_type, ObjectDict
+from tornado.util import b, u, bytes_type, ObjectDict
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler
 
 import binascii
@@ -107,7 +107,7 @@ class CookieTest(WebTestCase):
                 # Try setting cookies with different argument types
                 # to ensure that everything gets encoded correctly
                 self.set_cookie("str", "asdf")
-                self.set_cookie("unicode", u"qwer")
+                self.set_cookie("unicode", u("qwer"))
                 self.set_cookie("bytes", b("zxcv"))
 
         class GetCookieHandler(RequestHandler):
@@ -118,8 +118,8 @@ class CookieTest(WebTestCase):
             def get(self):
                 # unicode domain and path arguments shouldn't break things
                 # either (see bug #285)
-                self.set_cookie("unicode_args", "blah", domain=u"foo.com",
-                                path=u"/foo")
+                self.set_cookie("unicode_args", "blah", domain=u("foo.com"),
+                                path=u("/foo"))
 
         class SetCookieSpecialCharHandler(RequestHandler):
             def get(self):
@@ -308,9 +308,9 @@ class RequestEncodingTest(WebTestCase):
     def test_group_encoding(self):
         # Path components and query arguments should be decoded the same way
         self.assertEqual(self.fetch_json('/group/%C3%A9?arg=%C3%A9'),
-                         {u"path": u"/group/%C3%A9",
-                          u"path_args": [u"\u00e9"],
-                          u"args": {u"arg": [u"\u00e9"]}})
+                         {u("path"): u("/group/%C3%A9"),
+                          u("path_args"): [u("\u00e9")],
+                          u("args"): {u("arg"): [u("\u00e9")]}})
 
     def test_slashes(self):
         # Slashes may be escaped to appear as a single "directory" in the path,
@@ -535,15 +535,15 @@ class WSGISafeWebTest(WebTestCase):
             response = self.fetch(url)
             response.rethrow()
             data = json_decode(response.body)
-            self.assertEqual(data, {u'path': [u'unicode', u'\u00e9'],
-                                    u'query': [u'unicode', u'\u00e9'],
+            self.assertEqual(data, {u('path'): [u('unicode'), u('\u00e9')],
+                                    u('query'): [u('unicode'), u('\u00e9')],
                                     })
 
         response = self.fetch("/decode_arg/%C3%A9?foo=%C3%A9")
         response.rethrow()
         data = json_decode(response.body)
-        self.assertEqual(data, {u'path': [u'bytes', u'c3a9'],
-                                u'query': [u'bytes', u'c3a9'],
+        self.assertEqual(data, {u('path'): [u('bytes'), u('c3a9')],
+                                u('query'): [u('bytes'), u('c3a9')],
                                 })
 
     def test_reverse_url(self):
@@ -553,7 +553,7 @@ class WSGISafeWebTest(WebTestCase):
                          '/decode_arg/42')
         self.assertEqual(self.app.reverse_url('decode_arg', b('\xe9')),
                          '/decode_arg/%E9')
-        self.assertEqual(self.app.reverse_url('decode_arg', u'\u00e9'),
+        self.assertEqual(self.app.reverse_url('decode_arg', u('\u00e9')),
                          '/decode_arg/%C3%A9')
 
     def test_uimodule_unescaped(self):
@@ -588,9 +588,9 @@ js_embed()
 
     def test_optional_path(self):
         self.assertEqual(self.fetch_json("/optional_path/foo"),
-                         {u"path": u"foo"})
+                         {u("path"): u("foo")})
         self.assertEqual(self.fetch_json("/optional_path/"),
-                         {u"path": None})
+                         {u("path"): None})
 
     def test_multi_header(self):
         response = self.fetch("/multi_header")
@@ -894,7 +894,7 @@ class NamedURLSpecGroupsTest(WebTestCase):
                 self.write(path)
 
         return [("/str/(?P<path>.*)", EchoHandler),
-                (u"/unicode/(?P<path>.*)", EchoHandler)]
+                (u("/unicode/(?P<path>.*)"), EchoHandler)]
 
     def test_named_urlspec_groups(self):
         response = self.fetch("/str/foo")

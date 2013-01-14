@@ -11,7 +11,7 @@ from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b, bytes_type
+from tornado.util import b, u, bytes_type
 from tornado.web import Application, RequestHandler, asynchronous
 import datetime
 import os
@@ -206,19 +206,19 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                                   b("\r\n").join([
                     b("Content-Disposition: form-data; name=argument"),
                     b(""),
-                    u"\u00e1".encode("utf-8"),
+                    u("\u00e1").encode("utf-8"),
                     b("--1234567890"),
-                    u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode("utf8"),
+                    u('Content-Disposition: form-data; name="files"; filename="\u00f3"').encode("utf8"),
                     b(""),
-                    u"\u00fa".encode("utf-8"),
+                    u("\u00fa").encode("utf-8"),
                     b("--1234567890--"),
                     b(""),
                     ]))
         data = json_decode(response.body)
-        self.assertEqual(u"\u00e9", data["header"])
-        self.assertEqual(u"\u00e1", data["argument"])
-        self.assertEqual(u"\u00f3", data["filename"])
-        self.assertEqual(u"\u00fa", data["filebody"])
+        self.assertEqual(u("\u00e9"), data["header"])
+        self.assertEqual(u("\u00e1"), data["argument"])
+        self.assertEqual(u("\u00f3"), data["filename"])
+        self.assertEqual(u("\u00fa"), data["filebody"])
 
     def test_100_continue(self):
         # Run through a 100-continue interaction by hand:
@@ -304,12 +304,12 @@ class HTTPServerTest(AsyncHTTPTestCase):
     def test_query_string_encoding(self):
         response = self.fetch("/echo?foo=%C3%A9")
         data = json_decode(response.body)
-        self.assertEqual(data, {u"foo": [u"\u00e9"]})
+        self.assertEqual(data, {u("foo"): [u("\u00e9")]})
 
     def test_empty_query_string(self):
         response = self.fetch("/echo?foo=&foo=")
         data = json_decode(response.body)
-        self.assertEqual(data, {u"foo": [u"", u""]})
+        self.assertEqual(data, {u("foo"): [u(""), u("")]})
 
     def test_types(self):
         headers = {"Cookie": "foo=bar"}

@@ -27,6 +27,8 @@ import re
 import sys
 import urllib
 
+from tornado.util import u
+
 # Python3 compatibility:  On python2.5, introduce the bytes alias from 2.6
 try:
     bytes
@@ -232,7 +234,9 @@ def recursive_unicode(obj):
 # but it gets all exponential on certain patterns (such as too many trailing
 # dots), causing the regex matcher to never return.
 # This regex should avoid those problems.
-_URL_RE = re.compile(ur"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)""")
+# Use to_unicode instead of tornado.util.u - we don't want backslashes getting
+# processed as escapes.
+_URL_RE = re.compile(to_unicode(r"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)"""))
 
 
 def linkify(text, shorten=False, extra_params="",
@@ -321,7 +325,7 @@ def linkify(text, shorten=False, extra_params="",
                     # have a status bar, such as Safari by default)
                     params += ' title="%s"' % href
 
-        return u'<a href="%s"%s>%s</a>' % (href, params, url)
+        return u('<a href="%s"%s>%s</a>') % (href, params, url)
 
     # First HTML-escape so that our strings are all safe.
     # The regex is modified to avoid character entites other than &amp; so
