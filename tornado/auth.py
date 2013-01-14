@@ -1292,7 +1292,7 @@ class GitHubMixin(OAuth2Mixin):
             self._OAUTH_ACCESS_TOKEN_URL,
             on_authenticate,
             method='POST',
-            body=urllib.parse.urlencode(params),
+            body=urllib.urlencode(params),
             headers=self._API_BASE_HEADERS
         )
 
