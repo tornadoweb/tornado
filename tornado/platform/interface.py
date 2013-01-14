@@ -21,7 +21,7 @@ for other tornado.platform modules.  Most code should import the appropriate
 implementation from `tornado.platform.auto`.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 
 def set_close_exec(fd):

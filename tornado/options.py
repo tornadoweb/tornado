@@ -57,7 +57,7 @@ simply call methods on it.  You may create additional `OptionParser`
 instances to define isolated sets of options, such as for subcommands.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import datetime
 import re
@@ -218,15 +218,15 @@ class OptionParser(object):
         """Prints all the command line options to stderr (or another file)."""
         if file is None:
             file = sys.stderr
-        print >> file, "Usage: %s [OPTIONS]" % sys.argv[0]
-        print >> file, "\nOptions:\n"
+        print("Usage: %s [OPTIONS]" % sys.argv[0], file=file)
+        print("\nOptions:\n", file=file)
         by_group = {}
         for option in self._options.itervalues():
             by_group.setdefault(option.group_name, []).append(option)
 
         for filename, o in sorted(by_group.items()):
             if filename:
-                print >> file, "\n%s options:\n" % os.path.normpath(filename)
+                print("\n%s options:\n" % os.path.normpath(filename), file=file)
             o.sort(key=lambda option: option.name)
             for option in o:
                 prefix = option.name
@@ -238,10 +238,10 @@ class OptionParser(object):
                 lines = textwrap.wrap(description, 79 - 35)
                 if len(prefix) > 30 or len(lines) == 0:
                     lines.insert(0, '')
-                print >> file, "  --%-30s %s" % (prefix, lines[0])
+                print("  --%-30s %s" % (prefix, lines[0]), file=file)
                 for line in lines[1:]:
-                    print >> file, "%-34s %s" % (' ', line)
-        print >> file
+                    print("%-34s %s" % (' ', line), file=file)
+        print(file=file)
 
     def _help_callback(self, value):
         if value:

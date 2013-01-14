@@ -31,7 +31,7 @@ Additionally, modifying these variables will cause reloading to behave
 incorrectly.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import os
 import sys
@@ -263,7 +263,7 @@ def main():
         script = sys.argv[1]
         sys.argv = sys.argv[1:]
     else:
-        print >>sys.stderr, _USAGE
+        print(_USAGE, file=sys.stderr)
         sys.exit(1)
 
     try:

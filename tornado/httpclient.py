@@ -29,7 +29,7 @@ you use a recent version of ``libcurl`` and ``pycurl``.  Currently the minimum
 supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import calendar
 import email.utils
@@ -446,9 +446,9 @@ def main():
             else:
                 raise
         if options.print_headers:
-            print response.headers
+            print(response.headers)
         if options.print_body:
-            print response.body
+            print(response.body)
     client.close()
 
 if __name__ == "__main__":

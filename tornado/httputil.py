@@ -16,7 +16,7 @@
 
 """HTTP utility code shared by clients and servers."""
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import urllib
 import re
@@ -47,8 +47,8 @@ class HTTPHeaders(dict):
     ['A=B', 'C=D']
 
     >>> for (k,v) in sorted(h.get_all()):
-    ...    print '%s: %s' % (k,v)
-    ...
+    ...    print('%s: %s' % (k,v))
+    ... 
     Content-Type: text/html
     Set-Cookie: A=B
     Set-Cookie: C=D

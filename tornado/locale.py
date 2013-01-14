@@ -39,7 +39,7 @@ supported by gettext and related tools).  If neither method is called,
 the locale.translate method will simply return the original string.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import csv
 import datetime

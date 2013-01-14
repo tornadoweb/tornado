@@ -64,7 +64,7 @@ reactor.  Recommended usage::
 This module has been tested with Twisted versions 11.0.0 and newer.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
 import datetime

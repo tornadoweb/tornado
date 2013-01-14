@@ -18,7 +18,7 @@
 Supports the standard library's `select.epoll` function for Python 2.6+,
 and our own C module for Python 2.5.
 """
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import os
 import select

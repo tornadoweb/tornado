@@ -18,7 +18,7 @@ inheritance.  See the docstrings for each class/function below for more
 information.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 from cStringIO import StringIO
 try:
@@ -496,7 +496,7 @@ def main(**kwargs):
         kwargs['buffer'] = True
 
     if __name__ == '__main__' and len(argv) == 1:
-        print >> sys.stderr, "No tests specified"
+        print("No tests specified", file=sys.stderr)
         sys.exit(1)
     try:
         # In order to be able to run tests by their fully-qualified name

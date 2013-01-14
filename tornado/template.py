@@ -179,7 +179,7 @@ with ``{# ... #}``.
     ``{% continue %}`` may be used inside the loop.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import cStringIO
 import datetime
@@ -620,7 +620,7 @@ class _CodeWriter(object):
             ancestors = ["%s:%d" % (tmpl.name, lineno)
                          for (tmpl, lineno) in self.include_stack]
             line_comment += ' (via %s)' % ', '.join(reversed(ancestors))
-        print >> self.file, "    " * indent + line + line_comment
+        print("    " * indent + line + line_comment, file=self.file)
 
 
 class _TemplateReader(object):
