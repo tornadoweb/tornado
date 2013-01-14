@@ -262,7 +262,7 @@ class GenTest(AsyncTestCase):
 
         @gen.engine
         def outer():
-            for i in xrange(10):
+            for i in range(10):
                 yield gen.Task(inner)
             stack_increase = len(stack_context._state.contexts) - initial_stack_depth
             self.assertTrue(stack_increase <= 2)
@@ -281,7 +281,7 @@ class GenTest(AsyncTestCase):
 
         @gen.engine
         def outer():
-            for i in xrange(10):
+            for i in range(10):
                 try:
                     yield gen.Task(inner)
                 except ZeroDivisionError:

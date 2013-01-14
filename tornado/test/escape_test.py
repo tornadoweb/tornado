@@ -5,7 +5,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import tornado.escape
 
 from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode
-from tornado.util import b, u
+from tornado.util import b, u, unicode_type
 from tornado.test.util import unittest
 
 linkify_tests = [
@@ -180,7 +180,7 @@ class EscapeTestCase(unittest.TestCase):
         # On python2 the escape methods should generally return the same
         # type as their argument
         self.assertEqual(type(xhtml_escape("foo")), str)
-        self.assertEqual(type(xhtml_escape(u("foo"))), unicode)
+        self.assertEqual(type(xhtml_escape(u("foo"))), unicode_type)
 
     def test_json_decode(self):
         # json_decode accepts both bytes and unicode, but strings it returns

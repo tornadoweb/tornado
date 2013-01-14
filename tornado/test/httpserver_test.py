@@ -270,15 +270,15 @@ class TypeCheckHandler(RequestHandler):
         for field, expected_type in fields:
             self.check_type(field, getattr(self.request, field), expected_type)
 
-        self.check_type('header_key', self.request.headers.keys()[0], str)
-        self.check_type('header_value', self.request.headers.values()[0], str)
+        self.check_type('header_key', list(self.request.headers.keys())[0], str)
+        self.check_type('header_value', list(self.request.headers.values())[0], str)
 
-        self.check_type('cookie_key', self.request.cookies.keys()[0], str)
-        self.check_type('cookie_value', self.request.cookies.values()[0].value, str)
+        self.check_type('cookie_key', list(self.request.cookies.keys())[0], str)
+        self.check_type('cookie_value', list(self.request.cookies.values())[0].value, str)
         # secure cookies
 
-        self.check_type('arg_key', self.request.arguments.keys()[0], str)
-        self.check_type('arg_value', self.request.arguments.values()[0][0], bytes_type)
+        self.check_type('arg_key', list(self.request.arguments.keys())[0], str)
+        self.check_type('arg_value', list(self.request.arguments.values())[0][0], bytes_type)
 
     def post(self):
         self.check_type('body', self.request.body, bytes_type)
@@ -441,7 +441,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
             def get(self):
                 # 512KB should be bigger than the socket buffers so it will
                 # be written out in chunks.
-                self.write(''.join(chr(i % 256) * 1024 for i in xrange(512)))
+                self.write(''.join(chr(i % 256) * 1024 for i in range(512)))
 
         class FinishOnCloseHandler(RequestHandler):
             @asynchronous

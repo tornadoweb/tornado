@@ -62,6 +62,7 @@ import hashlib
 import hmac
 import itertools
 import mimetypes
+import numbers
 import os.path
 import re
 import stat
@@ -71,7 +72,6 @@ import time
 import tornado
 import traceback
 import types
-import urllib
 import uuid
 
 from tornado import escape
@@ -81,7 +81,7 @@ from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info
+from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info, unicode_type
 
 try:
     from io import BytesIO  # python 3
@@ -97,6 +97,11 @@ try:
     import urlparse  # py2
 except ImportError:
     import urllib.parse as urlparse  # py3
+
+try:
+    from urllib import urlencode  # py2
+except ImportError:
+    from urllib.parse import urlencode  # py3
 
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
@@ -123,14 +128,14 @@ class RequestHandler(object):
         self.path_args = None
         self.path_kwargs = None
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
-                     application.ui_methods.iteritems())
+                     application.ui_methods.items())
         # UIModules are available as both `modules` and `_modules` in the
         # template namespace.  Historically only `modules` was available
         # but could be clobbered by user additions to the namespace.
         # The template {% module %} directive looks in `_modules` to avoid
         # possible conflicts.
         self.ui["_modules"] = ObjectDict((n, self._ui_module(n, m)) for n, m in
-                                 application.ui_modules.iteritems())
+                                 application.ui_modules.items())
         self.ui["modules"] = self.ui["_modules"]
         self.clear()
         # Check since connection is not available in WSGI
@@ -302,9 +307,9 @@ class RequestHandler(object):
     def _convert_header_value(self, value):
         if isinstance(value, bytes_type):
             pass
-        elif isinstance(value, unicode):
+        elif isinstance(value, unicode_type):
             value = value.encode('utf-8')
-        elif isinstance(value, (int, long)):
+        elif isinstance(value, numbers.Integral):
             # return immediately since we know the converted value will be safe
             return str(value)
         elif isinstance(value, datetime.datetime):
@@ -349,7 +354,7 @@ class RequestHandler(object):
         values = []
         for v in self.request.arguments.get(name, []):
             v = self.decode_argument(v, name=name)
-            if isinstance(v, unicode):
+            if isinstance(v, unicode_type):
                 # Get rid of any weird control chars (unless decoding gave
                 # us bytes, in which case leave it alone)
                 v = re.sub(r"[\x00-\x08\x0e-\x1f]", " ", v)
@@ -415,7 +420,7 @@ class RequestHandler(object):
                 timestamp, localtime=False, usegmt=True)
         if path:
             morsel["path"] = path
-        for k, v in kwargs.iteritems():
+        for k, v in kwargs.items():
             if k == 'max_age':
                 k = 'max-age'
             morsel[k] = v
@@ -530,13 +535,13 @@ class RequestHandler(object):
         css_files = []
         html_heads = []
         html_bodies = []
-        for module in getattr(self, "_active_modules", {}).itervalues():
+        for module in getattr(self, "_active_modules", {}).values():
             embed_part = module.embedded_javascript()
             if embed_part:
                 js_embed.append(utf8(embed_part))
             file_part = module.javascript_files()
             if file_part:
-                if isinstance(file_part, (unicode, bytes_type)):
+                if isinstance(file_part, (unicode_type, bytes_type)):
                     js_files.append(file_part)
                 else:
                     js_files.extend(file_part)
@@ -545,7 +550,7 @@ class RequestHandler(object):
                 css_embed.append(utf8(embed_part))
             file_part = module.css_files()
             if file_part:
-                if isinstance(file_part, (unicode, bytes_type)):
+                if isinstance(file_part, (unicode_type, bytes_type)):
                     css_files.append(file_part)
                 else:
                     css_files.extend(file_part)
@@ -1062,7 +1067,7 @@ class RequestHandler(object):
                 raise HTTPError(405)
             self.path_args = [self.decode_argument(arg) for arg in args]
             self.path_kwargs = dict((k, self.decode_argument(v, name=k))
-                                    for (k, v) in kwargs.iteritems())
+                                    for (k, v) in kwargs.items())
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
@@ -1083,7 +1088,7 @@ class RequestHandler(object):
                       str(self._status_code) +
                       " " + reason)]
         lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in
-                      itertools.chain(self._headers.iteritems(), self._list_headers)])
+                      itertools.chain(self._headers.items(), self._list_headers)])
         if hasattr(self, "_new_cookie"):
             for cookie in self._new_cookie.values():
                 lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))
@@ -1389,7 +1394,7 @@ class Application(object):
             for m in methods:
                 self._load_ui_methods(m)
         else:
-            for name, fn in methods.iteritems():
+            for name, fn in methods.items():
                 if not name.startswith("_") and hasattr(fn, "__call__") \
                    and name[0].lower() == name[0]:
                     self.ui_methods[name] = fn
@@ -1403,7 +1408,7 @@ class Application(object):
                 self._load_ui_modules(m)
         else:
             assert isinstance(modules, dict)
-            for name, cls in modules.iteritems():
+            for name, cls in modules.items():
                 try:
                     if issubclass(cls, UIModule):
                         self.ui_modules[name] = cls
@@ -1441,7 +1446,7 @@ class Application(object):
                         if spec.regex.groupindex:
                             kwargs = dict(
                                 (str(k), unquote(v))
-                                for (k, v) in match.groupdict().iteritems())
+                                for (k, v) in match.groupdict().items())
                         else:
                             args = [unquote(s) for s in match.groups()]
                     break
@@ -1853,7 +1858,7 @@ def authenticated(method):
                         next_url = self.request.full_url()
                     else:
                         next_url = self.request.uri
-                    url += "?" + urllib.urlencode(dict(next=next_url))
+                    url += "?" + urlencode(dict(next=next_url))
                 self.redirect(url)
                 return
             raise HTTPError(403)
@@ -1961,7 +1966,7 @@ class TemplateModule(UIModule):
     def javascript_files(self):
         result = []
         for f in self._get_resources("javascript_files"):
-            if isinstance(f, (unicode, bytes_type)):
+            if isinstance(f, (unicode_type, bytes_type)):
                 result.append(f)
             else:
                 result.extend(f)
@@ -1973,7 +1978,7 @@ class TemplateModule(UIModule):
     def css_files(self):
         result = []
         for f in self._get_resources("css_files"):
-            if isinstance(f, (unicode, bytes_type)):
+            if isinstance(f, (unicode_type, bytes_type)):
                 result.append(f)
             else:
                 result.extend(f)
@@ -2058,7 +2063,7 @@ class URLSpec(object):
             return self._path
         converted_args = []
         for a in args:
-            if not isinstance(a, (unicode, bytes_type)):
+            if not isinstance(a, (unicode_type, bytes_type)):
                 a = str(a)
             converted_args.append(escape.url_escape(utf8(a)))
         return self._path % tuple(converted_args)

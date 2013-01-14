@@ -38,6 +38,10 @@ try:
 except ImportError:
     multiprocessing = None
 
+try:
+    long  # py2
+except NameError:
+    long = int  # py3
 
 def cpu_count():
     """Returns the number of processors on this machine."""
@@ -253,7 +257,7 @@ class Subprocess(object):
 
     @classmethod
     def _cleanup(cls):
-        for pid in cls._waiting.keys():
+        for pid in list(cls._waiting.keys()):  # make a copy
             cls._try_cleanup_process(pid)
 
     @classmethod

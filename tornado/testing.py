@@ -36,7 +36,7 @@ except ImportError:
     SimpleAsyncHTTPClient = None
 from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import raise_exc_info
+from tornado.util import raise_exc_info, basestring_type
 import logging
 import os
 import re
@@ -414,7 +414,7 @@ class ExpectLog(logging.Filter):
         :param required: If true, an exeption will be raised if the end of
             the ``with`` statement is reached without matching any log entries.
         """
-        if isinstance(logger, basestring):
+        if isinstance(logger, basestring_type):
             logger = logging.getLogger(logger)
         self.logger = logger
         self.regex = re.compile(regex)

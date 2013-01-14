@@ -35,10 +35,6 @@ if "linux" in sys.platform.lower() and not python_26:
 
 version = "2.4.post2"
 
-if major >= 3:
-    import setuptools  # setuptools is required for use_2to3
-    kwargs["use_2to3"] = True
-
 distutils.core.setup(
     name="tornado",
     version=version,

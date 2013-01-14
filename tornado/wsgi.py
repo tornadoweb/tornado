@@ -53,6 +53,11 @@ try:
 except ImportError:
     import http.cookies as Cookie  # py3
 
+try:
+    import urllib.parse as urllib_parse  # py3
+except ImportError:
+    import urllib as urllib_parse
+
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
 # that are smuggled inside objects of type unicode (via the latin1 encoding).
 # These functions are like those in the tornado.escape module, but defined
@@ -118,7 +123,7 @@ class WSGIApplication(web.Application):
         assert handler._finished
         reason = handler._reason
         status = str(handler._status_code) + " " + reason
-        headers = handler._headers.items() + handler._list_headers
+        headers = list(handler._headers.items()) + handler._list_headers
         if hasattr(handler, "_new_cookie"):
             for cookie in handler._new_cookie.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))
@@ -132,8 +137,8 @@ class HTTPRequest(object):
     def __init__(self, environ):
         """Parses the given WSGI environ to construct the request."""
         self.method = environ["REQUEST_METHOD"]
-        self.path = urllib.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
-        self.path += urllib.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
+        self.path = urllib_parse.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
+        self.path += urllib_parse.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
         self.uri = self.path
         self.arguments = {}
         self.query = environ.get("QUERY_STRING", "")
@@ -296,7 +301,7 @@ class WSGIContainer(object):
             environ["CONTENT_TYPE"] = request.headers.pop("Content-Type")
         if "Content-Length" in request.headers:
             environ["CONTENT_LENGTH"] = request.headers.pop("Content-Length")
-        for key, value in request.headers.iteritems():
+        for key, value in request.headers.items():
             environ["HTTP_" + key.replace("-", "_").upper()] = value
         return environ
 

@@ -222,7 +222,7 @@ class OptionParser(object):
         print("Usage: %s [OPTIONS]" % sys.argv[0], file=file)
         print("\nOptions:\n", file=file)
         by_group = {}
-        for option in self._options.itervalues():
+        for option in self._options.values():
             by_group.setdefault(option.group_name, []).append(option)
 
         for filename, o in sorted(by_group.items()):

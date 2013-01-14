@@ -375,7 +375,7 @@ class TestIOStreamMixin(object):
                 # but there was no pypy for 2.5
                 pass
             NUM_KB = 4096
-            for i in xrange(NUM_KB):
+            for i in range(NUM_KB):
                 client.write(b("A") * 1024)
             client.write(b("\r\n"))
             server.read_until(b("\r\n"), self.stop)

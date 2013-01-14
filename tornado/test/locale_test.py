@@ -4,7 +4,7 @@ import os
 import tornado.locale
 from tornado.escape import utf8
 from tornado.test.util import unittest
-from tornado.util import b, u
+from tornado.util import b, u, unicode_type
 
 
 class TranslationLoaderTest(unittest.TestCase):
@@ -45,6 +45,6 @@ class TranslationLoaderTest(unittest.TestCase):
 class LocaleDataTest(unittest.TestCase):
     def test_non_ascii_name(self):
         name = tornado.locale.LOCALE_NAMES['es_LA']['name']
-        self.assertTrue(isinstance(name, unicode))
+        self.assertTrue(isinstance(name, unicode_type))
         self.assertEqual(name, u('Espa\u00f1ol'))
         self.assertEqual(utf8(name), b('Espa\xc3\xb1ol'))

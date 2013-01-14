@@ -30,6 +30,11 @@ try:
 except ImportError:
     from http.client import responses  # py3
 
+try:
+    from urllib import urlencode  # py2
+except ImportError:
+    from urllib.parse import urlencode  # py3
+
 class HTTPHeaders(dict):
     """A dictionary that maintains Http-Header-Case for all keys.
 
@@ -38,7 +43,7 @@ class HTTPHeaders(dict):
     value per key, with multiple values joined by a comma.
 
     >>> h = HTTPHeaders({"content-type": "text/html"})
-    >>> h.keys()
+    >>> list(h.keys())
     ['Content-Type']
     >>> h["Content-Type"]
     'text/html'
@@ -96,7 +101,7 @@ class HTTPHeaders(dict):
         If a header has multiple values, multiple pairs will be
         returned with the same name.
         """
-        for name, list in self._as_list.iteritems():
+        for name, list in self._as_list.items():
             for value in list:
                 yield (name, value)
 
@@ -123,7 +128,7 @@ class HTTPHeaders(dict):
         """Returns a dictionary from HTTP header text.
 
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
-        >>> sorted(h.iteritems())
+        >>> sorted(h.items())
         [('Content-Length', '42'), ('Content-Type', 'text/html')]
         """
         h = cls()
@@ -156,7 +161,7 @@ class HTTPHeaders(dict):
 
     def update(self, *args, **kwargs):
         # dict.update bypasses our __setitem__
-        for k, v in dict(*args, **kwargs).iteritems():
+        for k, v in dict(*args, **kwargs).items():
             self[k] = v
 
     def copy(self):
@@ -195,7 +200,7 @@ def url_concat(url, args):
         return url
     if url[-1] not in ('?', '&'):
         url += '&' if ('?' in url) else '?'
-    return url + urllib.urlencode(args)
+    return url + urlencode(args)
 
 
 class HTTPFile(ObjectDict):
@@ -220,7 +225,7 @@ def parse_body_arguments(content_type, body, arguments, files):
     """
     if content_type.startswith("application/x-www-form-urlencoded"):
         uri_arguments = parse_qs_bytes(native_str(body))
-        for name, values in uri_arguments.iteritems():
+        for name, values in uri_arguments.items():
             values = [v for v in values if v]
             if values:
                 arguments.setdefault(name, []).extend(values)
@@ -304,7 +309,7 @@ def _parse_header(line):
 
     """
     parts = _parseparam(';' + line)
-    key = parts.next()
+    key = next(parts)
     pdict = {}
     for p in parts:
         i = p.find('=')

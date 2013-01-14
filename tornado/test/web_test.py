@@ -7,7 +7,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b, u, bytes_type, ObjectDict
+from tornado.util import b, u, bytes_type, ObjectDict, unicode_type
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler
 
 import binascii
@@ -278,11 +278,11 @@ class EchoHandler(RequestHandler):
                     raise Exception("incorrect type for value: %r" %
                                     type(value))
             for value in self.get_arguments(key):
-                if type(value) != unicode:
+                if type(value) != unicode_type:
                     raise Exception("incorrect type for value: %r" %
                                     type(value))
         for arg in path_args:
-            if type(arg) != unicode:
+            if type(arg) != unicode_type:
                 raise Exception("incorrect type for path arg: %r" % type(arg))
         self.write(dict(path=self.request.path,
                         path_args=path_args,
@@ -333,13 +333,13 @@ class TypeCheckHandler(RequestHandler):
 
         # get_argument is an exception from the general rule of using
         # type str for non-body data mainly for historical reasons.
-        self.check_type('argument', self.get_argument('foo'), unicode)
-        self.check_type('cookie_key', self.cookies.keys()[0], str)
-        self.check_type('cookie_value', self.cookies.values()[0].value, str)
+        self.check_type('argument', self.get_argument('foo'), unicode_type)
+        self.check_type('cookie_key', list(self.cookies.keys())[0], str)
+        self.check_type('cookie_value', list(self.cookies.values())[0].value, str)
 
         # Secure cookies return bytes because they can contain arbitrary
         # data, but regular cookies are native strings.
-        if self.cookies.keys() != ['asdf']:
+        if list(self.cookies.keys()) != ['asdf']:
             raise Exception("unexpected values for cookie keys: %r" %
                             self.cookies.keys())
         self.check_type('get_secure_cookie', self.get_secure_cookie('asdf'), bytes_type)
@@ -355,11 +355,11 @@ class TypeCheckHandler(RequestHandler):
     def get(self, path_component):
         # path_component uses type unicode instead of str for consistency
         # with get_argument()
-        self.check_type('path_component', path_component, unicode)
+        self.check_type('path_component', path_component, unicode_type)
         self.write(self.errors)
 
     def post(self, path_component):
-        self.check_type('path_component', path_component, unicode)
+        self.check_type('path_component', path_component, unicode_type)
         self.write(self.errors)
 
     def check_type(self, name, obj, expected_type):
@@ -383,7 +383,7 @@ class DecodeArgHandler(RequestHandler):
         def describe(s):
             if type(s) == bytes_type:
                 return ["bytes", native_str(binascii.b2a_hex(s))]
-            elif type(s) == unicode:
+            elif type(s) == unicode_type:
                 return ["unicode", s]
             raise Exception("unknown type")
         self.write({'path': describe(arg),

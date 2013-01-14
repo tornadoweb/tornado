@@ -28,6 +28,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import collections
 import errno
+import numbers
 import os
 import socket
 import sys
@@ -146,7 +147,7 @@ class BaseIOStream(object):
         ``callback`` will be empty.
         """
         self._set_read_callback(callback)
-        assert isinstance(num_bytes, (int, long))
+        assert isinstance(num_bytes, numbers.Integral)
         self._read_bytes = num_bytes
         self._streaming_callback = stack_context.wrap(streaming_callback)
         self._try_inline_read()

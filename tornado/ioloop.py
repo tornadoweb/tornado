@@ -426,7 +426,7 @@ class PollIOLoop(IOLoop):
             self._closing = True
         self.remove_handler(self._waker.fileno())
         if all_fds:
-            for fd in self._handlers.keys()[:]:
+            for fd in self._handlers.keys():
                 try:
                     os.close(fd)
                 except Exception:

@@ -78,8 +78,6 @@ class OAuth1ClientRequestParametersHandler(RequestHandler, OAuthMixin):
             'http://www.example.com/api/asdf',
             dict(key='uiop', secret='5678'),
             parameters=dict(foo='bar'))
-        import urllib
-        urllib.urlencode(params)
         self.write(params)
 
 

@@ -24,19 +24,26 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import re
 import sys
-import urllib
 
 from tornado.util import bytes_type, unicode_type, basestring_type, u
 
 try:
-    from urlparse import parse_qs  # Python 2.6+
+    from urllib.parse import parse_qs  # py3
 except ImportError:
-    from cgi import parse_qs
+    try:
+        from urlparse import parse_qs  # Python 2.6+
+    except ImportError:
+        from cgi import parse_qs
 
 try:
     import htmlentitydefs  # py2
 except ImportError:
     import html.entities as htmlentitydefs  # py3
+
+try:
+    import urllib.parse as urllib_parse  # py3
+except ImportError:
+    import urllib as urllib_parse  # py2
 
 # json module is in the standard library as of python 2.6; fall back to
 # simplejson if present for older versions.
@@ -106,7 +113,7 @@ def squeeze(value):
 
 def url_escape(value):
     """Returns a valid URL-encoded version of the given value."""
-    return urllib.quote_plus(utf8(value))
+    return urllib_parse.quote_plus(utf8(value))
 
 # python 3 changed things around enough that we need two separate
 # implementations of url_unescape.  We also need our own implementation
@@ -121,9 +128,9 @@ if sys.version_info[0] < 3:
         the result is a unicode string in the specified encoding.
         """
         if encoding is None:
-            return urllib.unquote_plus(utf8(value))
+            return urllib_parse.unquote_plus(utf8(value))
         else:
-            return unicode_type(urllib.unquote_plus(utf8(value)), encoding)
+            return unicode_type(urllib_parse.unquote_plus(utf8(value)), encoding)
 
     parse_qs_bytes = parse_qs
 else:
@@ -136,9 +143,9 @@ else:
         the result is a unicode string in the specified encoding.
         """
         if encoding is None:
-            return urllib.parse.unquote_to_bytes(value)
+            return urllib_parse.unquote_to_bytes(value)
         else:
-            return urllib.unquote_plus(to_basestring(value), encoding=encoding)
+            return urllib_parse.unquote_plus(to_basestring(value), encoding=encoding)
 
     def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
         """Parses a query string like urlparse.parse_qs, but returns the
@@ -153,7 +160,7 @@ else:
         result = parse_qs(qs, keep_blank_values, strict_parsing,
                           encoding='latin1', errors='strict')
         encoded = {}
-        for k, v in result.iteritems():
+        for k, v in result.items():
             encoded[k] = [i.encode('latin1') for i in v]
         return encoded
 
@@ -221,7 +228,7 @@ def recursive_unicode(obj):
     Supports lists, tuples, and dictionaries.
     """
     if isinstance(obj, dict):
-        return dict((recursive_unicode(k), recursive_unicode(v)) for (k, v) in obj.iteritems())
+        return dict((recursive_unicode(k), recursive_unicode(v)) for (k, v) in obj.items())
     elif isinstance(obj, list):
         return list(recursive_unicode(i) for i in obj)
     elif isinstance(obj, tuple):

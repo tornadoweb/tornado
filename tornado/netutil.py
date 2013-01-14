@@ -202,7 +202,7 @@ class TCPServer(object):
         Requests currently in progress may still continue after the
         server is stopped.
         """
-        for fd, sock in self._sockets.iteritems():
+        for fd, sock in self._sockets.items():
             self.io_loop.remove_handler(fd)
             sock.close()
 

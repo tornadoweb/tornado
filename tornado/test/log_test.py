@@ -27,7 +27,7 @@ from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
 from tornado.options import OptionParser
 from tornado.test.util import unittest
-from tornado.util import b, u, bytes_type
+from tornado.util import b, u, bytes_type, basestring_type
 
 @contextlib.contextmanager
 def ignore_bytes_warning():
@@ -97,7 +97,7 @@ class LogFormatterTest(unittest.TestCase):
 
     def test_utf8_logging(self):
         self.logger.error(u("\u00e9").encode("utf8"))
-        if issubclass(bytes_type, basestring):
+        if issubclass(bytes_type, basestring_type):
             # on python 2, utf8 byte strings (and by extension ascii byte
             # strings) are passed through as-is.
             self.assertEqual(self.get_output(), utf8(u("\u00e9")))
