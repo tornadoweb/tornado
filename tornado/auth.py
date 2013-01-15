@@ -1215,7 +1215,7 @@ class GitHubMixin(OAuth2Mixin):
 
         http = httpclient.AsyncHTTPClient()
 
-        access_token = None
+        callback_sharing_data = {}
 
         def use_error_callback(response, decoded_body):
             data = {
@@ -1265,10 +1265,10 @@ class GitHubMixin(OAuth2Mixin):
 
                 return
 
-            access_token = body['access_token']
+            callback_sharing_data['access_token'] = body['access_token']
 
             http.fetch(
-                '{}{}'.format(self._OAUTH_USER_URL, access_token),
+                '{}{}'.format(self._OAUTH_USER_URL, callback_sharing_data['access_token']),
                 on_fetching_user_information,
                 headers=self._API_BASE_HEADERS
             )
@@ -1285,7 +1285,7 @@ class GitHubMixin(OAuth2Mixin):
             if not user:
                 return
 
-            success_callback(user, access_token)
+            success_callback(user, callback_sharing_data['access_token'])
 
         # Request the access token.
         http.fetch(
