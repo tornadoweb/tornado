@@ -85,7 +85,7 @@ class DeflateFrameExtension(WebSocketExtension):
 
     def process_outgoing(self, message, flags):
         if not message:
-            return result, flags
+            return message, flags
 
         if self._deflate_finalize:
             deflater = zlib.compressobj(zlib.Z_DEFAULT_COMPRESSION, zlib.DEFLATED, -self._max_window_bits)
