@@ -637,6 +637,8 @@ class WebSocketProtocol13(WebSocketProtocol):
 
         if extensions_headers:
             extensions_headers = "Sec-WebSocket-Extensions: %s\r\n" % (','.join(extensions_headers))
+        else:
+            extensions_headers = ""
 
         self.stream.write(tornado.escape.utf8(
             "HTTP/1.1 101 Switching Protocols\r\n"
