@@ -26,11 +26,108 @@ import hashlib
 import struct
 import time
 import base64
+import zlib
 import tornado.escape
 import tornado.web
 
 from tornado.log import gen_log, app_log
 from tornado.util import bytes_type, b
+from tornado.httputil import _parseparam
+
+
+class WebSocketExtension(object):
+    """
+    Base class for WebSocket extension handlers.
+    """
+
+    def __init__(self, handler, name, params):
+        super(WebSocketExtension, self).__init__()
+        self.handler = handler
+        self.name = name
+        self.client_params = params
+        self.server_params = {}
+
+    def get_header_line(self):
+        return _unparse_extension(self.name, self.server_params)
+
+    def process_outgoing(self, message, flags):
+        return message, flags
+
+    def process_incoming(self, message):
+        return message
+
+    def check_process_incoming(self, opcode, is_control, flags):
+        return False, flags
+
+
+class DeflateFrameExtension(WebSocketExtension):
+    """
+    Implement per-frame DEFLATE extension as specified by
+
+    http://tools.ietf.org/id/draft-tyoshino-hybi-websocket-perframe-deflate-05.txt
+    """
+
+    # use a new compressor for every outgoing frame?
+    # NOTE: finalizing only works with Chrome M24 and above (see Chromium issue #155060 for details)
+    _deflate_finalize = False
+
+    def __init__(self, handler, name, params):
+        super(DeflateFrameExtension, self).__init__(handler, name, params)
+        self._deflater = None
+        self._inflater = None
+        self._unprocessed = ''
+        self._max_window_bits = int(params.get('max_window_bits', 15))
+        self._no_context_takeover = 'no_context_takeover' in params
+        if self._no_context_takeover:
+            self._deflate_finalize = True
+        else:
+            self._deflater = zlib.compressobj(zlib.Z_DEFAULT_COMPRESSION, zlib.DEFLATED, -self._max_window_bits)
+
+    def process_outgoing(self, message, flags):
+        if self._deflate_finalize:
+            deflater = zlib.compressobj(zlib.Z_DEFAULT_COMPRESSION, zlib.DEFLATED, -self._max_window_bits)
+            result = deflater.compress(message)
+            result += deflater.flush(zlib.Z_FINISH)
+            result += '\x00'
+        else:
+            result = self._deflater.compress(message)
+            result += self._deflater.flush(zlib.Z_SYNC_FLUSH)
+            # strip flush trail
+            result = result[:-4]
+
+        # set "COMP" bit (corresponds to "RSV1")
+        return result, flags | 0x40
+
+    def process_incoming(self, message):
+        # re-add stripped flush tail
+        self._unprocessed += message + '\x00\x00\xff\xff'
+        result = ''
+        while True:
+            if self._inflater is None:
+                self._inflater = zlib.decompressobj(-zlib.MAX_WBITS)
+
+            result += self._inflater.decompress(self._unprocessed)
+            self._unprocessed = ''
+            if not self._inflater.unused_data:
+                break
+
+            # more compressed data available inside frame, continue
+            # processing but reset decompressor first
+            self._unprocessed = self._inflater.unused_data
+            self._inflater = None
+
+        return result
+
+    def check_process_incoming(self, opcode, is_control, flags):
+        if is_control:
+            # control frames may not be compressed
+            return False, flags
+
+        if flags & 0x40:
+            # frame is compressed ("COMP" bit is set)
+            return True, flags & 0xbf
+
+        return False, flags
 
 
 class WebSocketHandler(tornado.web.RequestHandler):
@@ -76,6 +173,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     This script pops up an alert box that says "You said: Hello, world".
     """
+
+    _extension_classes = {
+        'deflate-frame': DeflateFrameExtension,
+        'x-webkit-deflate-frame': DeflateFrameExtension,
+    }
+
     def __init__(self, application, request, **kwargs):
         tornado.web.RequestHandler.__init__(self, application, request,
                                             **kwargs)
@@ -154,6 +257,18 @@ class WebSocketHandler(tornado.web.RequestHandler):
         although clients may close the connection if none of their
         proposed subprotocols was selected.
         """
+        return None
+
+    def get_extension(self, extension, params):
+        """Invoked when a new WebSocket requests specific extensions.
+
+        ``extension`` is the name of the extension requested by the client,
+        ``params`` a dictionary of additional parameters for the extension.
+        """
+        klass = self._extension_classes.get(extension, None)
+        if klass is not None:
+            return klass(self, extension, params)
+
         return None
 
     def open(self):
@@ -460,9 +575,17 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._frame_opcode = None
         self._frame_mask = None
         self._frame_length = None
+        self._frame_extensions = []
         self._fragmented_message_buffer = None
         self._fragmented_message_opcode = None
         self._waiting = None
+        self._extensions = []
+
+    def _abort(self):
+        # break references
+        self._frame_extensions[:] = []
+        self._extensions[:] = []
+        WebSocketProtocol._abort(self)
 
     def accept_connection(self):
         try:
@@ -500,23 +623,36 @@ class WebSocketProtocol13(WebSocketProtocol):
                 assert selected in subprotocols
                 subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
 
+        extensions_headers = []
+        for extension_line in self.request.headers.get_list("Sec-WebSocket-Extensions"):
+            for part in extension_line.split(','):
+                token, params = _parse_extension(part.strip())
+                extension = self.handler.get_extension(token, params)
+                if extension is not None:
+                    extensions_headers.append(extension.get_header_line())
+                    self._extensions.append(extension)
+
+        if extensions_headers:
+            extensions_headers = "Sec-WebSocket-Extensions: %s\r\n" % (','.join(extensions_headers))
+
         self.stream.write(tornado.escape.utf8(
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
             "Sec-WebSocket-Accept: %s\r\n"
             "%s"
-            "\r\n" % (self._challenge_response(), subprotocol_header)))
+            "%s"
+            "\r\n" % (self._challenge_response(), subprotocol_header, extensions_headers)))
 
         self.async_callback(self.handler.open)(*self.handler.open_args, **self.handler.open_kwargs)
         self._receive_frame()
 
-    def _write_frame(self, fin, opcode, data):
+    def _write_frame(self, fin, opcode, data, flags=0):
         if fin:
             finbit = 0x80
         else:
             finbit = 0
-        frame = struct.pack("B", finbit | opcode)
+        frame = struct.pack("B", finbit | flags | opcode)
         l = len(data)
         if l < 126:
             frame += struct.pack("B", l)
@@ -535,7 +671,10 @@ class WebSocketProtocol13(WebSocketProtocol):
             opcode = 0x1
         message = tornado.escape.utf8(message)
         assert isinstance(message, bytes_type)
-        self._write_frame(True, opcode, message)
+        flags = 0
+        for extension in self._extensions:
+            message, flags = extension.process_outgoing(message, flags)
+        self._write_frame(True, opcode, message, flags=flags)
 
     def write_ping(self, data):
         """Send ping frame."""
@@ -551,6 +690,11 @@ class WebSocketProtocol13(WebSocketProtocol):
         reserved_bits = header & 0x70
         self._frame_opcode = header & 0xf
         self._frame_opcode_is_control = self._frame_opcode & 0x8
+        self._frame_extensions = []
+        for extension in self._extensions:
+            process, reserved_bits = extension.check_process_incoming(self._frame_opcode, self._frame_opcode_is_control, reserved_bits)
+            if process:
+                self._frame_extensions.append(extension)
         if reserved_bits:
             # client is using as-yet-undefined extensions; abort
             self._abort()
@@ -588,6 +732,12 @@ class WebSocketProtocol13(WebSocketProtocol):
         unmasked = array.array("B", data)
         for i in xrange(len(data)):
             unmasked[i] = unmasked[i] ^ self._frame_mask[i % 4]
+
+        if self._frame_extensions:
+            unmasked = unmasked.tostring()
+            for extension in self._frame_extensions:
+                unmasked = extension.process_incoming(unmasked)
+            unmasked = array.array("B", unmasked)
 
         if self._frame_opcode_is_control:
             # control frames may be interleaved with a series of fragmented
@@ -669,3 +819,48 @@ class WebSocketProtocol13(WebSocketProtocol):
             # otherwise just close the connection.
             self._waiting = self.stream.io_loop.add_timeout(
                 self.stream.io_loop.time() + 5, self._abort)
+
+
+def _parse_extension(line):
+    """Parse a WebSocket extension header line.
+
+    Return the extension name and a dictionary of options.
+
+    """
+    parts = _parseparam(';' + line)
+    key = parts.next()
+    pdict = {}
+    for p in parts:
+        i = p.find('=')
+        if i >= 0:
+            name = p[:i].strip().lower()
+            value = p[i + 1:].strip()
+            if len(value) >= 2 and value[0] == value[-1] == '"':
+                value = value[1:-1]
+                value = value.replace('\\\\', '\\').replace('\\"', '"')
+            pdict[name] = value
+        else:
+            pdict[name] = None
+    return key, pdict
+
+
+def _unparse_extension(name, params):
+    """Parse a WebSocket extension header line.
+
+    Return the extension name and a dictionary of options.
+
+    """
+    if not params:
+        return name
+
+    result = [name]
+    for k, v in params.iteritems():
+        if v is None:
+            result.append(k)
+        elif not isinstance(v, basestring):
+            result.append(k+'='+str(v))
+        elif '=' in v:
+            result.append(k+'="'+v.replace('\\', '\\\\').replace('"', '\\"')+'"')
+        else:
+            result.append(k+'='+v.replace('\\', '\\\\').replace('"', '\\"'))
+    return '; '.join(result)
