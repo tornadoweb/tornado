@@ -383,6 +383,9 @@ class TemplateLoaderTest(unittest.TestCase):
 
     def test_debug_loader(self):
         debug_loader = Loader(os.path.join(os.path.dirname(__file__), "templates"), debug=True)
-        self.assertEqual(debug_loader.load("utf8.html").generate(),
-                         self.loader.load("utf8.html").generate())
+        tmpl = "utf8.html"
+        self.assertEqual(debug_loader.load(tmpl).generate(),
+                         self.loader.load(tmpl).generate())
+        self.assertTrue(tmpl not in debug_loader.templates)
+        
         
