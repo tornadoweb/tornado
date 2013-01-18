@@ -16,17 +16,18 @@
 
 """Miscellaneous network utility code."""
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
-import logging
 import os
 import socket
 import stat
 
 from tornado import process
+from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
+from tornado.log import app_log
 from tornado.platform.auto import set_close_exec
 
 try:
@@ -201,7 +202,7 @@ class TCPServer(object):
         Requests currently in progress may still continue after the
         server is stopped.
         """
-        for fd, sock in self._sockets.iteritems():
+        for fd, sock in self._sockets.items():
             self.io_loop.remove_handler(fd)
             sock.close()
 
@@ -217,12 +218,12 @@ class TCPServer(object):
                                              server_side=True,
                                              do_handshake_on_connect=False,
                                              **self.ssl_options)
-            except ssl.SSLError, err:
+            except ssl.SSLError as err:
                 if err.args[0] == ssl.SSL_ERROR_EOF:
                     return connection.close()
                 else:
                     raise
-            except socket.error, err:
+            except socket.error as err:
                 if err.args[0] == errno.ECONNABORTED:
                     return connection.close()
                 else:
@@ -234,10 +235,10 @@ class TCPServer(object):
                 stream = IOStream(connection, io_loop=self.io_loop)
             self.handle_stream(stream, address)
         except Exception:
-            logging.error("Error in connection callback", exc_info=True)
+            app_log.error("Error in connection callback", exc_info=True)
 
 
-def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
+def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -253,17 +254,15 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
 
     The ``backlog`` argument has the same meaning as for
     ``socket.listen()``.
+
+    ``flags`` is a bitmask of AI_* flags to ``getaddrinfo``, like
+    ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
     """
     sockets = []
     if address == "":
         address = None
-    flags = socket.AI_PASSIVE
-    if hasattr(socket, "AI_ADDRCONFIG"):
-        # AI_ADDRCONFIG ensures that we only try to bind on ipv6
-        # if the system is configured for it, but the flag doesn't
-        # exist on some platforms (specifically WinXP, although
-        # newer versions of windows have it)
-        flags |= socket.AI_ADDRCONFIG
+    if flags is None:
+        flags = socket.AI_PASSIVE
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                   0, flags)):
         af, socktype, proto, canonname, sockaddr = res
@@ -289,7 +288,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128):
     return sockets
 
 if hasattr(socket, 'AF_UNIX'):
-    def bind_unix_socket(file, mode=0600, backlog=128):
+    def bind_unix_socket(file, mode=int('600', 8), backlog=128):
         """Creates a listening unix socket.
 
         If a socket with the given name already exists, it will be deleted.
@@ -305,7 +304,7 @@ if hasattr(socket, 'AF_UNIX'):
         sock.setblocking(0)
         try:
             st = os.stat(file)
-        except OSError, err:
+        except OSError as err:
             if err.errno != errno.ENOENT:
                 raise
         else:
@@ -335,9 +334,19 @@ def add_accept_handler(sock, callback, io_loop=None):
         while True:
             try:
                 connection, address = sock.accept()
-            except socket.error, e:
+            except socket.error as e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     return
                 raise
             callback(connection, address)
     io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
+
+
+class Resolver(object):
+    def __init__(self, io_loop=None, executor=None):
+        self.io_loop = io_loop or IOLoop.instance()
+        self.executor = executor or dummy_executor
+
+    @run_on_executor
+    def getaddrinfo(self, *args, **kwargs):
+        return socket.getaddrinfo(*args, **kwargs)

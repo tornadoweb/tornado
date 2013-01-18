@@ -62,13 +62,15 @@ it was called with one argument, the result is that argument.  If it was
 called with more than one argument or any keyword arguments, the result
 is an `Arguments` object, which is a named tuple ``(args, kwargs)``.
 """
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
 import operator
 import sys
 import types
 
+from tornado.concurrent import Future
+from tornado.ioloop import IOLoop
 from tornado.stack_context import ExceptionStackContext
 
 
@@ -247,6 +249,24 @@ class Task(YieldPoint):
         return self.runner.pop_result(self.key)
 
 
+class YieldFuture(YieldPoint):
+    def __init__(self, future, io_loop=None):
+        self.future = future
+        self.io_loop = io_loop or IOLoop.current()
+
+    def start(self, runner):
+        self.runner = runner
+        self.key = object()
+        runner.register_callback(self.key)
+        self.io_loop.add_future(self.future, runner.result_callback(self.key))
+
+    def is_ready(self):
+        return self.runner.is_ready(self.key)
+
+    def get_result(self):
+        return self.runner.pop_result(self.key).result()
+
+
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
 
@@ -354,12 +374,16 @@ class Runner(object):
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
                     self.deactivate_stack_context()
+                    self.deactivate_stack_context = None
                     return
                 except Exception:
                     self.finished = True
                     raise
                 if isinstance(yielded, list):
                     yielded = Multi(yielded)
+                if isinstance(yielded, Future):
+                    # TODO: lists of futures
+                    yielded = YieldFuture(yielded)
                 if isinstance(yielded, YieldPoint):
                     self.yield_point = yielded
                     try:

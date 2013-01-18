@@ -18,7 +18,6 @@ import os
 import os.path
 import tornado.web
 import tornado.wsgi
-import wsgiref.handlers
 
 
 class ContentHandler(tornado.web.RequestHandler):
@@ -46,11 +45,3 @@ application = tornado.wsgi.WSGIApplication([
      dict(url="/documentation/index.html")),
 
 ], **settings)
-
-
-def main():
-    wsgiref.handlers.CGIHandler().run(application)
-
-
-if __name__ == "__main__":
-    main()

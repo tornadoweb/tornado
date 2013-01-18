@@ -16,7 +16,7 @@
 
 """Posix implementations of platform-specific functionality."""
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import fcntl
 import os
@@ -47,6 +47,9 @@ class Waker(interface.Waker):
 
     def fileno(self):
         return self.reader.fileno()
+
+    def write_fileno(self):
+        return self.writer.fileno()
 
     def wake(self):
         try:

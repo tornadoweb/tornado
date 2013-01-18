@@ -16,15 +16,24 @@
 
 """HTTP utility code shared by clients and servers."""
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
-import logging
 import urllib
 import re
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
+from tornado.log import gen_log
 from tornado.util import b, ObjectDict
 
+try:
+    from httplib import responses  # py2
+except ImportError:
+    from http.client import responses  # py3
+
+try:
+    from urllib import urlencode  # py2
+except ImportError:
+    from urllib.parse import urlencode  # py3
 
 class HTTPHeaders(dict):
     """A dictionary that maintains Http-Header-Case for all keys.
@@ -34,7 +43,7 @@ class HTTPHeaders(dict):
     value per key, with multiple values joined by a comma.
 
     >>> h = HTTPHeaders({"content-type": "text/html"})
-    >>> h.keys()
+    >>> list(h.keys())
     ['Content-Type']
     >>> h["Content-Type"]
     'text/html'
@@ -47,8 +56,8 @@ class HTTPHeaders(dict):
     ['A=B', 'C=D']
 
     >>> for (k,v) in sorted(h.get_all()):
-    ...    print '%s: %s' % (k,v)
-    ...
+    ...    print('%s: %s' % (k,v))
+    ... 
     Content-Type: text/html
     Set-Cookie: A=B
     Set-Cookie: C=D
@@ -92,7 +101,7 @@ class HTTPHeaders(dict):
         If a header has multiple values, multiple pairs will be
         returned with the same name.
         """
-        for name, list in self._as_list.iteritems():
+        for name, list in self._as_list.items():
             for value in list:
                 yield (name, value)
 
@@ -119,7 +128,7 @@ class HTTPHeaders(dict):
         """Returns a dictionary from HTTP header text.
 
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
-        >>> sorted(h.iteritems())
+        >>> sorted(h.items())
         [('Content-Length', '42'), ('Content-Type', 'text/html')]
         """
         h = cls()
@@ -152,7 +161,7 @@ class HTTPHeaders(dict):
 
     def update(self, *args, **kwargs):
         # dict.update bypasses our __setitem__
-        for k, v in dict(*args, **kwargs).iteritems():
+        for k, v in dict(*args, **kwargs).items():
             self[k] = v
 
     def copy(self):
@@ -191,7 +200,7 @@ def url_concat(url, args):
         return url
     if url[-1] not in ('?', '&'):
         url += '&' if ('?' in url) else '?'
-    return url + urllib.urlencode(args)
+    return url + urlencode(args)
 
 
 class HTTPFile(ObjectDict):
@@ -207,9 +216,16 @@ class HTTPFile(ObjectDict):
 
 
 def parse_body_arguments(content_type, body, arguments, files):
+    """Parses a form request body.
+
+    Supports "application/x-www-form-urlencoded" and "multipart/form-data".
+    The content_type parameter should be a string and body should be
+    a byte string.  The arguments and files parameters are dictionaries
+    that will be updated with the parsed contents.
+    """
     if content_type.startswith("application/x-www-form-urlencoded"):
         uri_arguments = parse_qs_bytes(native_str(body))
-        for name, values in uri_arguments.iteritems():
+        for name, values in uri_arguments.items():
             values = [v for v in values if v]
             if values:
                 arguments.setdefault(name, []).extend(values)
@@ -221,7 +237,7 @@ def parse_body_arguments(content_type, body, arguments, files):
                 parse_multipart_form_data(utf8(v), body, arguments, files)
                 break
         else:
-            logging.warning("Invalid multipart/form-data")
+            gen_log.warning("Invalid multipart/form-data")
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):
@@ -240,7 +256,7 @@ def parse_multipart_form_data(boundary, data, arguments, files):
         boundary = boundary[1:-1]
     final_boundary_index = data.rfind(b("--") + boundary + b("--"))
     if final_boundary_index == -1:
-        logging.warning("Invalid multipart/form-data: no final boundary")
+        gen_log.warning("Invalid multipart/form-data: no final boundary")
         return
     parts = data[:final_boundary_index].split(b("--") + boundary + b("\r\n"))
     for part in parts:
@@ -248,17 +264,17 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             continue
         eoh = part.find(b("\r\n\r\n"))
         if eoh == -1:
-            logging.warning("multipart/form-data missing headers")
+            gen_log.warning("multipart/form-data missing headers")
             continue
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
         if disposition != "form-data" or not part.endswith(b("\r\n")):
-            logging.warning("Invalid multipart/form-data")
+            gen_log.warning("Invalid multipart/form-data")
             continue
         value = part[eoh + 4:-2]
         if not disp_params.get("name"):
-            logging.warning("multipart/form-data value missing name")
+            gen_log.warning("multipart/form-data value missing name")
             continue
         name = disp_params["name"]
         if disp_params.get("filename"):
@@ -293,7 +309,7 @@ def _parse_header(line):
 
     """
     parts = _parseparam(';' + line)
-    key = parts.next()
+    key = next(parts)
     pdict = {}
     for p in parts:
         i = p.find('=')

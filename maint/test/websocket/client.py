@@ -3,7 +3,7 @@ import sys
 from tornado.options import options, define, parse_command_line
 from twisted.python import log
 from twisted.internet import reactor
-from autobahn.fuzzing import FuzzingClientFactory
+from autobahntestsuite.fuzzing import FuzzingClientFactory
 
 define('servers', type=str, multiple=True,
        default=['Tornado=ws://localhost:9000'])

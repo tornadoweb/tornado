@@ -14,8 +14,9 @@ ftp/curl
 "
 
 PIP_PACKAGES="
-tox
+futures
 pycurl
+tox
 "
 
 cd /usr/ports

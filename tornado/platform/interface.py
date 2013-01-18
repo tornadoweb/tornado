@@ -21,7 +21,7 @@ for other tornado.platform modules.  Most code should import the appropriate
 implementation from `tornado.platform.auto`.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 
 def set_close_exec(fd):
@@ -39,11 +39,15 @@ class Waker(object):
     the ``IOLoop`` is closed, it closes its waker too.
     """
     def fileno(self):
-        """Returns a file descriptor for this waker.
+        """Returns the read file descriptor for this waker.
 
         Must be suitable for use with ``select()`` or equivalent on the
         local platform.
         """
+        raise NotImplementedError()
+
+    def write_fileno(self):
+        """Returns the write file descriptor for this waker."""
         raise NotImplementedError()
 
     def wake(self):

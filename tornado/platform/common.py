@@ -1,5 +1,5 @@
 """Lowest-common-denominator implementations of platform functionality."""
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
 import socket
@@ -43,7 +43,7 @@ class Waker(interface.Waker):
             try:
                 self.writer.connect(connect_address)
                 break    # success
-            except socket.error, detail:
+            except socket.error as detail:
                 if (not hasattr(errno, 'WSAEADDRINUSE') or
                     detail[0] != errno.WSAEADDRINUSE):
                     # "Address already in use" is the only error
@@ -68,6 +68,9 @@ class Waker(interface.Waker):
 
     def fileno(self):
         return self.reader.fileno()
+
+    def write_fileno(self):
+        return self.writer.fileno()
 
     def wake(self):
         try:

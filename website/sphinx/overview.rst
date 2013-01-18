@@ -392,7 +392,7 @@ application settings as keyword arguments to your application:
 
     application = tornado.web.Application([
         (r"/", MainHandler),
-    ], cookie_secret="61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=")
+    ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
 Signed cookies contain the encoded value of the cookie in addition to a
 timestamp and an `HMAC <http://en.wikipedia.org/wiki/HMAC>`_ signature.
@@ -451,7 +451,7 @@ specifying a nickname, which is then saved in a cookie:
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/login", LoginHandler),
-    ], cookie_secret="61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=")
+    ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
 You can require that the user be logged in using the `Python
 decorator <http://www.python.org/dev/peps/pep-0318/>`_
@@ -469,7 +469,7 @@ rewritten:
             self.write("Hello, " + name)
 
     settings = {
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
     }
     application = tornado.web.Application([
@@ -485,6 +485,8 @@ schemes like Google OAuth. See the `tornado.auth`
 for more details. Check out the `Tornado Blog example application <https://github.com/facebook/tornado/tree/master/demos/blog>`_ for a
 complete example that uses authentication (and stores user data in a
 MySQL database).
+
+.. _xsrf:
 
 Cross-site request forgery protection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -508,7 +510,7 @@ include the application setting ``xsrf_cookies``:
 ::
 
     settings = {
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
         "xsrf_cookies": True,
     }
@@ -555,7 +557,11 @@ all requests:
 
 For ``PUT`` and ``DELETE`` requests (as well as ``POST`` requests that
 do not use form-encoded arguments), the XSRF token may also be passed
-via an HTTP header named ``X-XSRFToken``.
+via an HTTP header named ``X-XSRFToken``.  The XSRF cookie is normally
+set when ``xsrf_form_html`` is used, but in a pure-Javascript application
+that does not use any regular forms you may need to access
+``self.xsrf_token`` manually (just reading the property is enough to
+set the cookie as a side effect).
 
 If you need to customize XSRF behavior on a per-handler basis, you can
 override ``RequestHandler.check_xsrf_cookie()``. For example, if you
@@ -575,7 +581,7 @@ You can serve static files from Tornado by specifying the
 
     settings = {
         "static_path": os.path.join(os.path.dirname(__file__), "static"),
-        "cookie_secret": "61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+        "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         "login_url": "/login",
         "xsrf_cookies": True,
     }
@@ -748,6 +754,8 @@ the user's locale is ``es_GT``, and the ``es`` locale is supported,
 See the `tornado.locale`
 documentation for detailed information on the CSV format and other
 localization methods.
+
+.. _ui-modules:
 
 UI modules
 ~~~~~~~~~~

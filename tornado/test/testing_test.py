@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-from __future__ import absolute_import, division, with_statement
-import unittest
+from __future__ import absolute_import, division, print_function, with_statement
 import time
-from tornado.testing import AsyncTestCase, LogTrapTestCase
+from tornado.testing import AsyncTestCase
+from tornado.test.util import unittest
 
 
-class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):
+class AsyncTestCaseTest(AsyncTestCase):
     def test_exception_in_callback(self):
         self.io_loop.add_callback(lambda: 1 / 0)
         try:
@@ -20,10 +20,10 @@ class AsyncTestCaseTest(AsyncTestCase, LogTrapTestCase):
         This test makes sure that a second call to wait()
         clears the first timeout.
         """
-        self.io_loop.add_timeout(time.time() + 0.01, self.stop)
+        self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
         self.wait(timeout=0.02)
-        self.io_loop.add_timeout(time.time() + 0.03, self.stop)
-        self.wait(timeout=0.1)
+        self.io_loop.add_timeout(self.io_loop.time() + 0.03, self.stop)
+        self.wait(timeout=0.15)
 
 
 class SetUpTearDownTest(unittest.TestCase):

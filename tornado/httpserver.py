@@ -24,16 +24,15 @@ This module also defines the `HTTPRequest` class which is exposed via
 `tornado.web.RequestHandler.request`.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
-import Cookie
-import logging
 import socket
 import time
 
 from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
+from tornado.log import gen_log
 from tornado.netutil import TCPServer
 from tornado import stack_context
 from tornado.util import b, bytes_type
@@ -43,6 +42,10 @@ try:
 except ImportError:
     ssl = None
 
+try:
+    import Cookie  # py2
+except ImportError:
+    import http.cookies as Cookie  # py3
 
 class HTTPServer(TCPServer):
     r"""A non-blocking, single-threaded HTTP server.
@@ -67,21 +70,30 @@ class HTTPServer(TCPServer):
         http_server.listen(8888)
         ioloop.IOLoop.instance().start()
 
-    `HTTPServer` is a very basic connection handler. Beyond parsing the
-    HTTP request body and headers, the only HTTP semantics implemented
-    in `HTTPServer` is HTTP/1.1 keep-alive connections. We do not, however,
-    implement chunked encoding, so the request callback must provide a
-    ``Content-Length`` header or implement chunked encoding for HTTP/1.1
-    requests for the server to run correctly for HTTP/1.1 clients. If
-    the request handler is unable to do this, you can provide the
-    ``no_keep_alive`` argument to the `HTTPServer` constructor, which will
-    ensure the connection is closed on every request no matter what HTTP
-    version the client is using.
+    `HTTPServer` is a very basic connection handler.  It parses the request
+    headers and body, but the request callback is responsible for producing
+    the response exactly as it will appear on the wire.  This affords
+    maximum flexibility for applications to implement whatever parts
+    of HTTP responses are required.
 
-    If ``xheaders`` is ``True``, we support the ``X-Real-Ip`` and ``X-Scheme``
-    headers, which override the remote IP and HTTP scheme for all requests.
-    These headers are useful when running Tornado behind a reverse proxy or
-    load balancer.
+    `HTTPServer` supports keep-alive connections by default
+    (automatically for HTTP/1.1, or for HTTP/1.0 when the client
+    requests ``Connection: keep-alive``).  This means that the request
+    callback must generate a properly-framed response, using either
+    the ``Content-Length`` header or ``Transfer-Encoding: chunked``.
+    Applications that are unable to frame their responses properly
+    should instead return a ``Connection: close`` header in each
+    response and pass ``no_keep_alive=True`` to the `HTTPServer`
+    constructor.
+
+    If ``xheaders`` is ``True``, we support the
+    ``X-Real-Ip``/``X-Forwarded-For`` and
+    ``X-Scheme``/``X-Forwarded-Proto`` headers, which override the
+    remote IP and URI scheme/protocol for all requests.  These headers
+    are useful when running Tornado behind a reverse proxy or load
+    balancer.  The ``protocol`` argument can also be set to ``https``
+    if Tornado is run behind an SSL-decoding proxy that does not set one of
+    the supported ``xheaders``.
 
     `HTTPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
     To make this server serve SSL traffic, send the ssl_options dictionary
@@ -134,16 +146,17 @@ class HTTPServer(TCPServer):
 
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, **kwargs):
+                 xheaders=False, ssl_options=None, protocol=None, **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
+        self.protocol = protocol
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
     def handle_stream(self, stream, address):
         HTTPConnection(stream, address, self.request_callback,
-                       self.no_keep_alive, self.xheaders)
+                       self.no_keep_alive, self.xheaders, self.protocol)
 
 
 class _BadRequestException(Exception):
@@ -158,12 +171,13 @@ class HTTPConnection(object):
     until the HTTP conection is closed.
     """
     def __init__(self, stream, address, request_callback, no_keep_alive=False,
-                 xheaders=False):
+                 xheaders=False, protocol=None):
         self.stream = stream
         self.address = address
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
+        self.protocol = protocol
         self._request = None
         self._request_finished = False
         # Save stack context here, outside of any request.  This keeps
@@ -171,6 +185,12 @@ class HTTPConnection(object):
         self._header_callback = stack_context.wrap(self._on_headers)
         self.stream.read_until(b("\r\n\r\n"), self._header_callback)
         self._write_callback = None
+
+    def close(self):
+        self.stream.close()
+        # Remove this reference to self, which would otherwise cause a
+        # cycle and delay garbage collection of this connection.
+        self._header_callback = None
 
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
@@ -218,9 +238,15 @@ class HTTPConnection(object):
         self._request = None
         self._request_finished = False
         if disconnect:
-            self.stream.close()
+            self.close()
             return
-        self.stream.read_until(b("\r\n\r\n"), self._header_callback)
+        try:
+            # Use a try/except instead of checking stream.closed()
+            # directly, because in some cases the stream doesn't discover
+            # that it's closed until you try to read from it.
+            self.stream.read_until(b("\r\n\r\n"), self._header_callback)
+        except iostream.StreamClosedError:
+            self.close()
 
     def _on_headers(self, data):
         try:
@@ -247,7 +273,7 @@ class HTTPConnection(object):
 
             self._request = HTTPRequest(
                 connection=self, method=method, uri=uri, version=version,
-                headers=headers, remote_ip=remote_ip)
+                headers=headers, remote_ip=remote_ip, protocol=self.protocol)
 
             content_length = headers.get("Content-Length")
             if content_length:
@@ -260,10 +286,10 @@ class HTTPConnection(object):
                 return
 
             self.request_callback(self._request)
-        except _BadRequestException, e:
-            logging.info("Malformed HTTP request from %s: %s",
+        except _BadRequestException as e:
+            gen_log.info("Malformed HTTP request from %s: %s",
                          self.address[0], e)
-            self.stream.close()
+            self.close()
             return
 
     def _on_request_body(self, data):
@@ -382,12 +408,7 @@ class HTTPRequest(object):
         self._finish_time = None
 
         self.path, sep, self.query = uri.partition('?')
-        arguments = parse_qs_bytes(self.query)
-        self.arguments = {}
-        for name, values in arguments.iteritems():
-            values = [v for v in values if v]
-            if values:
-                self.arguments[name] = values
+        self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
 
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""
@@ -427,7 +448,7 @@ class HTTPRequest(object):
         else:
             return self._finish_time - self._start_time
 
-    def get_ssl_certificate(self):
+    def get_ssl_certificate(self, binary_form=False):
         """Returns the client's SSL certificate, if any.
 
         To use client certificates, the HTTPServer must have been constructed
@@ -440,12 +461,16 @@ class HTTPRequest(object):
                     cert_reqs=ssl.CERT_REQUIRED,
                     ca_certs="cacert.crt"))
 
-        The return value is a dictionary, see SSLSocket.getpeercert() in
-        the standard library for more details.
+        By default, the return value is a dictionary (or None, if no
+        client certificate is present).  If ``binary_form`` is true, a
+        DER-encoded form of the certificate is returned instead.  See
+        SSLSocket.getpeercert() in the standard library for more
+        details.
         http://docs.python.org/library/ssl.html#sslsocket-objects
         """
         try:
-            return self.connection.stream.socket.getpeercert()
+            return self.connection.stream.socket.getpeercert(
+                binary_form=binary_form)
         except ssl.SSLError:
             return None
 
@@ -462,7 +487,7 @@ class HTTPRequest(object):
                                      socket.SOCK_STREAM,
                                      0, socket.AI_NUMERICHOST)
             return bool(res)
-        except socket.gaierror, e:
+        except socket.gaierror as e:
             if e.args[0] == socket.EAI_NONAME:
                 return False
             raise

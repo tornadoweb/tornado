@@ -1,15 +1,16 @@
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import os
 import traceback
 
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
-from tornado.testing import LogTrapTestCase
-from tornado.util import b, bytes_type, ObjectDict
+from tornado.testing import ExpectLog
+from tornado.test.util import unittest
+from tornado.util import b, u, bytes_type, ObjectDict, unicode_type
 
 
-class TemplateTest(LogTrapTestCase):
+class TemplateTest(unittest.TestCase):
     def test_simple(self):
         template = Template("Hello {{ name }}!")
         self.assertEqual(template.generate(name="Ben"),
@@ -70,21 +71,21 @@ class TemplateTest(LogTrapTestCase):
                          b("expr {{jquery expr}}"))
 
     def test_unicode_template(self):
-        template = Template(utf8(u"\u00e9"))
-        self.assertEqual(template.generate(), utf8(u"\u00e9"))
+        template = Template(utf8(u("\u00e9")))
+        self.assertEqual(template.generate(), utf8(u("\u00e9")))
 
     def test_unicode_literal_expression(self):
         # Unicode literals should be usable in templates.  Note that this
         # test simulates unicode characters appearing directly in the
         # template file (with utf8 encoding), i.e. \u escapes would not
         # be used in the template file itself.
-        if str is unicode:
+        if str is unicode_type:
             # python 3 needs a different version of this test since
             # 2to3 doesn't run on template internals
-            template = Template(utf8(u'{{ "\u00e9" }}'))
+            template = Template(utf8(u('{{ "\u00e9" }}')))
         else:
-            template = Template(utf8(u'{{ u"\u00e9" }}'))
-        self.assertEqual(template.generate(), utf8(u"\u00e9"))
+            template = Template(utf8(u('{{ u"\u00e9" }}')))
+        self.assertEqual(template.generate(), utf8(u("\u00e9")))
 
     def test_custom_namespace(self):
         loader = DictLoader({"test.html": "{{ inc(5) }}"}, namespace={"inc": lambda x: x + 1})
@@ -96,10 +97,26 @@ class TemplateTest(LogTrapTestCase):
         template = Template(utf8("{% apply upper %}foo{% end %}"))
         self.assertEqual(template.generate(upper=upper), b("FOO"))
 
+    def test_unicode_apply(self):
+        def upper(s):
+            return to_unicode(s).upper()
+        template = Template(utf8(u("{% apply upper %}foo \u00e9{% end %}")))
+        self.assertEqual(template.generate(upper=upper), utf8(u("FOO \u00c9")))
+
+    def test_bytes_apply(self):
+        def upper(s):
+            return utf8(to_unicode(s).upper())
+        template = Template(utf8(u("{% apply upper %}foo \u00e9{% end %}")))
+        self.assertEqual(template.generate(upper=upper), utf8(u("FOO \u00c9")))
+
     def test_if(self):
         template = Template(utf8("{% if x > 4 %}yes{% else %}no{% end %}"))
         self.assertEqual(template.generate(x=5), b("yes"))
         self.assertEqual(template.generate(x=3), b("no"))
+
+    def test_if_empty_body(self):
+        template = Template(utf8("{% if True %}{% else %}{% end %}"))
+        self.assertEqual(template.generate(), b(""))
 
     def test_try(self):
         template = Template(utf8("""{% try %}
@@ -148,7 +165,7 @@ try{% set y = 1/x %}
             pass
 
 
-class StackTraceTest(LogTrapTestCase):
+class StackTraceTest(unittest.TestCase):
     def test_error_line_number_expression(self):
         loader = DictLoader({"test.html": """one
 two{{1/0}}
@@ -231,7 +248,7 @@ three{%end%}
                             traceback.format_exc())
 
 
-class AutoEscapeTest(LogTrapTestCase):
+class AutoEscapeTest(unittest.TestCase):
     def setUp(self):
         self.templates = {
             "escaped.html": "{% autoescape xhtml_escape %}{{ name }}",
@@ -355,11 +372,11 @@ raw: {% raw name %}""",
                          b("""s = "['not a string']"\n"""))
 
 
-class TemplateLoaderTest(LogTrapTestCase):
+class TemplateLoaderTest(unittest.TestCase):
     def setUp(self):
         self.loader = Loader(os.path.join(os.path.dirname(__file__), "templates"))
 
     def test_utf8_in_file(self):
         tmpl = self.loader.load("utf8.html")
         result = tmpl.generate()
-        self.assertEqual(to_unicode(result).strip(), u"H\u00e9llo")
+        self.assertEqual(to_unicode(result).strip(), u("H\u00e9llo"))

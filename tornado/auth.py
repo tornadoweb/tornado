@@ -44,22 +44,31 @@ Example usage for Google OpenID::
             # Save the user with, e.g., set_secure_cookie()
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import base64
 import binascii
 import hashlib
 import hmac
-import logging
 import time
 import urllib
-import urlparse
 import uuid
 
 from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
-from tornado.util import bytes_type, b
+from tornado.log import gen_log
+from tornado.util import bytes_type, b, u, unicode_type
+
+try:
+    import urlparse  # py2
+except ImportError:
+    import urllib.parse as urlparse  # py3
+
+try:
+    import urllib.parse as urllib_parse  # py3
+except ImportError:
+    import urllib as urllib_parse  # py2
 
 
 class OpenIdMixin(object):
@@ -81,7 +90,7 @@ class OpenIdMixin(object):
         """
         callback_uri = callback_uri or self.request.uri
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs)
-        self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))
+        self.redirect(self._OPENID_ENDPOINT + "?" + urllib_parse.urlencode(args))
 
     def get_authenticated_user(self, callback, http_client=None):
         """Fetches the authenticated user data upon redirect.
@@ -91,14 +100,14 @@ class OpenIdMixin(object):
         methods.
         """
         # Verify the OpenID response via direct request to the OP
-        args = dict((k, v[-1]) for k, v in self.request.arguments.iteritems())
-        args["openid.mode"] = u"check_authentication"
+        args = dict((k, v[-1]) for k, v in self.request.arguments.items())
+        args["openid.mode"] = u("check_authentication")
         url = self._OPENID_ENDPOINT
         if http_client is None:
-            http_client = httpclient.AsyncHTTPClient()
+            http_client = self.get_auth_http_client()
         http_client.fetch(url, self.async_callback(
             self._on_authentication_verified, callback),
-            method="POST", body=urllib.urlencode(args))
+            method="POST", body=urllib_parse.urlencode(args))
 
     def _openid_args(self, callback_uri, ax_attrs=[], oauth_scope=None):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)
@@ -150,32 +159,32 @@ class OpenIdMixin(object):
 
     def _on_authentication_verified(self, callback, response):
         if response.error or b("is_valid:true") not in response.body:
-            logging.warning("Invalid OpenID response: %s", response.error or
+            gen_log.warning("Invalid OpenID response: %s", response.error or
                             response.body)
             callback(None)
             return
 
         # Make sure we got back at least an email from attribute exchange
         ax_ns = None
-        for name in self.request.arguments.iterkeys():
+        for name in self.request.arguments.keys():
             if name.startswith("openid.ns.") and \
-               self.get_argument(name) == u"http://openid.net/srv/ax/1.0":
+               self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
                 ax_ns = name[10:]
                 break
 
         def get_ax_arg(uri):
             if not ax_ns:
-                return u""
+                return u("")
             prefix = "openid." + ax_ns + ".type."
             ax_name = None
-            for name in self.request.arguments.iterkeys():
+            for name in self.request.arguments.keys():
                 if self.get_argument(name) == uri and name.startswith(prefix):
                     part = name[len(prefix):]
                     ax_name = "openid." + ax_ns + ".value." + part
                     break
             if not ax_name:
-                return u""
-            return self.get_argument(ax_name, u"")
+                return u("")
+            return self.get_argument(ax_name, u(""))
 
         email = get_ax_arg("http://axschema.org/contact/email")
         name = get_ax_arg("http://axschema.org/namePerson")
@@ -194,7 +203,7 @@ class OpenIdMixin(object):
         if name:
             user["name"] = name
         elif name_parts:
-            user["name"] = u" ".join(name_parts)
+            user["name"] = u(" ").join(name_parts)
         elif email:
             user["name"] = email.split("@")[0]
         if email:
@@ -203,7 +212,18 @@ class OpenIdMixin(object):
             user["locale"] = locale
         if username:
             user["username"] = username
+        claimed_id = self.get_argument("openid.claimed_id", None)
+        if claimed_id:
+            user["claimed_id"] = claimed_id
         callback(user)
+
+    def get_auth_http_client(self):
+        """Returns the AsyncHTTPClient instance to be used for auth requests.
+
+        May be overridden by subclasses to use an http client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
 
 
 class OAuthMixin(object):
@@ -229,7 +249,7 @@ class OAuthMixin(object):
         if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
             raise Exception("This service does not support oauth_callback")
         if http_client is None:
-            http_client = httpclient.AsyncHTTPClient()
+            http_client = self.get_auth_http_client()
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
             http_client.fetch(
                 self._oauth_request_token_url(callback_uri=callback_uri,
@@ -260,21 +280,21 @@ class OAuthMixin(object):
         oauth_verifier = self.get_argument("oauth_verifier", None)
         request_cookie = self.get_cookie("_oauth_request_token")
         if not request_cookie:
-            logging.warning("Missing OAuth request token cookie")
+            gen_log.warning("Missing OAuth request token cookie")
             callback(None)
             return
         self.clear_cookie("_oauth_request_token")
         cookie_key, cookie_secret = [base64.b64decode(escape.utf8(i)) for i in request_cookie.split("|")]
         if cookie_key != request_key:
-            logging.info((cookie_key, request_key, request_cookie))
-            logging.warning("Request token does not match cookie")
+            gen_log.info((cookie_key, request_key, request_cookie))
+            gen_log.warning("Request token does not match cookie")
             callback(None)
             return
         token = dict(key=cookie_key, secret=cookie_secret)
         if oauth_verifier:
             token["verifier"] = oauth_verifier
         if http_client is None:
-            http_client = httpclient.AsyncHTTPClient()
+            http_client = self.get_auth_http_client()
         http_client.fetch(self._oauth_access_token_url(token),
                           self.async_callback(self._on_access_token, callback))
 
@@ -301,7 +321,7 @@ class OAuthMixin(object):
             signature = _oauth_signature(consumer_token, "GET", url, args)
 
         args["oauth_signature"] = signature
-        return url + "?" + urllib.urlencode(args)
+        return url + "?" + urllib_parse.urlencode(args)
 
     def _on_request_token(self, authorize_url, callback_uri, response):
         if response.error:
@@ -312,12 +332,12 @@ class OAuthMixin(object):
         self.set_cookie("_oauth_request_token", data)
         args = dict(oauth_token=request_token["key"])
         if callback_uri == "oob":
-            self.finish(authorize_url + "?" + urllib.urlencode(args))
+            self.finish(authorize_url + "?" + urllib_parse.urlencode(args))
             return
         elif callback_uri:
             args["oauth_callback"] = urlparse.urljoin(
                 self.request.full_url(), callback_uri)
-        self.redirect(authorize_url + "?" + urllib.urlencode(args))
+        self.redirect(authorize_url + "?" + urllib_parse.urlencode(args))
 
     def _oauth_access_token_url(self, request_token):
         consumer_token = self._oauth_consumer_token()
@@ -341,11 +361,11 @@ class OAuthMixin(object):
                                          request_token)
 
         args["oauth_signature"] = signature
-        return url + "?" + urllib.urlencode(args)
+        return url + "?" + urllib_parse.urlencode(args)
 
     def _on_access_token(self, callback, response):
         if response.error:
-            logging.warning("Could not fetch access token")
+            gen_log.warning("Could not fetch access token")
             callback(None)
             return
 
@@ -390,6 +410,14 @@ class OAuthMixin(object):
                                          access_token)
         base_args["oauth_signature"] = signature
         return base_args
+
+    def get_auth_http_client(self):
+        """Returns the AsyncHTTPClient instance to be used for auth requests.
+
+        May be overridden by subclasses to use an http client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
 
 
 class OAuth2Mixin(object):
@@ -468,6 +496,7 @@ class TwitterMixin(OAuthMixin):
     _OAUTH_AUTHORIZE_URL = "http://api.twitter.com/oauth/authorize"
     _OAUTH_AUTHENTICATE_URL = "http://api.twitter.com/oauth/authenticate"
     _OAUTH_NO_CALLBACKS = False
+    _TWITTER_BASE_URL = "http://api.twitter.com/1"
 
     def authenticate_redirect(self, callback_uri=None):
         """Just like authorize_redirect(), but auto-redirects if authorized.
@@ -475,7 +504,7 @@ class TwitterMixin(OAuthMixin):
         This is generally the right interface to use if you are using
         Twitter for single-sign on.
         """
-        http = httpclient.AsyncHTTPClient()
+        http = self.get_auth_http_client()
         http.fetch(self._oauth_request_token_url(callback_uri=callback_uri), self.async_callback(
             self._on_request_token, self._OAUTH_AUTHENTICATE_URL, None))
 
@@ -522,7 +551,7 @@ class TwitterMixin(OAuthMixin):
             # usual pattern: http://search.twitter.com/search.json
             url = path
         else:
-            url = "http://api.twitter.com/1" + path + ".json"
+            url = self._TWITTER_BASE_URL + path + ".json"
         # Add the OAuth resource request signature if we have credentials
         if access_token:
             all_args = {}
@@ -533,18 +562,18 @@ class TwitterMixin(OAuthMixin):
                 url, access_token, all_args, method=method)
             args.update(oauth)
         if args:
-            url += "?" + urllib.urlencode(args)
+            url += "?" + urllib_parse.urlencode(args)
         callback = self.async_callback(self._on_twitter_request, callback)
-        http = httpclient.AsyncHTTPClient()
+        http = self.get_auth_http_client()
         if post_args is not None:
-            http.fetch(url, method="POST", body=urllib.urlencode(post_args),
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
                        callback=callback)
         else:
             http.fetch(url, callback=callback)
 
     def _on_twitter_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            gen_log.warning("Error response %s fetching %s", response.error,
                             response.request.url)
             callback(None)
             return
@@ -560,7 +589,7 @@ class TwitterMixin(OAuthMixin):
     def _oauth_get_user(self, access_token, callback):
         callback = self.async_callback(self._parse_user_response, callback)
         self.twitter_request(
-            "/users/show/" + access_token["screen_name"],
+            "/users/show/" + escape.native_str(access_token[b("screen_name")]),
             access_token=access_token, callback=callback)
 
     def _parse_user_response(self, callback, user):
@@ -655,18 +684,18 @@ class FriendFeedMixin(OAuthMixin):
                 url, access_token, all_args, method=method)
             args.update(oauth)
         if args:
-            url += "?" + urllib.urlencode(args)
+            url += "?" + urllib_parse.urlencode(args)
         callback = self.async_callback(self._on_friendfeed_request, callback)
-        http = httpclient.AsyncHTTPClient()
+        http = self.get_auth_http_client()
         if post_args is not None:
-            http.fetch(url, method="POST", body=urllib.urlencode(post_args),
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
                        callback=callback)
         else:
             http.fetch(url, callback=callback)
 
     def _on_friendfeed_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            gen_log.warning("Error response %s fetching %s", response.error,
                             response.request.url)
             callback(None)
             return
@@ -735,7 +764,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
         callback_uri = callback_uri or self.request.uri
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs,
                                  oauth_scope=oauth_scope)
-        self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))
+        self.redirect(self._OPENID_ENDPOINT + "?" + urllib_parse.urlencode(args))
 
     def get_authenticated_user(self, callback):
         """Fetches the authenticated user data upon redirect."""
@@ -743,12 +772,12 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
         oauth_ns = ""
         for name, values in self.request.arguments.iteritems():
             if name.startswith("openid.ns.") and \
-               values[-1] == u"http://specs.openid.net/extensions/oauth/1.0":
+               values[-1] == u("http://specs.openid.net/extensions/oauth/1.0"):
                 oauth_ns = name[10:]
                 break
         token = self.get_argument("openid." + oauth_ns + ".request_token", "")
         if token:
-            http = httpclient.AsyncHTTPClient()
+            http = self.get_auth_http_client()
             token = dict(key=token, secret="")
             http.fetch(self._oauth_access_token_url(token),
                        self.async_callback(self._on_access_token, callback))
@@ -817,11 +846,11 @@ class FacebookMixin(object):
             args["cancel_url"] = urlparse.urljoin(
                 self.request.full_url(), cancel_uri)
         if extended_permissions:
-            if isinstance(extended_permissions, (unicode, bytes_type)):
+            if isinstance(extended_permissions, (unicode_type, bytes_type)):
                 extended_permissions = [extended_permissions]
             args["req_perms"] = ",".join(extended_permissions)
         self.redirect("http://www.facebook.com/login.php?" +
-                      urllib.urlencode(args))
+                      urllib_parse.urlencode(args))
 
     def authorize_redirect(self, extended_permissions, callback_uri=None,
                            cancel_uri=None):
@@ -859,7 +888,7 @@ class FacebookMixin(object):
                 self._on_get_user_info, callback, session),
             session_key=session["session_key"],
             uids=session["uid"],
-            fields="uid,first_name,last_name,name,locale,pic_square," \
+            fields="uid,first_name,last_name,name,locale,pic_square,"
                    "profile_url,username")
 
     def facebook_request(self, method, callback, **args):
@@ -903,8 +932,8 @@ class FacebookMixin(object):
         args["format"] = "json"
         args["sig"] = self._signature(args)
         url = "http://api.facebook.com/restserver.php?" + \
-            urllib.urlencode(args)
-        http = httpclient.AsyncHTTPClient()
+            urllib_parse.urlencode(args)
+        http = self.get_auth_http_client()
         http.fetch(url, callback=self.async_callback(
             self._parse_response, callback))
 
@@ -927,17 +956,17 @@ class FacebookMixin(object):
 
     def _parse_response(self, callback, response):
         if response.error:
-            logging.warning("HTTP error from Facebook: %s", response.error)
+            gen_log.warning("HTTP error from Facebook: %s", response.error)
             callback(None)
             return
         try:
             json = escape.json_decode(response.body)
         except Exception:
-            logging.warning("Invalid JSON from Facebook: %r", response.body)
+            gen_log.warning("Invalid JSON from Facebook: %r", response.body)
             callback(None)
             return
         if isinstance(json, dict) and json.get("error_code"):
-            logging.warning("Facebook error: %d: %r", json["error_code"],
+            gen_log.warning("Facebook error: %d: %r", json["error_code"],
                             json.get("error_msg"))
             callback(None)
             return
@@ -946,9 +975,17 @@ class FacebookMixin(object):
     def _signature(self, args):
         parts = ["%s=%s" % (n, args[n]) for n in sorted(args.keys())]
         body = "".join(parts) + self.settings["facebook_secret"]
-        if isinstance(body, unicode):
+        if isinstance(body, unicode_type):
             body = body.encode("utf-8")
         return hashlib.md5(body).hexdigest()
+
+    def get_auth_http_client(self):
+        """Returns the AsyncHTTPClient instance to be used for auth requests.
+
+        May be overridden by subclasses to use an http client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
 
 
 class FacebookGraphMixin(OAuth2Mixin):
@@ -984,7 +1021,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                 self.finish()
 
         """
-        http = httpclient.AsyncHTTPClient()
+        http = self.get_auth_http_client()
         args = {
           "redirect_uri": redirect_uri,
           "code": code,
@@ -1004,7 +1041,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     def _on_access_token(self, redirect_uri, client_id, client_secret,
                         callback, fields, response):
         if response.error:
-            logging.warning('Facebook auth error: %s' % str(response))
+            gen_log.warning('Facebook auth error: %s' % str(response))
             callback(None)
             return
 
@@ -1076,22 +1113,30 @@ class FacebookGraphMixin(OAuth2Mixin):
             all_args.update(args)
 
         if all_args:
-            url += "?" + urllib.urlencode(all_args)
+            url += "?" + urllib_parse.urlencode(all_args)
         callback = self.async_callback(self._on_facebook_request, callback)
-        http = httpclient.AsyncHTTPClient()
+        http = self.get_auth_http_client()
         if post_args is not None:
-            http.fetch(url, method="POST", body=urllib.urlencode(post_args),
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
                        callback=callback)
         else:
             http.fetch(url, callback=callback)
 
     def _on_facebook_request(self, callback, response):
         if response.error:
-            logging.warning("Error response %s fetching %s", response.error,
+            gen_log.warning("Error response %s fetching %s", response.error,
                             response.request.url)
             callback(None)
             return
         callback(escape.json_decode(response.body))
+
+    def get_auth_http_client(self):
+        """Returns the AsyncHTTPClient instance to be used for auth requests.
+
+        May be overridden by subclasses to use an http client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
 
 
 def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
@@ -1134,8 +1179,8 @@ def _oauth10a_signature(consumer_token, method, url, parameters={}, token=None):
                                for k, v in sorted(parameters.items())))
 
     base_string = "&".join(_oauth_escape(e) for e in base_elems)
-    key_elems = [escape.utf8(urllib.quote(consumer_token["secret"], safe='~'))]
-    key_elems.append(escape.utf8(urllib.quote(token["secret"], safe='~') if token else ""))
+    key_elems = [escape.utf8(urllib_parse.quote(consumer_token["secret"], safe='~'))]
+    key_elems.append(escape.utf8(urllib_parse.quote(token["secret"], safe='~') if token else ""))
     key = b("&").join(key_elems)
 
     hash = hmac.new(key, escape.utf8(base_string), hashlib.sha1)
@@ -1143,9 +1188,9 @@ def _oauth10a_signature(consumer_token, method, url, parameters={}, token=None):
 
 
 def _oauth_escape(val):
-    if isinstance(val, unicode):
+    if isinstance(val, unicode_type):
         val = val.encode("utf-8")
-    return urllib.quote(val, safe="~")
+    return urllib_parse.quote(val, safe="~")
 
 
 def _oauth_parse_response(body):
