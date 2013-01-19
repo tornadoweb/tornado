@@ -4,8 +4,7 @@ What's new in the next release of Tornado
 In progress
 -----------
 
-* The Tornado test suite now requires ``unittest2`` when run on Python 2.5
-  or 2.6.
+* The Tornado test suite now requires ``unittest2`` when run on Python 2.6.
 * `tornado.testing.AsyncTestCase` and friends now extend ``unittest2.TestCase``
   when it is available (and continue to use the standard ``unittest`` module
   when ``unittest2`` is not available)
@@ -208,3 +207,5 @@ In progress
 * `IOStream.close` now has an ``exc_info`` argument (similar to the
   one used in the `logging` module) that can be used to set the stream's
   ``error`` attribute when closing it.
+* Python 2.5 is no longer supported.
+* Installation under Python 3 no longer uses ``2to3``.

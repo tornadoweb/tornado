@@ -18,10 +18,10 @@ way, so you may wish to download a copy of the source tarball as well.
 Manual installation
 -------------------
 
-Download https://github.com/downloads/facebook/tornado/tornado-2.3.tar.gz
+Download the latest release from http://pypi.python.org/pypi/tornado
 
-    tar xvzf tornado-2.3.tar.gz
-    cd tornado-2.3
+    tar xvzf tornado-$VERSION.tar.gz
+    cd tornado-$VERSION
     python setup.py build
     sudo python setup.py install
 
@@ -34,22 +34,23 @@ the standard library includes epoll support.
 Prerequisites
 -------------
 
-Tornado runs on Python 2.5, 2.6, 2.7 and 3.2.
+Tornado runs on Python 2.6+ and 3.2+.  Both CPython and PyPy are supported.
 
-On Python 2.6 and 2.7, there are no dependencies outside the Python
-standard library, although PycURL (version 7.18.2 or higher required;
-version 7.21.1 or higher recommended) may be used if desired.
+There are no required dependencies outside the Python standard library,
+although unittest2 is required to run Tornado's unittest suite on
+Python 2.6.
 
-On Python 2.5, PycURL is required, along with simplejson and the
-Python development headers (typically obtained by installing a package
-named something like python-dev from your operating system).
+Certain optional features require additional third-party modules:
 
-On Python 3.2, the distribute package is required. Note that Python 3
-support is relatively new and may have bugs.
+* tornado.curl_httpclient needs PycURL (version 7.18.2 or higher required;
+  version 7.21.1 or higher recommended)
+* Multithreading support requires the concurrent.futures module,
+  which is in the standard library for Python 3.2+ and available
+  at http://pypi.python.org/pypi/futures for older versions.
 
 Platforms
 ---------
 
- Tornado should run on any Unix-like platform, although for the best
+Tornado should run on any Unix-like platform, although for the best
 performance and scalability only Linux and BSD (including BSD
 derivatives like Mac OS X) are recommended.

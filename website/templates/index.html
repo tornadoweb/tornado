@@ -49,13 +49,12 @@ if __name__ == "__main__":
 cd tornado-{{version}}
 python setup.py build
 sudo python setup.py install</code></pre>
-  <p>The Tornado source code is <a href="https://github.com/facebook/tornado">hosted on GitHub</a>.  On Python 2.6 and 2.7, it is also possible to simply add the tornado directory to your <code>PYTHONPATH</code> instead of building with <code>setup.py</code>, since the standard library includes <code>epoll</code> support.</p>
+  <p>The Tornado source code is <a href="https://github.com/facebook/tornado">hosted on GitHub</a>.  It is also possible to simply add the tornado directory to your <code>PYTHONPATH</code> instead of building with <code>setup.py</code>.
 
-  <p><b>Prerequisites:</b> Tornado runs on Python 2.5, 2.6, 2.7 and 3.2.
+  <p><b>Prerequisites:</b> Tornado runs on Python 2.6+ and 3.2+.  Both CPython and PyPy are supported.  There are no required dependencies outside the Python standard library, although unittest2 is required to run Tornado's unittest suite on Python 2.6.  Certain optional features require additional third-party modules:
   <ul>
-    <li>On Python 2.6 and 2.7, there are no dependencies outside the Python standard library, although <a href="http://pycurl.sourceforge.net/">PycURL</a> (version 7.18.2 or higher required; version 7.21.1 or higher recommended) may be used if desired.</li>
-    <li>On Python 2.5, PycURL is required, along with <a href="http://pypi.python.org/pypi/simplejson/">simplejson</a> and the Python development headers (typically obtained by installing a package named something like <code>python-dev</code> from your operating system).</li>
-    <li>On Python 3.2, the <a href="http://pypi.python.org/pypi/distribute">distribute</a> package is required.  Note that Python 3 support is relatively new and may have bugs.</li>
+    <li>tornado.curl_httpclient needs <a href="http://pycurl.sourceforge.net/">PycURL</a> (version 7.18.2 or higher required; version 7.21.1 or higher recommended)</li>
+    <li>Multithreading support requires the concurrent.futures module, which is in the standard library for Python 3.2+ and available <a href="http://pypi.python.org/pypi/futures">on pypi</a> for older versions.</li>
   </ul></p>
 
   <p><b>Platforms:</b> Tornado should run on any Unix-like platform, although
