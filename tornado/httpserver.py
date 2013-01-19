@@ -171,6 +171,10 @@ class HTTPConnection(object):
                  xheaders=False, protocol=None):
         self.stream = stream
         self.address = address
+        # Save the socket's address family now so we know how to
+        # interpret self.address even after the stream is closed
+        # and its socket attribute replaced with None.
+        self.address_family = stream.socket.family
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
@@ -259,7 +263,7 @@ class HTTPConnection(object):
             headers = httputil.HTTPHeaders.parse(data[eol:])
 
             # HTTPRequest wants an IP, not a full socket address
-            if self.stream.socket.family in (socket.AF_INET, socket.AF_INET6):
+            if self.address_family in (socket.AF_INET, socket.AF_INET6):
                 remote_ip = self.address[0]
             else:
                 # Unix (or other) socket; fake the remote address
