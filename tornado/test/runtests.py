@@ -43,14 +43,15 @@ TEST_MODULES = [
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 
+
 class TornadoTextTestRunner(unittest.TextTestRunner):
     def run(self, test):
         result = super(TornadoTextTestRunner, self).run(test)
         if result.skipped:
             skip_reasons = set(reason for (test, reason) in result.skipped)
             self.stream.write(textwrap.fill(
-                    "Some tests were skipped because: %s" %
-                    ", ".join(sorted(skip_reasons))))
+                "Some tests were skipped because: %s" %
+                ", ".join(sorted(skip_reasons))))
             self.stream.write("\n")
         return result
 
@@ -83,6 +84,7 @@ if __name__ == '__main__':
            callback=AsyncHTTPClient.configure)
     define('ioloop', type=str, default=None)
     define('ioloop_time_monotonic', default=False)
+
     def configure_ioloop():
         kwargs = {}
         if options.ioloop_time_monotonic:

@@ -289,7 +289,7 @@ def linkify(text, shorten=False, extra_params="",
                 # (no more slug, etc), so it really just provides a little
                 # extra indication of shortening.
                 url = url[:proto_len] + parts[0] + "/" + \
-                        parts[1][:8].split('?')[0].split('.')[0]
+                    parts[1][:8].split('?')[0].split('.')[0]
 
             if len(url) > max_len * 1.5:  # still too long
                 url = url[:max_len]

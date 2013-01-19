@@ -34,6 +34,7 @@ try:
 except ImportError:
     from urllib.parse import urlencode  # py3
 
+
 class HTTPHeaders(dict):
     """A dictionary that maintains Http-Header-Case for all keys.
 
@@ -68,7 +69,7 @@ class HTTPHeaders(dict):
         self._as_list = {}
         self._last_key = None
         if (len(args) == 1 and len(kwargs) == 0 and
-            isinstance(args[0], HTTPHeaders)):
+                isinstance(args[0], HTTPHeaders)):
             # Copy constructor
             for k, v in args[0].get_all():
                 self.add(k, v)

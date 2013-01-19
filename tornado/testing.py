@@ -154,7 +154,7 @@ class AsyncTestCase(unittest.TestCase):
     def tearDown(self):
         self.io_loop.clear_current()
         if (not IOLoop.initialized() or
-            self.io_loop is not IOLoop.instance()):
+                self.io_loop is not IOLoop.instance()):
             # Try to clean up any file descriptors left open in the ioloop.
             # This avoids leaks, especially when tests are run repeatedly
             # in the same process with autoreload (because curl does not
@@ -214,8 +214,8 @@ class AsyncTestCase(unittest.TestCase):
                 def timeout_func():
                     try:
                         raise self.failureException(
-                          'Async operation timed out after %s seconds' %
-                          timeout)
+                            'Async operation timed out after %s seconds' %
+                            timeout)
                     except Exception:
                         self.__failure = sys.exc_info()
                     self.stop()
@@ -226,7 +226,7 @@ class AsyncTestCase(unittest.TestCase):
                 self.__running = True
                 self.io_loop.start()
                 if (self.__failure is not None or
-                    condition is None or condition()):
+                        condition is None or condition()):
                     break
         assert self.__stopped
         self.__stopped = False
@@ -317,7 +317,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
     def tearDown(self):
         self.http_server.stop()
         if (not IOLoop.initialized() or
-            self.http_client.io_loop is not IOLoop.instance()):
+                self.http_client.io_loop is not IOLoop.instance()):
             self.http_client.close()
         super(AsyncHTTPTestCase, self).tearDown()
 
@@ -345,8 +345,8 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
         # openssl req -new -keyout tornado/test/test.key -out tornado/test/test.crt -nodes -days 3650 -x509
         module_dir = os.path.dirname(__file__)
         return dict(
-                certfile=os.path.join(module_dir, 'test', 'test.crt'),
-                keyfile=os.path.join(module_dir, 'test', 'test.key'))
+            certfile=os.path.join(module_dir, 'test', 'test.crt'),
+            keyfile=os.path.join(module_dir, 'test', 'test.key'))
 
     def get_protocol(self):
         return 'https'

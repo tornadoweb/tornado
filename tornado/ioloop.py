@@ -252,8 +252,8 @@ class IOLoop(Configurable):
         For use with set_blocking_signal_threshold.
         """
         gen_log.warning('IOLoop blocked for %f seconds in\n%s',
-                         self._blocking_signal_threshold,
-                         ''.join(traceback.format_stack(frame)))
+                        self._blocking_signal_threshold,
+                        ''.join(traceback.format_stack(frame)))
 
     def start(self):
         """Starts the I/O loop.
@@ -351,6 +351,7 @@ class IOLoop(Configurable):
         _FUTURE_TYPES = (futures.Future, DummyFuture)
     else:
         _FUTURE_TYPES = DummyFuture
+
     def add_future(self, future, callback):
         """Schedules a callback on the IOLoop when the given future is finished.
 
@@ -382,7 +383,6 @@ class IOLoop(Configurable):
         in sys.exc_info.
         """
         app_log.error("Exception in callback %r", callback, exc_info=True)
-
 
 
 class PollIOLoop(IOLoop):
@@ -447,7 +447,7 @@ class PollIOLoop(IOLoop):
     def set_blocking_signal_threshold(self, seconds, action):
         if not hasattr(signal, "setitimer"):
             gen_log.error("set_blocking_signal_threshold requires a signal module "
-                           "with the setitimer method")
+                          "with the setitimer method")
             return
         self._blocking_signal_threshold = seconds
         if seconds is not None:
@@ -614,7 +614,7 @@ class PollIOLoop(IOLoop):
                 raise RuntimeError("IOLoop is closing")
             list_empty = not self._callbacks
             self._callbacks.append(functools.partial(
-                    stack_context.wrap(callback), *args, **kwargs))
+                stack_context.wrap(callback), *args, **kwargs))
         if list_empty and thread.get_ident() != self._thread_ident:
             # If we're in the IOLoop's thread, we know it's not currently
             # polling.  If we're not, and we added the first callback to an
@@ -640,7 +640,7 @@ class PollIOLoop(IOLoop):
                 # either the old or new version of self._callbacks,
                 # but either way will work.
                 self._callbacks.append(functools.partial(
-                        stack_context.wrap(callback), *args, **kwargs))
+                    stack_context.wrap(callback), *args, **kwargs))
 
 
 class _Timeout(object):

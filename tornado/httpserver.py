@@ -43,6 +43,7 @@ try:
 except ImportError:
     import http.cookies as Cookie  # py3
 
+
 class HTTPServer(TCPServer):
     r"""A non-blocking, single-threaded HTTP server.
 
@@ -259,7 +260,7 @@ class HTTPConnection(object):
 
             # HTTPRequest wants an IP, not a full socket address
             if getattr(self.stream.socket, 'family', socket.AF_INET) in (
-                socket.AF_INET, socket.AF_INET6):
+                    socket.AF_INET, socket.AF_INET6):
                 # Jython 2.5.2 doesn't have the socket.family attribute,
                 # so just assume IP in that case.
                 remote_ip = self.address[0]

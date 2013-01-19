@@ -20,7 +20,7 @@ class GenTest(AsyncTestCase):
             callback(arg)
         else:
             self.io_loop.add_callback(functools.partial(
-                    self.delay_callback, iterations - 1, callback, arg))
+                self.delay_callback, iterations - 1, callback, arg))
 
     def test_no_yield(self):
         @gen.engine
@@ -215,7 +215,7 @@ class GenTest(AsyncTestCase):
             responses = yield [
                 gen.Task(self.delay_callback, 3, arg="v1"),
                 gen.Task(self.delay_callback, 1, arg="v2"),
-                ]
+            ]
             self.assertEqual(responses, ["v1", "v2"])
             self.stop()
         self.run_gen(f)
@@ -349,11 +349,11 @@ class GenYieldExceptionHandler(RequestHandler):
 class GenWebTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
-                ('/sequence', GenSequenceHandler),
-                ('/task', GenTaskHandler),
-                ('/exception', GenExceptionHandler),
-                ('/yield_exception', GenYieldExceptionHandler),
-                ])
+            ('/sequence', GenSequenceHandler),
+            ('/task', GenTaskHandler),
+            ('/exception', GenExceptionHandler),
+            ('/yield_exception', GenYieldExceptionHandler),
+        ])
 
     def test_sequence_handler(self):
         response = self.fetch('/sequence')

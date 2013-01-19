@@ -76,7 +76,7 @@ class StackContextTest(AsyncTestCase):
             callback = wrap(callback)
             with StackContext(functools.partial(self.context, 'library')):
                 self.io_loop.add_callback(
-                  functools.partial(library_inner_callback, callback))
+                    functools.partial(library_inner_callback, callback))
 
         def library_inner_callback(callback):
             self.assertEqual(self.active_contexts[-2:],

@@ -31,33 +31,33 @@ class TemplateTest(unittest.TestCase):
 
     def test_include(self):
         loader = DictLoader({
-                "index.html": '{% include "header.html" %}\nbody text',
-                "header.html": "header text",
-                })
+            "index.html": '{% include "header.html" %}\nbody text',
+            "header.html": "header text",
+        })
         self.assertEqual(loader.load("index.html").generate(),
                          b"header text\nbody text")
 
     def test_extends(self):
         loader = DictLoader({
-                "base.html": """\
+            "base.html": """\
 <title>{% block title %}default title{% end %}</title>
 <body>{% block body %}default body{% end %}</body>
 """,
-                "page.html": """\
+            "page.html": """\
 {% extends "base.html" %}
 {% block title %}page title{% end %}
 {% block body %}page body{% end %}
 """,
-                })
+        })
         self.assertEqual(loader.load("page.html").generate(),
                          b"<title>page title</title>\n<body>page body</body>\n")
 
     def test_relative_load(self):
         loader = DictLoader({
-                "a/1.html": "{% include '2.html' %}",
-                "a/2.html": "{% include '../b/3.html' %}",
-                "b/3.html": "ok",
-                })
+            "a/1.html": "{% include '2.html' %}",
+            "a/2.html": "{% include '../b/3.html' %}",
+            "b/3.html": "ok",
+        })
         self.assertEqual(loader.load("a/1.html").generate(),
                          b"ok")
 
@@ -236,10 +236,10 @@ three{%end%}
 
     def test_multi_includes(self):
         loader = DictLoader({
-                "a.html": "{% include 'b.html' %}",
-                "b.html": "{% include 'c.html' %}",
-                "c.html": "{{1/0}}",
-                })
+            "a.html": "{% include 'b.html' %}",
+            "b.html": "{% include 'c.html' %}",
+            "c.html": "{{1/0}}",
+        })
         try:
             loader.load("a.html").generate()
         except ZeroDivisionError:
@@ -288,7 +288,7 @@ default: {% include 'default.html' %}
 {% autoescape xhtml_escape %}\
 expr: {{ name }}
 raw: {% raw name %}""",
-            }
+        }
 
     def test_default_off(self):
         loader = DictLoader(self.templates, autoescape=None)

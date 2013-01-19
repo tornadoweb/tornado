@@ -100,11 +100,11 @@ class TCPServer(object):
 
             if not os.path.exists(self.ssl_options['certfile']):
                 raise ValueError('certfile "%s" does not exist' %
-                    self.ssl_options['certfile'])
+                                 self.ssl_options['certfile'])
             if ('keyfile' in self.ssl_options and
                     not os.path.exists(self.ssl_options['keyfile'])):
                 raise ValueError('keyfile "%s" does not exist' %
-                    self.ssl_options['keyfile'])
+                                 self.ssl_options['keyfile'])
 
     def listen(self, port, address=""):
         """Starts accepting connections on the given port.
@@ -260,7 +260,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     if flags is None:
         flags = socket.AI_PASSIVE
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                  0, flags)):
+                                      0, flags)):
         af, socktype, proto, canonname, sockaddr = res
         sock = socket.socket(af, socktype, proto)
         set_close_exec(sock.fileno())

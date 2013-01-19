@@ -133,7 +133,7 @@ class AsyncHTTPClient(Configurable):
     def _async_clients(cls):
         attr_name = '_async_client_dict_' + cls.__name__
         if not hasattr(cls, attr_name):
-            setattr(cls, attr_name,  weakref.WeakKeyDictionary())
+            setattr(cls, attr_name, weakref.WeakKeyDictionary())
         return getattr(cls, attr_name)
 
     def __new__(cls, io_loop=None, force_instance=False, **kwargs):
@@ -405,6 +405,7 @@ class HTTPError(Exception):
         message = message or httputil.responses.get(code, "Unknown")
         self.response = response
         Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
+
 
 class _RequestProxy(object):
     """Combines an object with a dictionary of defaults.

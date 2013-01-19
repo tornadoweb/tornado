@@ -126,9 +126,11 @@ class TwitterServerAccessTokenHandler(RequestHandler):
     def get(self):
         self.write('oauth_token=hjkl&oauth_token_secret=vbnm&screen_name=foo')
 
+
 class TwitterServerShowUserHandler(RequestHandler):
     def get(self, screen_name):
         self.write(dict(screen_name=screen_name, name=screen_name.capitalize()))
+
 
 class AuthTest(AsyncHTTPTestCase):
     def get_app(self):
@@ -157,7 +159,7 @@ class AuthTest(AsyncHTTPTestCase):
 
                 ('/twitter/server/access_token', TwitterServerAccessTokenHandler),
                 (r'/twitter/api/users/show/(.*)\.json', TwitterServerShowUserHandler),
-                ],
+            ],
             http_client=self.http_client,
             twitter_consumer_key='test_twitter_consumer_key',
             twitter_consumer_secret='test_twitter_consumer_secret')
@@ -254,8 +256,8 @@ class AuthTest(AsyncHTTPTestCase):
         parsed = json_decode(response.body)
         self.assertEqual(parsed,
                          {u('access_token'): {u('key'): u('hjkl'),
-                                            u('screen_name'): u('foo'),
-                                            u('secret'): u('vbnm')},
+                                              u('screen_name'): u('foo'),
+                                              u('secret'): u('vbnm')},
                           u('name'): u('Foo'),
                           u('screen_name'): u('foo'),
                           u('username'): u('foo')})

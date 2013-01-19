@@ -109,6 +109,7 @@ class SSLv3Test(BaseSSLTest, SSLTestMixin):
         return ssl.PROTOCOL_SSLv3
 SSLv3Test = skipIfNoSSL(skipIfOldSSL(SSLv3Test))
 
+
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_TLSv1
@@ -130,18 +131,18 @@ class BadSSLOptionsTest(unittest.TestCase):
         existing_certificate = os.path.join(module_dir, 'test.crt')
 
         self.assertRaises(ValueError, HTTPServer, application, ssl_options={
-           "certfile": "/__mising__.crt",
-        })
+                          "certfile": "/__mising__.crt",
+                          })
         self.assertRaises(ValueError, HTTPServer, application, ssl_options={
-           "certfile": existing_certificate,
-           "keyfile": "/__missing__.key"
-        })
+                          "certfile": existing_certificate,
+                          "keyfile": "/__missing__.key"
+                          })
 
         # This actually works because both files exist
         HTTPServer(application, ssl_options={
-           "certfile": existing_certificate,
-           "keyfile": existing_certificate
-        })
+                   "certfile": existing_certificate,
+                   "keyfile": existing_certificate
+                   })
 
 
 class MultipartTestHandler(RequestHandler):
@@ -184,7 +185,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
             1024 * 1024)
         conn.set_request(
             b"\r\n".join(headers +
-                           [utf8("Content-Length: %d\r\n" % len(body))]) +
+                         [utf8("Content-Length: %d\r\n" % len(body))]) +
             b"\r\n" + body)
         response = self.wait()
         client.close()
@@ -195,21 +196,21 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         # Encodings here are tricky:  Headers are latin1, bodies can be
         # anything (we use utf8 by default).
         response = self.raw_fetch([
-                b"POST /multipart HTTP/1.0",
-                b"Content-Type: multipart/form-data; boundary=1234567890",
-                b"X-Header-encoding-test: \xe9",
-                ],
-                                  b"\r\n".join([
-                    b"Content-Disposition: form-data; name=argument",
-                    b"",
-                    u("\u00e1").encode("utf-8"),
-                    b"--1234567890",
-                    u('Content-Disposition: form-data; name="files"; filename="\u00f3"').encode("utf8"),
-                    b"",
-                    u("\u00fa").encode("utf-8"),
-                    b"--1234567890--",
-                    b"",
-                    ]))
+            b"POST /multipart HTTP/1.0",
+            b"Content-Type: multipart/form-data; boundary=1234567890",
+            b"X-Header-encoding-test: \xe9",
+        ],
+            b"\r\n".join([
+            b"Content-Disposition: form-data; name=argument",
+            b"",
+            u("\u00e1").encode("utf-8"),
+            b"--1234567890",
+            u('Content-Disposition: form-data; name="files"; filename="\u00f3"').encode("utf8"),
+            b"",
+            u("\u00fa").encode("utf-8"),
+            b"--1234567890--",
+            b"",
+            ]))
         data = json_decode(response.body)
         self.assertEqual(u("\u00e9"), data["header"])
         self.assertEqual(u("\u00e1"), data["argument"])
@@ -224,10 +225,10 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         stream.connect(("localhost", self.get_http_port()), callback=self.stop)
         self.wait()
         stream.write(b"\r\n".join([b"POST /hello HTTP/1.1",
-                                     b"Content-Length: 1024",
-                                     b"Expect: 100-continue",
-                                     b"Connection: close",
-                                     b"\r\n"]), callback=self.stop)
+                                   b"Content-Length: 1024",
+                                   b"Expect: 100-continue",
+                                   b"Connection: close",
+                                   b"\r\n"]), callback=self.stop)
         self.wait()
         stream.read_until(b"\r\n\r\n", self.stop)
         data = self.wait()
@@ -262,7 +263,7 @@ class TypeCheckHandler(RequestHandler):
             ('host', str),
             ('path', str),
             ('query', str),
-            ]
+        ]
         for field, expected_type in fields:
             self.check_type(field, getattr(self.request, field), expected_type)
 
@@ -366,6 +367,7 @@ class XHeaderTest(HandlerBaseTestCase):
             self.fetch_json("/", headers=invalid_host)["remote_ip"],
             "127.0.0.1")
 
+
 class ManualProtocolTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -419,6 +421,7 @@ class UnixSocketTest(AsyncTestCase):
 UnixSocketTest = unittest.skipIf(
     not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin',
     "unix sockets not supported on this platform")
+
 
 class KeepAliveTest(AsyncHTTPTestCase):
     """Tests various scenarios for HTTP 1.1 keep-alive support.

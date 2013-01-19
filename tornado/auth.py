@@ -113,9 +113,9 @@ class OpenIdMixin(object):
         args = {
             "openid.ns": "http://specs.openid.net/auth/2.0",
             "openid.claimed_id":
-                "http://specs.openid.net/auth/2.0/identifier_select",
+            "http://specs.openid.net/auth/2.0/identifier_select",
             "openid.identity":
-                "http://specs.openid.net/auth/2.0/identifier_select",
+            "http://specs.openid.net/auth/2.0/identifier_select",
             "openid.return_to": url,
             "openid.realm": urlparse.urljoin(url, '/'),
             "openid.mode": "checkid_setup",
@@ -132,11 +132,11 @@ class OpenIdMixin(object):
                 required += ["firstname", "fullname", "lastname"]
                 args.update({
                     "openid.ax.type.firstname":
-                        "http://axschema.org/namePerson/first",
+                    "http://axschema.org/namePerson/first",
                     "openid.ax.type.fullname":
-                        "http://axschema.org/namePerson",
+                    "http://axschema.org/namePerson",
                     "openid.ax.type.lastname":
-                        "http://axschema.org/namePerson/last",
+                    "http://axschema.org/namePerson/last",
                 })
             known_attrs = {
                 "email": "http://axschema.org/contact/email",
@@ -150,7 +150,7 @@ class OpenIdMixin(object):
         if oauth_scope:
             args.update({
                 "openid.ns.oauth":
-                    "http://specs.openid.net/extensions/oauth/1.0",
+                "http://specs.openid.net/extensions/oauth/1.0",
                 "openid.oauth.consumer": self.request.host.split(":")[0],
                 "openid.oauth.scope": oauth_scope,
             })
@@ -167,7 +167,7 @@ class OpenIdMixin(object):
         ax_ns = None
         for name in self.request.arguments.keys():
             if name.startswith("openid.ns.") and \
-               self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
+                    self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
                 ax_ns = name[10:]
                 break
 
@@ -256,7 +256,7 @@ class OAuthMixin(object):
                 self.async_callback(
                     self._on_request_token,
                     self._OAUTH_AUTHORIZE_URL,
-                callback_uri))
+                    callback_uri))
         else:
             http_client.fetch(
                 self._oauth_request_token_url(),
@@ -370,7 +370,7 @@ class OAuthMixin(object):
 
         access_token = _oauth_parse_response(response.body)
         self._oauth_get_user(access_token, self.async_callback(
-             self._on_oauth_get_user, access_token, callback))
+                             self._on_oauth_get_user, access_token, callback))
 
     def _oauth_get_user(self, access_token, callback):
         raise NotImplementedError()
@@ -403,7 +403,7 @@ class OAuthMixin(object):
         args.update(parameters)
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
             signature = _oauth10a_signature(consumer_token, method, url, args,
-                                         access_token)
+                                            access_token)
         else:
             signature = _oauth_signature(consumer_token, method, url, args,
                                          access_token)
@@ -433,13 +433,13 @@ class OAuth2Mixin(object):
         process.
         """
         args = {
-          "redirect_uri": redirect_uri,
-          "client_id": client_id
+            "redirect_uri": redirect_uri,
+            "client_id": client_id
         }
         if extra_params:
             args.update(extra_params)
         self.redirect(
-                url_concat(self._OAUTH_AUTHORIZE_URL, args))
+            url_concat(self._OAUTH_AUTHORIZE_URL, args))
 
     def _oauth_request_token_url(self, redirect_uri=None, client_id=None,
                                  client_secret=None, code=None,
@@ -450,7 +450,7 @@ class OAuth2Mixin(object):
             code=code,
             client_id=client_id,
             client_secret=client_secret,
-            )
+        )
         if extra_params:
             args.update(extra_params)
         return url_concat(url, args)
@@ -508,7 +508,7 @@ class TwitterMixin(OAuthMixin):
             self._on_request_token, self._OAUTH_AUTHENTICATE_URL, None))
 
     def twitter_request(self, path, callback, access_token=None,
-                           post_args=None, **args):
+                        post_args=None, **args):
         """Fetches the given API path, e.g., "/statuses/user_timeline/btaylor"
 
         The path should not include the format (we automatically append
@@ -771,7 +771,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
         oauth_ns = ""
         for name, values in self.request.arguments.iteritems():
             if name.startswith("openid.ns.") and \
-               values[-1] == u("http://specs.openid.net/extensions/oauth/1.0"):
+                    values[-1] == u("http://specs.openid.net/extensions/oauth/1.0"):
                 oauth_ns = name[10:]
                 break
         token = self.get_argument("openid." + oauth_ns + ".request_token", "")
@@ -994,7 +994,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     _OAUTH_NO_CALLBACKS = False
 
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
-                              code, callback, extra_fields=None):
+                               code, callback, extra_fields=None):
         """Handles the login for the Facebook user, returning a user object.
 
         Example usage::
@@ -1022,10 +1022,10 @@ class FacebookGraphMixin(OAuth2Mixin):
         """
         http = self.get_auth_http_client()
         args = {
-          "redirect_uri": redirect_uri,
-          "code": code,
-          "client_id": client_id,
-          "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
         }
 
         fields = set(['id', 'name', 'first_name', 'last_name',
@@ -1034,11 +1034,11 @@ class FacebookGraphMixin(OAuth2Mixin):
             fields.update(extra_fields)
 
         http.fetch(self._oauth_request_token_url(**args),
-            self.async_callback(self._on_access_token, redirect_uri, client_id,
-                                client_secret, callback, fields))
+                   self.async_callback(self._on_access_token, redirect_uri, client_id,
+                                       client_secret, callback, fields))
 
     def _on_access_token(self, redirect_uri, client_id, client_secret,
-                        callback, fields, response):
+                         callback, fields, response):
         if response.error:
             gen_log.warning('Facebook auth error: %s' % str(response))
             callback(None)
@@ -1056,7 +1056,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                 self._on_get_user_info, callback, session, fields),
             access_token=session["access_token"],
             fields=",".join(fields)
-            )
+        )
 
     def _on_get_user_info(self, callback, session, fields, user):
         if user is None:
@@ -1071,7 +1071,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         callback(fieldmap)
 
     def facebook_request(self, path, callback, access_token=None,
-                           post_args=None, **args):
+                         post_args=None, **args):
         """Fetches the given relative API path, e.g., "/btaylor/picture"
 
         If the request is a POST, post_args should be provided. Query

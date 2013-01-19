@@ -11,6 +11,7 @@ try:
 except ImportError:
     futures = None
 
+
 class _ResolverTestMixin(object):
     def test_localhost(self):
         self.resolver.getaddrinfo('localhost', 80, socket.AF_UNSPEC,
@@ -27,6 +28,7 @@ class SyncResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(SyncResolverTest, self).setUp()
         self.resolver = Resolver(self.io_loop)
+
 
 class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):

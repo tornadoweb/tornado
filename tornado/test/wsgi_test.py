@@ -39,10 +39,10 @@ class WSGIApplicationTest(AsyncHTTPTestCase):
         # fits better in our async testing framework and the wsgiref
         # validator should keep us honest
         return WSGIContainer(validator(WSGIApplication([
-                        ("/", HelloHandler),
-                        ("/path/(.*)", PathQuotingHandler),
-                        ("/typecheck", TypeCheckHandler),
-                        ])))
+            ("/", HelloHandler),
+            ("/path/(.*)", PathQuotingHandler),
+            ("/typecheck", TypeCheckHandler),
+        ])))
 
     def test_simple(self):
         response = self.fetch("/")

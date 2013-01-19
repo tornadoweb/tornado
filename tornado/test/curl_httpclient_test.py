@@ -23,7 +23,7 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
         return client
 CurlHTTPClientCommonTestCase = unittest.skipIf(pycurl is None,
                                                "pycurl module not present")(
-    CurlHTTPClientCommonTestCase)
+                                                   CurlHTTPClientCommonTestCase)
 
 
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
@@ -36,6 +36,7 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
 
     def test_prepare_curl_callback_stack_context(self):
         exc_info = []
+
         def error_handler(typ, value, tb):
             exc_info.append((typ, value, tb))
             self.stop()
@@ -50,4 +51,4 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 CurlHTTPClientTestCase = unittest.skipIf(pycurl is None,
                                          "pycurl module not present")(
-    CurlHTTPClientTestCase)
+                                             CurlHTTPClientTestCase)

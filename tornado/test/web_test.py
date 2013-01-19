@@ -20,6 +20,7 @@ import sys
 
 wsgi_safe = []
 
+
 class WebTestCase(AsyncHTTPTestCase):
     """Base class for web tests that also supports WSGI mode.
 
@@ -35,6 +36,7 @@ class WebTestCase(AsyncHTTPTestCase):
 
     def get_app_kwargs(self):
         return {}
+
 
 class SimpleHandlerTestCase(WebTestCase):
     """Simplified base class for tests that work with a single handler class.
@@ -87,7 +89,7 @@ class SecureCookieTest(unittest.TestCase):
             sig)
         # tamper with the cookie
         handler._cookies['foo'] = utf8('1234|5678%s|%s' % (
-                to_basestring(timestamp), to_basestring(sig)))
+            to_basestring(timestamp), to_basestring(sig)))
         # it gets rejected
         with ExpectLog(gen_log, "Cookie timestamp in future"):
             self.assertTrue(handler.get_secure_cookie('foo') is None)
@@ -478,17 +480,17 @@ class WSGISafeWebTest(WebTestCase):
 
     def get_app_kwargs(self):
         loader = DictLoader({
-                "linkify.html": "{% module linkify(message) %}",
-                "page.html": """\
+            "linkify.html": "{% module linkify(message) %}",
+            "page.html": """\
 <html><head></head><body>
 {% for e in entries %}
 {% module Template("entry.html", entry=e) %}
 {% end %}
 </body></html>""",
-                "entry.html": """\
+            "entry.html": """\
 {{ set_resources(embedded_css=".entry { margin-bottom: 1em; }", embedded_javascript="js_embed()", css_files=["/base.css", "/foo.css"], javascript_files="/common.js", html_head="<meta>", html_body='<script src="/analytics.js"/>') }}
 <div class="entry">...</div>""",
-                })
+        })
         return dict(template_loader=loader,
                     autoescape="xhtml_escape",
                     cookie_secret=self.COOKIE_SECRET)
@@ -505,7 +507,7 @@ class WSGISafeWebTest(WebTestCase):
             url("/redirect", RedirectHandler),
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
-            ]
+        ]
         return urls
 
     def fetch_json(self, *args, **kwargs):
@@ -724,6 +726,7 @@ class ErrorResponseTest(WebTestCase):
             self.assertEqual(b"", response.body)
 wsgi_safe.append(ErrorResponseTest)
 
+
 class StaticFileTest(WebTestCase):
     def get_handlers(self):
         class StaticUrlHandler(RequestHandler):
@@ -793,7 +796,7 @@ class StaticFileTest(WebTestCase):
     def test_static_304_if_modified_since(self):
         response1 = self.fetch("/static/robots.txt")
         response2 = self.fetch("/static/robots.txt", headers={
-                'If-Modified-Since': response1.headers['Last-Modified']})
+            'If-Modified-Since': response1.headers['Last-Modified']})
         self.assertEqual(response2.code, 304)
         self.assertTrue('Content-Length' not in response2.headers)
         self.assertTrue('Last-Modified' not in response2.headers)
@@ -801,9 +804,10 @@ class StaticFileTest(WebTestCase):
     def test_static_304_if_none_match(self):
         response1 = self.fetch("/static/robots.txt")
         response2 = self.fetch("/static/robots.txt", headers={
-                'If-None-Match': response1.headers['Etag']})
+            'If-None-Match': response1.headers['Etag']})
         self.assertEqual(response2.code, 304)
 wsgi_safe.append(StaticFileTest)
+
 
 class CustomStaticFileTest(WebTestCase):
     def get_handlers(self):
@@ -865,11 +869,11 @@ class HostMatchingTest(WebTestCase):
 
     def test_host_matching(self):
         self.app.add_handlers("www.example.com",
-            [("/foo", HostMatchingTest.Handler, {"reply": "[0]"})])
+                              [("/foo", HostMatchingTest.Handler, {"reply": "[0]"})])
         self.app.add_handlers(r"www\.example\.com",
-            [("/bar", HostMatchingTest.Handler, {"reply": "[1]"})])
+                              [("/bar", HostMatchingTest.Handler, {"reply": "[1]"})])
         self.app.add_handlers("www.example.com",
-            [("/baz", HostMatchingTest.Handler, {"reply": "[2]"})])
+                              [("/baz", HostMatchingTest.Handler, {"reply": "[2]"})])
 
         response = self.fetch("/foo")
         self.assertEqual(response.body, b"wildcard")
@@ -919,6 +923,7 @@ class ClearHeaderTest(SimpleHandlerTestCase):
         self.assertEqual(response.headers["h2"], "bar")
 wsgi_safe.append(ClearHeaderTest)
 
+
 class Header304Test(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -931,7 +936,7 @@ class Header304Test(SimpleHandlerTestCase):
         self.assertEqual(response1.headers["Content-Language"], "en_US")
 
         response2 = self.fetch('/', headers={
-                'If-None-Match': response1.headers["Etag"]})
+            'If-None-Match': response1.headers["Etag"]})
         self.assertEqual(response2.code, 304)
         self.assertTrue("Content-Length" not in response2.headers)
         self.assertTrue("Content-Language" not in response2.headers)
@@ -1045,6 +1050,7 @@ class GzipTestCase(SimpleHandlerTestCase):
         response = self.fetch('/?vary=Accept-Language')
         self.assertEqual(response.headers['Vary'],
                          'Accept-Language, Accept-Encoding')
+
 
 class PathArgsInPrepareTest(WebTestCase):
     class Handler(RequestHandler):

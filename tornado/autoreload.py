@@ -92,6 +92,7 @@ _reload_hooks = []
 _reload_attempted = False
 _io_loops = weakref.WeakKeyDictionary()
 
+
 def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
 
@@ -205,7 +206,7 @@ def _reload():
     # to ensure that the new process sees the same path we did.
     path_prefix = '.' + os.pathsep
     if (sys.path[0] == '' and
-        not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
+            not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
         os.environ["PYTHONPATH"] = (path_prefix +
                                     os.environ.get("PYTHONPATH", ""))
     if sys.platform == 'win32':

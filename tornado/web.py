@@ -103,6 +103,7 @@ try:
 except ImportError:
     from urllib.parse import urlencode  # py3
 
+
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
 
@@ -128,14 +129,14 @@ class RequestHandler(object):
         self.path_args = None
         self.path_kwargs = None
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
-                     application.ui_methods.items())
+                             application.ui_methods.items())
         # UIModules are available as both `modules` and `_modules` in the
         # template namespace.  Historically only `modules` was available
         # but could be clobbered by user additions to the namespace.
         # The template {% module %} directive looks in `_modules` to avoid
         # possible conflicts.
         self.ui["_modules"] = ObjectDict((n, self._ui_module(n, m)) for n, m in
-                                 application.ui_modules.items())
+                                         application.ui_modules.items())
         self.ui["modules"] = self.ui["_modules"]
         self.clear()
         # Check since connection is not available in WSGI
@@ -694,7 +695,7 @@ class RequestHandler(object):
             for transform in self._transforms:
                 self._status_code, self._headers, chunk = \
                     transform.transform_first_chunk(
-                    self._status_code, self._headers, chunk, include_footers)
+                        self._status_code, self._headers, chunk, include_footers)
             headers = self._generate_headers()
         else:
             for transform in self._transforms:
@@ -724,7 +725,7 @@ class RequestHandler(object):
         if not self._headers_written:
             if (self._status_code == 200 and
                 self.request.method in ("GET", "HEAD") and
-                "Etag" not in self._headers):
+                    "Etag" not in self._headers):
                 etag = self.compute_etag()
                 if etag is not None:
                     self.set_header("Etag", etag)
@@ -824,9 +825,9 @@ class RequestHandler(object):
         else:
             self.finish("<html><title>%(code)d: %(message)s</title>"
                         "<body>%(code)d: %(message)s</body></html>" % {
-                    "code": status_code,
-                    "message": self._reason,
-                    })
+                            "code": status_code,
+                            "message": self._reason,
+                        })
 
     @property
     def locale(self):
@@ -1071,7 +1072,7 @@ class RequestHandler(object):
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
-               self.application.settings.get("xsrf_cookies"):
+                    self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
             self.prepare()
             if not self._finished:
@@ -1173,7 +1174,7 @@ def asynchronous(method):
             raise Exception("@asynchronous is not supported for WSGI apps")
         self._auto_finish = False
         with stack_context.ExceptionStackContext(
-            self._stack_context_handle_exception):
+                self._stack_context_handle_exception):
             return method(self, *args, **kwargs)
     return wrapper
 
@@ -1346,7 +1347,7 @@ class Application(object):
             self.handlers.append((re.compile(host_pattern), handlers))
 
         for spec in host_handlers:
-            if type(spec) is type(()):
+            if isinstance(spec, type(())):
                 assert len(spec) in (2, 3)
                 pattern = spec[0]
                 handler = spec[1]
@@ -1387,7 +1388,7 @@ class Application(object):
         return matches or None
 
     def _load_ui_methods(self, methods):
-        if type(methods) is types.ModuleType:
+        if isinstance(methods, types.ModuleType):
             self._load_ui_methods(dict((n, getattr(methods, n))
                                        for n in dir(methods)))
         elif isinstance(methods, list):
@@ -1396,11 +1397,11 @@ class Application(object):
         else:
             for name, fn in methods.items():
                 if not name.startswith("_") and hasattr(fn, "__call__") \
-                   and name[0].lower() == name[0]:
+                        and name[0].lower() == name[0]:
                     self.ui_methods[name] = fn
 
     def _load_ui_modules(self, modules):
-        if type(modules) is types.ModuleType:
+        if isinstance(modules, types.ModuleType):
             self._load_ui_modules(dict((n, getattr(modules, n))
                                        for n in dir(modules)))
         elif isinstance(modules, list):
@@ -1630,7 +1631,7 @@ class StaticFileHandler(RequestHandler):
 
         if cache_time > 0:
             self.set_header("Expires", datetime.datetime.utcnow() +
-                                       datetime.timedelta(seconds=cache_time))
+                            datetime.timedelta(seconds=cache_time))
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
 
         self.set_extra_headers(path)
@@ -2023,8 +2024,8 @@ class URLSpec(object):
 
     def __repr__(self):
         return '%s(%r, %s, kwargs=%r, name=%r)' % \
-                (self.__class__.__name__, self.regex.pattern,
-                 self.handler_class, self.kwargs, self.name)
+            (self.__class__.__name__, self.regex.pattern,
+             self.handler_class, self.kwargs, self.name)
 
     def _find_groups(self):
         """Returns a tuple (reverse string, group count) for a url.
@@ -2078,7 +2079,7 @@ else:
         if len(a) != len(b):
             return False
         result = 0
-        if type(a[0]) is int:  # python3 byte strings
+        if isinstance(a[0], int):  # python3 byte strings
             for x, y in zip(a, b):
                 result |= x ^ y
         else:  # python2

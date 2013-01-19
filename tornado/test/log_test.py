@@ -29,6 +29,7 @@ from tornado.options import OptionParser
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, basestring_type
 
+
 @contextlib.contextmanager
 def ignore_bytes_warning():
     if not hasattr(warnings, 'catch_warnings'):
@@ -52,7 +53,7 @@ class LogFormatterTest(unittest.TestCase):
         # encoding issues from the control characters)
         self.formatter._colors = {
             logging.ERROR: u("\u0001"),
-            }
+        }
         self.formatter._normal = u("\u0002")
         self.formatter._color = True
         # construct a Logger directly to bypass getLogger's caching

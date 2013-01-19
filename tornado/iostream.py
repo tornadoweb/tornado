@@ -45,8 +45,10 @@ try:
 except ImportError:
     _set_nonblocking = None
 
+
 class StreamClosedError(IOError):
     pass
+
 
 class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
@@ -234,7 +236,7 @@ class BaseIOStream(object):
 
     def _maybe_run_close_callback(self):
         if (self.closed() and self._close_callback and
-            self._pending_callbacks == 0):
+                self._pending_callbacks == 0):
             # if there are pending callbacks, don't run the close callback
             # until they're done (see _maybe_add_error_handler)
             cb = self._close_callback
@@ -817,6 +819,7 @@ class SSLIOStream(IOStream):
             self.close()
             return None
         return chunk
+
 
 class PipeIOStream(BaseIOStream):
     """Pipe-based IOStream implementation.

@@ -350,8 +350,8 @@ class Loader(BaseLoader):
 
     def resolve_path(self, name, parent_path=None):
         if parent_path and not parent_path.startswith("<") and \
-           not parent_path.startswith("/") and \
-           not name.startswith("/"):
+            not parent_path.startswith("/") and \
+                not name.startswith("/"):
             current_path = os.path.join(self.root, parent_path)
             file_dir = os.path.dirname(os.path.abspath(current_path))
             relative_path = os.path.abspath(os.path.join(file_dir, name))
@@ -375,8 +375,8 @@ class DictLoader(BaseLoader):
 
     def resolve_path(self, name, parent_path=None):
         if parent_path and not parent_path.startswith("<") and \
-           not parent_path.startswith("/") and \
-           not name.startswith("/"):
+            not parent_path.startswith("/") and \
+                not name.startswith("/"):
             file_dir = posixpath.dirname(parent_path)
             name = posixpath.normpath(posixpath.join(file_dir, name))
         return name
@@ -712,7 +712,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
             # innermost ones.  This is useful when generating languages
             # like latex where curlies are also meaningful
             if (curly + 2 < reader.remaining() and
-                reader[curly + 1] == '{' and reader[curly + 2] == '{'):
+                    reader[curly + 1] == '{' and reader[curly + 2] == '{'):
                 curly += 1
                 continue
             break
@@ -779,7 +779,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
         if allowed_parents is not None:
             if not in_block:
                 raise ParseError("%s outside %s block" %
-                            (operator, allowed_parents))
+                                (operator, allowed_parents))
             if in_block not in allowed_parents:
                 raise ParseError("%s block cannot be attached to %s block" % (operator, in_block))
             body.chunks.append(_IntermediateControlBlock(contents, line))

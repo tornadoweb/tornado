@@ -57,6 +57,7 @@ from tornado.web import RequestHandler, Application
 skipIfNoTwisted = unittest.skipUnless(have_twisted,
                                       "twisted module not present")
 
+
 def save_signal_handlers():
     saved = {}
     for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:
@@ -103,6 +104,7 @@ class ReactorWhenRunningTest(ReactorTestCase):
     def anotherWhenRunningCallback(self):
         self._anotherWhenRunningCalled = True
 ReactorWhenRunningTest = skipIfNoTwisted(ReactorWhenRunningTest)
+
 
 class ReactorCallLaterTest(ReactorTestCase):
     def test_callLater(self):
@@ -458,30 +460,30 @@ if have_twisted:
         'twisted.internet.test.test_core.SystemEventTestsBuilder': [
             'test_iterate',  # deliberately not supported
             'test_runAfterCrash',  # fails because TwistedIOLoop uses the global reactor
-            ] if issubclass(IOLoop.configured_class(), TwistedIOLoop) else [
+        ] if issubclass(IOLoop.configured_class(), TwistedIOLoop) else [
             'test_iterate',  # deliberately not supported
-            ],
+        ],
         'twisted.internet.test.test_fdset.ReactorFDSetTestsBuilder': [
             "test_lostFileDescriptor",  # incompatible with epoll and kqueue
-            ],
+        ],
         'twisted.internet.test.test_process.ProcessTestsBuilder': [
             # Doesn't work on python 2.5
             'test_systemCallUninterruptedByChildExit',
-            ],
+        ],
         # Process tests appear to work on OSX 10.7, but not 10.6
         #'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
         #    'test_systemCallUninterruptedByChildExit',
         #    ],
         'twisted.internet.test.test_tcp.TCPClientTestsBuilder': [
             'test_badContext',  # ssl-related; see also SSLClientTestsMixin
-            ],
+        ],
         'twisted.internet.test.test_tcp.TCPPortTestsBuilder': [
             # These use link-local addresses and cause firewall prompts on mac
             'test_buildProtocolIPv6AddressScopeID',
             'test_portGetHostOnIPv6ScopeID',
             'test_serverGetHostOnIPv6ScopeID',
             'test_serverGetPeerOnIPv6ScopeID',
-            ],
+        ],
         'twisted.internet.test.test_tcp.TCPConnectionTestsBuilder': [],
         'twisted.internet.test.test_tcp.WriteSequenceTests': [],
         'twisted.internet.test.test_tcp.AbortConnectionTestCase': [],
@@ -502,12 +504,12 @@ if have_twisted:
             'test_sendFileDescriptorTriggersPauseProducing',
             'test_descriptorDeliveredBeforeBytes',
             'test_avoidLeakingFileDescriptors',
-            ],
+        ],
         'twisted.internet.test.test_unix.UNIXDatagramTestsBuilder': [
             'test_listenOnLinuxAbstractNamespace',
-            ],
+        ],
         'twisted.internet.test.test_unix.UNIXPortTestsBuilder': [],
-        }
+    }
     for test_name, blacklist in twisted_tests.iteritems():
         try:
             test_class = import_object(test_name)
@@ -561,8 +563,8 @@ if have_twisted:
     # leave it turned off, but while working on these tests you may want
     # to uncomment one of the other lines instead.
     log.defaultObserver.stop()
-    #import sys; log.startLogging(sys.stderr, setStdout=0)
-    #log.startLoggingWithObserver(log.PythonLoggingObserver().emit, setStdout=0)
+    # import sys; log.startLogging(sys.stderr, setStdout=0)
+    # log.startLoggingWithObserver(log.PythonLoggingObserver().emit, setStdout=0)
 
 if __name__ == "__main__":
     unittest.main()

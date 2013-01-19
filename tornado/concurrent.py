@@ -87,6 +87,7 @@ if futures is None:
 else:
     Future = futures.Future
 
+
 class DummyExecutor(object):
     def submit(self, fn, *args, **kwargs):
         future = Future()
@@ -97,6 +98,7 @@ class DummyExecutor(object):
         return future
 
 dummy_executor = DummyExecutor()
+
 
 def run_on_executor(fn):
     @functools.wraps(fn)
@@ -109,6 +111,8 @@ def run_on_executor(fn):
     return wrapper
 
 # TODO: this needs a better name
+
+
 def future_wrap(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
@@ -116,6 +120,7 @@ def future_wrap(f):
         if kwargs.get('callback') is not None:
             future.add_done_callback(kwargs.pop('callback'))
         kwargs['callback'] = future.set_result
+
         def handle_error(typ, value, tb):
             future.set_exception(value)
             return True

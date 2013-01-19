@@ -123,11 +123,11 @@ linkify_tests = [
      u('<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>')),
 
     ("www.external-link.com and www.internal-link.com/blogs extra",
-     {"extra_params": lambda href:'class="internal"' if href.startswith("http://www.internal-link.com") else 'rel="nofollow" class="external"'},
+     {"extra_params": lambda href: 'class="internal"' if href.startswith("http://www.internal-link.com") else 'rel="nofollow" class="external"'},
      u('<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a> and <a href="http://www.internal-link.com/blogs" class="internal">www.internal-link.com/blogs</a> extra')),
 
     ("www.external-link.com",
-     {"extra_params": lambda href:'    rel="nofollow" class="external"  '},
+     {"extra_params": lambda href: '    rel="nofollow" class="external"  '},
      u('<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>')),
 ]
 
@@ -146,7 +146,7 @@ class EscapeTestCase(unittest.TestCase):
 
             ("<>&\"", "&lt;&gt;&amp;&quot;"),
             ("&amp;", "&amp;amp;"),
-            ]
+        ]
         for unescaped, escaped in tests:
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
@@ -159,7 +159,7 @@ class EscapeTestCase(unittest.TestCase):
 
             # unicode strings become utf8
             (u('\u00e9'), '%C3%A9'),
-            ]
+        ]
         for unescaped, escaped in tests:
             self.assertEqual(url_escape(unescaped), escaped)
 
@@ -168,7 +168,7 @@ class EscapeTestCase(unittest.TestCase):
             ('%C3%A9', u('\u00e9'), 'utf8'),
             ('%C3%A9', u('\u00c3\u00a9'), 'latin1'),
             ('%C3%A9', utf8(u('\u00e9')), None),
-            ]
+        ]
         for escaped, unescaped, encoding in tests:
             # input strings to url_unescape should only contain ascii
             # characters, but make sure the function accepts both byte

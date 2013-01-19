@@ -18,6 +18,7 @@ except ImportError:
     except ImportError:
         mock = None
 
+
 class OptionsTest(unittest.TestCase):
     def test_parse_command_line(self):
         options = OptionParser()
@@ -28,6 +29,7 @@ class OptionsTest(unittest.TestCase):
     def test_parse_callbacks(self):
         options = OptionParser()
         self.called = False
+
         def callback():
             self.called = True
         options.add_parse_callback(callback)

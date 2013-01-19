@@ -90,7 +90,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/echopost", EchoPostHandler),
             url("/user_agent", UserAgentHandler),
             url("/304_with_content_length", ContentLength304Handler),
-            ], gzip=True)
+        ], gzip=True)
 
     def test_hello_world(self):
         response = self.fetch("/hello")
@@ -161,6 +161,7 @@ Transfer-Encoding: chunked
     def test_streaming_stack_context(self):
         chunks = []
         exc_info = []
+
         def error_handler(typ, value, tb):
             exc_info.append((typ, value, tb))
             return True
@@ -258,6 +259,7 @@ Transfer-Encoding: chunked
 
     def test_header_callback_stack_context(self):
         exc_info = []
+
         def error_handler(typ, value, tb):
             exc_info.append((typ, value, tb))
             return True
@@ -299,6 +301,7 @@ Transfer-Encoding: chunked
         # and streaming_callback), as errors there must be seen as errors
         # by the http client so it can clean up the connection.
         exc_info = []
+
         def handle_callback_exception(callback):
             exc_info.append(sys.exc_info())
             self.stop()
@@ -308,6 +311,7 @@ Transfer-Encoding: chunked
                                    lambda response: 1 / 0)
         self.wait()
         self.assertEqual(exc_info[0][0], ZeroDivisionError)
+
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):

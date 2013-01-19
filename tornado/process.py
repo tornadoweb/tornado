@@ -38,6 +38,7 @@ try:
 except NameError:
     long = int  # py3
 
+
 def cpu_count():
     """Returns the number of processors on this machine."""
     if multiprocessing is not None:
@@ -160,6 +161,7 @@ def task_id():
     """
     global _task_id
     return _task_id
+
 
 class Subprocess(object):
     """Wraps ``subprocess.Popen`` with IOStream support.

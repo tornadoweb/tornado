@@ -234,7 +234,7 @@ class TornadoReactor(PosixReactorBase):
             with NullContext():
                 self._fds[fd] = (reader, None)
                 self._io_loop.add_handler(fd, self._invoke_callback,
-                                         IOLoop.READ)
+                                          IOLoop.READ)
 
     def addWriter(self, writer):
         """Add a FileDescriptor for notification of data available to write."""
@@ -253,7 +253,7 @@ class TornadoReactor(PosixReactorBase):
             with NullContext():
                 self._fds[fd] = (None, writer)
                 self._io_loop.add_handler(fd, self._invoke_callback,
-                                         IOLoop.WRITE)
+                                          IOLoop.WRITE)
 
     def removeReader(self, reader):
         """Remove a Selectable for notification of data available to read."""
@@ -351,6 +351,7 @@ def install(io_loop=None):
     installReactor(reactor)
     return reactor
 
+
 class _FD(object):
     def __init__(self, fd, handler):
         self.fd = fd
@@ -378,6 +379,7 @@ class _FD(object):
     def logPrefix(self):
         return ''
 _FD = implementer(IReadDescriptor, IWriteDescriptor)(_FD)
+
 
 class TwistedIOLoop(tornado.ioloop.IOLoop):
     """IOLoop implementation that runs on Twisted.

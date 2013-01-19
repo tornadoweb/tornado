@@ -273,6 +273,7 @@ class OptionParser(object):
         """
         return _Mockable(self)
 
+
 class _Mockable(object):
     """`mock.patch` compatible wrapper for `OptionParser`.
 
@@ -300,6 +301,7 @@ class _Mockable(object):
 
     def __delattr__(self, name):
         setattr(self._options, name, self._originals.pop(name))
+
 
 class _Option(object):
     def __init__(self, name, default=None, type=basestring_type, help=None,
@@ -467,6 +469,7 @@ def print_help(file=None):
     See `OptionParser.print_help`.
     """
     return options.print_help(file)
+
 
 def add_parse_callback(callback):
     """Adds a parse callback, to be invoked when option parsing is done.

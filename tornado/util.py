@@ -115,6 +115,7 @@ def exec_in(code, glob, loc=None):
     exec code in glob, loc
 """)
 
+
 class Configurable(object):
     """Base class for configurable interfaces.
 
@@ -197,7 +198,6 @@ class Configurable(object):
         if cls.__impl_class is None:
             base.__impl_class = cls.configurable_default()
         return base.__impl_class
-
 
     @classmethod
     def _save_configuration(cls):

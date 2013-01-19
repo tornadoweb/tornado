@@ -324,19 +324,19 @@ class Locale(object):
             if days == 0:
                 format = _("%(time)s")
             elif days == 1 and local_date.day == local_yesterday.day and \
-                 relative:
+                    relative:
                 format = _("yesterday") if shorter else \
-                         _("yesterday at %(time)s")
+                    _("yesterday at %(time)s")
             elif days < 5:
                 format = _("%(weekday)s") if shorter else \
-                         _("%(weekday)s at %(time)s")
+                    _("%(weekday)s at %(time)s")
             elif days < 334:  # 11mo, since confusing for same month last year
                 format = _("%(month_name)s %(day)s") if shorter else \
-                         _("%(month_name)s %(day)s at %(time)s")
+                    _("%(month_name)s %(day)s at %(time)s")
 
         if format is None:
             format = _("%(month_name)s %(day)s, %(year)s") if shorter else \
-                     _("%(month_name)s %(day)s, %(year)s at %(time)s")
+                _("%(month_name)s %(day)s, %(year)s at %(time)s")
 
         tfhour_clock = self.code not in ("en", "en_US", "zh_CN")
         if tfhour_clock:

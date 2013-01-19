@@ -27,6 +27,7 @@ class RaiseExcInfoTest(unittest.TestCase):
         except TwoArgException as e:
             self.assertIs(e, exc_info[1])
 
+
 class TestConfigurable(Configurable):
     @classmethod
     def configurable_base(cls):
@@ -36,13 +37,16 @@ class TestConfigurable(Configurable):
     def configurable_default(cls):
         return TestConfig1
 
+
 class TestConfig1(TestConfigurable):
     def initialize(self, a=None):
         self.a = a
 
+
 class TestConfig2(TestConfigurable):
     def initialize(self, b=None):
         self.b = b
+
 
 class ConfigurableTest(unittest.TestCase):
     def setUp(self):

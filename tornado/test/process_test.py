@@ -23,6 +23,8 @@ def skip_if_twisted():
         raise unittest.SkipTest("Process tests not compatible with TwistedIOLoop")
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
+
+
 class ProcessTest(unittest.TestCase):
     def get_app(self):
         class ProcessHandler(RequestHandler):
@@ -108,9 +110,9 @@ class ProcessTest(unittest.TestCase):
                     # Disabled because on the mac a process dying with a signal
                     # can trigger an "Application exited abnormally; send error
                     # report to Apple?" prompt.
-                    #fetch("/?signal=%d" % signal.SIGTERM, fail_ok=True)
-                    #fetch("/?signal=%d" % signal.SIGABRT, fail_ok=True)
-                    #int(fetch("/").body)
+                    # fetch("/?signal=%d" % signal.SIGTERM, fail_ok=True)
+                    # fetch("/?signal=%d" % signal.SIGABRT, fail_ok=True)
+                    # int(fetch("/").body)
 
                     # Now kill them normally so they won't be restarted
                     fetch("/?exit=0", fail_ok=True)

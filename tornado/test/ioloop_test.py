@@ -98,6 +98,7 @@ class TestIOLoop(AsyncTestCase):
         # Issue #635: add_callback() should raise a clean exception
         # if called while another thread is closing the IOLoop.
         closing = threading.Event()
+
         def target():
             other_ioloop.add_callback(other_ioloop.stop)
             other_ioloop.start()
@@ -195,6 +196,7 @@ class TestIOLoopFutures(AsyncTestCase):
 
     def test_add_future_stack_context(self):
         ready = threading.Event()
+
         def task():
             # we must wait for the ioloop callback to be scheduled before
             # the task completes to ensure that add_future adds the callback
@@ -203,9 +205,11 @@ class TestIOLoopFutures(AsyncTestCase):
             ready.wait(1)
             assert ready.isSet(), "timed out"
             raise Exception("worker")
+
         def callback(future):
             self.future = future
             raise Exception("callback")
+
         def handle_exception(typ, value, traceback):
             self.exception = value
             self.stop()

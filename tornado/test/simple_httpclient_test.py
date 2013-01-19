@@ -115,7 +115,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             url("/see_other_post", SeeOtherPostHandler),
             url("/see_other_get", SeeOtherGetHandler),
             url("/host_echo", HostEchoHandler),
-            ], gzip=True)
+        ], gzip=True)
 
     def test_singleton(self):
         # Class "constructor" reuses objects on the same IOLoop
@@ -206,7 +206,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             self.assertEqual(200, response.code)
             self.assertTrue(response.request.url.endswith("/see_other_post"))
             self.assertTrue(response.effective_url.endswith("/see_other_get"))
-            #request is the original request, is a POST still
+            # request is the original request, is a POST still
             self.assertEqual("POST", response.request.method)
 
     def test_request_timeout(self):

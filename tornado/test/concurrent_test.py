@@ -26,6 +26,7 @@ from tornado.iostream import IOStream
 from tornado.netutil import TCPServer
 from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
 
+
 class CapServer(TCPServer):
     def handle_stream(self, stream, address):
         logging.info("handle_stream")
@@ -170,7 +171,7 @@ class ClientTestMixin(object):
         @gen.engine
         def f():
             with self.assertRaisesRegexp(CapError, "already capitalized"):
-                 yield self.client.capitalize("HELLO")
+                yield self.client.capitalize("HELLO")
             self.stop()
         f()
         self.wait()

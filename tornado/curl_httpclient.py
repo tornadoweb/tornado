@@ -247,7 +247,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             starttransfer=curl.getinfo(pycurl.STARTTRANSFER_TIME),
             total=curl.getinfo(pycurl.TOTAL_TIME),
             redirect=curl.getinfo(pycurl.REDIRECT_TIME),
-            )
+        )
         try:
             info["callback"](HTTPResponse(
                 request=info["request"], code=code, headers=info["headers"],
@@ -329,7 +329,7 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.setopt(pycurl.PROXYPORT, request.proxy_port)
         if request.proxy_username:
             credentials = '%s:%s' % (request.proxy_username,
-                    request.proxy_password)
+                                     request.proxy_password)
             curl.setopt(pycurl.PROXYUSERPWD, credentials)
     else:
         curl.setopt(pycurl.PROXY, '')

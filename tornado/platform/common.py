@@ -44,7 +44,7 @@ class Waker(interface.Waker):
                 break    # success
             except socket.error as detail:
                 if (not hasattr(errno, 'WSAEADDRINUSE') or
-                    detail[0] != errno.WSAEADDRINUSE):
+                        detail[0] != errno.WSAEADDRINUSE):
                     # "Address already in use" is the only error
                     # I've seen on two WinXP Pro SP2 boxes, under
                     # Pythons 2.3.5 and 2.4.1.

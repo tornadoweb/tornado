@@ -17,6 +17,7 @@ import sys
 
 skipIfNoSSL = unittest.skipIf(ssl is None, "ssl module not present")
 
+
 class HelloHandler(RequestHandler):
     def get(self):
         self.write("Hello")
@@ -361,7 +362,7 @@ class TestIOStreamMixin(object):
                 # pypy's gc defeats moves objects, breaking the
                 # "frozen write buffer" assumption.
                 if (isinstance(server, SSLIOStream) and
-                    platform.python_implementation() == 'PyPy'):
+                        platform.python_implementation() == 'PyPy'):
                     raise unittest.SkipTest(
                         "pypy gc causes problems with openssl")
             except AttributeError:
@@ -426,6 +427,7 @@ class TestIOStreamMixin(object):
             server.read_bytes(1, lambda data: None)
             client.write(b'a')
             # Stub out read_from_fd to make it fail.
+
             def fake_read_from_fd():
                 os.close(server.socket.fileno())
                 server.__class__.read_from_fd(server)
@@ -436,6 +438,7 @@ class TestIOStreamMixin(object):
         finally:
             server.close()
             client.close()
+
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):
@@ -461,7 +464,7 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
         ssl_options = dict(
             certfile=os.path.join(os.path.dirname(__file__), 'test.crt'),
             keyfile=os.path.join(os.path.dirname(__file__), 'test.key'),
-            )
+        )
         connection = ssl.wrap_socket(connection,
                                      server_side=True,
                                      do_handshake_on_connect=False,
@@ -471,6 +474,7 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
     def _make_client_iostream(self, connection, **kwargs):
         return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
 TestIOStreamSSL = skipIfNoSSL(TestIOStreamSSL)
+
 
 class TestPipeIOStream(AsyncTestCase):
     def test_pipe_iostream(self):

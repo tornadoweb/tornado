@@ -96,7 +96,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         if self.queue:
             gen_log.debug("max_clients limit reached, request queued. "
                           "%d active, %d queued requests." % (
-                    len(self.active), len(self.queue)))
+                              len(self.active), len(self.queue)))
 
     def _process_queue(self):
         with stack_context.NullContext():
@@ -235,7 +235,7 @@ class _HTTPConnection(object):
                 self.start_time + self.request.request_timeout,
                 stack_context.wrap(self._on_timeout))
         if (self.request.validate_cert and
-            isinstance(self.stream, SSLIOStream)):
+                isinstance(self.stream, SSLIOStream)):
             match_hostname(self.stream.socket.getpeercert(),
                            # ipv6 addresses are broken (in
                            # self.parsed.hostname) until 2.7, here is
@@ -243,7 +243,7 @@ class _HTTPConnection(object):
                            # __init__
                            self.parsed_hostname)
         if (self.request.method not in self._SUPPORTED_METHODS and
-            not self.request.allow_nonstandard_methods):
+                not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
         for key in ('network_interface',
                     'proxy_host', 'proxy_port',
@@ -276,14 +276,14 @@ class _HTTPConnection(object):
                 assert self.request.body is None
         if self.request.body is not None:
             self.request.headers["Content-Length"] = str(len(
-                    self.request.body))
+                self.request.body))
         if (self.request.method == "POST" and
-            "Content-Type" not in self.request.headers):
+                "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
         if self.request.use_gzip:
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
-                (('?' + self.parsed.query) if self.parsed.query else ''))
+                   (('?' + self.parsed.query) if self.parsed.query else ''))
         request_lines = [utf8("%s %s HTTP/1.1" % (self.request.method,
                                                   req_path))]
         for k, v in self.request.headers.get_all():
@@ -313,8 +313,8 @@ class _HTTPConnection(object):
         if self.final_callback:
             gen_log.warning("uncaught exception", exc_info=(typ, value, tb))
             self._run_callback(HTTPResponse(self.request, 599, error=value,
-                                request_time=self.io_loop.time() - self.start_time,
-                                ))
+                                            request_time=self.io_loop.time() - self.start_time,
+                                            ))
 
             if hasattr(self, "stream"):
                 self.stream.close()
@@ -377,14 +377,14 @@ class _HTTPConnection(object):
             # These response codes never have bodies
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
             if ("Transfer-Encoding" in self.headers or
-                content_length not in (None, 0)):
+                    content_length not in (None, 0)):
                 raise ValueError("Response with code %d should not have body" %
                                  self.code)
             self._on_body(b"")
             return
 
         if (self.request.use_gzip and
-            self.headers.get("Content-Encoding") == "gzip"):
+                self.headers.get("Content-Encoding") == "gzip"):
             self._decompressor = GzipDecompressor()
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
@@ -402,7 +402,7 @@ class _HTTPConnection(object):
                                    self.request)
         if (self.request.follow_redirects and
             self.request.max_redirects > 0 and
-            self.code in (301, 302, 303, 307)):
+                self.code in (301, 302, 303, 307)):
             assert isinstance(self.request, _RequestProxy)
             new_request = copy.copy(self.request.request)
             new_request.url = urlparse.urljoin(self.request.url,
@@ -474,7 +474,7 @@ class _HTTPConnection(object):
             self._on_body(b''.join(self.chunks))
         else:
             self.stream.read_bytes(length + 2,  # chunk ends with \r\n
-                              self._on_chunk_data)
+                                   self._on_chunk_data)
 
     def _on_chunk_data(self, data):
         assert data[-2:] == b"\r\n"
@@ -538,15 +538,15 @@ def match_hostname(cert, hostname):
                     dnsnames.append(value)
     if len(dnsnames) > 1:
         raise CertificateError("hostname %r "
-            "doesn't match either of %s"
-            % (hostname, ', '.join(map(repr, dnsnames))))
+                               "doesn't match either of %s"
+                               % (hostname, ', '.join(map(repr, dnsnames))))
     elif len(dnsnames) == 1:
         raise CertificateError("hostname %r "
-            "doesn't match %r"
-            % (hostname, dnsnames[0]))
+                               "doesn't match %r"
+                               % (hostname, dnsnames[0]))
     else:
         raise CertificateError("no appropriate commonName or "
-            "subjectAltName fields were found")
+                               "subjectAltName fields were found")
 
 if __name__ == "__main__":
     AsyncHTTPClient.configure(SimpleAsyncHTTPClient)

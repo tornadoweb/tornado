@@ -325,12 +325,12 @@ class WebSocketProtocol76(WebSocketProtocol):
             "Sec-WebSocket-Location: %(scheme)s://%(host)s%(uri)s\r\n"
             "%(subprotocol)s"
             "\r\n" % (dict(
-                    version=tornado.version,
-                    origin=self.request.headers["Origin"],
-                    scheme=scheme,
-                    host=self.request.host,
-                    uri=self.request.uri,
-                    subprotocol=subprotocol_header))))
+            version=tornado.version,
+            origin=self.request.headers["Origin"],
+            scheme=scheme,
+            host=self.request.host,
+            uri=self.request.uri,
+            subprotocol=subprotocol_header))))
         self.stream.read_bytes(8, self._handle_challenge)
 
     def challenge_response(self, challenge):
@@ -407,7 +407,7 @@ class WebSocketProtocol76(WebSocketProtocol):
     def _on_end_delimiter(self, frame):
         if not self.client_terminated:
             self.async_callback(self.handler.on_message)(
-                    frame[:-1].decode("utf-8", "replace"))
+                frame[:-1].decode("utf-8", "replace"))
         if not self.client_terminated:
             self._receive_message()
 
@@ -486,7 +486,7 @@ class WebSocketProtocol13(WebSocketProtocol):
     def _challenge_response(self):
         sha1 = hashlib.sha1()
         sha1.update(tornado.escape.utf8(
-                self.request.headers.get("Sec-Websocket-Key")))
+            self.request.headers.get("Sec-Websocket-Key")))
         sha1.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")  # Magic value
         return tornado.escape.native_str(base64.b64encode(sha1.digest()))
 
