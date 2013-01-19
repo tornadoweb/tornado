@@ -25,6 +25,7 @@ def skip_if_twisted():
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
 
 
+@skipIfNonUnix
 class ProcessTest(unittest.TestCase):
     def get_app(self):
         class ProcessHandler(RequestHandler):
@@ -129,9 +130,9 @@ class ProcessTest(unittest.TestCase):
             except Exception:
                 logging.error("exception in child process %d", id, exc_info=True)
                 raise
-ProcessTest = skipIfNonUnix(ProcessTest)
 
 
+@skipIfNonUnix
 class SubprocessTest(AsyncTestCase):
     def test_subprocess(self):
         subproc = Subprocess([sys.executable, '-u', '-i'],
@@ -177,4 +178,3 @@ class SubprocessTest(AsyncTestCase):
         ret = self.wait()
         self.assertEqual(subproc.returncode, ret)
         self.assertEqual(ret, -signal.SIGTERM)
-SubprocessTest = skipIfNonUnix(SubprocessTest)

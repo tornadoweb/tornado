@@ -129,8 +129,6 @@ def load_translations(directory):
             f = open(full_path, "r", encoding="utf-8")
         except TypeError:
             # python 2: files return byte strings, which are decoded below.
-            # Once we drop python 2.5, this could use io.open instead
-            # on both 2 and 3.
             f = open(full_path, "r")
         _translations[locale] = {}
         for i, row in enumerate(csv.reader(f)):

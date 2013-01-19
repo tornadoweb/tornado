@@ -259,10 +259,7 @@ class HTTPConnection(object):
             headers = httputil.HTTPHeaders.parse(data[eol:])
 
             # HTTPRequest wants an IP, not a full socket address
-            if getattr(self.stream.socket, 'family', socket.AF_INET) in (
-                    socket.AF_INET, socket.AF_INET6):
-                # Jython 2.5.2 doesn't have the socket.family attribute,
-                # so just assume IP in that case.
+            if self.stream.socket.family in (socket.AF_INET, socket.AF_INET6):
                 remote_ip = self.address[0]
             else:
                 # Unix (or other) socket; fake the remote address

@@ -357,18 +357,13 @@ class TestIOStreamMixin(object):
         # seconds.
         server, client = self.make_iostream_pair()
         try:
-            try:
-                # This test fails on pypy with ssl.  I think it's because
-                # pypy's gc defeats moves objects, breaking the
-                # "frozen write buffer" assumption.
-                if (isinstance(server, SSLIOStream) and
-                        platform.python_implementation() == 'PyPy'):
-                    raise unittest.SkipTest(
-                        "pypy gc causes problems with openssl")
-            except AttributeError:
-                # python 2.5 didn't have platform.python_implementation,
-                # but there was no pypy for 2.5
-                pass
+            # This test fails on pypy with ssl.  I think it's because
+            # pypy's gc defeats moves objects, breaking the
+            # "frozen write buffer" assumption.
+            if (isinstance(server, SSLIOStream) and
+                    platform.python_implementation() == 'PyPy'):
+                raise unittest.SkipTest(
+                    "pypy gc causes problems with openssl")
             NUM_KB = 4096
             for i in range(NUM_KB):
                 client.write(b"A" * 1024)
@@ -445,10 +440,10 @@ class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
         return IOStream(socket.socket(), io_loop=self.io_loop)
 
 
+@skipIfNoSSL
 class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase):
     def _make_client_iostream(self):
         return SSLIOStream(socket.socket(), io_loop=self.io_loop)
-TestIOStreamWebHTTPS = skipIfNoSSL(TestIOStreamWebHTTPS)
 
 
 class TestIOStream(TestIOStreamMixin, AsyncTestCase):
@@ -459,6 +454,7 @@ class TestIOStream(TestIOStreamMixin, AsyncTestCase):
         return IOStream(connection, io_loop=self.io_loop, **kwargs)
 
 
+@skipIfNoSSL
 class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
         ssl_options = dict(
@@ -473,9 +469,9 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
 
     def _make_client_iostream(self, connection, **kwargs):
         return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
-TestIOStreamSSL = skipIfNoSSL(TestIOStreamSSL)
 
 
+@skipIfNonUnix
 class TestPipeIOStream(AsyncTestCase):
     def test_pipe_iostream(self):
         r, w = os.pipe()
@@ -501,4 +497,3 @@ class TestPipeIOStream(AsyncTestCase):
         self.assertEqual(data, b"ld")
 
         rs.close()
-TestPipeIOStream = skipIfNonUnix(TestPipeIOStream)

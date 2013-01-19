@@ -87,6 +87,7 @@ class ReactorTestCase(unittest.TestCase):
         restore_signal_handlers(self._saved_signals)
 
 
+@skipIfNoTwisted
 class ReactorWhenRunningTest(ReactorTestCase):
     def test_whenRunning(self):
         self._whenRunningCalled = False
@@ -103,9 +104,9 @@ class ReactorWhenRunningTest(ReactorTestCase):
 
     def anotherWhenRunningCallback(self):
         self._anotherWhenRunningCalled = True
-ReactorWhenRunningTest = skipIfNoTwisted(ReactorWhenRunningTest)
 
 
+@skipIfNoTwisted
 class ReactorCallLaterTest(ReactorTestCase):
     def test_callLater(self):
         self._laterCalled = False
@@ -122,9 +123,9 @@ class ReactorCallLaterTest(ReactorTestCase):
         self._laterCalled = True
         self._called = self._reactor.seconds()
         self._reactor.stop()
-ReactorCallLaterTest = skipIfNoTwisted(ReactorCallLaterTest)
 
 
+@skipIfNoTwisted
 class ReactorTwoCallLaterTest(ReactorTestCase):
     def test_callLater(self):
         self._later1Called = False
@@ -151,9 +152,9 @@ class ReactorTwoCallLaterTest(ReactorTestCase):
         self._later2Called = True
         self._called2 = self._reactor.seconds()
         self._reactor.stop()
-ReactorTwoCallLaterTest = skipIfNoTwisted(ReactorTwoCallLaterTest)
 
 
+@skipIfNoTwisted
 class ReactorCallFromThreadTest(ReactorTestCase):
     def setUp(self):
         super(ReactorCallFromThreadTest, self).setUp()
@@ -180,9 +181,9 @@ class ReactorCallFromThreadTest(ReactorTestCase):
     def testCallFromThread(self):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
-ReactorCallFromThreadTest = skipIfNoTwisted(ReactorCallFromThreadTest)
 
 
+@skipIfNoTwisted
 class ReactorCallInThread(ReactorTestCase):
     def setUp(self):
         super(ReactorCallInThread, self).setUp()
@@ -198,7 +199,6 @@ class ReactorCallInThread(ReactorTestCase):
     def testCallInThread(self):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
-ReactorCallInThread = skipIfNoTwisted(ReactorCallInThread)
 
 
 class Reader(object):
@@ -250,6 +250,7 @@ if have_twisted:
     Writer = implementer(IWriteDescriptor)(Writer)
 
 
+@skipIfNoTwisted
 class ReactorReaderWriterTest(ReactorTestCase):
     def _set_nonblocking(self, fd):
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -331,12 +332,12 @@ class ReactorReaderWriterTest(ReactorTestCase):
     def testNoWriter(self):
         self._reactor.callWhenRunning(self._testNoWriter)
         self._reactor.run()
-ReactorReaderWriterTest = skipIfNoTwisted(ReactorReaderWriterTest)
 
 # Test various combinations of twisted and tornado http servers,
 # http clients, and event loop interfaces.
 
 
+@skipIfNoTwisted
 class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.saved_signals = save_signal_handlers()
@@ -443,7 +444,6 @@ class CompatibilityTests(unittest.TestCase):
         response = self.twisted_fetch(
             'http://localhost:%d' % self.tornado_port, self.run_reactor)
         self.assertEqual(response, 'Hello from tornado!')
-CompatibilityTests = skipIfNoTwisted(CompatibilityTests)
 
 
 if have_twisted:
@@ -467,8 +467,6 @@ if have_twisted:
             "test_lostFileDescriptor",  # incompatible with epoll and kqueue
         ],
         'twisted.internet.test.test_process.ProcessTestsBuilder': [
-            # Doesn't work on python 2.5
-            'test_systemCallUninterruptedByChildExit',
         ],
         # Process tests appear to work on OSX 10.7, but not 10.6
         #'twisted.internet.test.test_process.PTYProcessTestsBuilder': [

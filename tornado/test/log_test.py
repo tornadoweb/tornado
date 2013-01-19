@@ -32,11 +32,6 @@ from tornado.util import u, bytes_type, basestring_type
 
 @contextlib.contextmanager
 def ignore_bytes_warning():
-    if not hasattr(warnings, 'catch_warnings'):
-        # python 2.5 doesn't have catch_warnings, but it doesn't have
-        # BytesWarning either so there's nothing to catch.
-        yield
-        return
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', category=BytesWarning)
         yield

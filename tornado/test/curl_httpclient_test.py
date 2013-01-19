@@ -14,18 +14,16 @@ except ImportError:
 if pycurl is not None:
     from tornado.curl_httpclient import CurlAsyncHTTPClient
 
-
+@unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
         client = CurlAsyncHTTPClient(io_loop=self.io_loop)
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
-CurlHTTPClientCommonTestCase = unittest.skipIf(pycurl is None,
-                                               "pycurl module not present")(
-                                                   CurlHTTPClientCommonTestCase)
 
 
+@unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(CurlHTTPClientTestCase, self).setUp()
@@ -49,6 +47,3 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
         self.wait()
         self.assertEqual(1, len(exc_info))
         self.assertIs(exc_info[0][0], ZeroDivisionError)
-CurlHTTPClientTestCase = unittest.skipIf(pycurl is None,
-                                         "pycurl module not present")(
-                                             CurlHTTPClientTestCase)

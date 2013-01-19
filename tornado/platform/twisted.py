@@ -84,6 +84,7 @@ from tornado.stack_context import NullContext, wrap
 from tornado.ioloop import IOLoop
 
 
+@implementer(IDelayedCall)
 class TornadoDelayedCall(object):
     """DelayedCall object for Tornado."""
     def __init__(self, reactor, seconds, f, *args, **kw):
@@ -124,10 +125,9 @@ class TornadoDelayedCall(object):
 
     def active(self):
         return self._active
-# Fake class decorator for python 2.5 compatibility
-TornadoDelayedCall = implementer(IDelayedCall)(TornadoDelayedCall)
 
 
+@implementer(IReactorTime, IReactorFDSet)
 class TornadoReactor(PosixReactorBase):
     """Twisted reactor built on the Tornado IOLoop.
 
@@ -315,7 +315,6 @@ class TornadoReactor(PosixReactorBase):
 
     def mainLoop(self):
         self._io_loop.start()
-TornadoReactor = implementer(IReactorTime, IReactorFDSet)(TornadoReactor)
 
 
 class _TestReactor(TornadoReactor):
@@ -352,6 +351,7 @@ def install(io_loop=None):
     return reactor
 
 
+@implementer(IReadDescriptor, IWriteDescriptor)
 class _FD(object):
     def __init__(self, fd, handler):
         self.fd = fd
@@ -378,7 +378,6 @@ class _FD(object):
 
     def logPrefix(self):
         return ''
-_FD = implementer(IReadDescriptor, IWriteDescriptor)(_FD)
 
 
 class TwistedIOLoop(tornado.ioloop.IOLoop):

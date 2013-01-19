@@ -98,22 +98,24 @@ class SSLTestMixin(object):
 # of SSLv23 allows it.
 
 
+@skipIfNoSSL
 class SSLv23Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv23
-SSLv23Test = skipIfNoSSL(SSLv23Test)
 
 
+@skipIfNoSSL
+@skipIfOldSSL
 class SSLv3Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv3
-SSLv3Test = skipIfNoSSL(skipIfOldSSL(SSLv3Test))
 
 
+@skipIfNoSSL
+@skipIfOldSSL
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_TLSv1
-TLSv1Test = skipIfNoSSL(skipIfOldSSL(TLSv1Test))
 
 
 class BadSSLOptionsTest(unittest.TestCase):
@@ -380,6 +382,8 @@ class ManualProtocolTest(HandlerBaseTestCase):
         self.assertEqual(self.fetch_json('/')['protocol'], 'https')
 
 
+@unittest.skipIf(not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin',
+                 "unix sockets not supported on this platform")
 class UnixSocketTest(AsyncTestCase):
     """HTTPServers can listen on Unix sockets too.
 
@@ -418,9 +422,6 @@ class UnixSocketTest(AsyncTestCase):
         self.assertEqual(body, b"Hello world")
         stream.close()
         server.stop()
-UnixSocketTest = unittest.skipIf(
-    not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin',
-    "unix sockets not supported on this platform")
 
 
 class KeepAliveTest(AsyncHTTPTestCase):

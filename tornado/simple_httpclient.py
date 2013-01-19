@@ -44,10 +44,6 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     supported.  In particular, proxies are not supported, connections
     are not reused, and callers cannot select the network interface to be
     used.
-
-    Python 2.6 or higher is required for HTTPS support.  Users of Python 2.5
-    should use the curl-based AsyncHTTPClient if HTTPS support is required.
-
     """
     def initialize(self, io_loop=None, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,

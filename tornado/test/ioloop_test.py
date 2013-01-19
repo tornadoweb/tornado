@@ -185,6 +185,7 @@ class TestIOLoopAddCallbackFromSignal(TestIOLoopAddCallback):
         self.io_loop.add_callback_from_signal(callback, *args, **kwargs)
 
 
+@unittest.skipIf(futures is None, "futures module not present")
 class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):
         with futures.ThreadPoolExecutor(1) as pool:
@@ -225,8 +226,6 @@ class TestIOLoopFutures(AsyncTestCase):
 
         self.assertEqual(self.exception.args[0], "callback")
         self.assertEqual(self.future.exception().args[0], "worker")
-TestIOLoopFutures = unittest.skipIf(
-    futures is None, "futures module not present")(TestIOLoopFutures)
 
 
 if __name__ == "__main__":

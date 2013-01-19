@@ -30,6 +30,7 @@ class SyncResolverTest(AsyncTestCase, _ResolverTestMixin):
         self.resolver = Resolver(self.io_loop)
 
 
+@unittest.skipIf(futures is None, "futures module not present")
 class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(ThreadedResolverTest, self).setUp()
@@ -40,5 +41,3 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def tearDown(self):
         self.executor.shutdown()
         super(ThreadedResolverTest, self).tearDown()
-ThreadedResolverTest = unittest.skipIf(
-    futures is None, "futures module not present")(ThreadedResolverTest)
