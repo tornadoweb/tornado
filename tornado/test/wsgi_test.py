@@ -76,7 +76,7 @@ class WSGIConnectionTest(httpserver_test.HTTPConnectionTest):
 
 def wrap_web_tests():
     result = {}
-    for cls in web_test.wsgi_safe:
+    for cls in web_test.wsgi_safe_tests:
         class WSGIWrappedTest(cls):
             def get_app(self):
                 self.app = WSGIApplication(self.get_handlers(),

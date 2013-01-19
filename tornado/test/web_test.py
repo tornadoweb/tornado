@@ -18,8 +18,11 @@ import re
 import socket
 import sys
 
-wsgi_safe = []
+wsgi_safe_tests = []
 
+def wsgi_safe(cls):
+    wsgi_safe_tests.append(cls)
+    return cls
 
 class WebTestCase(AsyncHTTPTestCase):
     """Base class for web tests that also supports WSGI mode.
@@ -475,6 +478,7 @@ class GetArgumentHandler(RequestHandler):
 
 
 # This test is shared with wsgi_test.py
+@wsgi_safe
 class WSGISafeWebTest(WebTestCase):
     COOKIE_SECRET = "WebTest.COOKIE_SECRET"
 
@@ -623,7 +627,6 @@ js_embed()
         response = self.fetch('/get_argument')
         self.assertNotIn('Accept-Encoding', response.headers.get('Vary', ''))
         self.assertNotIn('gzip', response.headers.get('Content-Encoding', ''))
-wsgi_safe.append(WSGISafeWebTest)
 
 
 class NonWSGIWebTests(WebTestCase):
@@ -640,6 +643,7 @@ class NonWSGIWebTests(WebTestCase):
         self.assertEqual(response.body, b"ok")
 
 
+@wsgi_safe
 class ErrorResponseTest(WebTestCase):
     def get_handlers(self):
         class DefaultHandler(RequestHandler):
@@ -724,9 +728,9 @@ class ErrorResponseTest(WebTestCase):
             response = self.fetch("/failed_write_error")
             self.assertEqual(response.code, 500)
             self.assertEqual(b"", response.body)
-wsgi_safe.append(ErrorResponseTest)
 
 
+@wsgi_safe
 class StaticFileTest(WebTestCase):
     def get_handlers(self):
         class StaticUrlHandler(RequestHandler):
@@ -806,9 +810,9 @@ class StaticFileTest(WebTestCase):
         response2 = self.fetch("/static/robots.txt", headers={
             'If-None-Match': response1.headers['Etag']})
         self.assertEqual(response2.code, 304)
-wsgi_safe.append(StaticFileTest)
 
 
+@wsgi_safe
 class CustomStaticFileTest(WebTestCase):
     def get_handlers(self):
         class MyStaticFileHandler(StaticFileHandler):
@@ -853,9 +857,9 @@ class CustomStaticFileTest(WebTestCase):
         with ExpectLog(gen_log, "Could not open static file", required=False):
             response = self.fetch("/static_url/foo.txt")
             self.assertEqual(response.body, b"/static/foo.42.txt")
-wsgi_safe.append(CustomStaticFileTest)
 
 
+@wsgi_safe
 class HostMatchingTest(WebTestCase):
     class Handler(RequestHandler):
         def initialize(self, reply):
@@ -888,9 +892,9 @@ class HostMatchingTest(WebTestCase):
         self.assertEqual(response.body, b"[1]")
         response = self.fetch("/baz", headers={'Host': 'www.example.com'})
         self.assertEqual(response.body, b"[2]")
-wsgi_safe.append(HostMatchingTest)
 
 
+@wsgi_safe
 class NamedURLSpecGroupsTest(WebTestCase):
     def get_handlers(self):
         class EchoHandler(RequestHandler):
@@ -906,9 +910,9 @@ class NamedURLSpecGroupsTest(WebTestCase):
 
         response = self.fetch("/unicode/bar")
         self.assertEqual(response.body, b"bar")
-wsgi_safe.append(NamedURLSpecGroupsTest)
 
 
+@wsgi_safe
 class ClearHeaderTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -921,9 +925,9 @@ class ClearHeaderTest(SimpleHandlerTestCase):
         response = self.fetch("/")
         self.assertTrue("h1" not in response.headers)
         self.assertEqual(response.headers["h2"], "bar")
-wsgi_safe.append(ClearHeaderTest)
 
 
+@wsgi_safe
 class Header304Test(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -942,9 +946,9 @@ class Header304Test(SimpleHandlerTestCase):
         self.assertTrue("Content-Language" not in response2.headers)
         # Not an entity header, but should not be added to 304s by chunking
         self.assertTrue("Transfer-Encoding" not in response2.headers)
-wsgi_safe.append(Header304Test)
 
 
+@wsgi_safe
 class StatusReasonTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -969,9 +973,9 @@ class StatusReasonTest(SimpleHandlerTestCase):
         with ExpectLog(app_log, 'Uncaught exception'):
             response = self.fetch("/?code=682")
         self.assertEqual(response.code, 500)
-wsgi_safe.append(StatusReasonTest)
 
 
+@wsgi_safe
 class DateHeaderTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -983,9 +987,9 @@ class DateHeaderTest(SimpleHandlerTestCase):
                                                  "%a, %d %b %Y %H:%M:%S GMT")
         self.assertTrue(header_date - datetime.datetime.utcnow() <
                         datetime.timedelta(seconds=2))
-wsgi_safe.append(DateHeaderTest)
 
 
+@wsgi_safe
 class RaiseWithReasonTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -1003,9 +1007,9 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
 
     def test_httperror_str(self):
         self.assertEqual(str(HTTPError(682, reason="Foo")), "HTTP 682: Foo")
-wsgi_safe.append(RaiseWithReasonTest)
 
 
+@wsgi_safe
 class ErrorHandlerXSRFTest(WebTestCase):
     def get_handlers(self):
         # note that if the handlers list is empty we get the default_host
@@ -1023,7 +1027,6 @@ class ErrorHandlerXSRFTest(WebTestCase):
     def test_404_xsrf(self):
         response = self.fetch('/404', method='POST', body='')
         self.assertEqual(response.code, 404)
-wsgi_safe.append(ErrorHandlerXSRFTest)
 
 
 class GzipTestCase(SimpleHandlerTestCase):
@@ -1052,6 +1055,7 @@ class GzipTestCase(SimpleHandlerTestCase):
                          'Accept-Language, Accept-Encoding')
 
 
+@wsgi_safe
 class PathArgsInPrepareTest(WebTestCase):
     class Handler(RequestHandler):
         def prepare(self):
@@ -1061,9 +1065,9 @@ class PathArgsInPrepareTest(WebTestCase):
             assert path == 'foo'
             self.finish()
 
-    def get_app(self):
-        return Application([('/pos/(.*)', self.Handler),
-                            ('/kw/(?P<path>.*)', self.Handler)])
+    def get_handlers(self):
+        return [('/pos/(.*)', self.Handler),
+                ('/kw/(?P<path>.*)', self.Handler)]
 
     def test_pos(self):
         response = self.fetch('/pos/foo')
