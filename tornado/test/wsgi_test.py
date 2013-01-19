@@ -14,14 +14,14 @@ class WSGIContainerTest(AsyncHTTPTestCase):
         status = "200 OK"
         response_headers = [("Content-Type", "text/plain")]
         start_response(status, response_headers)
-        return [b("Hello world!")]
+        return [b"Hello world!"]
 
     def get_app(self):
         return WSGIContainer(validator(self.wsgi_app))
 
     def test_simple(self):
         response = self.fetch("/")
-        self.assertEqual(response.body, b("Hello world!"))
+        self.assertEqual(response.body, b"Hello world!")
 
 
 class WSGIApplicationTest(AsyncHTTPTestCase):
@@ -46,7 +46,7 @@ class WSGIApplicationTest(AsyncHTTPTestCase):
 
     def test_simple(self):
         response = self.fetch("/")
-        self.assertEqual(response.body, b("Hello world!"))
+        self.assertEqual(response.body, b"Hello world!")
 
     def test_path_quoting(self):
         response = self.fetch("/path/foo%20bar%C3%A9")

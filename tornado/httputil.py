@@ -252,24 +252,24 @@ def parse_multipart_form_data(boundary, data, arguments, files):
     # xmpp).  I think we're also supposed to handle backslash-escapes
     # here but I'll save that until we see a client that uses them
     # in the wild.
-    if boundary.startswith(b('"')) and boundary.endswith(b('"')):
+    if boundary.startswith(b'"') and boundary.endswith(b'"'):
         boundary = boundary[1:-1]
-    final_boundary_index = data.rfind(b("--") + boundary + b("--"))
+    final_boundary_index = data.rfind(b"--" + boundary + b"--")
     if final_boundary_index == -1:
         gen_log.warning("Invalid multipart/form-data: no final boundary")
         return
-    parts = data[:final_boundary_index].split(b("--") + boundary + b("\r\n"))
+    parts = data[:final_boundary_index].split(b"--" + boundary + b"\r\n")
     for part in parts:
         if not part:
             continue
-        eoh = part.find(b("\r\n\r\n"))
+        eoh = part.find(b"\r\n\r\n")
         if eoh == -1:
             gen_log.warning("multipart/form-data missing headers")
             continue
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
-        if disposition != "form-data" or not part.endswith(b("\r\n")):
+        if disposition != "form-data" or not part.endswith(b"\r\n"):
             gen_log.warning("Invalid multipart/form-data")
             continue
         value = part[eoh + 4:-2]

@@ -70,13 +70,13 @@ class MultipartFormDataTest(unittest.TestCase):
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--""").replace(b("\n"), b("\r\n"))
+--1234--""").replace(b"\n", b"\r\n")
         args = {}
         files = {}
-        parse_multipart_form_data(b("1234"), data, args, files)
+        parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
-        self.assertEqual(file["body"], b("Foo"))
+        self.assertEqual(file["body"], b"Foo")
 
     def test_unquoted_names(self):
         # quotes are optional unless special characters are present
@@ -85,13 +85,13 @@ Foo
 Content-Disposition: form-data; name=files; filename=ab.txt
 
 Foo
---1234--""").replace(b("\n"), b("\r\n"))
+--1234--""").replace(b"\n", b"\r\n")
         args = {}
         files = {}
-        parse_multipart_form_data(b("1234"), data, args, files)
+        parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
-        self.assertEqual(file["body"], b("Foo"))
+        self.assertEqual(file["body"], b"Foo")
 
     def test_special_filenames(self):
         filenames = ['a;b.txt',
@@ -113,10 +113,10 @@ Foo
             data = utf8(data.replace("\n", "\r\n"))
             args = {}
             files = {}
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b"1234", data, args, files)
             file = files["files"][0]
             self.assertEqual(file["filename"], filename)
-            self.assertEqual(file["body"], b("Foo"))
+            self.assertEqual(file["body"], b"Foo")
 
     def test_boundary_starts_and_ends_with_quotes(self):
         data = b('''\
@@ -124,24 +124,24 @@ Foo
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--''').replace(b("\n"), b("\r\n"))
+--1234--''').replace(b"\n", b"\r\n")
         args = {}
         files = {}
-        parse_multipart_form_data(b('"1234"'), data, args, files)
+        parse_multipart_form_data(b'"1234"', data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
-        self.assertEqual(file["body"], b("Foo"))
+        self.assertEqual(file["body"], b"Foo")
 
     def test_missing_headers(self):
         data = b('''\
 --1234
 
 Foo
---1234--''').replace(b("\n"), b("\r\n"))
+--1234--''').replace(b"\n", b"\r\n")
         args = {}
         files = {}
         with ExpectLog(gen_log, "multipart/form-data missing headers"):
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
     def test_invalid_content_disposition(self):
@@ -150,11 +150,11 @@ Foo
 Content-Disposition: invalid; name="files"; filename="ab.txt"
 
 Foo
---1234--''').replace(b("\n"), b("\r\n"))
+--1234--''').replace(b"\n", b"\r\n")
         args = {}
         files = {}
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
     def test_line_does_not_end_with_correct_line_break(self):
@@ -162,11 +162,11 @@ Foo
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
-Foo--1234--''').replace(b("\n"), b("\r\n"))
+Foo--1234--''').replace(b"\n", b"\r\n")
         args = {}
         files = {}
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
     def test_content_disposition_header_without_name_parameter(self):
@@ -175,11 +175,11 @@ Foo--1234--''').replace(b("\n"), b("\r\n"))
 Content-Disposition: form-data; filename="ab.txt"
 
 Foo
---1234--""").replace(b("\n"), b("\r\n"))
+--1234--""").replace(b"\n", b"\r\n")
         args = {}
         files = {}
         with ExpectLog(gen_log, "multipart/form-data value missing name"):
-            parse_multipart_form_data(b("1234"), data, args, files)
+            parse_multipart_form_data(b"1234", data, args, files)
         self.assertEqual(files, {})
 
     def test_data_after_final_boundary(self):
@@ -192,13 +192,13 @@ Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
 --1234--
-""").replace(b("\n"), b("\r\n"))
+""").replace(b"\n", b"\r\n")
         args = {}
         files = {}
-        parse_multipart_form_data(b("1234"), data, args, files)
+        parse_multipart_form_data(b"1234", data, args, files)
         file = files["files"][0]
         self.assertEqual(file["filename"], "ab.txt")
-        self.assertEqual(file["body"], b("Foo"))
+        self.assertEqual(file["body"], b"Foo")
 
 
 class HTTPHeadersTest(unittest.TestCase):

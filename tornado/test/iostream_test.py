@@ -49,34 +49,34 @@ class TestIOStreamWebMixin(object):
         stream = self._make_client_iostream()
         stream.connect(('localhost', self.get_http_port()), callback=self.stop)
         self.wait()
-        stream.write(b("GET / HTTP/1.0\r\n\r\n"))
+        stream.write(b"GET / HTTP/1.0\r\n\r\n")
 
         stream.read_until_close(self.stop)
         data = self.wait()
-        self.assertTrue(data.startswith(b("HTTP/1.0 200")))
-        self.assertTrue(data.endswith(b("Hello")))
+        self.assertTrue(data.startswith(b"HTTP/1.0 200"))
+        self.assertTrue(data.endswith(b"Hello"))
 
     def test_read_zero_bytes(self):
         self.stream = self._make_client_iostream()
         self.stream.connect(("localhost", self.get_http_port()),
                             callback=self.stop)
         self.wait()
-        self.stream.write(b("GET / HTTP/1.0\r\n\r\n"))
+        self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
 
         # normal read
         self.stream.read_bytes(9, self.stop)
         data = self.wait()
-        self.assertEqual(data, b("HTTP/1.0 "))
+        self.assertEqual(data, b"HTTP/1.0 ")
 
         # zero bytes
         self.stream.read_bytes(0, self.stop)
         data = self.wait()
-        self.assertEqual(data, b(""))
+        self.assertEqual(data, b"")
 
         # another normal read
         self.stream.read_bytes(3, self.stop)
         data = self.wait()
-        self.assertEqual(data, b("200"))
+        self.assertEqual(data, b"200")
 
         self.stream.close()
 
@@ -96,7 +96,7 @@ class TestIOStreamWebMixin(object):
         def write_callback():
             written[0] = True
             self.stop()
-        stream.write(b("GET / HTTP/1.0\r\nConnection: close\r\n\r\n"),
+        stream.write(b"GET / HTTP/1.0\r\nConnection: close\r\n\r\n",
                      callback=write_callback)
         self.assertTrue(not connected[0])
         # by the time the write has flushed, the connection callback has
@@ -108,7 +108,7 @@ class TestIOStreamWebMixin(object):
 
         stream.read_until_close(self.stop)
         data = self.wait()
-        self.assertTrue(data.endswith(b("Hello")))
+        self.assertTrue(data.endswith(b"Hello"))
 
         stream.close()
 
@@ -155,7 +155,7 @@ class TestIOStreamMixin(object):
         # Attempting to write zero bytes should run the callback without
         # going into an infinite loop.
         server, client = self.make_iostream_pair()
-        server.write(b(''), callback=self.stop)
+        server.write(b'', callback=self.stop)
         self.wait()
         # As a side effect, the stream is now listening for connection
         # close (if it wasn't already), but is not listening for writes
@@ -209,7 +209,7 @@ class TestIOStreamMixin(object):
                 # Clear ExceptionStackContext so IOStream catches error
                 with NullContext():
                     server.read_bytes(1, callback=lambda data: 1 / 0)
-                client.write(b("1"))
+                client.write(b"1")
                 self.wait()
             self.assertTrue(isinstance(server.error, ZeroDivisionError))
         finally:
@@ -232,16 +232,16 @@ class TestIOStreamMixin(object):
                 self.stop()
             server.read_bytes(6, callback=final_callback,
                               streaming_callback=streaming_callback)
-            client.write(b("1234"))
+            client.write(b"1234")
             self.wait(condition=lambda: chunks)
-            client.write(b("5678"))
+            client.write(b"5678")
             self.wait(condition=lambda: final_called)
-            self.assertEqual(chunks, [b("1234"), b("56")])
+            self.assertEqual(chunks, [b"1234", b"56"])
 
             # the rest of the last chunk is still in the buffer
             server.read_bytes(2, callback=self.stop)
             data = self.wait()
-            self.assertEqual(data, b("78"))
+            self.assertEqual(data, b"78")
         finally:
             server.close()
             client.close()
@@ -256,13 +256,13 @@ class TestIOStreamMixin(object):
                 self.stop()
             client.read_until_close(callback=callback,
                                     streaming_callback=callback)
-            server.write(b("1234"))
+            server.write(b"1234")
             self.wait()
-            server.write(b("5678"))
+            server.write(b"5678")
             self.wait()
             server.close()
             self.wait()
-            self.assertEqual(chunks, [b("1234"), b("5678"), b("")])
+            self.assertEqual(chunks, [b"1234", b"5678", b""])
         finally:
             server.close()
             client.close()
@@ -275,7 +275,7 @@ class TestIOStreamMixin(object):
         server, client = self.make_iostream_pair()
         try:
             client.set_close_callback(self.stop)
-            server.write(b("12"))
+            server.write(b"12")
             chunks = []
 
             def callback1(data):
@@ -287,7 +287,7 @@ class TestIOStreamMixin(object):
                 chunks.append(data)
             client.read_bytes(1, callback1)
             self.wait()  # stopped by close_callback
-            self.assertEqual(chunks, [b("1"), b("2")])
+            self.assertEqual(chunks, [b"1", b"2"])
         finally:
             server.close()
             client.close()
@@ -303,10 +303,10 @@ class TestIOStreamMixin(object):
         # OS socket buffer, so make it small.
         server, client = self.make_iostream_pair(read_chunk_size=256)
         try:
-            server.write(b("A") * 512)
+            server.write(b"A" * 512)
             client.read_bytes(256, self.stop)
             data = self.wait()
-            self.assertEqual(b("A") * 256, data)
+            self.assertEqual(b"A" * 256, data)
             server.close()
             # Allow the close to propagate to the client side of the
             # connection.  Using add_callback instead of add_timeout
@@ -315,7 +315,7 @@ class TestIOStreamMixin(object):
             self.wait()
             client.read_bytes(256, self.stop)
             data = self.wait()
-            self.assertEqual(b("A") * 256, data)
+            self.assertEqual(b"A" * 256, data)
         finally:
             server.close()
             client.close()
@@ -326,12 +326,12 @@ class TestIOStreamMixin(object):
         server, client = self.make_iostream_pair()
         client.set_close_callback(self.stop)
         try:
-            server.write(b("1234"))
+            server.write(b"1234")
             server.close()
             self.wait()
             client.read_until_close(self.stop)
             data = self.wait()
-            self.assertEqual(data, b("1234"))
+            self.assertEqual(data, b"1234")
         finally:
             server.close()
             client.close()
@@ -343,15 +343,15 @@ class TestIOStreamMixin(object):
         server, client = self.make_iostream_pair()
         client.set_close_callback(self.stop)
         try:
-            server.write(b("1234"))
+            server.write(b"1234")
             server.close()
             self.wait()
             streaming_data = []
             client.read_until_close(self.stop,
                                     streaming_callback=streaming_data.append)
             data = self.wait()
-            self.assertEqual(b(''), data)
-            self.assertEqual(b('').join(streaming_data), b("1234"))
+            self.assertEqual(b'', data)
+            self.assertEqual(b''.join(streaming_data), b"1234")
         finally:
             server.close()
             client.close()
@@ -376,9 +376,9 @@ class TestIOStreamMixin(object):
                 pass
             NUM_KB = 4096
             for i in range(NUM_KB):
-                client.write(b("A") * 1024)
-            client.write(b("\r\n"))
-            server.read_until(b("\r\n"), self.stop)
+                client.write(b"A" * 1024)
+            client.write(b"\r\n")
+            server.read_until(b"\r\n", self.stop)
             data = self.wait()
             self.assertEqual(len(data), NUM_KB * 1024 + 2)
         finally:
@@ -389,17 +389,17 @@ class TestIOStreamMixin(object):
         # Regression test for a bug that was introduced in 2.3
         # where the IOStream._close_callback would never be called
         # if there were pending reads.
-        OK = b("OK\r\n")
+        OK = b"OK\r\n"
         server, client = self.make_iostream_pair()
         client.set_close_callback(self.stop)
         try:
             server.write(OK)
-            client.read_until(b("\r\n"), self.stop)
+            client.read_until(b"\r\n", self.stop)
             res = self.wait()
             self.assertEqual(res, OK)
 
             server.close()
-            client.read_until(b("\r\n"), lambda x: x)
+            client.read_until(b"\r\n", lambda x: x)
             # If _close_callback (self.stop) is not called,
             # an AssertionError: Async operation timed out after 5 seconds
             # will be raised.
@@ -430,7 +430,7 @@ class TestIOStreamMixin(object):
         try:
             # Start a read that will be fullfilled asynchronously.
             server.read_bytes(1, lambda data: None)
-            client.write(b('a'))
+            client.write(b'a')
             # Stub out read_from_fd to make it fail.
             def fake_read_from_fd():
                 os.close(server.socket.fileno())
@@ -485,22 +485,22 @@ class TestPipeIOStream(AsyncTestCase):
         rs = PipeIOStream(r, io_loop=self.io_loop)
         ws = PipeIOStream(w, io_loop=self.io_loop)
 
-        ws.write(b("hel"))
-        ws.write(b("lo world"))
+        ws.write(b"hel")
+        ws.write(b"lo world")
 
-        rs.read_until(b(' '), callback=self.stop)
+        rs.read_until(b' ', callback=self.stop)
         data = self.wait()
-        self.assertEqual(data, b("hello "))
+        self.assertEqual(data, b"hello ")
 
         rs.read_bytes(3, self.stop)
         data = self.wait()
-        self.assertEqual(data, b("wor"))
+        self.assertEqual(data, b"wor")
 
         ws.close()
 
         rs.read_until_close(self.stop)
         data = self.wait()
-        self.assertEqual(data, b("ld"))
+        self.assertEqual(data, b"ld")
 
         rs.close()
 TestPipeIOStream = skipIfNonUnix(TestPipeIOStream)

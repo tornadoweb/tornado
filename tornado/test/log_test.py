@@ -42,7 +42,7 @@ def ignore_bytes_warning():
 
 
 class LogFormatterTest(unittest.TestCase):
-    LINE_RE = re.compile(b("\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)"))
+    LINE_RE = re.compile(b"\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)")
 
     def setUp(self):
         self.formatter = LogFormatter(color=False)
@@ -87,13 +87,13 @@ class LogFormatterTest(unittest.TestCase):
 
     def test_basic_logging(self):
         self.logger.error("foo")
-        self.assertEqual(self.get_output(), b("foo"))
+        self.assertEqual(self.get_output(), b"foo")
 
     def test_bytes_logging(self):
         with ignore_bytes_warning():
             # This will be "\xe9" on python 2 or "b'\xe9'" on python 3
-            self.logger.error(b("\xe9"))
-            self.assertEqual(self.get_output(), utf8(repr(b("\xe9"))))
+            self.logger.error(b"\xe9")
+            self.assertEqual(self.get_output(), utf8(repr(b"\xe9")))
 
     def test_utf8_logging(self):
         self.logger.error(u("\u00e9").encode("utf8"))

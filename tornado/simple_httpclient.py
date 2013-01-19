@@ -269,8 +269,8 @@ class _HTTPConnection(object):
             username = self.request.auth_username
             password = self.request.auth_password or ''
         if username is not None:
-            auth = utf8(username) + b(":") + utf8(password)
-            self.request.headers["Authorization"] = (b("Basic ") +
+            auth = utf8(username) + b":" + utf8(password)
+            self.request.headers["Authorization"] = (b"Basic " +
                                                      base64.b64encode(auth))
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
@@ -292,14 +292,14 @@ class _HTTPConnection(object):
         request_lines = [utf8("%s %s HTTP/1.1" % (self.request.method,
                                                   req_path))]
         for k, v in self.request.headers.get_all():
-            line = utf8(k) + b(": ") + utf8(v)
-            if b('\n') in line:
+            line = utf8(k) + b": " + utf8(v)
+            if b'\n' in line:
                 raise ValueError('Newline in header: ' + repr(line))
             request_lines.append(line)
-        self.stream.write(b("\r\n").join(request_lines) + b("\r\n\r\n"))
+        self.stream.write(b"\r\n".join(request_lines) + b"\r\n\r\n")
         if self.request.body is not None:
             self.stream.write(self.request.body)
-        self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
+        self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
 
     def _release(self):
         if self.release_callback is not None:
@@ -345,7 +345,7 @@ class _HTTPConnection(object):
         assert match
         code = int(match.group(1))
         if 100 <= code < 200:
-            self.stream.read_until_regex(b("\r?\n\r?\n"), self._on_headers)
+            self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
             return
         else:
             self.code = code
@@ -376,7 +376,7 @@ class _HTTPConnection(object):
         if self.request.method == "HEAD" or self.code == 304:
             # HEAD requests and 304 responses never have content, even
             # though they may have content-length headers
-            self._on_body(b(""))
+            self._on_body(b"")
             return
         if 100 <= self.code < 200 or self.code == 204:
             # These response codes never have bodies
@@ -385,7 +385,7 @@ class _HTTPConnection(object):
                 content_length not in (None, 0)):
                 raise ValueError("Response with code %d should not have body" %
                                  self.code)
-            self._on_body(b(""))
+            self._on_body(b"")
             return
 
         if (self.request.use_gzip and
@@ -393,7 +393,7 @@ class _HTTPConnection(object):
             self._decompressor = GzipDecompressor()
         if self.headers.get("Transfer-Encoding") == "chunked":
             self.chunks = []
-            self.stream.read_until(b("\r\n"), self._on_chunk_length)
+            self.stream.read_until(b"\r\n", self._on_chunk_length)
         elif content_length is not None:
             self.stream.read_bytes(content_length, self._on_body)
         else:
@@ -476,13 +476,13 @@ class _HTTPConnection(object):
                 # all the data has been decompressed, so we don't need to
                 # decompress again in _on_body
                 self._decompressor = None
-            self._on_body(b('').join(self.chunks))
+            self._on_body(b''.join(self.chunks))
         else:
             self.stream.read_bytes(length + 2,  # chunk ends with \r\n
                               self._on_chunk_data)
 
     def _on_chunk_data(self, data):
-        assert data[-2:] == b("\r\n")
+        assert data[-2:] == b"\r\n"
         chunk = data[:-2]
         if self._decompressor:
             chunk = self._decompressor.decompress(chunk)
@@ -490,7 +490,7 @@ class _HTTPConnection(object):
             self.request.streaming_callback(chunk)
         else:
             self.chunks.append(chunk)
-        self.stream.read_until(b("\r\n"), self._on_chunk_length)
+        self.stream.read_until(b"\r\n", self._on_chunk_length)
 
 
 # match_hostname was added to the standard library ssl module in python 3.2.

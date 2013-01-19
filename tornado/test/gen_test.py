@@ -318,7 +318,7 @@ class GenTaskHandler(RequestHandler):
         client = AsyncHTTPClient(io_loop=io_loop)
         response = yield gen.Task(client.fetch, self.get_argument('url'))
         response.rethrow()
-        self.finish(b("got response: ") + response.body)
+        self.finish(b"got response: " + response.body)
 
 
 class GenExceptionHandler(RequestHandler):
@@ -358,11 +358,11 @@ class GenWebTest(AsyncHTTPTestCase):
 
     def test_sequence_handler(self):
         response = self.fetch('/sequence')
-        self.assertEqual(response.body, b("123"))
+        self.assertEqual(response.body, b"123")
 
     def test_task_handler(self):
         response = self.fetch('/task?url=%s' % url_escape(self.get_url('/sequence')))
-        self.assertEqual(response.body, b("got response: 123"))
+        self.assertEqual(response.body, b"got response: 123")
 
     def test_exception_handler(self):
         # Make sure we get an error and not a timeout
@@ -372,4 +372,4 @@ class GenWebTest(AsyncHTTPTestCase):
 
     def test_yield_exception_handler(self):
         response = self.fetch('/yield_exception')
-        self.assertEqual(response.body, b('ok'))
+        self.assertEqual(response.body, b'ok')

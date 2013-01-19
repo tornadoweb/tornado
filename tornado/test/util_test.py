@@ -118,4 +118,4 @@ class ConfigurableTest(unittest.TestCase):
 
 class UnicodeLiteralTest(unittest.TestCase):
     def test_unicode_escapes(self):
-        self.assertEqual(utf8(u('\u00e9')), b('\xc3\xa9'))
+        self.assertEqual(utf8(u('\u00e9')), b'\xc3\xa9')

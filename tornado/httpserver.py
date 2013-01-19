@@ -183,7 +183,7 @@ class HTTPConnection(object):
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
-        self.stream.read_until(b("\r\n\r\n"), self._header_callback)
+        self.stream.read_until(b"\r\n\r\n", self._header_callback)
         self._write_callback = None
 
     def close(self):
@@ -244,7 +244,7 @@ class HTTPConnection(object):
             # Use a try/except instead of checking stream.closed()
             # directly, because in some cases the stream doesn't discover
             # that it's closed until you try to read from it.
-            self.stream.read_until(b("\r\n\r\n"), self._header_callback)
+            self.stream.read_until(b"\r\n\r\n", self._header_callback)
         except iostream.StreamClosedError:
             self.close()
 
@@ -281,7 +281,7 @@ class HTTPConnection(object):
                 if content_length > self.stream.max_buffer_size:
                     raise _BadRequestException("Content-Length too long")
                 if headers.get("Expect") == "100-continue":
-                    self.stream.write(b("HTTP/1.1 100 (Continue)\r\n\r\n"))
+                    self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
                 self.stream.read_bytes(content_length, self._on_request_body)
                 return
 

@@ -142,7 +142,7 @@ class EscapeTestCase(unittest.TestCase):
         tests = [
             ("<foo>", "&lt;foo&gt;"),
             (u("<foo>"), u("&lt;foo&gt;")),
-            (b("<foo>"), b("&lt;foo&gt;")),
+            (b"<foo>", b"&lt;foo&gt;"),
 
             ("<>&\"", "&lt;&gt;&amp;&quot;"),
             ("&amp;", "&amp;amp;"),
@@ -185,7 +185,7 @@ class EscapeTestCase(unittest.TestCase):
     def test_json_decode(self):
         # json_decode accepts both bytes and unicode, but strings it returns
         # are always unicode.
-        self.assertEqual(json_decode(b('"foo"')), u("foo"))
+        self.assertEqual(json_decode(b'"foo"'), u("foo"))
         self.assertEqual(json_decode(u('"foo"')), u("foo"))
 
         # Non-ascii bytes are interpreted as utf8
@@ -196,4 +196,4 @@ class EscapeTestCase(unittest.TestCase):
         # accept bytes as well as long as they are utf8.
         self.assertEqual(json_decode(json_encode(u("\u00e9"))), u("\u00e9"))
         self.assertEqual(json_decode(json_encode(utf8(u("\u00e9")))), u("\u00e9"))
-        self.assertRaises(UnicodeDecodeError, json_encode, b("\xe9"))
+        self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")

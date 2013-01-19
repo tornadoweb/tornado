@@ -53,7 +53,7 @@ class Waker(interface.Waker):
 
     def wake(self):
         try:
-            self.writer.write(b("x"))
+            self.writer.write(b"x")
         except IOError:
             pass
 

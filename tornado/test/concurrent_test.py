@@ -31,13 +31,13 @@ class CapServer(TCPServer):
     def handle_stream(self, stream, address):
         logging.info("handle_stream")
         self.stream = stream
-        self.stream.read_until(b("\n"), self.handle_read)
+        self.stream.read_until(b"\n", self.handle_read)
 
     def handle_read(self, data):
         logging.info("handle_read")
         data = to_unicode(data)
         if data == data.upper():
-            self.stream.write(b("error\talready capitalized\n"))
+            self.stream.write(b"error\talready capitalized\n")
         else:
             # data already has \n
             self.stream.write(utf8("ok\t%s" % data.upper()))
@@ -76,7 +76,7 @@ class ManualCapClient(BaseCapClient):
     def handle_connect(self):
         logging.info("handle_connect")
         self.stream.write(utf8(self.request_data + "\n"))
-        self.stream.read_until(b('\n'), callback=self.handle_read)
+        self.stream.read_until(b'\n', callback=self.handle_read)
 
     def handle_read(self, data):
         logging.info("handle_read")
@@ -100,7 +100,7 @@ class DecoratorCapClient(BaseCapClient):
     def handle_connect(self):
         logging.info("handle_connect")
         self.stream.write(utf8(self.request_data + "\n"))
-        self.stream.read_until(b('\n'), callback=self.handle_read)
+        self.stream.read_until(b'\n', callback=self.handle_read)
 
     def handle_read(self, data):
         logging.info("handle_read")
@@ -118,7 +118,7 @@ class GeneratorCapClient(BaseCapClient):
         yield gen.Task(stream.connect, ('127.0.0.1', self.port))
         stream.write(utf8(request_data + '\n'))
         logging.info('reading')
-        data = yield gen.Task(stream.read_until, b('\n'))
+        data = yield gen.Task(stream.read_until, b'\n')
         logging.info('returning')
         stream.close()
         callback(self.process_response(data))

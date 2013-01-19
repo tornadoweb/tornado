@@ -14,21 +14,21 @@ class TemplateTest(unittest.TestCase):
     def test_simple(self):
         template = Template("Hello {{ name }}!")
         self.assertEqual(template.generate(name="Ben"),
-                         b("Hello Ben!"))
+                         b"Hello Ben!")
 
     def test_bytes(self):
         template = Template("Hello {{ name }}!")
         self.assertEqual(template.generate(name=utf8("Ben")),
-                         b("Hello Ben!"))
+                         b"Hello Ben!")
 
     def test_expressions(self):
         template = Template("2 + 2 = {{ 2 + 2 }}")
-        self.assertEqual(template.generate(), b("2 + 2 = 4"))
+        self.assertEqual(template.generate(), b"2 + 2 = 4")
 
     def test_comment(self):
         template = Template("Hello{# TODO i18n #} {{ name }}!")
         self.assertEqual(template.generate(name=utf8("Ben")),
-                         b("Hello Ben!"))
+                         b"Hello Ben!")
 
     def test_include(self):
         loader = DictLoader({
@@ -36,7 +36,7 @@ class TemplateTest(unittest.TestCase):
                 "header.html": "header text",
                 })
         self.assertEqual(loader.load("index.html").generate(),
-                         b("header text\nbody text"))
+                         b"header text\nbody text")
 
     def test_extends(self):
         loader = DictLoader({
@@ -51,7 +51,7 @@ class TemplateTest(unittest.TestCase):
 """,
                 })
         self.assertEqual(loader.load("page.html").generate(),
-                         b("<title>page title</title>\n<body>page body</body>\n"))
+                         b"<title>page title</title>\n<body>page body</body>\n")
 
     def test_relative_load(self):
         loader = DictLoader({
@@ -60,15 +60,15 @@ class TemplateTest(unittest.TestCase):
                 "b/3.html": "ok",
                 })
         self.assertEqual(loader.load("a/1.html").generate(),
-                         b("ok"))
+                         b"ok")
 
     def test_escaping(self):
         self.assertRaises(ParseError, lambda: Template("{{"))
         self.assertRaises(ParseError, lambda: Template("{%"))
-        self.assertEqual(Template("{{!").generate(), b("{{"))
-        self.assertEqual(Template("{%!").generate(), b("{%"))
+        self.assertEqual(Template("{{!").generate(), b"{{")
+        self.assertEqual(Template("{%!").generate(), b"{%")
         self.assertEqual(Template("{{ 'expr' }} {{!jquery expr}}").generate(),
-                         b("expr {{jquery expr}}"))
+                         b"expr {{jquery expr}}")
 
     def test_unicode_template(self):
         template = Template(utf8(u("\u00e9")))
@@ -89,13 +89,13 @@ class TemplateTest(unittest.TestCase):
 
     def test_custom_namespace(self):
         loader = DictLoader({"test.html": "{{ inc(5) }}"}, namespace={"inc": lambda x: x + 1})
-        self.assertEqual(loader.load("test.html").generate(), b("6"))
+        self.assertEqual(loader.load("test.html").generate(), b"6")
 
     def test_apply(self):
         def upper(s):
             return s.upper()
         template = Template(utf8("{% apply upper %}foo{% end %}"))
-        self.assertEqual(template.generate(upper=upper), b("FOO"))
+        self.assertEqual(template.generate(upper=upper), b"FOO")
 
     def test_unicode_apply(self):
         def upper(s):
@@ -111,12 +111,12 @@ class TemplateTest(unittest.TestCase):
 
     def test_if(self):
         template = Template(utf8("{% if x > 4 %}yes{% else %}no{% end %}"))
-        self.assertEqual(template.generate(x=5), b("yes"))
-        self.assertEqual(template.generate(x=3), b("no"))
+        self.assertEqual(template.generate(x=5), b"yes")
+        self.assertEqual(template.generate(x=3), b"no")
 
     def test_if_empty_body(self):
         template = Template(utf8("{% if True %}{% else %}{% end %}"))
-        self.assertEqual(template.generate(), b(""))
+        self.assertEqual(template.generate(), b"")
 
     def test_try(self):
         template = Template(utf8("""{% try %}
@@ -125,12 +125,12 @@ try{% set y = 1/x %}
 {% else %}-else
 {% finally %}-finally
 {% end %}"""))
-        self.assertEqual(template.generate(x=1), b("\ntry\n-else\n-finally\n"))
-        self.assertEqual(template.generate(x=0), b("\ntry-except\n-finally\n"))
+        self.assertEqual(template.generate(x=1), b"\ntry\n-else\n-finally\n")
+        self.assertEqual(template.generate(x=0), b"\ntry-except\n-finally\n")
 
     def test_comment_directive(self):
         template = Template(utf8("{% comment blah blah %}foo"))
-        self.assertEqual(template.generate(), b("foo"))
+        self.assertEqual(template.generate(), b"foo")
 
     def test_break_continue(self):
         template = Template(utf8("""\
@@ -145,8 +145,8 @@ try{% set y = 1/x %}
 {% end %}"""))
         result = template.generate()
         # remove extraneous whitespace
-        result = b('').join(result.split())
-        self.assertEqual(result, b("013456"))
+        result = b''.join(result.split())
+        self.assertEqual(result, b"013456")
 
     def test_break_outside_loop(self):
         try:
@@ -295,11 +295,11 @@ raw: {% raw name %}""",
         loader = DictLoader(self.templates, autoescape=None)
         name = "Bobby <table>s"
         self.assertEqual(loader.load("escaped.html").generate(name=name),
-                         b("Bobby &lt;table&gt;s"))
+                         b"Bobby &lt;table&gt;s")
         self.assertEqual(loader.load("unescaped.html").generate(name=name),
-                         b("Bobby <table>s"))
+                         b"Bobby <table>s")
         self.assertEqual(loader.load("default.html").generate(name=name),
-                         b("Bobby <table>s"))
+                         b"Bobby <table>s")
 
         self.assertEqual(loader.load("include.html").generate(name=name),
                          b("escaped: Bobby &lt;table&gt;s\n"
@@ -310,11 +310,11 @@ raw: {% raw name %}""",
         loader = DictLoader(self.templates, autoescape="xhtml_escape")
         name = "Bobby <table>s"
         self.assertEqual(loader.load("escaped.html").generate(name=name),
-                         b("Bobby &lt;table&gt;s"))
+                         b"Bobby &lt;table&gt;s")
         self.assertEqual(loader.load("unescaped.html").generate(name=name),
-                         b("Bobby <table>s"))
+                         b"Bobby <table>s")
         self.assertEqual(loader.load("default.html").generate(name=name),
-                         b("Bobby &lt;table&gt;s"))
+                         b"Bobby &lt;table&gt;s")
 
         self.assertEqual(loader.load("include.html").generate(name=name),
                          b("escaped: Bobby &lt;table&gt;s\n"
@@ -325,9 +325,9 @@ raw: {% raw name %}""",
         loader = DictLoader(self.templates)
         name = "<script>"
         self.assertEqual(loader.load("escaped_block.html").generate(name=name),
-                         b("base: &lt;script&gt;"))
+                         b"base: &lt;script&gt;")
         self.assertEqual(loader.load("unescaped_block.html").generate(name=name),
-                         b("base: <script>"))
+                         b"base: <script>")
 
     def test_extended_block(self):
         loader = DictLoader(self.templates)
@@ -335,14 +335,14 @@ raw: {% raw name %}""",
         def render(name):
             return loader.load(name).generate(name="<script>")
         self.assertEqual(render("escaped_extends_unescaped.html"),
-                         b("base: <script>"))
+                         b"base: <script>")
         self.assertEqual(render("escaped_overrides_unescaped.html"),
-                         b("extended: &lt;script&gt;"))
+                         b"extended: &lt;script&gt;")
 
         self.assertEqual(render("unescaped_extends_escaped.html"),
-                         b("base: &lt;script&gt;"))
+                         b"base: &lt;script&gt;")
         self.assertEqual(render("unescaped_overrides_escaped.html"),
-                         b("extended: <script>"))
+                         b"extended: <script>")
 
     def test_raw_expression(self):
         loader = DictLoader(self.templates)
@@ -365,7 +365,7 @@ raw: {% raw name %}""",
             return loader.load(template).generate(py_escape=py_escape,
                                                   name=name)
         self.assertEqual(render("foo.py", "<html>"),
-                         b("s = '<html>'\n"))
+                         b"s = '<html>'\n")
         self.assertEqual(render("foo.py", "';sys.exit()"),
                          b("""s = "';sys.exit()"\n"""))
         self.assertEqual(render("foo.py", ["not a string"]),

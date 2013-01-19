@@ -242,7 +242,7 @@ class WSGIContainer(object):
         app_response = self.wsgi_application(
             WSGIContainer.environ(request), start_response)
         response.extend(app_response)
-        body = b("").join(response)
+        body = b"".join(response)
         if hasattr(app_response, "close"):
             app_response.close()
         if not data:
@@ -262,10 +262,10 @@ class WSGIContainer(object):
 
         parts = [escape.utf8("HTTP/1.1 " + data["status"] + "\r\n")]
         for key, value in headers:
-            parts.append(escape.utf8(key) + b(": ") + escape.utf8(value) + b("\r\n"))
-        parts.append(b("\r\n"))
+            parts.append(escape.utf8(key) + b": " + escape.utf8(value) + b"\r\n")
+        parts.append(b"\r\n")
         parts.append(body)
-        request.write(b("").join(parts))
+        request.write(b"".join(parts))
         request.finish()
         self._log(status_code, request)
 

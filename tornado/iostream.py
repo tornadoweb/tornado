@@ -521,7 +521,7 @@ class BaseIOStream(object):
 
     def _consume(self, loc):
         if loc == 0:
-            return b("")
+            return b""
         _merge_prefix(self._read_buffer, loc)
         self._read_buffer_size -= loc
         return self._read_buffer.popleft()
@@ -905,7 +905,7 @@ def _merge_prefix(deque, size):
     if prefix:
         deque.appendleft(type(prefix[0])().join(prefix))
     if not deque:
-        deque.appendleft(b(""))
+        deque.appendleft(b"")
 
 
 def doctests():

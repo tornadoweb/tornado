@@ -158,7 +158,7 @@ class OpenIdMixin(object):
         return args
 
     def _on_authentication_verified(self, callback, response):
-        if response.error or b("is_valid:true") not in response.body:
+        if response.error or b"is_valid:true" not in response.body:
             gen_log.warning("Invalid OpenID response: %s", response.error or
                             response.body)
             callback(None)
@@ -327,7 +327,7 @@ class OAuthMixin(object):
         if response.error:
             raise Exception("Could not get request token")
         request_token = _oauth_parse_response(response.body)
-        data = (base64.b64encode(request_token["key"]) + b("|") +
+        data = (base64.b64encode(request_token["key"]) + b"|" +
                 base64.b64encode(request_token["secret"]))
         self.set_cookie("_oauth_request_token", data)
         args = dict(oauth_token=request_token["key"])
@@ -589,7 +589,7 @@ class TwitterMixin(OAuthMixin):
     def _oauth_get_user(self, access_token, callback):
         callback = self.async_callback(self._parse_user_response, callback)
         self.twitter_request(
-            "/users/show/" + escape.native_str(access_token[b("screen_name")]),
+            "/users/show/" + escape.native_str(access_token[b"screen_name"]),
             access_token=access_token, callback=callback)
 
     def _parse_user_response(self, callback, user):
@@ -1157,7 +1157,7 @@ def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
 
     key_elems = [escape.utf8(consumer_token["secret"])]
     key_elems.append(escape.utf8(token["secret"] if token else ""))
-    key = b("&").join(key_elems)
+    key = b"&".join(key_elems)
 
     hash = hmac.new(key, escape.utf8(base_string), hashlib.sha1)
     return binascii.b2a_base64(hash.digest())[:-1]
@@ -1181,7 +1181,7 @@ def _oauth10a_signature(consumer_token, method, url, parameters={}, token=None):
     base_string = "&".join(_oauth_escape(e) for e in base_elems)
     key_elems = [escape.utf8(urllib_parse.quote(consumer_token["secret"], safe='~'))]
     key_elems.append(escape.utf8(urllib_parse.quote(token["secret"], safe='~') if token else ""))
-    key = b("&").join(key_elems)
+    key = b"&".join(key_elems)
 
     hash = hmac.new(key, escape.utf8(base_string), hashlib.sha1)
     return binascii.b2a_base64(hash.digest())[:-1]
@@ -1195,9 +1195,9 @@ def _oauth_escape(val):
 
 def _oauth_parse_response(body):
     p = escape.parse_qs(body, keep_blank_values=False)
-    token = dict(key=p[b("oauth_token")][0], secret=p[b("oauth_token_secret")][0])
+    token = dict(key=p[b"oauth_token"][0], secret=p[b"oauth_token_secret"][0])
 
     # Add the extra parameters the Provider included to the token
-    special = (b("oauth_token"), b("oauth_token_secret"))
+    special = (b"oauth_token", b"oauth_token_secret")
     token.update((k, p[k][0]) for k in p if k not in special)
     return token

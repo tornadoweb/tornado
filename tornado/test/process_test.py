@@ -138,19 +138,19 @@ class SubprocessTest(AsyncTestCase):
                              stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
                              io_loop=self.io_loop)
         self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
-        subproc.stdout.read_until(b('>>> '), self.stop)
+        subproc.stdout.read_until(b'>>> ', self.stop)
         self.wait()
-        subproc.stdin.write(b("print('hello')\n"))
-        subproc.stdout.read_until(b('\n'), self.stop)
+        subproc.stdin.write(b"print('hello')\n")
+        subproc.stdout.read_until(b'\n', self.stop)
         data = self.wait()
-        self.assertEqual(data, b("hello\n"))
+        self.assertEqual(data, b"hello\n")
 
-        subproc.stdout.read_until(b(">>> "), self.stop)
+        subproc.stdout.read_until(b">>> ", self.stop)
         self.wait()
-        subproc.stdin.write(b("raise SystemExit\n"))
+        subproc.stdin.write(b"raise SystemExit\n")
         subproc.stdout.read_until_close(self.stop)
         data = self.wait()
-        self.assertEqual(data, b(""))
+        self.assertEqual(data, b"")
 
     def test_sigchild(self):
         # Twisted's SIGCHLD handler and Subprocess's conflict with each other.

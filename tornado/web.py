@@ -576,13 +576,13 @@ class RequestHandler(object):
             js = ''.join('<script src="' + escape.xhtml_escape(p) +
                          '" type="text/javascript"></script>'
                          for p in paths)
-            sloc = html.rindex(b('</body>'))
-            html = html[:sloc] + utf8(js) + b('\n') + html[sloc:]
+            sloc = html.rindex(b'</body>')
+            html = html[:sloc] + utf8(js) + b'\n' + html[sloc:]
         if js_embed:
-            js = b('<script type="text/javascript">\n//<![CDATA[\n') + \
-                b('\n').join(js_embed) + b('\n//]]>\n</script>')
-            sloc = html.rindex(b('</body>'))
-            html = html[:sloc] + js + b('\n') + html[sloc:]
+            js = b'<script type="text/javascript">\n//<![CDATA[\n' + \
+                b'\n'.join(js_embed) + b'\n//]]>\n</script>'
+            sloc = html.rindex(b'</body>')
+            html = html[:sloc] + js + b'\n' + html[sloc:]
         if css_files:
             paths = []
             unique_paths = set()
@@ -595,19 +595,19 @@ class RequestHandler(object):
             css = ''.join('<link href="' + escape.xhtml_escape(p) + '" '
                           'type="text/css" rel="stylesheet"/>'
                           for p in paths)
-            hloc = html.index(b('</head>'))
-            html = html[:hloc] + utf8(css) + b('\n') + html[hloc:]
+            hloc = html.index(b'</head>')
+            html = html[:hloc] + utf8(css) + b'\n' + html[hloc:]
         if css_embed:
-            css = b('<style type="text/css">\n') + b('\n').join(css_embed) + \
-                b('\n</style>')
-            hloc = html.index(b('</head>'))
-            html = html[:hloc] + css + b('\n') + html[hloc:]
+            css = b'<style type="text/css">\n' + b'\n'.join(css_embed) + \
+                b'\n</style>'
+            hloc = html.index(b'</head>')
+            html = html[:hloc] + css + b'\n' + html[hloc:]
         if html_heads:
-            hloc = html.index(b('</head>'))
-            html = html[:hloc] + b('').join(html_heads) + b('\n') + html[hloc:]
+            hloc = html.index(b'</head>')
+            html = html[:hloc] + b''.join(html_heads) + b'\n' + html[hloc:]
         if html_bodies:
-            hloc = html.index(b('</body>'))
-            html = html[:hloc] + b('').join(html_bodies) + b('\n') + html[hloc:]
+            hloc = html.index(b'</body>')
+            html = html[:hloc] + b''.join(html_bodies) + b'\n' + html[hloc:]
         self.finish(html)
 
     def render_string(self, template_name, **kwargs):
@@ -687,7 +687,7 @@ class RequestHandler(object):
         if self.application._wsgi:
             raise Exception("WSGI applications do not support flush()")
 
-        chunk = b("").join(self._write_buffer)
+        chunk = b"".join(self._write_buffer)
         self._write_buffer = []
         if not self._headers_written:
             self._headers_written = True
@@ -699,7 +699,7 @@ class RequestHandler(object):
         else:
             for transform in self._transforms:
                 chunk = transform.transform_chunk(chunk, include_footers)
-            headers = b("")
+            headers = b""
 
         # Ignore the chunk and only write the headers for HEAD requests
         if self.request.method == "HEAD":
@@ -1087,12 +1087,12 @@ class RequestHandler(object):
         lines = [utf8(self.request.version + " " +
                       str(self._status_code) +
                       " " + reason)]
-        lines.extend([(utf8(n) + b(": ") + utf8(v)) for n, v in
+        lines.extend([(utf8(n) + b": " + utf8(v)) for n, v in
                       itertools.chain(self._headers.items(), self._list_headers)])
         if hasattr(self, "_new_cookie"):
             for cookie in self._new_cookie.values():
                 lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))
-        return b("\r\n").join(lines) + b("\r\n\r\n")
+        return b"\r\n".join(lines) + b"\r\n\r\n"
 
     def _log(self):
         """Logs the current request.
@@ -1783,9 +1783,9 @@ class GZipContentEncoding(OutputTransform):
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
         if 'Vary' in headers:
-            headers['Vary'] += b(', Accept-Encoding')
+            headers['Vary'] += b', Accept-Encoding'
         else:
-            headers['Vary'] = b('Accept-Encoding')
+            headers['Vary'] = b'Accept-Encoding'
         if self._gzipping:
             ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = (ctype in self.CONTENT_TYPES) and \
@@ -1839,9 +1839,9 @@ class ChunkedTransferEncoding(OutputTransform):
             # Don't write out empty chunks because that means END-OF-STREAM
             # with chunked encoding
             if block:
-                block = utf8("%x" % len(block)) + b("\r\n") + block + b("\r\n")
+                block = utf8("%x" % len(block)) + b"\r\n" + block + b"\r\n"
             if finishing:
-                block += b("0\r\n\r\n")
+                block += b"0\r\n\r\n"
         return block
 
 
@@ -2091,14 +2091,14 @@ def create_signed_value(secret, name, value):
     timestamp = utf8(str(int(time.time())))
     value = base64.b64encode(utf8(value))
     signature = _create_signature(secret, name, value, timestamp)
-    value = b("|").join([value, timestamp, signature])
+    value = b"|".join([value, timestamp, signature])
     return value
 
 
 def decode_signed_value(secret, name, value, max_age_days=31):
     if not value:
         return None
-    parts = utf8(value).split(b("|"))
+    parts = utf8(value).split(b"|")
     if len(parts) != 3:
         return None
     signature = _create_signature(secret, name, parts[0], parts[1])
@@ -2117,7 +2117,7 @@ def decode_signed_value(secret, name, value, max_age_days=31):
         # here instead of modifying _cookie_signature.
         gen_log.warning("Cookie timestamp in future; possible tampering %r", value)
         return None
-    if parts[1].startswith(b("0")):
+    if parts[1].startswith(b"0"):
         gen_log.warning("Tampered cookie %r", value)
         return None
     try:

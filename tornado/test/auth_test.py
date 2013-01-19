@@ -61,7 +61,7 @@ class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
         self.finish(user)
 
     def _oauth_get_user(self, access_token, callback):
-        if access_token != dict(key=b('uiop'), secret=b('5678')):
+        if access_token != dict(key=b'uiop', secret=b'5678'):
             raise Exception("incorrect access token %r" % access_token)
         callback(dict(email='foo@example.com'))
 

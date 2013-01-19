@@ -97,11 +97,11 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         response = self.fetch("/hello")
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["Content-Type"], "text/plain")
-        self.assertEqual(response.body, b("Hello world!"))
+        self.assertEqual(response.body, b"Hello world!")
         self.assertEqual(int(response.request_time), 0)
 
         response = self.fetch("/hello?name=Ben")
-        self.assertEqual(response.body, b("Hello Ben!"))
+        self.assertEqual(response.body, b"Hello Ben!")
 
     def test_streaming_callback(self):
         # streaming_callback is also tested in test_chunked
@@ -109,23 +109,23 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         response = self.fetch("/hello",
                               streaming_callback=chunks.append)
         # with streaming_callback, data goes to the callback and not response.body
-        self.assertEqual(chunks, [b("Hello world!")])
+        self.assertEqual(chunks, [b"Hello world!"])
         self.assertFalse(response.body)
 
     def test_post(self):
         response = self.fetch("/post", method="POST",
                               body="arg1=foo&arg2=bar")
         self.assertEqual(response.code, 200)
-        self.assertEqual(response.body, b("Post arg1: foo, arg2: bar"))
+        self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
 
     def test_chunked(self):
         response = self.fetch("/chunk")
-        self.assertEqual(response.body, b("asdfqwer"))
+        self.assertEqual(response.body, b"asdfqwer")
 
         chunks = []
         response = self.fetch("/chunk",
                               streaming_callback=chunks.append)
-        self.assertEqual(chunks, [b("asdf"), b("qwer")])
+        self.assertEqual(chunks, [b"asdf", b"qwer"])
         self.assertFalse(response.body)
 
     def test_chunked_close(self):
@@ -144,19 +144,19 @@ Transfer-Encoding: chunked
 2
 0
 
-""").replace(b("\n"), b("\r\n")), callback=stream.close)
+""").replace(b"\n", b"\r\n"), callback=stream.close)
 
             def accept_callback(conn, address):
                 # fake an HTTP server using chunked encoding where the final chunks
                 # and connection close all happen at once
                 stream = IOStream(conn, io_loop=self.io_loop)
-                stream.read_until(b("\r\n\r\n"),
+                stream.read_until(b"\r\n\r\n",
                                   functools.partial(write_response, stream))
             netutil.add_accept_handler(sock, accept_callback, self.io_loop)
             self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
             resp = self.wait()
             resp.rethrow()
-            self.assertEqual(resp.body, b("12"))
+            self.assertEqual(resp.body, b"12")
             self.io_loop.remove_handler(sock.fileno())
 
     def test_streaming_stack_context(self):
@@ -168,20 +168,20 @@ Transfer-Encoding: chunked
 
         def streaming_cb(chunk):
             chunks.append(chunk)
-            if chunk == b('qwer'):
+            if chunk == b'qwer':
                 1 / 0
 
         with ExceptionStackContext(error_handler):
             self.fetch('/chunk', streaming_callback=streaming_cb)
 
-        self.assertEqual(chunks, [b('asdf'), b('qwer')])
+        self.assertEqual(chunks, [b'asdf', b'qwer'])
         self.assertEqual(1, len(exc_info))
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 
     def test_basic_auth(self):
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
                                     auth_password="open sesame").body,
-                         b("Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="))
+                         b"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
 
     def test_follow_redirect(self):
         response = self.fetch("/countdown/2", follow_redirects=False)
@@ -191,18 +191,18 @@ Transfer-Encoding: chunked
         response = self.fetch("/countdown/2")
         self.assertEqual(200, response.code)
         self.assertTrue(response.effective_url.endswith("/countdown/0"))
-        self.assertEqual(b("Zero"), response.body)
+        self.assertEqual(b"Zero", response.body)
 
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
         self.http_client.fetch(url, self.stop)
         response = self.wait()
-        self.assertEqual(b("Basic ") + base64.b64encode(b("me:secret")),
+        self.assertEqual(b"Basic " + base64.b64encode(b"me:secret"),
                          response.body)
 
     def test_body_encoding(self):
         unicode_body = u("\xe9")
-        byte_body = binascii.a2b_hex(b("e9"))
+        byte_body = binascii.a2b_hex(b"e9")
 
         # unicode string in body gets converted to utf8
         response = self.fetch("/echopost", method="POST", body=unicode_body,
@@ -255,7 +255,7 @@ Transfer-Encoding: chunked
                    streaming_callback=streaming_callback)
         self.assertEqual(len(first_line), 1)
         self.assertRegexpMatches(first_line[0], 'HTTP/1.[01] 200 OK\r\n')
-        self.assertEqual(chunks, [b('asdf'), b('qwer')])
+        self.assertEqual(chunks, [b'asdf', b'qwer'])
 
     def test_header_callback_stack_context(self):
         exc_info = []
@@ -279,7 +279,7 @@ Transfer-Encoding: chunked
                                             defaults=defaults)
         client.fetch(self.get_url('/user_agent'), callback=self.stop)
         response = self.wait()
-        self.assertEqual(response.body, b('TestDefaultUserAgent'))
+        self.assertEqual(response.body, b'TestDefaultUserAgent')
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
