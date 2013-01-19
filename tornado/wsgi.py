@@ -34,13 +34,12 @@ from __future__ import absolute_import, division, print_function, with_statement
 import sys
 import time
 import tornado
-import urllib
 
 from tornado import escape
 from tornado import httputil
 from tornado.log import access_log
 from tornado import web
-from tornado.escape import native_str, utf8, parse_qs_bytes
+from tornado.escape import native_str, parse_qs_bytes
 from tornado.util import bytes_type, unicode_type
 
 try:

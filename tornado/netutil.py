@@ -21,6 +21,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import errno
 import os
 import socket
+import ssl
 import stat
 
 from tornado import process
@@ -29,11 +30,6 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.log import app_log
 from tornado.platform.auto import set_close_exec
-
-try:
-    import ssl  # Python 2.6+
-except ImportError:
-    ssl = None
 
 
 class TCPServer(object):

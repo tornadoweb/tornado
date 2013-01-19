@@ -30,10 +30,7 @@ from tornado.util import bytes_type, unicode_type, basestring_type, u
 try:
     from urllib.parse import parse_qs  # py3
 except ImportError:
-    try:
-        from urlparse import parse_qs  # Python 2.6+
-    except ImportError:
-        from cgi import parse_qs
+    from urlparse import parse_qs  # Python 2.6+
 
 try:
     import htmlentitydefs  # py2
@@ -45,30 +42,7 @@ try:
 except ImportError:
     import urllib as urllib_parse  # py2
 
-# json module is in the standard library as of python 2.6; fall back to
-# simplejson if present for older versions.
-try:
-    import json
-    assert hasattr(json, "loads") and hasattr(json, "dumps")
-    _json_decode = json.loads
-    _json_encode = json.dumps
-except Exception:
-    try:
-        import simplejson
-        _json_decode = lambda s: simplejson.loads(_unicode(s))
-        _json_encode = lambda v: simplejson.dumps(v)
-    except ImportError:
-        try:
-            # For Google AppEngine
-            from django.utils import simplejson
-            _json_decode = lambda s: simplejson.loads(_unicode(s))
-            _json_encode = lambda v: simplejson.dumps(v)
-        except ImportError:
-            def _json_decode(s):
-                raise NotImplementedError(
-                    "A JSON parser is required, e.g., simplejson at "
-                    "http://pypi.python.org/pypi/simplejson/")
-            _json_encode = _json_decode
+import json
 
 try:
     unichr
@@ -98,12 +72,12 @@ def json_encode(value):
     # the javscript.  Some json libraries do this escaping by default,
     # although python's standard library does not, so we do it here.
     # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
-    return _json_encode(recursive_unicode(value)).replace("</", "<\\/")
+    return json.dumps(recursive_unicode(value)).replace("</", "<\\/")
 
 
 def json_decode(value):
     """Returns Python objects for the given JSON string."""
-    return _json_decode(to_basestring(value))
+    return json.loads(to_basestring(value))
 
 
 def squeeze(value):

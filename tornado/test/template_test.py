@@ -5,7 +5,6 @@ import traceback
 
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
-from tornado.testing import ExpectLog
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, ObjectDict, unicode_type
 

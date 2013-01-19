@@ -27,6 +27,7 @@ This module also defines the `HTTPRequest` class which is exposed via
 from __future__ import absolute_import, division, print_function, with_statement
 
 import socket
+import ssl
 import time
 
 from tornado.escape import native_str, parse_qs_bytes
@@ -36,11 +37,6 @@ from tornado.log import gen_log
 from tornado.netutil import TCPServer
 from tornado import stack_context
 from tornado.util import bytes_type
-
-try:
-    import ssl  # Python 2.6+
-except ImportError:
-    ssl = None
 
 try:
     import Cookie  # py2

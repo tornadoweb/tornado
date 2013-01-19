@@ -17,13 +17,9 @@ import datetime
 import os
 import shutil
 import socket
+import ssl
 import sys
 import tempfile
-
-try:
-    import ssl
-except ImportError:
-    ssl = None
 
 
 class HandlerBaseTestCase(AsyncHTTPTestCase):
@@ -142,7 +138,7 @@ class BadSSLOptionsTest(unittest.TestCase):
         })
 
         # This actually works because both files exist
-        server = HTTPServer(application, ssl_options={
+        HTTPServer(application, ssl_options={
            "certfile": existing_certificate,
            "keyfile": existing_certificate
         })
@@ -431,8 +427,6 @@ class KeepAliveTest(AsyncHTTPTestCase):
     connection reuse and closing.
     """
     def get_app(self):
-        test = self
-
         class HelloHandler(RequestHandler):
             def get(self):
                 self.finish('Hello world')

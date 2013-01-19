@@ -16,10 +16,8 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
-import sys
 
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import raise_exc_info
 
 try:
     from concurrent import futures

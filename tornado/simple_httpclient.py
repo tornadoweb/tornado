@@ -17,18 +17,13 @@ import functools
 import os.path
 import re
 import socket
+import ssl
 import sys
-import time
 
 try:
     from io import BytesIO  # python 3
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
-
-try:
-    import ssl  # python 2.6+
-except ImportError:
-    ssl = None
 
 try:
     import urlparse  # py2

@@ -51,7 +51,6 @@ import binascii
 import hashlib
 import hmac
 import time
-import urllib
 import uuid
 
 from tornado import httpclient

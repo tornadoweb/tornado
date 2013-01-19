@@ -18,7 +18,6 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import urllib
 import re
 
 from tornado.escape import native_str, parse_qs_bytes, utf8

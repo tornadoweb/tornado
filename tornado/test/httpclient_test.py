@@ -6,7 +6,6 @@ import base64
 import binascii
 from contextlib import closing
 import functools
-import re
 import sys
 
 from tornado.escape import utf8

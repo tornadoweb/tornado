@@ -12,13 +12,8 @@ import logging
 import os
 import platform
 import socket
+import ssl
 import sys
-import time
-
-try:
-    import ssl
-except ImportError:
-    ssl = None
 
 skipIfNoSSL = unittest.skipIf(ssl is None, "ssl module not present")
 

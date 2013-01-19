@@ -68,7 +68,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
 import datetime
-import time
 
 from twisted.internet.posixbase import PosixReactorBase
 from twisted.internet.interfaces import \

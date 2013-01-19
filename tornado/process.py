@@ -19,7 +19,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
-import functools
+import multiprocessing
 import os
 import signal
 import subprocess
@@ -32,11 +32,6 @@ from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado import stack_context
-
-try:
-    import multiprocessing  # Python 2.6+
-except ImportError:
-    multiprocessing = None
 
 try:
     long  # py2

@@ -36,7 +36,6 @@ import logging
 import numbers
 import os
 import select
-import sys
 import threading
 import time
 import traceback
