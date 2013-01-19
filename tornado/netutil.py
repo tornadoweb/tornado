@@ -233,6 +233,16 @@ class TCPServer(object):
         except Exception:
             app_log.error("Error in connection callback", exc_info=True)
 
+def set_defer_accept(sockets):
+    """On Linux try to set TCP_DEFER_ACCEPT option for all sockets
+
+    This option helps to evenly distribute connections across processes.
+    """
+    try:
+        for sock in sockets:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_DEFER_ACCEPT, 30)
+    except AttributeError:
+        pass
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
     """Creates listening sockets bound to the given port and address.

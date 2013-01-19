@@ -34,7 +34,7 @@ from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log
-from tornado.netutil import TCPServer
+from tornado.netutil import TCPServer, set_defer_accept
 from tornado import stack_context
 from tornado.util import bytes_type
 
@@ -154,6 +154,14 @@ class HTTPServer(TCPServer):
     def handle_stream(self, stream, address):
         HTTPConnection(stream, address, self.request_callback,
                        self.no_keep_alive, self.xheaders, self.protocol)
+
+    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128):
+        super(HTTPServer, self).bind(port, address, family, backlog)
+        if self._started:
+            set_defer_accept(self._sockets.itervalues())
+        else:
+            set_defer_accept(self._pending_sockets)
+
 
 
 class _BadRequestException(Exception):
