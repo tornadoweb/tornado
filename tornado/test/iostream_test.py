@@ -15,8 +15,6 @@ import socket
 import ssl
 import sys
 
-skipIfNoSSL = unittest.skipIf(ssl is None, "ssl module not present")
-
 
 class HelloHandler(RequestHandler):
     def get(self):
@@ -440,7 +438,6 @@ class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
         return IOStream(socket.socket(), io_loop=self.io_loop)
 
 
-@skipIfNoSSL
 class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase):
     def _make_client_iostream(self):
         return SSLIOStream(socket.socket(), io_loop=self.io_loop)
@@ -454,7 +451,6 @@ class TestIOStream(TestIOStreamMixin, AsyncTestCase):
         return IOStream(connection, io_loop=self.io_loop, **kwargs)
 
 
-@skipIfNoSSL
 class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
         ssl_options = dict(

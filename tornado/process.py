@@ -41,11 +41,10 @@ except NameError:
 
 def cpu_count():
     """Returns the number of processors on this machine."""
-    if multiprocessing is not None:
-        try:
-            return multiprocessing.cpu_count()
-        except NotImplementedError:
-            pass
+    try:
+        return multiprocessing.cpu_count()
+    except NotImplementedError:
+        pass
     try:
         return os.sysconf("SC_NPROCESSORS_CONF")
     except ValueError:

@@ -45,7 +45,6 @@ class HelloWorldRequestHandler(RequestHandler):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
 
-skipIfNoSSL = unittest.skipIf(ssl is None, "ssl module not present")
 # In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
 # ClientHello messages, which are rejected by SSLv3 and TLSv1
 # servers.  Note that while the OPENSSL_VERSION_INFO was formally
@@ -98,20 +97,17 @@ class SSLTestMixin(object):
 # of SSLv23 allows it.
 
 
-@skipIfNoSSL
 class SSLv23Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv23
 
 
-@skipIfNoSSL
 @skipIfOldSSL
 class SSLv3Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv3
 
 
-@skipIfNoSSL
 @skipIfOldSSL
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
