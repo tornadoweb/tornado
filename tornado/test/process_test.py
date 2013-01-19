@@ -15,7 +15,6 @@ from tornado.process import fork_processes, task_id, Subprocess
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase
 from tornado.test.util import unittest, skipIfNonUnix
-from tornado.util import b
 from tornado.web import RequestHandler, Application
 
 

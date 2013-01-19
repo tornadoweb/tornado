@@ -5,7 +5,6 @@ from tornado.log import app_log
 from tornado.stack_context import StackContext, wrap, NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools

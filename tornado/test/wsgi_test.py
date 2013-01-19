@@ -4,7 +4,7 @@ from wsgiref.validate import validator
 from tornado.escape import json_decode
 from tornado.test.httpserver_test import TypeCheckHandler
 from tornado.testing import AsyncHTTPTestCase
-from tornado.util import b, u
+from tornado.util import u
 from tornado.web import RequestHandler
 from tornado.wsgi import WSGIApplication, WSGIContainer
 

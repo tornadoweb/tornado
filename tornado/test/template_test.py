@@ -7,7 +7,7 @@ from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
 from tornado.testing import ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b, u, bytes_type, ObjectDict, unicode_type
+from tornado.util import u, bytes_type, ObjectDict, unicode_type
 
 
 class TemplateTest(unittest.TestCase):
@@ -302,9 +302,9 @@ raw: {% raw name %}""",
                          b"Bobby <table>s")
 
         self.assertEqual(loader.load("include.html").generate(name=name),
-                         b("escaped: Bobby &lt;table&gt;s\n"
-                           "unescaped: Bobby <table>s\n"
-                           "default: Bobby <table>s\n"))
+                         b"escaped: Bobby &lt;table&gt;s\n"
+                         b"unescaped: Bobby <table>s\n"
+                         b"default: Bobby <table>s\n")
 
     def test_default_on(self):
         loader = DictLoader(self.templates, autoescape="xhtml_escape")
@@ -317,9 +317,9 @@ raw: {% raw name %}""",
                          b"Bobby &lt;table&gt;s")
 
         self.assertEqual(loader.load("include.html").generate(name=name),
-                         b("escaped: Bobby &lt;table&gt;s\n"
-                           "unescaped: Bobby <table>s\n"
-                           "default: Bobby &lt;table&gt;s\n"))
+                         b"escaped: Bobby &lt;table&gt;s\n"
+                         b"unescaped: Bobby <table>s\n"
+                         b"default: Bobby &lt;table&gt;s\n")
 
     def test_unextended_block(self):
         loader = DictLoader(self.templates)
@@ -350,8 +350,8 @@ raw: {% raw name %}""",
         def render(name):
             return loader.load(name).generate(name='<>&"')
         self.assertEqual(render("raw_expression.html"),
-                         b("expr: &lt;&gt;&amp;&quot;\n"
-                           "raw: <>&\""))
+                         b"expr: &lt;&gt;&amp;&quot;\n"
+                         b"raw: <>&\"")
 
     def test_custom_escape(self):
         loader = DictLoader({"foo.py":
@@ -367,9 +367,9 @@ raw: {% raw name %}""",
         self.assertEqual(render("foo.py", "<html>"),
                          b"s = '<html>'\n")
         self.assertEqual(render("foo.py", "';sys.exit()"),
-                         b("""s = "';sys.exit()"\n"""))
+                         b"""s = "';sys.exit()"\n""")
         self.assertEqual(render("foo.py", ["not a string"]),
-                         b("""s = "['not a string']"\n"""))
+                         b"""s = "['not a string']"\n""")
 
 
 class TemplateLoaderTest(unittest.TestCase):

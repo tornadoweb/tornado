@@ -27,7 +27,7 @@ from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
 from tornado.options import OptionParser
 from tornado.test.util import unittest
-from tornado.util import b, u, bytes_type, basestring_type
+from tornado.util import u, bytes_type, basestring_type
 
 @contextlib.contextmanager
 def ignore_bytes_warning():

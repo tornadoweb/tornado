@@ -41,7 +41,7 @@ from tornado import httputil
 from tornado.log import access_log
 from tornado import web
 from tornado.escape import native_str, utf8, parse_qs_bytes
-from tornado.util import b, bytes_type, unicode_type
+from tornado.util import bytes_type, unicode_type
 
 try:
     from io import BytesIO  # python 3

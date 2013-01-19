@@ -23,7 +23,7 @@ import re
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import b, ObjectDict
+from tornado.util import ObjectDict
 
 try:
     from httplib import responses  # py2
@@ -57,7 +57,7 @@ class HTTPHeaders(dict):
 
     >>> for (k,v) in sorted(h.get_all()):
     ...    print('%s: %s' % (k,v))
-    ... 
+    ...
     Content-Type: text/html
     Set-Cookie: A=B
     Set-Cookie: C=D

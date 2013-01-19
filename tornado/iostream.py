@@ -37,7 +37,7 @@ import re
 from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado import stack_context
-from tornado.util import b, bytes_type
+from tornado.util import bytes_type
 
 try:
     import ssl  # Python 2.6+

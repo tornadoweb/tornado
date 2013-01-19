@@ -35,7 +35,7 @@ from tornado import iostream
 from tornado.log import gen_log
 from tornado.netutil import TCPServer
 from tornado import stack_context
-from tornado.util import b, bytes_type
+from tornado.util import bytes_type
 
 try:
     import ssl  # Python 2.6+

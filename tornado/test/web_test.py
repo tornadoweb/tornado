@@ -7,7 +7,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b, u, bytes_type, ObjectDict, unicode_type
+from tornado.util import u, bytes_type, ObjectDict, unicode_type
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler
 
 import binascii
@@ -70,7 +70,7 @@ class SecureCookieTest(unittest.TestCase):
         # this string base64-encodes to '12345678'
         handler.set_secure_cookie('foo', binascii.a2b_hex(b'd76df8e7aefc'))
         cookie = handler._cookies['foo']
-        match = re.match(b(r'12345678\|([0-9]+)\|([0-9a-f]+)'), cookie)
+        match = re.match(br'12345678\|([0-9]+)\|([0-9a-f]+)', cookie)
         self.assertTrue(match)
         timestamp = match.group(1)
         sig = match.group(2)
@@ -559,11 +559,11 @@ class WSGISafeWebTest(WebTestCase):
     def test_uimodule_unescaped(self):
         response = self.fetch("/linkify")
         self.assertEqual(response.body,
-                         b("<a href=\"http://example.com\">http://example.com</a>"))
+                         b"<a href=\"http://example.com\">http://example.com</a>")
 
     def test_uimodule_resources(self):
         response = self.fetch("/uimodule_resources")
-        self.assertEqual(response.body, b("""\
+        self.assertEqual(response.body, b"""\
 <html><head><link href="/base.css" type="text/css" rel="stylesheet"/><link href="/foo.css" type="text/css" rel="stylesheet"/>
 <style type="text/css">
 .entry { margin-bottom: 1em; }
@@ -584,7 +584,7 @@ js_embed()
 //]]>
 </script>
 <script src="/analytics.js"/>
-</body></html>"""))
+</body></html>""")
 
     def test_optional_path(self):
         self.assertEqual(self.fetch_json("/optional_path/foo"),

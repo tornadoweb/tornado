@@ -209,3 +209,4 @@ In progress
   ``error`` attribute when closing it.
 * Python 2.5 is no longer supported.
 * Installation under Python 3 no longer uses ``2to3``.
+* `tornado.util.b` (which was only intended for internal use) is gone.

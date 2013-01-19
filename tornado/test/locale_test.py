@@ -4,7 +4,7 @@ import os
 import tornado.locale
 from tornado.escape import utf8
 from tornado.test.util import unittest
-from tornado.util import b, u, unicode_type
+from tornado.util import u, unicode_type
 
 
 class TranslationLoaderTest(unittest.TestCase):

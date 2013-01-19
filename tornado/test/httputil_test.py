@@ -7,7 +7,6 @@ from tornado.escape import utf8
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b
 import logging
 
 
@@ -65,12 +64,12 @@ class TestUrlConcat(unittest.TestCase):
 
 class MultipartFormDataTest(unittest.TestCase):
     def test_file_upload(self):
-        data = b("""\
+        data = b"""\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--""").replace(b"\n", b"\r\n")
+--1234--""".replace(b"\n", b"\r\n")
         args = {}
         files = {}
         parse_multipart_form_data(b"1234", data, args, files)
@@ -80,12 +79,12 @@ Foo
 
     def test_unquoted_names(self):
         # quotes are optional unless special characters are present
-        data = b("""\
+        data = b"""\
 --1234
 Content-Disposition: form-data; name=files; filename=ab.txt
 
 Foo
---1234--""").replace(b"\n", b"\r\n")
+--1234--""".replace(b"\n", b"\r\n")
         args = {}
         files = {}
         parse_multipart_form_data(b"1234", data, args, files)
@@ -119,12 +118,12 @@ Foo
             self.assertEqual(file["body"], b"Foo")
 
     def test_boundary_starts_and_ends_with_quotes(self):
-        data = b('''\
+        data = b'''\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
---1234--''').replace(b"\n", b"\r\n")
+--1234--'''.replace(b"\n", b"\r\n")
         args = {}
         files = {}
         parse_multipart_form_data(b'"1234"', data, args, files)
@@ -133,11 +132,11 @@ Foo
         self.assertEqual(file["body"], b"Foo")
 
     def test_missing_headers(self):
-        data = b('''\
+        data = b'''\
 --1234
 
 Foo
---1234--''').replace(b"\n", b"\r\n")
+--1234--'''.replace(b"\n", b"\r\n")
         args = {}
         files = {}
         with ExpectLog(gen_log, "multipart/form-data missing headers"):
@@ -145,12 +144,12 @@ Foo
         self.assertEqual(files, {})
 
     def test_invalid_content_disposition(self):
-        data = b('''\
+        data = b'''\
 --1234
 Content-Disposition: invalid; name="files"; filename="ab.txt"
 
 Foo
---1234--''').replace(b"\n", b"\r\n")
+--1234--'''.replace(b"\n", b"\r\n")
         args = {}
         files = {}
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
@@ -158,11 +157,11 @@ Foo
         self.assertEqual(files, {})
 
     def test_line_does_not_end_with_correct_line_break(self):
-        data = b('''\
+        data = b'''\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
-Foo--1234--''').replace(b"\n", b"\r\n")
+Foo--1234--'''.replace(b"\n", b"\r\n")
         args = {}
         files = {}
         with ExpectLog(gen_log, "Invalid multipart/form-data"):
@@ -170,12 +169,12 @@ Foo--1234--''').replace(b"\n", b"\r\n")
         self.assertEqual(files, {})
 
     def test_content_disposition_header_without_name_parameter(self):
-        data = b("""\
+        data = b"""\
 --1234
 Content-Disposition: form-data; filename="ab.txt"
 
 Foo
---1234--""").replace(b"\n", b"\r\n")
+--1234--""".replace(b"\n", b"\r\n")
         args = {}
         files = {}
         with ExpectLog(gen_log, "multipart/form-data value missing name"):
@@ -186,13 +185,13 @@ Foo
         # The spec requires that data after the final boundary be ignored.
         # http://www.w3.org/Protocols/rfc1341/7_2_Multipart.html
         # In practice, some libraries include an extra CRLF after the boundary.
-        data = b("""\
+        data = b"""\
 --1234
 Content-Disposition: form-data; name="files"; filename="ab.txt"
 
 Foo
 --1234--
-""").replace(b"\n", b"\r\n")
+""".replace(b"\n", b"\r\n")
         args = {}
         files = {}
         parse_multipart_form_data(b"1234", data, args, files)

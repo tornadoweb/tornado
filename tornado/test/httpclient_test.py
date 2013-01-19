@@ -16,7 +16,7 @@ from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port
 from tornado.test.util import unittest
-from tornado.util import b, u, bytes_type
+from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, url
 
 
@@ -134,7 +134,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         sock, port = bind_unused_port()
         with closing(sock):
             def write_response(stream, request_data):
-                stream.write(b("""\
+                stream.write(b"""\
 HTTP/1.1 200 OK
 Transfer-Encoding: chunked
 
@@ -144,7 +144,7 @@ Transfer-Encoding: chunked
 2
 0
 
-""").replace(b"\n", b"\r\n"), callback=stream.close)
+""".replace(b"\n", b"\r\n"), callback=stream.close)
 
             def accept_callback(conn, address):
                 # fake an HTTP server using chunked encoding where the final chunks

@@ -6,7 +6,6 @@ from tornado.log import gen_log, app_log
 from tornado.stack_context import NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipIfNonUnix
-from tornado.util import b
 from tornado.web import RequestHandler, Application
 import errno
 import logging

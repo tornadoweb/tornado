@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import sys
 
 from tornado.escape import utf8
-from tornado.util import raise_exc_info, Configurable, u, b
+from tornado.util import raise_exc_info, Configurable, u
 from tornado.test.util import unittest
 
 

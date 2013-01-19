@@ -11,7 +11,7 @@ from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b, u, bytes_type
+from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, asynchronous
 import datetime
 import os

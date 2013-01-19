@@ -19,7 +19,6 @@ from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWo
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b
 from tornado.web import RequestHandler, Application, asynchronous, url
 
 

@@ -30,7 +30,7 @@ import tornado.escape
 import tornado.web
 
 from tornado.log import gen_log, app_log
-from tornado.util import bytes_type, b
+from tornado.util import bytes_type
 
 
 class WebSocketHandler(tornado.web.RequestHandler):

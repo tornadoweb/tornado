@@ -8,7 +8,7 @@ from tornado.iostream import IOStream, SSLIOStream
 from tornado.netutil import Resolver
 from tornado.log import gen_log
 from tornado import stack_context
-from tornado.util import b, GzipDecompressor
+from tornado.util import GzipDecompressor
 
 import base64
 import collections

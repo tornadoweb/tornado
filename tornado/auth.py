@@ -58,7 +58,7 @@ from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
-from tornado.util import bytes_type, b, u, unicode_type
+from tornado.util import bytes_type, u, unicode_type
 
 try:
     import urlparse  # py2

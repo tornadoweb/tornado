@@ -81,7 +81,7 @@ from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import b, bytes_type, import_object, ObjectDict, raise_exc_info, unicode_type
+from tornado.util import bytes_type, import_object, ObjectDict, raise_exc_info, unicode_type
 
 try:
     from io import BytesIO  # python 3
@@ -320,7 +320,7 @@ class RequestHandler(object):
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request. Also cap length to
         # prevent obviously erroneous values.
-        if len(value) > 4000 or re.search(b(r"[\x00-\x1f]"), value):
+        if len(value) > 4000 or re.search(br"[\x00-\x1f]", value):
             raise ValueError("Unsafe header value %r", value)
         return value
 
@@ -494,7 +494,7 @@ class RequestHandler(object):
             assert isinstance(status, int) and 300 <= status <= 399
         self.set_status(status)
         # Remove whitespace
-        url = re.sub(b(r"[\x00-\x20]+"), "", utf8(url))
+        url = re.sub(br"[\x00-\x20]+", "", utf8(url))
         self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
                                                      url))
         self.finish()

@@ -25,7 +25,6 @@ from tornado import gen
 from tornado.iostream import IOStream
 from tornado.netutil import TCPServer
 from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
-from tornado.util import b
 
 class CapServer(TCPServer):
     def handle_stream(self, stream, address):

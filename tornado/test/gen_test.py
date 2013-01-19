@@ -4,7 +4,6 @@ from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 from tornado.log import app_log
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog
-from tornado.util import b
 from tornado.web import Application, RequestHandler, asynchronous
 
 from tornado import gen

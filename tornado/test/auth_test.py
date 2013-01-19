@@ -8,7 +8,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin
 from tornado.escape import json_decode
 from tornado.testing import AsyncHTTPTestCase
-from tornado.util import b, u
+from tornado.util import u
 from tornado.web import RequestHandler, Application, asynchronous
 
 
