@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import contextlib
 import datetime
 import functools
+import socket
 import sys
 import threading
 import time
@@ -12,7 +13,7 @@ import time
 from tornado.ioloop import IOLoop
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipIfNonUnix
 
 try:
     from concurrent import futures
@@ -127,6 +128,25 @@ class TestIOLoop(AsyncTestCase):
             # exception as a test failure.
             self.io_loop.add_callback(lambda: 1 / 0)
         self.wait()
+
+    @skipIfNonUnix  # just because socketpair is so convenient
+    def test_read_while_writeable(self):
+        # Ensure that write events don't come in while we're waiting for
+        # a read and haven't asked for writeability. (the reverse is
+        # difficult to test for)
+        client, server = socket.socketpair()
+        try:
+            def handler(fd, events):
+                self.assertEqual(events, IOLoop.READ)
+                self.stop()
+            self.io_loop.add_handler(client.fileno(), handler, IOLoop.READ)
+            self.io_loop.add_timeout(self.io_loop.time() + 0.01,
+                                     functools.partial(server.send, b'asdf'))
+            self.wait()
+            self.io_loop.remove_handler(client.fileno())
+        finally:
+            client.close()
+            server.close()
 
 
 class TestIOLoopAddCallback(AsyncTestCase):

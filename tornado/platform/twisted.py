@@ -405,15 +405,15 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         if fd in self.fds:
             raise ValueError('fd %d added twice' % fd)
         self.fds[fd] = _FD(fd, wrap(handler))
-        if events | tornado.ioloop.IOLoop.READ:
+        if events & tornado.ioloop.IOLoop.READ:
             self.fds[fd].reading = True
             self.reactor.addReader(self.fds[fd])
-        if events | tornado.ioloop.IOLoop.WRITE:
+        if events & tornado.ioloop.IOLoop.WRITE:
             self.fds[fd].writing = True
             self.reactor.addWriter(self.fds[fd])
 
     def update_handler(self, fd, events):
-        if events | tornado.ioloop.IOLoop.READ:
+        if events & tornado.ioloop.IOLoop.READ:
             if not self.fds[fd].reading:
                 self.fds[fd].reading = True
                 self.reactor.addReader(self.fds[fd])
@@ -421,7 +421,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
             if self.fds[fd].reading:
                 self.fds[fd].reading = False
                 self.reactor.removeReader(self.fds[fd])
-        if events | tornado.ioloop.IOLoop.WRITE:
+        if events & tornado.ioloop.IOLoop.WRITE:
             if not self.fds[fd].writing:
                 self.fds[fd].writing = True
                 self.reactor.addWriter(self.fds[fd])
