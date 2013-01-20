@@ -299,7 +299,7 @@ def _curl_setup_request(curl, request, buffer, headers):
                     [utf8("%s: %s" % i) for i in request.headers.get_all()])
     else:
         curl.setopt(pycurl.HTTPHEADER,
-                    [utf8("%s: %s" % i) for i in request.headers.iteritems()])
+                    [utf8("%s: %s" % i) for i in request.headers.items()])
 
     if request.header_callback:
         curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)

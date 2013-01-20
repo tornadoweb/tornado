@@ -165,7 +165,7 @@ class OpenIdMixin(object):
 
         # Make sure we got back at least an email from attribute exchange
         ax_ns = None
-        for name in self.request.arguments.keys():
+        for name in self.request.arguments:
             if name.startswith("openid.ns.") and \
                     self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
                 ax_ns = name[10:]
@@ -769,9 +769,9 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
         """Fetches the authenticated user data upon redirect."""
         # Look to see if we are doing combined OpenID/OAuth
         oauth_ns = ""
-        for name, values in self.request.arguments.iteritems():
+        for name, values in self.request.arguments.items():
             if name.startswith("openid.ns.") and \
-                    values[-1] == u("http://specs.openid.net/extensions/oauth/1.0"):
+                    values[-1] == b"http://specs.openid.net/extensions/oauth/1.0":
                 oauth_ns = name[10:]
                 break
         token = self.get_argument("openid." + oauth_ns + ".request_token", "")

@@ -72,7 +72,7 @@ def save_signal_handlers():
 
 
 def restore_signal_handlers(saved):
-    for sig, handler in saved.iteritems():
+    for sig, handler in saved.items():
         signal.signal(sig, handler)
 
 
@@ -508,7 +508,7 @@ if have_twisted:
         ],
         'twisted.internet.test.test_unix.UNIXPortTestsBuilder': [],
     }
-    for test_name, blacklist in twisted_tests.iteritems():
+    for test_name, blacklist in twisted_tests.items():
         try:
             test_class = import_object(test_name)
         except (ImportError, AttributeError):

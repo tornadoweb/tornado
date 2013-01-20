@@ -1080,3 +1080,17 @@ class PathArgsInPrepareTest(WebTestCase):
         response.rethrow()
         data = json_decode(response.body)
         self.assertEqual(data, {'args': [], 'kwargs': {'path': 'foo'}})
+
+
+@wsgi_safe
+class ClearAllCookiesTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.clear_all_cookies()
+            self.write('ok')
+
+    def test_clear_all_cookies(self):
+        response = self.fetch('/', headers={'Cookie': 'foo=bar; baz=xyzzy'})
+        set_cookies = sorted(response.headers.get_list('Set-Cookie'))
+        self.assertTrue(set_cookies[0].startswith('baz=;'))
+        self.assertTrue(set_cookies[1].startswith('foo=;'))

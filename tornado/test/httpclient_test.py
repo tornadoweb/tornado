@@ -9,7 +9,7 @@ import functools
 import sys
 
 from tornado.escape import utf8
-from tornado.httpclient import HTTPRequest, _RequestProxy
+from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy
 from tornado.iostream import IOStream
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
@@ -18,6 +18,10 @@ from tornado.test.util import unittest
 from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, url
 
+try:
+    from io import BytesIO  # python 3
+except ImportError:
+    from cStringIO import StringIO as BytesIO
 
 class HelloWorldHandler(RequestHandler):
     def get(self):
@@ -345,3 +349,12 @@ class RequestProxyTest(unittest.TestCase):
     def test_defaults_none(self):
         proxy = _RequestProxy(HTTPRequest('http://example.com/'), None)
         self.assertIs(proxy.auth_username, None)
+
+
+class HTTPResponseTestCase(unittest.TestCase):
+    def test_str(self):
+        response = HTTPResponse(HTTPRequest('http://example.com'),
+                                200, headers={}, buffer=BytesIO())
+        s = str(response)
+        self.assertTrue(s.startswith('HTTPResponse('))
+        self.assertIn('code=200', s)

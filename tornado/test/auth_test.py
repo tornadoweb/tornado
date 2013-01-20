@@ -5,7 +5,7 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
-from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin
+from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin, GoogleMixin
 from tornado.escape import json_decode
 from tornado.testing import AsyncHTTPTestCase
 from tornado.util import u
@@ -132,6 +132,26 @@ class TwitterServerShowUserHandler(RequestHandler):
         self.write(dict(screen_name=screen_name, name=screen_name.capitalize()))
 
 
+class GoogleOpenIdClientLoginHandler(RequestHandler, GoogleMixin):
+    def initialize(self, test):
+        self._OPENID_ENDPOINT = test.get_url('/openid/server/authenticate')
+
+    @asynchronous
+    def get(self):
+        if self.get_argument("openid.mode", None):
+            self.get_authenticated_user(self.on_user)
+            return
+        self.authenticate_redirect()
+
+    def on_user(self, user):
+        if user is None:
+            raise Exception("user is None")
+        self.finish(user)
+
+    def get_auth_http_client(self):
+        return self.settings['http_client']
+
+
 class AuthTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application(
@@ -151,6 +171,7 @@ class AuthTest(AsyncHTTPTestCase):
                 ('/oauth2/client/login', OAuth2ClientLoginHandler, dict(test=self)),
 
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
+                ('/google/client/openid_login', GoogleOpenIdClientLoginHandler, dict(test=self)),
 
                 # simulated servers
                 ('/openid/server/authenticate', OpenIdServerAuthenticateHandler),
@@ -261,3 +282,16 @@ class AuthTest(AsyncHTTPTestCase):
                           u('name'): u('Foo'),
                           u('screen_name'): u('foo'),
                           u('username'): u('foo')})
+
+    def test_google_redirect(self):
+        # same as test_openid_redirect
+        response = self.fetch('/google/client/openid_login', follow_redirects=False)
+        self.assertEqual(response.code, 302)
+        self.assertTrue(
+            '/openid/server/authenticate?' in response.headers['Location'])
+
+    def test_google_get_user(self):
+        response = self.fetch('/google/client/openid_login?openid.mode=blah&openid.ns.ax=http://openid.net/srv/ax/1.0&openid.ax.type.email=http://axschema.org/contact/email&openid.ax.value.email=foo@example.com', follow_redirects=False)
+        response.rethrow()
+        parsed = json_decode(response.body)
+        self.assertEqual(parsed["email"], "foo@example.com")

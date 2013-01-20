@@ -382,7 +382,7 @@ class HTTPResponse(object):
             raise self.error
 
     def __repr__(self):
-        args = ",".join("%s=%r" % i for i in self.__dict__.iteritems())
+        args = ",".join("%s=%r" % i for i in sorted(self.__dict__.items()))
         return "%s(%s)" % (self.__class__.__name__, args)
 
 
