@@ -210,3 +210,8 @@ In progress
 * Python 2.5 is no longer supported.
 * Installation under Python 3 no longer uses ``2to3``.
 * `tornado.util.b` (which was only intended for internal use) is gone.
+* Fixed a memory leak involving ``gen.engine``, `RequestHandler.flush`,
+  and clients closing connections while output is being written.
+* `tornado.httpserver.HTTPConnection` now has a `set_close_callback`
+  method that should be used instead of reaching into its ``stream``
+  attribute.

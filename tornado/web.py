@@ -141,7 +141,7 @@ class RequestHandler(object):
         self.clear()
         # Check since connection is not available in WSGI
         if getattr(self.request, "connection", None):
-            self.request.connection.stream.set_close_callback(
+            self.request.connection.set_close_callback(
                 self.on_connection_close)
         self.initialize(**kwargs)
 

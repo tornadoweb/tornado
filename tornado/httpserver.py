@@ -186,6 +186,18 @@ class HTTPConnection(object):
         self._header_callback = stack_context.wrap(self._on_headers)
         self.stream.read_until(b"\r\n\r\n", self._header_callback)
         self._write_callback = None
+        self._close_callback = None
+
+    def set_close_callback(self, callback):
+        self._close_callback = stack_context.wrap(callback)
+        self.stream.set_close_callback(self._on_connection_close)
+
+    def _on_connection_close(self):
+        callback = self._close_callback
+        self._close_callback = None
+        callback()
+        # Delete any unfinished callbacks to break up reference cycles.
+        self._write_callback = None
 
     def close(self):
         self.stream.close()

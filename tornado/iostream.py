@@ -242,6 +242,8 @@ class BaseIOStream(object):
             cb = self._close_callback
             self._close_callback = None
             self._run_callback(cb)
+            # Delete any unfinished callbacks to break up reference cycles.
+            self._read_callback = self._write_callback = None
 
     def reading(self):
         """Returns true if we are currently reading from the stream."""
