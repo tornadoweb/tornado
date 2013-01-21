@@ -23,7 +23,7 @@ from tornado.concurrent import Future, future_wrap
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
-from tornado.netutil import TCPServer
+from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
 
 

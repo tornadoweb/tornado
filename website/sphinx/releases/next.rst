@@ -215,3 +215,4 @@ In progress
 * `tornado.httpserver.HTTPConnection` now has a `set_close_callback`
   method that should be used instead of reaching into its ``stream``
   attribute.
+* `tornado.netutil.TCPServer` has moved to its own module, `tornado.tcpserver`.

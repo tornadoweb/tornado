@@ -34,7 +34,7 @@ from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log
-from tornado.netutil import TCPServer
+from tornado.tcpserver import TCPServer
 from tornado import stack_context
 from tornado.util import bytes_type
 
@@ -103,9 +103,9 @@ class HTTPServer(TCPServer):
        })
 
     `HTTPServer` initialization follows one of three patterns (the
-    initialization methods are defined on `tornado.netutil.TCPServer`):
+    initialization methods are defined on `tornado.tcpserver.TCPServer`):
 
-    1. `~tornado.netutil.TCPServer.listen`: simple single-process::
+    1. `~tornado.tcpserver.TCPServer.listen`: simple single-process::
 
             server = HTTPServer(app)
             server.listen(8888)
@@ -114,7 +114,7 @@ class HTTPServer(TCPServer):
        In many cases, `tornado.web.Application.listen` can be used to avoid
        the need to explicitly create the `HTTPServer`.
 
-    2. `~tornado.netutil.TCPServer.bind`/`~tornado.netutil.TCPServer.start`:
+    2. `~tornado.tcpserver.TCPServer.bind`/`~tornado.netutil.TCPServer.start`:
        simple multi-process::
 
             server = HTTPServer(app)
@@ -126,7 +126,7 @@ class HTTPServer(TCPServer):
        to the `HTTPServer` constructor.  `start` will always start
        the server on the default singleton `IOLoop`.
 
-    3. `~tornado.netutil.TCPServer.add_sockets`: advanced multi-process::
+    3. `~tornado.tcpserver.TCPServer.add_sockets`: advanced multi-process::
 
             sockets = tornado.netutil.bind_sockets(8888)
             tornado.process.fork_processes(0)
