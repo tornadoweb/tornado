@@ -21,6 +21,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import errno
 import os
 import socket
+import ssl
 import stat
 
 from tornado.concurrent import dummy_executor, run_on_executor
@@ -140,3 +141,53 @@ class Resolver(object):
     @run_on_executor
     def getaddrinfo(self, *args, **kwargs):
         return socket.getaddrinfo(*args, **kwargs)
+
+
+# These are the keyword arguments to ssl.wrap_socket that must be translated
+# to their SSLContext equivalents (the other arguments are still passed
+# to SSLContext.wrap_socket).
+_SSL_CONTEXT_KEYWORDS = frozenset(['ssl_version', 'certfile', 'keyfile',
+                                   'cert_reqs', 'ca_certs', 'ciphers'])
+
+def ssl_options_to_context(ssl_options):
+    """Try to Convert an ssl_options dictionary to an SSLContext object.
+
+    The ``ssl_options`` dictionary contains keywords to be passed to
+    `ssl.wrap_sockets`.  In Python 3.2+, `ssl.SSLContext` objects can
+    be used instead.  This function converts the dict form to its
+    `SSLContext` equivalent, and may be used when a component which
+    accepts both forms needs to upgrade to the `SSLContext` version
+    to use features like SNI or NPN.
+    """
+    if isinstance(ssl_options, dict):
+        assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
+    if (not hasattr(ssl, 'SSLContext') or
+        isinstance(ssl_options, ssl.SSLContext)):
+        return ssl_options
+    context = ssl.SSLContext(
+        ssl_options.get('ssl_version', ssl.PROTOCOL_SSLv23))
+    if 'certfile' in ssl_options:
+        context.load_cert_chain(ssl_options['certfile'], ssl_options.get('keyfile', None))
+    if 'cert_reqs' in ssl_options:
+        context.verify_mode = ssl_options['cert_reqs']
+    if 'ca_certs' in ssl_options:
+        context.load_verify_locations(ssl_options['ca_certs'])
+    if 'ciphers' in ssl_options:
+        context.set_ciphers(ssl_options['ciphers'])
+    return context
+
+
+def ssl_wrap_socket(socket, ssl_options, **kwargs):
+    """Returns an `ssl.SSLSocket` wrapping the given socket.
+
+    ``ssl_options`` may be either a dictionary (as accepted by
+    `ssl_options_to_context) or an `ssl.SSLContext` object.
+    Additional keyword arguments are passed to `wrap_socket`
+    (either the `SSLContext` method or the `ssl` module function
+    as appropriate).
+    """
+    context = ssl_options_to_context(ssl_options)
+    if hasattr(ssl, 'SSLContext') and isinstance(context, ssl.SSLContext):
+        return context.wrap_socket(socket, **kwargs)
+    else:
+        return ssl.wrap_socket(socket, **dict(context, **kwargs))

@@ -216,3 +216,6 @@ In progress
   method that should be used instead of reaching into its ``stream``
   attribute.
 * `tornado.netutil.TCPServer` has moved to its own module, `tornado.tcpserver`.
+* On python 3.2+, methods that take an ``ssl_options`` argument (on
+  `SSLIOStream`, `TCPServer`, and `HTTPServer`) now accept either a
+  dictionary of options or an `ssl.SSLContext` object.

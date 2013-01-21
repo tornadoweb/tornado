@@ -25,7 +25,7 @@ import ssl
 from tornado.log import app_log
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
-from tornado.netutil import bind_sockets, add_accept_handler
+from tornado.netutil import bind_sockets, add_accept_handler, ssl_wrap_socket
 from tornado import process
 
 class TCPServer(object):
@@ -89,7 +89,7 @@ class TCPServer(object):
         # connect. This doesn't verify that the keys are legitimate, but
         # the SSL module doesn't do that until there is a connected socket
         # which seems like too much work
-        if self.ssl_options is not None:
+        if self.ssl_options is not None and isinstance(self.ssl_options, dict):
             # Only certfile is required: it can contain both keys
             if 'certfile' not in self.ssl_options:
                 raise KeyError('missing key "certfile" in ssl_options')
@@ -206,10 +206,10 @@ class TCPServer(object):
         if self.ssl_options is not None:
             assert ssl, "Python 2.6+ and OpenSSL required for SSL"
             try:
-                connection = ssl.wrap_socket(connection,
+                connection = ssl_wrap_socket(connection,
+                                             self.ssl_options,
                                              server_side=True,
-                                             do_handshake_on_connect=False,
-                                             **self.ssl_options)
+                                             do_handshake_on_connect=False)
             except ssl.SSLError as err:
                 if err.args[0] == ssl.SSL_ERROR_EOF:
                     return connection.close()

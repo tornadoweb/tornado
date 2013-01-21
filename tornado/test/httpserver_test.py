@@ -8,6 +8,7 @@ from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
 from tornado.log import gen_log
+from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
@@ -112,6 +113,15 @@ class SSLv3Test(BaseSSLTest, SSLTestMixin):
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_TLSv1
+
+
+@unittest.skipIf(not hasattr(ssl, 'SSLContext'), 'ssl.SSLContext not present')
+class SSLContextTest(BaseSSLTest, SSLTestMixin):
+    def get_ssl_options(self):
+        context = ssl_options_to_context(
+            AsyncHTTPSTestCase.get_ssl_options(self))
+        assert isinstance(context, ssl.SSLContext)
+        return context
 
 
 class BadSSLOptionsTest(unittest.TestCase):

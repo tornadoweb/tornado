@@ -37,6 +37,7 @@ import re
 
 from tornado import ioloop
 from tornado.log import gen_log, app_log
+from tornado.netutil import ssl_wrap_socket
 from tornado import stack_context
 from tornado.util import bytes_type
 
@@ -711,8 +712,9 @@ class SSLIOStream(IOStream):
     def __init__(self, *args, **kwargs):
         """Creates an SSLIOStream.
 
-        If a dictionary is provided as keyword argument ssl_options,
-        it will be used as additional keyword arguments to ssl.wrap_socket.
+        The ``ssl_options`` keyword argument may either be a dictionary
+        of keywords arguments for `ssl.wrap_socket`, or an `ssl.SSLContext`
+        object.
         """
         self._ssl_options = kwargs.pop('ssl_options', {})
         super(SSLIOStream, self).__init__(*args, **kwargs)
@@ -787,9 +789,8 @@ class SSLIOStream(IOStream):
         # user callbacks are enqueued asynchronously on the IOLoop,
         # but since _handle_events calls _handle_connect immediately
         # followed by _handle_write we need this to be synchronous.
-        self.socket = ssl.wrap_socket(self.socket,
-                                      do_handshake_on_connect=False,
-                                      **self._ssl_options)
+        self.socket = ssl_wrap_socket(self.socket, self._ssl_options,
+                                      do_handshake_on_connect=False)
         super(SSLIOStream, self)._handle_connect()
 
     def read_from_fd(self):

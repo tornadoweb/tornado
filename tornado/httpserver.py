@@ -95,7 +95,8 @@ class HTTPServer(TCPServer):
     `HTTPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
     To make this server serve SSL traffic, send the ssl_options dictionary
     argument with the arguments required for the `ssl.wrap_socket` method,
-    including "certfile" and "keyfile"::
+    including "certfile" and "keyfile".  In Python 3.2+ you can pass
+    an `ssl.SSLContext` object instead of a dict::
 
        HTTPServer(applicaton, ssl_options={
            "certfile": os.path.join(data_dir, "mydomain.crt"),

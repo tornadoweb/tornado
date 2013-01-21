@@ -3,6 +3,7 @@ from tornado import netutil
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream, PipeIOStream
 from tornado.log import gen_log, app_log
+from tornado.netutil import ssl_wrap_socket
 from tornado.stack_context import NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipIfNonUnix
@@ -465,6 +466,27 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
 
     def _make_client_iostream(self, connection, **kwargs):
         return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
+
+
+# This will run some tests that are basically redundant but it's the
+# simplest way to make sure that it works to pass an SSLContext
+# instead of an ssl_options dict to the SSLIOStream constructor.
+@unittest.skipIf(not hasattr(ssl, 'SSLContext'), 'ssl.SSLContext not present')
+class TestIOStreamSSLContext(TestIOStreamMixin, AsyncTestCase):
+    def _make_server_iostream(self, connection, **kwargs):
+        context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        context.load_cert_chain(
+            os.path.join(os.path.dirname(__file__), 'test.crt'),
+            os.path.join(os.path.dirname(__file__), 'test.key'))
+        connection = ssl_wrap_socket(connection, context,
+                                     server_side=True,
+                                     do_handshake_on_connect=False)
+        return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
+
+    def _make_client_iostream(self, connection, **kwargs):
+        context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        return SSLIOStream(connection, io_loop=self.io_loop,
+                           ssl_options=context, **kwargs)
 
 
 @skipIfNonUnix
