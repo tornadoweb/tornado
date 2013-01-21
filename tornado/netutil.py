@@ -20,6 +20,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
 import os
+import re
 import socket
 import ssl
 import stat
@@ -177,7 +178,7 @@ def ssl_options_to_context(ssl_options):
     return context
 
 
-def ssl_wrap_socket(socket, ssl_options, **kwargs):
+def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
     """Returns an `ssl.SSLSocket` wrapping the given socket.
 
     ``ssl_options`` may be either a dictionary (as accepted by
@@ -188,6 +189,77 @@ def ssl_wrap_socket(socket, ssl_options, **kwargs):
     """
     context = ssl_options_to_context(ssl_options)
     if hasattr(ssl, 'SSLContext') and isinstance(context, ssl.SSLContext):
-        return context.wrap_socket(socket, **kwargs)
+        if server_hostname is not None and getattr(ssl, 'HAS_SNI'):
+            # Python doesn't have server-side SNI support so we can't
+            # really unittest this, but it can be manually tested with
+            # python3.2 -m tornado.httpclient https://sni.velox.ch
+            return context.wrap_socket(socket, server_hostname=server_hostname,
+                                       **kwargs)
+        else:
+            return context.wrap_socket(socket, **kwargs)
     else:
         return ssl.wrap_socket(socket, **dict(context, **kwargs))
+
+if hasattr(ssl, 'match_hostname'):  # python 3.2+
+    ssl_match_hostname = ssl.match_hostname
+    SSLCertificateError = ssl.CertificateError
+else:
+    # match_hostname was added to the standard library ssl module in python 3.2.
+    # The following code was backported for older releases and copied from
+    # https://bitbucket.org/brandon/backports.ssl_match_hostname
+    class SSLCertificateError(ValueError):
+        pass
+
+
+    def _dnsname_to_pat(dn):
+        pats = []
+        for frag in dn.split(r'.'):
+            if frag == '*':
+                # When '*' is a fragment by itself, it matches a non-empty dotless
+                # fragment.
+                pats.append('[^.]+')
+            else:
+                # Otherwise, '*' matches any dotless fragment.
+                frag = re.escape(frag)
+                pats.append(frag.replace(r'\*', '[^.]*'))
+        return re.compile(r'\A' + r'\.'.join(pats) + r'\Z', re.IGNORECASE)
+
+
+    def ssl_match_hostname(cert, hostname):
+        """Verify that *cert* (in decoded format as returned by
+        SSLSocket.getpeercert()) matches the *hostname*.  RFC 2818 rules
+        are mostly followed, but IP addresses are not accepted for *hostname*.
+
+        CertificateError is raised on failure. On success, the function
+        returns nothing.
+        """
+        if not cert:
+            raise ValueError("empty or no certificate")
+        dnsnames = []
+        san = cert.get('subjectAltName', ())
+        for key, value in san:
+            if key == 'DNS':
+                if _dnsname_to_pat(value).match(hostname):
+                    return
+                dnsnames.append(value)
+        if not san:
+            # The subject is only checked when subjectAltName is empty
+            for sub in cert.get('subject', ()):
+                for key, value in sub:
+                    # XXX according to RFC 2818, the most specific Common Name
+                    # must be used.
+                    if key == 'commonName':
+                        if _dnsname_to_pat(value).match(hostname):
+                            return
+                        dnsnames.append(value)
+        if len(dnsnames) > 1:
+            raise SSLCertificateError("hostname %r "
+                                      "doesn't match either of %s"
+                                      % (hostname, ', '.join(map(repr, dnsnames))))
+        elif len(dnsnames) == 1:
+            raise SSLCertificateError("hostname %r "
+                                      "doesn't match %r"
+                                      % (hostname, dnsnames[0]))
+        else:
+            raise SSLCertificateError("no appropriate commonName or "
+                                      "subjectAltName fields were found")

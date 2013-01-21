@@ -219,3 +219,7 @@ In progress
 * On python 3.2+, methods that take an ``ssl_options`` argument (on
   `SSLIOStream`, `TCPServer`, and `HTTPServer`) now accept either a
   dictionary of options or an `ssl.SSLContext` object.
+* `IOStream.connect` now has an optional ``server_hostname`` argument
+  which will be used for SSL certificate validation when applicable.
+  Additionally, when supported (on Python 3.2+), this hostname
+  will be sent via SNI (and this is supported by `tornado.simple_httpclient`)
