@@ -221,7 +221,7 @@ class ObjectHandler(BaseRequestHandler):
         self.set_header("Content-Type", "application/unknown")
         self.set_header("Last-Modified", datetime.datetime.utcfromtimestamp(
             info.st_mtime))
-        object_file = open(path, "r")
+        object_file = open(path, "rb")
         try:
             self.finish(object_file.read())
         finally:
