@@ -228,3 +228,6 @@ In progress
   port available in 12.10 (``apt-get install python3-pycurl``).  This port
   currently has bugs that prevent it from handling arbitrary binary data
   but it should work for textual (utf8) resources.
+* `tornado.netutil.bind_sockets` now works when Python was compiled
+  with ``--disable-ipv6`` but IPv6 DNS resolution is available on the
+  system.

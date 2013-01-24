@@ -53,7 +53,12 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     sockets = []
     if address == "":
         address = None
-    if not socket.has_ipv6:
+    if not socket.has_ipv6 and family == socket.AF_UNSPEC:
+        # Python can be compiled with --disable-ipv6, which causes
+        # operations on AF_INET6 sockets to fail, but does not
+        # automatically exclude those results from getaddrinfo
+        # results.
+        # http://bugs.python.org/issue16208
         family = socket.AF_INET
     if flags is None:
         flags = socket.AI_PASSIVE
