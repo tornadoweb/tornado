@@ -1,0 +1,9 @@
+Vagrant::Config.run do |config|
+    config.vm.box = "ubuntu12.10"
+    config.vm.box_url = "http://cloud-images.ubuntu.com/quantal/current/quantal-server-cloudimg-vagrant-i386-disk1.box"
+
+    config.vm.network :hostonly, "172.19.1.7"
+    config.vm.share_folder("tornado", "/tornado", "../../..", :nfs=> true)
+
+    #config.vm.provision :shell, :path => "setup.sh"
+end
