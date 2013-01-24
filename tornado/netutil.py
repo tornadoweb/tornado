@@ -53,6 +53,8 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     sockets = []
     if address == "":
         address = None
+    if not socket.has_ipv6:
+        family = socket.AF_INET
     if flags is None:
         flags = socket.AI_PASSIVE
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
