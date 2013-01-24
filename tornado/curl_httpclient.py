@@ -18,7 +18,6 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import cStringIO
 import collections
 import logging
 import pycurl
@@ -30,8 +29,13 @@ from tornado import ioloop
 from tornado.log import gen_log
 from tornado import stack_context
 
-from tornado.escape import utf8
+from tornado.escape import utf8, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
+
+try:
+    from io import BytesIO  # py3
+except ImportError:
+    from cStringIO import StringIO as BytesIO  # py2
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
@@ -43,7 +47,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
-        self._curls = [_curl_create() for i in xrange(max_clients)]
+        self._curls = [_curl_create() for i in range(max_clients)]
         self._free_list = self._curls[:]
         self._requests = collections.deque()
         self._fds = {}
@@ -203,7 +207,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     (request, callback) = self._requests.popleft()
                     curl.info = {
                         "headers": httputil.HTTPHeaders(),
-                        "buffer": cStringIO.StringIO(),
+                        "buffer": BytesIO(),
                         "request": request,
                         "callback": callback,
                         "curl_start_time": time.time(),
@@ -276,7 +280,7 @@ def _curl_create():
 
 
 def _curl_setup_request(curl, request, buffer, headers):
-    curl.setopt(pycurl.URL, utf8(request.url))
+    curl.setopt(pycurl.URL, native_str(request.url))
 
     # libcurl's magic "Expect: 100-continue" behavior causes delays
     # with servers that don't support it (which include, among others,
@@ -296,10 +300,10 @@ def _curl_setup_request(curl, request, buffer, headers):
     # Request headers may be either a regular dict or HTTPHeaders object
     if isinstance(request.headers, httputil.HTTPHeaders):
         curl.setopt(pycurl.HTTPHEADER,
-                    [utf8("%s: %s" % i) for i in request.headers.get_all()])
+                    [native_str("%s: %s" % i) for i in request.headers.get_all()])
     else:
         curl.setopt(pycurl.HTTPHEADER,
-                    [utf8("%s: %s" % i) for i in request.headers.items()])
+                    [native_str("%s: %s" % i) for i in request.headers.items()])
 
     if request.header_callback:
         curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
@@ -307,15 +311,26 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.setopt(pycurl.HEADERFUNCTION,
                     lambda line: _curl_header_callback(headers, line))
     if request.streaming_callback:
-        curl.setopt(pycurl.WRITEFUNCTION, request.streaming_callback)
+        write_function = request.streaming_callback
     else:
-        curl.setopt(pycurl.WRITEFUNCTION, buffer.write)
+        write_function = buffer.write
+    if type(b'') is type(''):  # py2
+        curl.setopt(pycurl.WRITEFUNCTION, write_function)
+    else:  # py3
+        # Upstream pycurl doesn't support py3, but ubuntu 12.10 includes
+        # a fork/port.  That version has a bug in which it passes unicode
+        # strings instead of bytes to the WRITEFUNCTION.  This means that
+        # if you use a WRITEFUNCTION (which tornado always does), you cannot
+        # download arbitrary binary data.  This needs to be fixed in the
+        # ported pycurl package, but in the meantime this lambda will
+        # make it work for downloading (utf8) text.
+        curl.setopt(pycurl.WRITEFUNCTION, lambda s: write_function(utf8(s)))
     curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
     curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
     curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000 * request.connect_timeout))
     curl.setopt(pycurl.TIMEOUT_MS, int(1000 * request.request_timeout))
     if request.user_agent:
-        curl.setopt(pycurl.USERAGENT, utf8(request.user_agent))
+        curl.setopt(pycurl.USERAGENT, native_str(request.user_agent))
     else:
         curl.setopt(pycurl.USERAGENT, "Mozilla/5.0 (compatible; pycurl)")
     if request.network_interface:
@@ -377,7 +392,7 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     # Handle curl's cryptic options for every individual HTTP method
     if request.method in ("POST", "PUT"):
-        request_buffer = cStringIO.StringIO(utf8(request.body))
+        request_buffer = BytesIO(utf8(request.body))
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
         if request.method == "POST":
             def ioctl(cmd):
@@ -391,7 +406,7 @@ def _curl_setup_request(curl, request, buffer, headers):
     if request.auth_username is not None:
         userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
         curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
-        curl.setopt(pycurl.USERPWD, utf8(userpwd))
+        curl.setopt(pycurl.USERPWD, native_str(userpwd))
         gen_log.debug("%s %s (username: %r)", request.method, request.url,
                       request.auth_username)
     else:

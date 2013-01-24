@@ -223,3 +223,8 @@ In progress
   which will be used for SSL certificate validation when applicable.
   Additionally, when supported (on Python 3.2+), this hostname
   will be sent via SNI (and this is supported by `tornado.simple_httpclient`)
+* Preliminary support for `tornado.curl_httpclient` on Python 3.  The latest
+  official release of pycurl only supports Python 2, but Ubuntu has a
+  port available in 12.10 (``apt-get install python3-pycurl``).  This port
+  currently has bugs that prevent it from handling arbitrary binary data
+  but it should work for textual (utf8) resources.
