@@ -30,15 +30,22 @@ try:
     from twisted.internet.defer import Deferred
     from twisted.internet.interfaces import IReadDescriptor, IWriteDescriptor
     from twisted.internet.protocol import Protocol
-    from twisted.web.client import Agent
-    from twisted.web.resource import Resource
-    from twisted.web.server import Site
     from twisted.python import log
     from tornado.platform.twisted import TornadoReactor, TwistedIOLoop
     from zope.interface import implementer
     have_twisted = True
 except ImportError:
     have_twisted = False
+
+# The core of Twisted 12.3.0 is available on python 3, but twisted.web is not
+# so test for it separately.
+try:
+    from twisted.web.client import Agent
+    from twisted.web.resource import Resource
+    from twisted.web.server import Site
+    have_twisted_web = True
+except ImportError:
+    have_twisted_web = False
 
 try:
     import thread  # py2
@@ -279,13 +286,13 @@ class ReactorReaderWriterTest(ReactorTestCase):
         self.shouldWrite = True
 
         def checkReadInput(fd):
-            self.assertEquals(fd.read(1), 'x')
+            self.assertEquals(fd.read(1), b'x')
             self._reactor.stop()
 
         def writeOnce(fd):
             if self.shouldWrite:
                 self.shouldWrite = False
-                fd.write('x')
+                fd.write(b'x')
         self._reader = Reader(self._p1, checkReadInput)
         self._writer = Writer(self._p2, writeOnce)
 
@@ -338,6 +345,7 @@ class ReactorReaderWriterTest(ReactorTestCase):
 
 
 @skipIfNoTwisted
+@unittest.skipIf(not have_twisted_web, 'twisted web not present')
 class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.saved_signals = save_signal_handlers()
