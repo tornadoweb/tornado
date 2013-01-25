@@ -14,8 +14,12 @@ except ImportError:
 
 class _ResolverTestMixin(object):
     def test_localhost(self):
+        # Note that windows returns IPPROTO_IP unless we specifically
+        # ask for IPPROTO_TCP (either will work to create a socket,
+        # but this test looks for an exact match)
         self.resolver.getaddrinfo('localhost', 80, socket.AF_UNSPEC,
                                   socket.SOCK_STREAM,
+                                  socket.IPPROTO_TCP,
                                   callback=self.stop)
         future = self.wait()
         self.assertIn(

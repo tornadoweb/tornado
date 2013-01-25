@@ -398,10 +398,16 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    @skipIfNonUnix
     def test_inline_read_error(self):
         # An error on an inline read is raised without logging (on the
         # assumption that it will eventually be noticed or logged further
         # up the stack).
+        #
+        # This test is posix-only because windows os.close() doesn't work
+        # on socket FDs, but we can't close the socket object normally
+        # because we won't get the error we want if the socket knows
+        # it's closed.
         server, client = self.make_iostream_pair()
         try:
             os.close(server.socket.fileno())
