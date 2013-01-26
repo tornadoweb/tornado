@@ -311,6 +311,8 @@ General
   `Application.add_handlers` call.  Now the request will be matched
   against the handlers for any ``host_pattern`` that includes the request's
   ``Host`` header.
+* `RequestHandler.set_header` now overwrites previous header values
+  case-insensitively.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~

@@ -228,18 +228,12 @@ class RequestHandler(object):
 
     def clear(self):
         """Resets all headers and content for this response."""
-        # The performance cost of tornado.httputil.HTTPHeaders is significant
-        # (slowing down a benchmark with a trivial handler by more than 10%),
-        # and its case-normalization is not generally necessary for
-        # headers we generate on the server side, so use a plain dict
-        # and list instead.
-        self._headers = {
-            "Server": "TornadoServer/%s" % tornado.version,
-            "Content-Type": "text/html; charset=UTF-8",
-            "Date": datetime.datetime.utcnow().strftime(
-                "%a, %d %b %Y %H:%M:%S GMT"),
-        }
-        self._list_headers = []
+        self._headers = httputil.HTTPHeaders({
+                "Server": "TornadoServer/%s" % tornado.version,
+                "Content-Type": "text/html; charset=UTF-8",
+                "Date": datetime.datetime.utcnow().strftime(
+                    "%a, %d %b %Y %H:%M:%S GMT"),
+                })
         self.set_default_headers()
         if not self.request.supports_http_1_1():
             if self.request.headers.get("Connection") == "Keep-Alive":
@@ -294,7 +288,7 @@ class RequestHandler(object):
         Unlike `set_header`, `add_header` may be called multiple times
         to return multiple values for the same header.
         """
-        self._list_headers.append((name, self._convert_header_value(value)))
+        self._headers.add(name, self._convert_header_value(value))
 
     def clear_header(self, name):
         """Clears an outgoing header, undoing a previous `set_header` call.
@@ -1088,8 +1082,8 @@ class RequestHandler(object):
         lines = [utf8(self.request.version + " " +
                       str(self._status_code) +
                       " " + reason)]
-        lines.extend([(utf8(n) + b": " + utf8(v)) for n, v in
-                      itertools.chain(self._headers.items(), self._list_headers)])
+        lines.extend([utf8(n) + b": " + utf8(v) for n, v in self._headers.get_all()])
+
         if hasattr(self, "_new_cookie"):
             for cookie in self._new_cookie.values():
                 lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))

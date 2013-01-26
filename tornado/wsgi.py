@@ -122,7 +122,7 @@ class WSGIApplication(web.Application):
         assert handler._finished
         reason = handler._reason
         status = str(handler._status_code) + " " + reason
-        headers = list(handler._headers.items()) + handler._list_headers
+        headers = list(handler._headers.get_all())
         if hasattr(handler, "_new_cookie"):
             for cookie in handler._new_cookie.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))

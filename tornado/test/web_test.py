@@ -431,9 +431,9 @@ class FlowControlHandler(RequestHandler):
 class MultiHeaderHandler(RequestHandler):
     def get(self):
         self.set_header("x-overwrite", "1")
-        self.set_header("x-overwrite", 2)
+        self.set_header("X-Overwrite", 2)
         self.add_header("x-multi", 3)
-        self.add_header("x-multi", "4")
+        self.add_header("X-Multi", "4")
 
 
 class RedirectHandler(RequestHandler):
