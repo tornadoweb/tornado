@@ -159,6 +159,8 @@ General
   which will be used for SSL certificate validation when applicable.
   Additionally, when supported (on Python 3.2+), this hostname
   will be sent via SNI (and this is supported by `tornado.simple_httpclient`)
+* Fixed a major performance regression when run on PyPy (introduced in
+  Tornado 2.3).
 
 `tornado.netutil`
 ~~~~~~~~~~~~~~~~~
