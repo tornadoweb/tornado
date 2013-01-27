@@ -281,6 +281,9 @@ General
   instead of putting all possible options in `tornado.testing.main`.
 * `AsyncHTTPTestCase` no longer calls `AsyncHTTPClient.close` for tests
   that use the singleton `IOLoop.instance`.
+* New decorator `tornado.testing.gen_test` can be used to allow for
+  yielding `tornado.gen` objects in tests, as an alternative to the
+  ``stop`` and ``wait`` methods of `AsyncTestCase`.
 
 `tornado.util`
 ~~~~~~~~~~~~~~

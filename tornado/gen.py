@@ -66,7 +66,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import collections
 import functools
-import operator
 import sys
 import types
 
@@ -306,10 +305,12 @@ class Runner(object):
     """Internal implementation of `tornado.gen.engine`.
 
     Maintains information about pending callbacks and their results.
+
+    ``final_callback`` is run after the generator exits.
     """
-    def __init__(self, gen, deactivate_stack_context):
+    def __init__(self, gen, final_callback):
         self.gen = gen
-        self.deactivate_stack_context = deactivate_stack_context
+        self.final_callback = final_callback
         self.yield_point = _NullYieldPoint()
         self.pending_callbacks = set()
         self.results = {}
@@ -374,8 +375,8 @@ class Runner(object):
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
-                    self.deactivate_stack_context()
-                    self.deactivate_stack_context = None
+                    self.final_callback()
+                    self.final_callback = None
                     return
                 except Exception:
                     self.finished = True

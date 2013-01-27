@@ -34,15 +34,18 @@ except ImportError:
     IOLoop = None
     netutil = None
     SimpleAsyncHTTPClient = None
+from tornado import gen
 from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type
+import functools
 import logging
 import os
 import re
 import signal
 import socket
 import sys
+import types
 
 try:
     from io import StringIO  # py3
@@ -350,6 +353,36 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
 
     def get_protocol(self):
         return 'https'
+
+
+def gen_test(f):
+    """Testing equivalent of ``@gen.engine``, to be applied to test methods.
+
+    ``@gen.engine`` cannot be used on tests because the `IOLoop` is not
+    already running.  ``@gen_test`` should be applied to test methods
+    on subclasses of `AsyncTestCase`.
+
+    Note that unlike most uses of ``@gen.engine``, ``@gen_test`` can
+    detect automatically when the function finishes cleanly so there
+    is no need to run a callback to signal completion.
+
+    Example::
+        class MyTest(AsyncHTTPTestCase):
+            @gen_test
+            def test_something(self):
+                response = yield gen.Task(self.fetch('/'))
+
+    """
+    @functools.wraps(f)
+    def wrapper(self, *args, **kwargs):
+        result = f(self, *args, **kwargs)
+        if result is None:
+            return
+        assert isinstance(result, types.GeneratorType)
+        runner = gen.Runner(result, self.stop)
+        runner.run()
+        self.wait()
+    return wrapper
 
 
 class LogTrapTestCase(unittest.TestCase):

@@ -24,7 +24,7 @@ from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
+from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port, gen_test
 
 
 class ReturnFutureTest(AsyncTestCase):
@@ -82,6 +82,11 @@ class ReturnFutureTest(AsyncTestCase):
         future2 = self.wait()
         self.assertIs(future, future2)
         self.assertEqual(future.result(), 42)
+
+    @gen_test
+    def test_async_future_gen(self):
+        result = yield self.async_future()
+        self.assertEqual(result, 42)
 
     def test_delayed_failure(self):
         future = self.delayed_failure()
