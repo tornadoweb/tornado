@@ -1,12 +1,15 @@
 from __future__ import absolute_import, division, print_function, with_statement
+
 import functools
+from tornado.concurrent import return_future
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 from tornado.log import app_log
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.web import Application, RequestHandler, asynchronous
 
 from tornado import gen
+
 
 
 class GenTest(AsyncTestCase):
@@ -21,6 +24,10 @@ class GenTest(AsyncTestCase):
         else:
             self.io_loop.add_callback(functools.partial(
                 self.delay_callback, iterations - 1, callback, arg))
+
+    @return_future
+    def async_future(self, result, callback):
+        self.io_loop.add_callback(callback, result)
 
     def test_no_yield(self):
         @gen.engine
@@ -219,6 +226,16 @@ class GenTest(AsyncTestCase):
             self.assertEqual(responses, ["v1", "v2"])
             self.stop()
         self.run_gen(f)
+
+    @gen_test
+    def test_future(self):
+        result = yield self.async_future(1)
+        self.assertEqual(result, 1)
+
+    @gen_test
+    def test_multi_future(self):
+        results = yield [self.async_future(1), self.async_future(2)]
+        self.assertEqual(results, [1, 2])
 
     def test_arguments(self):
         @gen.engine

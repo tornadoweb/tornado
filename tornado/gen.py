@@ -276,8 +276,12 @@ class Multi(YieldPoint):
     a list of ``YieldPoints``.
     """
     def __init__(self, children):
-        assert all(isinstance(i, YieldPoint) for i in children)
-        self.children = children
+        self.children = []
+        for i in children:
+            if isinstance(i, Future):
+                i = YieldFuture(i)
+            self.children.append(i)
+        assert all(isinstance(i, YieldPoint) for i in self.children)
 
     def start(self, runner):
         for i in self.children:
@@ -383,8 +387,7 @@ class Runner(object):
                     raise
                 if isinstance(yielded, list):
                     yielded = Multi(yielded)
-                if isinstance(yielded, Future):
-                    # TODO: lists of futures
+                elif isinstance(yielded, Future):
                     yielded = YieldFuture(yielded)
                 if isinstance(yielded, YieldPoint):
                     self.yield_point = yielded
