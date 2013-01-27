@@ -19,7 +19,7 @@ import logging
 import re
 import socket
 
-from tornado.concurrent import Future, future_wrap
+from tornado.concurrent import Future, return_future
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
@@ -27,6 +27,79 @@ from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port
 
 
+class ReturnFutureTest(AsyncTestCase):
+    @return_future
+    def sync_future(self, callback):
+        callback(42)
+
+    @return_future
+    def async_future(self, callback):
+        self.io_loop.add_callback(callback, 42)
+
+    @return_future
+    def immediate_failure(self, callback):
+        1 / 0
+
+    @return_future
+    def delayed_failure(self, callback):
+        self.io_loop.add_callback(lambda: 1 / 0)
+
+    def test_immediate_failure(self):
+        with self.assertRaises(ZeroDivisionError):
+            self.immediate_failure(callback=self.stop)
+
+    def test_callback_kw(self):
+        future = self.sync_future(callback=self.stop)
+        future2 = self.wait()
+        self.assertIs(future, future2)
+        self.assertEqual(future.result(), 42)
+
+    def test_callback_positional(self):
+        # When the callback is passed in positionally, future_wrap shouldn't
+        # add another callback in the kwargs.
+        future = self.sync_future(self.stop)
+        future2 = self.wait()
+        self.assertIs(future, future2)
+        self.assertEqual(future.result(), 42)
+
+    def test_no_callback(self):
+        future = self.sync_future()
+        self.assertEqual(future.result(), 42)
+
+    def test_none_callback_kw(self):
+        # explicitly pass None as callback
+        future = self.sync_future(callback=None)
+        self.assertEqual(future.result(), 42)
+
+    def test_none_callback_pos(self):
+        future = self.sync_future(None)
+        self.assertEqual(future.result(), 42)
+
+    def test_async_future(self):
+        future = self.async_future()
+        self.assertFalse(future.done())
+        self.io_loop.add_future(future, self.stop)
+        future2 = self.wait()
+        self.assertIs(future, future2)
+        self.assertEqual(future.result(), 42)
+
+    def test_delayed_failure(self):
+        future = self.delayed_failure()
+        self.io_loop.add_future(future, self.stop)
+        future2 = self.wait()
+        self.assertIs(future, future2)
+        with self.assertRaises(ZeroDivisionError):
+            future.result()
+
+    def test_kw_only_callback(self):
+        @return_future
+        def f(**kwargs):
+            kwargs['callback'](42)
+        future = f()
+        self.assertEqual(future.result(), 42)
+
+# The following series of classes demonstrate and test various styles
+# of use, with and without generators and futures.
 class CapServer(TCPServer):
     def handle_stream(self, stream, address):
         logging.info("handle_stream")
@@ -88,7 +161,7 @@ class ManualCapClient(BaseCapClient):
 
 
 class DecoratorCapClient(BaseCapClient):
-    @future_wrap
+    @return_future
     def capitalize(self, request_data, callback):
         logging.info("capitalize")
         self.request_data = request_data
@@ -109,7 +182,7 @@ class DecoratorCapClient(BaseCapClient):
 
 
 class GeneratorCapClient(BaseCapClient):
-    @future_wrap
+    @return_future
     @gen.engine
     def capitalize(self, request_data, callback):
         logging.info('capitalize')
