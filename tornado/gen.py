@@ -64,6 +64,7 @@ is an `Arguments` object, which is a named tuple ``(args, kwargs)``.
 """
 from __future__ import absolute_import, division, print_function, with_statement
 
+import collections
 import functools
 import operator
 import sys
@@ -414,20 +415,4 @@ class Runner(object):
         else:
             return False
 
-# in python 2.6+ this could be a collections.namedtuple
-
-
-class Arguments(tuple):
-    """The result of a yield expression whose callback had more than one
-    argument (or keyword arguments).
-
-    The `Arguments` object can be used as a tuple ``(args, kwargs)``
-    or an object with attributes ``args`` and ``kwargs``.
-    """
-    __slots__ = ()
-
-    def __new__(cls, args, kwargs):
-        return tuple.__new__(cls, (args, kwargs))
-
-    args = property(operator.itemgetter(0))
-    kwargs = property(operator.itemgetter(1))
+Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])

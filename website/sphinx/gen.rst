@@ -12,7 +12,7 @@
    ------------
 
    Instances of the following classes may be used in yield expressions
-   in the generator.  
+   in the generator.
 
    .. autoclass:: Task
 
@@ -25,4 +25,10 @@
    Other classes
    -------------
 
-   .. autoclass:: Arguments
+   .. class:: Arguments
+
+      The result of a yield expression whose callback had more than one
+      argument (or keyword arguments).
+
+      The `Arguments` object can be used as a tuple ``(args, kwargs)``
+      or an object with attributes ``args`` and ``kwargs``.
