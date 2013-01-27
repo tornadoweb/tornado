@@ -280,7 +280,7 @@ General
   support now makes it easy to add options from a wrapper script
   instead of putting all possible options in `tornado.testing.main`.
 * `AsyncHTTPTestCase` no longer calls `AsyncHTTPClient.close` for tests
-  that use the singletion `IOLoop.instance`.
+  that use the singleton `IOLoop.instance`.
 
 `tornado.util`
 ~~~~~~~~~~~~~~
