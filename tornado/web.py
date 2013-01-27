@@ -53,14 +53,12 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import base64
 import binascii
-import calendar
 import datetime
 import email.utils
 import functools
 import gzip
 import hashlib
 import hmac
-import itertools
 import mimetypes
 import numbers
 import os.path
@@ -231,8 +229,7 @@ class RequestHandler(object):
         self._headers = httputil.HTTPHeaders({
                 "Server": "TornadoServer/%s" % tornado.version,
                 "Content-Type": "text/html; charset=UTF-8",
-                "Date": datetime.datetime.utcnow().strftime(
-                    "%a, %d %b %Y %H:%M:%S GMT"),
+                "Date": httputil.format_timestamp(time.gmtime()),
                 })
         self.set_default_headers()
         if not self.request.supports_http_1_1():
@@ -308,8 +305,7 @@ class RequestHandler(object):
             # return immediately since we know the converted value will be safe
             return str(value)
         elif isinstance(value, datetime.datetime):
-            t = calendar.timegm(value.utctimetuple())
-            return email.utils.formatdate(t, localtime=False, usegmt=True)
+            return httputil.format_timestamp(value)
         else:
             raise TypeError("Unsupported header value %r" % value)
         # If \n is allowed into the header, it is possible to inject
@@ -410,9 +406,7 @@ class RequestHandler(object):
             expires = datetime.datetime.utcnow() + datetime.timedelta(
                 days=expires_days)
         if expires:
-            timestamp = calendar.timegm(expires.utctimetuple())
-            morsel["expires"] = email.utils.formatdate(
-                timestamp, localtime=False, usegmt=True)
+            morsel["expires"] = httputil.format_timestamp(expires)
         if path:
             morsel["path"] = path
         for k, v in kwargs.items():

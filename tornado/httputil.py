@@ -18,7 +18,10 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import datetime
+import numbers
 import re
+import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
@@ -287,6 +290,26 @@ def parse_multipart_form_data(boundary, data, arguments, files):
         else:
             arguments.setdefault(name, []).append(value)
 
+
+def format_timestamp(ts):
+    """Formats a timestamp in the format used by HTTP.
+
+    The argument may be a numeric timestamp as returned by `time.time()`,
+    a time tuple as returned by `time.gmtime()`, or a `datetime.datetime`
+    object.
+
+    >>> format_timestamp(1359312200)
+    'Sun, 27 Jan 2013 18:43:20 GMT'
+    """
+    if isinstance(ts, (tuple, time.struct_time)):
+        pass
+    elif isinstance(ts, datetime.datetime):
+        ts = ts.utctimetuple()
+    elif isinstance(ts, numbers.Real):
+        ts = time.gmtime(ts)
+    else:
+        raise TypeError("unknown timestamp type: %r" % ts)
+    return time.strftime("%a, %d %b %Y %H:%M:%S GMT", ts)
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some

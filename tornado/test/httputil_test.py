@@ -2,12 +2,15 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
-from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders
+from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp
 from tornado.escape import utf8
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
 from tornado.test.util import unittest
+
+import datetime
 import logging
+import time
 
 
 class TestUrlConcat(unittest.TestCase):
@@ -224,3 +227,29 @@ Foo: even
                          [("Asdf", "qwer zxcv"),
                           ("Foo", "bar baz"),
                           ("Foo", "even more lines")])
+
+
+class FormatTimestampTest(unittest.TestCase):
+    # Make sure that all the input types are supported.
+    TIMESTAMP = 1359312200.503611
+    EXPECTED = 'Sun, 27 Jan 2013 18:43:20 GMT'
+
+    def check(self, value):
+        self.assertEqual(format_timestamp(value), self.EXPECTED)
+
+    def test_unix_time_float(self):
+        self.check(self.TIMESTAMP)
+
+    def test_unix_time_int(self):
+        self.check(int(self.TIMESTAMP))
+
+    def test_struct_time(self):
+        self.check(time.gmtime(self.TIMESTAMP))
+
+    def test_time_tuple(self):
+        tup = tuple(time.gmtime(self.TIMESTAMP))
+        self.assertEqual(9, len(tup))
+        self.check(tup)
+
+    def test_datetime(self):
+        self.check(datetime.datetime.utcfromtimestamp(self.TIMESTAMP))

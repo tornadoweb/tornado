@@ -31,8 +31,6 @@ supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import calendar
-import email.utils
 import time
 import weakref
 
@@ -279,9 +277,8 @@ class HTTPRequest(object):
         if headers is None:
             headers = httputil.HTTPHeaders()
         if if_modified_since:
-            timestamp = calendar.timegm(if_modified_since.utctimetuple())
-            headers["If-Modified-Since"] = email.utils.formatdate(
-                timestamp, localtime=False, usegmt=True)
+            headers["If-Modified-Since"] = httputil.format_timestamp(
+                if_modified_since)
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
         self.proxy_username = proxy_username
