@@ -21,6 +21,7 @@ information.
 from __future__ import absolute_import, division, print_function, with_statement
 
 try:
+    from tornado import gen
     from tornado.httpclient import AsyncHTTPClient
     from tornado.httpserver import HTTPServer
     from tornado.simple_httpclient import SimpleAsyncHTTPClient
@@ -30,11 +31,11 @@ except ImportError:
     # These modules are not importable on app engine.  Parts of this module
     # won't work, but e.g. LogTrapTestCase and main() will.
     AsyncHTTPClient = None
+    gen = None
     HTTPServer = None
     IOLoop = None
     netutil = None
     SimpleAsyncHTTPClient = None
-from tornado import gen
 from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type
