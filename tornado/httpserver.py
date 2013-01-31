@@ -37,7 +37,7 @@ from tornado.log import gen_log
 from tornado.tcpserver import TCPServer
 from tornado import stack_context
 from tornado.util import bytes_type
-from tornado.spdy import SPDYConnection, DEFAULT_SPDY_VERSION
+from tornado.spdy import SPDYConnection
 
 try:
     import Cookie  # py2
@@ -167,7 +167,9 @@ class HTTPServer(TCPServer):
         if self.spdy_options:
             SPDYConnection(stream, address, self.request_callback,
                            self.no_keep_alive, self.xheaders, self.protocol,
-                           server_side=True, version=self.spdy_options.get('version', default=DEFAULT_SPDY_VERSION))
+                           server_side=True, version=self.spdy_options.get('version'),
+                           max_frame_len=self.spdy_options.get('max_frame_len'),
+                           min_frame_len=self.spdy_options.get('min_frame_len'))
         else:
             HTTPConnection(stream, address, self.request_callback,
                            self.no_keep_alive, self.xheaders, self.protocol)
