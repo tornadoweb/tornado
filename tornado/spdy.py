@@ -121,21 +121,23 @@ class ControlFrame(Frame):
         if len(chunk) > self.conn.max_frame_size:
             raise SPDYProtocolError("The SYN_STREAM frame too large", ERR_FRAME_TOO_LARGE)
 
-        num_pairs = _parse_uint(chunk[0:4])
+        len_size = 4 if self.conn.version >= 3 else 2
 
-        pos = 4
+        num_pairs = _parse_uint(chunk[0:len_size])
+
+        pos = len_size
 
         for i in xrange(num_pairs):
-            len = _parse_uint(chunk[pos:pos+4])
+            len = _parse_uint(chunk[pos:pos+len_size])
 
             if len == 0:
                 raise SPDYProtocolError("The length of header name must be greater than zero", ERR_PROTOCOL_ERROR)
 
-            pos += 4
+            pos += len_size
             name = chunk[pos:pos+len]
             pos += len
-            len = _parse_uint(chunk[pos:pos+4])
-            pos += 4
+            len = _parse_uint(chunk[pos:pos+len_size])
+            pos += len_size
             values = chunk[pos:pos+len].split('\0') if len else []
 
             headers[name] = values
@@ -182,8 +184,8 @@ class SyncStream(ControlFrame):
     def _on_body(self, chunk):
         self.stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
         self.assoc_stream_id = _parse_uint(chunk[4:8]) & _last_31_bits
-        self.priority = chunk[8] & (_first_3_bits if self.conn.version == 3 else _first_2_bits)
-        self.slot = chunk[9] if self.conn.version == 3 else 0
+        self.priority = chunk[8] & (_first_3_bits if self.conn.version >= 3 else _first_2_bits)
+        self.slot = chunk[9] if self.conn.version >= 3 else 0
 
         try:
             self.headers = self._parse_headers(chunk[10:])
@@ -234,7 +236,7 @@ FRAME_TYPES = {
     TYPE_GOAWAY: GoAway,
     TYPE_HEADERS: Headers,
     TYPE_WINDOW_UPDATE: WindowUpdate,
-    TYPE_CREDENTIAL, Credential,
+    TYPE_CREDENTIAL: Credential,
 }
 
 class SPDYConnection(object):
