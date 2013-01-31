@@ -37,6 +37,7 @@ from tornado.log import gen_log
 from tornado.tcpserver import TCPServer
 from tornado import stack_context
 from tornado.util import bytes_type
+from tornado.spdy import SPDYConnection, DEFAULT_SPDY_VERSION
 
 try:
     import Cookie  # py2
@@ -103,6 +104,15 @@ class HTTPServer(TCPServer):
            "keyfile": os.path.join(data_dir, "mydomain.key"),
        })
 
+    `HTTPServer` can serve SPDY traffic
+    To make thie server serve SPDY traffic, send the spdy_options dictionary
+    argument with the arguments required for the `spdy.SPDYConnection` class,
+    including "version".
+
+       HTTPServer(applicaton, spdy_options={
+           "version": 3,
+       })
+
     `HTTPServer` initialization follows one of three patterns (the
     initialization methods are defined on `tornado.tcpserver.TCPServer`):
 
@@ -144,17 +154,23 @@ class HTTPServer(TCPServer):
 
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, protocol=None, **kwargs):
+                 xheaders=False, ssl_options=None, protocol=None, spdy_options=None, **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
         self.protocol = protocol
+        self.spdy_options = spdy_options or {}
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
     def handle_stream(self, stream, address):
-        HTTPConnection(stream, address, self.request_callback,
-                       self.no_keep_alive, self.xheaders, self.protocol)
+        if self.spdy_options:
+            SPDYConnection(stream, address, self.request_callback,
+                           self.no_keep_alive, self.xheaders, self.protocol,
+                           server_side=True, version=self.spdy_options.get('version', default=DEFAULT_SPDY_VERSION))
+        else:
+            HTTPConnection(stream, address, self.request_callback,
+                           self.no_keep_alive, self.xheaders, self.protocol)
 
 
 class _BadRequestException(Exception):
