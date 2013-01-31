@@ -13,3 +13,4 @@ _auto2to3*
 /.coverage
 /htmlcov/
 /env/
+.idea
