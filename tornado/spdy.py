@@ -26,10 +26,13 @@ import logging
 from struct import unpack
 
 from tornado import stack_context
+from tornado._zlib_stream import Inflater, Deflater
 
 spdy_log = logging.getLogger("tornado.spdy")
 
 DEFAULT_SPDY_VERSION = 2
+
+DEFAULT_HEADER_ENCODING = 'UTF-8'
 
 FRAME_HEADER_LEN = 8
 
@@ -115,11 +118,13 @@ class ControlFrame(Frame):
     def __init__(self, conn, flags):
         super(ControlFrame, self).__init__(conn, flags)
 
-    def _parse_headers(self, chunk):
+    def _parse_headers(self, compressed_chunk):
         headers = {}
 
-        if len(chunk) > self.conn.max_frame_size:
+        if len(compressed_chunk) > self.conn.max_frame_size:
             raise SPDYProtocolError("The SYN_STREAM frame too large", ERR_FRAME_TOO_LARGE)
+
+        chunk = self.conn.inflater.decompress(compressed_chunk)
 
         len_size = 4 if self.conn.version >= 3 else 2
 
@@ -127,18 +132,21 @@ class ControlFrame(Frame):
 
         pos = len_size
 
-        for i in xrange(num_pairs):
+        for _ in xrange(num_pairs):
             len = _parse_uint(chunk[pos:pos+len_size])
 
             if len == 0:
                 raise SPDYProtocolError("The length of header name must be greater than zero", ERR_PROTOCOL_ERROR)
 
             pos += len_size
-            name = chunk[pos:pos+len]
+
+            name = chunk[pos:pos+len].decode(self.conn.header_encoding)
             pos += len
+
             len = _parse_uint(chunk[pos:pos+len_size])
             pos += len_size
-            values = chunk[pos:pos+len].split('\0') if len else []
+
+            values = chunk[pos:pos+len].decode(self.conn.header_encoding).split('\0') if len else []
 
             headers[name] = values
 
@@ -246,7 +254,7 @@ class SPDYConnection(object):
     until the HTTP conection is closed.
     """
     def __init__(self, stream, address, request_callback, no_keep_alive=False, xheaders=False, protocol=None,
-                 server_side=True, version=None, max_frame_len=None, min_frame_len=None):
+                 server_side=True, version=None, max_frame_len=None, min_frame_len=None, header_encoding=None):
         self.stream = stream
         self.address = address
         # Save the socket's address family now so we know how to
@@ -262,6 +270,10 @@ class SPDYConnection(object):
         self.version = version or DEFAULT_SPDY_VERSION
         self.max_frame_len = max_frame_len or MAX_FRAME_LEN
         self.min_frame_len = min_frame_len or MIN_FRAME_LEN
+        self.header_encoding = header_encoding or DEFAULT_HEADER_ENCODING
+
+        self.deflater = Deflater(version)
+        self.inflater = Inflater(version)
 
         self._frame_callback = stack_context.wrap(self._on_frame_header)
         self.read_next_frame()

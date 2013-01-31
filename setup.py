@@ -15,6 +15,7 @@
 # under the License.
 
 import distutils.core
+from Cython.Distutils import build_ext
 import sys
 # Importing setuptools adds some features like "setup.py develop", but
 # it's optional so swallow the error if it's not there.
@@ -26,6 +27,11 @@ except ImportError:
 kwargs = {}
 
 version = "2.4.post2"
+
+zlib_wrapper = distutils.core.Extension(
+    'tornado._zlib_stream', ['cython/zlib_stream.pyx'],
+    libraries=['z']
+)
 
 distutils.core.setup(
     name="tornado",
@@ -47,6 +53,9 @@ distutils.core.setup(
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po",
             ],
         },
+    requires=['Cython (>=0.15.1)'],
+    cmdclass={'build_ext': build_ext},
+    ext_modules=[zlib_wrapper],
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",

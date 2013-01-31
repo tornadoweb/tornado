@@ -169,7 +169,8 @@ class HTTPServer(TCPServer):
                            self.no_keep_alive, self.xheaders, self.protocol,
                            server_side=True, version=self.spdy_options.get('version'),
                            max_frame_len=self.spdy_options.get('max_frame_len'),
-                           min_frame_len=self.spdy_options.get('min_frame_len'))
+                           min_frame_len=self.spdy_options.get('min_frame_len'),
+                           default_encoding=self.spdy_options.get('default_encoding'))
         else:
             HTTPConnection(stream, address, self.request_callback,
                            self.no_keep_alive, self.xheaders, self.protocol)
