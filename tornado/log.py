@@ -141,7 +141,7 @@ class LogFormatter(logging.Formatter):
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
-            formatted = formatted.rstrip() + "\n" + record.exc_text
+            formatted = formatted.rstrip().encode("ascii") + "\n" + record.exc_text
         return formatted.replace("\n", "\n    ")
 
 
