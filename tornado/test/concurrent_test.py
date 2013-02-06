@@ -24,7 +24,7 @@ from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, LogTrapTestCase, get_unused_port, gen_test
+from tornado.testing import AsyncTestCase, LogTrapTestCase, bind_unused_port, gen_test
 
 
 class ReturnFutureTest(AsyncTestCase):
@@ -206,8 +206,8 @@ class ClientTestMixin(object):
     def setUp(self):
         super(ClientTestMixin, self).setUp()
         self.server = CapServer(io_loop=self.io_loop)
-        port = get_unused_port()
-        self.server.listen(port, address='127.0.0.1')
+        sock, port = bind_unused_port()
+        self.server.add_sockets([sock])
         self.client = self.client_class(io_loop=self.io_loop, port=port)
 
     def tearDown(self):

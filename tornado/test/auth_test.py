@@ -7,6 +7,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin, GoogleMixin
 from tornado.escape import json_decode
+from tornado import gen
 from tornado.testing import AsyncHTTPTestCase
 from tornado.util import u
 from tornado.web import RequestHandler, Application, asynchronous
@@ -99,13 +100,19 @@ class OAuth2ClientLoginHandler(RequestHandler, OAuth2Mixin):
         self.authorize_redirect()
 
 
-class TwitterClientLoginHandler(RequestHandler, TwitterMixin):
+class TwitterClientHandler(RequestHandler, TwitterMixin):
     def initialize(self, test):
         self._OAUTH_REQUEST_TOKEN_URL = test.get_url('/oauth1/server/request_token')
         self._OAUTH_ACCESS_TOKEN_URL = test.get_url('/twitter/server/access_token')
         self._OAUTH_AUTHORIZE_URL = test.get_url('/oauth1/server/authorize')
         self._TWITTER_BASE_URL = test.get_url('/twitter/api')
 
+
+    def get_auth_http_client(self):
+        return self.settings['http_client']
+
+
+class TwitterClientLoginHandler(TwitterClientHandler):
     @asynchronous
     def get(self):
         if self.get_argument("oauth_token", None):
@@ -118,9 +125,17 @@ class TwitterClientLoginHandler(RequestHandler, TwitterMixin):
             raise Exception("user is None")
         self.finish(user)
 
-    def get_auth_http_client(self):
-        return self.settings['http_client']
 
+class TwitterClientShowUserHandler(TwitterClientHandler):
+    @asynchronous
+    @gen.engine
+    def get(self):
+        # TODO: would be nice to go through the login flow instead of
+        # cheating with a hard-coded access token.
+        response = yield gen.Task(self.twitter_request, '/users/show/somebody',
+                                  access_token=dict(key='hjkl', secret='vbnm'))
+        assert response is not None
+        self.finish(response)
 
 class TwitterServerAccessTokenHandler(RequestHandler):
     def get(self):
@@ -129,6 +144,13 @@ class TwitterServerAccessTokenHandler(RequestHandler):
 
 class TwitterServerShowUserHandler(RequestHandler):
     def get(self, screen_name):
+        assert 'oauth_nonce' in self.request.arguments
+        assert 'oauth_timestamp' in self.request.arguments
+        assert 'oauth_signature' in self.request.arguments
+        assert self.get_argument('oauth_consumer_key') == 'test_twitter_consumer_key'
+        assert self.get_argument('oauth_signature_method') == 'HMAC-SHA1'
+        assert self.get_argument('oauth_version') == '1.0a'
+        assert self.get_argument('oauth_token') == 'hjkl'
         self.write(dict(screen_name=screen_name, name=screen_name.capitalize()))
 
 
@@ -171,6 +193,7 @@ class AuthTest(AsyncHTTPTestCase):
                 ('/oauth2/client/login', OAuth2ClientLoginHandler, dict(test=self)),
 
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
+                ('/twitter/client/show_user', TwitterClientShowUserHandler, dict(test=self)),
                 ('/google/client/openid_login', GoogleOpenIdClientLoginHandler, dict(test=self)),
 
                 # simulated servers
@@ -282,6 +305,12 @@ class AuthTest(AsyncHTTPTestCase):
                           u('name'): u('Foo'),
                           u('screen_name'): u('foo'),
                           u('username'): u('foo')})
+
+    def test_twitter_show_user(self):
+        response = self.fetch('/twitter/client/show_user')
+        response.rethrow()
+        self.assertEqual(json_decode(response.body),
+                         {'name': 'Somebody', 'screen_name': 'somebody'})
 
     def test_google_redirect(self):
         # same as test_openid_redirect
