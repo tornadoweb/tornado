@@ -26,6 +26,7 @@ import logging
 from struct import unpack
 
 from tornado import stack_context
+from tornado.httpserver import HTTPServer
 
 try:
     from tornado._zlib_stream import Inflater, Deflater
@@ -222,6 +223,22 @@ class SPDYProtocolError(Exception):
 
         self.status_code = status_code
 
+class SPDYServer(HTTPServer):
+    def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
+                 xheaders=False, ssl_options=None, protocol=None, spdy_options=None, **kwargs):
+        HTTPServer.__init__(self, request_callback=request_callback, no_keep_alive=no_keep_alive, io_loop=io_loop,
+            xheaders=xheaders, ssl_options=ssl_options, protocol=protocol, **kwargs)
+
+        self.spdy_options = spdy_options
+
+    def handle_stream(self, stream, address):
+        SPDYConnection(stream, address, self.request_callback,
+            self.no_keep_alive, self.xheaders, self.protocol,
+            server_side=True, version=self.spdy_options.get('version'),
+            max_frame_len=self.spdy_options.get('max_frame_len'),
+            min_frame_len=self.spdy_options.get('min_frame_len'),
+            default_encoding=self.spdy_options.get('default_encoding'))
+
 class Frame(object):
     def __init__(self, conn, flags):
         self.conn = conn
@@ -399,7 +416,9 @@ class SPDYConnection(object):
         self.header_encoding = header_encoding or DEFAULT_HEADER_ENCODING
         self.compress_level = compress_level or DEFAULT_HEADER_COMPRESS_LEVEL
 
-        self.deflater = Deflater(version)
+        # Because header blocks are generally small, implementors may want to reduce the window-size of
+        # the compression engine from the default 15bits (a 32KB window) to more like 11bits (a 2KB window).
+        self.deflater = Deflater(version)   # TODO reduce the window size
         self.inflater = Inflater(version)
 
         self._frame_callback = stack_context.wrap(self._on_frame_header)

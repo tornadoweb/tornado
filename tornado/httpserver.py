@@ -159,22 +159,12 @@ class HTTPServer(TCPServer):
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
         self.protocol = protocol
-        self.spdy_options = spdy_options or {}
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
     def handle_stream(self, stream, address):
-        if self.spdy_options:
-            SPDYConnection(stream, address, self.request_callback,
-                           self.no_keep_alive, self.xheaders, self.protocol,
-                           server_side=True, version=self.spdy_options.get('version'),
-                           max_frame_len=self.spdy_options.get('max_frame_len'),
-                           min_frame_len=self.spdy_options.get('min_frame_len'),
-                           default_encoding=self.spdy_options.get('default_encoding'))
-        else:
-            HTTPConnection(stream, address, self.request_callback,
-                           self.no_keep_alive, self.xheaders, self.protocol)
-
+        HTTPConnection(stream, address, self.request_callback,
+                       self.no_keep_alive, self.xheaders, self.protocol)
 
 class _BadRequestException(Exception):
     """Exception class for malformed HTTP requests."""
