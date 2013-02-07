@@ -37,7 +37,6 @@ from tornado.log import gen_log
 from tornado.tcpserver import TCPServer
 from tornado import stack_context
 from tornado.util import bytes_type
-from tornado.spdy import SPDYConnection
 
 try:
     import Cookie  # py2

@@ -118,12 +118,7 @@ class Decompressor:
         err = _zlib.inflate(C.byref(self.st), Z_SYNC_FLUSH)
         if err == Z_NEED_DICT:
             assert self.dictionary, "no dictionary provided"  # FIXME: more specific error
-            dict_id = _zlib.adler32(
-                0L,
-                C.cast(C.c_char_p(self.dictionary), C.POINTER(C.c_ubyte)),
-                len(self.dictionary)
-            )
-#            assert dict_id == self.st.adler, 'incorrect dictionary (%s != %s)' % (dict_id, self.st.adler)
+
             err = _zlib.inflateSetDictionary(
                 C.byref(self.st),
                 C.cast(C.c_char_p(self.dictionary), C.POINTER(C.c_ubyte)),

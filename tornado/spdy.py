@@ -35,14 +35,14 @@ except ImportError:
 
     class Deflater(Compressor):
         def __init__(self, version, level):
-            super(Deflater, self).__init__(level, HEADER_ZLIB_DICT_2 if version == 2 else HEADER_ZLIB_DICT_3)
+            Compressor.__init__(self, level, HEADER_ZLIB_DICT_2 if version == 2 else HEADER_ZLIB_DICT_3)
 
         def compress(self, chunk):
             return self.__call__(chunk)
 
     class Inflater(Decompressor):
         def __init__(self, version):
-            super(Inflater, self).__init__(HEADER_ZLIB_DICT_2 if version == 2 else HEADER_ZLIB_DICT_3)
+            Decompressor.__init__(self, HEADER_ZLIB_DICT_2 if version == 2 else HEADER_ZLIB_DICT_3)
 
         def decompress(self, chunk):
             return self.__call__(chunk)
@@ -107,7 +107,7 @@ HEADER_ZLIB_DICT_2 =\
 "ndayTuesdayWednesdayThursdayFridaySaturdaySundayJanFebMarAprMayJunJulAugSe"\
 "pOctNovDecchunkedtext/htmlimage/pngimage/jpgimage/gifapplication/xmlapplic"\
 "ation/xhtmltext/plainpublicmax-agecharset=iso-8859-1utf-8gzipdeflateHTTP/1"\
-".1statusversionurl"
+".1statusversionurl\0"
 
 HEADER_ZLIB_DICT_3 =\
 "\x00\x00\x00\x07\x6f\x70\x74\x69\x6f\x6e\x73\x00\x00\x00\x04\x68"\
@@ -198,7 +198,7 @@ HEADER_ZLIB_DICT_3 =\
 "\x3d\x67\x7a\x69\x70\x2c\x64\x65\x66\x6c\x61\x74\x65\x2c\x73\x64"\
 "\x63\x68\x63\x68\x61\x72\x73\x65\x74\x3d\x75\x74\x66\x2d\x38\x63"\
 "\x68\x61\x72\x73\x65\x74\x3d\x69\x73\x6f\x2d\x38\x38\x35\x39\x2d"\
-"\x31\x2c\x75\x74\x66\x2d\x2c\x2a\x2c\x65\x6e\x71\x3d\x30\x2e"
+"\x31\x2c\x75\x74\x66\x2d\x2c\x2a\x2c\x65\x6e\x71\x3d\x30\x2e\0"
 
 def _bitmask(length, split, mask=0):
     invert = 1 if mask == 0 else 0
@@ -229,7 +229,7 @@ class SPDYServer(HTTPServer):
         HTTPServer.__init__(self, request_callback=request_callback, no_keep_alive=no_keep_alive, io_loop=io_loop,
             xheaders=xheaders, ssl_options=ssl_options, protocol=protocol, **kwargs)
 
-        self.spdy_options = spdy_options
+        self.spdy_options = spdy_options or {}
 
     def handle_stream(self, stream, address):
         SPDYConnection(stream, address, self.request_callback,
@@ -237,7 +237,8 @@ class SPDYServer(HTTPServer):
             server_side=True, version=self.spdy_options.get('version'),
             max_frame_len=self.spdy_options.get('max_frame_len'),
             min_frame_len=self.spdy_options.get('min_frame_len'),
-            default_encoding=self.spdy_options.get('default_encoding'))
+            header_encoding=self.spdy_options.get('header_encoding'),
+            compress_level=self.spdy_options.get('compress_level'))
 
 class Frame(object):
     def __init__(self, conn, flags):
@@ -263,19 +264,18 @@ class ControlFrame(Frame):
     def _parse_headers(self, compressed_chunk):
         headers = {}
 
-        if len(compressed_chunk) > self.conn.max_frame_size:
-            raise SPDYProtocolError("The SYN_STREAM frame too large", ERR_FRAME_TOO_LARGE)
-
         chunk = self.conn.inflater.decompress(compressed_chunk)
 
         len_size = 4 if self.conn.version >= 3 else 2
 
-        num_pairs = _parse_uint(chunk[0:len_size])
+        _parse_num = _parse_uint if self.conn.version >= 3 else _parse_ushort
+
+        num_pairs = _parse_num(chunk[0:len_size])
 
         pos = len_size
 
         for _ in xrange(num_pairs):
-            len = _parse_uint(chunk[pos:pos+len_size])
+            len = _parse_num(chunk[pos:pos+len_size])
 
             if len == 0:
                 raise SPDYProtocolError("The length of header name must be greater than zero", ERR_PROTOCOL_ERROR)
@@ -285,10 +285,11 @@ class ControlFrame(Frame):
             name = chunk[pos:pos+len].decode(self.conn.header_encoding)
             pos += len
 
-            len = _parse_uint(chunk[pos:pos+len_size])
+            len = _parse_num(chunk[pos:pos+len_size])
             pos += len_size
 
             values = chunk[pos:pos+len].decode(self.conn.header_encoding).split('\0') if len else []
+            pos += len
 
             headers[name] = values
 
@@ -334,8 +335,8 @@ class SyncStream(ControlFrame):
     def _on_body(self, chunk):
         self.stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
         self.assoc_stream_id = _parse_uint(chunk[4:8]) & _last_31_bits
-        self.priority = chunk[8] & (_first_3_bits if self.conn.version >= 3 else _first_2_bits)
-        self.slot = chunk[9] if self.conn.version >= 3 else 0
+        self.priority = ord(chunk[8]) & (_first_3_bits if self.conn.version >= 3 else _first_2_bits)
+        self.slot = ord(chunk[9]) if self.conn.version >= 3 else 0
 
         try:
             self.headers = self._parse_headers(chunk[10:])
@@ -418,8 +419,8 @@ class SPDYConnection(object):
 
         # Because header blocks are generally small, implementors may want to reduce the window-size of
         # the compression engine from the default 15bits (a 32KB window) to more like 11bits (a 2KB window).
-        self.deflater = Deflater(version)   # TODO reduce the window size
-        self.inflater = Inflater(version)
+        self.deflater = Deflater(self.version, self.compress_level)   # TODO reduce the window size
+        self.inflater = Inflater(self.version)
 
         self._frame_callback = stack_context.wrap(self._on_frame_header)
         self.read_next_frame()
@@ -429,7 +430,7 @@ class SPDYConnection(object):
 
     def _on_frame_header(self, chunk):
         #first bit: control or data frame?
-        control_frame = (chunk[0] & _first_bit == _first_bit)
+        control_frame = (ord(chunk[0]) & _first_bit == _first_bit)
 
         try:
             if control_frame:
@@ -440,7 +441,7 @@ class SPDYConnection(object):
                 frame_type = _parse_ushort(chunk[2:4])
 
                 #fifth byte: flags
-                flags = chunk[4]
+                flags = ord(chunk[4])
 
                 #sixth, seventh and eighth bytes: length
                 frame_length = _parse_uint("\0" + chunk[5:8])
@@ -453,6 +454,9 @@ class SPDYConnection(object):
                 if not frame_type in FRAME_TYPES:
                     raise SPDYProtocolError("invalid frame type: {0}".format(frame_type))
 
+                if frame_length > self.max_frame_len:
+                    raise SPDYProtocolError("The SYN_STREAM frame too large", ERR_FRAME_TOO_LARGE)
+
                 if not frame_cls:
                     raise SPDYProtocolError("unimplemented frame type: {0}".format(frame_type))
 
@@ -462,7 +466,7 @@ class SPDYConnection(object):
                 stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
 
                 #fifth byte: flags
-                flags = chunk[4]
+                flags = ord(chunk[4])
 
                 #sixth, seventh and eighth bytes: length
                 frame_length = _parse_uint("\0" + chunk[5:8])
