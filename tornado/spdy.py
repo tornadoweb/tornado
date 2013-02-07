@@ -23,10 +23,12 @@ http://www.chromium.org/spdy/spdy-protocol/spdy-protocol-draft3
 """
 
 import logging
+import socket
 from struct import unpack
 
 from tornado import stack_context
-from tornado.httpserver import HTTPServer
+from tornado.httputil import HTTPHeaders, parse_body_arguments
+from tornado.httpserver import HTTPServer, HTTPRequest
 
 try:
     from tornado._zlib_stream import Inflater, Deflater
@@ -198,7 +200,7 @@ HEADER_ZLIB_DICT_3 =\
 "\x3d\x67\x7a\x69\x70\x2c\x64\x65\x66\x6c\x61\x74\x65\x2c\x73\x64"\
 "\x63\x68\x63\x68\x61\x72\x73\x65\x74\x3d\x75\x74\x66\x2d\x38\x63"\
 "\x68\x61\x72\x73\x65\x74\x3d\x69\x73\x6f\x2d\x38\x38\x35\x39\x2d"\
-"\x31\x2c\x75\x74\x66\x2d\x2c\x2a\x2c\x65\x6e\x71\x3d\x30\x2e\0"
+"\x31\x2c\x75\x74\x66\x2d\x2c\x2a\x2c\x65\x6e\x71\x3d\x30\x2e"
 
 def _bitmask(length, split, mask=0):
     invert = 1 if mask == 0 else 0
@@ -218,7 +220,7 @@ def _parse_uint(data):
     return unpack(">I", data)[0]
 
 class SPDYProtocolError(Exception):
-    def __init__(self, err_msg, status_code=0):
+    def __init__(self, err_msg, status_code=None):
         super(SPDYProtocolError, self).__init__(err_msg)
 
         self.status_code = status_code
@@ -240,10 +242,33 @@ class SPDYServer(HTTPServer):
             header_encoding=self.spdy_options.get('header_encoding'),
             compress_level=self.spdy_options.get('compress_level'))
 
+class SPDYStream(object):
+    def __init__(self, sync_frame):
+        self.conn = sync_frame.conn
+        self.id = sync_frame.stream_id
+        self.headers = sync_frame.headers
+        self.finished = sync_frame.fin
+        self.data = ""
+
+    def recv(self, chunk, fin):
+        self.data += chunk
+
+        if fin:
+            self.finished = True
+            self.conn.parse_stream(self)
+
 class Frame(object):
     def __init__(self, conn, flags):
         self.conn = conn
         self.flags = flags
+
+    @property
+    def fin(self):
+        return FLAG_FIN == (self.flags & FLAG_FIN)
+
+    @property
+    def unidirectional(self):
+        return FLAG_UNIDIRECTIONAL == (self.flags & FLAG_UNIDIRECTIONAL)
 
     def _on_body(self, data):
         raise NotImplementedError()
@@ -305,7 +330,13 @@ class DataFrame(Frame):
     |               Data               |
     +----------------------------------+
     """
-    pass
+    def __init__(self, conn, flags, stream_id):
+        super(DataFrame, self).__init__(conn, flags)
+
+        self.stream_id = stream_id
+
+    def _on_body(self, chunk):
+        self.conn.streams[self.stream_id].recv(chunk, self.fin)
 
 class SyncStream(ControlFrame):
     """
@@ -340,11 +371,14 @@ class SyncStream(ControlFrame):
 
         try:
             self.headers = self._parse_headers(chunk[10:])
+
+            self.conn.add_stream(SPDYStream(self))
         except SPDYProtocolError, ex:
             spdy_log.warn(ex.message)
 
             self.conn.reset_stream(self.stream_id, ex.status_code)
-            self.conn.read_next_frame()
+
+        self.conn.read_next_frame()
 
 class SyncReply(ControlFrame):
     pass
@@ -425,6 +459,8 @@ class SPDYConnection(object):
         self._frame_callback = stack_context.wrap(self._on_frame_header)
         self.read_next_frame()
 
+        self.streams = {}
+
     def read_next_frame(self):
         self.stream.read_bytes(FRAME_HEADER_LEN, self._frame_callback)
 
@@ -473,17 +509,68 @@ class SPDYConnection(object):
 
                 frame = DataFrame(self, flags, stream_id)
 
+                if stream_id not in self.streams:
+                    raise SPDYProtocolError("invalid stream for %d bytes data" % frame_length, ERR_INVALID_STREAM)
+
             frame_callback = stack_context.wrap(frame._on_body)
 
             self.stream.read_bytes(frame_length, frame_callback)
         except SPDYProtocolError as ex:
             spdy_log.warn(ex.message)
 
+            if ex.status_code:
+                self.reset_stream(stream_id, ex.status_code)
+
             conn = self
 
             skip_frame_callback = stack_context.wrap(lambda data: conn.read_next_frame())
 
             self.stream.read_bytes(frame_length, skip_frame_callback)
+
+    def add_stream(self, stream):
+        if stream.id in self.streams:
+            self.reset_stream(stream.id, ERR_PROTOCOL_ERROR)
+        else:
+            self.streams[stream.id] = stream
+
+            if stream.finished:
+                self.parse_stream(stream)
+
+    def parse_stream(self, stream):
+        try:
+            if self.version >= 3:
+                scheme = stream.headers.pop(u':scheme')[0]
+                version = stream.headers.pop(u':version')[0]
+                method = stream.headers.pop(u':method')[0]
+                path = stream.headers.pop(u':path')[0]
+                host = stream.headers.pop(u':host')[0]
+            else:
+                scheme = stream.headers.pop(u'scheme')[0]
+                version = stream.headers.pop(u'version')[0]
+                method = stream.headers.pop(u'method')[0]
+                path = stream.headers.pop(u'url')[0]
+                host = None
+        except KeyError:
+            pass # TODO reply with a HTTP 400 BAD REQUEST reply.
+
+        # HTTPRequest wants an IP, not a full socket address
+        if self.address_family in (socket.AF_INET, socket.AF_INET6):
+            remote_ip = self.address[0]
+        else:
+            # Unix (or other) socket; fake the remote address
+            remote_ip = '0.0.0.0'
+
+        request = HTTPRequest(connection=self, method=method, uri=path, version=version,
+            headers=HTTPHeaders(stream.headers), remote_ip=remote_ip, protocol=self.protocol)
+
+        request.body = stream.data
+
+        if method in ("POST", "PATCH", "PUT"):
+            parse_body_arguments(
+                request.headers.get("Content-Type", ""), stream.data,
+                request.arguments, request.files)
+
+        self.request_callback(request)
 
     def reset_stream(self, stream_id, status_code):
         self.send_frame(RstStream(self, stream_id, status_code))
