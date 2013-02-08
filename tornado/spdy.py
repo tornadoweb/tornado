@@ -24,11 +24,13 @@ http://www.chromium.org/spdy/spdy-protocol/spdy-protocol-draft3
 
 import logging
 import socket
+import time
 from struct import unpack
 
 from tornado import stack_context
 from tornado.httputil import HTTPHeaders, parse_body_arguments
 from tornado.httpserver import HTTPServer, HTTPRequest
+from tornado.util import bytes_type
 
 try:
     from tornado._zlib_stream import Inflater, Deflater
@@ -424,6 +426,13 @@ FRAME_TYPES = {
     TYPE_CREDENTIAL: Credential,
 }
 
+class SPDYRequest(HTTPRequest):
+    def write(self, chunk, callback=None):
+        assert isinstance(chunk, bytes_type)
+
+    def finish(self):
+        self._finish_time = time.time()
+
 class SPDYConnection(object):
     """Handles a connection to an SPDY client, executing SPDY frames.
 
@@ -527,6 +536,9 @@ class SPDYConnection(object):
 
             self.stream.read_bytes(frame_length, skip_frame_callback)
 
+    def set_close_callback(self, callback):
+        pass
+
     def add_stream(self, stream):
         if stream.id in self.streams:
             self.reset_stream(stream.id, ERR_PROTOCOL_ERROR)
@@ -560,7 +572,7 @@ class SPDYConnection(object):
             # Unix (or other) socket; fake the remote address
             remote_ip = '0.0.0.0'
 
-        request = HTTPRequest(connection=self, method=method, uri=path, version=version,
+        request = SPDYRequest(connection=self, method=method, uri=path, version=version,
             headers=HTTPHeaders(stream.headers), remote_ip=remote_ip, protocol=self.protocol)
 
         request.body = stream.data
