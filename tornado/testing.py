@@ -398,21 +398,21 @@ class LogTrapTestCase(unittest.TestCase):
 
     This class assumes that only one log handler is configured and that
     it is a StreamHandler.  This is true for both logging.basicConfig
-    and the "pretty logging" configured by tornado.options.
+    and the "pretty logging" configured by tornado.options.  It is not
+    compatible with other log buffering mechanisms, such as those provided
+    by some test runners.
     """
     def run(self, result=None):
         logger = logging.getLogger()
-        if len(logger.handlers) > 1:
-            # Multiple handlers have been defined.  It gets messy to handle
-            # this, especially since the handlers may have different
-            # formatters.  Just leave the logging alone in this case.
-            super(LogTrapTestCase, self).run(result)
-            return
         if not logger.handlers:
             logging.basicConfig()
-        self.assertEqual(len(logger.handlers), 1)
         handler = logger.handlers[0]
-        assert isinstance(handler, logging.StreamHandler)
+        if (len(logger.handlers) > 1 or
+            not isinstance(handler, logging.StreamHandler)):
+            # Logging has been configured in a way we don't recognize,
+            # so just leave it alone.
+            super(LogTrapTestCase, self).run(result)
+            return
         old_stream = handler.stream
         try:
             handler.stream = StringIO()
