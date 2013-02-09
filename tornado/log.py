@@ -142,8 +142,12 @@ class LogFormatter(logging.Formatter):
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
-            formatted = (formatted.rstrip() + "\n" +
-                         safe_unicode(record.exc_text))
+            # exc_text contains multiple lines.  We need to safe_unicode
+            # each line separately so that non-utf8 bytes don't cause
+            # all the newlines to turn into '\n'.
+            lines = [formatted.rstrip()]
+            lines.extend(safe_unicode(ln) for ln in record.exc_text.split('\n'))
+            formatted = '\n'.join(lines)
         return formatted.replace("\n", "\n    ")
 
 

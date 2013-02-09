@@ -112,7 +112,10 @@ class LogFormatterTest(unittest.TestCase):
             self.logger.exception('caught exception')
         # This will be "Exception: \xe9" on python 2 or
         # "Exception: b'\xe9'" on python 3.
-        self.assertRegexpMatches(self.get_output(), br'Exception.*\\xe9')
+        output = self.get_output()
+        self.assertRegexpMatches(output, br'Exception.*\\xe9')
+        # The traceback contains newlines, which should not have been escaped.
+        self.assertNotIn(br'\n', output)
 
 
 class UnicodeLogFormatterTest(LogFormatterTest):
