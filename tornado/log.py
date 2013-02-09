@@ -131,17 +131,19 @@ class LogFormatter(logging.Formatter):
         # it's worth it since the encoding errors that would otherwise
         # result are so useless (and tornado is fond of using utf8-encoded
         # byte strings whereever possible).
-        try:
-            message = _unicode(record.message)
-        except UnicodeDecodeError:
-            message = repr(record.message)
+        def safe_unicode(s):
+            try:
+                return _unicode(s)
+            except UnicodeDecodeError:
+                return repr(s)
 
-        formatted = prefix + " " + message
+        formatted = prefix + " " + safe_unicode(record.message)
         if record.exc_info:
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
-            formatted = formatted.rstrip() + "\n" + record.exc_text
+            formatted = (formatted.rstrip() + "\n" +
+                         safe_unicode(record.exc_text))
         return formatted.replace("\n", "\n    ")
 
 

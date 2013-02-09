@@ -38,7 +38,9 @@ def ignore_bytes_warning():
 
 
 class LogFormatterTest(unittest.TestCase):
-    LINE_RE = re.compile(b"\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)")
+    # Matches the output of a single logging call (which may be multiple lines
+    # if a traceback was included, so we use the DOTALL option)
+    LINE_RE = re.compile(b"(?s)\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)")
 
     def setUp(self):
         self.formatter = LogFormatter(color=False)
@@ -102,6 +104,15 @@ class LogFormatterTest(unittest.TestCase):
             # they're ascii-only, so this degenerates into another
             # copy of test_bytes_logging.
             self.assertEqual(self.get_output(), utf8(repr(utf8(u("\u00e9")))))
+
+    def test_bytes_exception_logging(self):
+        try:
+            raise Exception(b'\xe9')
+        except Exception:
+            self.logger.exception('caught exception')
+        # This will be "Exception: \xe9" on python 2 or
+        # "Exception: b'\xe9'" on python 3.
+        self.assertRegexpMatches(self.get_output(), br'Exception.*\\xe9')
 
 
 class UnicodeLogFormatterTest(LogFormatterTest):
