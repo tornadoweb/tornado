@@ -114,6 +114,7 @@ class RequestHandler(object):
 
     _template_loaders = {}  # {path: template.BaseLoader}
     _template_loader_lock = threading.Lock()
+    _remove_control_chars_regex = re.compile(r"[\x00-\x08\x0e-\x1f]")
 
     def __init__(self, application, request, **kwargs):
         super(RequestHandler, self).__init__()
@@ -342,13 +343,14 @@ class RequestHandler(object):
 
         The returned values are always unicode.
         """
+
         values = []
         for v in self.request.arguments.get(name, []):
             v = self.decode_argument(v, name=name)
             if isinstance(v, unicode_type):
                 # Get rid of any weird control chars (unless decoding gave
                 # us bytes, in which case leave it alone)
-                v = re.sub(r"[\x00-\x08\x0e-\x1f]", " ", v)
+                v = RequestHandler._remove_control_chars_regex.sub(" ", v)
             if strip:
                 v = v.strip()
             values.append(v)
