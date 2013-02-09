@@ -73,6 +73,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             self._handle_force_timeout, 1000, io_loop=io_loop)
         self._force_timeout_callback.start()
 
+        # Work around a bug in libcurl 7.29.0: Some fields in the curl
+        # multi object are initialized lazily, and its destructor will
+        # segfault if it is destroyed without having been used.  Add
+        # and remove a dummy handle to make sure everything is
+        # initialized.
+        dummy_curl_handle = pycurl.Curl()
+        self._multi.add_handle(dummy_curl_handle)
+        self._multi.remove_handle(dummy_curl_handle)
+
     def close(self):
         self._force_timeout_callback.stop()
         for curl in self._curls:
