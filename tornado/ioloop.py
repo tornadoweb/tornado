@@ -264,7 +264,8 @@ class IOLoop(Configurable):
         raise NotImplementedError()
 
     def stop(self):
-        """Stop the loop after the current event loop iteration is complete.
+        """Stop the I/O loop.
+
         If the event loop is not currently running, the next call to start()
         will return immediately.
 
@@ -280,6 +281,8 @@ class IOLoop(Configurable):
 
         Note that even after `stop` has been called, the IOLoop is not
         completely stopped until `IOLoop.start` has also returned.
+        Some work that was scheduled before the call to `stop` may still
+        be run before the IOLoop shuts down.
         """
         raise NotImplementedError()
 
