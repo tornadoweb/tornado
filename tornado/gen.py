@@ -66,6 +66,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import collections
 import functools
+import itertools
 import sys
 import types
 
@@ -282,13 +283,17 @@ class Multi(YieldPoint):
                 i = YieldFuture(i)
             self.children.append(i)
         assert all(isinstance(i, YieldPoint) for i in self.children)
+        self.unfinished_children = set(self.children)
 
     def start(self, runner):
         for i in self.children:
             i.start(runner)
 
     def is_ready(self):
-        return all(i.is_ready() for i in self.children)
+        finished = list(itertools.takewhile(
+                lambda i: i.is_ready(), self.unfinished_children))
+        self.unfinished_children.difference_update(finished)
+        return not self.unfinished_children
 
     def get_result(self):
         return [i.get_result() for i in self.children]

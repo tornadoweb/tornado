@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
+import time
+
 from tornado.concurrent import return_future
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
@@ -226,6 +228,16 @@ class GenTest(AsyncTestCase):
             self.assertEqual(responses, ["v1", "v2"])
             self.stop()
         self.run_gen(f)
+
+    @gen_test
+    def test_multi_performance(self):
+        # Yielding a list used to have quadratic performance; make
+        # sure a large list stays reasonable.  On my laptop a list of
+        # 2000 used to take 1.8s, now it takes 0.12.
+        start = time.time()
+        yield [gen.Task(self.io_loop.add_callback) for i in range(2000)]
+        end = time.time()
+        self.assertLess(end - start, 1.0)
 
     @gen_test
     def test_future(self):
