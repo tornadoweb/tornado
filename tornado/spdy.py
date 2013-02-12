@@ -25,11 +25,12 @@ http://www.chromium.org/spdy/spdy-protocol/spdy-protocol-draft3
 import logging
 import socket
 import time
-from struct import unpack
+import numbers
+from struct import pack, unpack
 
 from tornado import stack_context
 from tornado.httputil import HTTPHeaders, parse_body_arguments
-from tornado.httpserver import HTTPServer, HTTPRequest
+from tornado.httpserver import HTTPServer, HTTPConnection, HTTPRequest
 from tornado.util import bytes_type
 
 try:
@@ -53,7 +54,9 @@ except ImportError:
 
 spdy_log = logging.getLogger("tornado.spdy")
 
-DEFAULT_SPDY_VERSION = 2
+SPDY_VERSION_AUTO = 0
+SPDY_VERSION_2 = 2
+SPDY_VERSION_3 = 3
 
 DEFAULT_HEADER_ENCODING = 'UTF-8'
 DEFAULT_HEADER_COMPRESS_LEVEL = -1
@@ -66,37 +69,64 @@ FRAME_HEADER_LEN = 8
 MAX_FRAME_LEN = 16 * 1024 * 1024
 MIN_FRAME_LEN = 8 * 1024
 
-TYPE_SYN_STREAM     = 1
-TYPE_SYN_REPLY      = 2
-TYPE_RST_STREAM     = 3
-TYPE_SETTINGS       = 4
-TYPE_NOOP           = 5
-TYPE_PING           = 6
-TYPE_GOAWAY         = 7
-TYPE_HEADERS        = 8
-TYPE_WINDOW_UPDATE  = 9
-TYPE_CREDENTIAL     = 10
+TYPE_SYN_STREAM = 1
+TYPE_SYN_REPLY = 2
+TYPE_RST_STREAM = 3
+TYPE_SETTINGS = 4
+TYPE_NOOP = 5
+TYPE_PING = 6
+TYPE_GOAWAY = 7
+TYPE_HEADERS = 8
+TYPE_WINDOW_UPDATE = 9
+TYPE_CREDENTIAL = 10
 
-ERR_PROTOCOL_ERROR        = 1   # This is a generic error, and should only be used if a more specific error is not available.
-ERR_INVALID_STREAM        = 2   # This is returned when a frame is received for a stream which is not active.
-ERR_REFUSED_STREAM        = 3   # Indicates that the stream was refused before any processing has been done on the stream.
-ERR_UNSUPPORTED_VERSION   = 4   # Indicates that the recipient of a stream does not support the SPDY version requested.
-ERR_CANCEL                = 5   # Used by the creator of a stream to indicate that the stream is no longer needed.
-ERR_INTERNAL_ERROR        = 6   # This is a generic error which can be used when the implementation has internally failed,
+PRI_LOWEST = 'lowest'
+PRI_LOW = 'low'
+PRI_HIGH = 'high'
+PRI_HIGHEST = 'highest'
+
+PRIORITIES = {
+    2: {
+        PRI_LOWEST: 0,
+        PRI_LOW: 1,
+        PRI_HIGH: 2,
+        PRI_HIGHEST: 3
+    },
+    3: {
+        PRI_LOWEST: 0,
+        PRI_LOW: 3,
+        PRI_HIGH: 5,
+        PRI_HIGHEST: 7
+    }
+}
+
+
+def _priority(pri, version):
+    if isinstance(pri, numbers.Number):
+        return pri
+
+    return PRIORITIES[version][str(pri)]
+
+ERR_PROTOCOL_ERROR = 1          # This is a generic error, and should only be used if a more specific error is not available.
+ERR_INVALID_STREAM = 2          # This is returned when a frame is received for a stream which is not active.
+ERR_REFUSED_STREAM = 3          # Indicates that the stream was refused before any processing has been done on the stream.
+ERR_UNSUPPORTED_VERSION = 4     # Indicates that the recipient of a stream does not support the SPDY version requested.
+ERR_CANCEL = 5                  # Used by the creator of a stream to indicate that the stream is no longer needed.
+ERR_INTERNAL_ERROR = 6          # This is a generic error which can be used when the implementation has internally failed,
                                 # not due to anything in the protocol.
-ERR_FLOW_CONTROL_ERROR    = 7   # The endpoint detected that its peer violated the flow control protocol.
-ERR_STREAM_IN_USE         = 8   # The endpoint received a SYN_REPLY for a stream already open.
+ERR_FLOW_CONTROL_ERROR = 7      # The endpoint detected that its peer violated the flow control protocol.
+ERR_STREAM_IN_USE = 8           # The endpoint received a SYN_REPLY for a stream already open.
 ERR_STREAM_ALREADY_CLOSED = 9   # The endpoint received a data or SYN_REPLY frame for a stream which is half closed.
-ERR_INVALID_CREDENTIALS   = 10  # The server received a request for a resource whose origin does not have valid credentials in the client certificate vector.
-ERR_FRAME_TOO_LARGE       = 11  # The endpoint received a frame which this implementation could not support.
+ERR_INVALID_CREDENTIALS = 10    # The server received a request for a resource whose origin does not have valid credentials in the client certificate vector.
+ERR_FRAME_TOO_LARGE = 11        # The endpoint received a frame which this implementation could not support.
                                 # If FRAME_TOO_LARGE is sent for a SYN_STREAM, HEADERS, or SYN_REPLY frame
                                 # without fully processing the compressed portion of those frames,
                                 # then the compression state will be out-of-sync with the other endpoint.
                                 # In this case, senders of FRAME_TOO_LARGE MUST close the session.
 
-FLAG_FIN            = 0x01  # marks this frame as the last frame to be transmitted on this stream
-                            # and puts the sender in the half-closed (Section 2.3.6) state.
-FLAG_UNIDIRECTIONAL = 0x02  # a stream created with this flag puts the recipient in the half-closed (Section 2.3.6) state.
+FLAG_FIN = 0x01                 # marks this frame as the last frame to be transmitted on this stream
+                                # and puts the sender in the half-closed (Section 2.3.6) state.
+FLAG_UNIDIRECTIONAL = 0x02      # a stream created with this flag puts the recipient in the half-closed (Section 2.3.6) state.
 
 HEADER_ZLIB_DICT_2 =\
 "optionsgetheadpostputdeletetraceacceptaccept-charsetaccept-encodingaccept-"\
@@ -215,11 +245,22 @@ _first_3_bits = _bitmask(8, 3, 1)
 _last_15_bits = _bitmask(16, 1, 0)
 _last_31_bits = _bitmask(32, 1, 0)
 
+
 def _parse_ushort(data):
     return unpack(">H", data)[0]
 
+
 def _parse_uint(data):
     return unpack(">I", data)[0]
+
+
+def _pack_ushort(num):
+    return pack(">H", num)
+
+
+def _pack_uint(num):
+    return pack(">I", num)
+
 
 class SPDYProtocolError(Exception):
     def __init__(self, err_msg, status_code=None):
@@ -227,30 +268,22 @@ class SPDYProtocolError(Exception):
 
         self.status_code = status_code
 
-class SPDYServer(HTTPServer):
-    def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, protocol=None, spdy_options=None, **kwargs):
-        HTTPServer.__init__(self, request_callback=request_callback, no_keep_alive=no_keep_alive, io_loop=io_loop,
-            xheaders=xheaders, ssl_options=ssl_options, protocol=protocol, **kwargs)
-
-        self.spdy_options = spdy_options or {}
-
-    def handle_stream(self, stream, address):
-        SPDYConnection(stream, address, self.request_callback,
-            self.no_keep_alive, self.xheaders, self.protocol,
-            server_side=True, version=self.spdy_options.get('version'),
-            max_frame_len=self.spdy_options.get('max_frame_len'),
-            min_frame_len=self.spdy_options.get('min_frame_len'),
-            header_encoding=self.spdy_options.get('header_encoding'),
-            compress_level=self.spdy_options.get('compress_level'))
 
 class SPDYStream(object):
-    def __init__(self, sync_frame):
-        self.conn = sync_frame.conn
-        self.id = sync_frame.stream_id
-        self.headers = sync_frame.headers
-        self.finished = sync_frame.fin
+    def __init__(self, conn, id, pri=None, headers=None, finished=True):
+        self.conn = conn
+        self.id = id
+        self.priority = _priority(pri, conn.version)
+        self.headers = headers
+        self.finished = finished
+
         self.data = ""
+        self.frames = []
+
+    def close(self):
+        self.data = None
+
+        self.conn.close_stream(self)
 
     def recv(self, chunk, fin):
         self.data += chunk
@@ -258,6 +291,12 @@ class SPDYStream(object):
         if fin:
             self.finished = True
             self.conn.parse_stream(self)
+
+    def send(self, frame, callback=None):
+        self.frames.append((frame, callback))
+
+        self.conn.send_next_frame()
+
 
 class Frame(object):
     def __init__(self, conn, flags):
@@ -275,6 +314,7 @@ class Frame(object):
     def _on_body(self, data):
         raise NotImplementedError()
 
+
 class ControlFrame(Frame):
     """
     +----------------------------------+
@@ -285,8 +325,10 @@ class ControlFrame(Frame):
     |               Data               |
     +----------------------------------+
     """
-    def __init__(self, conn, flags):
+    def __init__(self, conn, flags, frame_type):
         super(ControlFrame, self).__init__(conn, flags)
+
+        self.frame_type = frame_type
 
     def _parse_headers(self, compressed_chunk):
         headers = {}
@@ -302,25 +344,42 @@ class ControlFrame(Frame):
         pos = len_size
 
         for _ in xrange(num_pairs):
-            len = _parse_num(chunk[pos:pos+len_size])
+            len = _parse_num(chunk[pos:pos + len_size])
 
             if len == 0:
                 raise SPDYProtocolError("The length of header name must be greater than zero", ERR_PROTOCOL_ERROR)
 
             pos += len_size
 
-            name = chunk[pos:pos+len].decode(self.conn.header_encoding)
+            name = chunk[pos:pos + len].decode(self.conn.header_encoding)
             pos += len
 
-            len = _parse_num(chunk[pos:pos+len_size])
+            len = _parse_num(chunk[pos:pos + len_size])
             pos += len_size
 
-            values = chunk[pos:pos+len].decode(self.conn.header_encoding).split('\0') if len else []
+            values = chunk[pos:pos + len].decode(self.conn.header_encoding).split('\0') if len else []
             pos += len
 
             headers[name] = values
 
         return headers
+
+    def _pack_headers(self, headers):
+        _pack_num = _pack_uint if self.conn.version >= 3 else _pack_ushort
+
+        chunk = _pack_num(len(headers))
+
+        for name, value in headers:
+            chunk += _pack_num(len(name)) + name + _pack_num(len(value)) + value
+
+        compressed_chunk = self.conn.deflater.compress(chunk)
+
+        return compressed_chunk
+
+    def _pack_frame(self, chunk):
+        return _pack_ushort(self.conn.version | 0x8000) + _pack_ushort(self.frame_type) + \
+               _pack_uint(self.flags << 24 | len(chunk)) + chunk
+
 
 class DataFrame(Frame):
     """
@@ -332,16 +391,25 @@ class DataFrame(Frame):
     |               Data               |
     +----------------------------------+
     """
-    def __init__(self, conn, flags, stream_id):
+    def __init__(self, conn, flags, stream_id, chunk=''):
         super(DataFrame, self).__init__(conn, flags)
 
         self.stream_id = stream_id
+        self.chunk = chunk
 
     def _on_body(self, chunk):
+        self.chunk = chunk
+
         self.conn.streams[self.stream_id].recv(chunk, self.fin)
+
+    def pack(self):
+        return _pack_uint(self.stream_id) + _pack_uint(self.flags << 24 | len(self.chunk)) + self.chunk
+
 
 class SyncStream(ControlFrame):
     """
+    The SYN_STREAM control frame allows the sender to asynchronously create a stream between the endpoints.
+
     +------------------------------------+
     |1|    version    |         1        |
     +------------------------------------+
@@ -365,16 +433,26 @@ class SyncStream(ControlFrame):
     +------------------------------------+    |
     |           (repeats)                |   <+
     """
+    def __init__(self, conn, flags):
+        super(SyncStream, self).__init__(conn, flags, TYPE_SYN_STREAM)
+
     def _on_body(self, chunk):
         self.stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
         self.assoc_stream_id = _parse_uint(chunk[4:8]) & _last_31_bits
-        self.priority = ord(chunk[8]) & (_first_3_bits if self.conn.version >= 3 else _first_2_bits)
-        self.slot = ord(chunk[9]) if self.conn.version >= 3 else 0
+
+        if self.conn.version >= 3:
+            self.priority = (ord(chunk[8]) & _first_3_bits) >> 5
+            self.slot = ord(chunk[9])
+        else:
+            self.priority = (ord(chunk[8]) & _first_2_bits) >> 6
+            self.slot = 0
 
         try:
             self.headers = self._parse_headers(chunk[10:])
 
-            self.conn.add_stream(SPDYStream(self))
+            stream = SPDYStream(self.conn, self.stream_id, self.priority, self.headers, self.fin)
+
+            self.conn.add_stream(stream)
         except SPDYProtocolError, ex:
             spdy_log.warn(ex.message)
 
@@ -382,36 +460,104 @@ class SyncStream(ControlFrame):
 
         self.conn.read_next_frame()
 
+
 class SyncReply(ControlFrame):
-    pass
+    """
+    SYN_REPLY indicates the acceptance of a stream creation by the recipient of a SYN_STREAM frame.
+
+    +------------------------------------+
+    |1|    version    |         2        |
+    +------------------------------------+
+    |  Flags (8)  |  Length (24 bits)    |
+    +------------------------------------+
+    |X|           Stream-ID (31bits)     |
+    +------------------------------------+
+    | Number of Name/Value pairs (int32) |   <+
+    +------------------------------------+    |
+    |     Length of name (int32)         |    | This section is the "Name/Value
+    +------------------------------------+    | Header Block", and is compressed.
+    |           Name (string)            |    |
+    +------------------------------------+    |
+    |     Length of value  (int32)       |    |
+    +------------------------------------+    |
+    |          Value   (string)          |    |
+    +------------------------------------+    |
+    |           (repeats)                |   <+
+
+    """
+    def __init__(self, conn, stream_id, headers, finished):
+        super(SyncReply, self).__init__(conn, FLAG_UNIDIRECTIONAL if finished else 0, TYPE_SYN_REPLY)
+
+        self.stream_id = stream_id
+        self.headers = headers
+
+    def pack(self):
+        chunk = _pack_uint(self.stream_id) + \
+                ('' if self.conn.version >= 3 else _pack_ushort(0)) + \
+                self._pack_headers(self.headers)
+
+        return self._pack_frame(chunk)
+
 
 class RstStream(ControlFrame):
+    """
+    The RST_STREAM frame allows for abnormal termination of a stream.
+
+    +----------------------------------+
+    |1|   version    |         3       |
+    +----------------------------------+
+    | Flags (8)  |         8           |
+    +----------------------------------+
+    |X|          Stream-ID (31bits)    |
+    +----------------------------------+
+    |          Status code             |
+    +----------------------------------+
+    """
     def __init__(self, conn, stream_id, status_code):
-        super(RstStream, self).__init__(conn, 0)
+        super(RstStream, self).__init__(conn, 0, TYPE_RST_STREAM)
 
         self.stream_id = stream_id
         self.status_code = status_code
 
+    def pack(self):
+        chunk = _pack_uint(self.stream_id) + _pack_uint(self.status_code)
+
+        return self._pack_frame(chunk)
+
+
 class Settings(ControlFrame):
-    pass
+    def __init__(self, conn, flags):
+        super(Settings, self).__init__(conn, flags, TYPE_SETTINGS)
+
 
 class Noop(ControlFrame):
-    pass
+    def __init__(self, conn, flags):
+        super(Noop, self).__init__(conn, flags, TYPE_NOOP)
+
 
 class Ping(ControlFrame):
-    pass
+    def __init__(self, conn, flags):
+        super(Ping, self).__init__(conn, flags, TYPE_PING)
+
 
 class GoAway(ControlFrame):
-    pass
+    def __init__(self, conn, flags):
+        super(GoAway, self).__init__(conn, flags, TYPE_GOAWAY)
+
 
 class Headers(ControlFrame):
-    pass
+    def __init__(self, conn, flags):
+        super(Headers, self).__init__(conn, flags, TYPE_HEADERS)
+
 
 class WindowUpdate(ControlFrame):
-    pass
+    def __init__(self, conn, flags):
+        super(WindowUpdate, self).__init__(conn, flags, TYPE_WINDOW_UPDATE)
+
 
 class Credential(ControlFrame):
-    pass
+    def __init__(self, conn, flags):
+        super(Credential, self).__init__(conn, flags, TYPE_CREDENTIAL)
 
 FRAME_TYPES = {
     TYPE_SYN_STREAM: SyncStream,
@@ -426,12 +572,53 @@ FRAME_TYPES = {
     TYPE_CREDENTIAL: Credential,
 }
 
+
 class SPDYRequest(HTTPRequest):
+    def __init__(self, stream, *args, **kwds):
+        HTTPRequest.__init__(self, *args, **kwds)
+
+        self.stream = stream
+        self.replied = False
+
     def write(self, chunk, callback=None):
         assert isinstance(chunk, bytes_type)
 
+        if not self.replied:
+            idx = chunk.find('\r\n\r\n')
+
+            lines = chunk[:idx].split('\r\n')
+            version, status_code, reason = lines.pop(0).split(' ')
+            status = "%s %s" % (status_code, reason)
+
+            if self.version >= 3:
+                headers = [[':status', status], [':version', version]]
+            else:
+                headers = [['status', status], ['version', version]]
+
+            headers += [(name.lower(), value) for name, value in [line.split(': ') for line in lines]]
+
+            chunk = chunk[idx + 4:]
+
+            reply_frame = SyncReply(self.connection, self.stream.id, headers, len(chunk) == 0)
+
+            self.stream.send(reply_frame)
+
+            self.replied = True
+
+        data_frame = DataFrame(self.connection, 0, self.stream.id, chunk)
+
+        self.stream.send(data_frame, callback)
+
     def finish(self):
+        if self.stream.frames and isinstance(self.stream.frames[-1], DataFrame):
+            self.stream.frames[-1].flags |= FLAG_FIN
+        else:
+            data_frame = DataFrame(self.connection, FLAG_FIN, self.stream.id)
+
+            self.stream.send(data_frame, self.stream.close)
+
         self._finish_time = time.time()
+
 
 class SPDYConnection(object):
     """Handles a connection to an SPDY client, executing SPDY frames.
@@ -454,21 +641,37 @@ class SPDYConnection(object):
         self.protocol = protocol
 
         self.server_side = server_side
-        self.version = version or DEFAULT_SPDY_VERSION
+        self.version = version or SPDY_VERSION_AUTO
         self.max_frame_len = max_frame_len or MAX_FRAME_LEN
         self.min_frame_len = min_frame_len or MIN_FRAME_LEN
         self.header_encoding = header_encoding or DEFAULT_HEADER_ENCODING
         self.compress_level = compress_level or DEFAULT_HEADER_COMPRESS_LEVEL
 
-        # Because header blocks are generally small, implementors may want to reduce the window-size of
-        # the compression engine from the default 15bits (a 32KB window) to more like 11bits (a 2KB window).
-        self.deflater = Deflater(self.version, self.compress_level)   # TODO reduce the window size
-        self.inflater = Inflater(self.version)
-
         self._frame_callback = stack_context.wrap(self._on_frame_header)
         self.read_next_frame()
 
         self.streams = {}
+        self.priority_streams = [[] for i in range(7)]
+        self.sending = False
+
+    @property
+    def deflater(self):
+        """
+        Because header blocks are generally small, implementors may want to reduce the window-size of
+        the compression engine from the default 15bits (a 32KB window) to more like 11bits (a 2KB window).
+        """
+        if not hasattr(self, '_deflater'):
+            self._deflater = Deflater(self.version, self.compress_level)
+
+        return self._deflater
+
+    @property
+    def inflater(self):
+        if not hasattr(self, '_inflater'):
+            self._inflater = Inflater(self.version)
+
+        return self._inflater
+
 
     def read_next_frame(self):
         self.stream.read_bytes(FRAME_HEADER_LEN, self._frame_callback)
@@ -492,6 +695,11 @@ class SPDYConnection(object):
                 frame_length = _parse_uint("\0" + chunk[5:8])
 
                 frame_cls = FRAME_TYPES[frame_type]
+
+                if self.version == SPDY_VERSION_AUTO:
+                    spdy_log.info("auto switch to the SPDY v%d" % spdy_version)
+
+                    self.version = spdy_version
 
                 if spdy_version != self.version:
                     raise SPDYProtocolError("incorrect SPDY version")
@@ -537,6 +745,7 @@ class SPDYConnection(object):
             self.stream.read_bytes(frame_length, skip_frame_callback)
 
     def set_close_callback(self, callback):
+        # TODO ignore the close callback
         pass
 
     def add_stream(self, stream):
@@ -544,6 +753,7 @@ class SPDYConnection(object):
             self.reset_stream(stream.id, ERR_PROTOCOL_ERROR)
         else:
             self.streams[stream.id] = stream
+            self.priority_streams[stream.priority].append(stream)
 
             if stream.finished:
                 self.parse_stream(stream)
@@ -563,7 +773,7 @@ class SPDYConnection(object):
                 path = stream.headers.pop(u'url')[0]
                 host = None
         except KeyError:
-            pass # TODO reply with a HTTP 400 BAD REQUEST reply.
+            pass  # TODO reply with a HTTP 400 BAD REQUEST reply.
 
         # HTTPRequest wants an IP, not a full socket address
         if self.address_family in (socket.AF_INET, socket.AF_INET6):
@@ -572,10 +782,14 @@ class SPDYConnection(object):
             # Unix (or other) socket; fake the remote address
             remote_ip = '0.0.0.0'
 
-        request = SPDYRequest(connection=self, method=method, uri=path, version=version,
-            headers=HTTPHeaders(stream.headers), remote_ip=remote_ip, protocol=self.protocol)
+        headers = HTTPHeaders()
 
-        request.body = stream.data
+        for name, values in stream.headers.items():
+            for value in values:
+                headers.add(name, value)
+
+        request = SPDYRequest(method=method, uri=path, version=version, headers=headers, body=stream.data,
+            remote_ip=remote_ip, protocol=self.protocol, host=host, connection=self, stream=stream)
 
         if method in ("POST", "PATCH", "PUT"):
             parse_body_arguments(
@@ -584,8 +798,73 @@ class SPDYConnection(object):
 
         self.request_callback(request)
 
-    def reset_stream(self, stream_id, status_code):
-        self.send_frame(RstStream(self, stream_id, status_code))
+    def close_stream(self, stream):
+        try:
+            self.priority_streams[stream.priority].remove(stream)
+        except ValueError:
+            pass
 
-    def send_frame(self, frame):
-        pass
+    def reset_stream(self, stream_id, status_code):
+        if stream_id in self.streams:
+            stream = self.streams[stream_id]
+
+            stream.close()
+        else:
+            stream = SPDYStream(self, stream_id, PRI_HIGH)
+
+            self.add_stream(stream)
+
+        frame = RstStream(self, stream_id, status_code)
+
+        stream.send(frame)
+
+    def send_next_frame(self):
+        if not self.sending:
+            self.sending = True
+
+            for i in range(len(self.priority_streams)):
+                streams = self.priority_streams[-(i + 1)]
+
+                for stream in streams:
+                    if len(stream.frames) > 0:
+                        frame, callback = stream.frames.pop(0)
+
+                        if callback:
+                            conn = self
+
+                            def wrapper():
+                                conn.sending = False
+
+                                try:
+                                    callback()
+                                finally:
+                                    conn.send_next_frame()
+
+                            callback = wrapper
+
+                        self.stream.write(frame.pack(), callback)
+
+                        if not callback:
+                            self.send_next_frame()
+
+                        return frame
+
+        return None
+
+
+class SPDYServer(HTTPServer):
+    def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
+                 xheaders=False, ssl_options=None, protocol=None, spdy_options=None, **kwargs):
+        HTTPServer.__init__(self, request_callback=request_callback, no_keep_alive=no_keep_alive, io_loop=io_loop,
+                            xheaders=xheaders, ssl_options=ssl_options, protocol=protocol, **kwargs)
+
+        self.spdy_options = spdy_options or {}
+
+    def handle_stream(self, stream, address):
+        SPDYConnection(stream, address, self.request_callback,
+                       self.no_keep_alive, self.xheaders, self.protocol,
+                       server_side=True, version=self.spdy_options.get('version'),
+                       max_frame_len=self.spdy_options.get('max_frame_len'),
+                       min_frame_len=self.spdy_options.get('min_frame_len'),
+                       header_encoding=self.spdy_options.get('header_encoding'),
+                       compress_level=self.spdy_options.get('compress_level'))

@@ -32,7 +32,7 @@ def main():
     application = tornado.web.Application([
         (r"/", MainHandler),
         ])
-    http_server = tornado.spdy.SPDYServer(application, spdy_options={'version': 3})
+    http_server = tornado.spdy.SPDYServer(application, spdy_options={})
     http_server.listen(options.port)
     tornado.ioloop.IOLoop.instance().start()
 
