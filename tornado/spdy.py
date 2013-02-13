@@ -156,6 +156,8 @@ GOAWAY_STATUS_INTERNAL_ERROR = 2    # This is a generic error which can be used 
 WINDOW_SIZE_MAX = 0x7fffffff
 WINDOW_SIZE_DEFAULT = 65536
 
+CERTIFICATE_VECTOR_DEFAULT =  8
+
 HEADER_ZLIB_DICT_2 =\
 "optionsgetheadpostputdeletetraceacceptaccept-charsetaccept-encodingaccept-"\
 "languageauthorizationexpectfromhostif-modified-sinceif-matchif-none-matchi"\
@@ -880,8 +882,30 @@ class WindowUpdate(ControlFrame):
 
 
 class Credential(ControlFrame):
-    def __init__(self, conn, flags):
+    def __init__(self, conn, flags, slot=0, proof=None, certificates=[]):
         super(Credential, self).__init__(conn, flags, TYPE_CREDENTIAL)
+
+        self.slot = slot
+        self.proof = proof
+        self.certificates = certificates
+
+    def _on_body(self, chunk):
+        self.slot = _parse_ushort(chunk[:2])
+
+        size = _parse_uint(chunk[2:6])
+        pos = 6
+
+        self.proof = chunk[pos:pos + size]
+        pos += size
+
+        while pos < len(chunk):
+            size = _parse_uint(chunk[pos:pos + 4])
+            pos += 4
+
+            self.certificates.append(chunk[pos:pos + size])
+            pos += size
+
+        self.conn.certicates[self.slot + 1] = self.certificates
 
 FRAME_TYPES = {
     TYPE_SYN_STREAM: SyncStream,
@@ -974,10 +998,15 @@ class SPDYConnection(object):
         self.settings = {}
         self.settings_limit = {
             SETTINGS_MAX_CONCURRENT_STREAMS: (FLAG_SETTINGS_PERSIST_VALUE, 100),
-            SETTINGS_INITIAL_WINDOW_SIZE: (0, WINDOW_SIZE_DEFAULT),
+            SETTINGS_INITIAL_WINDOW_SIZE: (0, WINDOW_SIZE_MAX),
         }
+        self.settings_default = {
+            SETTINGS_INITIAL_WINDOW_SIZE: (0, WINDOW_SIZE_DEFAULT),
+            SETTINGS_CLIENT_CERTIFICATE_VECTOR_SIZE: (0, CERTIFICATE_VECTOR_DEFAULT),
+        }
+        self.credentials = [None for _ in range(CERTIFICATE_VECTOR_DEFAULT)]
         self.streams = {}
-        self.priority_streams = [[] for i in range(7)]
+        self.priority_streams = [[] for _ in range(7)]
         self.control_frames = []
         self.sending = False
         self.last_good_stream_id = None
@@ -1005,7 +1034,7 @@ class SPDYConnection(object):
         return self._inflater
 
     def get_setting(self, id):
-        return self.settings[id][1] if id in self.settings else self.settings_limit[id][1]
+        return self.settings[id][1] if id in self.settings else self.settings_default.get(id, [None, None])[1]
 
     def set_setting(self, id, flags, value):
         if id in self.settings_limit and value > self.settings_limit[id][1]:
@@ -1016,6 +1045,14 @@ class SPDYConnection(object):
             })
 
             self.send_control_frame(frame)
+
+        if id == SETTINGS_CLIENT_CERTIFICATE_VECTOR_SIZE and value != len(self.credentials):
+            credentials = [None for _ in range(value)]
+
+            for i in range(min(len(credentials), len(self.credentials))):
+                credentials[i] = self.credentials[i]
+
+            self.credentials = credentials
 
         self.settings[id] = (flags, value)
 
