@@ -14,6 +14,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import os.path
+
 import tornado.spdy
 import tornado.ioloop
 import tornado.options
@@ -29,11 +31,31 @@ class MainHandler(tornado.web.RequestHandler):
 
 def main():
     tornado.options.parse_command_line()
+
     application = tornado.web.Application([
         (r"/", MainHandler),
         ])
-    http_server = tornado.spdy.SPDYServer(application, spdy_options={})
+
+    ssl_options = {}
+
+    base_dir = os.path.dirname(__file__)
+
+    cert_file = os.path.join(base_dir, 'certificate.pem')
+    key_file = os.path.join(base_dir, 'privatekey.pem')
+
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        """
+        openssl genrsa -out privatekey.pem 1024
+        openssl req -new -key privatekey.pem -out certrequest.csr
+        openssl x509 -req -in certrequest.csr -signkey privatekey.pem -out certificate.pem
+        """
+        ssl_options.update(certfile=cert_file, keyfile=key_file)
+
+    spdy_options = {}
+
+    http_server = tornado.spdy.SPDYServer(application, ssl_options=ssl_options, spdy_options=spdy_options)
     http_server.listen(options.port)
+
     tornado.ioloop.IOLoop.instance().start()
 
 if __name__ == "__main__":
