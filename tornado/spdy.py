@@ -35,6 +35,7 @@ from struct import pack, unpack
 
 from tornado.httputil import HTTPHeaders, parse_body_arguments
 from tornado.httpserver import HTTPServer, HTTPRequest
+from tornado.iostream import StreamClosedError
 from tornado.util import bytes_type
 
 try:
@@ -151,6 +152,9 @@ IGNORE_ALL_STREAMS = 0
 GOAWAY_STATUS_OK = 0                # This is a normal session teardown.
 GOAWAY_STATUS_PROTOCOL_ERROR = 1    # This is a generic error, and should only be used if a more specific error is not available.
 GOAWAY_STATUS_INTERNAL_ERROR = 2    # This is a generic error which can be used when the implementation has internally failed, not due to anything in the protocol.
+
+WINDOW_SIZE_MAX = 0x7fffffff
+WINDOW_SIZE_DEFAULT = 65536
 
 HEADER_ZLIB_DICT_2 =\
 "optionsgetheadpostputdeletetraceacceptaccept-charsetaccept-encodingaccept-"\
@@ -304,6 +308,7 @@ class SPDYStream(object):
 
         self.data = ""
         self.frames = []
+        self.window_size = conn.get_setting(SETTINGS_INITIAL_WINDOW_SIZE)
 
     def close(self):
         self.data = None
@@ -662,7 +667,7 @@ class Settings(ControlFrame):
                 id = id_and_flags >> 8
                 flags = id_and_flags & 0xFF
 
-            self.conn.update_setting(id, flags, value)
+            self.conn.set_setting(id, flags, value)
 
     def pack(self):
         chunk = _pack_uint(len(self.settings))
@@ -691,7 +696,7 @@ class Noop(ControlFrame):
         super(Noop, self).__init__(conn, flags, TYPE_NOOP)
 
     def _on_body(self, chunk):
-        assert (len(chunk) == 0)
+        assert len(chunk) == 0
 
         # just ignore it
 
@@ -714,7 +719,7 @@ class Ping(ControlFrame):
         self.id = id
 
     def _on_body(self, chunk):
-        assert (len(chunk) == 4)
+        assert len(chunk) == 4
 
         self.id = _parse_uint(chunk[0:4])
 
@@ -746,7 +751,7 @@ class GoAway(ControlFrame):
         self.last_good_stream_id = last_good_stream_id
 
     def _on_body(self, chunk):
-        assert (len(chunk) == (8 if self.conn.version >= 3 else 4))
+        assert len(chunk) == (8 if self.conn.version >= 3 else 4)
 
         self.last_good_stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
 
@@ -835,8 +840,43 @@ class Headers(ControlFrame):
 
 
 class WindowUpdate(ControlFrame):
-    def __init__(self, conn, flags):
+    """
+    The WINDOW_UPDATE control frame is used to implement per stream flow control in SPDY.
+
+    +----------------------------------+
+    |1|   version    |         9       |
+    +----------------------------------+
+    | 0 (flags) |     8 (length)       |
+    +----------------------------------+
+    |X|     Stream-ID (31-bits)        |
+    +----------------------------------+
+    |X|  Delta-Window-Size (31-bits)   |
+    +----------------------------------+
+    """
+    def __init__(self, conn, flags=0, stream_id=None, delta_window_size=None):
         super(WindowUpdate, self).__init__(conn, flags, TYPE_WINDOW_UPDATE)
+
+        self.stream_id = stream_id
+        self.delta_window_size = delta_window_size
+
+    def _on_body(self, chunk):
+        assert len(chunk) == 8
+
+        self.stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
+        self.delta_window_size = _parse_uint(chunk[0:4]) & _last_31_bits
+
+        stream = self.conn.streams.get(self.stream_id, None)
+
+        if stream:
+            stream.window_size += self.delta_window_size
+
+            if stream.window_size > WINDOW_SIZE_MAX:
+                self.conn.reset_stream(self.stream_id, ERR_FLOW_CONTROL_ERROR)
+
+    def pack(self):
+        chunk = _pack_uint(self.stream_id) + _pack_uint(self.delta_window_size)
+
+        return self._pack_frame(chunk)
 
 
 class Credential(ControlFrame):
@@ -934,7 +974,7 @@ class SPDYConnection(object):
         self.settings = {}
         self.settings_limit = {
             SETTINGS_MAX_CONCURRENT_STREAMS: (FLAG_SETTINGS_PERSIST_VALUE, 100),
-            SETTINGS_INITIAL_WINDOW_SIZE: (0, 65536),
+            SETTINGS_INITIAL_WINDOW_SIZE: (0, WINDOW_SIZE_DEFAULT),
         }
         self.streams = {}
         self.priority_streams = [[] for i in range(7)]
@@ -964,7 +1004,10 @@ class SPDYConnection(object):
 
         return self._inflater
 
-    def update_setting(self, id, flags, value):
+    def get_setting(self, id):
+        return self.settings[id][1] if id in self.settings else self.settings_limit[id][1]
+
+    def set_setting(self, id, flags, value):
         if id in self.settings_limit and value > self.settings_limit[id][1]:
             value = self.settings_limit[id][1]
 
@@ -1006,7 +1049,10 @@ class SPDYConnection(object):
         self.last_good_stream_id = IGNORE_ALL_STREAMS
 
     def read_next_frame(self):
-        self.stream.read_bytes(FRAME_HEADER_LEN, self._on_frame_header)
+        try:
+            self.stream.read_bytes(FRAME_HEADER_LEN, self._on_frame_header)
+        except StreamClosedError:
+            pass  # TODO close all the streams
 
     def _on_frame_header(self, chunk):
         #first bit: control or data frame?
@@ -1128,6 +1174,13 @@ class SPDYConnection(object):
                 request.headers.get("Content-Type", ""), stream.data,
                 request.arguments, request.files)
 
+        if self.version >= 3:
+            frame = WindowUpdate(self, stream_id=stream.id, delta_window_size=len(stream.data))
+
+            stream.send(frame)
+
+        stream.data = ''
+
         self.request_callback(request)
 
     def close_stream(self, stream):
@@ -1192,6 +1245,7 @@ class SPDYConnection(object):
         self.sending = False
 
         return None
+
 
 class SPDYServer(HTTPServer):
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
