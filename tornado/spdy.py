@@ -18,8 +18,12 @@
 
 SPDY protocol utility code.
 
-SPDY Protocol - Draft 3
-http://www.chromium.org/spdy/spdy-protocol/spdy-protocol-draft3
+
+1. SPDY Protocol - Draft 2
+    http://www.chromium.org/spdy/spdy-protocol/spdy-protocol-draft2
+
+2. SPDY Protocol - Draft 3
+    http://www.chromium.org/spdy/spdy-protocol/spdy-protocol-draft3
 """
 
 import logging
@@ -30,7 +34,7 @@ from struct import pack, unpack
 
 from tornado import stack_context
 from tornado.httputil import HTTPHeaders, parse_body_arguments
-from tornado.httpserver import HTTPServer, HTTPConnection, HTTPRequest
+from tornado.httpserver import HTTPServer, HTTPRequest
 from tornado.util import bytes_type
 
 try:
@@ -234,9 +238,10 @@ HEADER_ZLIB_DICT_3 =\
 "\x68\x61\x72\x73\x65\x74\x3d\x69\x73\x6f\x2d\x38\x38\x35\x39\x2d"\
 "\x31\x2c\x75\x74\x66\x2d\x2c\x2a\x2c\x65\x6e\x71\x3d\x30\x2e"
 
+
 def _bitmask(length, split, mask=0):
     invert = 1 if mask == 0 else 0
-    b = str(mask)*split + str(invert)*(length-split)
+    b = str(mask) * split + str(invert) * (length-split)
     return int(b, 2)
 
 _first_bit = _bitmask(8, 1, 1)
@@ -610,8 +615,8 @@ class SPDYRequest(HTTPRequest):
         self.stream.send(data_frame, callback)
 
     def finish(self):
-        if self.stream.frames and isinstance(self.stream.frames[-1], DataFrame):
-            self.stream.frames[-1].flags |= FLAG_FIN
+        if self.stream.frames and isinstance(self.stream.frames[-1][0], DataFrame):
+            self.stream.frames[-1][0].flags |= FLAG_FIN
         else:
             data_frame = DataFrame(self.connection, FLAG_FIN, self.stream.id)
 
@@ -820,37 +825,32 @@ class SPDYConnection(object):
 
     def send_next_frame(self):
         if not self.sending:
-            self.sending = True
-
             for i in range(len(self.priority_streams)):
                 streams = self.priority_streams[-(i + 1)]
 
                 for stream in streams:
                     if len(stream.frames) > 0:
                         frame, callback = stream.frames.pop(0)
+                        conn = self
 
-                        if callback:
-                            conn = self
+                        def wrapper():
+                            conn.sending = False
 
-                            def wrapper():
-                                conn.sending = False
-
-                                try:
+                            try:
+                                if callback:
                                     callback()
-                                finally:
-                                    conn.send_next_frame()
+                            finally:
+                                conn.send_next_frame()
 
-                            callback = wrapper
+                        self.sending = True
 
-                        self.stream.write(frame.pack(), callback)
-
-                        if not callback:
-                            self.send_next_frame()
+                        self.stream.write(frame.pack(), wrapper)
 
                         return frame
 
-        return None
+        self.sending = False
 
+        return None
 
 class SPDYServer(HTTPServer):
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
