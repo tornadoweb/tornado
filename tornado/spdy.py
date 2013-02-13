@@ -30,9 +30,9 @@ import logging
 import socket
 import time
 import numbers
+import functools
 from struct import pack, unpack
 
-from tornado import stack_context
 from tornado.httputil import HTTPHeaders, parse_body_arguments
 from tornado.httpserver import HTTPServer, HTTPRequest
 from tornado.util import bytes_type
@@ -131,6 +131,20 @@ ERR_FRAME_TOO_LARGE = 11        # The endpoint received a frame which this imple
 FLAG_FIN = 0x01                 # marks this frame as the last frame to be transmitted on this stream
                                 # and puts the sender in the half-closed (Section 2.3.6) state.
 FLAG_UNIDIRECTIONAL = 0x02      # a stream created with this flag puts the recipient in the half-closed (Section 2.3.6) state.
+
+FLAG_SETTINGS_CLEAR_PREVIOUSLY_PERSISTED_SETTINGS = 0x01 # When set, the client should clear any previously persisted SETTINGS ID/Value pairs.
+
+SETTINGS_UPLOAD_BANDWIDTH = 1                # allows the sender to send its expected upload bandwidth on this channel.
+SETTINGS_DOWNLOAD_BANDWIDTH = 2              # allows the sender to send its expected download bandwidth on this channel.
+SETTINGS_ROUND_TRIP_TIME = 3                 # allows the sender to send its expected round-trip-time on this channel.
+SETTINGS_MAX_CONCURRENT_STREAMS = 4          # allows the sender to inform the remote endpoint the maximum number of concurrent streams which it will allow.
+SETTINGS_CURRENT_CWND = 5                    # allows the sender to inform the remote endpoint of the current CWND value.
+SETTINGS_DOWNLOAD_RETRANS_RATE = 6           # downstream byte retransmission rate in percentage
+SETTINGS_INITIAL_WINDOW_SIZE = 7             # initial window size in bytes
+SETTINGS_CLIENT_CERTIFICATE_VECTOR_SIZE = 8  # allows the server to inform the client if the new size of the client certificate vector.
+
+FLAG_SETTINGS_PERSIST_VALUE = 0x01
+FLAG_SETTINGS_PERSISTED = 0x02
 
 IGNORE_ALL_STREAMS = 0
 
@@ -422,7 +436,6 @@ class SyncStream(ControlFrame):
     The SYN_STREAM control frame allows the sender to asynchronously create a stream between the endpoints.
 
     SPDY v2
-
     +----------------------------------+
     |1|       2       |       1        |
     +----------------------------------+
@@ -451,7 +464,6 @@ class SyncStream(ControlFrame):
     |           (repeats)                |
 
     SDPY v3
-
     +------------------------------------+
     |1|   version     |          8       |
     +------------------------------------+
@@ -506,14 +518,12 @@ class SyncStream(ControlFrame):
 
                 self.conn.reset_stream(self.stream_id, ex.status_code)
 
-        self.conn.read_next_frame()
 
 class SyncReply(ControlFrame):
     """
     SYN_REPLY indicates the acceptance of a stream creation by the recipient of a SYN_STREAM frame.
 
     SPDY v2
-
     +----------------------------------+
     |1|        2        |        2     |
     +----------------------------------+
@@ -541,7 +551,6 @@ class SyncReply(ControlFrame):
 
 
     SPDY v3
-
     +------------------------------------+
     |1|   version     |          8       |
     +------------------------------------+
@@ -575,6 +584,7 @@ class SyncReply(ControlFrame):
 
         return self._pack_frame(chunk)
 
+
 class RstStream(ControlFrame):
     """
     The RST_STREAM frame allows for abnormal termination of a stream.
@@ -600,9 +610,72 @@ class RstStream(ControlFrame):
 
         return self._pack_frame(chunk)
 
+
 class Settings(ControlFrame):
-    def __init__(self, conn, flags):
+    """
+    A SETTINGS frame contains a set of id/value pairs for communicating configuration data about how the two endpoints may communicate.
+
+    +----------------------------------+
+    |1|       2          |       4     |
+    +----------------------------------+
+    | Flags (8)  |  Length (24 bits)   |
+    +----------------------------------+
+    |         Number of entries        |
+    +----------------------------------+
+    |          ID/Value Pairs          |
+    |             ...                  |
+
+    Each ID/value pair is as follows:
+
+    SPDY v2
+    +----------------------------------+
+    |    ID (24 bits)   | ID_Flags (8) |
+    +----------------------------------+
+    |          Value (32 bits)         |
+    +----------------------------------+
+
+    SPDY v3
+    +----------------------------------+
+    | Flags(8) |      ID (24 bits)     |
+    +----------------------------------+
+    |          Value (32 bits)         |
+    +----------------------------------+
+    """
+    def __init__(self, conn, flags=0, settings={}):
         super(Settings, self).__init__(conn, flags, TYPE_SETTINGS)
+
+        self.settings = settings
+
+    def _on_body(self, chunk):
+        num = _parse_uint(chunk[0:4])
+        pos = 4
+
+        for i in range(num):
+            id_and_flags = _parse_uint(chunk[pos:pos + 4])
+            value = _parse_uint(chunk[pos + 4:pos + 8])
+            pos += 8
+
+            if self.conn.version >= 3:
+                id = id_and_flags & 0xFFFFFF
+                flags = id_and_flags >> 24
+            else:
+                id = id_and_flags >> 8
+                flags = id_and_flags & 0xFF
+
+            self.conn.update_setting(id, flags, value)
+
+    def pack(self):
+        chunk = _pack_uint(len(self.settings))
+
+        for id, (flags, value) in self.settings.items():
+            if self.conn.version >= 3:
+                id_and_flags = (flags << 24) | id
+            else:
+                id_and_flags = (id << 8) | flags
+
+            chunk += _pack_uint(id_and_flags) + _pack_uint(value)
+
+        return self._pack_frame(chunk)
 
 class Noop(ControlFrame):
     """
@@ -621,6 +694,7 @@ class Noop(ControlFrame):
         assert (len(chunk) == 0)
 
         # just ignore it
+
 
 class Ping(ControlFrame):
     """
@@ -650,6 +724,7 @@ class Ping(ControlFrame):
         chunk = _pack_uint(self.id)
 
         return self._pack_frame(chunk)
+
 
 class GoAway(ControlFrame):
     """
@@ -683,6 +758,7 @@ class GoAway(ControlFrame):
         chunk = _pack_uint(self.last_good_stream_id)
 
         return self._pack_frame(chunk)
+
 
 class Headers(ControlFrame):
     """
@@ -757,7 +833,6 @@ class Headers(ControlFrame):
         else:
             spdy_log.warn("ignore an invalid HEADERS frame for #%d stream" % self.stream_id)
 
-        self.conn.read_next_frame()
 
 class WindowUpdate(ControlFrame):
     def __init__(self, conn, flags):
@@ -856,9 +931,11 @@ class SPDYConnection(object):
         self.header_encoding = header_encoding or DEFAULT_HEADER_ENCODING
         self.compress_level = compress_level or DEFAULT_HEADER_COMPRESS_LEVEL
 
-        self._frame_callback = stack_context.wrap(self._on_frame_header)
-        self.read_next_frame()
-
+        self.settings = {}
+        self.settings_limit = {
+            SETTINGS_MAX_CONCURRENT_STREAMS: (FLAG_SETTINGS_PERSIST_VALUE, 100),
+            SETTINGS_INITIAL_WINDOW_SIZE: (0, 65536),
+        }
         self.streams = {}
         self.priority_streams = [[] for i in range(7)]
         self.control_frames = []
@@ -866,6 +943,8 @@ class SPDYConnection(object):
         self.last_good_stream_id = None
         self.ping_id = 0
         self.ping_callbacks = {}
+
+        self.read_next_frame()
 
     @property
     def deflater(self):
@@ -884,6 +963,18 @@ class SPDYConnection(object):
             self._inflater = Inflater(self.version)
 
         return self._inflater
+
+    def update_setting(self, id, flags, value):
+        if id in self.settings_limit and value > self.settings_limit[id][1]:
+            value = self.settings_limit[id][1]
+
+            frame = Settings(self, settings={
+                id: self.settings_limit[id]
+            })
+
+            self.send_control_frame(frame)
+
+        self.settings[id] = (flags, value)
 
     def ping(self, callback):
         frame = Ping(self, self.ping_id)
@@ -915,7 +1006,7 @@ class SPDYConnection(object):
         self.last_good_stream_id = IGNORE_ALL_STREAMS
 
     def read_next_frame(self):
-        self.stream.read_bytes(FRAME_HEADER_LEN, self._frame_callback)
+        self.stream.read_bytes(FRAME_HEADER_LEN, self._on_frame_header)
 
     def _on_frame_header(self, chunk):
         #first bit: control or data frame?
@@ -970,20 +1061,20 @@ class SPDYConnection(object):
                 if stream_id not in self.streams:
                     raise SPDYProtocolError("invalid stream for %d bytes data" % frame_length, ERR_INVALID_STREAM)
 
-            frame_callback = stack_context.wrap(frame._on_body)
+            def wrapper(conn, chunk):
+                try:
+                    frame._on_body(chunk)
+                finally:
+                    conn.read_next_frame()
 
-            self.stream.read_bytes(frame_length, frame_callback)
+            self.stream.read_bytes(frame_length, functools.partial(wrapper, self))
         except SPDYProtocolError as ex:
             spdy_log.warn(ex.message)
 
             if ex.status_code:
                 self.reset_stream(stream_id, ex.status_code)
 
-            conn = self
-
-            skip_frame_callback = stack_context.wrap(lambda data: conn.read_next_frame())
-
-            self.stream.read_bytes(frame_length, skip_frame_callback)
+            self.stream.read_bytes(frame_length, self.read_next_frame)
 
     def set_close_callback(self, callback):
         # TODO ignore the close callback
