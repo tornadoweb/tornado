@@ -56,7 +56,7 @@ class _z_stream(C.Structure):
     ]
 
 # TODO: get zlib version with ctypes
-ZLIB_VERSION = C.c_char_p("1.2.3")
+ZLIB_VERSION = C.c_char_p(b"1.2.3")
 Z_NULL = 0x00
 Z_OK = 0x00
 Z_STREAM_END = 0x01
@@ -76,14 +76,14 @@ class Compressor:
         self.level = level
         self.st = _z_stream()
         err = _zlib.deflateInit_(C.byref(self.st), self.level, ZLIB_VERSION, C.sizeof(self.st))
-        assert err == Z_OK, err # FIXME: specific error
+        assert err == Z_OK, err  # FIXME: specific error
         if dictionary:
             err = _zlib.deflateSetDictionary(
                 C.byref(self.st),
                 C.cast(C.c_char_p(dictionary), C.POINTER(C.c_ubyte)),
                 len(dictionary)
             )
-            assert err == Z_OK, err # FIXME: more specific error
+            assert err == Z_OK, err  # FIXME: more specific error
 
     def __call__(self, input):
         outbuf = C.create_string_buffer(CHUNK)
@@ -92,14 +92,14 @@ class Compressor:
         self.st.next_out  = C.cast(outbuf, C.POINTER(C.c_ubyte))
         self.st.avail_out = CHUNK
         err = _zlib.deflate(C.byref(self.st), Z_SYNC_FLUSH)
-        if err in [Z_OK, Z_STREAM_END]:
-            return outbuf[:CHUNK-self.st.avail_out]
-        else:
-            raise AssertionError, err # FIXME: more specific errors?
+
+        assert err in [Z_OK, Z_STREAM_END]  # FIXME: more specific error
+
+        return outbuf[:CHUNK-self.st.avail_out]
 
     def __del__(self):
         err = _zlib.deflateEnd(C.byref(self.st))
-        assert err == Z_OK, err # FIXME: more specific error
+        assert err == Z_OK, err  # FIXME: more specific error
 
     
 class Decompressor:
@@ -107,7 +107,7 @@ class Decompressor:
         self.dictionary = dictionary
         self.st = _z_stream()
         err = _zlib.inflateInit2_(C.byref(self.st), 15, ZLIB_VERSION, C.sizeof(self.st))
-        assert err == Z_OK, err # FIXME: more specific error
+        assert err == Z_OK, err  # FIXME: more specific error
 
     def __call__(self, input):
         outbuf = C.create_string_buffer(CHUNK)
@@ -124,12 +124,11 @@ class Decompressor:
                 C.cast(C.c_char_p(self.dictionary), C.POINTER(C.c_ubyte)),
                 len(self.dictionary)
             )
-            assert err == Z_OK, err # FIXME: more specific error
+            assert err == Z_OK, err  # FIXME: more specific error
             err = _zlib.inflate(C.byref(self.st), Z_SYNC_FLUSH)
-        if err in [Z_OK, Z_STREAM_END]:
-            return outbuf[:CHUNK-self.st.avail_out]
-        else:
-            raise AssertionError, err # FIXME: more specific error
+        assert err in [Z_OK, Z_STREAM_END]  # FIXME: more specific error
+
+        return outbuf[:CHUNK-self.st.avail_out]
 
     def __del__(self):
         err = _zlib.inflateEnd(C.byref(self.st))
