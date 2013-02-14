@@ -30,6 +30,7 @@ import logging
 import socket
 import time
 import ssl
+import re
 import numbers
 import functools
 from struct import pack, unpack
@@ -73,6 +74,11 @@ spdy_log = logging.getLogger("tornado.spdy")
 SPDY_VERSION_AUTO = 0
 SPDY_VERSION_2 = 2
 SPDY_VERSION_3 = 3
+
+PROTO_HTTP = 'http/1.1'
+PROTO_SPDY_2 = 'spdy/2'
+PROTO_SPDY_3 = 'spdy/3'
+PROTO_SUPPORTS = [PROTO_HTTP, PROTO_SPDY_2, PROTO_SPDY_3]
 
 DEFAULT_HEADER_ENCODING = 'UTF-8'
 DEFAULT_HEADER_COMPRESS_LEVEL = -1
@@ -518,7 +524,7 @@ class SyncStream(ControlFrame):
 
         if self.conn.last_good_stream_id is not None and \
                 (self.conn.last_good_stream_id == IGNORE_ALL_STREAMS or self.stream_id > self.conn.last_good_stream_id):
-            spdy_log.info("ignore SYN_STREAM #%d frame since the session has been closed at #%d.",
+            spdy_log.warn("ignore SYN_STREAM #%d frame since the session has been closed at #%d.",
                           self.stream_id, self.conn.last_good_stream_id)
         else:
             self.assoc_stream_id = _parse_uint(chunk[4:8]) & _last_31_bits
@@ -537,12 +543,12 @@ class SyncStream(ControlFrame):
 
                 self.conn.add_stream(stream)
             except SPDYProtocolError as ex:
-                spdy_log.warn(ex.message)
+                spdy_log.warn("fail to parse stream: %s", ex.message)
 
                 self.conn.reset_stream(self.stream_id, ex.status_code)
 
     def __repr__(self):
-        headers = '\n'.join(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers])
+        headers = '\n'.join(sorted(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers.items()]))
 
         return """SYN_STREAM frame <version=%d, flags=%d>
 \t(stream_id=%d, assoc_stream_id=%d, pri=%d, slot=%d)
@@ -615,11 +621,11 @@ class SyncReply(ControlFrame):
         return self._pack_frame(chunk)
 
     def __repr__(self):
-        headers = '\n'.join(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers])
+        headers = '\n'.join(sorted(["\t%s: %s" % header for header in self.headers]))
 
         return """SYN_REPLY frame <version=%d, flags=%d>
 \t(stream_id=%d)
-%s""" % (self.conn.version, self.flags, self.stream_id, self.assoc_stream_id, self.priority, self.slot, headers)
+%s""" % (self.conn.version, self.flags, self.stream_id, headers)
 
 
 class RstStream(ControlFrame):
@@ -730,7 +736,7 @@ class Settings(ControlFrame):
         return self._pack_frame(chunk)
 
     def __repr__(self):
-        settings = '\n'.join(["\t%d(%d):%d" % (id, flags, value) for id, (flags, value) in self.settings])
+        settings = '\n'.join(sorted(["\t%d(%d):%d" % (id, setting[0], setting[1]) for id, setting in self.settings.items()]))
 
         return "SETTINGS frame <version=%d, flags=%d>\n%s" % (self.conn.version, self.flags, settings)
 
@@ -900,10 +906,10 @@ class Headers(ControlFrame):
             if stream.finished:
                 self.conn.parse_stream(stream)
         else:
-            spdy_log.warn("ignore an invalid HEADERS frame for #%d stream" % self.stream_id)
+            spdy_log.warn("ignore an invalid HEADERS frame for #%d stream", self.stream_id)
 
     def __repr__(self):
-        headers = '\n'.join(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers])
+        headers = '\n'.join(sorted(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers.items()]))
 
         return """HEADERS frame <version=%d, flags=%d>
 \t(stream_id=%d)
@@ -1031,7 +1037,7 @@ class SPDYRequest(HTTPRequest):
             idx = chunk.find(b'\r\n\r\n')
 
             lines = chunk[:idx].split(b'\r\n')
-            version, status_code, reason = lines.pop(0).split(b' ')
+            version, status_code, reason = lines.pop(0).split(b' ', maxsplit=2)
             status = status_code + b' ' + reason
 
             if self.connection.version >= 3:
@@ -1208,7 +1214,7 @@ class SPDYConnection(object):
                 frame_cls = FRAME_TYPES[frame_type]
 
                 if self.version == SPDY_VERSION_AUTO:
-                    spdy_log.info("auto switch to the SPDY v%d" % spdy_version)
+                    spdy_log.debug("auto switch to the SPDY v%d", spdy_version)
 
                     self.version = spdy_version
 
@@ -1244,13 +1250,13 @@ class SPDYConnection(object):
                 try:
                     frame._on_body(chunk)
 
-                    spdy_log.info("recv %s" % repr(frame))
+                    spdy_log.info("recv %s", repr(frame))
                 finally:
                     conn.read_next_frame()
 
             self.stream.read_bytes(frame_length, functools.partial(wrapper, self))
         except SPDYProtocolError as ex:
-            spdy_log.warn(ex.message)
+            spdy_log.warn("fail to parse frame: %s", ex.message)
 
             if ex.status_code:
                 self.reset_stream(stream_id, ex.status_code)
@@ -1273,17 +1279,19 @@ class SPDYConnection(object):
 
     def parse_stream(self, stream):
         try:
+            headers = stream.headers.copy()
+
             if self.version >= 3:
-                scheme = stream.headers.pop(u':scheme')[0]
-                version = stream.headers.pop(u':version')[0]
-                method = stream.headers.pop(u':method')[0]
-                path = stream.headers.pop(u':path')[0]
-                host = stream.headers.pop(u':host')[0]
+                scheme = headers.pop(u':scheme')[0]
+                version = headers.pop(u':version')[0]
+                method = headers.pop(u':method')[0]
+                path = headers.pop(u':path')[0]
+                host = headers.pop(u':host')[0]
             else:
-                scheme = stream.headers.pop(u'scheme')[0]
-                version = stream.headers.pop(u'version')[0]
-                method = stream.headers.pop(u'method')[0]
-                path = stream.headers.pop(u'url')[0]
+                scheme = headers.pop(u'scheme')[0]
+                version = headers.pop(u'version')[0]
+                method = headers.pop(u'method')[0]
+                path = headers.pop(u'url')[0]
                 host = None
         except KeyError:
             pass  # TODO reply with a HTTP 400 BAD REQUEST reply.
@@ -1295,13 +1303,13 @@ class SPDYConnection(object):
             # Unix (or other) socket; fake the remote address
             remote_ip = '0.0.0.0'
 
-        headers = HTTPHeaders()
+        http_headers = HTTPHeaders()
 
-        for name, values in stream.headers.items():
+        for name, values in headers.items():
             for value in values:
-                headers.add(name, value)
+                http_headers.add(name, value)
 
-        request = SPDYRequest(method=method, uri=path, version=version, headers=headers, body=stream.data,
+        request = SPDYRequest(method=method, uri=path, version=version, headers=http_headers, body=stream.data,
                               remote_ip=remote_ip, protocol=self.protocol, host=host, connection=self, stream=stream)
 
         if method in ("POST", "PATCH", "PUT"):
@@ -1362,7 +1370,7 @@ class SPDYConnection(object):
                 def wrapper():
                     conn.sending = False
 
-                    spdy_log.info("send %s" % repr(frame))
+                    spdy_log.debug("send %s", repr(frame))
 
                     try:
                         if hasattr(frame, 'stream_id') and frame.fin and frame.stream_id in self.streams:
@@ -1387,27 +1395,33 @@ class SPDYConnection(object):
 class SPDYServer(HTTPServer):
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
                  xheaders=False, ssl_options=None, protocol=None, spdy_options=None, **kwargs):
-        HTTPServer.__init__(self, request_callback=request_callback, no_keep_alive=no_keep_alive, io_loop=io_loop,
-                            xheaders=xheaders, ssl_options=ssl_options, protocol=protocol, **kwargs)
+
+        self.npn_enabled = is_py33 and ssl_options is not None and ssl.HAS_NPN
+
+        if self.npn_enabled:
+            ssl_options.setdefault('protocols', PROTO_SUPPORTS)
 
         self.spdy_options = spdy_options or {}
 
+        HTTPServer.__init__(self, request_callback=request_callback, no_keep_alive=no_keep_alive, io_loop=io_loop,
+                            xheaders=xheaders, ssl_options=ssl_options, protocol=protocol, **kwargs)
+
     def handle_stream(self, stream, address):
-        if is_py33 and self.ssl_options is not None and ssl.HAS_NPN:
+        if self.npn_enabled:
             server = self
 
             def on_selected_protocol():
                 proto = stream.socket.selected_npn_protocol()
 
-                spdy_log.info("client selected %s protocol" % proto)
+                spdy_log.debug("client selected %s protocol" % proto)
 
-                if proto == 'http/1.1':
+                if proto == PROTO_HTTP:
                     HTTPConnection(stream, address, server.request_callback,
                                    server.no_keep_alive, server.xheaders, server.protocol)
                 else:
                     SPDYConnection(stream, address, server.request_callback,
                                    server.no_keep_alive, server.xheaders, server.protocol,
-                                   server_side=True, version=server.spdy_options.get('version'),
+                                   server_side=True, version=server.spdy_options.get('version', 3 if proto == PROTO_SPDY_3 else 2),
                                    max_frame_len=server.spdy_options.get('max_frame_len'),
                                    min_frame_len=server.spdy_options.get('min_frame_len'),
                                    header_encoding=server.spdy_options.get('header_encoding'),
