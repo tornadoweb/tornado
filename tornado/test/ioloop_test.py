@@ -148,6 +148,12 @@ class TestIOLoop(AsyncTestCase):
             client.close()
             server.close()
 
+    def test_remove_timeout_after_fire(self):
+        # It is not an error to call remove_timeout after it has run.
+        handle = self.io_loop.add_timeout(self.io_loop.time(), self.stop())
+        self.wait()
+        self.io_loop.remove_timeout(handle)
+
 
 class TestIOLoopAddCallback(AsyncTestCase):
     def setUp(self):

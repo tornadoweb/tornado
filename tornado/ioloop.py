@@ -319,7 +319,9 @@ class IOLoop(Configurable):
     def remove_timeout(self, timeout):
         """Cancels a pending timeout.
 
-        The argument is a handle as returned by add_timeout.
+        The argument is a handle as returned by add_timeout.  It is
+        safe to call `remove_timeout` even if the callback has already
+        been run.
         """
         raise NotImplementedError()
 
