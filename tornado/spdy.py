@@ -29,13 +29,15 @@ import sys
 import logging
 import socket
 import time
+import ssl
 import numbers
 import functools
 from struct import pack, unpack
 
 from tornado.httputil import HTTPHeaders, parse_body_arguments
-from tornado.httpserver import HTTPServer, HTTPRequest
+from tornado.httpserver import HTTPServer, HTTPRequest, HTTPConnection
 from tornado.iostream import StreamClosedError
+from tornado.ioloop import IOLoop
 from tornado.util import bytes_type
 
 try:
@@ -58,6 +60,7 @@ except ImportError:
             return self.__call__(chunk)
 
 is_py3k = sys.version_info[0] >= 3
+is_py33 = sys.version_info[0] >= 3 and sys.version_info[1] >= 3
 
 if is_py3k:
     def _ord(b):
@@ -440,11 +443,16 @@ class DataFrame(Frame):
     def _on_body(self, chunk):
         self.chunk = chunk
 
-        self.conn.streams[self.stream_id].recv(chunk, self.fin)
+        stream = self.conn.streams.get(self.stream_id, None)
+
+        if stream and not stream.finished:
+            stream.recv(chunk, self.fin)
 
     def pack(self):
         return _pack_uint(self.stream_id) + _pack_uint(self.flags << 24 | len(self.chunk)) + self.chunk
 
+    def __repr__(self):
+        return "DATA frame (stream_id=%d, flags=%d, length=%d)" % (self.stream_id, self.flags, len(self.chunk))
 
 class SyncStream(ControlFrame):
     """
@@ -533,6 +541,13 @@ class SyncStream(ControlFrame):
 
                 self.conn.reset_stream(self.stream_id, ex.status_code)
 
+    def __repr__(self):
+        headers = '\n'.join(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers])
+
+        return """SYN_STREAM frame <version=%d, flags=%d>
+\t(stream_id=%d, assoc_stream_id=%d, pri=%d, slot=%d)
+%s""" % (self.conn.version, self.flags, self.stream_id, self.assoc_stream_id, self.priority, self.slot, headers)
+
 
 class SyncReply(ControlFrame):
     """
@@ -594,10 +609,17 @@ class SyncReply(ControlFrame):
 
     def pack(self):
         chunk = _pack_uint(self.stream_id) + \
-                ('' if self.conn.version >= 3 else _pack_ushort(0)) + \
+                (b'' if self.conn.version >= 3 else _pack_ushort(0)) + \
                 self._pack_headers(self.headers)
 
         return self._pack_frame(chunk)
+
+    def __repr__(self):
+        headers = '\n'.join(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers])
+
+        return """SYN_REPLY frame <version=%d, flags=%d>
+\t(stream_id=%d)
+%s""" % (self.conn.version, self.flags, self.stream_id, self.assoc_stream_id, self.priority, self.slot, headers)
 
 
 class RstStream(ControlFrame):
@@ -614,16 +636,30 @@ class RstStream(ControlFrame):
     |          Status code             |
     +----------------------------------+
     """
-    def __init__(self, conn, stream_id, status_code):
+    def __init__(self, conn, stream_id, status_code=0):
         super(RstStream, self).__init__(conn, 0, TYPE_RST_STREAM)
 
         self.stream_id = stream_id
         self.status_code = status_code
 
+    def _on_body(self, chunk):
+        assert len(chunk) == 8
+
+        self.stream_id = _parse_uint(chunk[0:4])
+        self.status_code = _parse_uint(chunk[4:8])
+
+        stream = self.conn.streams.get(self.stream_id, None)
+
+        if stream:
+            stream.finished = True
+
     def pack(self):
         chunk = _pack_uint(self.stream_id) + _pack_uint(self.status_code)
 
         return self._pack_frame(chunk)
+
+    def __repr__(self):
+        return "RST_STREAM frame (stream_id=%d, flags=%d, status=%d)" % (self.stream_id, self.flags, self.status_code)
 
 
 class Settings(ControlFrame):
@@ -678,6 +714,7 @@ class Settings(ControlFrame):
                 flags = id_and_flags & 0xFF
 
             self.conn.set_setting(id, flags, value)
+            self.settings[id] = (flags, value)
 
     def pack(self):
         chunk = _pack_uint(len(self.settings))
@@ -691,6 +728,12 @@ class Settings(ControlFrame):
             chunk += _pack_uint(id_and_flags) + _pack_uint(value)
 
         return self._pack_frame(chunk)
+
+    def __repr__(self):
+        settings = '\n'.join(["\t%d(%d):%d" % (id, flags, value) for id, (flags, value) in self.settings])
+
+        return "SETTINGS frame <version=%d, flags=%d>\n%s" % (self.conn.version, self.flags, settings)
+
 
 class Noop(ControlFrame):
     """
@@ -709,6 +752,9 @@ class Noop(ControlFrame):
         assert len(chunk) == 0
 
         # just ignore it
+
+    def __repr__(self):
+        return "NOOP frame <version=%d, flags=%d>" % (self.conn.version, self.flags)
 
 
 class Ping(ControlFrame):
@@ -740,6 +786,9 @@ class Ping(ControlFrame):
 
         return self._pack_frame(chunk)
 
+    def __repr__(self):
+        return "PING frame <version=%d, flags=%d, id=%d>" % (self.conn.version, self.flags, self.id)
+
 
 class GoAway(ControlFrame):
     """
@@ -755,10 +804,11 @@ class GoAway(ControlFrame):
     |          Status code             | <- SPDY v3 only
     +----------------------------------+
     """
-    def __init__(self, conn, flags=0, last_good_stream_id=IGNORE_ALL_STREAMS):
+    def __init__(self, conn, flags=0, last_good_stream_id=IGNORE_ALL_STREAMS, status=GOAWAY_STATUS_OK):
         super(GoAway, self).__init__(conn, flags, TYPE_GOAWAY)
 
         self.last_good_stream_id = last_good_stream_id
+        self.status = status
 
     def _on_body(self, chunk):
         assert len(chunk) == (8 if self.conn.version >= 3 else 4)
@@ -773,6 +823,10 @@ class GoAway(ControlFrame):
         chunk = _pack_uint(self.last_good_stream_id)
 
         return self._pack_frame(chunk)
+
+    def __repr__(self):
+        return "GOAWAY frame <version=%d, flags=%d, last_good_stream_id=%d, status_code=%d>" % \
+               (self.conn.version, self.flags, self.last_good_stream_id, self.status)
 
 
 class Headers(ControlFrame):
@@ -848,6 +902,13 @@ class Headers(ControlFrame):
         else:
             spdy_log.warn("ignore an invalid HEADERS frame for #%d stream" % self.stream_id)
 
+    def __repr__(self):
+        headers = '\n'.join(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers])
+
+        return """HEADERS frame <version=%d, flags=%d>
+\t(stream_id=%d)
+%s""" % (self.conn.version, self.flags, self.stream_id, headers)
+
 
 class WindowUpdate(ControlFrame):
     """
@@ -888,8 +949,31 @@ class WindowUpdate(ControlFrame):
 
         return self._pack_frame(chunk)
 
+    def __repr__(self):
+        return "WINDOW_UPDATE frame <version=%d, flags=%d, stream_id=%d, delta_window_size=%d>" % \
+               (self.conn.version, self.flags, self.stream_id, self.delta_window_size)
+
 
 class Credential(ControlFrame):
+    """
+    The CREDENTIAL control frame is used by the client to send additional client certificates to the server.
+
+    +----------------------------------+
+    |1|000000000000011|0000000000001010|
+    +----------------------------------+
+    | flags (8)  |  Length (24 bits)   |
+    +----------------------------------+
+    |  Slot (16 bits) |                |
+    +-----------------+                |
+    |      Proof Length (32 bits)      |
+    +----------------------------------+
+    |               Proof              |
+    +----------------------------------+ <+
+    |   Certificate Length (32 bits)   |  |
+    +----------------------------------+  | Repeated until end of frame
+    |            Certificate           |  |
+    +----------------------------------+ <+
+    """
     def __init__(self, conn, flags, slot=0, proof=None, certificates=[]):
         super(Credential, self).__init__(conn, flags, TYPE_CREDENTIAL)
 
@@ -914,6 +998,10 @@ class Credential(ControlFrame):
             pos += size
 
         self.conn.certicates[self.slot + 1] = self.certificates
+
+    def __repr__(self):
+        return "CREDENTIAL frame <version=%d, flags=%d, slot=%d>" % \
+               (self.conn.version, self.flags, self.slot)
 
 FRAME_TYPES = {
     TYPE_SYN_STREAM: SyncStream,
@@ -1155,6 +1243,8 @@ class SPDYConnection(object):
             def wrapper(conn, chunk):
                 try:
                     frame._on_body(chunk)
+
+                    spdy_log.info("recv %s" % repr(frame))
                 finally:
                     conn.read_next_frame()
 
@@ -1219,7 +1309,7 @@ class SPDYConnection(object):
                 request.headers.get("Content-Type", ""), stream.data,
                 request.arguments, request.files)
 
-        if self.version >= 3:
+        if self.version >= 3 and stream.data:
             frame = WindowUpdate(self, stream_id=stream.id, delta_window_size=len(stream.data))
 
             stream.send(frame)
@@ -1272,6 +1362,8 @@ class SPDYConnection(object):
                 def wrapper():
                     conn.sending = False
 
+                    spdy_log.info("send %s" % repr(frame))
+
                     try:
                         if hasattr(frame, 'stream_id') and frame.fin and frame.stream_id in self.streams:
                             self.streams[frame.stream_id].close()
@@ -1301,10 +1393,34 @@ class SPDYServer(HTTPServer):
         self.spdy_options = spdy_options or {}
 
     def handle_stream(self, stream, address):
-        SPDYConnection(stream, address, self.request_callback,
-                       self.no_keep_alive, self.xheaders, self.protocol,
-                       server_side=True, version=self.spdy_options.get('version'),
-                       max_frame_len=self.spdy_options.get('max_frame_len'),
-                       min_frame_len=self.spdy_options.get('min_frame_len'),
-                       header_encoding=self.spdy_options.get('header_encoding'),
-                       compress_level=self.spdy_options.get('compress_level'))
+        if is_py33 and self.ssl_options is not None and ssl.HAS_NPN:
+            server = self
+
+            def on_selected_protocol():
+                proto = stream.socket.selected_npn_protocol()
+
+                spdy_log.info("client selected %s protocol" % proto)
+
+                if proto == 'http/1.1':
+                    HTTPConnection(stream, address, server.request_callback,
+                                   server.no_keep_alive, server.xheaders, server.protocol)
+                else:
+                    SPDYConnection(stream, address, server.request_callback,
+                                   server.no_keep_alive, server.xheaders, server.protocol,
+                                   server_side=True, version=server.spdy_options.get('version'),
+                                   max_frame_len=server.spdy_options.get('max_frame_len'),
+                                   min_frame_len=server.spdy_options.get('min_frame_len'),
+                                   header_encoding=server.spdy_options.get('header_encoding'),
+                                   compress_level=server.spdy_options.get('compress_level'))
+
+            stream._ssl_connect_callback =  on_selected_protocol
+
+            stream._add_io_state(IOLoop.READ)
+        else:
+            SPDYConnection(stream, address, self.request_callback,
+                           self.no_keep_alive, self.xheaders, self.protocol,
+                           server_side=True, version=self.spdy_options.get('version'),
+                           max_frame_len=self.spdy_options.get('max_frame_len'),
+                           min_frame_len=self.spdy_options.get('min_frame_len'),
+                           header_encoding=self.spdy_options.get('header_encoding'),
+                           compress_level=self.spdy_options.get('compress_level'))

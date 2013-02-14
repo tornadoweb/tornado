@@ -49,7 +49,7 @@ def main():
         openssl req -new -key privatekey.pem -out certrequest.csr
         openssl x509 -req -in certrequest.csr -signkey privatekey.pem -out certificate.pem
         """
-        ssl_options.update(certfile=cert_file, keyfile=key_file)
+        ssl_options.update(certfile=cert_file, keyfile=key_file, protocols=['spdy/3', 'spdy/2', 'http/1.1'])
 
     spdy_options = {}
 

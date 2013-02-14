@@ -155,7 +155,8 @@ class Resolver(object):
 # to their SSLContext equivalents (the other arguments are still passed
 # to SSLContext.wrap_socket).
 _SSL_CONTEXT_KEYWORDS = frozenset(['ssl_version', 'certfile', 'keyfile',
-                                   'cert_reqs', 'ca_certs', 'ciphers'])
+                                   'cert_reqs', 'ca_certs', 'ciphers',
+                                   'protocols'])
 
 def ssl_options_to_context(ssl_options):
     """Try to Convert an ssl_options dictionary to an SSLContext object.
@@ -182,6 +183,8 @@ def ssl_options_to_context(ssl_options):
         context.load_verify_locations(ssl_options['ca_certs'])
     if 'ciphers' in ssl_options:
         context.set_ciphers(ssl_options['ciphers'])
+    if 'protocols' in ssl_options and hasattr(ssl, 'HAS_NPN') and ssl.HAS_NPN:
+        context.set_npn_protocols(ssl_options['protocols'])
     return context
 
 

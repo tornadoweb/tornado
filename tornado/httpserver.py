@@ -103,15 +103,6 @@ class HTTPServer(TCPServer):
            "keyfile": os.path.join(data_dir, "mydomain.key"),
        })
 
-    `HTTPServer` can serve SPDY traffic
-    To make thie server serve SPDY traffic, send the spdy_options dictionary
-    argument with the arguments required for the `spdy.SPDYConnection` class,
-    including "version".
-
-       HTTPServer(applicaton, spdy_options={
-           "version": 3,
-       })
-
     `HTTPServer` initialization follows one of three patterns (the
     initialization methods are defined on `tornado.tcpserver.TCPServer`):
 
