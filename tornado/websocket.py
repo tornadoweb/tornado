@@ -20,6 +20,7 @@ communication between the browser and server.
 from __future__ import absolute_import, division, print_function, with_statement
 # Author: Jacob Kristhammar, 2010
 
+import sys
 import array
 import functools
 import hashlib
@@ -31,6 +32,9 @@ import tornado.web
 
 from tornado.log import gen_log, app_log
 from tornado.util import bytes_type
+
+if sys.version_info > (3, ):
+    xrange = range
 
 
 class WebSocketHandler(tornado.web.RequestHandler):
