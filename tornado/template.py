@@ -230,10 +230,12 @@ class Template(object):
         try:
             # Under python2.5, the fake filename used here must match
             # the module name used in __name__ below.
+            # The dont_inherit flag prevents template.py's future imports
+            # from being applied to the generated code.
             self.compiled = compile(
                 escape.to_unicode(self.code),
                 "%s.generated.py" % self.name.replace('.', '_'),
-                "exec")
+                "exec", dont_inherit=True)
         except Exception:
             formatted_code = _format_code(self.code).rstrip()
             app_log.error("%s code:\n%s", self.name, formatted_code)

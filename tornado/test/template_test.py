@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import os
+import sys
 import traceback
 
 from tornado.escape import utf8, native_str, to_unicode
@@ -162,6 +163,15 @@ try{% set y = 1/x %}
             raise Exception("Did not get expected exception")
         except ParseError:
             pass
+
+    @unittest.skipIf(sys.version_info >= division.getMandatoryRelease(),
+                     'no testable future imports')
+    def test_no_inherit_future(self):
+        # This file has from __future__ import division...
+        self.assertEqual(1 / 2, 0.5)
+        # ...but the template doesn't
+        template = Template('{{ 1 / 2 }}')
+        self.assertEqual(template.generate(), '0')
 
 
 class StackTraceTest(unittest.TestCase):

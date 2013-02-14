@@ -3,9 +3,13 @@ from __future__ import absolute_import, division, print_function, with_statement
 import sys
 
 from tornado.escape import utf8
-from tornado.util import raise_exc_info, Configurable, u
+from tornado.util import raise_exc_info, Configurable, u, exec_in
 from tornado.test.util import unittest
 
+try:
+    from cStringIO import StringIO  # py2
+except ImportError:
+    from io import StringIO  # py3
 
 class RaiseExcInfoTest(unittest.TestCase):
     def test_two_arg_exception(self):
@@ -123,3 +127,17 @@ class ConfigurableTest(unittest.TestCase):
 class UnicodeLiteralTest(unittest.TestCase):
     def test_unicode_escapes(self):
         self.assertEqual(utf8(u('\u00e9')), b'\xc3\xa9')
+
+
+class ExecInTest(unittest.TestCase):
+    # This test is python 2 only because there are no new future imports
+    # defined in python 3 yet.
+    @unittest.skipIf(sys.version_info >= print_function.getMandatoryRelease(),
+                     'no testable future imports')
+    def test_no_inherit_future(self):
+        # This file has from __future__ import print_function...
+        f = StringIO()
+        print('hello', file=f)
+        # ...but the template doesn't
+        exec_in('print >> f, "world"', dict(f=f))
+        self.assertEqual(f.getvalue(), 'hello\nworld\n')

@@ -82,28 +82,14 @@ else:
     basestring_type = basestring
 
 
-# def raise_exc_info(exc_info):
-#     """Re-raise an exception (with original traceback) from an exc_info tuple.
-
-#     The argument is a ``(type, value, traceback)`` tuple as returned by
-#     `sys.exc_info`.
-#     """
-#     # 2to3 isn't smart enough to convert three-argument raise
-#     # statements correctly in some cases.
-#     if isinstance(exc_info[1], exc_info[0]):
-#         raise exc_info[1], None, exc_info[2]
-#         # After 2to3: raise exc_info[1].with_traceback(exc_info[2])
-#     else:
-#         # I think this branch is only taken for string exceptions,
-#         # which were removed in Python 2.6.
-#         raise exc_info[0], exc_info[1], exc_info[2]
-#         # After 2to3: raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
 if sys.version_info > (3,):
     exec("""
 def raise_exc_info(exc_info):
     raise exc_info[1].with_traceback(exc_info[2])
 
 def exec_in(code, glob, loc=None):
+    if isinstance(code, str):
+        code = compile(code, '<string>', 'exec', dont_inherit=True)
     exec(code, glob, loc)
 """)
 else:
@@ -112,6 +98,10 @@ def raise_exc_info(exc_info):
     raise exc_info[0], exc_info[1], exc_info[2]
 
 def exec_in(code, glob, loc=None):
+    if isinstance(code, basestring):
+        # exec(string) inherits the caller's future imports; compile
+        # the string first to prevent that.
+        code = compile(code, '<string>', 'exec', dont_inherit=True)
     exec code in glob, loc
 """)
 
