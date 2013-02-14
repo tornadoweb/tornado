@@ -115,7 +115,7 @@ class HTTPServer(TCPServer):
        In many cases, `tornado.web.Application.listen` can be used to avoid
        the need to explicitly create the `HTTPServer`.
 
-    2. `~tornado.tcpserver.TCPServer.bind`/`~tornado.netutil.TCPServer.start`:
+    2. `~tornado.tcpserver.TCPServer.bind`/`~tornado.tcpserver.TCPServer.start`:
        simple multi-process::
 
             server = HTTPServer(app)
