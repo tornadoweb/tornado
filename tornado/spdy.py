@@ -26,11 +26,13 @@ SPDY protocol utility code.
     http://www.chromium.org/spdy/spdy-protocol/spdy-protocol-draft3
 """
 import sys
+import os
 import logging
 import socket
 import time
 import ssl
-import re
+import random
+import base64
 import numbers
 import functools
 from struct import pack, unpack
@@ -516,8 +518,12 @@ class SyncStream(ControlFrame):
     +------------------------------------+    |
     |           (repeats)                |   <+
     """
-    def __init__(self, conn, flags):
+    def __init__(self, conn, flags, stream_id=0, assoc_stream_id=0, headers={}):
         super(SyncStream, self).__init__(conn, flags, TYPE_SYN_STREAM)
+
+        self.stream_id = stream_id
+        self.assoc_stream_id = assoc_stream_id
+        self.headers = headers
 
     def _on_body(self, chunk):
         self.stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
@@ -546,6 +552,18 @@ class SyncStream(ControlFrame):
                 spdy_log.warn("fail to parse stream: %s", ex.message)
 
                 self.conn.reset_stream(self.stream_id, ex.status_code)
+
+    def pack(self):
+        chunk = _pack_uint(self.stream_id) + _pack_uint(self.assoc_stream_id)
+
+        if self.conn.version >= 3:
+            chunk += _pack_ushort(((self.priority & 0x7) << 5) | self.slot)
+        else:
+            chunk += _pack_ushort((self.priority & 0x3) << 6)
+
+        chunk += self._pack_headers(self.headers)
+
+        return self._pack_frame(chunk)
 
     def __repr__(self):
         headers = '\n'.join(sorted(["\t%s: %s" % (key, ','.join(values)) for key, values in self.headers.items()]))
@@ -607,11 +625,15 @@ class SyncReply(ControlFrame):
     |           (repeats)                |   <+
 
     """
-    def __init__(self, conn, stream_id, headers, finished):
+    def __init__(self, conn, flags, stream_id=0, headers=[], finished=False):
         super(SyncReply, self).__init__(conn, FLAG_UNIDIRECTIONAL if finished else 0, TYPE_SYN_REPLY)
 
         self.stream_id = stream_id
         self.headers = headers
+
+    def _on_body(self, chunk):
+        self.stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
+        self.headers = self._parse_headers(chunk[4:] if self.conn.version >= 3 else chunk[6:])
 
     def pack(self):
         chunk = _pack_uint(self.stream_id) + \
@@ -642,8 +664,8 @@ class RstStream(ControlFrame):
     |          Status code             |
     +----------------------------------+
     """
-    def __init__(self, conn, stream_id, status_code=0):
-        super(RstStream, self).__init__(conn, 0, TYPE_RST_STREAM)
+    def __init__(self, conn, flags, stream_id=0, status_code=0):
+        super(RstStream, self).__init__(conn, flags, TYPE_RST_STREAM)
 
         self.stream_id = stream_id
         self.status_code = status_code
@@ -758,6 +780,9 @@ class Noop(ControlFrame):
         assert len(chunk) == 0
 
         # just ignore it
+
+    def pack(self):
+        self._pack_frame(b'')
 
     def __repr__(self):
         return "NOOP frame <version=%d, flags=%d>" % (self.conn.version, self.flags)
@@ -1045,15 +1070,18 @@ class SPDYRequest(HTTPRequest):
             else:
                 headers = [(b'status', status), (b'version', version)]
 
+            if self.stream.conn.salt_header:
+                headers.append((b'x-salt', base64.b64encode(os.urandom(random.randint(1, 8)))))
+
             headers += [(name.lower(), value) for name, value in [line.split(b': ') for line in lines]]
 
             chunk = chunk[idx + 4:]
 
-            reply_frame = SyncReply(self.connection, self.stream.id, headers, len(chunk) == 0)
+            self.replied = True
+
+            reply_frame = SyncReply(self.connection, 0, self.stream.id, headers, len(chunk) == 0)
 
             self.stream.send(reply_frame)
-
-            self.replied = True
 
         data_frame = DataFrame(self.connection, 0, self.stream.id, chunk)
 
@@ -1078,7 +1106,7 @@ class SPDYConnection(object):
     """
     def __init__(self, stream, address, request_callback, no_keep_alive=False, xheaders=False, protocol=None,
                  server_side=True, version=None, max_frame_len=None, min_frame_len=None, header_encoding=None,
-                 compress_level=None):
+                 compress_level=None, salt_header=True):
         self.stream = stream
         self.address = address
         # Save the socket's address family now so we know how to
@@ -1096,6 +1124,7 @@ class SPDYConnection(object):
         self.min_frame_len = min_frame_len or MIN_FRAME_LEN
         self.header_encoding = header_encoding or DEFAULT_HEADER_ENCODING
         self.compress_level = compress_level or DEFAULT_HEADER_COMPRESS_LEVEL
+        self.salt_header = salt_header
 
         self.settings = {}
         self.settings_limit = {
@@ -1230,7 +1259,7 @@ class SPDYConnection(object):
                 if not frame_cls:
                     raise SPDYProtocolError("unimplemented frame type: {0}".format(frame_type))
 
-                frame = frame_cls(self, flags)
+                frame = frame_cls(conn=self, flags=flags)
             else:
                 #first four bytes, except the first bit: stream_id
                 stream_id = _parse_uint(chunk[0:4]) & _last_31_bits
@@ -1425,7 +1454,8 @@ class SPDYServer(HTTPServer):
                                    max_frame_len=server.spdy_options.get('max_frame_len'),
                                    min_frame_len=server.spdy_options.get('min_frame_len'),
                                    header_encoding=server.spdy_options.get('header_encoding'),
-                                   compress_level=server.spdy_options.get('compress_level'))
+                                   compress_level=server.spdy_options.get('compress_level'),
+                                   salt_header=server.spdy_options.get('salt_header', True))
 
             stream._ssl_connect_callback =  on_selected_protocol
 
@@ -1437,4 +1467,5 @@ class SPDYServer(HTTPServer):
                            max_frame_len=self.spdy_options.get('max_frame_len'),
                            min_frame_len=self.spdy_options.get('min_frame_len'),
                            header_encoding=self.spdy_options.get('header_encoding'),
-                           compress_level=self.spdy_options.get('compress_level'))
+                           compress_level=self.spdy_options.get('compress_level'),
+                           salt_header=self.spdy_options.get('salt_header', True))
