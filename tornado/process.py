@@ -195,7 +195,7 @@ class Subprocess(object):
             err_r, err_w = os.pipe()
             kwargs['stderr'] = err_w
             to_close.append(err_w)
-            self.stdout = PipeIOStream(err_r, io_loop=self.io_loop)
+            self.stderr = PipeIOStream(err_r, io_loop=self.io_loop)
         self.proc = subprocess.Popen(*args, **kwargs)
         for fd in to_close:
             os.close(fd)
