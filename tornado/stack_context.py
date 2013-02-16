@@ -77,6 +77,10 @@ import threading
 from tornado.util import raise_exc_info
 
 
+class StackContextInconsistentError(Exception):
+    pass
+
+
 class _State(threading.local):
     def __init__(self):
         self.contexts = ()
@@ -113,8 +117,10 @@ class StackContext(object):
     def __enter__(self):
         self.old_contexts = _state.contexts
         # _state.contexts is a tuple of (class, arg, active_cell) tuples
-        _state.contexts = (self.old_contexts +
-                           ((StackContext, self.context_factory, self.active_cell),))
+        self.new_contexts = (self.old_contexts +
+                             ((StackContext, self.context_factory,
+                               self.active_cell),))
+        _state.contexts = self.new_contexts
         try:
             self.context = self.context_factory()
             self.context.__enter__()
@@ -127,7 +133,19 @@ class StackContext(object):
         try:
             return self.context.__exit__(type, value, traceback)
         finally:
+            final_contexts = _state.contexts
             _state.contexts = self.old_contexts
+            # Generator coroutines and with-statements with non-local
+            # effects interact badly.  Check here for signs of
+            # the stack getting out of sync.
+            # Note that this check comes after restoring _state.context
+            # so that if it fails things are left in a (relatively)
+            # consistent state.
+            if final_contexts is not self.new_contexts:
+                raise StackContextInconsistentError(
+                    'stack_context inconsistency (may be caused by yield '
+                    'within a "with StackContext" block)')
+            self.old_contexts = self.new_contexts = None
 
 
 class ExceptionStackContext(object):
@@ -149,9 +167,10 @@ class ExceptionStackContext(object):
 
     def __enter__(self):
         self.old_contexts = _state.contexts
-        _state.contexts = (self.old_contexts +
-                           ((ExceptionStackContext, self.exception_handler,
-                             self.active_cell),))
+        self.new_contexts = (self.old_contexts +
+                             ((ExceptionStackContext, self.exception_handler,
+                               self.active_cell),))
+        _state.contexts = self.new_contexts
         return lambda: operator.setitem(self.active_cell, 0, False)
 
     def __exit__(self, type, value, traceback):
@@ -159,8 +178,13 @@ class ExceptionStackContext(object):
             if type is not None:
                 return self.exception_handler(type, value, traceback)
         finally:
+            final_contexts = _state.contexts
             _state.contexts = self.old_contexts
-            self.old_contexts = None
+            if final_contexts is not self.new_contexts:
+                raise StackContextInconsistentError(
+                    'stack_context inconsistency (may be caused by yield '
+                    'within a "with StackContext" block)')
+            self.old_contexts = self.new_contexts = None
 
 
 class NullContext(object):

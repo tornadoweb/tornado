@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, print_function, with_statement
 
+from tornado import gen
 from tornado.log import app_log
-from tornado.stack_context import StackContext, wrap, NullContext
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog
+from tornado.stack_context import StackContext, wrap, NullContext, StackContextInconsistentError, ExceptionStackContext
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
@@ -167,6 +168,46 @@ class StackContextTest(AsyncTestCase):
 
         self.io_loop.add_callback(f1)
         self.wait()
+
+    def test_yield_in_with(self):
+        @gen.engine
+        def f():
+            with StackContext(functools.partial(self.context, 'c1')):
+                # This yield is a problem: the generator will be suspended
+                # and the StackContext's __exit__ is not called yet, so
+                # the context will be left on _state.contexts for anything
+                # that runs before the yield resolves.
+                yield gen.Task(self.io_loop.add_callback)
+
+        with self.assertRaises(StackContextInconsistentError):
+            f()
+            self.wait()
+
+    @gen_test
+    def test_yield_outside_with(self):
+        # This pattern avoids the problem in the previous test.
+        cb = yield gen.Callback('k1')
+        with StackContext(functools.partial(self.context, 'c1')):
+            self.io_loop.add_callback(cb)
+        yield gen.Wait('k1')
+
+    def test_yield_in_with_exception_stack_context(self):
+        # As above, but with ExceptionStackContext instead of StackContext.
+        @gen.engine
+        def f():
+            with ExceptionStackContext(lambda t, v, tb: False):
+                yield gen.Task(self.io_loop.add_callback)
+
+        with self.assertRaises(StackContextInconsistentError):
+            f()
+            self.wait()
+
+    @gen_test
+    def test_yield_outside_with_exception_stack_context(self):
+        cb = yield gen.Callback('k1')
+        with ExceptionStackContext(lambda t, v, tb: False):
+            self.io_loop.add_callback(cb)
+        yield gen.Wait('k1')
 
 
 if __name__ == '__main__':
