@@ -32,6 +32,10 @@ import tornado.web
 from tornado.log import gen_log, app_log
 from tornado.util import bytes_type
 
+try:
+    xrange  # py2
+except NameError:
+    xrange = range  # py3
 
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
@@ -586,7 +590,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def _on_frame_data(self, data):
         unmasked = array.array("B", data)
-        for i in range(len(data)):
+        for i in xrange(len(data)):
             unmasked[i] = unmasked[i] ^ self._frame_mask[i % 4]
 
         if self._frame_opcode_is_control:
