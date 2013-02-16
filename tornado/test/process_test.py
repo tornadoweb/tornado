@@ -154,6 +154,16 @@ class SubprocessTest(AsyncTestCase):
         data = self.wait()
         self.assertEqual(data, b"")
 
+    def test_stderr(self):
+        subproc = Subprocess([sys.executable, '-u', '-c',
+                              r"import sys; sys.stderr.write('hello\n')"],
+                             stderr=Subprocess.STREAM,
+                             io_loop=self.io_loop)
+        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
+        subproc.stderr.read_until(b'\n', self.stop)
+        data = self.wait()
+        self.assertEqual(data, b'hello\n')
+
     def test_sigchild(self):
         # Twisted's SIGCHLD handler and Subprocess's conflict with each other.
         skip_if_twisted()
