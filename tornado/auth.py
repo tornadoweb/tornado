@@ -54,7 +54,8 @@ import hmac
 import time
 import uuid
 
-from tornado.concurrent import Future, chain_future
+from tornado.concurrent import Future, chain_future, return_future
+from tornado import gen
 from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
@@ -401,13 +402,23 @@ class OAuthMixin(object):
             return
 
         access_token = _oauth_parse_response(response.body)
-        self._oauth_get_user(access_token, self.async_callback(
-                             self._on_oauth_get_user, access_token, future))
+        self._oauth_get_user_future(access_token).add_done_callback(
+            self.async_callback(self._on_oauth_get_user, access_token, future))
+
+    @return_future
+    def _oauth_get_user_future(self, access_token, callback):
+        # By default, call the old-style _oauth_get_user, but new code
+        # should override this method instead.
+        self._oauth_get_user(access_token, callback)
 
     def _oauth_get_user(self, access_token, callback):
         raise NotImplementedError()
 
-    def _on_oauth_get_user(self, access_token, future, user):
+    def _on_oauth_get_user(self, access_token, future, user_future):
+        if user_future.exception() is not None:
+            future.set_exception(user_future.exception())
+            return
+        user = user_future.result()
         if not user:
             future.set_exception(AuthError("Error getting user"))
             return
@@ -618,13 +629,12 @@ class TwitterMixin(OAuthMixin):
             key=self.settings["twitter_consumer_key"],
             secret=self.settings["twitter_consumer_secret"])
 
-    def _oauth_get_user(self, access_token, callback):
-        callback = self.async_callback(self._parse_user_response, callback)
-        self.twitter_request(
+    @return_future
+    @gen.engine
+    def _oauth_get_user_future(self, access_token, callback):
+        user = yield self.twitter_request(
             "/users/show/" + escape.native_str(access_token[b"screen_name"]),
-            access_token=access_token, callback=callback)
-
-    def _parse_user_response(self, callback, user):
+            access_token=access_token)
         if user:
             user["username"] = user["screen_name"]
         callback(user)
@@ -741,12 +751,15 @@ class FriendFeedMixin(OAuthMixin):
             key=self.settings["friendfeed_consumer_key"],
             secret=self.settings["friendfeed_consumer_secret"])
 
+    @return_future
+    @gen.engine
     def _oauth_get_user(self, access_token, callback):
-        callback = self.async_callback(self._parse_user_response, callback)
-        self.friendfeed_request(
+        user = yield self.friendfeed_request(
             "/feedinfo/" + access_token["username"],
-            include="id,name,description", access_token=access_token,
-            callback=callback)
+            include="id,name,description", access_token=access_token)
+        if user:
+            user["username"] = user["id"]
+        callback(user)
 
     def _parse_user_response(self, callback, user):
         if user:
@@ -826,8 +839,8 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
             key=self.settings["google_consumer_key"],
             secret=self.settings["google_consumer_secret"])
 
-    def _oauth_get_user(self, access_token, callback):
-        OpenIdMixin.get_authenticated_user(self, callback)
+    def _oauth_get_user_future(self, access_token, callback):
+        return OpenIdMixin.get_authenticated_user(self)
 
 
 class FacebookMixin(object):
