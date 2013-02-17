@@ -26,7 +26,7 @@ PYPY_SERVER_PID=$!
 
 sleep 1
 
-.tox/py27/bin/python ./client.py --servers=Tornado/py26=ws://localhost:9001,Tornado/py27=ws://localhost:9002,Tornado/py32=ws://localhost:9003,Tornado/pypy=ws://localhost:9004 "$@" || true
+.tox/py27/bin/wstest -m fuzzingclient
 
 kill $PY26_SERVER_PID
 kill $PY27_SERVER_PID
