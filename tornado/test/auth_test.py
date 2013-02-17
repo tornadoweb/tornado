@@ -5,12 +5,13 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
-from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin, GoogleMixin
+from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin, GoogleMixin, AuthError
 from tornado.escape import json_decode
 from tornado import gen
-from tornado.testing import AsyncHTTPTestCase
+from tornado.log import gen_log
+from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.util import u
-from tornado.web import RequestHandler, Application, asynchronous
+from tornado.web import RequestHandler, Application, asynchronous, HTTPError
 
 
 class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
@@ -132,10 +133,31 @@ class TwitterClientShowUserHandler(TwitterClientHandler):
     def get(self):
         # TODO: would be nice to go through the login flow instead of
         # cheating with a hard-coded access token.
-        response = yield gen.Task(self.twitter_request, '/users/show/somebody',
+        response = yield gen.Task(self.twitter_request,
+                                  '/users/show/%s' % self.get_argument('name'),
                                   access_token=dict(key='hjkl', secret='vbnm'))
+        if response is None:
+            self.set_status(500)
+            self.finish('error from twitter request')
+        else:
+            self.finish(response)
+
+
+class TwitterClientShowUserFutureHandler(TwitterClientHandler):
+    @asynchronous
+    @gen.engine
+    def get(self):
+        try:
+            response = yield self.twitter_request(
+                '/users/show/%s' % self.get_argument('name'),
+                access_token=dict(key='hjkl', secret='vbnm'))
+        except AuthError as e:
+            self.set_status(500)
+            self.finish(str(e))
+            return
         assert response is not None
         self.finish(response)
+
 
 class TwitterServerAccessTokenHandler(RequestHandler):
     def get(self):
@@ -144,6 +166,8 @@ class TwitterServerAccessTokenHandler(RequestHandler):
 
 class TwitterServerShowUserHandler(RequestHandler):
     def get(self, screen_name):
+        if screen_name == 'error':
+            raise HTTPError(500)
         assert 'oauth_nonce' in self.request.arguments
         assert 'oauth_timestamp' in self.request.arguments
         assert 'oauth_signature' in self.request.arguments
@@ -194,6 +218,7 @@ class AuthTest(AsyncHTTPTestCase):
 
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
                 ('/twitter/client/show_user', TwitterClientShowUserHandler, dict(test=self)),
+                ('/twitter/client/show_user_future', TwitterClientShowUserFutureHandler, dict(test=self)),
                 ('/google/client/openid_login', GoogleOpenIdClientLoginHandler, dict(test=self)),
 
                 # simulated servers
@@ -307,10 +332,27 @@ class AuthTest(AsyncHTTPTestCase):
                           u('username'): u('foo')})
 
     def test_twitter_show_user(self):
-        response = self.fetch('/twitter/client/show_user')
+        response = self.fetch('/twitter/client/show_user?name=somebody')
         response.rethrow()
         self.assertEqual(json_decode(response.body),
                          {'name': 'Somebody', 'screen_name': 'somebody'})
+
+    def test_twitter_show_user_error(self):
+        with ExpectLog(gen_log, 'Error response HTTP 500'):
+            response = self.fetch('/twitter/client/show_user?name=error')
+        self.assertEqual(response.code, 500)
+        self.assertEqual(response.body, b'error from twitter request')
+
+    def test_twitter_show_user_future(self):
+        response = self.fetch('/twitter/client/show_user_future?name=somebody')
+        response.rethrow()
+        self.assertEqual(json_decode(response.body),
+                         {'name': 'Somebody', 'screen_name': 'somebody'})
+
+    def test_twitter_show_user_future_error(self):
+        response = self.fetch('/twitter/client/show_user_future?name=error')
+        self.assertEqual(response.code, 500)
+        self.assertIn(b'Error response HTTP 500', response.body)
 
     def test_google_redirect(self):
         # same as test_openid_redirect

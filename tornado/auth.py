@@ -48,16 +48,18 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import base64
 import binascii
+import functools
 import hashlib
 import hmac
 import time
 import uuid
 
+from tornado.concurrent import Future
 from tornado import httpclient
 from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
-from tornado.util import bytes_type, u, unicode_type
+from tornado.util import bytes_type, u, unicode_type, ArgReplacer
 
 try:
     import urlparse  # py2
@@ -69,6 +71,35 @@ try:
 except ImportError:
     import urllib as urllib_parse  # py2
 
+class AuthError(Exception):
+    pass
+
+def _auth_future_to_callback(callback, future):
+    try:
+        result = future.result()
+    except AuthError as e:
+        gen_log.warning(str(e))
+        result = None
+    callback(result)
+
+def _auth_return_future(f):
+    """Similar to tornado.concurrent.return_future, but uses the auth
+    module's legacy callback interface.
+
+    Note that when using this decorator the ``callback`` parameter
+    inside the function will actually be a future.
+    """
+    replacer = ArgReplacer(f, 'callback')
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        future = Future()
+        callback, args, kwargs = replacer.replace(future, args, kwargs)
+        if callback is not None:
+            future.add_done_callback(
+                functools.partial(_auth_future_to_callback, callback))
+        f(*args, **kwargs)
+        return future
+    return wrapper
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -507,7 +538,8 @@ class TwitterMixin(OAuthMixin):
         http.fetch(self._oauth_request_token_url(callback_uri=callback_uri), self.async_callback(
             self._on_request_token, self._OAUTH_AUTHENTICATE_URL, None))
 
-    def twitter_request(self, path, callback, access_token=None,
+    @_auth_return_future
+    def twitter_request(self, path, callback=None, access_token=None,
                         post_args=None, **args):
         """Fetches the given API path, e.g., "/statuses/user_timeline/btaylor"
 
@@ -562,21 +594,21 @@ class TwitterMixin(OAuthMixin):
             args.update(oauth)
         if args:
             url += "?" + urllib_parse.urlencode(args)
-        callback = self.async_callback(self._on_twitter_request, callback)
         http = self.get_auth_http_client()
+        http_callback = self.async_callback(self._on_twitter_request, callback)
         if post_args is not None:
             http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
-                       callback=callback)
+                       callback=http_callback)
         else:
-            http.fetch(url, callback=callback)
+            http.fetch(url, callback=http_callback)
 
-    def _on_twitter_request(self, callback, response):
+    def _on_twitter_request(self, future, response):
         if response.error:
-            gen_log.warning("Error response %s fetching %s", response.error,
-                            response.request.url)
-            callback(None)
+            future.set_exception(AuthError(
+                    "Error response %s fetching %s" % (response.error,
+                                                       response.request.url)))
             return
-        callback(escape.json_decode(response.body))
+        future.set_result(escape.json_decode(response.body))
 
     def _oauth_consumer_token(self):
         self.require_setting("twitter_consumer_key", "Twitter OAuth")
