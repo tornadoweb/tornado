@@ -321,19 +321,22 @@ class _HTTPConnection(object):
                 message = str(self.stream.error)
             raise HTTPError(599, message)
 
+    def _handle_1xx(self, code):
+        self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
+
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
         first_line, _, header_data = data.partition("\n")
         match = re.match("HTTP/1.[01] ([0-9]+) ([^\r]*)", first_line)
         assert match
         code = int(match.group(1))
+        self.headers = HTTPHeaders.parse(header_data)
         if 100 <= code < 200:
-            self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
+            self._handle_1xx(code)
             return
         else:
             self.code = code
             self.reason = match.group(2)
-        self.headers = HTTPHeaders.parse(header_data)
 
         if "Content-Length" in self.headers:
             if "," in self.headers["Content-Length"]:
