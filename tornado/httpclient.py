@@ -144,6 +144,12 @@ class AsyncHTTPClient(Configurable):
             cls._async_clients()[io_loop] = instance
         return instance
 
+    def initialize(self, io_loop, defaults=None):
+        self.io_loop = io_loop
+        self.defaults = dict(HTTPRequest._DEFAULTS)
+        if defaults is not None:
+            self.defaults.update(defaults)
+
     def close(self):
         """Destroys this http client, freeing any file descriptors used.
         Not needed in normal use, but may be helpful in unittests that
@@ -165,6 +171,16 @@ class AsyncHTTPClient(Configurable):
         encountered during the request. You can call response.rethrow() to
         throw the exception (if any) in the callback.
         """
+        if not isinstance(request, HTTPRequest):
+            request = HTTPRequest(url=request, **kwargs)
+        # We may modify this (to add Host, Accept-Encoding, etc),
+        # so make sure we don't modify the caller's object.  This is also
+        # where normal dicts get converted to HTTPHeaders objects.
+        request.headers = httputil.HTTPHeaders(request.headers)
+        request = _RequestProxy(request, self.defaults)
+        self.fetch_impl(request, callback)
+
+    def fetch_impl(self, request, callback):
         raise NotImplementedError()
 
     @classmethod

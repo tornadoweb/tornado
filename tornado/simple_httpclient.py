@@ -45,7 +45,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     are not reused, and callers cannot select the network interface to be
     used.
     """
-    def initialize(self, io_loop=None, max_clients=10,
+    def initialize(self, io_loop, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
                    resolver=None, defaults=None):
         """Creates a AsyncHTTPClient.
@@ -67,25 +67,16 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         max_buffer_size is the number of bytes that can be read by IOStream. It
         defaults to 100mb.
         """
-        self.io_loop = io_loop
+        super(SimpleAsyncHTTPClient, self).initialize(io_loop,
+                                                      defaults=defaults)
         self.max_clients = max_clients
         self.queue = collections.deque()
         self.active = {}
         self.hostname_mapping = hostname_mapping
         self.max_buffer_size = max_buffer_size
         self.resolver = resolver or Resolver(io_loop=io_loop)
-        self.defaults = dict(HTTPRequest._DEFAULTS)
-        if defaults is not None:
-            self.defaults.update(defaults)
 
-    def fetch(self, request, callback, **kwargs):
-        if not isinstance(request, HTTPRequest):
-            request = HTTPRequest(url=request, **kwargs)
-        # We're going to modify this (to add Host, Accept-Encoding, etc),
-        # so make sure we don't modify the caller's object.  This is also
-        # where normal dicts get converted to HTTPHeaders objects.
-        request.headers = HTTPHeaders(request.headers)
-        request = _RequestProxy(request, self.defaults)
+    def fetch_impl(self, request, callback):
         callback = stack_context.wrap(callback)
         self.queue.append((request, callback))
         self._process_queue()

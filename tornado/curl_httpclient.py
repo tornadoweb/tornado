@@ -39,11 +39,8 @@ except ImportError:
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
-    def initialize(self, io_loop=None, max_clients=10, defaults=None):
-        self.io_loop = io_loop
-        self.defaults = dict(HTTPRequest._DEFAULTS)
-        if defaults is not None:
-            self.defaults.update(defaults)
+    def initialize(self, io_loop, max_clients=10, defaults=None):
+        super(CurlAsyncHTTPClient, self).initialize(io_loop, defaults=defaults)
         self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
@@ -90,10 +87,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._closed = True
         super(CurlAsyncHTTPClient, self).close()
 
-    def fetch(self, request, callback, **kwargs):
-        if not isinstance(request, HTTPRequest):
-            request = HTTPRequest(url=request, **kwargs)
-        request = _RequestProxy(request, self.defaults)
+    def fetch_impl(self, request, callback):
         self._requests.append((request, stack_context.wrap(callback)))
         self._process_queue()
         self._set_timeout(0)
