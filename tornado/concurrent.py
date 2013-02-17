@@ -169,3 +169,16 @@ def return_future(f):
             raise_exc_info(exc_info)
         return future
     return wrapper
+
+def chain_future(a, b):
+    """Chain two futures together so that when one completes, so does the other.
+
+    The result (success or failure) of ``a`` will be copied to ``b``.
+    """
+    def copy(future):
+        assert future is a
+        if a.exception() is not None:
+            b.set_exception(a.exception())
+        else:
+            b.set_result(a.result())
+    a.add_done_callback(copy)
