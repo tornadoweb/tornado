@@ -357,3 +357,20 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
     def test_100_continue(self):
         res = self.fetch('/')
         self.assertEqual(res.body, b'A')
+
+
+class HostnameMappingTestCase(AsyncHTTPTestCase):
+    def setUp(self):
+        super(HostnameMappingTestCase, self).setUp()
+        self.http_client = SimpleAsyncHTTPClient(
+            self.io_loop, hostname_mapping={'www.example.com': '127.0.0.1'})
+
+    def get_app(self):
+        return Application([url("/hello", HelloWorldHandler),])
+
+    def test_hostname_mapping(self):
+        self.http_client.fetch(
+            'http://www.example.com:%d/hello' % self.get_http_port(), self.stop)
+        response = self.wait()
+        response.rethrow()
+        self.assertEqual(response.body, b'Hello world!')
