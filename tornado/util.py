@@ -2,6 +2,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import inspect
 import sys
 import zlib
 
@@ -199,6 +200,45 @@ class Configurable(object):
         base = cls.configurable_base()
         base.__impl_class = saved[0]
         base.__impl_kwargs = saved[1]
+
+
+class ArgReplacer(object):
+    """Replaces one value in an ``args, kwargs`` pair.
+
+    Inspects the function signature to find an argument by name
+    whether it is passed by position or keyword.  For use in decorators
+    and similar wrappers.
+    """
+    def __init__(self, func, name):
+        """Create an ArgReplacer for the named argument to the given function.
+        """
+        self.name = name
+        try:
+            self.arg_pos = inspect.getargspec(func).args.index(self.name)
+        except ValueError:
+            # Not a positional parameter
+            self.arg_pos = None
+
+    def replace(self, new_value, args, kwargs):
+        """Replace the named argument in ``args, kwargs`` with ``new_value``.
+
+        Returns ``(old_value, args, kwargs)``.  The returned ``args`` and
+        ``kwargs`` objects may not be the same as the input objects, or
+        the input objects may be mutated.
+
+        If the named argument was not found, ``new_value`` will be added
+        to ``kwargs`` and None will be returned as ``old_value``.
+        """
+        if self.arg_pos is not None and len(args) > self.arg_pos:
+            # The arg to replace is passed positionally
+            old_value = args[self.arg_pos]
+            args = list(args)  # *args is normally a tuple
+            args[self.arg_pos] = new_value
+        else:
+            # The arg to replace is either omitted or passed by keyword.
+            old_value = kwargs.get(self.name)
+            kwargs[self.name] = new_value
+        return old_value, args, kwargs
 
 
 def doctests():

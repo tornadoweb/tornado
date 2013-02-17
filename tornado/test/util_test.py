@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import sys
 
 from tornado.escape import utf8
-from tornado.util import raise_exc_info, Configurable, u, exec_in
+from tornado.util import raise_exc_info, Configurable, u, exec_in, ArgReplacer
 from tornado.test.util import unittest
 
 try:
@@ -141,3 +141,23 @@ class ExecInTest(unittest.TestCase):
         # ...but the template doesn't
         exec_in('print >> f, "world"', dict(f=f))
         self.assertEqual(f.getvalue(), 'hello\nworld\n')
+
+
+class ArgReplacerTest(unittest.TestCase):
+    def setUp(self):
+        def function(x, y, callback=None, z=None):
+            pass
+        self.replacer = ArgReplacer(function, 'callback')
+
+    def test_omitted(self):
+        self.assertEqual(self.replacer.replace('new', (1, 2), dict()),
+                         (None, (1, 2), dict(callback='new')))
+
+    def test_position(self):
+        self.assertEqual(self.replacer.replace('new', (1, 2, 'old', 3), dict()),
+                         ('old', [1, 2, 'new', 3], dict()))
+
+    def test_keyword(self):
+        self.assertEqual(self.replacer.replace('new', (1,),
+                                               dict(y=2, callback='old', z=3)),
+                         ('old', (1,), dict(y=2, callback='new', z=3)))

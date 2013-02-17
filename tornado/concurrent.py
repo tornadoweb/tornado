@@ -16,11 +16,10 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
-import inspect
 import sys
 
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import raise_exc_info
+from tornado.util import raise_exc_info, ArgReplacer
 
 try:
     from concurrent import futures
@@ -143,25 +142,14 @@ def return_future(f):
     Note that ``@return_future`` and ``@gen.engine`` can be applied to the
     same function, provided ``@return_future`` appears first.
     """
-    try:
-        callback_pos = inspect.getargspec(f).args.index('callback')
-    except ValueError:
-        # Callback is not accepted as a positional parameter
-        callback_pos = None
+    replacer = ArgReplacer(f, 'callback')
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         future = Future()
-        if callback_pos is not None and len(args) > callback_pos:
-            # The callback argument is being passed positionally
-            if args[callback_pos] is not None:
-                future.add_done_callback(args[callback_pos])
-            args = list(args)  # *args is normally a tuple
-            args[callback_pos] = future.set_result
-        else:
-            # The callback argument is either omitted or passed by keyword.
-            if kwargs.get('callback') is not None:
-                future.add_done_callback(kwargs.pop('callback'))
-            kwargs['callback'] = future.set_result
+        callback, args, kwargs = replacer.replace(future.set_result,
+                                                  args, kwargs)
+        if callback is not None:
+            future.add_done_callback(callback)
 
         def handle_error(typ, value, tb):
             future.set_exception(value)
