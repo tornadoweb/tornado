@@ -106,8 +106,8 @@ class HTTPHeaders(dict):
         If a header has multiple values, multiple pairs will be
         returned with the same name.
         """
-        for name, list in self._as_list.items():
-            for value in list:
+        for name, values in self._as_list.items():
+            for value in values:
                 yield (name, value)
 
     def parse_line(self, line):
