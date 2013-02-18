@@ -78,7 +78,6 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             self.resolver = OverrideResolver(self.resolver, hostname_mapping)
 
     def fetch_impl(self, request, callback):
-        callback = stack_context.wrap(callback)
         self.queue.append((request, callback))
         self._process_queue()
         if self.queue:

@@ -88,7 +88,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         super(CurlAsyncHTTPClient, self).close()
 
     def fetch_impl(self, request, callback):
-        self._requests.append((request, stack_context.wrap(callback)))
+        self._requests.append((request, callback))
         self._process_queue()
         self._set_timeout(0)
 

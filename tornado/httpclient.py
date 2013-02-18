@@ -34,6 +34,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import time
 import weakref
 
+from tornado.concurrent import Future
 from tornado.escape import utf8
 from tornado import httputil, stack_context
 from tornado.ioloop import IOLoop
@@ -159,7 +160,7 @@ class AsyncHTTPClient(Configurable):
         if self._async_clients().get(self.io_loop) is self:
             del self._async_clients()[self.io_loop]
 
-    def fetch(self, request, callback, **kwargs):
+    def fetch(self, request, callback=None, **kwargs):
         """Executes a request, calling callback with an `HTTPResponse`.
 
         The request may be either a string URL or an `HTTPRequest` object.
@@ -178,7 +179,28 @@ class AsyncHTTPClient(Configurable):
         # where normal dicts get converted to HTTPHeaders objects.
         request.headers = httputil.HTTPHeaders(request.headers)
         request = _RequestProxy(request, self.defaults)
-        self.fetch_impl(request, callback)
+        future = Future()
+        if callback is not None:
+            callback = stack_context.wrap(callback)
+            def handle_future(future):
+                exc = future.exception()
+                if isinstance(exc, HTTPError) and exc.response is not None:
+                    response = exc.response
+                elif exc is not None:
+                    response = HTTPResponse(
+                        request, 599, error=exc,
+                        request_time=time.time() - request.start_time)
+                else:
+                    response = future.result()
+                self.io_loop.add_callback(callback, response)
+            future.add_done_callback(handle_future)
+        def handle_response(response):
+            if response.error:
+                future.set_exception(response.error)
+            else:
+                future.set_result(response)
+        self.fetch_impl(request, handle_response)
+        return future
 
     def fetch_impl(self, request, callback):
         raise NotImplementedError()

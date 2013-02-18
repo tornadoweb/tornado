@@ -9,11 +9,11 @@ import functools
 import sys
 
 from tornado.escape import utf8
-from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy
+from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError
 from tornado.iostream import IOStream
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
-from tornado.testing import AsyncHTTPTestCase, bind_unused_port
+from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, url
@@ -315,6 +315,19 @@ Transfer-Encoding: chunked
                                    lambda response: 1 / 0)
         self.wait()
         self.assertEqual(exc_info[0][0], ZeroDivisionError)
+
+    @gen_test
+    def test_future_interface(self):
+        response = yield self.http_client.fetch(self.get_url('/hello'))
+        self.assertEqual(response.body, b'Hello world!')
+
+    @gen_test
+    def test_future_http_error(self):
+        try:
+            yield self.http_client.fetch(self.get_url('/notfound'))
+        except HTTPError as e:
+            self.assertEqual(e.code, 404)
+            self.assertEqual(e.response.code, 404)
 
 
 class RequestProxyTest(unittest.TestCase):
