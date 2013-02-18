@@ -53,5 +53,16 @@ distutils.core.setup(
     download_url="http://github.com/downloads/facebook/tornado/tornado-%s.tar.gz" % version,
     license="http://www.apache.org/licenses/LICENSE-2.0",
     description="Tornado is an open source version of the scalable, non-blocking web server and and tools that power FriendFeed",
+    classifiers=[
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.2',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: Implementation :: PyPy',
+        ],
     **kwargs
 )
