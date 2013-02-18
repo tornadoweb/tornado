@@ -95,7 +95,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 _HTTPConnection(self.io_loop, self, request,
                                 functools.partial(self._release_fetch, key),
                                 callback,
-                                self.max_buffer_size)
+                                self.max_buffer_size, self.resolver)
 
     def _release_fetch(self, key):
         del self.active[key]
@@ -106,7 +106,7 @@ class _HTTPConnection(object):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
     def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size):
+                 final_callback, max_buffer_size, resolver):
         self.start_time = io_loop.time()
         self.io_loop = io_loop
         self.client = client
@@ -114,6 +114,7 @@ class _HTTPConnection(object):
         self.release_callback = release_callback
         self.final_callback = final_callback
         self.max_buffer_size = max_buffer_size
+        self.resolver = resolver
         self.code = None
         self.headers = None
         self.chunks = None
@@ -149,7 +150,7 @@ class _HTTPConnection(object):
                 # so restrict to ipv4 by default.
                 af = socket.AF_INET
 
-            self.client.resolver.getaddrinfo(
+            self.resolver.getaddrinfo(
                 host, port, af, socket.SOCK_STREAM, 0, 0,
                 callback=self._on_resolve)
 

@@ -8,7 +8,7 @@ from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
 from tornado.log import gen_log
-from tornado.netutil import ssl_options_to_context
+from tornado.netutil import ssl_options_to_context, Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
@@ -190,7 +190,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 httpclient.HTTPRequest(self.get_url("/")),
                 dict(httpclient.HTTPRequest._DEFAULTS)),
             None, self.stop,
-            1024 * 1024)
+            1024 * 1024, Resolver(self.io_loop))
         conn.set_request(
             b"\r\n".join(headers +
                          [utf8("Content-Length: %d\r\n" % len(body))]) +

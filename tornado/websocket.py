@@ -40,6 +40,7 @@ from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.log import gen_log, app_log
+from tornado.netutil import Resolver
 from tornado import simple_httpclient
 from tornado.util import bytes_type
 
@@ -727,7 +728,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
 
 class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
-    def __init__(self, io_loop, client, request):
+    def __init__(self, io_loop, request):
         self.connect_future = Future()
         self.read_future = None
         self.read_queue = collections.deque()
@@ -744,8 +745,8 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
                 })
 
         super(_WebSocketClientConnection, self).__init__(
-            io_loop, client, request, lambda: None, lambda response: None,
-            104857600)
+            io_loop, None, request, lambda: None, lambda response: None,
+            104857600, Resolver(io_loop))
 
     def _on_close(self):
         self.on_message(None)
@@ -798,11 +799,7 @@ def WebSocketConnect(url, io_loop=None, callback=None):
     request = simple_httpclient.HTTPRequest(url)
     request = simple_httpclient._RequestProxy(
         request, simple_httpclient.HTTPRequest._DEFAULTS)
-    from tornado.util import ObjectDict
-    from tornado.netutil import Resolver
-    # TODO: refactor _HTTPConnection's client parameter
-    client = ObjectDict(resolver=Resolver(io_loop), hostname_mapping=None)
-    conn = _WebSocketClientConnection(io_loop, client, request)
+    conn = _WebSocketClientConnection(io_loop, request)
     if callback is not None:
         io_loop.add_future(conn.connect_future, callback)
     return conn.connect_future
