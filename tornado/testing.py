@@ -167,10 +167,10 @@ class AsyncTestCase(unittest.TestCase):
         super(AsyncTestCase, self).tearDown()
 
     def get_new_ioloop(self):
-        '''Creates a new IOLoop for this test.  May be overridden in
+        """Creates a new IOLoop for this test.  May be overridden in
         subclasses for tests that require a specific IOLoop (usually
         the singleton).
-        '''
+        """
         return IOLoop()
 
     def _handle_exception(self, typ, value, tb):
@@ -192,12 +192,12 @@ class AsyncTestCase(unittest.TestCase):
         self.__rethrow()
 
     def stop(self, _arg=None, **kwargs):
-        '''Stops the ioloop, causing one pending (or future) call to wait()
+        """Stops the ioloop, causing one pending (or future) call to wait()
         to return.
 
         Keyword arguments or a single positional argument passed to stop() are
         saved and will be returned by wait().
-        '''
+        """
         assert _arg is None or not kwargs
         self.__stop_args = kwargs or _arg
         if self.__running:
@@ -241,7 +241,7 @@ class AsyncTestCase(unittest.TestCase):
 
 
 class AsyncHTTPTestCase(AsyncTestCase):
-    '''A test case that starts up an HTTP server.
+    """A test case that starts up an HTTP server.
 
     Subclasses must override get_app(), which returns the
     tornado.web.Application (or other HTTPServer callback) to be tested.
@@ -262,7 +262,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
                 self.http_client.fetch(self.get_url('/'), self.stop)
                 response = self.wait()
                 # test contents of response
-    '''
+    """
     def setUp(self):
         super(AsyncHTTPTestCase, self).setUp()
         sock, port = bind_unused_port()
