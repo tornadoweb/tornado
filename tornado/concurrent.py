@@ -156,6 +156,7 @@ def return_future(f):
             return True
         exc_info = None
         with ExceptionStackContext(handle_error):
+            result = None
             try:
                 result = f(*args, **kwargs)
             except:
