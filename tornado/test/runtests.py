@@ -6,6 +6,7 @@ import textwrap
 import sys
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
+from tornado.netutil import Resolver
 from tornado.options import define, options, add_parse_callback
 from tornado.test.util import unittest
 
@@ -85,6 +86,8 @@ if __name__ == '__main__':
            callback=AsyncHTTPClient.configure)
     define('ioloop', type=str, default=None)
     define('ioloop_time_monotonic', default=False)
+    define('resolver', type=str, default=None,
+           callback=Resolver.configure)
 
     def configure_ioloop():
         kwargs = {}

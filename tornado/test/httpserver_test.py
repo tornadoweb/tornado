@@ -190,7 +190,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 httpclient.HTTPRequest(self.get_url("/")),
                 dict(httpclient.HTTPRequest._DEFAULTS)),
             None, self.stop,
-            1024 * 1024, Resolver(self.io_loop))
+            1024 * 1024, Resolver(io_loop=self.io_loop))
         conn.set_request(
             b"\r\n".join(headers +
                          [utf8("Content-Length: %d\r\n" % len(body))]) +

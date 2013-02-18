@@ -75,7 +75,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.max_buffer_size = max_buffer_size
         self.resolver = resolver or Resolver(io_loop=io_loop)
         if hostname_mapping is not None:
-            self.resolver = OverrideResolver(self.resolver, hostname_mapping)
+            self.resolver = OverrideResolver(resolver=self.resolver,
+                                             mapping=hostname_mapping)
 
     def fetch_impl(self, request, callback):
         self.queue.append((request, callback))

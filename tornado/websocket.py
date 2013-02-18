@@ -746,7 +746,7 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
         super(_WebSocketClientConnection, self).__init__(
             io_loop, None, request, lambda: None, lambda response: None,
-            104857600, Resolver(io_loop))
+            104857600, Resolver(io_loop=io_loop))
 
     def _on_close(self):
         self.on_message(None)
