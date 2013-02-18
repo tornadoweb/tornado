@@ -105,7 +105,7 @@ dummy_executor = DummyExecutor()
 def run_on_executor(fn):
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
-        callback = kwargs.pop("callback")
+        callback = kwargs.pop("callback", None)
         future = self.executor.submit(fn, self, *args, **kwargs)
         if callback:
             self.io_loop.add_future(future, callback)

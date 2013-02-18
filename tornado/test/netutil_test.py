@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import socket
 
 from tornado.netutil import BlockingResolver, ThreadedResolver
-from tornado.testing import AsyncTestCase
+from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import unittest
 
 try:
@@ -26,6 +26,17 @@ class _ResolverTestMixin(object):
             (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '',
              ('127.0.0.1', 80)),
             future.result())
+
+    @gen_test
+    def test_future_interface(self):
+        addrinfo = yield self.resolver.getaddrinfo(
+            'localhost', 80, socket.AF_UNSPEC,
+            socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        self.assertIn(
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '',
+             ('127.0.0.1', 80)),
+            addrinfo)
+
 
 
 class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):
