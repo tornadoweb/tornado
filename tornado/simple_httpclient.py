@@ -5,7 +5,7 @@ from tornado.escape import utf8, _unicode, native_str
 from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
-from tornado.netutil import Resolver
+from tornado.netutil import Resolver, OverrideResolver
 from tornado.log import gen_log
 from tornado import stack_context
 from tornado.util import GzipDecompressor
@@ -72,9 +72,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.max_clients = max_clients
         self.queue = collections.deque()
         self.active = {}
-        self.hostname_mapping = hostname_mapping
         self.max_buffer_size = max_buffer_size
         self.resolver = resolver or Resolver(io_loop=io_loop)
+        if hostname_mapping is not None:
+            self.resolver = OverrideResolver(self.resolver, hostname_mapping)
 
     def fetch_impl(self, request, callback):
         callback = stack_context.wrap(callback)
@@ -140,8 +141,6 @@ class _HTTPConnection(object):
                 # raw ipv6 addresses in urls are enclosed in brackets
                 host = host[1:-1]
             self.parsed_hostname = host  # save final host for _on_connect
-            if self.client.hostname_mapping is not None:
-                host = self.client.hostname_mapping.get(host, host)
 
             if request.allow_ipv6:
                 af = socket.AF_UNSPEC

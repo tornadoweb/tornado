@@ -363,7 +363,11 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(HostnameMappingTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(
-            self.io_loop, hostname_mapping={'www.example.com': '127.0.0.1'})
+            self.io_loop,
+            hostname_mapping={
+                'www.example.com': '127.0.0.1',
+                ('foo.example.com', 8000): ('127.0.0.1', self.get_http_port()),
+                })
 
     def get_app(self):
         return Application([url("/hello", HelloWorldHandler),])
@@ -371,6 +375,12 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
     def test_hostname_mapping(self):
         self.http_client.fetch(
             'http://www.example.com:%d/hello' % self.get_http_port(), self.stop)
+        response = self.wait()
+        response.rethrow()
+        self.assertEqual(response.body, b'Hello world!')
+
+    def test_port_mapping(self):
+        self.http_client.fetch('http://foo.example.com:8000/hello', self.stop)
         response = self.wait()
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')

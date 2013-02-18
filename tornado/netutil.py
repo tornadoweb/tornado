@@ -141,7 +141,23 @@ def add_accept_handler(sock, callback, io_loop=None):
     io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
 
 
-class Resolver(object):
+class BaseResolver(object):
+    def getaddrinfo(self, *args, **kwargs):
+        """Resolves an address.
+
+        The arguments to this function are the same as to
+        `socket.getaddrinfo`, with the addition of an optional
+        keyword-only ``callback`` argument.
+
+        Returns a `Future` whose result is the same as the return
+        value of `socket.getaddrinfo`.  If a callback is passed,
+        it will be run with the `Future` as an argument when it
+        is complete.
+        """
+        raise NotImplementedError()
+
+
+class Resolver(BaseResolver):
     def __init__(self, io_loop=None, executor=None):
         self.io_loop = io_loop or IOLoop.instance()
         self.executor = executor or dummy_executor
@@ -149,6 +165,26 @@ class Resolver(object):
     @run_on_executor
     def getaddrinfo(self, *args, **kwargs):
         return socket.getaddrinfo(*args, **kwargs)
+
+class OverrideResolver(BaseResolver):
+    """Wraps a resolver with a mapping of overrides.
+
+    This can be used to make local DNS changes (e.g. for testing)
+    without modifying system-wide settings.
+
+    The mapping can contain either host strings or host-port pairs.
+    """
+    def __init__(self, resolver, mapping):
+        self.resolver = resolver
+        self.mapping = mapping
+
+    def getaddrinfo(self, host, port, *args, **kwargs):
+        if (host, port) in self.mapping:
+            host, port = self.mapping[(host, port)]
+        elif host in self.mapping:
+            host = self.mapping[host]
+        return self.resolver.getaddrinfo(host, port, *args, **kwargs)
+
 
 
 # These are the keyword arguments to ssl.wrap_socket that must be translated
