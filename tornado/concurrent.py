@@ -26,6 +26,8 @@ try:
 except ImportError:
     futures = None
 
+class ReturnValueIgnoredError(Exception):
+    pass
 
 class DummyFuture(object):
     def __init__(self):
@@ -158,11 +160,13 @@ def return_future(f):
         with ExceptionStackContext(handle_error):
             try:
                 result = f(*args, **kwargs)
+                if result is not None:
+                    raise ReturnValueIgnoredError(
+                        "@return_future should not be used with functions "
+                        "that return values")
             except:
                 exc_info = sys.exc_info()
                 raise
-            assert result is None, ("@return_future should not be used with "
-                                    "functions that return values")
         if exc_info is not None:
             # If the initial synchronous part of f() raised an exception,
             # go ahead and raise it to the caller directly without waiting

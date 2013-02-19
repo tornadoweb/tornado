@@ -19,7 +19,7 @@ import logging
 import re
 import socket
 
-from tornado.concurrent import Future, return_future
+from tornado.concurrent import Future, return_future, ReturnValueIgnoredError
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
@@ -44,6 +44,13 @@ class ReturnFutureTest(AsyncTestCase):
     def delayed_failure(self, callback):
         self.io_loop.add_callback(lambda: 1 / 0)
 
+    @return_future
+    def return_value(self, callback):
+        # Note that the result of both running the callback and returning
+        # a value (or raising an exception) is unspecified; with current
+        # implementations the last event prior to callback resolution wins.
+        return 42
+
     def test_immediate_failure(self):
         with self.assertRaises(ZeroDivisionError):
             # The caller sees the error just like a normal function.
@@ -51,6 +58,13 @@ class ReturnFutureTest(AsyncTestCase):
         # The callback is also run, with a future that contains the error.
         future = self.wait()
         with self.assertRaises(ZeroDivisionError):
+            future.result()
+
+    def test_return_value(self):
+        with self.assertRaises(ReturnValueIgnoredError):
+            self.return_value(callback=self.stop)
+        future = self.wait()
+        with self.assertRaises(ReturnValueIgnoredError):
             future.result()
 
     def test_callback_kw(self):
