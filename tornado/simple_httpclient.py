@@ -213,10 +213,13 @@ class _HTTPConnection(object):
         if self.final_callback is not None:
             raise HTTPError(599, "Timeout")
 
-    def _on_connect(self):
+    def _remove_timeout(self):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
+
+    def _on_connect(self):
+        self._remove_timeout()
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
@@ -290,6 +293,7 @@ class _HTTPConnection(object):
 
     def _handle_exception(self, typ, value, tb):
         if self.final_callback:
+            self._remove_timeout()
             gen_log.warning("uncaught exception", exc_info=(typ, value, tb))
             self._run_callback(HTTPResponse(self.request, 599, error=value,
                                             request_time=self.io_loop.time() - self.start_time,
@@ -377,9 +381,7 @@ class _HTTPConnection(object):
             self.stream.read_until_close(self._on_body)
 
     def _on_body(self, data):
-        if self._timeout is not None:
-            self.io_loop.remove_timeout(self._timeout)
-            self._timeout = None
+        self._remove_timeout()
         original_request = getattr(self.request, "original_request",
                                    self.request)
         if (self.request.follow_redirects and
