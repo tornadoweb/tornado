@@ -156,11 +156,11 @@ def return_future(f):
             return True
         exc_info = None
         with ExceptionStackContext(handle_error):
-            result = None
             try:
                 result = f(*args, **kwargs)
             except:
                 exc_info = sys.exc_info()
+                raise
             assert result is None, ("@return_future should not be used with "
                                     "functions that return values")
         if exc_info is not None:

@@ -46,7 +46,12 @@ class ReturnFutureTest(AsyncTestCase):
 
     def test_immediate_failure(self):
         with self.assertRaises(ZeroDivisionError):
+            # The caller sees the error just like a normal function.
             self.immediate_failure(callback=self.stop)
+        # The callback is also run, with a future that contains the error.
+        future = self.wait()
+        with self.assertRaises(ZeroDivisionError):
+            future.result()
 
     def test_callback_kw(self):
         future = self.sync_future(callback=self.stop)
