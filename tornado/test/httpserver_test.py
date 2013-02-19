@@ -132,7 +132,7 @@ class BadSSLOptionsTest(unittest.TestCase):
         })
 
     def test_missing_key(self):
-        '''A missing SSL key should cause an immediate exception.'''
+        """A missing SSL key should cause an immediate exception."""
 
         application = Application()
         module_dir = os.path.dirname(__file__)
