@@ -81,6 +81,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
     def close(self):
         self._force_timeout_callback.stop()
+        if self._timeout is not None:
+            self.io_loop.remove_timeout(self._timeout)
         for curl in self._curls:
             curl.close()
         self._multi.close()

@@ -223,8 +223,6 @@ class AsyncTestCase(unittest.TestCase):
                     except Exception:
                         self.__failure = sys.exc_info()
                     self.stop()
-                if self.__timeout is not None:
-                    self.io_loop.remove_timeout(self.__timeout)
                 self.__timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout, timeout_func)
             while True:
                 self.__running = True
@@ -232,6 +230,9 @@ class AsyncTestCase(unittest.TestCase):
                 if (self.__failure is not None or
                         condition is None or condition()):
                     break
+            if self.__timeout is not None:
+                self.io_loop.remove_timeout(self.__timeout)
+                self.__timeout = None
         assert self.__stopped
         self.__stopped = False
         self.__rethrow()

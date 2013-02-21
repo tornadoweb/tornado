@@ -285,6 +285,7 @@ Transfer-Encoding: chunked
         client.fetch(self.get_url('/user_agent'), callback=self.stop)
         response = self.wait()
         self.assertEqual(response.body, b'TestDefaultUserAgent')
+        client.close()
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
