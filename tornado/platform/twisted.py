@@ -66,20 +66,29 @@ This module has been tested with Twisted versions 11.0.0 and newer.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import functools
 import datetime
+import functools
+import socket
 
+import twisted.internet.abstract
 from twisted.internet.posixbase import PosixReactorBase
 from twisted.internet.interfaces import \
     IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor
 from twisted.python import failure, log
 from twisted.internet import error
+import twisted.names.cache
+import twisted.names.client
+import twisted.names.hosts
+import twisted.names.resolve
 
 from zope.interface import implementer
 
-import tornado
+from tornado.concurrent import return_future
+from tornado.escape import utf8
+from tornado import gen
 import tornado.ioloop
 from tornado.log import app_log
+from tornado.netutil import Resolver
 from tornado.stack_context import NullContext, wrap
 from tornado.ioloop import IOLoop
 
@@ -470,3 +479,58 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
 
     def add_callback_from_signal(self, callback, *args, **kwargs):
         self.add_callback(callback, *args, **kwargs)
+
+
+class TwistedResolver(Resolver):
+    """Twisted-based asynchronous resolver.
+
+    This is a non-blocking and non-threaded resolver.  It is
+    recommended only when threads cannot be used, since it has
+    limitations compared to the standard ``getaddrinfo``-based
+    `~tornado.netutil.Resolver` and
+    `~tornado.netutil.ThreadedResolver`.  Specifically, it returns at
+    most one result, and arguments other than ``host`` and ``family``
+    are ignored.  It may fail to resolve when ``family`` is not
+    ``socket.AF_UNSPEC``.
+    """
+    def initialize(self, io_loop):
+        self.io_loop = io_loop
+        # partial copy of twisted.names.client.createResolver, which doesn't
+        # allow for a reactor to be passed in.
+        self.reactor = tornado.platform.twisted.TornadoReactor(io_loop)
+
+        host_resolver = twisted.names.hosts.Resolver('/etc/hosts')
+        cache_resolver = twisted.names.cache.CacheResolver(reactor=self.reactor)
+        real_resolver = twisted.names.client.Resolver('/etc/resolv.conf',
+                                                      reactor=self.reactor)
+        self.resolver = twisted.names.resolve.ResolverChain(
+            [host_resolver, cache_resolver, real_resolver])
+
+    @return_future
+    @gen.engine
+    def getaddrinfo(self, host, port, family=0, socktype=0, proto=0,
+                    flags=0, callback=None):
+        # getHostByName doesn't accept IP addresses, so if the input
+        # looks like an IP address just return it immediately.
+        if twisted.internet.abstract.isIPAddress(host):
+            resolved = host
+            resolved_family = socket.AF_INET
+        elif twisted.internet.abstract.isIPv6Address(host):
+            resolved = host
+            resolved_family = socket.AF_INET6
+        else:
+            deferred = self.resolver.getHostByName(utf8(host))
+            resolved = yield gen.Task(deferred.addCallback)
+            if twisted.internet.abstract.isIPAddress(resolved):
+                resolved_family = socket.AF_INET
+            elif twisted.internet.abstract.isIPv6Address(resolved):
+                resolved_family = socket.AF_INET6
+            else:
+                resolved_family = socket.AF_UNSPEC
+        if family != socket.AF_UNSPEC and family != resolved_family:
+            raise Exception('Requested socket family %d but got %d' %
+                            (family, resolved_family))
+        result = [
+            (resolved_family, socktype, proto, '', (resolved, port)),
+            ]
+        self.io_loop.add_callback(callback, result)
