@@ -18,7 +18,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import functools
 import sys
 
-from tornado.stack_context import ExceptionStackContext
+from tornado.stack_context import ExceptionStackContext, wrap
 from tornado.util import raise_exc_info, ArgReplacer
 
 try:
@@ -151,7 +151,7 @@ def return_future(f):
         callback, args, kwargs = replacer.replace(future.set_result,
                                                   args, kwargs)
         if callback is not None:
-            future.add_done_callback(callback)
+            future.add_done_callback(wrap(callback))
 
         def handle_error(typ, value, tb):
             future.set_exception(value)

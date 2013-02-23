@@ -122,6 +122,12 @@ class ReturnFutureTest(AsyncTestCase):
         future = f()
         self.assertEqual(future.result(), 42)
 
+    def test_error_in_callback(self):
+        self.sync_future(callback=lambda future: 1 / 0)
+        # The exception gets caught by our StackContext and will be re-raised
+        # when we wait.
+        self.assertRaises(ZeroDivisionError, self.wait)
+
 # The following series of classes demonstrate and test various styles
 # of use, with and without generators and futures.
 class CapServer(TCPServer):
