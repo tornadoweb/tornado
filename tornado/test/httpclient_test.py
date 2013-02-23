@@ -7,9 +7,12 @@ import binascii
 from contextlib import closing
 import functools
 import sys
+import threading
 
 from tornado.escape import utf8
-from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError
+from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
@@ -372,3 +375,42 @@ class HTTPResponseTestCase(unittest.TestCase):
         s = str(response)
         self.assertTrue(s.startswith('HTTPResponse('))
         self.assertIn('code=200', s)
+
+
+class SyncHTTPClientTest(unittest.TestCase):
+    def setUp(self):
+        if IOLoop.configured_class().__name__ == 'TwistedIOLoop':
+            # TwistedIOLoop only supports the global reactor, so we can't have
+            # separate IOLoops for client and server threads.
+            raise unittest.SkipTest(
+                'Sync HTTPClient not compatible with TwistedIOLoop')
+        self.server_ioloop = IOLoop()
+
+        sock, self.port = bind_unused_port()
+        app = Application([('/', HelloWorldHandler)])
+        server = HTTPServer(app, io_loop=self.server_ioloop)
+        server.add_socket(sock)
+
+        self.server_thread = threading.Thread(target=self.server_ioloop.start)
+        self.server_thread.start()
+
+        self.http_client = HTTPClient()
+
+    def tearDown(self):
+        self.server_ioloop.add_callback(self.server_ioloop.stop)
+        self.server_thread.join()
+        self.server_ioloop.close(all_fds=True)
+
+    def get_url(self, path):
+        return 'http://localhost:%d%s' % (self.port, path)
+
+    def test_sync_client(self):
+        response = self.http_client.fetch(self.get_url('/'))
+        self.assertEqual(b'Hello world!', response.body)
+
+    def test_sync_client_error(self):
+        # Synchronous HTTPClient raises errors directly; no need for
+        # response.rethrow()
+        with self.assertRaises(HTTPError) as assertion:
+            self.http_client.fetch(self.get_url('/notfound'))
+        self.assertEqual(assertion.exception.code, 404)
