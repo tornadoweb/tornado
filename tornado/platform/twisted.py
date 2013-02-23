@@ -186,8 +186,12 @@ class TornadoReactor(PosixReactorBase):
     def callFromThread(self, f, *args, **kw):
         """See `twisted.internet.interfaces.IReactorThreads.callFromThread`"""
         assert callable(f), "%s is not callable" % f
-        p = functools.partial(f, *args, **kw)
-        self._io_loop.add_callback(p)
+        with NullContext():
+            # This NullContext is mainly for an edge case when running
+            # TwistedIOLoop on top of a TornadoReactor.
+            # TwistedIOLoop.add_callback uses reactor.callFromThread and
+            # should not pick up additional StackContexts along the way.
+            self._io_loop.add_callback(f, *args, **kw)
 
     # We don't need the waker code from the super class, Tornado uses
     # its own waker.
@@ -392,16 +396,18 @@ class _FD(object):
 class TwistedIOLoop(tornado.ioloop.IOLoop):
     """IOLoop implementation that runs on Twisted.
 
-    Uses the global Twisted reactor.  It is possible to create multiple
-    TwistedIOLoops in the same process, but it doesn't really make sense
-    because they will all run in the same thread.
+    Uses the global Twisted reactor by default.  To create multiple
+    `TwistedIOLoops` in the same process, you must pass a unique reactor
+    when constructing each one.
 
     Not compatible with `tornado.process.Subprocess.set_exit_callback`
     because the ``SIGCHLD`` handlers used by Tornado and Twisted conflict
     with each other.
     """
-    def initialize(self):
-        from twisted.internet import reactor
+    def initialize(self, reactor=None):
+        if reactor is None:
+            import twisted.internet.reactor
+            reactor = twisted.internet.reactor
         self.reactor = reactor
         self.fds = {}
 
@@ -471,7 +477,8 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         return self.reactor.callLater(delay, self._run_callback, wrap(callback))
 
     def remove_timeout(self, timeout):
-        timeout.cancel()
+        if timeout.active():
+            timeout.cancel()
 
     def add_callback(self, callback, *args, **kwargs):
         self.reactor.callFromThread(self._run_callback,

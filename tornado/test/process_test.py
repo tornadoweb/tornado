@@ -19,7 +19,7 @@ from tornado.web import RequestHandler, Application
 
 
 def skip_if_twisted():
-    if IOLoop.configured_class().__name__ == 'TwistedIOLoop':
+    if IOLoop.configured_class().__name__.endswith('TwistedIOLoop'):
         raise unittest.SkipTest("Process tests not compatible with TwistedIOLoop")
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
