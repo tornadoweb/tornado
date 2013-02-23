@@ -150,8 +150,6 @@ def return_future(f):
         future = Future()
         callback, args, kwargs = replacer.replace(future.set_result,
                                                   args, kwargs)
-        if callback is not None:
-            future.add_done_callback(wrap(callback))
 
         def handle_error(typ, value, tb):
             future.set_exception(value)
@@ -172,6 +170,15 @@ def return_future(f):
             # go ahead and raise it to the caller directly without waiting
             # for them to inspect the Future.
             raise_exc_info(exc_info)
+
+        # If the caller passed in a callback, schedule it to be called
+        # when the future resolves.  It is important that this happens
+        # just before we return the future, or else we risk confusing
+        # stack contexts with multiple exceptions (one here with the
+        # immediate exception, and again when the future resolves and
+        # the callback triggers its exception by calling future.result()).
+        if callback is not None:
+            future.add_done_callback(wrap(callback))
         return future
     return wrapper
 
