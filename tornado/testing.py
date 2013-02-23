@@ -165,6 +165,11 @@ class AsyncTestCase(unittest.TestCase):
             # set FD_CLOEXEC on its file descriptors)
             self.io_loop.close(all_fds=True)
         super(AsyncTestCase, self).tearDown()
+        # In case an exception escaped or the StackContext caught an exception
+        # when there wasn't a wait() to re-raise it, do so here.
+        # This is our last chance to raise an exception in a way that the
+        # unittest machinery understands.
+        self.__rethrow()
 
     def get_new_ioloop(self):
         """Creates a new IOLoop for this test.  May be overridden in
@@ -187,8 +192,10 @@ class AsyncTestCase(unittest.TestCase):
     def run(self, result=None):
         with ExceptionStackContext(self._handle_exception):
             super(AsyncTestCase, self).run(result)
-        # In case an exception escaped super.run or the StackContext caught
-        # an exception when there wasn't a wait() to re-raise it, do so here.
+        # As a last resort, if an exception escaped super.run() and wasn't
+        # re-raised in tearDown, raise it here.  This will cause the
+        # unittest run to fail messily, but that's better than silently
+        # ignoring an error.
         self.__rethrow()
 
     def stop(self, _arg=None, **kwargs):
