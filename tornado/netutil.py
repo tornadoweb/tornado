@@ -142,6 +142,23 @@ def add_accept_handler(sock, callback, io_loop=None):
     io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
 
 
+def is_valid_ip(ip):
+    """Returns true if the given string is a well-formed IP address.
+
+    Supports IPv4 and IPv6.
+    """
+    try:
+        res = socket.getaddrinfo(ip, 0, socket.AF_UNSPEC,
+                                 socket.SOCK_STREAM,
+                                 0, socket.AI_NUMERICHOST)
+        return bool(res)
+    except socket.gaierror as e:
+        if e.args[0] == socket.EAI_NONAME:
+            return False
+        raise
+    return True
+
+
 class Resolver(Configurable):
     @classmethod
     def configurable_base(cls):

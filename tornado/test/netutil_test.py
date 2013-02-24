@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import socket
 
-from tornado.netutil import BlockingResolver, ThreadedResolver
+from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip
 from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import unittest
 
@@ -54,3 +54,15 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def tearDown(self):
         self.resolver.executor.shutdown()
         super(ThreadedResolverTest, self).tearDown()
+
+
+class IsValidIPTest(unittest.TestCase):
+    def test_is_valid_ip(self):
+        self.assertTrue(is_valid_ip('127.0.0.1'))
+        self.assertTrue(is_valid_ip('4.4.4.4'))
+        self.assertTrue(is_valid_ip('::1'))
+        self.assertTrue(is_valid_ip('2620:0:1cfe:face:b00c::3'))
+        self.assertTrue(not is_valid_ip('www.google.com'))
+        self.assertTrue(not is_valid_ip('localhost'))
+        self.assertTrue(not is_valid_ip('4.4.4.4<'))
+        self.assertTrue(not is_valid_ip(' 127.0.0.1'))

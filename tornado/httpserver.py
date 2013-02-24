@@ -34,6 +34,7 @@ from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log
+from tornado import netutil
 from tornado.tcpserver import TCPServer
 from tornado import stack_context
 from tornado.util import bytes_type
@@ -396,7 +397,7 @@ class HTTPRequest(object):
             # Squid uses X-Forwarded-For, others use X-Real-Ip
             self.remote_ip = self.headers.get(
                 "X-Real-Ip", self.headers.get("X-Forwarded-For", remote_ip))
-            if not self._valid_ip(self.remote_ip):
+            if not netutil.is_valid_ip(self.remote_ip):
                 self.remote_ip = remote_ip
             # AWS uses X-Forwarded-Proto
             self.protocol = self.headers.get(
@@ -491,15 +492,3 @@ class HTTPRequest(object):
         args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
         return "%s(%s, headers=%s)" % (
             self.__class__.__name__, args, dict(self.headers))
-
-    def _valid_ip(self, ip):
-        try:
-            res = socket.getaddrinfo(ip, 0, socket.AF_UNSPEC,
-                                     socket.SOCK_STREAM,
-                                     0, socket.AI_NUMERICHOST)
-            return bool(res)
-        except socket.gaierror as e:
-            if e.args[0] == socket.EAI_NONAME:
-                return False
-            raise
-        return True
