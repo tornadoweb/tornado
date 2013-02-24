@@ -168,17 +168,18 @@ class Resolver(Configurable):
     def configurable_default(cls):
         return BlockingResolver
 
-    def getaddrinfo(self, *args, **kwargs):
+    def resolve(self, host, port, family=socket.AF_UNSPEC, callback=None):
         """Resolves an address.
 
-        The arguments to this function are the same as to
-        `socket.getaddrinfo`, with the addition of an optional
-        keyword-only ``callback`` argument.
+        The ``host`` argument is a string which may be a hostname or a
+        literal IP address.
 
-        Returns a `Future` whose result is the same as the return
-        value of `socket.getaddrinfo`.  If a callback is passed,
-        it will be run with the `Future` as an argument when it
-        is complete.
+        Returns a `Future` whose result is a list of (family, address)
+        pairs, where address is a tuple suitable to pass to
+        `socket.connect` (i.e. a (host, port) pair for IPv4;
+        additional fields may be present for IPv6). If a callback is
+        passed, it will be run with the `Future` as an argument when
+        it is complete.
         """
         raise NotImplementedError()
 
@@ -189,8 +190,12 @@ class ExecutorResolver(Resolver):
         self.executor = executor or dummy_executor
 
     @run_on_executor
-    def getaddrinfo(self, *args, **kwargs):
-        return socket.getaddrinfo(*args, **kwargs)
+    def resolve(self, host, port, family=socket.AF_UNSPEC):
+        addrinfo = socket.getaddrinfo(host, port, family)
+        results = []
+        for family, socktype, proto, canonname, address in addrinfo:
+            results.append((family, address))
+        return results
 
 class BlockingResolver(ExecutorResolver):
     def initialize(self, io_loop=None):
@@ -214,12 +219,12 @@ class OverrideResolver(Resolver):
         self.resolver = resolver
         self.mapping = mapping
 
-    def getaddrinfo(self, host, port, *args, **kwargs):
+    def resolve(self, host, port, *args, **kwargs):
         if (host, port) in self.mapping:
             host, port = self.mapping[(host, port)]
         elif host in self.mapping:
             host = self.mapping[host]
-        return self.resolver.getaddrinfo(host, port, *args, **kwargs)
+        return self.resolver.resolve(host, port, *args, **kwargs)
 
 
 

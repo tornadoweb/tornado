@@ -150,12 +150,10 @@ class _HTTPConnection(object):
                 # so restrict to ipv4 by default.
                 af = socket.AF_INET
 
-            self.resolver.getaddrinfo(
-                host, port, af, socket.SOCK_STREAM, 0, 0,
-                callback=self._on_resolve)
+            self.resolver.resolve(host, port, af, callback=self._on_resolve)
 
     def _on_resolve(self, future):
-        af, socktype, proto, canonname, sockaddr = future.result()[0]
+        af, sockaddr = future.result()[0]
 
         if self.parsed.scheme == "https":
             ssl_options = {}
@@ -189,12 +187,12 @@ class _HTTPConnection(object):
                 # information.
                 ssl_options["ssl_version"] = ssl.PROTOCOL_SSLv3
 
-            self.stream = SSLIOStream(socket.socket(af, socktype, proto),
+            self.stream = SSLIOStream(socket.socket(af),
                                       io_loop=self.io_loop,
                                       ssl_options=ssl_options,
                                       max_buffer_size=self.max_buffer_size)
         else:
-            self.stream = IOStream(socket.socket(af, socktype, proto),
+            self.stream = IOStream(socket.socket(af),
                                    io_loop=self.io_loop,
                                    max_buffer_size=self.max_buffer_size)
         timeout = min(self.request.connect_timeout, self.request.request_timeout)

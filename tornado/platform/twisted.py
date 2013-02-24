@@ -515,8 +515,7 @@ class TwistedResolver(Resolver):
 
     @return_future
     @gen.engine
-    def getaddrinfo(self, host, port, family=0, socktype=0, proto=0,
-                    flags=0, callback=None):
+    def resolve(self, host, port, family=0, callback=None):
         # getHostByName doesn't accept IP addresses, so if the input
         # looks like an IP address just return it immediately.
         if twisted.internet.abstract.isIPAddress(host):
@@ -538,6 +537,6 @@ class TwistedResolver(Resolver):
             raise Exception('Requested socket family %d but got %d' %
                             (family, resolved_family))
         result = [
-            (resolved_family, socktype, proto, '', (resolved, port)),
+            (resolved_family, (resolved, port)),
             ]
         self.io_loop.add_callback(callback, result)

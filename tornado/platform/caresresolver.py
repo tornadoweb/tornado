@@ -47,8 +47,7 @@ class CaresResolver(Resolver):
 
     @return_future
     @gen.engine
-    def getaddrinfo(self, host, port, family=0, socktype=0, proto=0,
-                    flags=0, callback=None):
+    def resolve(self, host, port, family=0, callback=None):
         if is_valid_ip(host):
             addresses = [host]
         else:
@@ -73,5 +72,5 @@ class CaresResolver(Resolver):
             if family != socket.AF_UNSPEC and family != address_family:
                 raise Exception('Requested socket family %d but got %d' %
                                 (family, address_family))
-            addrinfo.append((address_family, socktype, proto, '', (address, port)))
+            addrinfo.append((address_family, (address, port)))
         callback(addrinfo)
