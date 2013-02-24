@@ -500,8 +500,8 @@ class TwistedResolver(Resolver):
     are ignored.  It may fail to resolve when ``family`` is not
     ``socket.AF_UNSPEC``.
     """
-    def initialize(self, io_loop):
-        self.io_loop = io_loop
+    def initialize(self, io_loop=None):
+        self.io_loop = io_loop or IOLoop.instance()
         # partial copy of twisted.names.client.createResolver, which doesn't
         # allow for a reactor to be passed in.
         self.reactor = tornado.platform.twisted.TornadoReactor(io_loop)

@@ -4,6 +4,7 @@
 Twisted==12.2.0
 futures==2.1.3
 mock==1.0.1
+pycares==0.4.0
 pycurl==7.19.0
 
 # Other useful tools
