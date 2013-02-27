@@ -35,6 +35,8 @@ General
   ``debug=True``) twice on the same `IOLoop` now does nothing (instead of
   creating multiple periodic callbacks).  Starting autoreload on
   more than one `IOLoop` in the same process now logs a warning.
+* Scripts run by autoreload no longer inherit ``__future__`` imports
+  used by Tornado.
 
 `tornado.auth`
 ~~~~~~~~~~~~~~
@@ -42,6 +44,13 @@ General
 * The `tornado.auth` mixin classes now define a method
   ``get_auth_http_client``, which can be overridden to use a non-default
   `AsyncHTTPClient` instance (e.g. to use a different `IOLoop`)
+* Asynchronous methods defined in `tornado.auth` now return a `Future`,
+  and their ``callback`` argument is optional.  The `Future` interface is
+  preferred as it offers better error handling (the previous interface
+  just logged a warning and returned None).
+* Subclasses of `OAuthMixin` are encouraged to override
+  `_oauth_get_user_future` instead of `_oauth_get_user`, although both
+  methods are still supported.
 
 `tornado.concurrent`
 ~~~~~~~~~~~~~~~~~~~~
@@ -58,6 +67,8 @@ General
   port available in 12.10 (``apt-get install python3-pycurl``).  This port
   currently has bugs that prevent it from handling arbitrary binary data
   but it should work for textual (utf8) resources.
+* Fix a crash with libcurl 7.29.0 if a curl object is created and closed
+  without being used.
 
 `tornado.gen`
 ~~~~~~~~~~~~~
@@ -65,6 +76,7 @@ General
 * Functions using `gen.engine` may now yield ``Future`` objects.
 * Fixed a memory leak involving ``gen.engine``, `RequestHandler.flush`,
   and clients closing connections while output is being written.
+* Yielding a large list no longer has quadratic performance.
 
 `tornado.httpclient`
 ~~~~~~~~~~~~~~~~~~~~
@@ -86,6 +98,9 @@ General
   ``use_gzip``, ``proxy_password``, ``allow_nonstandard_methods``,
   and ``validate_cert`` have been moved from `HTTPRequest` to the
   client implementations.
+* `AsyncHTTPClient.fetch` now returns a ``Future`` and its callback argument
+  is optional.  When the future interface is used, any error will be raised
+  automatically, as if `HTTPResponse.rethrow` was called.
 
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
@@ -162,6 +177,13 @@ General
 * Fixed a major performance regression when run on PyPy (introduced in
   Tornado 2.3).
 
+`tornado.log`
+~~~~~~~~~~~~~
+
+* New module containing `enable_pretty_logging` and `LogFormatter`,
+  moved from the options module.
+* `LogFormatter` now handles non-ascii data in messages and tracebacks better.
+
 `tornado.netutil`
 ~~~~~~~~~~~~~~~~~
 
@@ -178,6 +200,8 @@ General
 * `tornado.netutil.bind_sockets` now works when Python was compiled
   with ``--disable-ipv6`` but IPv6 DNS resolution is available on the
   system.
+* New function `tornado.netutil.is_valid_ip` returns true if a given string
+  is a valid IP (v4 or v6) address.
 
 `tornado.options`
 ~~~~~~~~~~~~~~~~~
@@ -245,6 +269,9 @@ General
   stack.
 * Fixed a bug in which stack contexts could leak from one callback
   chain to another.
+* Yield statements inside a ``with`` statement can cause stack
+  contexts to become inconsistent; an exception will now be raised
+  when this case is detected.
 
 `tornado.template`
 ~~~~~~~~~~~~~~~~~~
@@ -255,6 +282,8 @@ General
 * The ``{% apply %}`` directive now works properly with functions that return
   both unicode strings and byte strings (previously only byte strings were
   supported).
+* Code in templates is no longer affected by Tornado's ``__future__`` imports
+  (which previously included ``absolute_import`` and ``division``).
 
 
 `tornado.testing`
@@ -284,6 +313,10 @@ General
 * New decorator `tornado.testing.gen_test` can be used to allow for
   yielding `tornado.gen` objects in tests, as an alternative to the
   ``stop`` and ``wait`` methods of `AsyncTestCase`.
+* `LogTrapTestCase` no longer fails when run in unknown logging
+  configurations.  This allows tests to be run under nose, which does its
+  own log buffering (`LogTrapTestCase` doesn't do anything useful in this
+  case, but at least it doesn't break things any more).
 
 `tornado.util`
 ~~~~~~~~~~~~~~
@@ -322,3 +355,5 @@ General
 
 * `WebSocketHandler` has new methods `ping` and `on_pong` to send pings
   to the browser (not supported on the ``draft76`` protocol)
+* Client-side WebSocket support is now available:
+  `tornado.websocket.WebSocketConnect`
