@@ -174,6 +174,7 @@ class BaseIOStream(object):
             return
         self._read_until_close = True
         self._streaming_callback = stack_context.wrap(streaming_callback)
+        self._read_from_buffer()
         self._add_io_state(self.io_loop.READ)
 
     def write(self, data, callback=None):
