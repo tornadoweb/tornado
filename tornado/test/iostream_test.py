@@ -147,17 +147,17 @@ class TestIOStreamMixin(object):
 
     def test_streaming_callback_with_data_in_buffer(self):
         server, client = self.make_iostream_pair()
-        client.write("abcd\r\nefgh")
-        server.read_until("\r\n", self.stop)
+        client.write(b"abcd\r\nefgh")
+        server.read_until(b"\r\n", self.stop)
         data = self.wait()
-        self.assertEqual(data, "abcd\r\n")
+        self.assertEqual(data, b"abcd\r\n")
         def closed_callback(chunk):
             self.fail()
         server.read_until_close(callback=closed_callback,
                                 streaming_callback=self.stop)
         self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
         data = self.wait()
-        self.assertEqual(data, "efgh")
+        self.assertEqual(data, b"efgh")
         server.close()
         client.close()
 
