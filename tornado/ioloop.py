@@ -40,7 +40,7 @@ import threading
 import time
 import traceback
 
-from tornado.concurrent import DummyFuture
+from tornado.concurrent import Future
 from tornado.log import app_log, gen_log
 from tornado import stack_context
 from tornado.util import Configurable
@@ -49,11 +49,6 @@ try:
     import signal
 except ImportError:
     signal = None
-
-try:
-    from concurrent import futures
-except ImportError:
-    futures = None
 
 try:
     import thread  # py2
@@ -352,17 +347,12 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    if futures is not None:
-        _FUTURE_TYPES = (futures.Future, DummyFuture)
-    else:
-        _FUTURE_TYPES = DummyFuture
-
     def add_future(self, future, callback):
         """Schedules a callback on the IOLoop when the given future is finished.
 
         The callback is invoked with one argument, the future.
         """
-        assert isinstance(future, IOLoop._FUTURE_TYPES)
+        assert isinstance(future, Future)
         callback = stack_context.wrap(callback)
         future.add_done_callback(
             lambda future: self.add_callback(callback, future))

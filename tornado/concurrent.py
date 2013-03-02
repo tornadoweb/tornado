@@ -29,7 +29,7 @@ except ImportError:
 class ReturnValueIgnoredError(Exception):
     pass
 
-class DummyFuture(object):
+class _DummyFuture(object):
     def __init__(self):
         self._done = False
         self._result = None
@@ -87,7 +87,7 @@ class DummyFuture(object):
         self._callbacks = None
 
 if futures is None:
-    Future = DummyFuture
+    Future = _DummyFuture
 else:
     Future = futures.Future
 
