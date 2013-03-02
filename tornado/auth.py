@@ -629,15 +629,14 @@ class TwitterMixin(OAuthMixin):
             key=self.settings["twitter_consumer_key"],
             secret=self.settings["twitter_consumer_secret"])
 
-    @return_future
-    @gen.engine
-    def _oauth_get_user_future(self, access_token, callback):
+    @gen.coroutine
+    def _oauth_get_user_future(self, access_token):
         user = yield self.twitter_request(
             "/users/show/" + escape.native_str(access_token[b"screen_name"]),
             access_token=access_token)
         if user:
             user["username"] = user["screen_name"]
-        callback(user)
+        raise gen.Return(user)
 
 
 class FriendFeedMixin(OAuthMixin):
@@ -751,9 +750,8 @@ class FriendFeedMixin(OAuthMixin):
             key=self.settings["friendfeed_consumer_key"],
             secret=self.settings["friendfeed_consumer_secret"])
 
-    @return_future
-    @gen.engine
-    def _oauth_get_user(self, access_token, callback):
+    @gen.coroutine
+    def _oauth_get_user_future(self, access_token, callback):
         user = yield self.friendfeed_request(
             "/feedinfo/" + access_token["username"],
             include="id,name,description", access_token=access_token)
@@ -839,7 +837,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
             key=self.settings["google_consumer_key"],
             secret=self.settings["google_consumer_secret"])
 
-    def _oauth_get_user_future(self, access_token, callback):
+    def _oauth_get_user_future(self, access_token):
         return OpenIdMixin.get_authenticated_user(self)
 
 
