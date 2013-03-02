@@ -351,10 +351,12 @@ class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.saved_signals = save_signal_handlers()
         self.io_loop = IOLoop()
+        self.io_loop.make_current()
         self.reactor = TornadoReactor(self.io_loop)
 
     def tearDown(self):
         self.reactor.disconnectAll()
+        self.io_loop.clear_current()
         self.io_loop.close(all_fds=True)
         restore_signal_handlers(self.saved_signals)
 

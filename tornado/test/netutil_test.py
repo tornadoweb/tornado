@@ -65,6 +65,7 @@ class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
 
 
 @unittest.skipIf(twisted is None, "twisted module not present")
+@unittest.skipIf(twisted.__version__ < "12.1", "old version of twisted")
 class TwistedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(TwistedResolverTest, self).setUp()

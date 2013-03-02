@@ -499,6 +499,8 @@ class TwistedResolver(Resolver):
     most one result, and arguments other than ``host`` and ``family``
     are ignored.  It may fail to resolve when ``family`` is not
     ``socket.AF_UNSPEC``.
+
+    Requires Twisted 12.1 or newer.
     """
     def initialize(self, io_loop=None):
         self.io_loop = io_loop or IOLoop.instance()
@@ -513,9 +515,8 @@ class TwistedResolver(Resolver):
         self.resolver = twisted.names.resolve.ResolverChain(
             [host_resolver, cache_resolver, real_resolver])
 
-    @return_future
-    @gen.engine
-    def resolve(self, host, port, family=0, callback=None):
+    @gen.coroutine
+    def resolve(self, host, port, family=0):
         # getHostByName doesn't accept IP addresses, so if the input
         # looks like an IP address just return it immediately.
         if twisted.internet.abstract.isIPAddress(host):
@@ -539,4 +540,4 @@ class TwistedResolver(Resolver):
         result = [
             (resolved_family, (resolved, port)),
             ]
-        self.io_loop.add_callback(callback, result)
+        raise gen.Return(result)

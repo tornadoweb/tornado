@@ -85,7 +85,8 @@ class HTTPClient(object):
         def callback(response):
             self._response = response
             self._io_loop.stop()
-        self._async_client.fetch(request, callback, **kwargs)
+        self._io_loop.add_callback(self._async_client.fetch, request,
+                                   callback, **kwargs)
         self._io_loop.start()
         response = self._response
         self._response = None

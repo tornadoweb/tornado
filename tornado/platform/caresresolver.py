@@ -45,9 +45,8 @@ class CaresResolver(Resolver):
             write_fd = fd
         self.channel.process_fd(read_fd, write_fd)
 
-    @return_future
-    @gen.engine
-    def resolve(self, host, port, family=0, callback=None):
+    @gen.coroutine
+    def resolve(self, host, port, family=0):
         if is_valid_ip(host):
             addresses = [host]
         else:
@@ -73,4 +72,4 @@ class CaresResolver(Resolver):
                 raise Exception('Requested socket family %d but got %d' %
                                 (family, address_family))
             addrinfo.append((address_family, (address, port)))
-        callback(addrinfo)
+        raise gen.Return(addrinfo)
