@@ -91,6 +91,10 @@ class BadYieldError(Exception):
     pass
 
 
+class ReturnValueIgnoredError(Exception):
+    pass
+
+
 def engine(func):
     """Decorator for asynchronous generators.
 
@@ -117,15 +121,91 @@ def engine(func):
                 return runner.handle_exception(typ, value, tb)
             return False
         with ExceptionStackContext(handle_exception) as deactivate:
-            gen = func(*args, **kwargs)
-            if isinstance(gen, types.GeneratorType):
-                runner = Runner(gen, deactivate)
-                runner.run()
-                return
-            assert gen is None, gen
+            try:
+                result = func(*args, **kwargs)
+            except (Return, StopIteration) as e:
+                result = getattr(e, 'value', None)
+            else:
+                if isinstance(result, types.GeneratorType):
+                    def final_callback(value):
+                        if value is not None:
+                            raise ReturnValueIgnoredError(
+                                "@gen.engine functions cannot return values: "
+                                "%r" % result)
+                        assert value is None
+                        deactivate()
+                    runner = Runner(result, final_callback)
+                    runner.run()
+                    return
+            if result is not None:
+                raise ReturnValueIgnoredError(
+                    "@gen.engine functions cannot return values: %r" % result)
             deactivate()
             # no yield, so we're done
     return wrapper
+
+
+def coroutine(func):
+    """Future-oriented decorator for asynchronous generators.
+
+    Similar to ``@gen.engine``, but the decorated function does not receive
+    a ``callback`` parameter.  Instead, it may "return" by raising the
+    special exception `gen.Return(value)`.  In Python 3.3+, it is also
+    possible for the function to simply use the ``return`` statement.
+    (prior to Python 3.3 generators were not allowed to also return values.
+
+    Functions with this decorator return a `Future`.  Additionally,
+    they may be called with a ``callback`` keyword argument, which will
+    be invoked with the future when it resolves.
+
+    From the caller's perspective, ``@gen.coroutine`` is similar to
+    the combination of ``@return_future`` and ``@gen.engine``.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        runner = None
+        future = Future()
+
+        if 'callback' in kwargs:
+            IOLoop.current().add_future(future, kwargs.pop('callback'))
+
+        def handle_exception(typ, value, tb):
+            try:
+                if runner is not None and runner.handle_exception(typ, value, tb):
+                    return True
+            except Exception as e:
+                # can't just say "Exception as value" - exceptions are cleared
+                # from local namespace after except clause finishes.
+                value = e
+            future.set_exception(value)
+            return True
+        with ExceptionStackContext(handle_exception) as deactivate:
+            try:
+                result = func(*args, **kwargs)
+            except (Return, StopIteration) as e:
+                result = getattr(e, 'value', None)
+            except Exception as e:
+                deactivate()
+                future.set_exception(e)
+                return future
+            else:
+                if isinstance(result, types.GeneratorType):
+                    def final_callback(value):
+                        deactivate()
+                        future.set_result(value)
+                    runner = Runner(result, final_callback)
+                    runner.run()
+                    return future
+            deactivate()
+            future.set_result(result)
+        return future
+    return wrapper
+
+
+class Return(Exception):
+    def __init__(self, value=None):
+        super(Return, self).__init__()
+        self.value = value
 
 
 class YieldPoint(object):
@@ -374,7 +454,7 @@ class Runner(object):
                         yielded = self.gen.throw(*exc_info)
                     else:
                         yielded = self.gen.send(next)
-                except StopIteration:
+                except (StopIteration, Return) as e:
                     self.finished = True
                     if self.pending_callbacks and not self.had_exception:
                         # If we ran cleanly without waiting on all callbacks
@@ -384,7 +464,7 @@ class Runner(object):
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
-                    self.final_callback()
+                    self.final_callback(getattr(e, 'value', None))
                     self.final_callback = None
                     return
                 except Exception:

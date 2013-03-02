@@ -388,7 +388,7 @@ def gen_test(f):
         if result is None:
             return
         assert isinstance(result, types.GeneratorType)
-        runner = gen.Runner(result, self.stop)
+        runner = gen.Runner(result, lambda value: self.stop())
         runner.run()
         self.wait()
     return wrapper
