@@ -49,7 +49,7 @@ def main():
     for host in args:
         print('Resolving %s' % host)
         for resolver in resolvers:
-            addrinfo = yield resolver.getaddrinfo(host, 80, family)
+            addrinfo = yield resolver.resolve(host, 80, family)
             print('%s: %s' % (resolver.__class__.__name__,
                               pprint.pformat(addrinfo)))
         print()
