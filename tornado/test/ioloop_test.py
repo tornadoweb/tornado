@@ -155,6 +155,24 @@ class TestIOLoop(AsyncTestCase):
         self.io_loop.remove_timeout(handle)
 
 
+# Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
+# automatically set as current.
+class TestIOLoopCurrent(unittest.TestCase):
+    def setUp(self):
+        self.io_loop = IOLoop()
+
+    def tearDown(self):
+        self.io_loop.close()
+
+    def test_current(self):
+        def f():
+            self.current_io_loop = IOLoop.current()
+            self.io_loop.stop()
+        self.io_loop.add_callback(f)
+        self.io_loop.start()
+        self.assertIs(self.current_io_loop, self.io_loop)
+
+
 class TestIOLoopAddCallback(AsyncTestCase):
     def setUp(self):
         super(TestIOLoopAddCallback, self).setUp()

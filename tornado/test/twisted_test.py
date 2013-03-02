@@ -592,6 +592,7 @@ if have_twisted:
             self.real_io_loop = SelectIOLoop()
             reactor = TornadoReactor(io_loop=self.real_io_loop)
             super(LayeredTwistedIOLoop, self).initialize(reactor=reactor)
+            self.add_callback(self.make_current)
 
         def close(self, all_fds=False):
             super(LayeredTwistedIOLoop, self).close(all_fds=all_fds)

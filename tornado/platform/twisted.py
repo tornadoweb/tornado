@@ -410,6 +410,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
             reactor = twisted.internet.reactor
         self.reactor = reactor
         self.fds = {}
+        self.reactor.callWhenRunning(self.make_current)
 
     def close(self, all_fds=False):
         self.reactor.removeAll()
