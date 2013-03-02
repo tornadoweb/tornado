@@ -145,6 +145,22 @@ class TestIOStreamMixin(object):
         listener.close()
         return streams
 
+    def test_streaming_callback_with_data_in_buffer(self):
+        server, client = self.make_iostream_pair()
+        client.write(b"abcd\r\nefgh")
+        server.read_until(b"\r\n", self.stop)
+        data = self.wait()
+        self.assertEqual(data, b"abcd\r\n")
+        def closed_callback(chunk):
+            self.fail()
+        server.read_until_close(callback=closed_callback,
+                                streaming_callback=self.stop)
+        self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
+        data = self.wait()
+        self.assertEqual(data, b"efgh")
+        server.close()
+        client.close()
+
     def test_write_zero_bytes(self):
         # Attempting to write zero bytes should run the callback without
         # going into an infinite loop.
