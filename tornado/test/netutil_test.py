@@ -11,6 +11,19 @@ try:
 except ImportError:
     futures = None
 
+try:
+    import pycares
+except ImportError:
+    pycares = None
+else:
+    from tornado.platform.caresresolver import CaresResolver
+
+try:
+    import twisted
+except ImportError:
+    twisted = None
+else:
+    from tornado.platform.twisted import TwistedResolver
 
 class _ResolverTestMixin(object):
     def test_localhost(self):
@@ -42,6 +55,20 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def tearDown(self):
         self.resolver.executor.shutdown()
         super(ThreadedResolverTest, self).tearDown()
+
+
+@unittest.skipIf(pycares is None, "pycares module not present")
+class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
+    def setUp(self):
+        super(CaresResolverTest, self).setUp()
+        self.resolver = CaresResolver(io_loop=self.io_loop)
+
+
+@unittest.skipIf(twisted is None, "twisted module not present")
+class TwistedResolverTest(AsyncTestCase, _ResolverTestMixin):
+    def setUp(self):
+        super(TwistedResolverTest, self).setUp()
+        self.resolver = TwistedResolver(io_loop=self.io_loop)
 
 
 class IsValidIPTest(unittest.TestCase):
