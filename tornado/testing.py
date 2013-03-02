@@ -365,15 +365,11 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
 
 
 def gen_test(f):
-    """Testing equivalent of ``@gen.engine``, to be applied to test methods.
+    """Testing equivalent of ``@gen.coroutine``, to be applied to test methods.
 
-    ``@gen.engine`` cannot be used on tests because the `IOLoop` is not
+    ``@gen.coroutine`` cannot be used on tests because the `IOLoop` is not
     already running.  ``@gen_test`` should be applied to test methods
     on subclasses of `AsyncTestCase`.
-
-    Note that unlike most uses of ``@gen.engine``, ``@gen_test`` can
-    detect automatically when the function finishes cleanly so there
-    is no need to run a callback to signal completion.
 
     Example::
         class MyTest(AsyncHTTPTestCase):
@@ -382,15 +378,10 @@ def gen_test(f):
                 response = yield gen.Task(self.fetch('/'))
 
     """
+    f = gen.coroutine(f)
     @functools.wraps(f)
-    def wrapper(self, *args, **kwargs):
-        result = f(self, *args, **kwargs)
-        if result is None:
-            return
-        assert isinstance(result, types.GeneratorType)
-        runner = gen.Runner(result, lambda value: self.stop())
-        runner.run()
-        self.wait()
+    def wrapper(self):
+        return self.io_loop.run_sync(functools.partial(f, self), timeout=5)
     return wrapper
 
 

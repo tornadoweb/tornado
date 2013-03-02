@@ -31,6 +31,7 @@ supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import functools
 import time
 import weakref
 
@@ -60,7 +61,6 @@ class HTTPClient(object):
         if async_client_class is None:
             async_client_class = AsyncHTTPClient
         self._async_client = async_client_class(self._io_loop, **kwargs)
-        self._response = None
         self._closed = False
 
     def __del__(self):
@@ -82,14 +82,8 @@ class HTTPClient(object):
 
         If an error occurs during the fetch, we raise an `HTTPError`.
         """
-        def callback(response):
-            self._response = response
-            self._io_loop.stop()
-        self._io_loop.add_callback(self._async_client.fetch, request,
-                                   callback, **kwargs)
-        self._io_loop.start()
-        response = self._response
-        self._response = None
+        response = self._io_loop.run_sync(functools.partial(
+                self._async_client.fetch, request, **kwargs))
         response.rethrow()
         return response
 

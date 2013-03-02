@@ -10,7 +10,8 @@ import sys
 import threading
 import time
 
-from tornado.ioloop import IOLoop
+from tornado import gen
+from tornado.ioloop import IOLoop, TimeoutError
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port
 from tornado.test.util import unittest, skipIfNonUnix
@@ -271,6 +272,46 @@ class TestIOLoopFutures(AsyncTestCase):
         self.assertEqual(self.exception.args[0], "callback")
         self.assertEqual(self.future.exception().args[0], "worker")
 
+
+class TestIOLoopRunSync(unittest.TestCase):
+    def setUp(self):
+        self.io_loop = IOLoop()
+
+    def tearDown(self):
+        self.io_loop.close()
+
+    def test_sync_result(self):
+        self.assertEqual(self.io_loop.run_sync(lambda: 42), 42)
+
+    def test_sync_exception(self):
+        with self.assertRaises(ZeroDivisionError):
+            self.io_loop.run_sync(lambda: 1 / 0)
+
+    def test_async_result(self):
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            raise gen.Return(42)
+        self.assertEqual(self.io_loop.run_sync(f), 42)
+
+    def test_async_exception(self):
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            1 / 0
+        with self.assertRaises(ZeroDivisionError):
+            self.io_loop.run_sync(f)
+
+    def test_current(self):
+        def f():
+            self.assertIs(IOLoop.current(), self.io_loop)
+        self.io_loop.run_sync(f)
+
+    def test_timeout(self):
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)
+        self.assertRaises(TimeoutError, self.io_loop.run_sync, f, timeout=0.01)
 
 if __name__ == "__main__":
     unittest.main()

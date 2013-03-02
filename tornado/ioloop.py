@@ -58,6 +58,10 @@ except ImportError:
 from tornado.platform.auto import set_close_exec, Waker
 
 
+class TimeoutError(Exception):
+    pass
+
+
 class IOLoop(Configurable):
     """A level-triggered I/O loop.
 
@@ -166,8 +170,8 @@ class IOLoop(Configurable):
     def make_current(self):
         IOLoop._current.instance = self
 
-    def clear_current(self):
-        assert IOLoop._current.instance is self
+    @staticmethod
+    def clear_current():
         IOLoop._current.instance = None
 
     @classmethod
@@ -280,6 +284,52 @@ class IOLoop(Configurable):
         be run before the IOLoop shuts down.
         """
         raise NotImplementedError()
+
+    def run_sync(self, func, timeout=None):
+        """Starts the `IOLoop`, runs the given function, and stops the loop.
+
+        If the function returns a `Future`, the `IOLoop` will run until
+        the future is resolved.  If it raises an exception, the `IOLoop`
+        will stop and the exception will be re-raised to the caller.
+
+        The keyword-only argument ``timeout`` may be used to set
+        a maximum duration for the function.  If the timeout expires,
+        a `TimeoutError` is raised.
+
+        This method is useful in conjunction with `tornado.gen.coroutine`
+        to allow asynchronous calls in a `main()` function::
+
+            @gen.coroutine
+            def main():
+                # do stuff...
+
+            if __name__ == '__main__':
+                IOLoop.instance().run_sync(main)
+        """
+        future_cell = [None]
+        def run():
+            try:
+                result = func()
+            except Exception as e:
+                future_cell[0] = Future()
+                future_cell[0].set_exception(e)
+            else:
+                if isinstance(result, Future):
+                    future_cell[0] = result
+                else:
+                    future_cell[0] = Future()
+                    future_cell[0].set_result(result)
+            self.add_future(future_cell[0], lambda future: self.stop())
+        self.add_callback(run)
+        if timeout is not None:
+            timeout_handle = self.add_timeout(self.time() + timeout, self.stop)
+        self.start()
+        if timeout is not None:
+            self.remove_timeout(timeout_handle)
+        if not future_cell[0].done():
+            raise TimeoutError('Operation timed out after %s seconds' % timeout)
+        return future_cell[0].result()
+
 
     def time(self):
         """Returns the current time according to the IOLoop's clock.

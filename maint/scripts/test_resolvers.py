@@ -22,7 +22,7 @@ except ImportError:
 define('family', default='unspec',
        help='Address family to query: unspec, inet, or inet6')
 
-@gen.engine
+@gen.coroutine
 def main():
     args = parse_command_line()
 
@@ -53,8 +53,6 @@ def main():
             print('%s: %s' % (resolver.__class__.__name__,
                               pprint.pformat(addrinfo)))
         print()
-    IOLoop.instance().stop()
 
 if __name__ == '__main__':
-    IOLoop.instance().add_callback(main)
-    IOLoop.instance().start()
+    IOLoop.instance().run_sync(main)
