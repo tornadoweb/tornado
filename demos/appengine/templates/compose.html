@@ -2,8 +2,8 @@
 
 {% block body %}
   <form action="{{ request.path }}" method="post" class="compose">
-    <div style="margin-bottom:5px"><input name="title" type="text" class="title" value="{{ escape(entry.title) if entry else "" }}"/></div>
-    <div style="margin-bottom:5px"><textarea name="body_source" rows="30" cols="40" class="body_source">{{ escape(entry.body_source) if entry else "" }}</textarea></div>
+    <div style="margin-bottom:5px"><input name="title" type="text" class="title" value="{{ entry.title if entry else "" }}"/></div>
+    <div style="margin-bottom:5px"><textarea name="body_source" rows="30" cols="40" class="body_source">{{ entry.body_source if entry else "" }}</textarea></div>
     <div>
       <input type="submit" value="{{ _("Save changes") if entry else _("Publish post") }}" class="submit"/>
       &nbsp;<a href="{{ "/entry/" + entry.slug if entry else "/" }}">{{ _("Cancel") }}</a>
@@ -11,7 +11,7 @@
     {% if entry %}
       <input type="hidden" name="key" value="{{ str(entry.key()) }}"/>
     {% end %}
-    {{ xsrf_form_html() }}
+    {% module xsrf_form_html() %}
   </form>
 {% end %}
 

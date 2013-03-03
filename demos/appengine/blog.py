@@ -152,7 +152,6 @@ settings = {
     "template_path": os.path.join(os.path.dirname(__file__), "templates"),
     "ui_modules": {"Entry": EntryModule},
     "xsrf_cookies": True,
-    "autoescape": None,
 }
 application = tornado.wsgi.WSGIApplication([
     (r"/", HomeHandler),
