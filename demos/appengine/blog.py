@@ -21,7 +21,6 @@ import re
 import tornado.web
 import tornado.wsgi
 import unicodedata
-import wsgiref.handlers
 
 from google.appengine.api import users
 from google.appengine.ext import db
@@ -67,10 +66,11 @@ class BaseHandler(tornado.web.RequestHandler):
     def get_login_url(self):
         return users.create_login_url(self.request.uri)
 
-    def render_string(self, template_name, **kwargs):
+    def get_template_namespace(self):
         # Let the templates access the users module to generate login URLs
-        return tornado.web.RequestHandler.render_string(
-            self, template_name, users=users, **kwargs)
+        ns = super(BaseHandler, self).get_template_namespace()
+        ns['users'] = users
+        return ns
 
 
 class HomeHandler(BaseHandler):
@@ -160,11 +160,3 @@ application = tornado.wsgi.WSGIApplication([
     (r"/entry/([^/]+)", EntryHandler),
     (r"/compose", ComposeHandler),
 ], **settings)
-
-
-def main():
-    wsgiref.handlers.CGIHandler().run(application)
-
-
-if __name__ == "__main__":
-    main()
