@@ -15,9 +15,9 @@
 # under the License.
 
 import functools
-import markdown
 import os.path
 import re
+import tornado.escape
 import tornado.web
 import tornado.wsgi
 import unicodedata
@@ -31,7 +31,7 @@ class Entry(db.Model):
     author = db.UserProperty()
     title = db.StringProperty(required=True)
     slug = db.StringProperty(required=True)
-    markdown = db.TextProperty(required=True)
+    body_source = db.TextProperty(required=True)
     html = db.TextProperty(required=True)
     published = db.DateTimeProperty(auto_now_add=True)
     updated = db.DateTimeProperty(auto_now=True)
@@ -116,8 +116,9 @@ class ComposeHandler(BaseHandler):
         if key:
             entry = Entry.get(key)
             entry.title = self.get_argument("title")
-            entry.markdown = self.get_argument("markdown")
-            entry.html = markdown.markdown(self.get_argument("markdown"))
+            entry.body_source = self.get_argument("body_source")
+            entry.html = tornado.escape.linkify(
+                self.get_argument("body_source"))
         else:
             title = self.get_argument("title")
             slug = unicodedata.normalize("NFKD", title).encode(
@@ -134,8 +135,8 @@ class ComposeHandler(BaseHandler):
                 author=self.current_user,
                 title=title,
                 slug=slug,
-                markdown=self.get_argument("markdown"),
-                html=markdown.markdown(self.get_argument("markdown")),
+                body_source=self.get_argument("body_source"),
+                html=tornado.escape.linkify(self.get_argument("body_source")),
             )
         entry.put()
         self.redirect("/entry/" + entry.slug)

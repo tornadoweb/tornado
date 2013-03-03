@@ -143,11 +143,11 @@ a code {
 }
 
 .compose .title,
-.compose .markdown {
+.compose .body_source {
   width: 100%;
 }
 
-.compose .markdown {
+.compose .body_source {
   height: 500px;
   line-height: 16pt;
 }
