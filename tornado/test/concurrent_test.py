@@ -23,6 +23,7 @@ from tornado.concurrent import Future, return_future, ReturnValueIgnoredError
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
+from tornado import stack_context
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, LogTrapTestCase, bind_unused_port, gen_test
 
@@ -66,16 +67,16 @@ class ReturnFutureTest(AsyncTestCase):
 
     def test_callback_kw(self):
         future = self.sync_future(callback=self.stop)
-        future2 = self.wait()
-        self.assertIs(future, future2)
+        result = self.wait()
+        self.assertEqual(result, 42)
         self.assertEqual(future.result(), 42)
 
     def test_callback_positional(self):
         # When the callback is passed in positionally, future_wrap shouldn't
         # add another callback in the kwargs.
         future = self.sync_future(self.stop)
-        future2 = self.wait()
-        self.assertIs(future, future2)
+        result = self.wait()
+        self.assertEqual(result, 42)
         self.assertEqual(future.result(), 42)
 
     def test_no_callback(self):
@@ -170,7 +171,8 @@ class ManualCapClient(BaseCapClient):
                             callback=self.handle_connect)
         self.future = Future()
         if callback is not None:
-            self.future.add_done_callback(callback)
+            self.future.add_done_callback(
+                stack_context.wrap(lambda future: callback(future.result())))
         return self.future
 
     def handle_connect(self):
@@ -238,13 +240,12 @@ class ClientTestMixin(object):
 
     def test_callback(self):
         self.client.capitalize("hello", callback=self.stop)
-        future = self.wait()
-        self.assertEqual(future.result(), "HELLO")
+        result = self.wait()
+        self.assertEqual(result, "HELLO")
 
     def test_callback_error(self):
         self.client.capitalize("HELLO", callback=self.stop)
-        future = self.wait()
-        self.assertRaisesRegexp(CapError, "already capitalized", future.result)
+        self.assertRaisesRegexp(CapError, "already capitalized", self.wait)
 
     def test_future(self):
         future = self.client.capitalize("hello")

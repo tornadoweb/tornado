@@ -152,8 +152,8 @@ class _HTTPConnection(object):
 
             self.resolver.resolve(host, port, af, callback=self._on_resolve)
 
-    def _on_resolve(self, future):
-        af, sockaddr = future.result()[0]
+    def _on_resolve(self, addrinfo):
+        af, sockaddr = addrinfo[0]
 
         if self.parsed.scheme == "https":
             ssl_options = {}

@@ -178,7 +178,7 @@ class Resolver(Configurable):
         pairs, where address is a tuple suitable to pass to
         `socket.connect` (i.e. a (host, port) pair for IPv4;
         additional fields may be present for IPv6). If a callback is
-        passed, it will be run with the `Future` as an argument when
+        passed, it will be run with the result as an argument when
         it is complete.
         """
         raise NotImplementedError()

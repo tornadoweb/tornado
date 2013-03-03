@@ -28,9 +28,8 @@ else:
 class _ResolverTestMixin(object):
     def test_localhost(self):
         self.resolver.resolve('localhost', 80, callback=self.stop)
-        future = self.wait()
-        self.assertIn((socket.AF_INET, ('127.0.0.1', 80)),
-                      future.result())
+        result = self.wait()
+        self.assertIn((socket.AF_INET, ('127.0.0.1', 80)), result)
 
     @gen_test
     def test_future_interface(self):

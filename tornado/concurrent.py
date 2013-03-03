@@ -110,7 +110,8 @@ def run_on_executor(fn):
         callback = kwargs.pop("callback", None)
         future = self.executor.submit(fn, self, *args, **kwargs)
         if callback:
-            self.io_loop.add_future(future, callback)
+            self.io_loop.add_future(future,
+                                    lambda future: callback(future.result()))
         return future
     return wrapper
 
@@ -125,10 +126,13 @@ def return_future(f):
 
     From the caller's perspective, the callback argument is optional.
     If one is given, it will be invoked when the function is complete
-    with the `Future` as an argument.  If no callback is given, the caller
-    should use the `Future` to wait for the function to complete
-    (perhaps by yielding it in a `gen.engine` function, or passing it
-    to `IOLoop.add_future`).
+    with `Future.result()` as an argument.  If the function fails,
+    the callback will not be run and an exception will be raised into
+    the surrounding `StackContext`.
+
+    If no callback is given, the caller should use the `Future` to
+    wait for the function to complete (perhaps by yielding it in a
+    `gen.engine` function, or passing it to `IOLoop.add_future`).
 
     Usage::
         @return_future
@@ -142,7 +146,8 @@ def return_future(f):
             callback()
 
     Note that ``@return_future`` and ``@gen.engine`` can be applied to the
-    same function, provided ``@return_future`` appears first.
+    same function, provided ``@return_future`` appears first.  However,
+    consider using ``@gen.coroutine`` instead of this combination.
     """
     replacer = ArgReplacer(f, 'callback')
     @functools.wraps(f)
@@ -178,7 +183,9 @@ def return_future(f):
         # immediate exception, and again when the future resolves and
         # the callback triggers its exception by calling future.result()).
         if callback is not None:
-            future.add_done_callback(wrap(callback))
+            def run_callback(future):
+                callback(future.result())
+            future.add_done_callback(wrap(run_callback))
         return future
     return wrapper
 

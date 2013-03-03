@@ -156,7 +156,9 @@ def coroutine(func):
 
     Functions with this decorator return a `Future`.  Additionally,
     they may be called with a ``callback`` keyword argument, which will
-    be invoked with the future when it resolves.
+    be invoked with the future's result when it resolves.  If the coroutine
+    fails, the callback will not be run and an exception will be raised
+    into the surrounding `StackContext`.
 
     From the caller's perspective, ``@gen.coroutine`` is similar to
     the combination of ``@return_future`` and ``@gen.engine``.
@@ -167,7 +169,9 @@ def coroutine(func):
         future = Future()
 
         if 'callback' in kwargs:
-            IOLoop.current().add_future(future, kwargs.pop('callback'))
+            callback = kwargs.pop('callback')
+            IOLoop.current().add_future(
+                future, lambda future: callback(future.result()))
 
         def handle_exception(typ, value, tb):
             try:

@@ -512,10 +512,8 @@ class GenCoroutineTest(AsyncTestCase):
         @gen.coroutine
         def f():
             raise gen.Return(42)
-        # The callback version passes a future to the callback without
-        # resolving it so exception information is available to the caller.
-        future = yield gen.Task(f)
-        self.assertEqual(future.result(), 42)
+        result = yield gen.Task(f)
+        self.assertEqual(result, 42)
         self.finished = True
 
     @gen_test
