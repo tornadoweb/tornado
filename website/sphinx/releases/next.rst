@@ -25,6 +25,8 @@ General
   as a separate package, `torndb <https://github.com/bdarnell/torndb>`_
 * Python 2.5 is no longer supported.
 * The Tornado test suite now requires ``unittest2`` when run on Python 2.6.
+* Functions that take an ``io_loop`` parameter now default to
+  `IOLoop.current()` instead of `IOLoop.instance()`.
 
 `tornado.autoreload`
 ~~~~~~~~~~~~~~~~~~~~
@@ -77,6 +79,11 @@ General
 * Fixed a memory leak involving ``gen.engine``, `RequestHandler.flush`,
   and clients closing connections while output is being written.
 * Yielding a large list no longer has quadratic performance.
+* New decorator ``@gen.coroutine`` is available as an alternative to
+  ``@gen.engine``.  It automatically returns a `Future`, and within the
+  function instead of calling a callback you return a value with
+  ``raise gen.Return(value)`` (or simply ``return value`` in Python 3.3).
+
 
 `tornado.httpclient`
 ~~~~~~~~~~~~~~~~~~~~
@@ -153,6 +160,8 @@ General
 * `IOLoop` has been refactored to better support subclassing.
 * `IOLoop.add_callback` and `add_callback_from_signal` now take
   ``*args, **kwargs`` to pass along to the callback.
+* New convenience method `IOLoop.run_sync` can be used to start an IOLoop
+  just long enough to run a single coroutine.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -176,6 +185,8 @@ General
   will be sent via SNI (and this is supported by `tornado.simple_httpclient`)
 * Fixed a major performance regression when run on PyPy (introduced in
   Tornado 2.3).
+* `IOStream.read_until_close` now works correctly when it is called
+  while there is buffered data.
 
 `tornado.log`
 ~~~~~~~~~~~~~
