@@ -128,7 +128,7 @@ def add_accept_handler(sock, callback, io_loop=None):
     ``IOLoop`` handlers.
     """
     if io_loop is None:
-        io_loop = IOLoop.instance()
+        io_loop = IOLoop.current()
 
     def accept_handler(fd, events):
         while True:
@@ -186,7 +186,7 @@ class Resolver(Configurable):
 
 class ExecutorResolver(Resolver):
     def initialize(self, io_loop=None, executor=None):
-        self.io_loop = io_loop or IOLoop.instance()
+        self.io_loop = io_loop or IOLoop.current()
         self.executor = executor or dummy_executor
 
     @run_on_executor

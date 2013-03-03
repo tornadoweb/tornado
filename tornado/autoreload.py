@@ -99,7 +99,7 @@ def start(io_loop=None, check_time=500):
     We run on the I/O loop, and restarting is a destructive operation,
     so will terminate any pending requests.
     """
-    io_loop = io_loop or ioloop.IOLoop.instance()
+    io_loop = io_loop or ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return
     _io_loops[io_loop] = True

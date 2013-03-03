@@ -468,10 +468,10 @@ class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase):
 
 class TestIOStream(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
-        return IOStream(connection, io_loop=self.io_loop, **kwargs)
+        return IOStream(connection, **kwargs)
 
     def _make_client_iostream(self, connection, **kwargs):
-        return IOStream(connection, io_loop=self.io_loop, **kwargs)
+        return IOStream(connection, **kwargs)
 
 
 class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):

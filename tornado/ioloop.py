@@ -164,7 +164,7 @@ class IOLoop(Configurable):
     def current():
         current = getattr(IOLoop._current, "instance", None)
         if current is None:
-            raise ValueError("no current IOLoop")
+            return IOLoop.instance()
         return current
 
     def make_current(self):
@@ -733,7 +733,7 @@ class PeriodicCallback(object):
         if callback_time <= 0:
             raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
-        self.io_loop = io_loop or IOLoop.instance()
+        self.io_loop = io_loop or IOLoop.current()
         self._running = False
         self._timeout = None
 

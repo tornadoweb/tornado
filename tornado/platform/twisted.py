@@ -149,7 +149,7 @@ class TornadoReactor(PosixReactorBase):
     """
     def __init__(self, io_loop=None):
         if not io_loop:
-            io_loop = tornado.ioloop.IOLoop.instance()
+            io_loop = tornado.ioloop.IOLoop.current()
         self._io_loop = io_loop
         self._readers = {}  # map of reader objects to fd
         self._writers = {}  # map of writer objects to fd
@@ -357,7 +357,7 @@ class _TestReactor(TornadoReactor):
 def install(io_loop=None):
     """Install this package as the default Twisted reactor."""
     if not io_loop:
-        io_loop = tornado.ioloop.IOLoop.instance()
+        io_loop = tornado.ioloop.IOLoop.current()
     reactor = TornadoReactor(io_loop)
     from twisted.internet.main import installReactor
     installReactor(reactor)
@@ -504,7 +504,7 @@ class TwistedResolver(Resolver):
     Requires Twisted 12.1 or newer.
     """
     def initialize(self, io_loop=None):
-        self.io_loop = io_loop or IOLoop.instance()
+        self.io_loop = io_loop or IOLoop.current()
         # partial copy of twisted.names.client.createResolver, which doesn't
         # allow for a reactor to be passed in.
         self.reactor = tornado.platform.twisted.TornadoReactor(io_loop)

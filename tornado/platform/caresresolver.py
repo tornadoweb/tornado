@@ -19,7 +19,7 @@ class CaresResolver(Resolver):
     may default to ``AF_UNSPEC``.
     """
     def initialize(self, io_loop=None):
-        self.io_loop = io_loop or IOLoop.instance()
+        self.io_loop = io_loop or IOLoop.current()
         self.channel = pycares.Channel(sock_state_cb=self._sock_state_cb)
         self.fds = {}
 

@@ -237,7 +237,7 @@ class Subprocess(object):
         if cls._initialized:
             return
         if io_loop is None:
-            io_loop = ioloop.IOLoop.instance()
+            io_loop = ioloop.IOLoop.current()
         cls._old_sigchld = signal.signal(
             signal.SIGCHLD,
             lambda sig, frame: io_loop.add_callback_from_signal(cls._cleanup))

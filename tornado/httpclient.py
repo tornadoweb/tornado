@@ -131,7 +131,7 @@ class AsyncHTTPClient(Configurable):
         return getattr(cls, attr_name)
 
     def __new__(cls, io_loop=None, force_instance=False, **kwargs):
-        io_loop = io_loop or IOLoop.instance()
+        io_loop = io_loop or IOLoop.current()
         if io_loop in cls._async_clients() and not force_instance:
             return cls._async_clients()[io_loop]
         instance = super(AsyncHTTPClient, cls).__new__(cls, io_loop=io_loop,

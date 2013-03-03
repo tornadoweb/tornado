@@ -123,7 +123,7 @@ class TCPServer(object):
         control over the initialization of a multi-process server.
         """
         if self.io_loop is None:
-            self.io_loop = IOLoop.instance()
+            self.io_loop = IOLoop.current()
 
         for sock in sockets:
             self._sockets[sock.fileno()] = sock

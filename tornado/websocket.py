@@ -795,7 +795,7 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
 def WebSocketConnect(url, io_loop=None, callback=None):
     if io_loop is None:
-        io_loop = IOLoop.instance()
+        io_loop = IOLoop.current()
     request = simple_httpclient.HTTPRequest(url)
     request = simple_httpclient._RequestProxy(
         request, simple_httpclient.HTTPRequest._DEFAULTS)
