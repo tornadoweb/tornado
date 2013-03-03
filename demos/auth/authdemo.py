@@ -42,7 +42,7 @@ class Application(tornado.web.Application):
 
 class BaseHandler(tornado.web.RequestHandler):
     def get_current_user(self):
-        user_json = self.get_secure_cookie("user")
+        user_json = self.get_secure_cookie("authdemo_user")
         if not user_json: return None
         return tornado.escape.json_decode(user_json)
 
@@ -66,7 +66,7 @@ class AuthHandler(BaseHandler, tornado.auth.GoogleMixin):
     def _on_auth(self, user):
         if not user:
             raise tornado.web.HTTPError(500, "Google auth failed")
-        self.set_secure_cookie("user", tornado.escape.json_encode(user))
+        self.set_secure_cookie("authdemo_user", tornado.escape.json_encode(user))
         self.redirect("/")
 
 
@@ -77,7 +77,7 @@ class LogoutHandler(BaseHandler):
         # returning to this app will log them back in immediately with no
         # interaction (unless they have separately logged out of Google in
         # the meantime).
-        self.clear_cookie("user")
+        self.clear_cookie("authdemo_user")
         self.write('You are now logged out. '
                    'Click <a href="/">here</a> to log back in.')
 
