@@ -83,7 +83,7 @@ class HTTPClient(object):
         If an error occurs during the fetch, we raise an `HTTPError`.
         """
         response = self._io_loop.run_sync(functools.partial(
-                self._async_client.fetch, request, **kwargs))
+            self._async_client.fetch, request, **kwargs))
         response.rethrow()
         return response
 
@@ -177,6 +177,7 @@ class AsyncHTTPClient(Configurable):
         future = Future()
         if callback is not None:
             callback = stack_context.wrap(callback)
+
             def handle_future(future):
                 exc = future.exception()
                 if isinstance(exc, HTTPError) and exc.response is not None:
@@ -189,6 +190,7 @@ class AsyncHTTPClient(Configurable):
                     response = future.result()
                 self.io_loop.add_callback(callback, response)
             future.add_done_callback(handle_future)
+
         def handle_response(response):
             if response.error:
                 future.set_exception(response.error)

@@ -20,9 +20,11 @@ import sys
 
 wsgi_safe_tests = []
 
+
 def wsgi_safe(cls):
     wsgi_safe_tests.append(cls)
     return cls
+
 
 class WebTestCase(AsyncHTTPTestCase):
     """Base class for web tests that also supports WSGI mode.

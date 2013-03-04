@@ -5,6 +5,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.netutil import Resolver, is_valid_ip
 
+
 class CaresResolver(Resolver):
     """Name resolver based on the c-ares library.
 

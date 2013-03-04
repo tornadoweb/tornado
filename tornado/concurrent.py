@@ -26,8 +26,10 @@ try:
 except ImportError:
     futures = None
 
+
 class ReturnValueIgnoredError(Exception):
     pass
+
 
 class _DummyFuture(object):
     def __init__(self):
@@ -143,6 +145,7 @@ def run_on_executor(fn):
 
 _NO_RESULT = object()
 
+
 def return_future(f):
     """Decorator to make a function that returns via callback return a `Future`.
 
@@ -177,6 +180,7 @@ def return_future(f):
     consider using ``@gen.coroutine`` instead of this combination.
     """
     replacer = ArgReplacer(f, 'callback')
+
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         future = TracebackFuture()
@@ -221,6 +225,7 @@ def return_future(f):
         return future
     return wrapper
 
+
 def chain_future(a, b):
     """Chain two futures together so that when one completes, so does the other.
 
@@ -229,7 +234,7 @@ def chain_future(a, b):
     def copy(future):
         assert future is a
         if (isinstance(a, TracebackFuture) and isinstance(b, TracebackFuture)
-            and a.exc_info() is not None):
+                and a.exc_info() is not None):
             b.set_exc_info(a.exc_info())
         elif a.exception() is not None:
             b.set_exception(a.exception())

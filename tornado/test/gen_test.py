@@ -561,7 +561,7 @@ class GenCoroutineTest(AsyncTestCase):
         # can be caught and replaced.
         @gen.coroutine
         def f2():
-            self.io_loop.add_callback(lambda: 1/ 0)
+            self.io_loop.add_callback(lambda: 1 / 0)
             try:
                 yield gen.Task(self.io_loop.add_timeout,
                                self.io_loop.time() + 10)
@@ -579,7 +579,7 @@ class GenCoroutineTest(AsyncTestCase):
         # can be caught and ignored.
         @gen.coroutine
         def f2():
-            self.io_loop.add_callback(lambda: 1/ 0)
+            self.io_loop.add_callback(lambda: 1 / 0)
             try:
                 yield gen.Task(self.io_loop.add_timeout,
                                self.io_loop.time() + 10)
@@ -589,7 +589,6 @@ class GenCoroutineTest(AsyncTestCase):
         result = yield f2()
         self.assertEqual(result, 42)
         self.finished = True
-
 
 
 class GenSequenceHandler(RequestHandler):

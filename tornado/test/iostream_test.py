@@ -151,6 +151,7 @@ class TestIOStreamMixin(object):
         server.read_until(b"\r\n", self.stop)
         data = self.wait()
         self.assertEqual(data, b"abcd\r\n")
+
         def closed_callback(chunk):
             self.fail()
         server.read_until_close(callback=closed_callback,

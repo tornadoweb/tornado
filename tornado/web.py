@@ -228,10 +228,10 @@ class RequestHandler(object):
     def clear(self):
         """Resets all headers and content for this response."""
         self._headers = httputil.HTTPHeaders({
-                "Server": "TornadoServer/%s" % tornado.version,
-                "Content-Type": "text/html; charset=UTF-8",
-                "Date": httputil.format_timestamp(time.gmtime()),
-                })
+            "Server": "TornadoServer/%s" % tornado.version,
+            "Content-Type": "text/html; charset=UTF-8",
+            "Date": httputil.format_timestamp(time.gmtime()),
+        })
         self.set_default_headers()
         if not self.request.supports_http_1_1():
             if self.request.headers.get("Connection") == "Keep-Alive":

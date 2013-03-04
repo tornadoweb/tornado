@@ -378,6 +378,7 @@ def gen_test(f):
 
     """
     f = gen.coroutine(f)
+
     @functools.wraps(f)
     def wrapper(self):
         return self.io_loop.run_sync(functools.partial(f, self), timeout=5)
@@ -406,7 +407,7 @@ class LogTrapTestCase(unittest.TestCase):
             logging.basicConfig()
         handler = logger.handlers[0]
         if (len(logger.handlers) > 1 or
-            not isinstance(handler, logging.StreamHandler)):
+                not isinstance(handler, logging.StreamHandler)):
             # Logging has been configured in a way we don't recognize,
             # so just leave it alone.
             super(LogTrapTestCase, self).run(result)

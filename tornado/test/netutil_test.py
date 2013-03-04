@@ -25,6 +25,7 @@ except ImportError:
 else:
     from tornado.platform.twisted import TwistedResolver
 
+
 class _ResolverTestMixin(object):
     def test_localhost(self):
         self.resolver.resolve('localhost', 80, callback=self.stop)

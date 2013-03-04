@@ -308,6 +308,7 @@ class IOLoop(Configurable):
                 IOLoop.instance().run_sync(main)
         """
         future_cell = [None]
+
         def run():
             try:
                 result = func()
@@ -330,7 +331,6 @@ class IOLoop(Configurable):
         if not future_cell[0].done():
             raise TimeoutError('Operation timed out after %s seconds' % timeout)
         return future_cell[0].result()
-
 
     def time(self):
         """Returns the current time according to the IOLoop's clock.

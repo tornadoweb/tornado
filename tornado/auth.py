@@ -72,8 +72,10 @@ try:
 except ImportError:
     import urllib as urllib_parse  # py2
 
+
 class AuthError(Exception):
     pass
+
 
 def _auth_future_to_callback(callback, future):
     try:
@@ -83,6 +85,7 @@ def _auth_future_to_callback(callback, future):
         result = None
     callback(result)
 
+
 def _auth_return_future(f):
     """Similar to tornado.concurrent.return_future, but uses the auth
     module's legacy callback interface.
@@ -91,6 +94,7 @@ def _auth_return_future(f):
     inside the function will actually be a future.
     """
     replacer = ArgReplacer(f, 'callback')
+
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         future = Future()
@@ -101,6 +105,7 @@ def _auth_return_future(f):
         f(*args, **kwargs)
         return future
     return wrapper
+
 
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
@@ -192,8 +197,8 @@ class OpenIdMixin(object):
     def _on_authentication_verified(self, future, response):
         if response.error or b"is_valid:true" not in response.body:
             future.set_exception(AuthError(
-                    "Invalid OpenID response: %s" % (response.error or
-                                                     response.body)))
+                "Invalid OpenID response: %s" % (response.error or
+                                                 response.body)))
             return
 
         # Make sure we got back at least an email from attribute exchange
@@ -315,13 +320,13 @@ class OAuthMixin(object):
         request_cookie = self.get_cookie("_oauth_request_token")
         if not request_cookie:
             future.set_exception(AuthError(
-                    "Missing OAuth request token cookie"))
+                "Missing OAuth request token cookie"))
             return
         self.clear_cookie("_oauth_request_token")
         cookie_key, cookie_secret = [base64.b64decode(escape.utf8(i)) for i in request_cookie.split("|")]
         if cookie_key != request_key:
             future.set_exception(AuthError(
-                    "Request token does not match cookie"))
+                "Request token does not match cookie"))
             return
         token = dict(key=cookie_key, secret=cookie_secret)
         if oauth_verifier:
@@ -617,8 +622,8 @@ class TwitterMixin(OAuthMixin):
     def _on_twitter_request(self, future, response):
         if response.error:
             future.set_exception(AuthError(
-                    "Error response %s fetching %s" % (response.error,
-                                                       response.request.url)))
+                "Error response %s fetching %s" % (response.error,
+                                                   response.request.url)))
             return
         future.set_result(escape.json_decode(response.body))
 
@@ -738,8 +743,8 @@ class FriendFeedMixin(OAuthMixin):
     def _on_friendfeed_request(self, future, response):
         if response.error:
             future.set_exception(AuthError(
-                    "Error response %s fetching %s" % (response.error,
-                                                       response.request.url)))
+                "Error response %s fetching %s" % (response.error,
+                                                   response.request.url)))
             return
         future.set_result(escape.json_decode(response.body))
 

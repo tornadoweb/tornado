@@ -367,10 +367,10 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
             hostname_mapping={
                 'www.example.com': '127.0.0.1',
                 ('foo.example.com', 8000): ('127.0.0.1', self.get_http_port()),
-                })
+            })
 
     def get_app(self):
-        return Application([url("/hello", HelloWorldHandler),])
+        return Application([url("/hello", HelloWorldHandler), ])
 
     def test_hostname_mapping(self):
         self.http_client.fetch(

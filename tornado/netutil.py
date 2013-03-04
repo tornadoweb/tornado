@@ -197,15 +197,18 @@ class ExecutorResolver(Resolver):
             results.append((family, address))
         return results
 
+
 class BlockingResolver(ExecutorResolver):
     def initialize(self, io_loop=None):
         super(BlockingResolver, self).initialize(io_loop=io_loop)
+
 
 class ThreadedResolver(ExecutorResolver):
     def initialize(self, io_loop=None, num_threads=10):
         from concurrent.futures import ThreadPoolExecutor
         super(ThreadedResolver, self).initialize(
             io_loop=io_loop, executor=ThreadPoolExecutor(num_threads))
+
 
 class OverrideResolver(Resolver):
     """Wraps a resolver with a mapping of overrides.
@@ -227,12 +230,12 @@ class OverrideResolver(Resolver):
         return self.resolver.resolve(host, port, *args, **kwargs)
 
 
-
 # These are the keyword arguments to ssl.wrap_socket that must be translated
 # to their SSLContext equivalents (the other arguments are still passed
 # to SSLContext.wrap_socket).
 _SSL_CONTEXT_KEYWORDS = frozenset(['ssl_version', 'certfile', 'keyfile',
                                    'cert_reqs', 'ca_certs', 'ciphers'])
+
 
 def ssl_options_to_context(ssl_options):
     """Try to Convert an ssl_options dictionary to an SSLContext object.
@@ -247,7 +250,7 @@ def ssl_options_to_context(ssl_options):
     if isinstance(ssl_options, dict):
         assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
     if (not hasattr(ssl, 'SSLContext') or
-        isinstance(ssl_options, ssl.SSLContext)):
+            isinstance(ssl_options, ssl.SSLContext)):
         return ssl_options
     context = ssl.SSLContext(
         ssl_options.get('ssl_version', ssl.PROTOCOL_SSLv23))
@@ -294,7 +297,6 @@ else:
     class SSLCertificateError(ValueError):
         pass
 
-
     def _dnsname_to_pat(dn):
         pats = []
         for frag in dn.split(r'.'):
@@ -307,7 +309,6 @@ else:
                 frag = re.escape(frag)
                 pats.append(frag.replace(r'\*', '[^.]*'))
         return re.compile(r'\A' + r'\.'.join(pats) + r'\Z', re.IGNORECASE)
-
 
     def ssl_match_hostname(cert, hostname):
         """Verify that *cert* (in decoded format as returned by

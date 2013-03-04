@@ -11,6 +11,7 @@ try:
 except ImportError:
     from io import StringIO  # py3
 
+
 class RaiseExcInfoTest(unittest.TestCase):
     def test_two_arg_exception(self):
         # This test would fail on python 3 if raise_exc_info were simply

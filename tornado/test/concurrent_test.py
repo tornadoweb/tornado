@@ -166,6 +166,8 @@ class ReturnFutureTest(AsyncTestCase):
 
 # The following series of classes demonstrate and test various styles
 # of use, with and without generators and futures.
+
+
 class CapServer(TCPServer):
     def handle_stream(self, stream, address):
         logging.info("handle_stream")

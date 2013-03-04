@@ -373,7 +373,7 @@ class Multi(YieldPoint):
 
     def is_ready(self):
         finished = list(itertools.takewhile(
-                lambda i: i.is_ready(), self.unfinished_children))
+            lambda i: i.is_ready(), self.unfinished_children))
         self.unfinished_children.difference_update(finished)
         return not self.unfinished_children
 

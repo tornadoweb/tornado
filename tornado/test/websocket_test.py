@@ -2,15 +2,17 @@ from tornado.testing import AsyncHTTPTestCase, gen_test
 from tornado.web import Application
 from tornado.websocket import WebSocketHandler, WebSocketConnect
 
+
 class EchoHandler(WebSocketHandler):
     def on_message(self, message):
         self.write_message(message, isinstance(message, bytes))
 
+
 class WebSocketTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
-                ('/echo', EchoHandler),
-                ])
+            ('/echo', EchoHandler),
+        ])
 
     @gen_test
     def test_websocket_gen(self):

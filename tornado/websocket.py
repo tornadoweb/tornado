@@ -45,6 +45,7 @@ try:
 except NameError:
     xrange = range  # py3
 
+
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
 
@@ -511,7 +512,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         return WebSocketProtocol13.compute_accept_value(
             self.request.headers.get("Sec-Websocket-Key"))
 
-
     def _accept_connection(self):
         subprotocol_header = ''
         subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", '')
@@ -729,11 +729,11 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
         scheme = {'ws': 'http', 'wss': 'https'}[scheme]
         request.url = scheme + sep + rest
         request.headers.update({
-                'Upgrade': 'websocket',
-                'Connection': 'Upgrade',
-                'Sec-WebSocket-Key': self.key,
-                'Sec-WebSocket-Version': '13',
-                })
+            'Upgrade': 'websocket',
+            'Connection': 'Upgrade',
+            'Sec-WebSocket-Key': self.key,
+            'Sec-WebSocket-Version': '13',
+        })
 
         super(_WebSocketClientConnection, self).__init__(
             io_loop, None, request, lambda: None, lambda response: None,
@@ -741,7 +741,6 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def _on_close(self):
         self.on_message(None)
-
 
     def _handle_1xx(self, code):
         assert code == 101

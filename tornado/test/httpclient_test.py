@@ -26,6 +26,7 @@ try:
 except ImportError:
     from cStringIO import StringIO as BytesIO
 
+
 class HelloWorldHandler(RequestHandler):
     def get(self):
         name = self.get_argument("name", "world")

@@ -540,5 +540,5 @@ class TwistedResolver(Resolver):
                             (family, resolved_family))
         result = [
             (resolved_family, (resolved, port)),
-            ]
+        ]
         raise gen.Return(result)

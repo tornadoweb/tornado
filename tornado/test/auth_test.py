@@ -108,7 +108,6 @@ class TwitterClientHandler(RequestHandler, TwitterMixin):
         self._OAUTH_AUTHORIZE_URL = test.get_url('/oauth1/server/authorize')
         self._TWITTER_BASE_URL = test.get_url('/twitter/api')
 
-
     def get_auth_http_client(self):
         return self.settings['http_client']
 
