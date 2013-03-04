@@ -18,6 +18,8 @@ from __future__ import absolute_import, division, print_function, with_statement
 import logging
 import re
 import socket
+import sys
+import traceback
 
 from tornado.concurrent import Future, return_future, ReturnValueIgnoredError
 from tornado.escape import utf8, to_unicode
@@ -142,6 +144,25 @@ class ReturnFutureTest(AsyncTestCase):
         result = self.wait()
         self.assertIs(result, None)
         future.result()
+
+    @gen_test
+    def test_future_traceback(self):
+        @return_future
+        @gen.engine
+        def f(callback):
+            yield gen.Task(self.io_loop.add_callback)
+            try:
+                1 / 0
+            except ZeroDivisionError:
+                self.expected_frame = traceback.extract_tb(
+                    sys.exc_info()[2], limit=1)[0]
+                raise
+        try:
+            yield f()
+            self.fail("didn't get expected exception")
+        except ZeroDivisionError:
+            tb = traceback.extract_tb(sys.exc_info()[2])
+            self.assertIn(self.expected_frame, tb)
 
 # The following series of classes demonstrate and test various styles
 # of use, with and without generators and futures.

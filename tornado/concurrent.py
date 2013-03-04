@@ -92,13 +92,38 @@ else:
     Future = futures.Future
 
 
+class TracebackFuture(Future):
+    """Subclass of `Future` which can store a traceback with exceptions.
+
+    The traceback is automatically available in Python 3, but in the
+    Python 2 futures backport this information is discarded.
+    """
+    def __init__(self):
+        super(TracebackFuture, self).__init__()
+        self.__exc_info = None
+
+    def exc_info(self):
+        return self.__exc_info
+
+    def set_exc_info(self, exc_info):
+        """Traceback-aware replacement for `Future.set_exception`."""
+        self.__exc_info = exc_info
+        self.set_exception(exc_info[1])
+
+    def result(self):
+        if self.__exc_info is not None:
+            raise_exc_info(self.__exc_info)
+        else:
+            return super(TracebackFuture, self).result()
+
+
 class DummyExecutor(object):
     def submit(self, fn, *args, **kwargs):
-        future = Future()
+        future = TracebackFuture()
         try:
             future.set_result(fn(*args, **kwargs))
-        except Exception as e:
-            future.set_exception(e)
+        except Exception:
+            future.set_exc_info(sys.exc_info())
         return future
 
 dummy_executor = DummyExecutor()
@@ -154,13 +179,13 @@ def return_future(f):
     replacer = ArgReplacer(f, 'callback')
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
-        future = Future()
+        future = TracebackFuture()
         callback, args, kwargs = replacer.replace(
             lambda value=_NO_RESULT: future.set_result(value),
             args, kwargs)
 
         def handle_error(typ, value, tb):
-            future.set_exception(value)
+            future.set_exc_info((typ, value, tb))
             return True
         exc_info = None
         with ExceptionStackContext(handle_error):
@@ -203,7 +228,10 @@ def chain_future(a, b):
     """
     def copy(future):
         assert future is a
-        if a.exception() is not None:
+        if (isinstance(a, TracebackFuture) and isinstance(b, TracebackFuture)
+            and a.exc_info() is not None):
+            b.set_exc_info(a.exc_info())
+        elif a.exception() is not None:
             b.set_exception(a.exception())
         else:
             b.set_result(a.result())

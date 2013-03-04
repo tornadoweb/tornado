@@ -36,11 +36,12 @@ import logging
 import numbers
 import os
 import select
+import sys
 import threading
 import time
 import traceback
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, TracebackFuture
 from tornado.log import app_log, gen_log
 from tornado import stack_context
 from tornado.util import Configurable
@@ -310,9 +311,9 @@ class IOLoop(Configurable):
         def run():
             try:
                 result = func()
-            except Exception as e:
-                future_cell[0] = Future()
-                future_cell[0].set_exception(e)
+            except Exception:
+                future_cell[0] = TracebackFuture()
+                future_cell[0].set_exc_info(sys.exc_info())
             else:
                 if isinstance(result, Future):
                     future_cell[0] = result

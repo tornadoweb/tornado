@@ -70,7 +70,7 @@ import itertools
 import sys
 import types
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, TracebackFuture
 from tornado.ioloop import IOLoop
 from tornado.stack_context import ExceptionStackContext
 
@@ -166,7 +166,7 @@ def coroutine(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         runner = None
-        future = Future()
+        future = TracebackFuture()
 
         if 'callback' in kwargs:
             callback = kwargs.pop('callback')
@@ -177,20 +177,18 @@ def coroutine(func):
             try:
                 if runner is not None and runner.handle_exception(typ, value, tb):
                     return True
-            except Exception as e:
-                # can't just say "Exception as value" - exceptions are cleared
-                # from local namespace after except clause finishes.
-                value = e
-            future.set_exception(value)
+            except Exception:
+                typ, value, tb = sys.exc_info()
+            future.set_exc_info((typ, value, tb))
             return True
         with ExceptionStackContext(handle_exception) as deactivate:
             try:
                 result = func(*args, **kwargs)
             except (Return, StopIteration) as e:
                 result = getattr(e, 'value', None)
-            except Exception as e:
+            except Exception:
                 deactivate()
-                future.set_exception(e)
+                future.set_exc_info(sys.exc_info())
                 return future
             else:
                 if isinstance(result, types.GeneratorType):
