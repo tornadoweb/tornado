@@ -131,9 +131,17 @@ class ReturnFutureTest(AsyncTestCase):
         self.assertRaises(ZeroDivisionError, self.wait)
 
     def test_no_result_future(self):
-        self.no_result_future(self.stop)
+        future = self.no_result_future(self.stop)
         result = self.wait()
         self.assertIs(result, None)
+        # result of this future is undefined, but not an error
+        future.result()
+
+    def test_no_result_future_callback(self):
+        future = self.no_result_future(callback=lambda: self.stop())
+        result = self.wait()
+        self.assertIs(result, None)
+        future.result()
 
 # The following series of classes demonstrate and test various styles
 # of use, with and without generators and futures.

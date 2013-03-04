@@ -116,6 +116,8 @@ def run_on_executor(fn):
     return wrapper
 
 
+_NO_RESULT = object()
+
 def return_future(f):
     """Decorator to make a function that returns via callback return a `Future`.
 
@@ -154,7 +156,7 @@ def return_future(f):
     def wrapper(*args, **kwargs):
         future = Future()
         callback, args, kwargs = replacer.replace(
-            lambda value=None: future.set_result(value),
+            lambda value=_NO_RESULT: future.set_result(value),
             args, kwargs)
 
         def handle_error(typ, value, tb):
@@ -185,7 +187,11 @@ def return_future(f):
         # the callback triggers its exception by calling future.result()).
         if callback is not None:
             def run_callback(future):
-                callback(future.result())
+                result = future.result()
+                if result is _NO_RESULT:
+                    callback()
+                else:
+                    callback(future.result())
             future.add_done_callback(wrap(run_callback))
         return future
     return wrapper
