@@ -30,7 +30,7 @@ from tornado.log import gen_log
 from tornado import stack_context
 
 from tornado.escape import utf8, native_str
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
+from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.util import bytes_type
 
 try:

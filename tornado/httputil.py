@@ -32,6 +32,10 @@ try:
 except ImportError:
     from http.client import responses  # py3
 
+# responses is unused in this file, but we re-export it to other files.
+# Reference it so pyflakes doesn't complain.
+responses
+
 try:
     from urllib import urlencode  # py2
 except ImportError:

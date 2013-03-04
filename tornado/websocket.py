@@ -25,20 +25,16 @@ import base64
 import collections
 import functools
 import hashlib
-import logging
 import os
-import re
-import socket
 import struct
 import time
 import tornado.escape
 import tornado.web
 
-from tornado.concurrent import Future, return_future
-from tornado.escape import utf8, to_unicode, native_str
-from tornado.httputil import HTTPHeaders
+from tornado.concurrent import Future
+from tornado.escape import utf8, native_str
+from tornado import httpclient
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream, SSLIOStream
 from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
 from tornado import simple_httpclient
@@ -48,11 +44,6 @@ try:
     xrange  # py2
 except NameError:
     xrange = range  # py3
-
-try:
-    import urlparse  # py2
-except ImportError:
-    import urllib.parse as urlparse  # py3
 
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
@@ -399,7 +390,7 @@ class WebSocketProtocol76(WebSocketProtocol):
 
         Raises ValueError when feed invalid key."""
         number = int(''.join(c for c in key if c.isdigit()))
-        spaces = len([c for c in key if c.isspace()])
+        spaces = len(c for c in key if c.isspace())
         try:
             key_number = number // spaces
         except (ValueError, ZeroDivisionError):
@@ -796,9 +787,9 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
 def WebSocketConnect(url, io_loop=None, callback=None):
     if io_loop is None:
         io_loop = IOLoop.current()
-    request = simple_httpclient.HTTPRequest(url)
-    request = simple_httpclient._RequestProxy(
-        request, simple_httpclient.HTTPRequest._DEFAULTS)
+    request = httpclient.HTTPRequest(url)
+    request = httpclient._RequestProxy(
+        request, httpclient.HTTPRequest._DEFAULTS)
     conn = _WebSocketClientConnection(io_loop, request)
     if callback is not None:
         io_loop.add_future(conn.connect_future, callback)
