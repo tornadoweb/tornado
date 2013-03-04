@@ -52,6 +52,10 @@ class ReturnFutureTest(AsyncTestCase):
         # implementations the last event prior to callback resolution wins.
         return 42
 
+    @return_future
+    def no_result_future(self, callback):
+        callback()
+
     def test_immediate_failure(self):
         with self.assertRaises(ZeroDivisionError):
             # The caller sees the error just like a normal function.
@@ -125,6 +129,11 @@ class ReturnFutureTest(AsyncTestCase):
         # The exception gets caught by our StackContext and will be re-raised
         # when we wait.
         self.assertRaises(ZeroDivisionError, self.wait)
+
+    def test_no_result_future(self):
+        self.no_result_future(self.stop)
+        result = self.wait()
+        self.assertIs(result, None)
 
 # The following series of classes demonstrate and test various styles
 # of use, with and without generators and futures.

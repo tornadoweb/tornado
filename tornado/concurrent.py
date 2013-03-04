@@ -153,8 +153,9 @@ def return_future(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         future = Future()
-        callback, args, kwargs = replacer.replace(future.set_result,
-                                                  args, kwargs)
+        callback, args, kwargs = replacer.replace(
+            lambda value=None: future.set_result(value),
+            args, kwargs)
 
         def handle_error(typ, value, tb):
             future.set_exception(value)
