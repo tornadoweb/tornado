@@ -336,25 +336,34 @@ class RequestHandler(object):
             return default
         return args[-1]
 
-    def get_arguments(self, name, strip=True):
-        """Returns a list of the arguments with the given name.
+    def get_arguments(self, name = None, strip = True):
+        """Returns a list of the arguments with the given name or a dictionary
+        of all arguments.
 
-        If the argument is not present, returns an empty list.
+        If the argument is not present, returns a dictionary containing all
+        the arguments, like {name1:[value1, value2, ...], name2:[...], ...}
 
         The returned values are always unicode.
         """
 
-        values = []
-        for v in self.request.arguments.get(name, []):
-            v = self.decode_argument(v, name=name)
-            if isinstance(v, unicode_type):
-                # Get rid of any weird control chars (unless decoding gave
-                # us bytes, in which case leave it alone)
-                v = RequestHandler._remove_control_chars_regex.sub(" ", v)
-            if strip:
-                v = v.strip()
-            values.append(v)
-        return values
+        def _get_arguments(name = None, strip = True):
+            values = []
+            for v in self.request.arguments.get(name, []):
+                v = self.decode_argument(v, name = name)
+                if isinstance(v, unicode):
+                    # Get rid of any weird control chars (unless decoding gave
+                    # us bytes, in which case leave it alone)
+                    v = re.sub(r"[\x00-\x08\x0e-\x1f]", " ", v)
+                if strip:
+                    v = v.strip()
+                values.append(v)
+            return values
+
+        if name:  # fetch the arguments named after name
+            return _get_arguments(name = name, strip = strip)
+        else:  # fetch all the arguments
+            return {k:_get_arguments(name = k, strip = strip) \
+                    for k in self.request.arguments}
 
     def decode_argument(self, value, name=None):
         """Decodes an argument from the request.
