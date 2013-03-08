@@ -28,9 +28,9 @@ import sys
 from tornado.util import bytes_type, unicode_type, basestring_type, u
 
 try:
-    from urllib.parse import parse_qs  # py3
+    from urllib.parse import parse_qs as _parse_qs  # py3
 except ImportError:
-    from urlparse import parse_qs  # Python 2.6+
+    from urlparse import parse_qs as _parse_qs  # Python 2.6+
 
 try:
     import htmlentitydefs  # py2
@@ -72,7 +72,7 @@ def json_encode(value):
     # the javscript.  Some json libraries do this escaping by default,
     # although python's standard library does not, so we do it here.
     # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
-    return json.dumps(recursive_unicode(value)).replace("</", "<\\/")
+    return json.dumps(value).replace("</", "<\\/")
 
 
 def json_decode(value):
@@ -106,7 +106,7 @@ if sys.version_info[0] < 3:
         else:
             return unicode_type(urllib_parse.unquote_plus(utf8(value)), encoding)
 
-    parse_qs_bytes = parse_qs
+    parse_qs_bytes = _parse_qs
 else:
     def url_unescape(value, encoding='utf-8'):
         """Decodes the given value from a URL.
@@ -131,8 +131,8 @@ else:
         """
         # This is gross, but python3 doesn't give us another way.
         # Latin1 is the universal donor of character encodings.
-        result = parse_qs(qs, keep_blank_values, strict_parsing,
-                          encoding='latin1', errors='strict')
+        result = _parse_qs(qs, keep_blank_values, strict_parsing,
+                           encoding='latin1', errors='strict')
         encoded = {}
         for k, v in result.items():
             encoded[k] = [i.encode('latin1') for i in v]
