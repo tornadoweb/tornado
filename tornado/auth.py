@@ -365,8 +365,8 @@ class OAuthMixin(object):
         if response.error:
             raise Exception("Could not get request token")
         request_token = _oauth_parse_response(response.body)
-        data = (base64.b64encode(request_token["key"]) + b"|" +
-                base64.b64encode(request_token["secret"]))
+        data = (base64.b64encode(escape.utf8(request_token["key"])) + b"|" +
+                base64.b64encode(escape.utf8(request_token["secret"])))
         self.set_cookie("_oauth_request_token", data)
         args = dict(oauth_token=request_token["key"])
         if callback_uri == "oob":
@@ -455,7 +455,7 @@ class OAuthMixin(object):
         else:
             signature = _oauth_signature(consumer_token, method, url, args,
                                          access_token)
-        base_args["oauth_signature"] = signature
+        base_args["oauth_signature"] = escape.to_basestring(signature)
         return base_args
 
     def get_auth_http_client(self):
@@ -637,7 +637,7 @@ class TwitterMixin(OAuthMixin):
     @gen.coroutine
     def _oauth_get_user_future(self, access_token):
         user = yield self.twitter_request(
-            "/users/show/" + escape.native_str(access_token[b"screen_name"]),
+            "/users/show/" + escape.native_str(access_token["screen_name"]),
             access_token=access_token)
         if user:
             user["username"] = user["screen_name"]
@@ -1246,10 +1246,14 @@ def _oauth_escape(val):
 
 
 def _oauth_parse_response(body):
-    p = escape.parse_qs(body, keep_blank_values=False)
-    token = dict(key=p[b"oauth_token"][0], secret=p[b"oauth_token_secret"][0])
+    # I can't find an officially-defined encoding for oauth responses and
+    # have never seen anyone use non-ascii.  Leave the response in a byte
+    # string for python 2, and use utf8 on python 3.
+    body = escape.native_str(body)
+    p = urlparse.parse_qs(body, keep_blank_values=False)
+    token = dict(key=p["oauth_token"][0], secret=p["oauth_token_secret"][0])
 
     # Add the extra parameters the Provider included to the token
-    special = (b"oauth_token", b"oauth_token_secret")
+    special = ("oauth_token", "oauth_token_secret")
     token.update((k, p[k][0]) for k in p if k not in special)
     return token
