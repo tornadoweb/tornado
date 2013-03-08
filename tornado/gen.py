@@ -72,7 +72,7 @@ import types
 
 from tornado.concurrent import Future, TracebackFuture
 from tornado.ioloop import IOLoop
-from tornado.stack_context import ExceptionStackContext
+from tornado.stack_context import ExceptionStackContext, wrap
 
 
 class KeyReuseError(Exception):
@@ -496,7 +496,7 @@ class Runner(object):
             else:
                 result = None
             self.set_result(key, result)
-        return inner
+        return wrap(inner)
 
     def handle_exception(self, typ, value, tb):
         if not self.running and not self.finished:
