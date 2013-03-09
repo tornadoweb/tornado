@@ -50,6 +50,7 @@ coverage_ignore_functions = [
 ]
 
 html_static_path = [os.path.abspath("../static")]
+html_theme = 'default'
 html_style = "sphinx.css"
 highlight_language = "none"
 html_theme_options = dict(
