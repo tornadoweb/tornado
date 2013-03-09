@@ -472,7 +472,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         if isinstance(deadline, (int, long, float)):
             delay = max(deadline - self.time(), 0)
         elif isinstance(deadline, datetime.timedelta):
-            delay = deadline.total_seconds()
+            delay = tornado.ioloop._Timeout.timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r")
         return self.reactor.callLater(delay, self._run_callback, wrap(callback))
