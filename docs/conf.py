@@ -1,7 +1,7 @@
 # Ensure we get the local copy of tornado instead of what's on the standard path
 import os
 import sys
-sys.path.insert(0, os.path.abspath("../.."))
+sys.path.insert(0, os.path.abspath(".."))
 import tornado
 
 master_doc = "index"
@@ -57,9 +57,9 @@ coverage_ignore_functions = [
     "main",
 ]
 
-html_static_path = [os.path.abspath("../static")]
+html_static_path = ['tornado.css']
 html_theme = 'default'
-html_style = "sphinx.css"
+html_style = "tornado.css"
 highlight_language = "none"
 html_theme_options = dict(
     footerbgcolor="#fff",

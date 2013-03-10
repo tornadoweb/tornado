@@ -37,7 +37,7 @@ Backwards-incompatible changes
 
 * Python 2.5 is no longer supported.  Python 3 is now supported in a single
   codebase instead of using ``2to3``
-* The `tornado.database` module has been removed.  It is now available
+* The ``tornado.database`` module has been removed.  It is now available
   as a separate package, `torndb <https://github.com/bdarnell/torndb>`_
 * Functions that take an ``io_loop`` parameter now default to
   `IOLoop.current()` instead of `IOLoop.instance()`.
