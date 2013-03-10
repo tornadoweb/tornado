@@ -44,6 +44,9 @@ Backwards-incompatible changes
 * Empty HTTP request arguments are no longer ignored.  This applies to
   ``HTTPRequest.arguments`` and ``RequestHandler.get_argument[s]``
   in WSGI and non-WSGI modes.
+* On Python 3, `tornado.escape.json_encode` no longer accepts byte strings.
+* On Python 3, the ``get_authenticated_user`` methods in `tornado.auth`
+  now return character strings instead of byte strings.
 * `tornado.netutil.TCPServer` has moved to its own module, `tornado.tcpserver`.
 * The Tornado test suite now requires ``unittest2`` when run on Python 2.6.
 
@@ -83,6 +86,8 @@ Multiple modules
 `tornado.auth`
 ~~~~~~~~~~~~~~
 
+* On Python 3, the ``get_authenticated_user`` method family now returns
+  character strings instead of byte strings.
 * Asynchronous methods defined in `tornado.auth` now return a `Future`,
   and their ``callback`` argument is optional.  The `Future` interface is
   preferred as it offers better error handling (the previous interface
@@ -112,6 +117,13 @@ Multiple modules
 * Fix a crash with libcurl 7.29.0 if a curl object is created and closed
   without being used.
 
+`tornado.escape`
+~~~~~~~~~~~~~~~~
+
+* On Python 3, `~tornado.escape.json_encode` no longer accepts byte strings.
+  This mirrors the behavior of the underlying json module.  Python 2 behavior
+  is unchanged but should be faster.
+
 `tornado.gen`
 ~~~~~~~~~~~~~
 
@@ -120,6 +132,9 @@ Multiple modules
   function instead of calling a callback you return a value with
   ``raise gen.Return(value)`` (or simply ``return value`` in Python 3.3).
 * Generators may now yield ``Future`` objects.
+* Callbacks produced by `gen.Callback` and `gen.Task` are now automatically
+  stack-context-wrapped, to minimize the risk of context leaks when used
+  with asynchronous functions that don't do their own wrapping.
 * Fixed a memory leak involving generators, `RequestHandler.flush`,
   and clients closing connections while output is being written.
 * Yielding a large list no longer has quadratic performance.
