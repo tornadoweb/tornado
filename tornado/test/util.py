@@ -12,3 +12,8 @@ else:
 
 skipIfNonUnix = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
                                 "non-unix platform")
+
+# travis-ci.org runs our tests in an overworked virtual machine, which makes
+# timing-related tests unreliable.
+skipOnTravis = unittest.skipIf('TRAVIS' in os.environ,
+                               'timing tests unreliable on travis')

@@ -14,7 +14,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port
-from tornado.test.util import unittest, skipIfNonUnix
+from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis
 
 try:
     from concurrent import futures
@@ -23,6 +23,7 @@ except ImportError:
 
 
 class TestIOLoop(AsyncTestCase):
+    @skipOnTravis
     def test_add_callback_wakeup(self):
         # Make sure that add_callback from inside a running IOLoop
         # wakes up the IOLoop immediately instead of waiting for a timeout.
@@ -40,6 +41,7 @@ class TestIOLoop(AsyncTestCase):
         self.assertAlmostEqual(time.time(), self.start_time, places=2)
         self.assertTrue(self.called)
 
+    @skipOnTravis
     def test_add_callback_wakeup_other_thread(self):
         def target():
             # sleep a bit to let the ioloop go into its poll loop

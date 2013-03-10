@@ -18,7 +18,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, ExpectLog
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipOnTravis
 from tornado.web import RequestHandler, Application, asynchronous, url
 
 
@@ -209,6 +209,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             # request is the original request, is a POST still
             self.assertEqual("POST", response.request.method)
 
+    @skipOnTravis
     def test_request_timeout(self):
         with ExpectLog(gen_log, "uncaught exception"):
             response = self.fetch('/trigger?wake=false', request_timeout=0.1)
