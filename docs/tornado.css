@@ -65,3 +65,9 @@ div.related, div.sphinxsidebar {
 div.section {
     max-width: 850px;
 }
+
+/* sphinx renders an em tag inside internal reference links; we don't want
+   these to be italic */
+a.reference.internal em {
+    font-style: normal;
+}

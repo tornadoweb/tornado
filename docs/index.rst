@@ -33,14 +33,14 @@ Upgrading from Tornado 1.x
 Tornado 2.0 introduces several potentially backwards-incompatible
 changes, including in particular automatic escaping of template
 output.  Users who are upgrading from Tornado 1.x should see the
-`version 2.0 release notes </documentation/releases/v2.0.0.html>`_ for
+:doc:`version 2.0 release notes <releases/v2.0.0>` for
 information about backwards compatibility.
 
 Quick links
 -----------
 
-* `Documentation <documentation.html>`_
-* |Download current version|: :current_tarball:`z` (`release notes </documentation/releases.html>`_)
+* :doc:`Documentation <documentation>`
+* |Download current version|: :current_tarball:`z` (:doc:`release notes <releases>`)
 * `Source (github) <https://github.com/facebook/tornado>`_
 * `Mailing list <http://groups.google.com/group/python-tornado>`_
 * `Wiki <https://github.com/facebook/tornado/wiki/Links>`_
@@ -67,7 +67,7 @@ Here is the canonical "Hello, world" example app for Tornado::
         application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()</code></pre>
 
-See the `Tornado documentation </documentation/index.html>`_ for a
+See the :doc:`Tornado documentation <documentation>` for a
 detailed walkthrough of the framework.
 
 Installation
@@ -134,4 +134,3 @@ Commons 3.0 <http://creativecommons.org/licenses/by/3.0/>`_.
    :hidden:
 
    documentation
-
