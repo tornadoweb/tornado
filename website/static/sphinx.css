@@ -65,3 +65,7 @@ div.related, div.sphinxsidebar {
 div.section {
     max-width: 850px;
 }
+
+a.reference.internal em {
+    font-style: normal;
+}
