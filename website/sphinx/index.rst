@@ -1,7 +1,9 @@
-Tornado Web Server
-==================
+.. title:: Tornado Web Server
 
-.. image:: tornado.png
+|Tornado Web Server|
+====================
+
+.. |Tornado Web Server| image:: tornado.png
     :alt: Tornado Web Server
 
 `Tornado <http://www.tornadoweb.org/>`_ is an open source version of
@@ -38,10 +40,12 @@ Quick links
 -----------
 
 * `Documentation <documentation.html>`_
-* `Download version |version| <https://github.com/downloads/facebook/tornado/tornado-|version|.tar.gz>`_ (`release notes </documentation/releases.html>`_)
+* |Download current version|: :current_tarball:`z` (`release notes </documentation/releases.html>`_)
 * `Source (github) <https://github.com/facebook/tornado>`_
 * `Mailing list <http://groups.google.com/group/python-tornado>`_
 * `Wiki <https://github.com/facebook/tornado/wiki/Links>`_
+
+.. |Download current version| replace:: Download version |version|
 
 Hello, world
 ------------
@@ -76,7 +80,9 @@ includes demo applications that are not present when Tornado is
 installed in this way, so you may wish to download a copy of the
 source tarball as well.
 
-**Manual installation:** Download `tornado-|version|.tar.gz <https://github.com/downloads/facebook/tornado/tornado-{{version}}.tar.gz>`_::
+**Manual installation:** Download :current_tarball:`z`:
+
+.. parsed-literal::
 
     tar xvzf tornado-|version|.tar.gz
     cd tornado-|version|
