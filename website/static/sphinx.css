@@ -61,3 +61,7 @@ div.body {
 div.related, div.sphinxsidebar {
     font-family: Calibri, sans-serif;
 }
+
+div.section {
+    max-width: 850px;
+}
