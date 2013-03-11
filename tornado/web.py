@@ -1337,7 +1337,7 @@ class Application(object):
             self.handlers.append((re.compile(host_pattern), handlers))
 
         for spec in host_handlers:
-            if isinstance(spec, type(())):
+            if isinstance(spec, (tuple, list)):
                 assert len(spec) in (2, 3)
                 pattern = spec[0]
                 handler = spec[1]
