@@ -86,7 +86,7 @@ html_theme_options = dict(
 html_favicon = 'favicon.ico'
 
 latex_documents = [
-    ('index', 'tornado.tex', 'Tornado Documentation', 'Facebook', 'manual', False),
+    ('documentation', 'tornado.tex', 'Tornado Documentation', 'Facebook', 'manual', False),
     ]
 
 # HACK: sphinx has limited support for substitutions with the |version|
