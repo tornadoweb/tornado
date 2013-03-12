@@ -1,5 +1,8 @@
 .. title:: Tornado Web Server
 
+.. meta::
+    :google-site-verification: g4bVhgwbVO1d9apCUsT-eKlApg31Cygbp8VGZY8Rf0g
+
 |Tornado Web Server|
 ====================
 
