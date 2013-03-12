@@ -346,14 +346,14 @@ class HTTPServerTest(AsyncHTTPTestCase):
 class XHeaderTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
         def get(self):
-            self.write(dict(remote_ip=self.request.remote_ip))
+            self.write(dict(remote_ip=self.request.remote_ip,
+                remote_protocol=self.request.protocol))
 
     def get_httpserver_options(self):
         return dict(xheaders=True)
 
     def test_ip_headers(self):
-        self.assertEqual(self.fetch_json("/")["remote_ip"],
-                         "127.0.0.1")
+        self.assertEqual(self.fetch_json("/")["remote_ip"], "127.0.0.1")
 
         valid_ipv4 = {"X-Real-IP": "4.4.4.4"}
         self.assertEqual(
@@ -374,6 +374,45 @@ class XHeaderTest(HandlerBaseTestCase):
         self.assertEqual(
             self.fetch_json("/", headers=invalid_host)["remote_ip"],
             "127.0.0.1")
+
+    def test_scheme_headers(self):
+        self.assertEqual(self.fetch_json("/")["remote_protocol"], "http")
+
+        https_scheme = {"X-Scheme": "https"}
+        self.assertEqual(
+            self.fetch_json("/", headers=https_scheme)["remote_protocol"],
+            "https")
+
+        https_forwarded = {"X-Forwarded-Proto": "https"}
+        self.assertEqual(
+            self.fetch_json("/", headers=https_forwarded)["remote_protocol"],
+            "https")
+
+        bad_forwarded = {"X-Forwarded-Proto": "unknown"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bad_forwarded)["remote_protocol"],
+            "http")
+
+
+class SSLXHeaderTest(AsyncHTTPSTestCase, HandlerBaseTestCase):
+    def get_app(self):
+        return Application([('/', XHeaderTest.Handler)])
+
+    def get_httpserver_options(self):
+        output = super(SSLXHeaderTest, self).get_httpserver_options()
+        output['xheaders'] = True
+        return output
+
+    def test_request_without_xprotocol(self):
+        self.assertEqual(self.fetch_json("/")["remote_protocol"], "https")
+
+        http_scheme = {"X-Scheme": "http"}
+        self.assertEqual(
+            self.fetch_json("/", headers=http_scheme)["remote_protocol"], "http")
+
+        bad_scheme = {"X-Scheme": "unknown"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bad_scheme)["remote_protocol"], "https")
 
 
 class ManualProtocolTest(HandlerBaseTestCase):
