@@ -25,7 +25,7 @@ reasonably fast. Because it is non-blocking and uses `epoll
 or ``kqueue``, it can handle thousands of simultaneous standing
 connections, which means it is ideal for real-time web services. We
 built the web server specifically to handle FriendFeed's real-time
-features &mdash; every active user of FriendFeed maintains an open
+features — every active user of FriendFeed maintains an open
 connection to the FriendFeed servers. (For more information on scaling
 servers to support thousands of clients, see The `C10K problem
 <http://www.kegel.com/c10k.html>`_.)
@@ -68,7 +68,7 @@ Here is the canonical "Hello, world" example app for Tornado::
 
     if __name__ == "__main__":
         application.listen(8888)
-        tornado.ioloop.IOLoop.instance().start()</code></pre>
+        tornado.ioloop.IOLoop.instance().start()
 
 See the :doc:`Tornado documentation <documentation>` for a
 detailed walkthrough of the framework.
