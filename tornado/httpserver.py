@@ -393,26 +393,31 @@ class HTTPRequest(object):
         self.version = version
         self.headers = headers or httputil.HTTPHeaders()
         self.body = body or ""
+
+        # set remote IP and protocol
+        self.remote_ip = remote_ip
+        if protocol:
+            self.protocol = protocol
+        elif connection and isinstance(connection.stream,
+                                       iostream.SSLIOStream):
+            self.protocol = "https"
+        else:
+            self.protocol = "http"
+
+        # xheaders can override the defaults
         if connection and connection.xheaders:
             # Squid uses X-Forwarded-For, others use X-Real-Ip
-            self.remote_ip = self.headers.get(
-                "X-Real-Ip", self.headers.get("X-Forwarded-For", remote_ip))
-            if not netutil.is_valid_ip(self.remote_ip):
-                self.remote_ip = remote_ip
+            ip = self.headers.get(
+                "X-Real-Ip", self.headers.get("X-Forwarded-For", self.remote_ip))
+            if netutil.is_valid_ip(ip):
+                self.remote_ip = ip
             # AWS uses X-Forwarded-Proto
-            self.protocol = self.headers.get(
-                "X-Scheme", self.headers.get("X-Forwarded-Proto", protocol))
-            if self.protocol not in ("http", "https"):
-                self.protocol = "http"
-        else:
-            self.remote_ip = remote_ip
-            if protocol:
-                self.protocol = protocol
-            elif connection and isinstance(connection.stream,
-                                           iostream.SSLIOStream):
-                self.protocol = "https"
-            else:
-                self.protocol = "http"
+            proto = self.headers.get(
+                "X-Scheme", self.headers.get("X-Forwarded-Proto", self.protocol))
+            if proto in ("http", "https"):
+                self.protocol = proto
+
+
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}
         self.connection = connection
