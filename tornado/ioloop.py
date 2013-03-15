@@ -163,12 +163,31 @@ class IOLoop(Configurable):
 
     @staticmethod
     def current():
+        """Returns the current thread's `IOLoop`.
+
+        If an `IOLoop` is currently running or has been marked as current
+        by `make_current`, returns that instance.  Otherwise returns
+        `IOLoop.instance()`, i.e. the main thread's `IOLoop`.
+
+        In general you should use `IOLoop.current` as the default when
+        constructing an asynchronous object, and use `IOLoop.instance`
+        when you mean to communicate to the main thread from a different
+        one.
+        """
         current = getattr(IOLoop._current, "instance", None)
         if current is None:
             return IOLoop.instance()
         return current
 
     def make_current(self):
+        """Makes this the `IOLoop` for the current thread.
+
+        An `IOLoop` automatically becomes current for its thread
+        when it is started, but it is sometimes useful to call
+        `make_current` explictly before starting the `IOLoop`,
+        so that code run at startup time can find the right
+        instance.
+        """
         IOLoop._current.instance = self
 
     @staticmethod

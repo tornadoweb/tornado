@@ -4,6 +4,7 @@ Utilities
 .. toctree::
 
    autoreload
+   concurrent
    gen
    httputil
    log

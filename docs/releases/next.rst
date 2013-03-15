@@ -430,6 +430,6 @@ Multiple modules
 ~~~~~~~~~~~~~~~~~~~
 
 * Client-side WebSocket support is now available:
-  `tornado.websocket.WebSocketConnect`
+  `tornado.websocket.websocket_connect`
 * `WebSocketHandler` has new methods `ping` and `on_pong` to send pings
   to the browser (not supported on the ``draft76`` protocol)

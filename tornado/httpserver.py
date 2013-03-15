@@ -191,6 +191,11 @@ class HTTPConnection(object):
         self._close_callback = None
 
     def set_close_callback(self, callback):
+        """Sets a callback that will be run when the connection is closed.
+
+        Use this instead of accessing `HTTPConnection.stream.set_close_callback`
+        directly (which was the recommended approach prior to Tornado 3.0).
+        """
         self._close_callback = stack_context.wrap(callback)
         self.stream.set_close_callback(self._on_connection_close)
 

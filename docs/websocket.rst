@@ -31,3 +31,11 @@
    .. automethod:: WebSocketHandler.async_callback
    .. automethod:: WebSocketHandler.ping
    .. automethod:: WebSocketHandler.on_pong
+
+
+   Client-side support
+   -------------------
+
+   .. autofunction:: websocket_connect
+   .. autoclass:: WebSocketClientConnection
+       :members:

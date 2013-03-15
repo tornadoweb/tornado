@@ -132,6 +132,11 @@ dummy_executor = DummyExecutor()
 
 
 def run_on_executor(fn):
+    """Decorator to run a synchronous method asynchronously on an executor.
+
+    The decorated method may be called with a ``callback`` keyword
+    argument and returns a future.
+    """
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         callback = kwargs.pop("callback", None)
@@ -165,6 +170,7 @@ def return_future(f):
     `gen.engine` function, or passing it to `IOLoop.add_future`).
 
     Usage::
+
         @return_future
         def future_func(arg1, arg2, callback):
             # Do stuff (possibly asynchronous)

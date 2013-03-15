@@ -160,6 +160,22 @@ def is_valid_ip(ip):
 
 
 class Resolver(Configurable):
+    """Configurable asynchronous DNS resolver interface.
+
+    By default, a blocking implementation is used (which simply
+    calls `socket.getaddrinfo`).  An alternative implementation
+    can be chosen with the `Resolver.configure` class method::
+
+        Resolver.configure('tornado.netutil.ThreadedResolver')
+
+    The implementations of this interface included with Tornado are
+
+    * `tornado.netutil.BlockingResolver`
+    * `tornado.netutil.ThreadedResolver`
+    * `tornado.netutil.OverrideResolver`
+    * `tornado.platform.twisted.TwistedResolver`
+    * `tornado.platform.caresresolver.CaresResolver`
+    """
     @classmethod
     def configurable_base(cls):
         return Resolver
@@ -199,11 +215,27 @@ class ExecutorResolver(Resolver):
 
 
 class BlockingResolver(ExecutorResolver):
+    """Default `Resolver` implementation, using `socket.getaddrinfo`.
+
+    The `IOLoop` will be blocked during the resolution, although the
+    callback will not be run until the next `IOLoop` iteration.
+    """
     def initialize(self, io_loop=None):
         super(BlockingResolver, self).initialize(io_loop=io_loop)
 
 
 class ThreadedResolver(ExecutorResolver):
+    """Multithreaded non-blocking `Resolver` implementation.
+
+    Requires the `concurrent.futures` package to be installed
+    (available in the standard library since Python 3.2,
+    installable with ``pip install futures`` in older versions).
+
+    The thread pool size can be configured with::
+
+        Resolver.configure('tornado.netutil.ThreadedResolver',
+                           num_threads=10)
+    """
     def initialize(self, io_loop=None, num_threads=10):
         from concurrent.futures import ThreadPoolExecutor
         super(ThreadedResolver, self).initialize(
