@@ -371,6 +371,7 @@ def gen_test(f):
     on subclasses of `AsyncTestCase`.
 
     Example::
+
         class MyTest(AsyncHTTPTestCase):
             @gen_test
             def test_something(self):

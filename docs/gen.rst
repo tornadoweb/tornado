@@ -3,8 +3,10 @@
 
 .. automodule:: tornado.gen
 
-   Decorator
-   ---------
+   Decorators
+   ----------
+
+   .. autofunction:: coroutine
 
    .. autofunction:: engine
 
