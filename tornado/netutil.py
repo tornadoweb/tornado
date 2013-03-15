@@ -131,14 +131,15 @@ def add_accept_handler(sock, callback, io_loop=None):
         io_loop = IOLoop.current()
 
     def accept_handler(fd, events):
-        while True:
-            try:
-                connection, address = sock.accept()
-            except socket.error as e:
-                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
-                    return
-                raise
-            callback(connection, address)
+        try:
+            connection, address = sock.accept()
+        except socket.error as e:
+            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                return
+            raise
+
+        callback(connection, address)
+
     io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
 
 
