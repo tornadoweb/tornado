@@ -25,6 +25,12 @@ import uuid
 
 from tornado.options import define, options
 
+try:
+    xrange  # py2
+except NameError:
+    xrange = range  # py3
+
+
 define("port", default=8888, help="run on the given port", type=int)
 
 
