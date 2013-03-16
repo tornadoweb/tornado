@@ -23,7 +23,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 # version_info is a four-tuple for programmatic comparison. The first
 # three numbers are the components of the version number.  The fourth
 # is zero for an official release, positive for a development branch,
-# or negative for a release candidate (after the base version number
-# has been incremented)
-version = "2.4.post4"
-version_info = (2, 4, 0, 4)
+# or negative for a release candidate or beta (after the base version
+# number has been incremented)
+version = "3.0b1"
+version_info = (3, 0, 0, -10)
