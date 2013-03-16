@@ -60,9 +60,9 @@ class TCPServer(object):
             server.start(0)  # Forks multiple sub-processes
             IOLoop.instance().start()
 
-       When using this interface, an `IOLoop` must *not* be passed
+       When using this interface, an `.IOLoop` must *not* be passed
        to the `TCPServer` constructor.  `start` will always start
-       the server on the default singleton `IOLoop`.
+       the server on the default singleton `.IOLoop`.
 
     3. `add_sockets`: advanced multi-process::
 
@@ -77,7 +77,7 @@ class TCPServer(object):
        flexibility in when the fork happens.  `add_sockets` can
        also be used in single-process servers if you want to create
        your listening sockets in some way other than
-       `bind_sockets`.
+       `~tornado.netutil.bind_sockets`.
     """
     def __init__(self, io_loop=None, ssl_options=None):
         self.io_loop = io_loop
@@ -109,7 +109,7 @@ class TCPServer(object):
         This method may be called more than once to listen on multiple ports.
         `listen` takes effect immediately; it is not necessary to call
         `TCPServer.start` afterwards.  It is, however, necessary to start
-        the `IOLoop`.
+        the `.IOLoop`.
         """
         sockets = bind_sockets(port, address=address)
         self.add_sockets(sockets)
@@ -118,7 +118,7 @@ class TCPServer(object):
         """Makes this server start accepting connections on the given sockets.
 
         The ``sockets`` parameter is a list of socket objects such as
-        those returned by `bind_sockets`.
+        those returned by `~tornado.netutil.bind_sockets`.
         `add_sockets` is typically used in combination with that
         method and `tornado.process.fork_processes` to provide greater
         control over the initialization of a multi-process server.
@@ -150,7 +150,7 @@ class TCPServer(object):
         both will be used if available.
 
         The ``backlog`` argument has the same meaning as for
-        `socket.listen`.
+        `socket.socket.listen`.
 
         This method may be called multiple times prior to `start` to listen
         on multiple ports or interfaces.
@@ -200,7 +200,7 @@ class TCPServer(object):
             sock.close()
 
     def handle_stream(self, stream, address):
-        """Override to handle a new `IOStream` from an incoming connection."""
+        """Override to handle a new `.IOStream` from an incoming connection."""
         raise NotImplementedError()
 
     def _handle_connection(self, connection, address):

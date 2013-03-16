@@ -79,9 +79,10 @@ We provide the functions escape(), url_escape(), json_encode(), and squeeze()
 to all templates by default.
 
 Typical applications do not create `Template` or `Loader` instances by
-hand, but instead use the `render` and `render_string` methods of
+hand, but instead use the `~.RequestHandler.render` and
+`~.RequestHandler.render_string` methods of
 `tornado.web.RequestHandler`, which load templates automatically based
-on the ``template_path`` `Application` setting.
+on the ``template_path`` `.Application` setting.
 
 Syntax Reference
 ----------------
@@ -109,7 +110,7 @@ with ``{# ... #}``.
 ``{% autoescape *function* %}``
     Sets the autoescape mode for the current file.  This does not affect
     other files, even those referenced by ``{% include %}``.  Note that
-    autoescaping can also be configured globally, at the `Application`
+    autoescaping can also be configured globally, at the `.Application`
     or `Loader`.::
 
         {% autoescape xhtml_escape %}

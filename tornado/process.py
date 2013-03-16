@@ -169,8 +169,8 @@ class Subprocess(object):
     additions:
 
     * ``stdin``, ``stdout``, and ``stderr`` may have the value
-      `tornado.process.Subprocess.STREAM`, which will make the corresponding
-      attribute of the resulting Subprocess a `PipeIOStream`.
+      ``tornado.process.Subprocess.STREAM``, which will make the corresponding
+      attribute of the resulting Subprocess a `.PipeIOStream`.
     * A new keyword argument ``io_loop`` may be used to pass in an IOLoop.
     """
     STREAM = object()

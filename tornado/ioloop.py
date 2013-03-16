@@ -308,16 +308,17 @@ class IOLoop(Configurable):
     def run_sync(self, func, timeout=None):
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
-        If the function returns a `Future`, the `IOLoop` will run until
-        the future is resolved.  If it raises an exception, the `IOLoop`
-        will stop and the exception will be re-raised to the caller.
+        If the function returns a `~concurrent.futures.Future`, the
+        `IOLoop` will run until the future is resolved.  If it raises
+        an exception, the `IOLoop` will stop and the exception will be
+        re-raised to the caller.
 
         The keyword-only argument ``timeout`` may be used to set
         a maximum duration for the function.  If the timeout expires,
         a `TimeoutError` is raised.
 
         This method is useful in conjunction with `tornado.gen.coroutine`
-        to allow asynchronous calls in a `main()` function::
+        to allow asynchronous calls in a ``main()`` function::
 
             @gen.coroutine
             def main():

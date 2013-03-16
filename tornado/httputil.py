@@ -297,8 +297,8 @@ def parse_multipart_form_data(boundary, data, arguments, files):
 def format_timestamp(ts):
     """Formats a timestamp in the format used by HTTP.
 
-    The argument may be a numeric timestamp as returned by `time.time()`,
-    a time tuple as returned by `time.gmtime()`, or a `datetime.datetime`
+    The argument may be a numeric timestamp as returned by `time.time`,
+    a time tuple as returned by `time.gmtime`, or a `datetime.datetime`
     object.
 
     >>> format_timestamp(1359312200)

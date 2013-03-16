@@ -795,7 +795,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 def websocket_connect(url, io_loop=None, callback=None):
     """Client-side websocket support.
 
-    Takes a url and returns a Future whose result is a `WebSocketConnection`.
+    Takes a url and returns a Future whose result is a
+    `WebSocketClientConnection`.
     """
     if io_loop is None:
         io_loop = IOLoop.current()

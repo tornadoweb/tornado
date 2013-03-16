@@ -58,7 +58,7 @@ class BaseIOStream(object):
     All of the methods take callbacks (since writing and reading are
     non-blocking and asynchronous).
 
-    When a stream is closed due to an error, the IOStream's `error`
+    When a stream is closed due to an error, the IOStream's ``error``
     attribute contains the exception object.
 
     Subclasses must implement `fileno`, `close_fd`, `write_to_fd`,
@@ -213,7 +213,7 @@ class BaseIOStream(object):
         """Close this stream.
 
         If ``exc_info`` is true, set the ``error`` attribute to the current
-        exception from `sys.exc_info()` (or if ``exc_info`` is a tuple,
+        exception from `sys.exc_info` (or if ``exc_info`` is a tuple,
         use that instead of `sys.exc_info`).
         """
         if not self.closed():

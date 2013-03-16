@@ -52,7 +52,7 @@ Here are a few rules of thumb for when it's necessary:
 * If you're writing an asynchronous library that doesn't rely on a
   stack_context-aware library like `tornado.ioloop` or `tornado.iostream`
   (for example, if you're writing a thread pool), use
-  `stack_context.wrap()` before any asynchronous operations to capture the
+  `.stack_context.wrap()` before any asynchronous operations to capture the
   stack context from where the operation was started.
 
 * If you're writing an asynchronous library that has some shared

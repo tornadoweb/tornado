@@ -167,7 +167,7 @@ class RequestHandler(object):
 
     @property
     def settings(self):
-        """An alias for `self.application.settings`."""
+        """An alias for ``self.application.settings``."""
         return self.application.settings
 
     def head(self, *args, **kwargs):
@@ -253,10 +253,11 @@ class RequestHandler(object):
     def set_status(self, status_code, reason=None):
         """Sets the status code for our response.
 
-        :arg int status_code: Response status code. If `reason` is ``None``,
-            it must be present in `httplib.responses`.
+        :arg int status_code: Response status code. If ``reason`` is ``None``,
+            it must be present in `httplib.responses <http.client.responses>`.
         :arg string reason: Human-readable reason phrase describing the status
-            code. If ``None``, it will be filled in from `httplib.responses`.
+            code. If ``None``, it will be filled in from
+            `httplib.responses <http.client.responses>`.
         """
         self._status_code = status_code
         if reason is not None:
@@ -1456,7 +1457,7 @@ class Application(object):
         return handler
 
     def reverse_url(self, name, *args):
-        """Returns a URL path for handler named `name`
+        """Returns a URL path for handler named ``name``
 
         The handler must be added to the application as a named URLSpec.
 
@@ -1494,7 +1495,8 @@ class HTTPError(Exception):
     """An exception that will turn into an HTTP error response.
 
     :arg int status_code: HTTP status code.  Must be listed in
-        `httplib.responses` unless the ``reason`` keyword argument is given.
+        `httplib.responses <http.client.responses>` unless the ``reason``
+        keyword argument is given.
     :arg string log_message: Message to be written to the log for this error
         (will not be shown to the user unless the `Application` is in debug
         mode).  May contain ``%s``-style placeholders, which will be filled

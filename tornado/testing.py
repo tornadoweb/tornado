@@ -366,7 +366,7 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
 def gen_test(f):
     """Testing equivalent of ``@gen.coroutine``, to be applied to test methods.
 
-    ``@gen.coroutine`` cannot be used on tests because the `IOLoop` is not
+    ``@gen.coroutine`` cannot be used on tests because the `.IOLoop` is not
     already running.  ``@gen_test`` should be applied to test methods
     on subclasses of `AsyncTestCase`.
 

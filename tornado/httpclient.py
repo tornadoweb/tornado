@@ -1,30 +1,30 @@
 """Blocking and non-blocking HTTP client interfaces.
 
 This module defines a common interface shared by two implementations,
-`simple_httpclient` and `curl_httpclient`.  Applications may either
+``simple_httpclient`` and ``curl_httpclient``.  Applications may either
 instantiate their chosen implementation class directly or use the
 `AsyncHTTPClient` class from this module, which selects an implementation
 that can be overridden with the `AsyncHTTPClient.configure` method.
 
-The default implementation is `simple_httpclient`, and this is expected
+The default implementation is ``simple_httpclient``, and this is expected
 to be suitable for most users' needs.  However, some applications may wish
-to switch to `curl_httpclient` for reasons such as the following:
+to switch to ``curl_httpclient`` for reasons such as the following:
 
-* `curl_httpclient` has some features not found in `simple_httpclient`,
+* ``curl_httpclient`` has some features not found in ``simple_httpclient``,
   including support for HTTP proxies and the ability to use a specified
   network interface.
 
-* `curl_httpclient` is more likely to be compatible with sites that are
+* ``curl_httpclient`` is more likely to be compatible with sites that are
   not-quite-compliant with the HTTP spec, or sites that use little-exercised
   features of HTTP.
 
-* `simple_httpclient` only supports SSL on Python 2.6 and above.
+* ``simple_httpclient`` only supports SSL on Python 2.6 and above.
 
-* `curl_httpclient` is faster
+* ``curl_httpclient`` is faster
 
-* `curl_httpclient` was the default prior to Tornado 2.0.
+* ``curl_httpclient`` was the default prior to Tornado 2.0.
 
-Note that if you are using `curl_httpclient`, it is highly recommended that
+Note that if you are using ``curl_httpclient``, it is highly recommended that
 you use a recent version of ``libcurl`` and ``pycurl``.  Currently the minimum
 supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
 """
@@ -255,7 +255,7 @@ class HTTPRequest(object):
                  client_key=None, client_cert=None):
         r"""Creates an `HTTPRequest`.
 
-        All parameters except `url` are optional.
+        All parameters except ``url`` are optional.
 
         :arg string url: URL to fetch
         :arg string method: HTTP method, e.g. "GET" or "POST"
@@ -269,43 +269,43 @@ class HTTPRequest(object):
            header
         :arg bool follow_redirects: Should redirects be followed automatically
            or return the 3xx response?
-        :arg int max_redirects: Limit for `follow_redirects`
+        :arg int max_redirects: Limit for ``follow_redirects``
         :arg string user_agent: String to send as ``User-Agent`` header
         :arg bool use_gzip: Request gzip encoding from the server
         :arg string network_interface: Network interface to use for request
-        :arg callable streaming_callback: If set, `streaming_callback` will
+        :arg callable streaming_callback: If set, ``streaming_callback`` will
            be run with each chunk of data as it is received, and
-           `~HTTPResponse.body` and `~HTTPResponse.buffer` will be empty in
+           ``HTTPResponse.body`` and ``HTTPResponse.buffer`` will be empty in
            the final response.
-        :arg callable header_callback: If set, `header_callback` will
+        :arg callable header_callback: If set, ``header_callback`` will
            be run with each header line as it is received (including the
            first line, e.g. ``HTTP/1.0 200 OK\r\n``, and a final line
            containing only ``\r\n``.  All lines include the trailing newline
-           characters).  `~HTTPResponse.headers` will be empty in the final
+           characters).  ``HTTPResponse.headers`` will be empty in the final
            response.  This is most useful in conjunction with
-           `streaming_callback`, because it's the only way to get access to
+           ``streaming_callback``, because it's the only way to get access to
            header data while the request is in progress.
         :arg callable prepare_curl_callback: If set, will be called with
-           a `pycurl.Curl` object to allow the application to make additional
-           `setopt` calls.
+           a ``pycurl.Curl`` object to allow the application to make additional
+           ``setopt`` calls.
         :arg string proxy_host: HTTP proxy hostname.  To use proxies,
-           `proxy_host` and `proxy_port` must be set; `proxy_username` and
-           `proxy_pass` are optional.  Proxies are currently only support
-           with `curl_httpclient`.
+           ``proxy_host`` and ``proxy_port`` must be set; ``proxy_username`` and
+           ``proxy_pass`` are optional.  Proxies are currently only supported
+           with ``curl_httpclient``.
         :arg int proxy_port: HTTP proxy port
         :arg string proxy_username: HTTP proxy username
         :arg string proxy_password: HTTP proxy password
-        :arg bool allow_nonstandard_methods: Allow unknown values for `method`
+        :arg bool allow_nonstandard_methods: Allow unknown values for ``method``
            argument?
         :arg bool validate_cert: For HTTPS requests, validate the server's
            certificate?
         :arg string ca_certs: filename of CA certificates in PEM format,
-           or None to use defaults.  Note that in `curl_httpclient`, if
-           any request uses a custom `ca_certs` file, they all must (they
-           don't have to all use the same `ca_certs`, but it's not possible
+           or None to use defaults.  Note that in ``curl_httpclient``, if
+           any request uses a custom ``ca_certs`` file, they all must (they
+           don't have to all use the same ``ca_certs``, but it's not possible
            to mix requests with ca_certs and requests that use the defaults.
         :arg bool allow_ipv6: Use IPv6 when available?  Default is false in
-           `simple_httpclient` and true in `curl_httpclient`
+           ``simple_httpclient`` and true in ``curl_httpclient``
         :arg string client_key: Filename for client SSL key, if any
         :arg string client_cert: Filename for client SSL certificate, if any
         """

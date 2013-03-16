@@ -124,9 +124,9 @@ class HTTPServer(TCPServer):
             server.start(0)  # Forks multiple sub-processes
             IOLoop.instance().start()
 
-       When using this interface, an `IOLoop` must *not* be passed
-       to the `HTTPServer` constructor.  `start` will always start
-       the server on the default singleton `IOLoop`.
+       When using this interface, an `.IOLoop` must *not* be passed
+       to the `HTTPServer` constructor.  `~.TCPServer.start` will always start
+       the server on the default singleton `.IOLoop`.
 
     3. `~tornado.tcpserver.TCPServer.add_sockets`: advanced multi-process::
 
@@ -136,12 +136,12 @@ class HTTPServer(TCPServer):
             server.add_sockets(sockets)
             IOLoop.instance().start()
 
-       The `add_sockets` interface is more complicated, but it can be
-       used with `tornado.process.fork_processes` to give you more
-       flexibility in when the fork happens.  `add_sockets` can
-       also be used in single-process servers if you want to create
-       your listening sockets in some way other than
-       `tornado.netutil.bind_sockets`.
+       The `~.TCPServer.add_sockets` interface is more complicated,
+       but it can be used with `tornado.process.fork_processes` to
+       give you more flexibility in when the fork happens.
+       `~.TCPServer.add_sockets` can also be used in single-process
+       servers if you want to create your listening sockets in some
+       way other than `tornado.netutil.bind_sockets`.
 
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
@@ -193,8 +193,10 @@ class HTTPConnection(object):
     def set_close_callback(self, callback):
         """Sets a callback that will be run when the connection is closed.
 
-        Use this instead of accessing `HTTPConnection.stream.set_close_callback`
-        directly (which was the recommended approach prior to Tornado 3.0).
+        Use this instead of accessing
+        `HTTPConnection.stream.set_close_callback
+        <.BaseIOStream.set_close_callback>` directly (which was the
+        recommended approach prior to Tornado 3.0).
         """
         self._close_callback = stack_context.wrap(callback)
         self.stream.set_close_callback(self._on_connection_close)
@@ -345,7 +347,7 @@ class HTTPRequest(object):
 
     .. attribute:: headers
 
-       `HTTPHeader` dictionary-like object for request headers.  Acts like
+       `.HTTPHeaders` dictionary-like object for request headers.  Acts like
        a case-insensitive dictionary with additional methods for repeated
        headers.
 
@@ -355,13 +357,13 @@ class HTTPRequest(object):
 
     .. attribute:: remote_ip
 
-       Client's IP address as a string.  If `HTTPServer.xheaders` is set,
+       Client's IP address as a string.  If ``HTTPServer.xheaders`` is set,
        will pass along the real IP address provided by a load balancer
        in the ``X-Real-Ip`` header
 
     .. attribute:: protocol
 
-       The protocol used, either "http" or "https".  If `HTTPServer.xheaders`
+       The protocol used, either "http" or "https".  If ``HTTPServer.xheaders``
        is set, will pass along the protocol used by a load balancer if
        reported via an ``X-Scheme`` header.
 
@@ -375,13 +377,13 @@ class HTTPRequest(object):
        maps arguments names to lists of values (to support multiple values
        for individual names). Names are of type `str`, while arguments
        are byte strings.  Note that this is different from
-       `RequestHandler.get_argument`, which returns argument values as
+       `.RequestHandler.get_argument`, which returns argument values as
        unicode strings.
 
     .. attribute:: files
 
        File uploads are available in the files property, which maps file
-       names to lists of :class:`HTTPFile`.
+       names to lists of `.HTTPFile`.
 
     .. attribute:: connection
 

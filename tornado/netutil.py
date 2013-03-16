@@ -162,9 +162,9 @@ def is_valid_ip(ip):
 class Resolver(Configurable):
     """Configurable asynchronous DNS resolver interface.
 
-    By default, a blocking implementation is used (which simply
-    calls `socket.getaddrinfo`).  An alternative implementation
-    can be chosen with the `Resolver.configure` class method::
+    By default, a blocking implementation is used (which simply calls
+    `socket.getaddrinfo`).  An alternative implementation can be
+    chosen with the ``Resolver.configure`` class method::
 
         Resolver.configure('tornado.netutil.ThreadedResolver')
 
@@ -173,8 +173,8 @@ class Resolver(Configurable):
     * `tornado.netutil.BlockingResolver`
     * `tornado.netutil.ThreadedResolver`
     * `tornado.netutil.OverrideResolver`
-    * `tornado.platform.twisted.TwistedResolver`
-    * `tornado.platform.caresresolver.CaresResolver`
+    * ``tornado.platform.twisted.TwistedResolver``
+    * ``tornado.platform.caresresolver.CaresResolver``
     """
     @classmethod
     def configurable_base(cls):
@@ -190,12 +190,12 @@ class Resolver(Configurable):
         The ``host`` argument is a string which may be a hostname or a
         literal IP address.
 
-        Returns a `Future` whose result is a list of (family, address)
-        pairs, where address is a tuple suitable to pass to
-        `socket.connect` (i.e. a (host, port) pair for IPv4;
-        additional fields may be present for IPv6). If a callback is
-        passed, it will be run with the result as an argument when
-        it is complete.
+        Returns a `~concurrent.futures.Future` whose result is a list
+        of (family, address) pairs, where address is a tuple suitable
+        to pass to `socket.socket.connect` (i.e. a (host, port) pair for
+        IPv4; additional fields may be present for IPv6). If a
+        callback is passed, it will be run with the result as an
+        argument when it is complete.
         """
         raise NotImplementedError()
 
@@ -217,8 +217,8 @@ class ExecutorResolver(Resolver):
 class BlockingResolver(ExecutorResolver):
     """Default `Resolver` implementation, using `socket.getaddrinfo`.
 
-    The `IOLoop` will be blocked during the resolution, although the
-    callback will not be run until the next `IOLoop` iteration.
+    The `.IOLoop` will be blocked during the resolution, although the
+    callback will not be run until the next `.IOLoop` iteration.
     """
     def initialize(self, io_loop=None):
         super(BlockingResolver, self).initialize(io_loop=io_loop)
@@ -273,10 +273,10 @@ def ssl_options_to_context(ssl_options):
     """Try to Convert an ssl_options dictionary to an SSLContext object.
 
     The ``ssl_options`` dictionary contains keywords to be passed to
-    `ssl.wrap_sockets`.  In Python 3.2+, `ssl.SSLContext` objects can
+    `ssl.wrap_socket`.  In Python 3.2+, `ssl.SSLContext` objects can
     be used instead.  This function converts the dict form to its
-    `SSLContext` equivalent, and may be used when a component which
-    accepts both forms needs to upgrade to the `SSLContext` version
+    `~ssl.SSLContext` equivalent, and may be used when a component which
+    accepts both forms needs to upgrade to the `~ssl.SSLContext` version
     to use features like SNI or NPN.
     """
     if isinstance(ssl_options, dict):
@@ -298,12 +298,12 @@ def ssl_options_to_context(ssl_options):
 
 
 def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
-    """Returns an `ssl.SSLSocket` wrapping the given socket.
+    """Returns an ``ssl.SSLSocket`` wrapping the given socket.
 
     ``ssl_options`` may be either a dictionary (as accepted by
-    `ssl_options_to_context) or an `ssl.SSLContext` object.
-    Additional keyword arguments are passed to `wrap_socket`
-    (either the `SSLContext` method or the `ssl` module function
+    `ssl_options_to_context`) or an `ssl.SSLContext` object.
+    Additional keyword arguments are passed to ``wrap_socket``
+    (either the `~ssl.SSLContext` method or the `ssl` module function
     as appropriate).
     """
     context = ssl_options_to_context(ssl_options)
