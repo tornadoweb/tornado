@@ -216,10 +216,9 @@ class HTTPFile(ObjectDict):
     """Represents an HTTP file. For backwards compatibility, its instance
     attributes are also accessible as dictionary keys.
 
-    :ivar filename:
-    :ivar body:
-    :ivar content_type: The content_type comes from the provided HTTP header
-        and should not be trusted outright given that it can be easily forged.
+    * ``filename``
+    * ``body``
+    * ``content_type``
     """
     pass
 
