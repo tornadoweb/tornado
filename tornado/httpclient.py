@@ -18,9 +18,7 @@ to switch to ``curl_httpclient`` for reasons such as the following:
   not-quite-compliant with the HTTP spec, or sites that use little-exercised
   features of HTTP.
 
-* ``simple_httpclient`` only supports SSL on Python 2.6 and above.
-
-* ``curl_httpclient`` is faster
+* ``curl_httpclient`` is faster.
 
 * ``curl_httpclient`` was the default prior to Tornado 2.0.
 
@@ -53,8 +51,9 @@ class HTTPClient(object):
         try:
             response = http_client.fetch("http://www.google.com/")
             print response.body
-        except httpclient.HTTPError, e:
+        except httpclient.HTTPError as e:
             print "Error:", e
+        httpclient.close()
     """
     def __init__(self, async_client_class=None, **kwargs):
         self._io_loop = IOLoop()
@@ -93,26 +92,23 @@ class AsyncHTTPClient(Configurable):
 
     Example usage::
 
-        import ioloop
-
         def handle_request(response):
             if response.error:
                 print "Error:", response.error
             else:
                 print response.body
-            ioloop.IOLoop.instance().stop()
 
-        http_client = httpclient.AsyncHTTPClient()
+        http_client = AsyncHTTPClient()
         http_client.fetch("http://www.google.com/", handle_request)
-        ioloop.IOLoop.instance().start()
 
-    The constructor for this class is magic in several respects:  It actually
-    creates an instance of an implementation-specific subclass, and instances
-    are reused as a kind of pseudo-singleton (one per IOLoop).  The keyword
-    argument force_instance=True can be used to suppress this singleton
-    behavior.  Constructor arguments other than io_loop and force_instance
-    are deprecated.  The implementation subclass as well as arguments to
-    its constructor can be set with the static method configure()
+    The constructor for this class is magic in several respects: It
+    actually creates an instance of an implementation-specific
+    subclass, and instances are reused as a kind of pseudo-singleton
+    (one per `.IOLoop`).  The keyword argument ``force_instance=True``
+    can be used to suppress this singleton behavior.  Constructor
+    arguments other than ``io_loop`` and ``force_instance`` are
+    deprecated.  The implementation subclass as well as arguments to
+    its constructor can be set with the static method `configure()`
     """
     @classmethod
     def configurable_base(cls):
@@ -147,25 +143,29 @@ class AsyncHTTPClient(Configurable):
             self.defaults.update(defaults)
 
     def close(self):
-        """Destroys this http client, freeing any file descriptors used.
+        """Destroys this HTTP client, freeing any file descriptors used.
         Not needed in normal use, but may be helpful in unittests that
         create and destroy http clients.  No other methods may be called
-        on the AsyncHTTPClient after close().
+        on the `AsyncHTTPClient` after ``close()``.
         """
         if self._async_clients().get(self.io_loop) is self:
             del self._async_clients()[self.io_loop]
 
     def fetch(self, request, callback=None, **kwargs):
-        """Executes a request, calling callback with an `HTTPResponse`.
+        """Executes a request, asynchronously returning an `HTTPResponse`.
 
         The request may be either a string URL or an `HTTPRequest` object.
         If it is a string, we construct an `HTTPRequest` using any additional
         kwargs: ``HTTPRequest(request, **kwargs)``
 
-        If an error occurs during the fetch, the HTTPResponse given to the
-        callback has a non-None error attribute that contains the exception
-        encountered during the request. You can call response.rethrow() to
-        throw the exception (if any) in the callback.
+        This method returns a `~concurrent.futures.Future` whose
+        result is an `HTTPResponse`.  The ``Future`` wil raise an
+        `HTTPError` if the request returned a non-200 response code.
+
+        If a ``callback`` is given, it will be invoked with the `HTTPResponse`.
+        In the callback interface, `HTTPError` is not automatically raised.
+        Instead, you must check the response's ``error`` attribute or
+        call its `~HTTPResponse.rethrow` method.
         """
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
@@ -204,19 +204,19 @@ class AsyncHTTPClient(Configurable):
 
     @classmethod
     def configure(cls, impl, **kwargs):
-        """Configures the AsyncHTTPClient subclass to use.
+        """Configures the `AsyncHTTPClient` subclass to use.
 
-        AsyncHTTPClient() actually creates an instance of a subclass.
+        ``AsyncHTTPClient()`` actually creates an instance of a subclass.
         This method may be called with either a class object or the
-        fully-qualified name of such a class (or None to use the default,
-        SimpleAsyncHTTPClient)
+        fully-qualified name of such a class (or ``None`` to use the default,
+        ``SimpleAsyncHTTPClient``)
 
         If additional keyword arguments are given, they will be passed
         to the constructor of each subclass instance created.  The
-        keyword argument max_clients determines the maximum number of
-        simultaneous fetch() operations that can execute in parallel
-        on each IOLoop.  Additional arguments may be supported depending
-        on the implementation class in use.
+        keyword argument ``max_clients`` determines the maximum number
+        of simultaneous `~AsyncHTTPClient.fetch()` operations that can
+        execute in parallel on each `.IOLoop`.  Additional arguments
+        may be supported depending on the implementation class in use.
 
         Example::
 
@@ -253,9 +253,7 @@ class HTTPRequest(object):
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
                  client_key=None, client_cert=None):
-        r"""Creates an `HTTPRequest`.
-
-        All parameters except ``url`` are optional.
+        r"""All parameters except ``url`` are optional.
 
         :arg string url: URL to fetch
         :arg string method: HTTP method, e.g. "GET" or "POST"
@@ -265,8 +263,8 @@ class HTTPRequest(object):
         :arg string auth_password: Password for HTTP "Basic" authentication
         :arg float connect_timeout: Timeout for initial connection in seconds
         :arg float request_timeout: Timeout for entire request in seconds
-        :arg datetime if_modified_since: Timestamp for ``If-Modified-Since``
-           header
+        :arg if_modified_since: Timestamp for ``If-Modified-Since`` header
+        :type if_modified_since: `datetime` or `float`
         :arg bool follow_redirects: Should redirects be followed automatically
            or return the 3xx response?
         :arg int max_redirects: Limit for ``follow_redirects``
@@ -303,7 +301,7 @@ class HTTPRequest(object):
            or None to use defaults.  Note that in ``curl_httpclient``, if
            any request uses a custom ``ca_certs`` file, they all must (they
            don't have to all use the same ``ca_certs``, but it's not possible
-           to mix requests with ca_certs and requests that use the defaults.
+           to mix requests with ``ca_certs`` and requests that use the defaults.
         :arg bool allow_ipv6: Use IPv6 when available?  Default is false in
            ``simple_httpclient`` and true in ``curl_httpclient``
         :arg string client_key: Filename for client SSL key, if any
@@ -353,24 +351,24 @@ class HTTPResponse(object):
     * code: numeric HTTP status code, e.g. 200 or 404
 
     * reason: human-readable reason phrase describing the status code
-        (with curl_httpclient, this is a default value rather than the
-        server's actual response)
+      (with curl_httpclient, this is a default value rather than the
+      server's actual response)
 
-    * headers: httputil.HTTPHeaders object
+    * headers: `tornado.httputil.HTTPHeaders` object
 
-    * buffer: cStringIO object for response body
+    * buffer: ``cStringIO`` object for response body
 
-    * body: response body as string (created on demand from self.buffer)
+    * body: response body as string (created on demand from ``self.buffer``)
 
     * error: Exception object, if any
 
     * request_time: seconds from request start to finish
 
     * time_info: dictionary of diagnostic timing information from the request.
-        Available data are subject to change, but currently uses timings
-        available from http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html,
-        plus 'queue', which is the delay (if any) introduced by waiting for
-        a slot under AsyncHTTPClient's max_clients setting.
+      Available data are subject to change, but currently uses timings
+      available from http://curl.haxx.se/libcurl/c/curl_easy_getinfo.html,
+      plus ``queue``, which is the delay (if any) introduced by waiting for
+      a slot under `AsyncHTTPClient`'s ``max_clients`` setting.
     """
     def __init__(self, request, code, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
@@ -423,13 +421,13 @@ class HTTPError(Exception):
 
     Attributes:
 
-    code - HTTP error integer error code, e.g. 404.  Error code 599 is
-           used when no HTTP response was received, e.g. for a timeout.
+    * ``code`` - HTTP error integer error code, e.g. 404.  Error code 599 is
+      used when no HTTP response was received, e.g. for a timeout.
 
-    response - HTTPResponse object, if any.
+    * ``response`` - `HTTPResponse` object, if any.
 
-    Note that if follow_redirects is False, redirects become HTTPErrors,
-    and you can look at error.response.headers['Location'] to see the
+    Note that if ``follow_redirects`` is False, redirects become HTTPErrors,
+    and you can look at ``error.response.headers['Location']`` to see the
     destination of the redirect.
     """
     def __init__(self, code, message=None, response=None):

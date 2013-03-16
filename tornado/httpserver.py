@@ -55,8 +55,8 @@ class HTTPServer(TCPServer):
     requests). A simple example server that echoes back the URI you
     requested::
 
-        import httpserver
-        import ioloop
+        import tornado.httpserver
+        import tornado.ioloop
 
         def handle_request(request):
            message = "You requested %s\n" % request.uri
@@ -64,9 +64,9 @@ class HTTPServer(TCPServer):
                          len(message), message))
            request.finish()
 
-        http_server = httpserver.HTTPServer(handle_request)
+        http_server = tornado.httpserver.HTTPServer(handle_request)
         http_server.listen(8888)
-        ioloop.IOLoop.instance().start()
+        tornado.ioloop.IOLoop.instance().start()
 
     `HTTPServer` is a very basic connection handler.  It parses the request
     headers and body, but the request callback is responsible for producing
@@ -93,11 +93,10 @@ class HTTPServer(TCPServer):
     if Tornado is run behind an SSL-decoding proxy that does not set one of
     the supported ``xheaders``.
 
-    `HTTPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
-    To make this server serve SSL traffic, send the ssl_options dictionary
+    To make this server serve SSL traffic, send the ``ssl_options`` dictionary
     argument with the arguments required for the `ssl.wrap_socket` method,
-    including "certfile" and "keyfile".  In Python 3.2+ you can pass
-    an `ssl.SSLContext` object instead of a dict::
+    including ``certfile`` and ``keyfile``.  (In Python 3.2+ you can pass
+    an `ssl.SSLContext` object instead of a dict)::
 
        HTTPServer(applicaton, ssl_options={
            "certfile": os.path.join(data_dir, "mydomain.crt"),

@@ -66,11 +66,11 @@ class TimeoutError(Exception):
 class IOLoop(Configurable):
     """A level-triggered I/O loop.
 
-    We use epoll (Linux) or kqueue (BSD and Mac OS X; requires python
-    2.6+) if they are available, or else we fall back on select(). If
-    you are implementing a system that needs to handle thousands of
-    simultaneous connections, you should use a system that supports either
-    epoll or kqueue.
+    We use ``epoll`` (Linux) or ``kqueue`` (BSD and Mac OS X) if they
+    are available, or else we fall back on select(). If you are
+    implementing a system that needs to handle thousands of
+    simultaneous connections, you should use a system that supports
+    either ``epoll`` or ``kqueue``.
 
     Example usage for a simple TCP server::
 
@@ -125,19 +125,11 @@ class IOLoop(Configurable):
 
     @staticmethod
     def instance():
-        """Returns a global IOLoop instance.
+        """Returns a global `IOLoop` instance.
 
-        Most single-threaded applications have a single, global IOLoop.
-        Use this method instead of passing around IOLoop instances
-        throughout your code.
-
-        A common pattern for classes that depend on IOLoops is to use
-        a default argument to enable programs with multiple IOLoops
-        but not require the argument for simpler applications::
-
-            class MyClass(object):
-                def __init__(self, io_loop=None):
-                    self.io_loop = io_loop or IOLoop.instance()
+        Most applications have a single, global `IOLoop` running on the
+        main thread.  Use this method to get this instance from
+        another thread.  To get the current thread's `IOLoop`, use `current()`.
         """
         if not hasattr(IOLoop, "_instance"):
             with IOLoop._instance_lock:
@@ -152,11 +144,11 @@ class IOLoop(Configurable):
         return hasattr(IOLoop, "_instance")
 
     def install(self):
-        """Installs this IOloop object as the singleton instance.
+        """Installs this `IOLoop` object as the singleton instance.
 
         This is normally not necessary as `instance()` will create
-        an IOLoop on demand, but you may want to call `install` to use
-        a custom subclass of IOLoop.
+        an `IOLoop` on demand, but you may want to call `install` to use
+        a custom subclass of `IOLoop`.
         """
         assert not IOLoop.initialized()
         IOLoop._instance = self
@@ -168,6 +160,14 @@ class IOLoop(Configurable):
         If an `IOLoop` is currently running or has been marked as current
         by `make_current`, returns that instance.  Otherwise returns
         `IOLoop.instance()`, i.e. the main thread's `IOLoop`.
+
+        A common pattern for classes that depend on ``IOLoops`` is to use
+        a default argument to enable programs with multiple ``IOLoops``
+        but not require the argument for simpler applications::
+
+            class MyClass(object):
+                def __init__(self, io_loop=None):
+                    self.io_loop = io_loop or IOLoop.current()
 
         In general you should use `IOLoop.current` as the default when
         constructing an asynchronous object, and use `IOLoop.instance`
@@ -214,19 +214,20 @@ class IOLoop(Configurable):
         pass
 
     def close(self, all_fds=False):
-        """Closes the IOLoop, freeing any resources used.
+        """Closes the `IOLoop`, freeing any resources used.
 
         If ``all_fds`` is true, all file descriptors registered on the
-        IOLoop will be closed (not just the ones created by the IOLoop itself).
+        IOLoop will be closed (not just the ones created by the
+        `IOLoop` itself).
 
-        Many applications will only use a single IOLoop that runs for the
-        entire lifetime of the process.  In that case closing the IOLoop
+        Many applications will only use a single `IOLoop` that runs for the
+        entire lifetime of the process.  In that case closing the `IOLoop`
         is not necessary since everything will be cleaned up when the
         process exits.  `IOLoop.close` is provided mainly for scenarios
         such as unit tests, which create and destroy a large number of
-        IOLoops.
+        ``IOLoops``.
 
-        An IOLoop must be completely stopped before it can be closed.  This
+        An `IOLoop` must be completely stopped before it can be closed.  This
         means that `IOLoop.stop()` must be called *and* `IOLoop.start()` must
         be allowed to return before attempting to call `IOLoop.close()`.
         Therefore the call to `close` will usually appear just after
@@ -235,7 +236,13 @@ class IOLoop(Configurable):
         raise NotImplementedError()
 
     def add_handler(self, fd, handler, events):
-        """Registers the given handler to receive the given events for fd."""
+        """Registers the given handler to receive the given events for fd.
+
+        The ``events`` argument is a bitwise or of the constants
+        ``IOLoop.READ``, ``IOLoop.WRITE``, and ``IOLoop.ERROR``.
+
+        When an event occurs, ``handler(fd, events)`` will be run.
+        """
         raise NotImplementedError()
 
     def update_handler(self, fd, events):
@@ -247,28 +254,32 @@ class IOLoop(Configurable):
         raise NotImplementedError()
 
     def set_blocking_signal_threshold(self, seconds, action):
-        """Sends a signal if the ioloop is blocked for more than s seconds.
+        """Sends a signal if the `IOLoop` is blocked for more than
+        ``s`` seconds.
 
-        Pass seconds=None to disable.  Requires python 2.6 on a unixy
+        Pass ``seconds=None`` to disable.  Requires Python 2.6 on a unixy
         platform.
 
-        The action parameter is a python signal handler.  Read the
-        documentation for the python 'signal' module for more information.
-        If action is None, the process will be killed if it is blocked for
-        too long.
+        The action parameter is a Python signal handler.  Read the
+        documentation for the `signal` module for more information.
+        If ``action`` is None, the process will be killed if it is
+        blocked for too long.
         """
         raise NotImplementedError()
 
     def set_blocking_log_threshold(self, seconds):
-        """Logs a stack trace if the ioloop is blocked for more than s seconds.
-        Equivalent to set_blocking_signal_threshold(seconds, self.log_stack)
+        """Logs a stack trace if the `IOLoop` is blocked for more than
+        ``s`` seconds.
+
+        Equivalent to ``set_blocking_signal_threshold(seconds,
+        self.log_stack)``
         """
         self.set_blocking_signal_threshold(seconds, self.log_stack)
 
     def log_stack(self, signal, frame):
         """Signal handler to log the stack trace of the current thread.
 
-        For use with set_blocking_signal_threshold.
+        For use with `set_blocking_signal_threshold`.
         """
         gen_log.warning('IOLoop blocked for %f seconds in\n%s',
                         self._blocking_signal_threshold,
@@ -277,7 +288,7 @@ class IOLoop(Configurable):
     def start(self):
         """Starts the I/O loop.
 
-        The loop will run until one of the I/O handlers calls stop(), which
+        The loop will run until one of the callbacks calls `stop()`, which
         will make the loop stop after the current event iteration completes.
         """
         raise NotImplementedError()
@@ -285,7 +296,7 @@ class IOLoop(Configurable):
     def stop(self):
         """Stop the I/O loop.
 
-        If the event loop is not currently running, the next call to start()
+        If the event loop is not currently running, the next call to `start()`
         will return immediately.
 
         To use asynchronous methods from otherwise-synchronous code (such as
@@ -295,13 +306,14 @@ class IOLoop(Configurable):
           async_method(ioloop=ioloop, callback=ioloop.stop)
           ioloop.start()
 
-        ioloop.start() will return after async_method has run its callback,
-        whether that callback was invoked before or after ioloop.start.
+        ``ioloop.start()`` will return after ``async_method`` has run
+        its callback, whether that callback was invoked before or
+        after ``ioloop.start``.
 
-        Note that even after `stop` has been called, the IOLoop is not
+        Note that even after `stop` has been called, the `IOLoop` is not
         completely stopped until `IOLoop.start` has also returned.
         Some work that was scheduled before the call to `stop` may still
-        be run before the IOLoop shuts down.
+        be run before the `IOLoop` shuts down.
         """
         raise NotImplementedError()
 
@@ -353,12 +365,12 @@ class IOLoop(Configurable):
         return future_cell[0].result()
 
     def time(self):
-        """Returns the current time according to the IOLoop's clock.
+        """Returns the current time according to the `IOLoop`'s clock.
 
         The return value is a floating-point number relative to an
         unspecified time in the past.
 
-        By default, the IOLoop's time function is `time.time`.  However,
+        By default, the `IOLoop`'s time function is `time.time`.  However,
         it may be configured to use e.g. `time.monotonic` instead.
         Calls to `add_timeout` that pass a number instead of a
         `datetime.timedelta` should use this function to compute the
@@ -368,24 +380,26 @@ class IOLoop(Configurable):
         return time.time()
 
     def add_timeout(self, deadline, callback):
-        """Calls the given callback at the time deadline from the I/O loop.
+        """Runs the ``callback`` at the time ``deadline`` from the I/O loop.
 
-        Returns a handle that may be passed to remove_timeout to cancel.
+        Returns an opaque handle that may be passed to
+        `remove_timeout` to cancel.
 
-        ``deadline`` may be a number denoting a time relative to
-        `IOLoop.time`, or a ``datetime.timedelta`` object for a
-        deadline relative to the current time.
+        ``deadline`` may be a number denoting a time (on the same
+        scale as `IOLoop.time`, normally `time.time`), or a
+        `datetime.timedelta` object for a deadline relative to the
+        current time.
 
         Note that it is not safe to call `add_timeout` from other threads.
         Instead, you must use `add_callback` to transfer control to the
-        IOLoop's thread, and then call `add_timeout` from there.
+        `IOLoop`'s thread, and then call `add_timeout` from there.
         """
         raise NotImplementedError()
 
     def remove_timeout(self, timeout):
         """Cancels a pending timeout.
 
-        The argument is a handle as returned by add_timeout.  It is
+        The argument is a handle as returned by `add_timeout`.  It is
         safe to call `remove_timeout` even if the callback has already
         been run.
         """
@@ -395,11 +409,11 @@ class IOLoop(Configurable):
         """Calls the given callback on the next I/O loop iteration.
 
         It is safe to call this method from any thread at any time,
-        except from a signal handler.  Note that this is the *only*
-        method in IOLoop that makes this thread-safety guarantee; all
-        other interaction with the IOLoop must be done from that
-        IOLoop's thread.  add_callback() may be used to transfer
-        control from other threads to the IOLoop's thread.
+        except from a signal handler.  Note that this is the **only**
+        method in `IOLoop` that makes this thread-safety guarantee; all
+        other interaction with the `IOLoop` must be done from that
+        `IOLoop`'s thread.  `add_callback()` may be used to transfer
+        control from other threads to the `IOLoop`'s thread.
 
         To add a callback from a signal handler, see
         `add_callback_from_signal`.
@@ -413,15 +427,17 @@ class IOLoop(Configurable):
         otherwise.
 
         Callbacks added with this method will be run without any
-        stack_context, to avoid picking up the context of the function
+        `.stack_context`, to avoid picking up the context of the function
         that was interrupted by the signal.
         """
         raise NotImplementedError()
 
     def add_future(self, future, callback):
-        """Schedules a callback on the IOLoop when the given future is finished.
+        """Schedules a callback on the ``IOLoop`` when the given
+        `~concurrent.futures.Future` is finished.
 
-        The callback is invoked with one argument, the future.
+        The callback is invoked with one argument, the
+        `~concurrent.futures.Future`.
         """
         assert isinstance(future, Future)
         callback = stack_context.wrap(callback)
@@ -439,14 +455,14 @@ class IOLoop(Configurable):
             self.handle_callback_exception(callback)
 
     def handle_callback_exception(self, callback):
-        """This method is called whenever a callback run by the IOLoop
+        """This method is called whenever a callback run by the `IOLoop`
         throws an exception.
 
         By default simply logs the exception as an error.  Subclasses
         may override this method to customize reporting of exceptions.
 
         The exception itself is not passed explicitly, but is available
-        in sys.exc_info.
+        in `sys.exc_info`.
         """
         app_log.error("Exception in callback %r", callback, exc_info=True)
 
@@ -745,9 +761,9 @@ class _Timeout(object):
 class PeriodicCallback(object):
     """Schedules the given callback to be called periodically.
 
-    The callback is called every callback_time milliseconds.
+    The callback is called every ``callback_time`` milliseconds.
 
-    `start` must be called after the PeriodicCallback is created.
+    `start` must be called after the `PeriodicCallback` is created.
     """
     def __init__(self, callback, callback_time, io_loop=None):
         self.callback = callback
