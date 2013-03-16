@@ -34,18 +34,16 @@ See the individual service classes below for complete documentation.
 
 Example usage for Google OpenID::
 
-    class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
+    class GoogleLoginHandler(tornado.web.RequestHandler,
+                             tornado.auth.GoogleMixin):
         @tornado.web.asynchronous
+        @tornado.gen.coroutine
         def get(self):
             if self.get_argument("openid.mode", None):
-                self.get_authenticated_user(self.async_callback(self._on_auth))
-                return
-            self.authenticate_redirect()
-
-        def _on_auth(self, user):
-            if not user:
-                raise tornado.web.HTTPError(500, "Google auth failed")
-            # Save the user with, e.g., set_secure_cookie()
+                user = yield self.get_authenticated_user()
+                # Save the user with e.g. set_secure_cookie()
+            else:
+                self.authenticate_redirect()
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -573,16 +571,13 @@ class TwitterMixin(OAuthMixin):
         class TwitterLoginHandler(tornado.web.RequestHandler,
                                   tornado.auth.TwitterMixin):
             @tornado.web.asynchronous
+            @tornado.gen.coroutine
             def get(self):
                 if self.get_argument("oauth_token", None):
-                    self.get_authenticated_user(self.async_callback(self._on_auth))
-                    return
-                self.authorize_redirect()
-
-            def _on_auth(self, user):
-                if not user:
-                    raise tornado.web.HTTPError(500, "Twitter auth failed")
-                # Save the user using, e.g., set_secure_cookie()
+                    user = yield self.get_authenticated_user()
+                    # Save the user using e.g. set_secure_cookie()
+                else:
+                    self.authorize_redirect()
 
     The user object returned by `get_authenticated_user()` includes the
     attributes ``username``, ``name``, ``access_token``, and all of the
@@ -631,14 +626,12 @@ class TwitterMixin(OAuthMixin):
                               tornado.auth.TwitterMixin):
                 @tornado.web.authenticated
                 @tornado.web.asynchronous
+                @tornado.gen.coroutine
                 def get(self):
-                    self.twitter_request(
+                    new_entry = yield self.twitter_request(
                         "/statuses/update",
                         post_args={"status": "Testing Tornado Web Server"},
-                        access_token=user["access_token"],
-                        callback=self.async_callback(self._on_post))
-
-                def _on_post(self, new_entry):
+                        access_token=self.current_user["access_token"])
                     if not new_entry:
                         # Call failed; perhaps missing permission?
                         self.authorize_redirect()
@@ -709,19 +702,16 @@ class FriendFeedMixin(OAuthMixin):
     When your application is set up, you can use this mixin like this
     to authenticate the user with FriendFeed and get access to their feed::
 
-        class FriendFeedHandler(tornado.web.RequestHandler,
-                                tornado.auth.FriendFeedMixin):
+        class FriendFeedLoginHandler(tornado.web.RequestHandler,
+                                     tornado.auth.FriendFeedMixin):
             @tornado.web.asynchronous
+            @tornado.gen.coroutine
             def get(self):
                 if self.get_argument("oauth_token", None):
-                    self.get_authenticated_user(self.async_callback(self._on_auth))
-                    return
-                self.authorize_redirect()
-
-            def _on_auth(self, user):
-                if not user:
-                    raise tornado.web.HTTPError(500, "FriendFeed auth failed")
-                # Save the user using, e.g., set_secure_cookie()
+                    user = yield self.get_authenticated_user()
+                    # Save the user using e.g. set_secure_cookie()
+                else:
+                    self.authorize_redirect()
 
     The user object returned by `~OAuthMixin.get_authenticated_user()` includes the
     attributes ``username``, ``name``, and ``description`` in addition to
@@ -760,14 +750,13 @@ class FriendFeedMixin(OAuthMixin):
                               tornado.auth.FriendFeedMixin):
                 @tornado.web.authenticated
                 @tornado.web.asynchronous
+                @tornado.gen.coroutine
                 def get(self):
-                    self.friendfeed_request(
+                    new_entry = yield self.friendfeed_request(
                         "/entry",
                         post_args={"body": "Testing Tornado Web Server"},
-                        access_token=self.current_user["access_token"],
-                        callback=self.async_callback(self._on_post))
+                        access_token=self.current_user["access_token"])
 
-                def _on_post(self, new_entry):
                     if not new_entry:
                         # Call failed; perhaps missing permission?
                         self.authorize_redirect()
@@ -842,19 +831,16 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
 
     Example usage::
 
-        class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
+        class GoogleLoginHandler(tornado.web.RequestHandler,
+                                 tornado.auth.GoogleMixin):
            @tornado.web.asynchronous
+           @tornado.gen.coroutine
            def get(self):
                if self.get_argument("openid.mode", None):
-                   self.get_authenticated_user(self.async_callback(self._on_auth))
-                   return
-            self.authenticate_redirect()
-
-            def _on_auth(self, user):
-                if not user:
-                    raise tornado.web.HTTPError(500, "Google auth failed")
-                # Save the user with, e.g., set_secure_cookie()
-
+                   user = yield self.get_authenticated_user()
+                   # Save the user with e.g. set_secure_cookie()
+               else:
+                   self.authenticate_redirect()
     """
     _OPENID_ENDPOINT = "https://www.google.com/accounts/o8/ud"
     _OAUTH_ACCESS_TOKEN_URL = "https://www.google.com/accounts/OAuthGetAccessToken"
@@ -1117,24 +1103,20 @@ class FacebookGraphMixin(OAuth2Mixin):
 
             class FacebookGraphLoginHandler(LoginHandler, tornado.auth.FacebookGraphMixin):
               @tornado.web.asynchronous
+              @tornado.gen.coroutine
               def get(self):
                   if self.get_argument("code", False):
-                      self.get_authenticated_user(
-                        redirect_uri='/auth/facebookgraph/',
-                        client_id=self.settings["facebook_api_key"],
-                        client_secret=self.settings["facebook_secret"],
-                        code=self.get_argument("code"),
-                        callback=self.async_callback(
-                          self._on_login))
-                      return
-                  self.authorize_redirect(redirect_uri='/auth/facebookgraph/',
-                                          client_id=self.settings["facebook_api_key"],
-                                          extra_params={"scope": "read_stream,offline_access"})
-
-              def _on_login(self, user):
-                logging.error(user)
-                self.finish()
-
+                      user = yield self.get_authenticated_user(
+                          redirect_uri='/auth/facebookgraph/',
+                          client_id=self.settings["facebook_api_key"],
+                          client_secret=self.settings["facebook_secret"],
+                          code=self.get_argument("code"))
+                      # Save the user with e.g. set_secure_cookie
+                  else:
+                      self.authorize_redirect(
+                          redirect_uri='/auth/facebookgraph/',
+                          client_id=self.settings["facebook_api_key"],
+                          extra_params={"scope": "read_stream,offline_access"})
         """
         http = self.get_auth_http_client()
         args = {
@@ -1208,20 +1190,18 @@ class FacebookGraphMixin(OAuth2Mixin):
                               tornado.auth.FacebookGraphMixin):
                 @tornado.web.authenticated
                 @tornado.web.asynchronous
+                @tornado.gen.coroutine
                 def get(self):
-                    self.facebook_request(
+                    new_entry = yield self.facebook_request(
                         "/me/feed",
                         post_args={"message": "I am posting from my Tornado application!"},
-                        access_token=self.current_user["access_token"],
-                        callback=self.async_callback(self._on_post))
+                        access_token=self.current_user["access_token"])
 
-                def _on_post(self, new_entry):
                     if not new_entry:
                         # Call failed; perhaps missing permission?
                         self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
-
         """
         url = "https://graph.facebook.com" + path
         all_args = {}
