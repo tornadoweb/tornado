@@ -14,7 +14,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Utilities for working with multiple processes."""
+"""Utilities for working with multiple processes, including both forking
+the server into multiple processes and managing subprocesses.
+"""
 
 from __future__ import absolute_import, division, print_function, with_statement
 
@@ -229,10 +231,10 @@ class Subprocess(object):
     def initialize(cls, io_loop=None):
         """Initializes the ``SIGCHILD`` handler.
 
-        The signal handler is run on an IOLoop to avoid locking issues.
-        Note that the IOLoop used for signal handling need not be the
+        The signal handler is run on an `.IOLoop` to avoid locking issues.
+        Note that the `.IOLoop` used for signal handling need not be the
         same one used by individual Subprocess objects (as long as the
-        IOLoops are each running in separate threads).
+        ``IOLoops`` are each running in separate threads).
         """
         if cls._initialized:
             return

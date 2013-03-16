@@ -29,27 +29,28 @@ option namespace, e.g.::
         db = database.Connection(options.mysql_host)
         ...
 
-The main() method of your application does not need to be aware of all of
+The ``main()`` method of your application does not need to be aware of all of
 the options used throughout your program; they are all automatically loaded
 when the modules are loaded.  However, all modules that define options
 must have been imported before the command line is parsed.
 
-Your main() method can parse the command line or parse a config file with
+Your ``main()`` method can parse the command line or parse a config file with
 either::
 
     tornado.options.parse_command_line()
     # or
     tornado.options.parse_config_file("/etc/server.conf")
 
-Command line formats are what you would expect ("--myoption=myvalue").
+Command line formats are what you would expect (``--myoption=myvalue``).
 Config files are just Python files. Global names become options, e.g.::
 
     myoption = "myvalue"
     myotheroption = "myothervalue"
 
-We support datetimes, timedeltas, ints, and floats (just pass a 'type'
-kwarg to define). We also accept multi-value options. See the documentation
-for define() below.
+We support `datetimes <datetime.datetime>`, `timedeltas
+<datetime.timedelta>`, ints, and floats (just pass a ``type`` kwarg to
+`define`). We also accept multi-value options. See the documentation for
+`define()` below.
 
 `tornado.options.options` is a singleton instance of `OptionParser`, and
 the top-level functions in this module (`define`, `parse_command_line`, etc)
@@ -103,28 +104,29 @@ class OptionParser(object):
                multiple=False, group=None, callback=None):
         """Defines a new command line option.
 
-        If type is given (one of str, float, int, datetime, or timedelta)
-        or can be inferred from the default, we parse the command line
-        arguments based on the given type. If multiple is True, we accept
+        If ``type`` is given (one of str, float, int, datetime, or timedelta)
+        or can be inferred from the ``default``, we parse the command line
+        arguments based on the given type. If ``multiple`` is True, we accept
         comma-separated values, and the option value is always a list.
 
-        For multi-value integers, we also accept the syntax x:y, which
-        turns into range(x, y) - very useful for long integer ranges.
+        For multi-value integers, we also accept the syntax ``x:y``, which
+        turns into ``range(x, y)`` - very useful for long integer ranges.
 
-        help and metavar are used to construct the automatically generated
-        command line help string. The help message is formatted like::
+        ``help`` and ``metavar`` are used to construct the
+        automatically generated command line help string. The help
+        message is formatted like::
 
            --name=METAVAR      help string
 
-        group is used to group the defined options in logical
+        ``group`` is used to group the defined options in logical
         groups. By default, command line options are grouped by the
         file in which they are defined.
 
         Command line option names must be unique globally. They can be parsed
-        from the command line with parse_command_line() or parsed from a
-        config file with parse_config_file.
+        from the command line with `parse_command_line` or parsed from a
+        config file with `parse_config_file`.
 
-        If a callback is given, it will be run with the new value whenever
+        If a ``callback`` is given, it will be run with the new value whenever
         the option is changed.  This can be used to combine command-line
         and file-based options::
 
@@ -159,9 +161,11 @@ class OptionParser(object):
                                       callback=callback)
 
     def parse_command_line(self, args=None, final=True):
-        """Parses all options given on the command line (defaults to sys.argv).
+        """Parses all options given on the command line (defaults to
+        `sys.argv`).
 
-        Note that args[0] is ignored since it is the program name in sys.argv.
+        Note that ``args[0]`` is ignored since it is the program name
+        in `sys.argv`.
 
         We return a list of all arguments that are not parsed as options.
 

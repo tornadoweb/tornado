@@ -41,14 +41,14 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     Address may be either an IP address or hostname.  If it's a hostname,
     the server will listen on all IP addresses associated with the
     name.  Address may be an empty string or None to listen on all
-    available interfaces.  Family may be set to either socket.AF_INET
-    or socket.AF_INET6 to restrict to ipv4 or ipv6 addresses, otherwise
+    available interfaces.  Family may be set to either `socket.AF_INET`
+    or `socket.AF_INET6` to restrict to IPv4 or IPv6 addresses, otherwise
     both will be used if available.
 
     The ``backlog`` argument has the same meaning as for
-    ``socket.listen()``.
+    `socket.listen() <socket.socket.listen>`.
 
-    ``flags`` is a bitmask of AI_* flags to ``getaddrinfo``, like
+    ``flags`` is a bitmask of AI_* flags to `~socket.getaddrinfo`, like
     ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
     """
     sockets = []
@@ -119,13 +119,13 @@ if hasattr(socket, 'AF_UNIX'):
 
 
 def add_accept_handler(sock, callback, io_loop=None):
-    """Adds an ``IOLoop`` event handler to accept new connections on ``sock``.
+    """Adds an `.IOLoop` event handler to accept new connections on ``sock``.
 
     When a connection is accepted, ``callback(connection, address)`` will
     be run (``connection`` is a socket object, and ``address`` is the
     address of the other end of the connection).  Note that this signature
     is different from the ``callback(fd, events)`` signature used for
-    ``IOLoop`` handlers.
+    `.IOLoop` handlers.
     """
     if io_loop is None:
         io_loop = IOLoop.current()
@@ -192,10 +192,10 @@ class Resolver(Configurable):
 
         Returns a `~concurrent.futures.Future` whose result is a list
         of (family, address) pairs, where address is a tuple suitable
-        to pass to `socket.socket.connect` (i.e. a (host, port) pair for
-        IPv4; additional fields may be present for IPv6). If a
-        callback is passed, it will be run with the result as an
-        argument when it is complete.
+        to pass to `socket.connect <socket.socket.connect>` (i.e. a
+        ``(host, port)`` pair for IPv4; additional fields may be
+        present for IPv6). If a ``callback`` is passed, it will be run
+        with the result as an argument when it is complete.
         """
         raise NotImplementedError()
 
@@ -270,7 +270,8 @@ _SSL_CONTEXT_KEYWORDS = frozenset(['ssl_version', 'certfile', 'keyfile',
 
 
 def ssl_options_to_context(ssl_options):
-    """Try to Convert an ssl_options dictionary to an SSLContext object.
+    """Try to convert an ``ssl_options`` dictionary to an
+    `~ssl.SSLContext` object.
 
     The ``ssl_options`` dictionary contains keywords to be passed to
     `ssl.wrap_socket`.  In Python 3.2+, `ssl.SSLContext` objects can

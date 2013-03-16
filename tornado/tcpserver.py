@@ -35,7 +35,6 @@ class TCPServer(object):
     To use `TCPServer`, define a subclass which overrides the `handle_stream`
     method.
 
-    `TCPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
     To make this server serve SSL traffic, send the ssl_options dictionary
     argument with the arguments required for the `ssl.wrap_socket` method,
     including "certfile" and "keyfile"::
@@ -145,12 +144,12 @@ class TCPServer(object):
         Address may be either an IP address or hostname.  If it's a hostname,
         the server will listen on all IP addresses associated with the
         name.  Address may be an empty string or None to listen on all
-        available interfaces.  Family may be set to either ``socket.AF_INET``
-        or ``socket.AF_INET6`` to restrict to ipv4 or ipv6 addresses, otherwise
+        available interfaces.  Family may be set to either `socket.AF_INET`
+        or `socket.AF_INET6` to restrict to IPv4 or IPv6 addresses, otherwise
         both will be used if available.
 
         The ``backlog`` argument has the same meaning as for
-        `socket.socket.listen`.
+        `socket.listen <socket.socket.listen>`.
 
         This method may be called multiple times prior to `start` to listen
         on multiple ports or interfaces.
@@ -163,7 +162,7 @@ class TCPServer(object):
             self._pending_sockets.extend(sockets)
 
     def start(self, num_processes=1):
-        """Starts this server in the IOLoop.
+        """Starts this server in the `.IOLoop`.
 
         By default, we run the server in this process and do not fork any
         additional child process.
