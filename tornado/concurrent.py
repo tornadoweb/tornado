@@ -13,6 +13,12 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+"""Utilities for working with the `concurrent.futures` package.
+
+This module also contains compatibility shims including a dummy
+implementation of `concurrent.futures.Future` which can be used
+when `concurrent.futures` is not available.
+"""
 from __future__ import absolute_import, division, print_function, with_statement
 
 import functools

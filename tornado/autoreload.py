@@ -14,15 +14,24 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""A module to automatically restart the server when a module is modified.
+"""Automatically restart the server when a source file is modified.
 
-Most applications should not call this module directly.  Instead, pass the
+Most applications should not access this module directly.  Instead, pass the
 keyword argument ``debug=True`` to the `tornado.web.Application` constructor.
 This will enable autoreload mode as well as checking for changes to templates
-and static resources.
+and static resources.  Note that restarting is a destructive operation
+and any requests in progress will be aborted when the process restarts.
 
-This module depends on IOLoop, so it will not work in WSGI applications
-and Google AppEngine.  It also will not work correctly when HTTPServer's
+This module can also be used as a command-line wrapper around scripts
+such as unit test runners.  See the `main` method for details.
+
+The command-line wrapper and Application debug modes can be used together.
+This combination is encouraged as the wrapper catches syntax errors and
+other import-time failures, while debug mode catches changes once
+the server has started.
+
+This module depends on `IOLoop`, so it will not work in WSGI applications
+and Google App Engine.  It also will not work correctly when `HTTPServer`'s
 multi-process mode is used.
 
 Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
@@ -94,11 +103,7 @@ _io_loops = weakref.WeakKeyDictionary()
 
 
 def start(io_loop=None, check_time=500):
-    """Restarts the process automatically when a module is modified.
-
-    We run on the I/O loop, and restarting is a destructive operation,
-    so will terminate any pending requests.
-    """
+    """Begins watching source files for changes using the given `IOLoop`. """
     io_loop = io_loop or ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return
