@@ -25,9 +25,9 @@ Highlights
   to the root logger, allowing for finer-grained configuration.
 * New class `tornado.process.Subprocess` wraps `subprocess.Popen` with
   `.PipeIOStream` access to the child's file descriptors.
-* `.IOLoop` now has a static ``configure`` method like the one on
-  `.AsyncHTTPClient`, which can be used to select an IOLoop implementation
-  other than the default.
+* `.IOLoop` now has a static `configure <.Configurable.configure>`
+  method like the one on `.AsyncHTTPClient`, which can be used to
+  select an `.IOLoop` implementation other than the default.
 * `.IOLoop` can now optionally use a monotonic clock if available
   (see below for more details).
 
@@ -191,9 +191,9 @@ Multiple modules
   specific thread's (usually the main thread's) IOLoop).
 * New method `.IOLoop.add_future` to run a callback on the IOLoop when
   an asynchronous ``Future`` finishes.
-* `.IOLoop` now has a static ``configure`` method like the one on
-  `.AsyncHTTPClient`, which can be used to select an IOLoop implementation
-  other than the default.
+* `.IOLoop` now has a static `configure <.Configurable.configure>`
+  method like the one on `.AsyncHTTPClient`, which can be used to
+  select an `.IOLoop` implementation other than the default.
 * The `.IOLoop` poller implementations (``select``, ``epoll``, ``kqueue``)
   are now available as distinct subclasses of `.IOLoop`.  Instantiating
   `.IOLoop` will continue to automatically choose the best available
@@ -262,8 +262,8 @@ Multiple modules
   blocking, but non-blocking implementations are available using one
   of three optional dependencies: `~tornado.netutil.ThreadedResolver`
   using the `concurrent.futures` thread pool,
-  ``tornado.platform.caresresolver.CaresResolver`` using the ``pycares``
-  library, or ``tornado.platform.twisted.TwistedResolver`` using ``twisted``
+  `tornado.platform.caresresolver.CaresResolver` using the ``pycares``
+  library, or `tornado.platform.twisted.TwistedResolver` using ``twisted``
 * New function `tornado.netutil.is_valid_ip` returns true if a given string
   is a valid IP (v4 or v6) address.
 * `tornado.netutil.bind_sockets` has a new ``flags`` argument that can
@@ -301,8 +301,8 @@ Multiple modules
 * Function ``tornado.options.enable_pretty_logging`` has been moved to the
   `tornado.log` module.
 
-```tornado.platform.caresresolver``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+`tornado.platform.caresresolver`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * New module containing an asynchronous implementation of the `.Resolver`
   interface, using the ``pycares`` library.
@@ -310,10 +310,10 @@ Multiple modules
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* New class ``tornado.platform.twisted.TwistedIOLoop`` allows Tornado
+* New class `tornado.platform.twisted.TwistedIOLoop` allows Tornado
   code to be run on the Twisted reactor (as opposed to the existing
-  ``TornadoReactor``, which bridges the gap in the other direction).
-* New class ``tornado.platform.twisted.TwistedResolver`` is an asynchronous
+  `.TornadoReactor`, which bridges the gap in the other direction).
+* New class `tornado.platform.twisted.TwistedResolver` is an asynchronous
   implementation of the `.Resolver` interface.
 
 `tornado.process`
@@ -325,9 +325,10 @@ Multiple modules
 ``tornado.simple_httpclient``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``SimpleAsyncHTTPClient`` now takes a ``resolver`` keyword argument (which
-  may be passed to either the constructor or ``configure``), to allow it to
-  use the new non-blocking `tornado.netutil.Resolver`.
+* ``SimpleAsyncHTTPClient`` now takes a ``resolver`` keyword argument
+  (which may be passed to either the constructor or `configure
+  <.Configurable.configure>`), to allow it to use the new non-blocking
+  `tornado.netutil.Resolver`.
 * When following redirects, ``SimpleAsyncHTTPClient`` now treats a 302
   response code the same as a 303.  This is contrary to the HTTP spec
   but consistent with all browsers and other major HTTP clients

@@ -164,7 +164,8 @@ class Resolver(Configurable):
 
     By default, a blocking implementation is used (which simply calls
     `socket.getaddrinfo`).  An alternative implementation can be
-    chosen with the ``Resolver.configure`` class method::
+    chosen with the `Resolver.configure <.Configurable.configure>`
+    class method::
 
         Resolver.configure('tornado.netutil.ThreadedResolver')
 
@@ -173,8 +174,8 @@ class Resolver(Configurable):
     * `tornado.netutil.BlockingResolver`
     * `tornado.netutil.ThreadedResolver`
     * `tornado.netutil.OverrideResolver`
-    * ``tornado.platform.twisted.TwistedResolver``
-    * ``tornado.platform.caresresolver.CaresResolver``
+    * `tornado.platform.twisted.TwistedResolver`
+    * `tornado.platform.caresresolver.CaresResolver`
     """
     @classmethod
     def configurable_base(cls):

@@ -15,7 +15,7 @@ class CaresResolver(Resolver):
 
     c-ares fails to resolve some names when ``family`` is ``AF_UNSPEC``,
     so it is only recommended for use in ``AF_INET`` (i.e. IPv4).  This is
-    the default for `tornado.simple_httpclient`, but other libraries
+    the default for ``tornado.simple_httpclient``, but other libraries
     may default to ``AF_UNSPEC``.
     """
     def initialize(self, io_loop=None):
