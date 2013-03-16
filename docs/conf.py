@@ -15,6 +15,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.coverage",
     "sphinx.ext.extlinks",
+    "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
     ]
 
@@ -100,4 +101,8 @@ extlinks = {
     'current_tarball': (
         'https://github.com/downloads/facebook/tornado/tornado-%s.tar.g%%s' % version,
         'tornado-%s.tar.g' % version),
+    }
+
+intersphinx_mapping = {
+    'python': ('http://python.readthedocs.org/en/latest/', None),
     }
