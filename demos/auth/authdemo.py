@@ -18,10 +18,10 @@ import tornado.auth
 import tornado.escape
 import tornado.httpserver
 import tornado.ioloop
-import tornado.options
 import tornado.web
 
-from tornado.options import define, options
+from tornado import gen
+from tornado.options import define, options, parse_command_line
 
 define("port", default=8888, help="run on the given port", type=int)
 
@@ -57,17 +57,15 @@ class MainHandler(BaseHandler):
 
 class AuthHandler(BaseHandler, tornado.auth.GoogleMixin):
     @tornado.web.asynchronous
+    @gen.coroutine
     def get(self):
         if self.get_argument("openid.mode", None):
-            self.get_authenticated_user(self.async_callback(self._on_auth))
+            user = yield self.get_authenticated_user()
+            self.set_secure_cookie("authdemo_user",
+                                   tornado.escape.json_encode(user))
+            self.redirect("/")
             return
         self.authenticate_redirect()
-
-    def _on_auth(self, user):
-        if not user:
-            raise tornado.web.HTTPError(500, "Google auth failed")
-        self.set_secure_cookie("authdemo_user", tornado.escape.json_encode(user))
-        self.redirect("/")
 
 
 class LogoutHandler(BaseHandler):
@@ -82,7 +80,7 @@ class LogoutHandler(BaseHandler):
                    'Click <a href="/">here</a> to log back in.')
 
 def main():
-    tornado.options.parse_command_line()
+    parse_command_line()
     http_server = tornado.httpserver.HTTPServer(Application())
     http_server.listen(options.port)
     tornado.ioloop.IOLoop.instance().start()
