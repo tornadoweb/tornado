@@ -20,29 +20,41 @@ could be written with ``gen`` as::
 
     class GenAsyncHandler(RequestHandler):
         @asynchronous
-        @gen.engine
+        @gen.coroutine
         def get(self):
             http_client = AsyncHTTPClient()
-            response = yield gen.Task(http_client.fetch, "http://example.com")
+            response = yield http_client.fetch("http://example.com")
             do_something_with_response(response)
             self.render("template.html")
 
-`Task` works with any function that takes a ``callback`` keyword
-argument.  You can also yield a list of ``Tasks``, which will be
+Most asynchronous functions in Tornado return a `~concurrent.futures.Future`;
+yielding this object returns its `~concurrent.futures.Future.result`.
+
+For functions that do not return ``Futures``, `Task` works with any
+function that takes a ``callback`` keyword argument (most Tornado functions
+can be used in either style, although the ``Future`` style is preferred
+since it is both shorter and provides better exception handling)::
+
+    @gen.coroutine
+    def get(self):
+        yield gen.Task(AsyncHTTPClient().fetch, "http://example.com")
+
+You can also yield a list of ``Futures`` and/or ``Tasks``, which will be
 started at the same time and run in parallel; a list of results will
 be returned when they are all finished::
 
+    @gen.coroutine
     def get(self):
         http_client = AsyncHTTPClient()
-        response1, response2 = yield [gen.Task(http_client.fetch, url1),
-                                      gen.Task(http_client.fetch, url2)]
+        response1, response2 = yield [http_client.fetch(url1),
+                                      http_client.fetch(url2)]
 
 For more complicated interfaces, `Task` can be split into two parts:
 `Callback` and `Wait`::
 
     class GenAsyncHandler2(RequestHandler):
         @asynchronous
-        @gen.engine
+        @gen.coroutine
         def get(self):
             http_client = AsyncHTTPClient()
             http_client.fetch("http://example.com",
@@ -96,17 +108,21 @@ class ReturnValueIgnoredError(Exception):
 
 
 def engine(func):
-    """Decorator for asynchronous generators.
+    """Callback-oriented decorator for asynchronous generators.
 
-    Any generator that yields objects from this module must be wrapped
-    in this decorator.  The decorator only works on functions that are
-    already asynchronous.  For `~tornado.web.RequestHandler`
-    ``get``/``post``/etc methods, this means that both the
-    `tornado.web.asynchronous` and `tornado.gen.engine` decorators
-    must be used (for proper exception handling, ``asynchronous``
-    should come before ``gen.engine``).  In most other cases, it means
-    that it doesn't make sense to use ``gen.engine`` on functions that
-    don't already take a callback argument.
+    This is an older interface; for new code that does not need to be
+    compatible with versions of Tornado older than 3.0 the
+    `coroutine` decorator is recommended instead.
+
+    This decorator is similar to `coroutine`, except it does not
+    return a `~concurrent.futures.Future` and the ``callback``
+    argument is not treated specially.
+
+    In most cases, functions decorated with `engine` should take
+    a ``callback`` argument and invoke it with their result when
+    they are finished.  One notable exception is the
+    `~tornado.web.RequestHandler` ``get``/``post``/etc methods,
+    which use ``self.finish()`` in place of a callback argument.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -146,19 +162,32 @@ def engine(func):
 
 
 def coroutine(func):
-    """Future-oriented decorator for asynchronous generators.
+    """Decorator for asynchronous generators.
 
-    Similar to ``@gen.engine``, but the decorated function does not receive
-    a ``callback`` parameter.  Instead, it may "return" by raising the
-    special exception `gen.Return(value)`.  In Python 3.3+, it is also
-    possible for the function to simply use the ``return`` statement.
-    (prior to Python 3.3 generators were not allowed to also return values.
+    Any generator that yields objects from this module must be wrapped
+    in either this decorator or `engine`.  These decorators only work
+    on functions that are already asynchronous.  For
+    `~tornado.web.RequestHandler` ``get``/``post``/etc methods, this
+    means that both the `tornado.web.asynchronous` and
+    `tornado.gen.coroutine` decorators must be used (for proper
+    exception handling, ``asynchronous`` should come before
+    ``gen.coroutine``).
 
-    Functions with this decorator return a `Future`.  Additionally,
-    they may be called with a ``callback`` keyword argument, which will
-    be invoked with the future's result when it resolves.  If the coroutine
-    fails, the callback will not be run and an exception will be raised
-    into the surrounding `StackContext`.
+    Coroutines may "return" by raising the special exception
+    `Return(value) <Return>`.  In Python 3.3+, it is also possible for
+    the function to simply use the ``return value`` statement (prior to
+    Python 3.3 generators were not allowed to also return values).
+    In all versions of Python a coroutine that simply wishes to exit
+    early may use the ``return`` statement without a value.
+
+    Functions with this decorator return a
+    `~concurrent.futures.Future`.  Additionally, they may be called
+    with a ``callback`` keyword argument, which will be invoked with
+    the future's result when it resolves.  If the coroutine fails, the
+    callback will not be run and an exception will be raised into the
+    surrounding `.StackContext`.  The ``callback`` argument is not
+    visible inside the decorated function; it is handled by the
+    decorator itself.
 
     From the caller's perspective, ``@gen.coroutine`` is similar to
     the combination of ``@return_future`` and ``@gen.engine``.
@@ -205,13 +234,36 @@ def coroutine(func):
 
 
 class Return(Exception):
+    """Special exception to return a value from a `coroutine`.
+
+    If this exception is raised, its value argument is used as the
+    result of the coroutine::
+
+        @gen.coroutine
+        def fetch_json(url):
+            response = yield AsyncHTTPClient().fetch(url)
+            raise gen.Return(json_decode(response.body))
+
+    In Python 3.3, this exception is no longer necessary: the ``return``
+    statement can be used directly to return a value (previously
+    ``yield`` and ``return`` with a value could not be combined in the
+    same function).
+
+    By analogy with the return statement, the value argument is optional,
+    but it is never necessary to ``raise gen.Return()``.  The ``return``
+    statement can be used with no arguments instead.
+    """
     def __init__(self, value=None):
         super(Return, self).__init__()
         self.value = value
 
 
 class YieldPoint(object):
-    """Base class for objects that may be yielded from the generator."""
+    """Base class for objects that may be yielded from the generator.
+
+    Applications do not normally need to use this class, but it may be
+    subclassed to provide additional yielding behavior.
+    """
     def start(self, runner):
         """Called by the runner after the generator has yielded.
 
@@ -277,7 +329,7 @@ class Wait(YieldPoint):
 
 
 class WaitAll(YieldPoint):
-    """Returns the results of multiple previous `Callbacks`.
+    """Returns the results of multiple previous `Callbacks <Callback>`.
 
     The argument is a sequence of `Callback` keys, and the result is
     a list of results in the same order.

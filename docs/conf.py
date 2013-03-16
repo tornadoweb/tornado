@@ -34,7 +34,6 @@ coverage_ignore_classes = [
     # tornado.gen
     "Multi",
     "Runner",
-    "YieldPoint",
 
     # tornado.ioloop
     "PollIOLoop",
