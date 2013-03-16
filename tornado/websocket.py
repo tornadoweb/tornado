@@ -1,4 +1,4 @@
-"""Server-side implementation of the WebSocket protocol.
+"""Implementation of the WebSocket protocol.
 
 `WebSockets <http://dev.w3.org/html5/websockets/>`_ allow for bidirectional
 communication between the browser and server.
@@ -49,14 +49,16 @@ except NameError:
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
 
-    Override on_message to handle incoming messages. You can also override
-    open and on_close to handle opened and closed connections.
+    Override `on_message` to handle incoming messages, and use
+    `write_message` to send messages to the client. You can also
+    override `open` and `on_close` to handle opened and closed
+    connections.
 
     See http://dev.w3.org/html5/websockets/ for details on the
     JavaScript interface.  The protocol is specified at
     http://tools.ietf.org/html/rfc6455.
 
-    Here is an example Web Socket handler that echos back all received messages
+    Here is an example WebSocket handler that echos back all received messages
     back to the client::
 
       class EchoWebSocket(websocket.WebSocketHandler):
@@ -69,14 +71,15 @@ class WebSocketHandler(tornado.web.RequestHandler):
           def on_close(self):
               print "WebSocket closed"
 
-    Web Sockets are not standard HTTP connections. The "handshake" is HTTP,
-    but after the handshake, the protocol is message-based. Consequently,
-    most of the Tornado HTTP facilities are not available in handlers of this
-    type. The only communication methods available to you are write_message()
-    and close(). Likewise, your request handler class should
-    implement open() method rather than get() or post().
+    WebSockets are not standard HTTP connections. The "handshake" is
+    HTTP, but after the handshake, the protocol is
+    message-based. Consequently, most of the Tornado HTTP facilities
+    are not available in handlers of this type. The only communication
+    methods available to you are `write_message()`, `ping()`, and
+    `close()`. Likewise, your request handler class should implement
+    `open()` method rather than ``get()`` or ``post()``.
 
-    If you map the handler above to "/websocket" in your application, you can
+    If you map the handler above to ``/websocket`` in your application, you can
     invoke it in JavaScript with::
 
       var ws = new WebSocket("ws://localhost:8888/websocket");
@@ -232,11 +235,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
         return "wss" if self.request.protocol == "https" else "ws"
 
     def async_callback(self, callback, *args, **kwargs):
-        """Wrap callbacks with this if they are used on asynchronous requests.
+        """Obsolete - catches exceptions from the wrapped function.
 
-        Catches exceptions properly and closes this WebSocket if an exception
-        is uncaught.  (Note that this is usually unnecessary thanks to
-        `tornado.stack_context`)
+        This function is normally unncecessary thanks to
+        `tornado.stack_context`.
         """
         return self.ws_connection.async_callback(callback, *args, **kwargs)
 

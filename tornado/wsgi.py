@@ -82,11 +82,11 @@ else:
 class WSGIApplication(web.Application):
     """A WSGI equivalent of `tornado.web.Application`.
 
-    WSGIApplication is very similar to web.Application, except no
-    asynchronous methods are supported (since WSGI does not support
-    non-blocking requests properly). If you call self.flush() or other
-    asynchronous methods in your request handlers running in a
-    WSGIApplication, we throw an exception.
+    `WSGIApplication` is very similar to `tornado.web.Application`,
+    except no asynchronous methods are supported (since WSGI does not
+    support non-blocking requests properly). If you call
+    ``self.flush()`` or other asynchronous methods in your request
+    handlers running in a `WSGIApplication`, we throw an exception.
 
     Example usage::
 
@@ -105,13 +105,15 @@ class WSGIApplication(web.Application):
             server = wsgiref.simple_server.make_server('', 8888, application)
             server.serve_forever()
 
-    See the 'appengine' demo for an example of using this module to run
-    a Tornado app on Google AppEngine.
+    See the `appengine demo
+    <https://github.com/facebook/tornado/tree/master/demos/appengine>`_
+    for an example of using this module to run a Tornado app on Google
+    App Engine.
 
-    Since no asynchronous methods are available for WSGI applications, the
-    httpclient and auth modules are both not available for WSGI applications.
-    We support the same interface, but handlers running in a WSGIApplication
-    do not support flush() or asynchronous methods.
+    WSGI applications use the same `.RequestHandler` class, but not
+    ``@asynchronous`` methods or ``flush()``.  This means that it is
+    not possible to use `.AsyncHTTPClient`, or the `tornado.auth` or
+    `tornado.websocket` modules.
     """
     def __init__(self, handlers=None, default_host="", **settings):
         web.Application.__init__(self, handlers, default_host, transforms=[],
@@ -134,7 +136,7 @@ class WSGIApplication(web.Application):
 class HTTPRequest(object):
     """Mimics `tornado.httpserver.HTTPRequest` for WSGI applications."""
     def __init__(self, environ):
-        """Parses the given WSGI environ to construct the request."""
+        """Parses the given WSGI environment to construct the request."""
         self.method = environ["REQUEST_METHOD"]
         self.path = urllib_parse.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
         self.path += urllib_parse.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
@@ -206,7 +208,7 @@ class HTTPRequest(object):
 class WSGIContainer(object):
     r"""Makes a WSGI-compatible function runnable on Tornado's HTTP server.
 
-    Wrap a WSGI function in a WSGIContainer and pass it to HTTPServer to
+    Wrap a WSGI function in a `WSGIContainer` and pass it to `.HTTPServer` to
     run it. For example::
 
         def simple_app(environ, start_response):
