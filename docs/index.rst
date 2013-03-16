@@ -87,7 +87,7 @@ features may require one of the following libraries:
   `~tornado.netutil.ThreadedResolver`.  It is needed only on Python 2;
   Python 3 includes this package in the standard library.
 * `pycurl <http://pycurl.sourceforge.net>`_ is used by the optional
-  `tornado.curl_httpclient`.  Libcurl version 7.18.2 or higher is required;
+  ``tornado.curl_httpclient``.  Libcurl version 7.18.2 or higher is required;
   version 7.21.1 or higher is recommended.
 * `Twisted <http://www.twistedmatrix.com>`_ may be used with the classes in
   `tornado.platform.twisted`.

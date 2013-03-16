@@ -14,7 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Automatically restart the server when a source file is modified.
+"""xAutomatically restart the server when a source file is modified.
 
 Most applications should not access this module directly.  Instead, pass the
 keyword argument ``debug=True`` to the `tornado.web.Application` constructor.
@@ -30,8 +30,8 @@ This combination is encouraged as the wrapper catches syntax errors and
 other import-time failures, while debug mode catches changes once
 the server has started.
 
-This module depends on `IOLoop`, so it will not work in WSGI applications
-and Google App Engine.  It also will not work correctly when `HTTPServer`'s
+This module depends on `.IOLoop`, so it will not work in WSGI applications
+and Google App Engine.  It also will not work correctly when `.HTTPServer`'s
 multi-process mode is used.
 
 Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
@@ -103,7 +103,7 @@ _io_loops = weakref.WeakKeyDictionary()
 
 
 def start(io_loop=None, check_time=500):
-    """Begins watching source files for changes using the given `IOLoop`. """
+    """Begins watching source files for changes using the given `.IOLoop`. """
     io_loop = io_loop or ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return
@@ -142,8 +142,8 @@ def add_reload_hook(fn):
 
     Note that for open file and socket handles it is generally
     preferable to set the ``FD_CLOEXEC`` flag (using `fcntl` or
-    `tornado.platform.auto.set_close_exec`) instead of using a reload
-    hook to close them.
+    ``tornado.platform.auto.set_close_exec``) instead
+    of using a reload hook to close them.
     """
     _reload_hooks.append(fn)
 

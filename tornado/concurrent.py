@@ -101,7 +101,8 @@ else:
 
 
 class TracebackFuture(Future):
-    """Subclass of `Future` which can store a traceback with exceptions.
+    """Subclass of `~concurrent.futures.Future` which can store a traceback
+    with exceptions.
 
     The traceback is automatically available in Python 3, but in the
     Python 2 futures backport this information is discarded.
@@ -114,7 +115,9 @@ class TracebackFuture(Future):
         return self.__exc_info
 
     def set_exc_info(self, exc_info):
-        """Traceback-aware replacement for `Future.set_exception`."""
+        """Traceback-aware replacement for
+        `~concurrent.futures.Future.set_exception`.
+        """
         self.__exc_info = exc_info
         self.set_exception(exc_info[1])
 
@@ -158,22 +161,23 @@ _NO_RESULT = object()
 
 
 def return_future(f):
-    """Decorator to make a function that returns via callback return a `Future`.
+    """Decorator to make a function that returns via callback return a
+    `~concurrent.futures.Future`.
 
     The wrapped function should take a ``callback`` keyword argument
     and invoke it with one argument when it has finished.  To signal failure,
     the function can simply raise an exception (which will be
-    captured by the `stack_context` and passed along to the `Future`).
+    captured by the `.StackContext` and passed along to the ``Future``).
 
     From the caller's perspective, the callback argument is optional.
     If one is given, it will be invoked when the function is complete
-    with `Future.result()` as an argument.  If the function fails,
-    the callback will not be run and an exception will be raised into
-    the surrounding `StackContext`.
+    with `Future.result() <concurrent.futures.Future.result>` as an
+    argument.  If the function fails, the callback will not be run and
+    an exception will be raised into the surrounding `.StackContext`.
 
-    If no callback is given, the caller should use the `Future` to
+    If no callback is given, the caller should use the ``Future`` to
     wait for the function to complete (perhaps by yielding it in a
-    `gen.engine` function, or passing it to `IOLoop.add_future`).
+    `.gen.engine` function, or passing it to `.IOLoop.add_future`).
 
     Usage::
 

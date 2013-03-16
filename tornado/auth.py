@@ -266,7 +266,7 @@ class OpenIdMixin(object):
         future.set_result(user)
 
     def get_auth_http_client(self):
-        """Returns the `AsyncHTTPClient` instance to be used for auth requests.
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
         May be overridden by subclasses to use an HTTP client other than
         the default.
@@ -445,14 +445,15 @@ class OAuthMixin(object):
         """Subclasses must override this to get basic information about the
         user.
 
-        Should return a `Future` whose result is a dictionary containing
-        information about the user, which may have been retrieved by
-        using ``access_token`` to make a request to the service.
+        Should return a `~concurrent.futures.Future` whose result is a
+        dictionary containing information about the user, which may
+        have been retrieved by using ``access_token`` to make a
+        request to the service.
 
         The access token will be added to the returned dictionary to make
         the result of `get_authenticated_user`.
 
-        For backwards compatibility, the callback-based `_oauth_get_user`
+        For backwards compatibility, the callback-based ``_oauth_get_user``
         method is also supported.
         """
         # By default, call the old-style _oauth_get_user, but new code
@@ -502,7 +503,7 @@ class OAuthMixin(object):
         return base_args
 
     def get_auth_http_client(self):
-        """Returns the `AsyncHTTPClient` instance to be used for auth requests.
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
         May be overridden by subclasses to use an HTTP client other than
         the default.
@@ -528,7 +529,7 @@ class OAuth2Mixin(object):
         Some providers require that you register a redirect URL with
         your application instead of passing one via this method. You
         should call this method to log the user in, and then call
-        `get_authenticated_user()` in the handler for your
+        ``get_authenticated_user`` in the handler for your
         redirect URL to complete the authorization process.
         """
         args = {
@@ -579,9 +580,9 @@ class TwitterMixin(OAuthMixin):
                 else:
                     self.authorize_redirect()
 
-    The user object returned by `get_authenticated_user()` includes the
-    attributes ``username``, ``name``, ``access_token``, and all of the
-    custom Twitter user attributes described at
+    The user object returned by `~OAuthMixin.get_authenticated_user`
+    includes the attributes ``username``, ``name``, ``access_token``,
+    and all of the custom Twitter user attributes described at
     https://dev.twitter.com/docs/api/1.1/get/users/show
     """
     _OAUTH_REQUEST_TOKEN_URL = "http://api.twitter.com/oauth/request_token"
@@ -822,10 +823,10 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
 
     Google implements both OpenID and OAuth in a hybrid mode.  If you
     just need the user's identity, use
-    `~OpenIDMixin.authenticate_redirect`.  If you need to make
+    `~OpenIdMixin.authenticate_redirect`.  If you need to make
     requests to Google on behalf of the user, use
     `authorize_redirect`.  On return, parse the response with
-    `~OpenIDMixin.get_authenticated_user()`. We send a dict containing
+    `~OpenIdMixin.get_authenticated_user`. We send a dict containing
     the values for the user, including ``email``, ``name``, and
     ``locale``.
 
@@ -1081,7 +1082,7 @@ class FacebookMixin(object):
         return hashlib.md5(body).hexdigest()
 
     def get_auth_http_client(self):
-        """Returns the `AsyncHTTPClient` instance to be used for auth requests.
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
         May be overridden by subclasses to use an HTTP client other than
         the default.
@@ -1228,7 +1229,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         callback(escape.json_decode(response.body))
 
     def get_auth_http_client(self):
-        """Returns the `AsyncHTTPClient` instance to be used for auth requests.
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
         May be overridden by subclasses to use an HTTP client other than
         the default.
