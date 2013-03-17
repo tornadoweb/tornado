@@ -445,10 +445,10 @@ class OAuthMixin(object):
         """Subclasses must override this to get basic information about the
         user.
 
-        Should return a `~concurrent.futures.Future` whose result is a
-        dictionary containing information about the user, which may
-        have been retrieved by using ``access_token`` to make a
-        request to the service.
+        Should return a `.Future` whose result is a dictionary
+        containing information about the user, which may have been
+        retrieved by using ``access_token`` to make a request to the
+        service.
 
         The access token will be added to the returned dictionary to make
         the result of `get_authenticated_user`.

@@ -27,8 +27,8 @@ could be written with ``gen`` as::
             do_something_with_response(response)
             self.render("template.html")
 
-Most asynchronous functions in Tornado return a `~concurrent.futures.Future`;
-yielding this object returns its `~concurrent.futures.Future.result`.
+Most asynchronous functions in Tornado return a `.Future`;
+yielding this object returns its `~.Future.result`.
 
 For functions that do not return ``Futures``, `Task` works with any
 function that takes a ``callback`` keyword argument (most Tornado functions
@@ -115,8 +115,8 @@ def engine(func):
     `coroutine` decorator is recommended instead.
 
     This decorator is similar to `coroutine`, except it does not
-    return a `~concurrent.futures.Future` and the ``callback``
-    argument is not treated specially.
+    return a `.Future` and the ``callback`` argument is not treated
+    specially.
 
     In most cases, functions decorated with `engine` should take
     a ``callback`` argument and invoke it with their result when
@@ -180,14 +180,13 @@ def coroutine(func):
     In all versions of Python a coroutine that simply wishes to exit
     early may use the ``return`` statement without a value.
 
-    Functions with this decorator return a
-    `~concurrent.futures.Future`.  Additionally, they may be called
-    with a ``callback`` keyword argument, which will be invoked with
-    the future's result when it resolves.  If the coroutine fails, the
-    callback will not be run and an exception will be raised into the
-    surrounding `.StackContext`.  The ``callback`` argument is not
-    visible inside the decorated function; it is handled by the
-    decorator itself.
+    Functions with this decorator return a `.Future`.  Additionally,
+    they may be called with a ``callback`` keyword argument, which
+    will be invoked with the future's result when it resolves.  If the
+    coroutine fails, the callback will not be run and an exception
+    will be raised into the surrounding `.StackContext`.  The
+    ``callback`` argument is not visible inside the decorated
+    function; it is handled by the decorator itself.
 
     From the caller's perspective, ``@gen.coroutine`` is similar to
     the combination of ``@return_future`` and ``@gen.engine``.

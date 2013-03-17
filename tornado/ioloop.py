@@ -320,10 +320,10 @@ class IOLoop(Configurable):
     def run_sync(self, func, timeout=None):
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
-        If the function returns a `~concurrent.futures.Future`, the
-        `IOLoop` will run until the future is resolved.  If it raises
-        an exception, the `IOLoop` will stop and the exception will be
-        re-raised to the caller.
+        If the function returns a `.Future`, the `IOLoop` will run
+        until the future is resolved.  If it raises an exception, the
+        `IOLoop` will stop and the exception will be re-raised to the
+        caller.
 
         The keyword-only argument ``timeout`` may be used to set
         a maximum duration for the function.  If the timeout expires,
@@ -434,10 +434,10 @@ class IOLoop(Configurable):
 
     def add_future(self, future, callback):
         """Schedules a callback on the ``IOLoop`` when the given
-        `~concurrent.futures.Future` is finished.
+        `.Future` is finished.
 
         The callback is invoked with one argument, the
-        `~concurrent.futures.Future`.
+        `.Future`.
         """
         assert isinstance(future, Future)
         callback = stack_context.wrap(callback)

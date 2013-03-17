@@ -13,11 +13,14 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-"""Utilities for working with the `concurrent.futures` package.
+"""Utilities for working with threads and ``Futures``.
 
-This module also contains compatibility shims including a dummy
-implementation of `concurrent.futures.Future` which can be used
-when `concurrent.futures` is not available.
+``Futures`` are a pattern for concurrent programming introduced in
+Python 3.2 in the `concurrent.futures` package (this package has also
+been backported to older versions of Python and can be installed with
+``pip install futures``).  Tornado will use `concurrent.futures.Future` if
+it is available; otherwise it will use a compatible class defined in this
+module.
 """
 from __future__ import absolute_import, division, print_function, with_statement
 
@@ -101,8 +104,8 @@ else:
 
 
 class TracebackFuture(Future):
-    """Subclass of `~concurrent.futures.Future` which can store a traceback
-    with exceptions.
+    """Subclass of `Future` which can store a traceback with
+    exceptions.
 
     The traceback is automatically available in Python 3, but in the
     Python 2 futures backport this information is discarded.
@@ -162,7 +165,7 @@ _NO_RESULT = object()
 
 def return_future(f):
     """Decorator to make a function that returns via callback return a
-    `~concurrent.futures.Future`.
+    `Future`.
 
     The wrapped function should take a ``callback`` keyword argument
     and invoke it with one argument when it has finished.  To signal failure,
@@ -171,9 +174,9 @@ def return_future(f):
 
     From the caller's perspective, the callback argument is optional.
     If one is given, it will be invoked when the function is complete
-    with `Future.result() <concurrent.futures.Future.result>` as an
-    argument.  If the function fails, the callback will not be run and
-    an exception will be raised into the surrounding `.StackContext`.
+    with `Future.result()` as an argument.  If the function fails, the
+    callback will not be run and an exception will be raised into the
+    surrounding `.StackContext`.
 
     If no callback is given, the caller should use the ``Future`` to
     wait for the function to complete (perhaps by yielding it in a

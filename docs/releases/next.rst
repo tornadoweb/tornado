@@ -8,9 +8,9 @@ Highlights
 ^^^^^^^^^^
 
 * The ``callback`` argument to many asynchronous methods is now
-  optional, and these methods return a `~concurrent.futures.Future`.
-  The `tornado.gen` module now understands ``Futures``, and these
-  methods can be used directly without a `.gen.Task` wrapper.
+  optional, and these methods return a `.Future`.  The `tornado.gen`
+  module now understands ``Futures``, and these methods can be used
+  directly without a `.gen.Task` wrapper.
 * New function `.IOLoop.current` returns the `.IOLoop` that is running
   on the current thread (as opposed to `.IOLoop.instance`, which
   returns a specific thread's (usually the main thread's) IOLoop.
@@ -90,10 +90,9 @@ Multiple modules
 * On Python 3, the ``get_authenticated_user`` method family now returns
   character strings instead of byte strings.
 * Asynchronous methods defined in `tornado.auth` now return a
-  `~concurrent.futures.Future`, and their ``callback`` argument is
-  optional.  The ``Future`` interface is preferred as it offers better
-  error handling (the previous interface just logged a warning and
-  returned None).
+  `.Future`, and their ``callback`` argument is optional.  The
+  ``Future`` interface is preferred as it offers better error handling
+  (the previous interface just logged a warning and returned None).
 * The `tornado.auth` mixin classes now define a method
   ``get_auth_http_client``, which can be overridden to use a non-default
   `.AsyncHTTPClient` instance (e.g. to use a different `.IOLoop`)
@@ -131,10 +130,10 @@ Multiple modules
 
 * New decorator ``@gen.coroutine`` is available as an alternative to
   ``@gen.engine``.  It automatically returns a
-  `~concurrent.futures.Future`, and within the function instead of
+  `.Future`, and within the function instead of
   calling a callback you return a value with ``raise
   gen.Return(value)`` (or simply ``return value`` in Python 3.3).
-* Generators may now yield ``Future`` objects.
+* Generators may now yield `.Future` objects.
 * Callbacks produced by `.gen.Callback` and `.gen.Task` are now automatically
   stack-context-wrapped, to minimize the risk of context leaks when used
   with asynchronous functions that don't do their own wrapping.
@@ -146,7 +145,7 @@ Multiple modules
 `tornado.httpclient`
 ~~~~~~~~~~~~~~~~~~~~
 
-* `.AsyncHTTPClient.fetch` now returns a ``Future`` and its callback argument
+* `.AsyncHTTPClient.fetch` now returns a `.Future` and its callback argument
   is optional.  When the future interface is used, any error will be raised
   automatically, as if `.HTTPResponse.rethrow` was called.
 * `.AsyncHTTPClient.configure` and all `.AsyncHTTPClient` constructors
@@ -190,7 +189,7 @@ Multiple modules
   on the current thread (as opposed to `.IOLoop.instance`, which returns a
   specific thread's (usually the main thread's) IOLoop).
 * New method `.IOLoop.add_future` to run a callback on the IOLoop when
-  an asynchronous ``Future`` finishes.
+  an asynchronous `.Future` finishes.
 * `.IOLoop` now has a static `configure <.Configurable.configure>`
   method like the one on `.AsyncHTTPClient`, which can be used to
   select an `.IOLoop` implementation other than the default.

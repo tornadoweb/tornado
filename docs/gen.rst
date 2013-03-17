@@ -14,11 +14,11 @@
    ------------
 
    Instances of the following classes may be used in yield expressions
-   in the generator.  `Futures <concurrent.futures.Future>` may be yielded as
-   well; their result method will be called automatically when they
-   are ready.  Additionally, lists of any combination of these objects
-   may be yielded; the result is a list of the results of each yield
-   point in the same order.
+   in the generator.  `Futures <.Future>` may be yielded as well;
+   their result method will be called automatically when they are
+   ready.  Additionally, lists of any combination of these objects may
+   be yielded; the result is a list of the results of each yield point
+   in the same order.
 
    .. autoclass:: Task
 
