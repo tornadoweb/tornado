@@ -1,4 +1,4 @@
-``tornado.httpclient`` --- Non-blocking HTTP client
+``tornado.httpclient`` --- Asynchronous HTTP client
 ===================================================
 
 .. automodule:: tornado.httpclient

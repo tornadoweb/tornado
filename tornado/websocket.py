@@ -1,4 +1,4 @@
-"""Server-side implementation of the WebSocket protocol.
+"""Implementation of the WebSocket protocol.
 
 `WebSockets <http://dev.w3.org/html5/websockets/>`_ allow for bidirectional
 communication between the browser and server.
@@ -38,7 +38,7 @@ from tornado.ioloop import IOLoop
 from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
 from tornado import simple_httpclient
-from tornado.util import bytes_type
+from tornado.util import bytes_type, unicode_type
 
 try:
     xrange  # py2
@@ -49,14 +49,16 @@ except NameError:
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
 
-    Override on_message to handle incoming messages. You can also override
-    open and on_close to handle opened and closed connections.
+    Override `on_message` to handle incoming messages, and use
+    `write_message` to send messages to the client. You can also
+    override `open` and `on_close` to handle opened and closed
+    connections.
 
     See http://dev.w3.org/html5/websockets/ for details on the
     JavaScript interface.  The protocol is specified at
     http://tools.ietf.org/html/rfc6455.
 
-    Here is an example Web Socket handler that echos back all received messages
+    Here is an example WebSocket handler that echos back all received messages
     back to the client::
 
       class EchoWebSocket(websocket.WebSocketHandler):
@@ -69,14 +71,15 @@ class WebSocketHandler(tornado.web.RequestHandler):
           def on_close(self):
               print "WebSocket closed"
 
-    Web Sockets are not standard HTTP connections. The "handshake" is HTTP,
-    but after the handshake, the protocol is message-based. Consequently,
-    most of the Tornado HTTP facilities are not available in handlers of this
-    type. The only communication methods available to you are write_message()
-    and close(). Likewise, your request handler class should
-    implement open() method rather than get() or post().
+    WebSockets are not standard HTTP connections. The "handshake" is
+    HTTP, but after the handshake, the protocol is
+    message-based. Consequently, most of the Tornado HTTP facilities
+    are not available in handlers of this type. The only communication
+    methods available to you are `write_message()`, `ping()`, and
+    `close()`. Likewise, your request handler class should implement
+    `open()` method rather than ``get()`` or ``post()``.
 
-    If you map the handler above to "/websocket" in your application, you can
+    If you map the handler above to ``/websocket`` in your application, you can
     invoke it in JavaScript with::
 
       var ws = new WebSocket("ws://localhost:8888/websocket");
@@ -232,11 +235,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
         return "wss" if self.request.protocol == "https" else "ws"
 
     def async_callback(self, callback, *args, **kwargs):
-        """Wrap callbacks with this if they are used on asynchronous requests.
+        """Obsolete - catches exceptions from the wrapped function.
 
-        Catches exceptions properly and closes this WebSocket if an exception
-        is uncaught.  (Note that this is usually unnecessary thanks to
-        `tornado.stack_context`)
+        This function is normally unncecessary thanks to
+        `tornado.stack_context`.
         """
         return self.ws_connection.async_callback(callback, *args, **kwargs)
 
@@ -390,8 +392,9 @@ class WebSocketProtocol76(WebSocketProtocol):
         """Processes the key headers and calculates their key value.
 
         Raises ValueError when feed invalid key."""
+        # pyflakes complains about variable reuse if both of these lines use 'c'
         number = int(''.join(c for c in key if c.isdigit()))
-        spaces = len(c for c in key if c.isspace())
+        spaces = len([c2 for c2 in key if c2.isspace()])
         try:
             key_number = number // spaces
         except (ValueError, ZeroDivisionError):
@@ -436,7 +439,7 @@ class WebSocketProtocol76(WebSocketProtocol):
         if binary:
             raise ValueError(
                 "Binary messages not supported by this version of websockets")
-        if isinstance(message, unicode):
+        if isinstance(message, unicode_type):
             message = message.encode("utf-8")
         assert isinstance(message, bytes_type)
         self.stream.write(b"\x00" + message + b"\xff")
@@ -718,7 +721,8 @@ class WebSocketProtocol13(WebSocketProtocol):
                 self.stream.io_loop.time() + 5, self._abort)
 
 
-class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
+class WebSocketClientConnection(simple_httpclient._HTTPConnection):
+    """WebSocket client connection."""
     def __init__(self, io_loop, request):
         self.connect_future = Future()
         self.read_future = None
@@ -735,7 +739,7 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
             'Sec-WebSocket-Version': '13',
         })
 
-        super(_WebSocketClientConnection, self).__init__(
+        super(WebSocketClientConnection, self).__init__(
             io_loop, None, request, lambda: None, lambda response: None,
             104857600, Resolver(io_loop=io_loop))
 
@@ -759,9 +763,17 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.connect_future.set_result(self)
 
     def write_message(self, message, binary=False):
+        """Sends a message to the WebSocket server."""
         self.protocol.write_message(message, binary)
 
     def read_message(self, callback=None):
+        """Reads a message from the WebSocket server.
+
+        Returns a future whose result is the message, or None
+        if the connection is closed.  If a callback argument
+        is given it will be called with the future when it is
+        ready.
+        """
         assert self.read_future is None
         future = Future()
         if self.read_queue:
@@ -783,13 +795,18 @@ class _WebSocketClientConnection(simple_httpclient._HTTPConnection):
         pass
 
 
-def WebSocketConnect(url, io_loop=None, callback=None):
+def websocket_connect(url, io_loop=None, callback=None):
+    """Client-side websocket support.
+
+    Takes a url and returns a Future whose result is a
+    `WebSocketClientConnection`.
+    """
     if io_loop is None:
         io_loop = IOLoop.current()
     request = httpclient.HTTPRequest(url)
     request = httpclient._RequestProxy(
         request, httpclient.HTTPRequest._DEFAULTS)
-    conn = _WebSocketClientConnection(io_loop, request)
+    conn = WebSocketClientConnection(io_loop, request)
     if callback is not None:
         io_loop.add_future(conn.connect_future, callback)
     return conn.connect_future

@@ -55,8 +55,8 @@ class HTTPServer(TCPServer):
     requests). A simple example server that echoes back the URI you
     requested::
 
-        import httpserver
-        import ioloop
+        import tornado.httpserver
+        import tornado.ioloop
 
         def handle_request(request):
            message = "You requested %s\n" % request.uri
@@ -64,9 +64,9 @@ class HTTPServer(TCPServer):
                          len(message), message))
            request.finish()
 
-        http_server = httpserver.HTTPServer(handle_request)
+        http_server = tornado.httpserver.HTTPServer(handle_request)
         http_server.listen(8888)
-        ioloop.IOLoop.instance().start()
+        tornado.ioloop.IOLoop.instance().start()
 
     `HTTPServer` is a very basic connection handler.  It parses the request
     headers and body, but the request callback is responsible for producing
@@ -93,11 +93,10 @@ class HTTPServer(TCPServer):
     if Tornado is run behind an SSL-decoding proxy that does not set one of
     the supported ``xheaders``.
 
-    `HTTPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
-    To make this server serve SSL traffic, send the ssl_options dictionary
+    To make this server serve SSL traffic, send the ``ssl_options`` dictionary
     argument with the arguments required for the `ssl.wrap_socket` method,
-    including "certfile" and "keyfile".  In Python 3.2+ you can pass
-    an `ssl.SSLContext` object instead of a dict::
+    including ``certfile`` and ``keyfile``.  (In Python 3.2+ you can pass
+    an `ssl.SSLContext` object instead of a dict)::
 
        HTTPServer(applicaton, ssl_options={
            "certfile": os.path.join(data_dir, "mydomain.crt"),
@@ -124,9 +123,9 @@ class HTTPServer(TCPServer):
             server.start(0)  # Forks multiple sub-processes
             IOLoop.instance().start()
 
-       When using this interface, an `IOLoop` must *not* be passed
-       to the `HTTPServer` constructor.  `start` will always start
-       the server on the default singleton `IOLoop`.
+       When using this interface, an `.IOLoop` must *not* be passed
+       to the `HTTPServer` constructor.  `~.TCPServer.start` will always start
+       the server on the default singleton `.IOLoop`.
 
     3. `~tornado.tcpserver.TCPServer.add_sockets`: advanced multi-process::
 
@@ -136,12 +135,12 @@ class HTTPServer(TCPServer):
             server.add_sockets(sockets)
             IOLoop.instance().start()
 
-       The `add_sockets` interface is more complicated, but it can be
-       used with `tornado.process.fork_processes` to give you more
-       flexibility in when the fork happens.  `add_sockets` can
-       also be used in single-process servers if you want to create
-       your listening sockets in some way other than
-       `tornado.netutil.bind_sockets`.
+       The `~.TCPServer.add_sockets` interface is more complicated,
+       but it can be used with `tornado.process.fork_processes` to
+       give you more flexibility in when the fork happens.
+       `~.TCPServer.add_sockets` can also be used in single-process
+       servers if you want to create your listening sockets in some
+       way other than `tornado.netutil.bind_sockets`.
 
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
@@ -191,6 +190,13 @@ class HTTPConnection(object):
         self._close_callback = None
 
     def set_close_callback(self, callback):
+        """Sets a callback that will be run when the connection is closed.
+
+        Use this instead of accessing
+        `HTTPConnection.stream.set_close_callback
+        <.BaseIOStream.set_close_callback>` directly (which was the
+        recommended approach prior to Tornado 3.0).
+        """
         self._close_callback = stack_context.wrap(callback)
         self.stream.set_close_callback(self._on_connection_close)
 
@@ -340,7 +346,7 @@ class HTTPRequest(object):
 
     .. attribute:: headers
 
-       `HTTPHeader` dictionary-like object for request headers.  Acts like
+       `.HTTPHeaders` dictionary-like object for request headers.  Acts like
        a case-insensitive dictionary with additional methods for repeated
        headers.
 
@@ -350,13 +356,13 @@ class HTTPRequest(object):
 
     .. attribute:: remote_ip
 
-       Client's IP address as a string.  If `HTTPServer.xheaders` is set,
+       Client's IP address as a string.  If ``HTTPServer.xheaders`` is set,
        will pass along the real IP address provided by a load balancer
        in the ``X-Real-Ip`` header
 
     .. attribute:: protocol
 
-       The protocol used, either "http" or "https".  If `HTTPServer.xheaders`
+       The protocol used, either "http" or "https".  If ``HTTPServer.xheaders``
        is set, will pass along the protocol used by a load balancer if
        reported via an ``X-Scheme`` header.
 
@@ -370,13 +376,13 @@ class HTTPRequest(object):
        maps arguments names to lists of values (to support multiple values
        for individual names). Names are of type `str`, while arguments
        are byte strings.  Note that this is different from
-       `RequestHandler.get_argument`, which returns argument values as
+       `.RequestHandler.get_argument`, which returns argument values as
        unicode strings.
 
     .. attribute:: files
 
        File uploads are available in the files property, which maps file
-       names to lists of :class:`HTTPFile`.
+       names to lists of `.HTTPFile`.
 
     .. attribute:: connection
 

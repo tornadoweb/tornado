@@ -14,13 +14,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""
-The Tornado web framework looks a bit like web.py (http://webpy.org/) or
-Google's webapp (http://code.google.com/appengine/docs/python/tools/webapp/),
-but with additional tools and optimizations to take advantage of the
-Tornado non-blocking web server and tools.
+"""``tornado.web`` provides a simple web framework with asynchronous
+features that allow it to scale to large numbers of open connections,
+making it ideal for `long polling
+<http://en.wikipedia.org/wiki/Push_technology#Long_polling>`_.
 
-Here is the canonical "Hello, world" example app::
+Here is a simple "Hello, world" example app::
 
     import tornado.ioloop
     import tornado.web
@@ -36,17 +35,19 @@ Here is the canonical "Hello, world" example app::
         application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
 
-See the Tornado walkthrough on http://tornadoweb.org for more details
-and a good getting started guide.
+See the :doc:`Tornado overview <overview>` for more details and a good getting
+started guide.
 
 Thread-safety notes
 -------------------
 
-In general, methods on RequestHandler and elsewhere in tornado are not
-thread-safe.  In particular, methods such as write(), finish(), and
-flush() must only be called from the main thread.  If you use multiple
-threads it is important to use IOLoop.add_callback to transfer control
-back to the main thread before finishing the request.
+In general, methods on `RequestHandler` and elsewhere in Tornado are
+not thread-safe.  In particular, methods such as
+`~RequestHandler.write()`, `~RequestHandler.finish()`, and
+`~RequestHandler.flush()` must only be called from the main thread.  If
+you use multiple threads it is important to use `.IOLoop.add_callback`
+to transfer control back to the main thread before finishing the
+request.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -103,11 +104,11 @@ except ImportError:
 
 
 class RequestHandler(object):
-    """Subclass this class and define get() or post() to make a handler.
+    """Subclass this class and define `get()` or `post()` to make a handler.
 
     If you want to support more methods than the standard GET/HEAD/POST, you
-    should override the class variable SUPPORTED_METHODS in your
-    RequestHandler class.
+    should override the class variable ``SUPPORTED_METHODS`` in your
+    `RequestHandler` subclass.
     """
     SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PATCH", "PUT",
                          "OPTIONS")
@@ -167,7 +168,7 @@ class RequestHandler(object):
 
     @property
     def settings(self):
-        """An alias for `self.application.settings`."""
+        """An alias for `self.application.settings <Application.settings>`."""
         return self.application.settings
 
     def head(self, *args, **kwargs):
@@ -253,10 +254,11 @@ class RequestHandler(object):
     def set_status(self, status_code, reason=None):
         """Sets the status code for our response.
 
-        :arg int status_code: Response status code. If `reason` is ``None``,
-            it must be present in `httplib.responses`.
+        :arg int status_code: Response status code. If ``reason`` is ``None``,
+            it must be present in `httplib.responses <http.client.responses>`.
         :arg string reason: Human-readable reason phrase describing the status
-            code. If ``None``, it will be filled in from `httplib.responses`.
+            code. If ``None``, it will be filled in from
+            `httplib.responses <http.client.responses>`.
         """
         self._status_code = status_code
         if reason is not None:
@@ -363,8 +365,8 @@ class RequestHandler(object):
         By default, this method decodes the argument as utf-8 and returns
         a unicode string, but this may be overridden in subclasses.
 
-        This method is used as a filter for both get_argument() and for
-        values extracted from the url and passed to get()/post()/etc.
+        This method is used as a filter for both `get_argument()` and for
+        values extracted from the url and passed to `get()`/`post()`/etc.
 
         The name of the argument is provided if known, but may be None
         (e.g. for unnamed groups in the url regex).
@@ -373,6 +375,7 @@ class RequestHandler(object):
 
     @property
     def cookies(self):
+        """An alias for `self.request.cookies <.httpserver.HTTPRequest.cookies>`."""
         return self.request.cookies
 
     def get_cookie(self, name, default=None):
@@ -496,8 +499,8 @@ class RequestHandler(object):
         To write the output to the network, use the flush() method below.
 
         If the given chunk is a dictionary, we write it as JSON and set
-        the Content-Type of the response to be application/json.
-        (if you want to send JSON as a different Content-Type, call
+        the Content-Type of the response to be ``application/json``.
+        (if you want to send JSON as a different ``Content-Type``, call
         set_header *after* calling write()).
 
         Note that lists are not converted to JSON because of a potential
@@ -604,8 +607,8 @@ class RequestHandler(object):
     def render_string(self, template_name, **kwargs):
         """Generate the given template with the given arguments.
 
-        We return the generated string. To generate and write a template
-        as a response, use render() above.
+        We return the generated byte string (in utf8). To generate and
+        write a template as a response, use render() above.
         """
         # If no template_path is specified, use the path of the calling file
         template_path = self.get_template_path()
@@ -823,9 +826,9 @@ class RequestHandler(object):
     def locale(self):
         """The local for the current session.
 
-        Determined by either get_user_locale, which you can override to
+        Determined by either `get_user_locale`, which you can override to
         set the locale based on, e.g., a user preference stored in a
-        database, or get_browser_locale, which uses the Accept-Language
+        database, or `get_browser_locale`, which uses the ``Accept-Language``
         header.
         """
         if not hasattr(self, "_locale"):
@@ -838,15 +841,15 @@ class RequestHandler(object):
     def get_user_locale(self):
         """Override to determine the locale from the authenticated user.
 
-        If None is returned, we fall back to get_browser_locale().
+        If None is returned, we fall back to `get_browser_locale()`.
 
-        This method should return a tornado.locale.Locale object,
-        most likely obtained via a call like tornado.locale.get("en")
+        This method should return a `tornado.locale.Locale` object,
+        most likely obtained via a call like ``tornado.locale.get("en")``
         """
         return None
 
     def get_browser_locale(self, default="en_US"):
-        """Determines the user's locale from Accept-Language header.
+        """Determines the user's locale from ``Accept-Language`` header.
 
         See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.4
         """
@@ -873,9 +876,9 @@ class RequestHandler(object):
     def current_user(self):
         """The authenticated user for this request.
 
-        Determined by either get_current_user, which you can override to
-        set the user based on, e.g., a cookie. If that method is not
-        overridden, this method always returns None.
+        This is a cached version of `get_current_user`, which you can
+        override to set the user based on, e.g., a cookie. If that
+        method is not overridden, this method always returns None.
 
         We lazy-load the current user the first time this method is called
         and cache the result after that.
@@ -891,7 +894,7 @@ class RequestHandler(object):
     def get_login_url(self):
         """Override to customize the login URL based on the request.
 
-        By default, we use the 'login_url' application setting.
+        By default, we use the ``login_url`` application setting.
         """
         self.require_setting("login_url", "@tornado.web.authenticated")
         return self.application.settings["login_url"]
@@ -899,7 +902,7 @@ class RequestHandler(object):
     def get_template_path(self):
         """Override to customize template path for each handler.
 
-        By default, we use the 'template_path' application setting.
+        By default, we use the ``template_path`` application setting.
         Return None to load templates relative to the calling file.
         """
         return self.application.settings.get("template_path")
@@ -925,21 +928,21 @@ class RequestHandler(object):
         return self._xsrf_token
 
     def check_xsrf_cookie(self):
-        """Verifies that the '_xsrf' cookie matches the '_xsrf' argument.
+        """Verifies that the ``_xsrf`` cookie matches the ``_xsrf`` argument.
 
-        To prevent cross-site request forgery, we set an '_xsrf'
+        To prevent cross-site request forgery, we set an ``_xsrf``
         cookie and include the same value as a non-cookie
-        field with all POST requests. If the two do not match, we
+        field with all ``POST`` requests. If the two do not match, we
         reject the form submission as a potential forgery.
 
-        The _xsrf value may be set as either a form field named _xsrf
-        or in a custom HTTP header named X-XSRFToken or X-CSRFToken
+        The ``_xsrf`` value may be set as either a form field named ``_xsrf``
+        or in a custom HTTP header named ``X-XSRFToken`` or ``X-CSRFToken``
         (the latter is accepted for compatibility with Django).
 
         See http://en.wikipedia.org/wiki/Cross-site_request_forgery
 
         Prior to release 1.1.1, this check was ignored if the HTTP header
-        "X-Requested-With: XMLHTTPRequest" was present.  This exception
+        ``X-Requested-With: XMLHTTPRequest`` was present.  This exception
         has been shown to be insecure and has been removed.  For more
         information please see
         http://www.djangoproject.com/weblog/2011/feb/08/security/
@@ -954,14 +957,17 @@ class RequestHandler(object):
             raise HTTPError(403, "XSRF cookie does not match POST argument")
 
     def xsrf_form_html(self):
-        """An HTML <input/> element to be included with all POST forms.
+        """An HTML ``<input/>`` element to be included with all POST forms.
 
-        It defines the _xsrf input value, which we check on all POST
+        It defines the ``_xsrf`` input value, which we check on all POST
         requests to prevent cross-site request forgery. If you have set
-        the 'xsrf_cookies' application setting, you must include this
+        the ``xsrf_cookies`` application setting, you must include this
         HTML within all of your HTML forms.
 
-        See check_xsrf_cookie() above for more information.
+        In a template, this method should be called with ``{% module
+        xsrf_form_html() %}``
+
+        See `check_xsrf_cookie()` above for more information.
         """
         return '<input type="hidden" name="_xsrf" value="' + \
             escape.xhtml_escape(self.xsrf_token) + '"/>'
@@ -969,11 +975,11 @@ class RequestHandler(object):
     def static_url(self, path, include_host=None):
         """Returns a static URL for the given relative static file path.
 
-        This method requires you set the 'static_path' setting in your
+        This method requires you set the ``static_path`` setting in your
         application (which specifies the root directory of your static
         files).
 
-        We append ?v=<signature> to the returned URL, which makes our
+        We append ``?v=<signature>`` to the returned URL, which makes our
         static file handler set an infinite expiration header on the
         returned content. The signature is based on the content of the
         file.
@@ -1143,9 +1149,10 @@ def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.
 
     If this decorator is given, the response is not finished when the
-    method returns. It is up to the request handler to call self.finish()
-    to finish the HTTP request. Without this decorator, the request is
-    automatically finished when the get() or post() method returns. ::
+    method returns. It is up to the request handler to call
+    `self.finish() <RequestHandler.finish>` to finish the HTTP
+    request. Without this decorator, the request is automatically
+    finished when the ``get()`` or ``post()`` method returns. Example::
 
        class MyRequestHandler(web.RequestHandler):
            @web.asynchronous
@@ -1172,7 +1179,7 @@ def asynchronous(method):
 def removeslash(method):
     """Use this decorator to remove trailing slashes from the request path.
 
-    For example, a request to ``'/foo/'`` would redirect to ``'/foo'`` with this
+    For example, a request to ``/foo/`` would redirect to ``/foo`` with this
     decorator. Your request handler mapping should use a regular expression
     like ``r'/foo/*'`` in conjunction with using the decorator.
     """
@@ -1195,9 +1202,9 @@ def removeslash(method):
 def addslash(method):
     """Use this decorator to add a missing trailing slash to the request path.
 
-    For example, a request to '/foo' would redirect to '/foo/' with this
+    For example, a request to ``/foo`` would redirect to ``/foo/`` with this
     decorator. Your request handler mapping should use a regular expression
-    like r'/foo/?' in conjunction with using the decorator.
+    like ``r'/foo/?'`` in conjunction with using the decorator.
     """
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
@@ -1226,35 +1233,36 @@ class Application(object):
         http_server.listen(8080)
         ioloop.IOLoop.instance().start()
 
-    The constructor for this class takes in a list of URLSpec objects
+    The constructor for this class takes in a list of `URLSpec` objects
     or (regexp, request_class) tuples. When we receive requests, we
     iterate over the list in order and instantiate an instance of the
     first request class whose regexp matches the request path.
 
-    Each tuple can contain an optional third element, which should be a
-    dictionary if it is present. That dictionary is passed as keyword
-    arguments to the contructor of the handler. This pattern is used
-    for the StaticFileHandler below (note that a StaticFileHandler
-    can be installed automatically with the static_path setting described
-    below)::
+    Each tuple can contain an optional third element, which should be
+    a dictionary if it is present. That dictionary is passed as
+    keyword arguments to the contructor of the handler. This pattern
+    is used for the `StaticFileHandler` in this example (note that a
+    `StaticFileHandler` can be installed automatically with the
+    static_path setting described below)::
 
         application = web.Application([
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
         ])
 
-    We support virtual hosts with the add_handlers method, which takes in
+    We support virtual hosts with the `add_handlers` method, which takes in
     a host regular expression as the first argument::
 
         application.add_handlers(r"www\.myhost\.com", [
             (r"/article/([0-9]+)", ArticleHandler),
         ])
 
-    You can serve static files by sending the static_path setting as a
-    keyword argument. We will serve those files from the /static/ URI
-    (this is configurable with the static_url_prefix setting),
-    and we will serve /favicon.ico and /robots.txt from the same directory.
-    A custom subclass of StaticFileHandler can be specified with the
-    static_handler_class setting.
+    You can serve static files by sending the ``static_path`` setting
+    as a keyword argument. We will serve those files from the
+    ``/static/`` URI (this is configurable with the
+    ``static_url_prefix`` setting), and we will serve ``/favicon.ico``
+    and ``/robots.txt`` from the same directory.  A custom subclass of
+    `StaticFileHandler` can be specified with the
+    ``static_handler_class`` setting.
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
                  wsgi=False, **settings):
@@ -1301,15 +1309,16 @@ class Application(object):
     def listen(self, port, address="", **kwargs):
         """Starts an HTTP server for this application on the given port.
 
-        This is a convenience alias for creating an HTTPServer object
-        and calling its listen method.  Keyword arguments not
-        supported by HTTPServer.listen are passed to the HTTPServer
-        constructor.  For advanced uses (e.g. preforking), do not use
-        this method; create an HTTPServer and call its bind/start
-        methods directly.
+        This is a convenience alias for creating an `.HTTPServer`
+        object and calling its listen method.  Keyword arguments not
+        supported by `HTTPServer.listen <.TCPServer.listen>` are passed to the
+        `.HTTPServer` constructor.  For advanced uses
+        (e.g. multi-process mode), do not use this method; create an
+        `.HTTPServer` and call its
+        `.TCPServer.bind`/`.TCPServer.start` methods directly.
 
         Note that after calling this method you still need to call
-        IOLoop.instance().start() to start the server.
+        ``IOLoop.instance().start()`` to start the server.
         """
         # import is here rather than top level because HTTPServer
         # is not importable on appengine
@@ -1361,7 +1370,6 @@ class Application(object):
                 self.named_handlers[spec.name] = spec
 
     def add_transform(self, transform_class):
-        """Adds the given OutputTransform to our transform list."""
         self.transforms.append(transform_class)
 
     def _get_host_handlers(self, request):
@@ -1456,11 +1464,11 @@ class Application(object):
         return handler
 
     def reverse_url(self, name, *args):
-        """Returns a URL path for handler named `name`
+        """Returns a URL path for handler named ``name``
 
-        The handler must be added to the application as a named URLSpec.
+        The handler must be added to the application as a named `URLSpec`.
 
-        Args will be substituted for capturing groups in the URLSpec regex.
+        Args will be substituted for capturing groups in the `URLSpec` regex.
         They will be converted to strings if necessary, encoded as utf8,
         and url-escaped.
         """
@@ -1474,7 +1482,7 @@ class Application(object):
         By default writes to the python root logger.  To change
         this behavior either subclass Application and override this method,
         or pass a function in the application settings dictionary as
-        'log_function'.
+        ``log_function``.
         """
         if "log_function" in self.settings:
             self.settings["log_function"](handler)
@@ -1493,8 +1501,13 @@ class Application(object):
 class HTTPError(Exception):
     """An exception that will turn into an HTTP error response.
 
+    Raising an `HTTPError` is a convenient alternative to calling
+    `RequestHandler.send_error` since it automatically ends the
+    current function.
+
     :arg int status_code: HTTP status code.  Must be listed in
-        `httplib.responses` unless the ``reason`` keyword argument is given.
+        `httplib.responses <http.client.responses>` unless the ``reason``
+        keyword argument is given.
     :arg string log_message: Message to be written to the log for this error
         (will not be shown to the user unless the `Application` is in debug
         mode).  May contain ``%s``-style placeholders, which will be filled
@@ -1521,7 +1534,7 @@ class HTTPError(Exception):
 
 
 class ErrorHandler(RequestHandler):
-    """Generates an error response with status_code for all requests."""
+    """Generates an error response with ``status_code`` for all requests."""
     def initialize(self, status_code):
         self.set_status(status_code)
 
@@ -1538,7 +1551,7 @@ class ErrorHandler(RequestHandler):
 class RedirectHandler(RequestHandler):
     """Redirects the client to the given URL for all GET requests.
 
-    You should provide the keyword argument "url" to the handler, e.g.::
+    You should provide the keyword argument ``url`` to the handler, e.g.::
 
         application = web.Application([
             (r"/oldpath", web.RedirectHandler, {"url": "/newpath"}),
@@ -1555,20 +1568,20 @@ class RedirectHandler(RequestHandler):
 class StaticFileHandler(RequestHandler):
     """A simple handler that can serve static content from a directory.
 
-    To map a path to this handler for a static data directory /var/www,
+    To map a path to this handler for a static data directory ``/var/www``,
     you would add a line to your application like::
 
         application = web.Application([
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
         ])
 
-    The local root directory of the content should be passed as the "path"
+    The local root directory of the content should be passed as the ``path``
     argument to the handler.
 
-    To support aggressive browser caching, if the argument "v" is given
+    To support aggressive browser caching, if the argument ``v`` is given
     with the path, we set an infinite HTTP expiration header. So, if you
     want browsers to cache a file indefinitely, send them to, e.g.,
-    /static/images/myimage.png?v=xxx. Override ``get_cache_time`` method for
+    ``/static/images/myimage.png?v=xxx``. Override `get_cache_time` method for
     more fine-grained cache control.
     """
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
@@ -1651,11 +1664,13 @@ class StaticFileHandler(RequestHandler):
     def get_cache_time(self, path, modified, mime_type):
         """Override to customize cache control behavior.
 
-        Return a positive number of seconds to trigger aggressive caching or 0
-        to mark resource as cacheable, only.
+        Return a positive number of seconds to make the result
+        cacheable for that amount of time or 0 to mark resource as
+        cacheable for an unspecified amount of time (subject to
+        browser heuristics).
 
         By default returns cache expiry of 10 years for resources requested
-        with "v" argument.
+        with ``v`` argument.
         """
         return self.CACHE_MAX_AGE if "v" in self.request.arguments else 0
 
@@ -1718,12 +1733,13 @@ class StaticFileHandler(RequestHandler):
 
 
 class FallbackHandler(RequestHandler):
-    """A RequestHandler that wraps another HTTP server callback.
+    """A `RequestHandler` that wraps another HTTP server callback.
 
-    The fallback is a callable object that accepts an HTTPRequest,
-    such as an Application or tornado.wsgi.WSGIContainer.  This is most
-    useful to use both tornado RequestHandlers and WSGI in the same server.
-    Typical usage::
+    The fallback is a callable object that accepts an
+    `~.httpserver.HTTPRequest`, such as an `Application` or
+    `tornado.wsgi.WSGIContainer`.  This is most useful to use both
+    Tornado ``RequestHandlers`` and WSGI in the same server.  Typical
+    usage::
 
         wsgi_app = tornado.wsgi.WSGIContainer(
             django.core.handlers.wsgi.WSGIHandler())
@@ -1837,7 +1853,11 @@ class ChunkedTransferEncoding(OutputTransform):
 
 
 def authenticated(method):
-    """Decorate methods with this to require that the user be logged in."""
+    """Decorate methods with this to require that the user be logged in.
+
+    If the user is not logged in, they will be redirected to the configured
+    `login url <RequestHandler.get_login_url>`.
+    """
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if not self.current_user:
@@ -1858,7 +1878,7 @@ def authenticated(method):
 
 
 class UIModule(object):
-    """A UI re-usable, modular unit on a page.
+    """A re-usable, modular UI unit on a page.
 
     UI modules often execute additional queries, and they can include
     additional CSS and JavaScript that will be included in the output
@@ -1985,21 +2005,19 @@ class TemplateModule(UIModule):
 class URLSpec(object):
     """Specifies mappings between URLs and handlers."""
     def __init__(self, pattern, handler_class, kwargs=None, name=None):
-        """Creates a URLSpec.
+        """Parameters:
 
-        Parameters:
+        * ``pattern``: Regular expression to be matched.  Any groups
+          in the regex will be passed in to the handler's get/post/etc
+          methods as arguments.
 
-        pattern: Regular expression to be matched.  Any groups in the regex
-            will be passed in to the handler's get/post/etc methods as
-            arguments.
+        * ``handler_class``: `RequestHandler` subclass to be invoked.
 
-        handler_class: RequestHandler subclass to be invoked.
+        * ``kwargs`` (optional): A dictionary of additional arguments
+          to be passed to the handler's constructor.
 
-        kwargs (optional): A dictionary of additional arguments to be passed
-            to the handler's constructor.
-
-        name (optional): A name for this handler.  Used by
-            Application.reverse_url.
+        * ``name`` (optional): A name for this handler.  Used by
+          `Application.reverse_url`.
         """
         if not pattern.endswith('$'):
             pattern += '$'

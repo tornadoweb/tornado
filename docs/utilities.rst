@@ -4,10 +4,11 @@ Utilities
 .. toctree::
 
    autoreload
-   gen
+   concurrent
    httputil
    log
    options
    process
    stack_context
    testing
+   util

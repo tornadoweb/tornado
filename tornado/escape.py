@@ -54,7 +54,7 @@ _XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}
 
 
 def xhtml_escape(value):
-    """Escapes a string so it is valid within XML or XHTML."""
+    """Escapes a string so it is valid within HTML or XML."""
     return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)],
                                 to_basestring(value))
 
@@ -86,7 +86,7 @@ def squeeze(value):
 
 
 def url_escape(value):
-    """Returns a valid URL-encoded version of the given value."""
+    """Returns a URL-encoded version of the given value."""
     return urllib_parse.quote_plus(utf8(value))
 
 # python 3 changed things around enough that we need two separate
@@ -231,9 +231,9 @@ def linkify(text, shorten=False, extra_params="",
 
     Parameters:
 
-    shorten: Long urls will be shortened for display.
+    * ``shorten``: Long urls will be shortened for display.
 
-    extra_params: Extra text to include in the link tag, or a callable
+    * ``extra_params``: Extra text to include in the link tag, or a callable
         taking the link as an argument and returning the extra text
         e.g. ``linkify(text, extra_params='rel="nofollow" class="external"')``,
         or::
@@ -245,12 +245,13 @@ def linkify(text, shorten=False, extra_params="",
                     return 'class="external" rel="nofollow"'
             linkify(text, extra_params=extra_params_cb)
 
-    require_protocol: Only linkify urls which include a protocol. If this is
-        False, urls such as www.facebook.com will also be linkified.
+    * ``require_protocol``: Only linkify urls which include a protocol. If
+        this is False, urls such as www.facebook.com will also be linkified.
 
-    permitted_protocols: List (or set) of protocols which should be linkified,
-        e.g. linkify(text, permitted_protocols=["http", "ftp", "mailto"]).
-        It is very unsafe to include protocols such as "javascript".
+    * ``permitted_protocols``: List (or set) of protocols which should be
+        linkified, e.g. ``linkify(text, permitted_protocols=["http", "ftp",
+        "mailto"])``. It is very unsafe to include protocols such as
+        ``javascript``.
     """
     if extra_params and not callable(extra_params):
         extra_params = " " + extra_params.strip()

@@ -25,7 +25,7 @@ except ImportError:
 
 kwargs = {}
 
-version = "2.4.post4"
+version = "3.0b1"
 
 distutils.core.setup(
     name="tornado",

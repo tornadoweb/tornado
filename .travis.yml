@@ -28,7 +28,7 @@ script:
     - LANG=C python -m tornado.test.runtests
     - LANG=en_US.utf-8 python -m tornado.test.runtests
     - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python -bb -m tornado.test.runtests; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 3* || $DEPS == true ]]; then python -m tornado.test.runtests --resolver=tornado.netutil.ThreadedResolver; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != pypy && $DEPS == true ]]; then python -m tornado.test.runtests --resolver=tornado.netutil.ThreadedResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python -m tornado.test.runtests --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python -m tornado.test.runtests --ioloop_time_monotonic; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python -m tornado.test.runtests --ioloop=tornado.platform.twisted.TwistedIOLoop; fi

@@ -7,28 +7,28 @@ In progress
 Highlights
 ^^^^^^^^^^
 
-* The ``callback`` argument to many asynchronous methods is now optional,
-  and these methods return a `Future`.  The `tornado.gen` module now
-  understands `Futures`, and these methods can be used directly without
-  a `gen.Task` wrapper.
-* New function `IOLoop.current` returns the `IOLoop` that is running
-  on the current thread (as opposed to `IOLoop.instance`, which
+* The ``callback`` argument to many asynchronous methods is now
+  optional, and these methods return a `.Future`.  The `tornado.gen`
+  module now understands ``Futures``, and these methods can be used
+  directly without a `.gen.Task` wrapper.
+* New function `.IOLoop.current` returns the `.IOLoop` that is running
+  on the current thread (as opposed to `.IOLoop.instance`, which
   returns a specific thread's (usually the main thread's) IOLoop.
 * New class `tornado.netutil.Resolver` provides an asynchronous
   interface to DNS resolution.  The default implementation is still
   blocking, but non-blocking implementations are available using one
   of three optional dependencies: `~tornado.netutil.ThreadedResolver`
   using the `concurrent.futures` thread pool,
-  `~tornado.platform.caresresolver.CaresResolver` using the `pycares`
-  library, or `~tornado.platform.twisted.TwistedResolver` using `twisted`
+  ``tornado.platform.caresresolver.CaresResolver`` using the ``pycares``
+  library, or ``tornado.platform.twisted.TwistedResolver`` using ``twisted``
 * Tornado's logging is now less noisy, and it no longer goes directly
   to the root logger, allowing for finer-grained configuration.
 * New class `tornado.process.Subprocess` wraps `subprocess.Popen` with
-  `PipeIOStream` access to the child's file descriptors.
-* `IOLoop` now has a static ``configure`` method like the one on
-  `AsyncHTTPClient`, which can be used to select an IOLoop implementation
-  other than the default.
-* `IOLoop` can now optionally use a monotonic clock if available
+  `.PipeIOStream` access to the child's file descriptors.
+* `.IOLoop` now has a static `configure <.Configurable.configure>`
+  method like the one on `.AsyncHTTPClient`, which can be used to
+  select an `.IOLoop` implementation other than the default.
+* `.IOLoop` can now optionally use a monotonic clock if available
   (see below for more details).
 
 
@@ -40,14 +40,15 @@ Backwards-incompatible changes
 * The ``tornado.database`` module has been removed.  It is now available
   as a separate package, `torndb <https://github.com/bdarnell/torndb>`_
 * Functions that take an ``io_loop`` parameter now default to
-  `IOLoop.current()` instead of `IOLoop.instance()`.
+  `.IOLoop.current()` instead of `.IOLoop.instance()`.
 * Empty HTTP request arguments are no longer ignored.  This applies to
   ``HTTPRequest.arguments`` and ``RequestHandler.get_argument[s]``
   in WSGI and non-WSGI modes.
 * On Python 3, `tornado.escape.json_encode` no longer accepts byte strings.
 * On Python 3, the ``get_authenticated_user`` methods in `tornado.auth`
   now return character strings instead of byte strings.
-* `tornado.netutil.TCPServer` has moved to its own module, `tornado.tcpserver`.
+* ``tornado.netutil.TCPServer`` has moved to its own module,
+  `tornado.tcpserver`.
 * The Tornado test suite now requires ``unittest2`` when run on Python 2.6.
 
 
@@ -61,10 +62,10 @@ Multiple modules
   scheme can be found under the `tornado.log` module.  Note that in some
   cases this will require that you add an explicit logging configuration
   in order to see any output (perhaps just calling ``logging.basicConfig()``),
-  although both `IOLoop.start()` and `tornado.options.parse_command_line`
+  although both `.IOLoop.start()` and `tornado.options.parse_command_line`
   will do this for you.
 * On python 3.2+, methods that take an ``ssl_options`` argument (on
-  `SSLIOStream`, `TCPServer`, and `HTTPServer`) now accept either a
+  `.SSLIOStream`, `.TCPServer`, and `.HTTPServer`) now accept either a
   dictionary of options or an `ssl.SSLContext` object.
 * New optional dependency on `concurrent.futures` to provide better support
   for working with threads.  `concurrent.futures` is in the standard library
@@ -76,10 +77,10 @@ Multiple modules
 
 * `tornado.autoreload` is now more reliable when there are errors at import
   time.
-* Calling `tornado.autoreload.start` (or creating an `Application` with
-  ``debug=True``) twice on the same `IOLoop` now does nothing (instead of
+* Calling `tornado.autoreload.start` (or creating an `.Application` with
+  ``debug=True``) twice on the same `.IOLoop` now does nothing (instead of
   creating multiple periodic callbacks).  Starting autoreload on
-  more than one `IOLoop` in the same process now logs a warning.
+  more than one `.IOLoop` in the same process now logs a warning.
 * Scripts run by autoreload no longer inherit ``__future__`` imports
   used by Tornado.
 
@@ -88,16 +89,16 @@ Multiple modules
 
 * On Python 3, the ``get_authenticated_user`` method family now returns
   character strings instead of byte strings.
-* Asynchronous methods defined in `tornado.auth` now return a `Future`,
-  and their ``callback`` argument is optional.  The `Future` interface is
-  preferred as it offers better error handling (the previous interface
-  just logged a warning and returned None).
+* Asynchronous methods defined in `tornado.auth` now return a
+  `.Future`, and their ``callback`` argument is optional.  The
+  ``Future`` interface is preferred as it offers better error handling
+  (the previous interface just logged a warning and returned None).
 * The `tornado.auth` mixin classes now define a method
   ``get_auth_http_client``, which can be overridden to use a non-default
-  `AsyncHTTPClient` instance (e.g. to use a different `IOLoop`)
-* Subclasses of `OAuthMixin` are encouraged to override
-  `_oauth_get_user_future` instead of `_oauth_get_user`, although both
-  methods are still supported.
+  `.AsyncHTTPClient` instance (e.g. to use a different `.IOLoop`)
+* Subclasses of `.OAuthMixin` are encouraged to override
+  `.OAuthMixin._oauth_get_user_future` instead of ``_oauth_get_user``,
+  although both methods are still supported.
 
 `tornado.concurrent`
 ~~~~~~~~~~~~~~~~~~~~
@@ -106,10 +107,10 @@ Multiple modules
   `concurrent.futures`, or to emulate future-based interface when that module
   is not available.
 
-`tornado.curl_httpclient`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+``tornado.curl_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Preliminary support for `tornado.curl_httpclient` on Python 3.  The latest
+* Preliminary support for ``tornado.curl_httpclient`` on Python 3.  The latest
   official release of pycurl only supports Python 2, but Ubuntu has a
   port available in 12.10 (``apt-get install python3-pycurl``).  This port
   currently has bugs that prevent it from handling arbitrary binary data
@@ -128,14 +129,15 @@ Multiple modules
 ~~~~~~~~~~~~~
 
 * New decorator ``@gen.coroutine`` is available as an alternative to
-  ``@gen.engine``.  It automatically returns a `Future`, and within the
-  function instead of calling a callback you return a value with
-  ``raise gen.Return(value)`` (or simply ``return value`` in Python 3.3).
-* Generators may now yield ``Future`` objects.
-* Callbacks produced by `gen.Callback` and `gen.Task` are now automatically
+  ``@gen.engine``.  It automatically returns a
+  `.Future`, and within the function instead of
+  calling a callback you return a value with ``raise
+  gen.Return(value)`` (or simply ``return value`` in Python 3.3).
+* Generators may now yield `.Future` objects.
+* Callbacks produced by `.gen.Callback` and `.gen.Task` are now automatically
   stack-context-wrapped, to minimize the risk of context leaks when used
   with asynchronous functions that don't do their own wrapping.
-* Fixed a memory leak involving generators, `RequestHandler.flush`,
+* Fixed a memory leak involving generators, `.RequestHandler.flush`,
   and clients closing connections while output is being written.
 * Yielding a large list no longer has quadratic performance.
 
@@ -143,36 +145,37 @@ Multiple modules
 `tornado.httpclient`
 ~~~~~~~~~~~~~~~~~~~~
 
-* `AsyncHTTPClient.fetch` now returns a ``Future`` and its callback argument
+* `.AsyncHTTPClient.fetch` now returns a `.Future` and its callback argument
   is optional.  When the future interface is used, any error will be raised
-  automatically, as if `HTTPResponse.rethrow` was called.
-* `AsyncHTTPClient.configure` and all `AsyncHTTPClient` constructors
+  automatically, as if `.HTTPResponse.rethrow` was called.
+* `.AsyncHTTPClient.configure` and all `.AsyncHTTPClient` constructors
   now take a ``defaults`` keyword argument.  This argument should be a
   dictionary, and its values will be used in place of corresponding
-  attributes of `HTTPRequest` that are not set.
-* All unset attributes of `tornado.httpclient.HTTPRequest` are now ``None``.
-  The default values of some attributes (``connect_timeout``,
-  ``request_timeout``, ``follow_redirects``, ``max_redirects``,
-  ``use_gzip``, ``proxy_password``, ``allow_nonstandard_methods``,
-  and ``validate_cert`` have been moved from `HTTPRequest` to the
-  client implementations.
-* The ``max_clients`` argument to `AsyncHTTPClient` is now a keyword-only
+  attributes of `~tornado.httpclient.HTTPRequest` that are not set.
+* All unset attributes of `tornado.httpclient.HTTPRequest` are now
+  ``None``.  The default values of some attributes
+  (``connect_timeout``, ``request_timeout``, ``follow_redirects``,
+  ``max_redirects``, ``use_gzip``, ``proxy_password``,
+  ``allow_nonstandard_methods``, and ``validate_cert`` have been moved
+  from `~tornado.httpclient.HTTPRequest` to the client
+  implementations.
+* The ``max_clients`` argument to `.AsyncHTTPClient` is now a keyword-only
   argument.
-* Keyword arguments to `AsyncHTTPClient.configure` are no longer used
+* Keyword arguments to `.AsyncHTTPClient.configure` are no longer used
   when instantiating an implementation subclass directly.
-* Secondary `AsyncHTTPClient` callbacks (``streaming_callback``,
+* Secondary `.AsyncHTTPClient` callbacks (``streaming_callback``,
   ``header_callback``, and ``prepare_curl_callback``) now respect
-  `StackContext`.
+  `.StackContext`.
 
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
 
-* `HTTPServer` no longer logs an error when it is unable to read a second
+* `.HTTPServer` no longer logs an error when it is unable to read a second
   request from an HTTP 1.1 keep-alive connection.
-* `HTTPServer` now takes a ``protocol`` keyword argument which can be set
+* `.HTTPServer` now takes a ``protocol`` keyword argument which can be set
   to ``https`` if the server is behind an SSL-decoding proxy that does not
   set any supported X-headers.
-* `tornado.httpserver.HTTPConnection` now has a `set_close_callback`
+* `tornado.httpserver.HTTPConnection` now has a ``set_close_callback``
   method that should be used instead of reaching into its ``stream``
   attribute.
 * Empty HTTP request arguments are no longer ignored.  This applies to
@@ -182,63 +185,63 @@ Multiple modules
 `tornado.ioloop`
 ~~~~~~~~~~~~~~~~
 
-* New function `IOLoop.current` returns the ``IOLoop`` that is running
-  on the current thread (as opposed to `IOLoop.instance`, which returns a
+* New function `.IOLoop.current` returns the ``IOLoop`` that is running
+  on the current thread (as opposed to `.IOLoop.instance`, which returns a
   specific thread's (usually the main thread's) IOLoop).
-* New method `IOLoop.add_future` to run a callback on the IOLoop when
-  an asynchronous ``Future`` finishes.
-* `IOLoop` now has a static ``configure`` method like the one on
-  `AsyncHTTPClient`, which can be used to select an IOLoop implementation
-  other than the default.
-* The `IOLoop` poller implementations (``select``, ``epoll``, ``kqueue``)
-  are now available as distinct subclasses of `IOLoop`.  Instantiating
-  `IOLoop` will continue to automatically choose the best available
+* New method `.IOLoop.add_future` to run a callback on the IOLoop when
+  an asynchronous `.Future` finishes.
+* `.IOLoop` now has a static `configure <.Configurable.configure>`
+  method like the one on `.AsyncHTTPClient`, which can be used to
+  select an `.IOLoop` implementation other than the default.
+* The `.IOLoop` poller implementations (``select``, ``epoll``, ``kqueue``)
+  are now available as distinct subclasses of `.IOLoop`.  Instantiating
+  `.IOLoop` will continue to automatically choose the best available
   implementation.
-* The `IOLoop` constructor has a new keyword argument ``time_func``,
+* The `.IOLoop` constructor has a new keyword argument ``time_func``,
   which can be used to set the time function used when scheduling callbacks.
-  This is most useful with the `time.monotonic()` function, introduced
+  This is most useful with the `time.monotonic` function, introduced
   in Python 3.3 and backported to older versions via the ``monotime``
   module.  Using a monotonic clock here avoids problems when the system
   clock is changed.
-* New function `IOLoop.time` returns the current time according to the
+* New function `.IOLoop.time` returns the current time according to the
   IOLoop.  To use the new monotonic clock functionality, all calls to
-  `IOLoop.add_timeout` must be either pass a `datetime.timedelta` or
-  a time relative to `IOLoop.time`, not `time.time`.  (`time.time` will
+  `.IOLoop.add_timeout` must be either pass a `datetime.timedelta` or
+  a time relative to `.IOLoop.time`, not `time.time`.  (`time.time` will
   continue to work only as long as the IOLoop's ``time_func`` argument
   is not used).
-* New convenience method `IOLoop.run_sync` can be used to start an IOLoop
+* New convenience method `.IOLoop.run_sync` can be used to start an IOLoop
   just long enough to run a single coroutine.
-* New method `IOLoop.add_callback_from_signal` is safe to use in a signal
-  handler (the regular `add_callback` method may deadlock).
-* `IOLoop` now uses `signal.set_wakeup_fd` where available (Python 2.6+
+* New method `.IOLoop.add_callback_from_signal` is safe to use in a signal
+  handler (the regular `.add_callback` method may deadlock).
+* `.IOLoop` now uses `signal.set_wakeup_fd` where available (Python 2.6+
   on Unix) to avoid a race condition that could result in Python signal
   handlers being delayed.
-* Method `IOLoop.running()` has been removed.
-* `IOLoop` has been refactored to better support subclassing.
-* `IOLoop.add_callback` and `add_callback_from_signal` now take
+* Method ``IOLoop.running()`` has been removed.
+* `.IOLoop` has been refactored to better support subclassing.
+* `.IOLoop.add_callback` and `.add_callback_from_signal` now take
   ``*args, **kwargs`` to pass along to the callback.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
 
-* `IOStream.connect` now has an optional ``server_hostname`` argument
+* `.IOStream.connect` now has an optional ``server_hostname`` argument
   which will be used for SSL certificate validation when applicable.
   Additionally, when supported (on Python 3.2+), this hostname
-  will be sent via SNI (and this is supported by `tornado.simple_httpclient`)
-* Much of `IOStream` has been refactored into a separate class
-  `BaseIOStream`.
+  will be sent via SNI (and this is supported by ``tornado.simple_httpclient``)
+* Much of `.IOStream` has been refactored into a separate class
+  `.BaseIOStream`.
 * New class `tornado.iostream.PipeIOStream` provides the IOStream
   interface on pipe file descriptors.
-* `IOStream` now raises a new exception
-  `tornado.iostream.StreamClosedError` when you attempt to read or
+* `.IOStream` now raises a new exception
+  ``tornado.iostream.StreamClosedError`` when you attempt to read or
   write after the stream has been closed (by either side).
-* `IOStream` now simply closes the connection when it gets an
+* `.IOStream` now simply closes the connection when it gets an
   ``ECONNRESET`` error, rather than logging it as an error.
-* `IOStream.error` no longer picks up unrelated exceptions.
-* `IOStream.close` now has an ``exc_info`` argument (similar to the
+* ``IOStream.error`` no longer picks up unrelated exceptions.
+* `.BaseIOStream.close` now has an ``exc_info`` argument (similar to the
   one used in the `logging` module) that can be used to set the stream's
   ``error`` attribute when closing it.
-* `IOStream.read_until_close` now works correctly when it is called
+* `.BaseIOStream.read_until_close` now works correctly when it is called
   while there is buffered data.
 * Fixed a major performance regression when run on PyPy (introduced in
   Tornado 2.3).
@@ -246,9 +249,9 @@ Multiple modules
 `tornado.log`
 ~~~~~~~~~~~~~
 
-* New module containing `enable_pretty_logging` and `LogFormatter`,
+* New module containing `.enable_pretty_logging` and `.LogFormatter`,
   moved from the options module.
-* `LogFormatter` now handles non-ascii data in messages and tracebacks better.
+* `.LogFormatter` now handles non-ascii data in messages and tracebacks better.
 
 `tornado.netutil`
 ~~~~~~~~~~~~~~~~~
@@ -258,8 +261,8 @@ Multiple modules
   blocking, but non-blocking implementations are available using one
   of three optional dependencies: `~tornado.netutil.ThreadedResolver`
   using the `concurrent.futures` thread pool,
-  `~tornado.platform.caresresolver.CaresResolver` using the `pycares`
-  library, or `~tornado.platform.twisted.TwistedResolver` using `twisted`
+  `tornado.platform.caresresolver.CaresResolver` using the ``pycares``
+  library, or `tornado.platform.twisted.TwistedResolver` using ``twisted``
 * New function `tornado.netutil.is_valid_ip` returns true if a given string
   is a valid IP (v4 or v6) address.
 * `tornado.netutil.bind_sockets` has a new ``flags`` argument that can
@@ -269,7 +272,7 @@ Multiple modules
 * `tornado.netutil.bind_sockets` now works when Python was compiled
   with ``--disable-ipv6`` but IPv6 DNS resolution is available on the
   system.
-* `tornado.netutil.TCPServer` has moved to its own module, `tornado.tcpserver`.
+* ``tornado.netutil.TCPServer`` has moved to its own module, `tornado.tcpserver`.
 
 `tornado.options`
 ~~~~~~~~~~~~~~~~~
@@ -278,7 +281,7 @@ Multiple modules
   (`tornado.options.OptionParser`).  This can be used to create multiple
   independent option sets, such as for subcommands.
 * `tornado.options.parse_config_file` now configures logging automatically
-  by default, in the same way that `parse_command_line` does.
+  by default, in the same way that `~tornado.options.parse_command_line` does.
 * New function `tornado.options.add_parse_callback` schedules a callback
   to be run after the command line or config file has been parsed.  The
   keyword argument ``final=False`` can be used on either parsing function
@@ -287,60 +290,61 @@ Multiple modules
   will be run with the new value whenever the option is changed.  This is
   especially useful for options that set other options, such as by reading
   from a config file.
-* `tornado.option.parse_command_line` ``--help`` output now goes to ``stderr``
+* `tornado.options.parse_command_line` ``--help`` output now goes to ``stderr``
   rather than ``stdout``.
 * `tornado.options.options` is no longer a subclass of `dict`; attribute-style
   access is now required.
-* `tornado.options.options` (and `OptionParser` instances generally) now
-  have a `mockable()` method that returns a wrapper object compatible with
-  `mock.patch`.
-* Function `tornado.options.enable_pretty_logging` has been moved to the
+* `tornado.options.options` (and `.OptionParser` instances generally) now
+  have a `.mockable()` method that returns a wrapper object compatible with
+  `mock.patch <unittest.mock.patch>`.
+* Function ``tornado.options.enable_pretty_logging`` has been moved to the
   `tornado.log` module.
 
 `tornado.platform.caresresolver`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* New module containing an asynchronous implementation of the `Resolver`
-  interface, using the `pycares` library.
+* New module containing an asynchronous implementation of the `.Resolver`
+  interface, using the ``pycares`` library.
 
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * New class `tornado.platform.twisted.TwistedIOLoop` allows Tornado
   code to be run on the Twisted reactor (as opposed to the existing
-  `TornadoReactor`, which bridges the gap in the other direction).
+  `.TornadoReactor`, which bridges the gap in the other direction).
 * New class `tornado.platform.twisted.TwistedResolver` is an asynchronous
-  implementation of the `Resolver` interface.
+  implementation of the `.Resolver` interface.
 
 `tornado.process`
 ~~~~~~~~~~~~~~~~~
 
 * New class `tornado.process.Subprocess` wraps `subprocess.Popen` with
-  `PipeIOStream` access to the child's file descriptors.
+  `.PipeIOStream` access to the child's file descriptors.
 
-`tornado.simple_httpclient`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* `SimpleAsyncHTTPClient` now takes a ``resolver`` keyword argument (which
-  may be passed to either the constructor or ``configure``), to allow it to
-  use the new non-blocking `tornado.netutil.Resolver`.
-* When following redirects, `SimpleAsyncHTTPClient` now treats a 302
+* ``SimpleAsyncHTTPClient`` now takes a ``resolver`` keyword argument
+  (which may be passed to either the constructor or `configure
+  <.Configurable.configure>`), to allow it to use the new non-blocking
+  `tornado.netutil.Resolver`.
+* When following redirects, ``SimpleAsyncHTTPClient`` now treats a 302
   response code the same as a 303.  This is contrary to the HTTP spec
   but consistent with all browsers and other major HTTP clients
-  (including `CurlAsyncHTTPClient`).
-* The behavior of ``header_callback`` with `SimpleAsyncHTTPClient` has
-  changed and is now the same as that of `CurlAsyncHTTPClient`.  The
+  (including ``CurlAsyncHTTPClient``).
+* The behavior of ``header_callback`` with ``SimpleAsyncHTTPClient`` has
+  changed and is now the same as that of ``CurlAsyncHTTPClient``.  The
   header callback now receives the first line of the response (e.g.
   ``HTTP/1.0 200 OK``) and the final empty line.
-* `simple_httpclient` now accepts responses with a 304 status code that
-  include a ``Content-Length`` header.
-* Fixed a bug in which `SimpleAsyncHTTPClient` callbacks were being run in the
+* ``tornado.simple_httpclient`` now accepts responses with a 304
+  status code that include a ``Content-Length`` header.
+* Fixed a bug in which ``SimpleAsyncHTTPClient`` callbacks were being run in the
   client's ``stack_context``.
 
 `tornado.stack_context`
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* `stack_context.wrap` now runs the wrapped callback in a more consistent
+* `.stack_context.wrap` now runs the wrapped callback in a more consistent
   environment by recreating contexts even if they already exist on the
   stack.
 * Fixed a bug in which stack contexts could leak from one callback
@@ -370,7 +374,7 @@ Multiple modules
   using the same port.  ``get_unused_port`` is now deprecated.
 * New decorator `tornado.testing.gen_test` can be used to allow for
   yielding `tornado.gen` objects in tests, as an alternative to the
-  ``stop`` and ``wait`` methods of `AsyncTestCase`.
+  ``stop`` and ``wait`` methods of `.AsyncTestCase`.
 * `tornado.testing.AsyncTestCase` and friends now extend ``unittest2.TestCase``
   when it is available (and continue to use the standard ``unittest`` module
   when ``unittest2`` is not available)
@@ -383,26 +387,26 @@ Multiple modules
   been removed.  Use ``python -m tornado.autoreload`` as a prefix command
   instead.
 * The ``--httpclient`` option of `tornado.testing.main` has been moved
-  to `tornado.test.runtests` so as not to pollute the application
+  to ``tornado.test.runtests`` so as not to pollute the application
   option namespace.  The `tornado.options` module's new callback
   support now makes it easy to add options from a wrapper script
   instead of putting all possible options in `tornado.testing.main`.
-* `AsyncHTTPTestCase` no longer calls `AsyncHTTPClient.close` for tests
-  that use the singleton `IOLoop.instance`.
-* `LogTrapTestCase` no longer fails when run in unknown logging
+* `.AsyncHTTPTestCase` no longer calls `.AsyncHTTPClient.close` for tests
+  that use the singleton `.IOLoop.instance`.
+* `.LogTrapTestCase` no longer fails when run in unknown logging
   configurations.  This allows tests to be run under nose, which does its
-  own log buffering (`LogTrapTestCase` doesn't do anything useful in this
+  own log buffering (`.LogTrapTestCase` doesn't do anything useful in this
   case, but at least it doesn't break things any more).
 
-`tornado.util`
-~~~~~~~~~~~~~~
+``tornado.util``
+~~~~~~~~~~~~~~~~
 
-* `tornado.util.b` (which was only intended for internal use) is gone.
+* ``tornado.util.b`` (which was only intended for internal use) is gone.
 
 `tornado.web`
 ~~~~~~~~~~~~~
 
-* `RequestHandler.set_header` now overwrites previous header values
+* `.RequestHandler.set_header` now overwrites previous header values
   case-insensitively.
 * `tornado.web.RequestHandler` has new attributes ``path_args`` and
   ``path_kwargs``, which contain the positional and keyword arguments
@@ -417,12 +421,12 @@ Multiple modules
   "HTTP/1.1 404 Not Found").  It is now possible to set status codes other
   than those defined in the spec, as long as a reason string is given.
 * The ``Date`` HTTP header is now set by default on all responses.
-* ``Etag``/``If-None-Match`` requests now work with `StaticFileHandler`.
-* `StaticFileHandler` no longer sets ``Cache-Control: public`` unnecessarily.
+* ``Etag``/``If-None-Match`` requests now work with `.StaticFileHandler`.
+* `.StaticFileHandler` no longer sets ``Cache-Control: public`` unnecessarily.
 * When gzip is enabled in a `tornado.web.Application`, appropriate
   ``Vary: Accept-Encoding`` headers are now sent.
 * It is no longer necessary to pass all handlers for a host in a single
-  `Application.add_handlers` call.  Now the request will be matched
+  `.Application.add_handlers` call.  Now the request will be matched
   against the handlers for any ``host_pattern`` that includes the request's
   ``Host`` header.
 
@@ -430,6 +434,7 @@ Multiple modules
 ~~~~~~~~~~~~~~~~~~~
 
 * Client-side WebSocket support is now available:
-  `tornado.websocket.WebSocketConnect`
-* `WebSocketHandler` has new methods `ping` and `on_pong` to send pings
-  to the browser (not supported on the ``draft76`` protocol)
+  `tornado.websocket.websocket_connect`
+* `.WebSocketHandler` has new methods `~.WebSocketHandler.ping` and
+  `~.WebSocketHandler.on_pong` to send pings to the browser (not
+  supported on the ``draft76`` protocol)

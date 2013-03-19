@@ -14,20 +14,21 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""StackContext allows applications to maintain threadlocal-like state
+"""`StackContext` allows applications to maintain threadlocal-like state
 that follows execution as it moves to other execution contexts.
 
 The motivating examples are to eliminate the need for explicit
-async_callback wrappers (as in tornado.web.RequestHandler), and to
+``async_callback`` wrappers (as in `tornado.web.RequestHandler`), and to
 allow some additional context to be kept for logging.
 
-This is slightly magic, but it's an extension of the idea that an exception
-handler is a kind of stack-local state and when that stack is suspended
-and resumed in a new context that state needs to be preserved.  StackContext
-shifts the burden of restoring that state from each call site (e.g.
-wrapping each AsyncHTTPClient callback in async_callback) to the mechanisms
-that transfer control from one context to another (e.g. AsyncHTTPClient
-itself, IOLoop, thread pools, etc).
+This is slightly magic, but it's an extension of the idea that an
+exception handler is a kind of stack-local state and when that stack
+is suspended and resumed in a new context that state needs to be
+preserved.  `StackContext` shifts the burden of restoring that state
+from each call site (e.g.  wrapping each `.AsyncHTTPClient` callback
+in ``async_callback``) to the mechanisms that transfer control from
+one context to another (e.g. `.AsyncHTTPClient` itself, `.IOLoop`,
+thread pools, etc).
 
 Example usage::
 
@@ -52,7 +53,7 @@ Here are a few rules of thumb for when it's necessary:
 * If you're writing an asynchronous library that doesn't rely on a
   stack_context-aware library like `tornado.ioloop` or `tornado.iostream`
   (for example, if you're writing a thread pool), use
-  `stack_context.wrap()` before any asynchronous operations to capture the
+  `.stack_context.wrap()` before any asynchronous operations to capture the
   stack context from where the operation was started.
 
 * If you're writing an asynchronous library that has some shared
@@ -151,11 +152,11 @@ class StackContext(object):
 class ExceptionStackContext(object):
     """Specialization of StackContext for exception handling.
 
-    The supplied exception_handler function will be called in the
+    The supplied ``exception_handler`` function will be called in the
     event of an uncaught exception in this context.  The semantics are
     similar to a try/finally clause, and intended use cases are to log
     an error, close a socket, or similar cleanup actions.  The
-    exc_info triple (type, value, traceback) will be passed to the
+    ``exc_info`` triple ``(type, value, traceback)`` will be passed to the
     exception_handler function.
 
     If the exception handler returns true, the exception will be
@@ -188,11 +189,11 @@ class ExceptionStackContext(object):
 
 
 class NullContext(object):
-    """Resets the StackContext.
+    """Resets the `StackContext`.
 
-    Useful when creating a shared resource on demand (e.g. an AsyncHTTPClient)
-    where the stack that caused the creating is not relevant to future
-    operations.
+    Useful when creating a shared resource on demand (e.g. an
+    `.AsyncHTTPClient`) where the stack that caused the creating is
+    not relevant to future operations.
     """
     def __enter__(self):
         self.old_contexts = _state.contexts
@@ -207,7 +208,7 @@ class _StackContextWrapper(functools.partial):
 
 
 def wrap(fn):
-    """Returns a callable object that will restore the current StackContext
+    """Returns a callable object that will restore the current `StackContext`
     when executed.
 
     Use this whenever saving a callback to be executed later in a

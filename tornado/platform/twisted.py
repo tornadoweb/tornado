@@ -22,6 +22,8 @@ This module lets you run applications and libraries written for
 Twisted in a Tornado application.  It can be used in two modes,
 depending on which library's underlying event loop you want to use.
 
+This module has been tested with Twisted versions 11.0.0 and newer.
+
 Twisted on Tornado
 ------------------
 
@@ -60,8 +62,6 @@ reactor.  Recommended usage::
     reactor.run()
 
 `TwistedIOLoop` always uses the global Twisted reactor.
-
-This module has been tested with Twisted versions 11.0.0 and newer.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement

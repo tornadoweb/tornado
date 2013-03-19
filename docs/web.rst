@@ -138,7 +138,7 @@
          Authentication and security settings:
 
          * ``cookie_secret``: Used by `RequestHandler.get_secure_cookie`
-           and `set_secure_cookie` to sign cookies.
+           and `.set_secure_cookie` to sign cookies.
          * ``login_url``: The `authenticated` decorator will redirect
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`

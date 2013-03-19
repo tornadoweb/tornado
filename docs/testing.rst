@@ -15,6 +15,8 @@
    .. autoclass:: AsyncHTTPSTestCase
       :members:
 
+   .. autofunction:: gen_test
+
    Controlling log output
    ----------------------
 

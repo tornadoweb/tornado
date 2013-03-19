@@ -11,11 +11,14 @@
    Running an IOLoop
    ^^^^^^^^^^^^^^^^^
 
+   .. automethod:: IOLoop.current
+   .. automethod:: IOLoop.make_current
    .. automethod:: IOLoop.instance
    .. automethod:: IOLoop.initialized
    .. automethod:: IOLoop.install
    .. automethod:: IOLoop.start
    .. automethod:: IOLoop.stop
+   .. automethod:: IOLoop.run_sync
    .. automethod:: IOLoop.close
 
    I/O events

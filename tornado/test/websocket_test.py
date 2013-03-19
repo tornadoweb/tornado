@@ -1,6 +1,6 @@
 from tornado.testing import AsyncHTTPTestCase, gen_test
 from tornado.web import Application
-from tornado.websocket import WebSocketHandler, WebSocketConnect
+from tornado.websocket import WebSocketHandler, websocket_connect
 
 
 class EchoHandler(WebSocketHandler):
@@ -16,7 +16,7 @@ class WebSocketTest(AsyncHTTPTestCase):
 
     @gen_test
     def test_websocket_gen(self):
-        ws = yield WebSocketConnect(
+        ws = yield websocket_connect(
             'ws://localhost:%d/echo' % self.get_http_port(),
             io_loop=self.io_loop)
         ws.write_message('hello')
@@ -24,7 +24,7 @@ class WebSocketTest(AsyncHTTPTestCase):
         self.assertEqual(response, 'hello')
 
     def test_websocket_callbacks(self):
-        WebSocketConnect(
+        websocket_connect(
             'ws://localhost:%d/echo' % self.get_http_port(),
             io_loop=self.io_loop, callback=self.stop)
         ws = self.wait().result()

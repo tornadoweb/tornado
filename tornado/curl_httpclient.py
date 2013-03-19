@@ -14,7 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Blocking and non-blocking HTTP client implementations using pycurl."""
+"""Non-blocking HTTP client implementation using pycurl."""
 
 from __future__ import absolute_import, division, print_function, with_statement
 

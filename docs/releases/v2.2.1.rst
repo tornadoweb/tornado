@@ -11,7 +11,7 @@ Security fixes
   values to protect against header injection, response splitting, etc.
   (it has always attempted to do this, but the check was incorrect).
   Note that redirects, the most likely source of such bugs, are protected
-  by a separate check in `RequestHandler.redirect`.
+  by a separate check in `.RequestHandler.redirect`.
 
 Bug fixes
 ~~~~~~~~~

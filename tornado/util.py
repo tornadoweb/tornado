@@ -1,4 +1,14 @@
-"""Miscellaneous utility functions."""
+"""Miscellaneous utility functions and classes.
+
+This module is used internally by Tornado.  It is not necessarily expected
+that the functions and classes defined here will be useful to other
+applications, but they are documented here in case they are.
+
+The one public-facing part of this module is the `Configurable` class
+and its `~Configurable.configure` method, which becomes a part of the
+interface of its subclasses, including `.AsyncHTTPClient`, `.IOLoop`,
+and `.Resolver`.
+"""
 
 from __future__ import absolute_import, division, print_function, with_statement
 
@@ -8,7 +18,8 @@ import zlib
 
 
 class ObjectDict(dict):
-    """Makes a dictionary behave like an object."""
+    """Makes a dictionary behave like an object, with attribute-style access.
+    """
     def __getattr__(self, name):
         try:
             return self[name]
@@ -115,16 +126,17 @@ class Configurable(object):
     The implementation subclass as well as optional keyword arguments to
     its initializer can be set globally at runtime with `configure`.
 
-    By using the constructor as the factory method, the interface looks like
-    a normal class, ``isinstance()`` works as usual, etc.  This pattern
-    is most useful when the choice of implementation is likely to be a
-    global decision (e.g. when epoll is available, always use it instead of
-    select), or when a previously-monolithic class has been split into
-    specialized subclasses.
+    By using the constructor as the factory method, the interface
+    looks like a normal class, `isinstance` works as usual, etc.  This
+    pattern is most useful when the choice of implementation is likely
+    to be a global decision (e.g. when `~select.epoll` is available,
+    always use it instead of `~select.select`), or when a
+    previously-monolithic class has been split into specialized
+    subclasses.
 
     Configurable subclasses must define the class methods
     `configurable_base` and `configurable_default`, and use the instance
-    method `initialize` instead of `__init__`.
+    method `initialize` instead of ``__init__``.
     """
     __impl_class = None
     __impl_kwargs = None
@@ -163,7 +175,7 @@ class Configurable(object):
     def initialize(self):
         """Initialize a `Configurable` subclass instance.
 
-        Configurable classes should use `initialize` instead of `__init__`.
+        Configurable classes should use `initialize` instead of ``__init__``.
         """
 
     @classmethod
@@ -210,8 +222,6 @@ class ArgReplacer(object):
     and similar wrappers.
     """
     def __init__(self, func, name):
-        """Create an ArgReplacer for the named argument to the given function.
-        """
         self.name = name
         try:
             self.arg_pos = inspect.getargspec(func).args.index(self.name)

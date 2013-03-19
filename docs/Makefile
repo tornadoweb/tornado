@@ -1,4 +1,4 @@
-SPHINXOPTS=-W -d build/doctrees .
+SPHINXOPTS=-n -W -d build/doctrees .
 
 .PHONY: sphinx
 sphinx:

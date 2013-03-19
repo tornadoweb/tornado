@@ -14,15 +14,19 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Implementations of various third-party authentication schemes.
+"""This module contains implementations of various third-party
+authentication schemes.
 
-All the classes in this file are class Mixins designed to be used with
-web.py RequestHandler classes. The primary methods for each service are
-authenticate_redirect(), authorize_redirect(), and get_authenticated_user().
-The former should be called to redirect the user to, e.g., the OpenID
-authentication page on the third party service, and the latter should
-be called upon return to get the user data from the data returned by
-the third party service.
+All the classes in this file are class mixins designed to be used with
+the `tornado.web.RequestHandler` class.  They are used in two ways:
+
+* On a login handler, use methods such as ``authenticate_redirect()``,
+  ``authorize_redirect()``, and ``get_authenticated_user()`` to
+  establish the user's identity and store authentication tokens to your
+  database and/or cookies.
+* In non-login handlers, use methods such as ``facebook_request()``
+  or ``twitter_request()`` to use the authentication tokens to make
+  requests to the respective services.
 
 They all take slightly different arguments due to the fact all these
 services implement authentication and authorization slightly differently.
@@ -30,18 +34,16 @@ See the individual service classes below for complete documentation.
 
 Example usage for Google OpenID::
 
-    class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
+    class GoogleLoginHandler(tornado.web.RequestHandler,
+                             tornado.auth.GoogleMixin):
         @tornado.web.asynchronous
+        @tornado.gen.coroutine
         def get(self):
             if self.get_argument("openid.mode", None):
-                self.get_authenticated_user(self.async_callback(self._on_auth))
-                return
-            self.authenticate_redirect()
-
-        def _on_auth(self, user):
-            if not user:
-                raise tornado.web.HTTPError(500, "Google auth failed")
-            # Save the user with, e.g., set_secure_cookie()
+                user = yield self.get_authenticated_user()
+                # Save the user with e.g. set_secure_cookie()
+            else:
+                self.authenticate_redirect()
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -110,14 +112,19 @@ def _auth_return_future(f):
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
 
-    See GoogleMixin below for example implementations.
+    See `GoogleMixin` below for a customized example (which also
+    includes OAuth support).
+
+    Class attributes:
+
+    * ``_OPENID_ENDPOINT``: the identity provider's URI.
     """
     def authenticate_redirect(self, callback_uri=None,
                               ax_attrs=["name", "email", "language", "username"]):
-        """Returns the authentication URL for this service.
+        """Redirects to the authentication URL for this service.
 
         After authentication, the service will redirect back to the given
-        callback URI.
+        callback URI with additional parameters including ``openid.mode``.
 
         We request the given attributes for the authenticated user by
         default (name, email, language, and username). If you don't need
@@ -133,8 +140,12 @@ class OpenIdMixin(object):
         """Fetches the authenticated user data upon redirect.
 
         This method should be called by the handler that receives the
-        redirect from the authenticate_redirect() or authorize_redirect()
-        methods.
+        redirect from the `authenticate_redirect()` method (which is
+        often the same as the one that calls it; in that case you would
+        call `get_authenticated_user` if the ``openid.mode`` parameter
+        is present and `authenticate_redirect` if it is not).
+
+        The result of this method will generally be used to set a cookie.
         """
         # Verify the OpenID response via direct request to the OP
         args = dict((k, v[-1]) for k, v in self.request.arguments.items())
@@ -255,32 +266,44 @@ class OpenIdMixin(object):
         future.set_result(user)
 
     def get_auth_http_client(self):
-        """Returns the AsyncHTTPClient instance to be used for auth requests.
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
-        May be overridden by subclasses to use an http client other than
+        May be overridden by subclasses to use an HTTP client other than
         the default.
         """
         return httpclient.AsyncHTTPClient()
 
 
 class OAuthMixin(object):
-    """Abstract implementation of OAuth.
+    """Abstract implementation of OAuth 1.0 and 1.0a.
 
-    See TwitterMixin and FriendFeedMixin below for example implementations.
+    See `TwitterMixin` and `FriendFeedMixin` below for example implementations,
+    or `GoogleMixin` for an OAuth/OpenID hybrid.
+
+    Class attributes:
+
+    * ``_OAUTH_AUTHORIZE_URL``: The service's OAuth authorization url.
+    * ``_OAUTH_ACCESS_TOKEN_URL``: The service's OAuth access token url.
+    * ``_OAUTH_VERSION``: May be either "1.0" or "1.0a".
+    * ``_OAUTH_NO_CALLBACKS``: Set this to True if the service requires
+      advance registration of callbacks.
+
+    Subclasses must also override the `_oauth_get_user_future` and
+    `_oauth_consumer_token` methods.
     """
 
     def authorize_redirect(self, callback_uri=None, extra_params=None,
                            http_client=None):
         """Redirects the user to obtain OAuth authorization for this service.
 
-        Twitter and FriendFeed both require that you register a Callback
-        URL with your application. You should call this method to log the
-        user in, and then call get_authenticated_user() in the handler
-        you registered as your Callback URL to complete the authorization
-        process.
+        The ``callback_uri`` may be omitted if you have previously
+        registered a callback URI with the third-party service.  For some
+        sevices (including Twitter and Friendfeed), you must use a
+        previously-registered callback URI and cannot specify a callback
+        via this method.
 
-        This method sets a cookie called _oauth_request_token which is
-        subsequently used (and cleared) in get_authenticated_user for
+        This method sets a cookie called ``_oauth_request_token`` which is
+        subsequently used (and cleared) in `get_authenticated_user` for
         security purposes.
         """
         if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
@@ -304,15 +327,15 @@ class OAuthMixin(object):
 
     @_auth_return_future
     def get_authenticated_user(self, callback, http_client=None):
-        """Gets the OAuth authorized user and access token on callback.
+        """Gets the OAuth authorized user and access token.
 
-        This method should be called from the handler for your registered
-        OAuth Callback URL to complete the registration process. We call
-        callback with the authenticated user, which in addition to standard
-        attributes like 'name' includes the 'access_key' attribute, which
-        contains the OAuth access you can use to make authorized requests
-        to this service on behalf of the user.
-
+        This method should be called from the handler for your
+        OAuth callback URL to complete the registration process. We run the
+        callback with the authenticated user dictionary.  This dictionary
+        will contain an ``access_key`` which can be used to make authorized
+        requests to this service on behalf of the user.  The dictionary will
+        also contain other fields such as ``name``, depending on the service
+        used.
         """
         future = callback
         request_key = escape.utf8(self.get_argument("oauth_token"))
@@ -410,8 +433,29 @@ class OAuthMixin(object):
         self._oauth_get_user_future(access_token).add_done_callback(
             self.async_callback(self._on_oauth_get_user, access_token, future))
 
+    def _oauth_consumer_token(self):
+        """Subclasses must override this to return their OAuth consumer keys.
+
+        The return value should be a `dict` with keys ``key`` and ``secret``.
+        """
+        raise NotImplementedError()
+
     @return_future
     def _oauth_get_user_future(self, access_token, callback):
+        """Subclasses must override this to get basic information about the
+        user.
+
+        Should return a `.Future` whose result is a dictionary
+        containing information about the user, which may have been
+        retrieved by using ``access_token`` to make a request to the
+        service.
+
+        The access token will be added to the returned dictionary to make
+        the result of `get_authenticated_user`.
+
+        For backwards compatibility, the callback-based ``_oauth_get_user``
+        method is also supported.
+        """
         # By default, call the old-style _oauth_get_user, but new code
         # should override this method instead.
         self._oauth_get_user(access_token, callback)
@@ -459,26 +503,34 @@ class OAuthMixin(object):
         return base_args
 
     def get_auth_http_client(self):
-        """Returns the AsyncHTTPClient instance to be used for auth requests.
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
-        May be overridden by subclasses to use an http client other than
+        May be overridden by subclasses to use an HTTP client other than
         the default.
         """
         return httpclient.AsyncHTTPClient()
 
 
 class OAuth2Mixin(object):
-    """Abstract implementation of OAuth v 2."""
+    """Abstract implementation of OAuth 2.0.
+
+    See `FacebookGraphMixin` below for an example implementation.
+
+    Class attributes:
+
+    * ``_OAUTH_AUTHORIZE_URL``: The service's authorization url.
+    * ``_OAUTH_ACCESS_TOKEN_URL``:  The service's access token url.
+    """
 
     def authorize_redirect(self, redirect_uri=None, client_id=None,
                            client_secret=None, extra_params=None):
         """Redirects the user to obtain OAuth authorization for this service.
 
-        Some providers require that you register a Callback
-        URL with your application. You should call this method to log the
-        user in, and then call get_authenticated_user() in the handler
-        you registered as your Callback URL to complete the authorization
-        process.
+        Some providers require that you register a redirect URL with
+        your application instead of passing one via this method. You
+        should call this method to log the user in, and then call
+        ``get_authenticated_user`` in the handler for your
+        redirect URL to complete the authorization process.
         """
         args = {
             "redirect_uri": redirect_uri,
@@ -508,35 +560,30 @@ class TwitterMixin(OAuthMixin):
     """Twitter OAuth authentication.
 
     To authenticate with Twitter, register your application with
-    Twitter at http://twitter.com/apps. Then copy your Consumer Key and
-    Consumer Secret to the application settings 'twitter_consumer_key' and
-    'twitter_consumer_secret'. Use this Mixin on the handler for the URL
-    you registered as your application's Callback URL.
+    Twitter at http://twitter.com/apps. Then copy your Consumer Key
+    and Consumer Secret to the application
+    `~tornado.web.Application.settings` ``twitter_consumer_key`` and
+    ``twitter_consumer_secret``. Use this mixin on the handler for the
+    URL you registered as your application's callback URL.
 
-    When your application is set up, you can use this Mixin like this
+    When your application is set up, you can use this mixin like this
     to authenticate the user with Twitter and get access to their stream::
 
-        class TwitterHandler(tornado.web.RequestHandler,
-                             tornado.auth.TwitterMixin):
+        class TwitterLoginHandler(tornado.web.RequestHandler,
+                                  tornado.auth.TwitterMixin):
             @tornado.web.asynchronous
+            @tornado.gen.coroutine
             def get(self):
                 if self.get_argument("oauth_token", None):
-                    self.get_authenticated_user(self.async_callback(self._on_auth))
-                    return
-                self.authorize_redirect()
+                    user = yield self.get_authenticated_user()
+                    # Save the user using e.g. set_secure_cookie()
+                else:
+                    self.authorize_redirect()
 
-            def _on_auth(self, user):
-                if not user:
-                    raise tornado.web.HTTPError(500, "Twitter auth failed")
-                # Save the user using, e.g., set_secure_cookie()
-
-    The user object returned by get_authenticated_user() includes the
-    attributes 'username', 'name', and all of the custom Twitter user
-    attributes describe at
-    http://apiwiki.twitter.com/Twitter-REST-API-Method%3A-users%C2%A0show
-    in addition to 'access_token'. You should save the access token with
-    the user; it is required to make requests on behalf of the user later
-    with twitter_request().
+    The user object returned by `~OAuthMixin.get_authenticated_user`
+    includes the attributes ``username``, ``name``, ``access_token``,
+    and all of the custom Twitter user attributes described at
+    https://dev.twitter.com/docs/api/1.1/get/users/show
     """
     _OAUTH_REQUEST_TOKEN_URL = "http://api.twitter.com/oauth/request_token"
     _OAUTH_ACCESS_TOKEN_URL = "http://api.twitter.com/oauth/access_token"
@@ -546,7 +593,8 @@ class TwitterMixin(OAuthMixin):
     _TWITTER_BASE_URL = "http://api.twitter.com/1"
 
     def authenticate_redirect(self, callback_uri=None):
-        """Just like authorize_redirect(), but auto-redirects if authorized.
+        """Just like `~OAuthMixin.authorize_redirect`, but
+        auto-redirects if authorized.
 
         This is generally the right interface to use if you are using
         Twitter for single-sign on.
@@ -558,35 +606,33 @@ class TwitterMixin(OAuthMixin):
     @_auth_return_future
     def twitter_request(self, path, callback=None, access_token=None,
                         post_args=None, **args):
-        """Fetches the given API path, e.g., "/statuses/user_timeline/btaylor"
+        """Fetches the given API path, e.g., ``/statuses/user_timeline/btaylor``
 
-        The path should not include the format (we automatically append
-        ".json" and parse the JSON output).
+        The path should not include the format or API version number.
+        (we automatically use JSON format and API version 1).
 
-        If the request is a POST, post_args should be provided. Query
+        If the request is a POST, ``post_args`` should be provided. Query
         string arguments should be given as keyword arguments.
 
-        All the Twitter methods are documented at
-        http://apiwiki.twitter.com/Twitter-API-Documentation.
+        All the Twitter methods are documented at http://dev.twitter.com/
 
-        Many methods require an OAuth access token which you can obtain
-        through authorize_redirect() and get_authenticated_user(). The
-        user returned through that process includes an 'access_token'
-        attribute that can be used to make authenticated requests via
-        this method. Example usage::
+        Many methods require an OAuth access token which you can
+        obtain through `~OAuthMixin.authorize_redirect` and
+        `~OAuthMixin.get_authenticated_user`. The user returned through that
+        process includes an 'access_token' attribute that can be used
+        to make authenticated requests via this method. Example
+        usage::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.TwitterMixin):
                 @tornado.web.authenticated
                 @tornado.web.asynchronous
+                @tornado.gen.coroutine
                 def get(self):
-                    self.twitter_request(
+                    new_entry = yield self.twitter_request(
                         "/statuses/update",
                         post_args={"status": "Testing Tornado Web Server"},
-                        access_token=user["access_token"],
-                        callback=self.async_callback(self._on_post))
-
-                def _on_post(self, new_entry):
+                        access_token=self.current_user["access_token"])
                     if not new_entry:
                         # Call failed; perhaps missing permission?
                         self.authorize_redirect()
@@ -648,34 +694,31 @@ class FriendFeedMixin(OAuthMixin):
     """FriendFeed OAuth authentication.
 
     To authenticate with FriendFeed, register your application with
-    FriendFeed at http://friendfeed.com/api/applications. Then
-    copy your Consumer Key and Consumer Secret to the application settings
-    'friendfeed_consumer_key' and 'friendfeed_consumer_secret'. Use
-    this Mixin on the handler for the URL you registered as your
-    application's Callback URL.
+    FriendFeed at http://friendfeed.com/api/applications. Then copy
+    your Consumer Key and Consumer Secret to the application
+    `~tornado.web.Application.settings` ``friendfeed_consumer_key``
+    and ``friendfeed_consumer_secret``. Use this mixin on the handler
+    for the URL you registered as your application's Callback URL.
 
-    When your application is set up, you can use this Mixin like this
+    When your application is set up, you can use this mixin like this
     to authenticate the user with FriendFeed and get access to their feed::
 
-        class FriendFeedHandler(tornado.web.RequestHandler,
-                                tornado.auth.FriendFeedMixin):
+        class FriendFeedLoginHandler(tornado.web.RequestHandler,
+                                     tornado.auth.FriendFeedMixin):
             @tornado.web.asynchronous
+            @tornado.gen.coroutine
             def get(self):
                 if self.get_argument("oauth_token", None):
-                    self.get_authenticated_user(self.async_callback(self._on_auth))
-                    return
-                self.authorize_redirect()
+                    user = yield self.get_authenticated_user()
+                    # Save the user using e.g. set_secure_cookie()
+                else:
+                    self.authorize_redirect()
 
-            def _on_auth(self, user):
-                if not user:
-                    raise tornado.web.HTTPError(500, "FriendFeed auth failed")
-                # Save the user using, e.g., set_secure_cookie()
-
-    The user object returned by get_authenticated_user() includes the
-    attributes 'username', 'name', and 'description' in addition to
-    'access_token'. You should save the access token with the user;
+    The user object returned by `~OAuthMixin.get_authenticated_user()` includes the
+    attributes ``username``, ``name``, and ``description`` in addition to
+    ``access_token``. You should save the access token with the user;
     it is required to make requests on behalf of the user later with
-    friendfeed_request().
+    `friendfeed_request()`.
     """
     _OAUTH_VERSION = "1.0"
     _OAUTH_REQUEST_TOKEN_URL = "https://friendfeed.com/account/oauth/request_token"
@@ -689,30 +732,32 @@ class FriendFeedMixin(OAuthMixin):
                            post_args=None, **args):
         """Fetches the given relative API path, e.g., "/bret/friends"
 
-        If the request is a POST, post_args should be provided. Query
+        If the request is a POST, ``post_args`` should be provided. Query
         string arguments should be given as keyword arguments.
 
         All the FriendFeed methods are documented at
         http://friendfeed.com/api/documentation.
 
-        Many methods require an OAuth access token which you can obtain
-        through authorize_redirect() and get_authenticated_user(). The
-        user returned through that process includes an 'access_token'
-        attribute that can be used to make authenticated requests via
-        this method. Example usage::
+        Many methods require an OAuth access token which you can
+        obtain through `~OAuthMixin.authorize_redirect` and
+        `~OAuthMixin.get_authenticated_user`. The user returned
+        through that process includes an ``access_token`` attribute that
+        can be used to make authenticated requests via this
+        method.
+
+        Example usage::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FriendFeedMixin):
                 @tornado.web.authenticated
                 @tornado.web.asynchronous
+                @tornado.gen.coroutine
                 def get(self):
-                    self.friendfeed_request(
+                    new_entry = yield self.friendfeed_request(
                         "/entry",
                         post_args={"body": "Testing Tornado Web Server"},
-                        access_token=self.current_user["access_token"],
-                        callback=self.async_callback(self._on_post))
+                        access_token=self.current_user["access_token"])
 
-                def _on_post(self, new_entry):
                     if not new_entry:
                         # Call failed; perhaps missing permission?
                         self.authorize_redirect()
@@ -773,26 +818,30 @@ class FriendFeedMixin(OAuthMixin):
 class GoogleMixin(OpenIdMixin, OAuthMixin):
     """Google Open ID / OAuth authentication.
 
-    No application registration is necessary to use Google for authentication
-    or to access Google resources on behalf of a user. To authenticate with
-    Google, redirect with authenticate_redirect(). On return, parse the
-    response with get_authenticated_user(). We send a dict containing the
-    values for the user, including 'email', 'name', and 'locale'.
+    No application registration is necessary to use Google for
+    authentication or to access Google resources on behalf of a user.
+
+    Google implements both OpenID and OAuth in a hybrid mode.  If you
+    just need the user's identity, use
+    `~OpenIdMixin.authenticate_redirect`.  If you need to make
+    requests to Google on behalf of the user, use
+    `authorize_redirect`.  On return, parse the response with
+    `~OpenIdMixin.get_authenticated_user`. We send a dict containing
+    the values for the user, including ``email``, ``name``, and
+    ``locale``.
+
     Example usage::
 
-        class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
+        class GoogleLoginHandler(tornado.web.RequestHandler,
+                                 tornado.auth.GoogleMixin):
            @tornado.web.asynchronous
+           @tornado.gen.coroutine
            def get(self):
                if self.get_argument("openid.mode", None):
-                   self.get_authenticated_user(self.async_callback(self._on_auth))
-                   return
-            self.authenticate_redirect()
-
-            def _on_auth(self, user):
-                if not user:
-                    raise tornado.web.HTTPError(500, "Google auth failed")
-                # Save the user with, e.g., set_secure_cookie()
-
+                   user = yield self.get_authenticated_user()
+                   # Save the user with e.g. set_secure_cookie()
+               else:
+                   self.authenticate_redirect()
     """
     _OPENID_ENDPOINT = "https://www.google.com/accounts/o8/ud"
     _OAUTH_ACCESS_TOKEN_URL = "https://www.google.com/accounts/OAuthGetAccessToken"
@@ -801,7 +850,8 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
                            ax_attrs=["name", "email", "language", "username"]):
         """Authenticates and authorizes for the given Google resource.
 
-        Some of the available resources are:
+        Some of the available resources which can be used in the ``oauth_scope``
+        argument are:
 
         * Gmail Contacts - http://www.google.com/m8/feeds/
         * Calendar - http://www.google.com/calendar/feeds/
@@ -856,9 +906,9 @@ class FacebookMixin(object):
     To authenticate with Facebook, register your application with
     Facebook at http://www.facebook.com/developers/apps.php. Then
     copy your API Key and Application Secret to the application settings
-    'facebook_api_key' and 'facebook_secret'.
+    ``facebook_api_key`` and ``facebook_secret``.
 
-    When your application is set up, you can use this Mixin like this
+    When your application is set up, you can use this mixin like this
     to authenticate the user with Facebook::
 
         class FacebookHandler(tornado.web.RequestHandler,
@@ -875,11 +925,11 @@ class FacebookMixin(object):
                     raise tornado.web.HTTPError(500, "Facebook auth failed")
                 # Save the user using, e.g., set_secure_cookie()
 
-    The user object returned by get_authenticated_user() includes the
-    attributes 'facebook_uid' and 'name' in addition to session attributes
-    like 'session_key'. You should save the session key with the user; it is
+    The user object returned by `get_authenticated_user` includes the
+    attributes ``facebook_uid`` and ``name`` in addition to session attributes
+    like ``session_key``. You should save the session key with the user; it is
     required to make requests on behalf of the user later with
-    facebook_request().
+    `facebook_request`.
     """
     def authenticate_redirect(self, callback_uri=None, cancel_uri=None,
                               extended_permissions=None):
@@ -1032,9 +1082,9 @@ class FacebookMixin(object):
         return hashlib.md5(body).hexdigest()
 
     def get_auth_http_client(self):
-        """Returns the AsyncHTTPClient instance to be used for auth requests.
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
-        May be overridden by subclasses to use an http client other than
+        May be overridden by subclasses to use an HTTP client other than
         the default.
         """
         return httpclient.AsyncHTTPClient()
@@ -1054,24 +1104,20 @@ class FacebookGraphMixin(OAuth2Mixin):
 
             class FacebookGraphLoginHandler(LoginHandler, tornado.auth.FacebookGraphMixin):
               @tornado.web.asynchronous
+              @tornado.gen.coroutine
               def get(self):
                   if self.get_argument("code", False):
-                      self.get_authenticated_user(
-                        redirect_uri='/auth/facebookgraph/',
-                        client_id=self.settings["facebook_api_key"],
-                        client_secret=self.settings["facebook_secret"],
-                        code=self.get_argument("code"),
-                        callback=self.async_callback(
-                          self._on_login))
-                      return
-                  self.authorize_redirect(redirect_uri='/auth/facebookgraph/',
-                                          client_id=self.settings["facebook_api_key"],
-                                          extra_params={"scope": "read_stream,offline_access"})
-
-              def _on_login(self, user):
-                logging.error(user)
-                self.finish()
-
+                      user = yield self.get_authenticated_user(
+                          redirect_uri='/auth/facebookgraph/',
+                          client_id=self.settings["facebook_api_key"],
+                          client_secret=self.settings["facebook_secret"],
+                          code=self.get_argument("code"))
+                      # Save the user with e.g. set_secure_cookie
+                  else:
+                      self.authorize_redirect(
+                          redirect_uri='/auth/facebookgraph/',
+                          client_id=self.settings["facebook_api_key"],
+                          extra_params={"scope": "read_stream,offline_access"})
         """
         http = self.get_auth_http_client()
         args = {
@@ -1127,36 +1173,36 @@ class FacebookGraphMixin(OAuth2Mixin):
                          post_args=None, **args):
         """Fetches the given relative API path, e.g., "/btaylor/picture"
 
-        If the request is a POST, post_args should be provided. Query
+        If the request is a POST, ``post_args`` should be provided. Query
         string arguments should be given as keyword arguments.
 
         An introduction to the Facebook Graph API can be found at
         http://developers.facebook.com/docs/api
 
-        Many methods require an OAuth access token which you can obtain
-        through authorize_redirect() and get_authenticated_user(). The
-        user returned through that process includes an 'access_token'
-        attribute that can be used to make authenticated requests via
-        this method. Example usage::
+        Many methods require an OAuth access token which you can
+        obtain through `~OAuth2Mixin.authorize_redirect` and
+        `get_authenticated_user`. The user returned through that
+        process includes an ``access_token`` attribute that can be
+        used to make authenticated requests via this method.
+
+        Example usage::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
                 @tornado.web.authenticated
                 @tornado.web.asynchronous
+                @tornado.gen.coroutine
                 def get(self):
-                    self.facebook_request(
+                    new_entry = yield self.facebook_request(
                         "/me/feed",
                         post_args={"message": "I am posting from my Tornado application!"},
-                        access_token=self.current_user["access_token"],
-                        callback=self.async_callback(self._on_post))
+                        access_token=self.current_user["access_token"])
 
-                def _on_post(self, new_entry):
                     if not new_entry:
                         # Call failed; perhaps missing permission?
                         self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
-
         """
         url = "https://graph.facebook.com" + path
         all_args = {}
@@ -1183,9 +1229,9 @@ class FacebookGraphMixin(OAuth2Mixin):
         callback(escape.json_decode(response.body))
 
     def get_auth_http_client(self):
-        """Returns the AsyncHTTPClient instance to be used for auth requests.
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
-        May be overridden by subclasses to use an http client other than
+        May be overridden by subclasses to use an HTTP client other than
         the default.
         """
         return httpclient.AsyncHTTPClient()
