@@ -38,7 +38,7 @@ from tornado.ioloop import IOLoop
 from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
 from tornado import simple_httpclient
-from tornado.util import bytes_type
+from tornado.util import bytes_type, unicode_type
 
 try:
     xrange  # py2
@@ -392,8 +392,9 @@ class WebSocketProtocol76(WebSocketProtocol):
         """Processes the key headers and calculates their key value.
 
         Raises ValueError when feed invalid key."""
+        # pyflakes complains about variable reuse if both of these lines use 'c'
         number = int(''.join(c for c in key if c.isdigit()))
-        spaces = len(c for c in key if c.isspace())
+        spaces = len([c2 for c2 in key if c2.isspace()])
         try:
             key_number = number // spaces
         except (ValueError, ZeroDivisionError):
@@ -438,7 +439,7 @@ class WebSocketProtocol76(WebSocketProtocol):
         if binary:
             raise ValueError(
                 "Binary messages not supported by this version of websockets")
-        if isinstance(message, unicode):
+        if isinstance(message, unicode_type):
             message = message.encode("utf-8")
         assert isinstance(message, bytes_type)
         self.stream.write(b"\x00" + message + b"\xff")
