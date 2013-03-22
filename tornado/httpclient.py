@@ -242,7 +242,7 @@ class HTTPRequest(object):
         validate_cert=True)
 
     def __init__(self, url, method="GET", headers=None, body=None,
-                 auth_username=None, auth_password=None,
+                 auth_username=None, auth_password=None, auth_mode=None,
                  connect_timeout=None, request_timeout=None,
                  if_modified_since=None, follow_redirects=None,
                  max_redirects=None, user_agent=None, use_gzip=None,
@@ -259,8 +259,9 @@ class HTTPRequest(object):
         :arg string method: HTTP method, e.g. "GET" or "POST"
         :arg headers: Additional HTTP headers to pass on the request
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
-        :arg string auth_username: Username for HTTP "Basic" authentication
-        :arg string auth_password: Password for HTTP "Basic" authentication
+        :arg string auth_username: Username for HTTP authentication
+        :arg string auth_password: Password for HTTP authentication
+        :arg string auth_mode: Authentication mode (basic, digest)
         :arg float connect_timeout: Timeout for initial connection in seconds
         :arg float request_timeout: Timeout for entire request in seconds
         :arg if_modified_since: Timestamp for ``If-Modified-Since`` header
@@ -322,6 +323,7 @@ class HTTPRequest(object):
         self.body = utf8(body)
         self.auth_username = auth_username
         self.auth_password = auth_password
+        self.auth_mode = auth_mode        
         self.connect_timeout = connect_timeout
         self.request_timeout = request_timeout
         self.follow_redirects = follow_redirects

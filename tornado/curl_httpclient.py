@@ -411,7 +411,12 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     if request.auth_username is not None:
         userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
-        curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
+
+        if request.auth_mode is None or request.auth_mode == "basic":
+            curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
+        elif request.auth_mode == "digest":
+            curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_DIGEST)
+
         curl.setopt(pycurl.USERPWD, native_str(userpwd))
         gen_log.debug("%s %s (username: %r)", request.method, request.url,
                       request.auth_username)
