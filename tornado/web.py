@@ -1630,32 +1630,56 @@ class StaticFileHandler(RequestHandler):
         if mime_type:
             self.set_header("Content-Type", mime_type)
 
-        cache_time = self.get_cache_time(path, modified, mime_type)
+        if "Range" not in self.request.headers:
+            cache_time = self.get_cache_time(path, modified, mime_type)
 
-        if cache_time > 0:
-            self.set_header("Expires", datetime.datetime.utcnow() +
-                            datetime.timedelta(seconds=cache_time))
-            self.set_header("Cache-Control", "max-age=" + str(cache_time))
+            if cache_time > 0:
+                self.set_header("Expires", datetime.datetime.utcnow() + datetime.timedelta(seconds=cache_time))
+                self.set_header("Cache-Control", "max-age=" + str(cache_time))
 
-        self.set_extra_headers(path)
+            self.set_extra_headers(path)
 
-        # Check the If-Modified-Since, and don't send the result if the
-        # content has not been modified
-        ims_value = self.request.headers.get("If-Modified-Since")
-        if ims_value is not None:
-            date_tuple = email.utils.parsedate(ims_value)
-            if_since = datetime.datetime.fromtimestamp(time.mktime(date_tuple))
-            if if_since >= modified:
-                self.set_status(304)
-                return
+            # Check the If-Modified-Since, and don't send the result if the
+            # content has not been modified
+            ims_value = self.request.headers.get("If-Modified-Since")
+            if ims_value is not None:
+                date_tuple = email.utils.parsedate(ims_value)
+                if_since = datetime.datetime.fromtimestamp(time.mktime(date_tuple))
+                if if_since >= modified:
+                    self.set_status(304)
+                    return
 
-        with open(abspath, "rb") as file:
-            data = file.read()
-            if include_body:
-                self.write(data)
-            else:
-                assert self.request.method == "HEAD"
-                self.set_header("Content-Length", len(data))
+
+            with open(abspath, "rb") as file:
+                data = file.read()
+                if include_body:
+                    self.write(data)
+                else:
+                    assert self.request.method == "HEAD"
+                    self.set_header("Content-Length", len(data))
+
+        else:
+            rangel, ranger = map(lambda x: int(x) if x and x.isdigit() else None,
+                  self.request.headers["Range"].split("=")[1].split("-"))
+            if not ranger:
+               ranger = stat_result.st_size - 1
+            if not rangel:
+               rangel = 0
+
+            length = ranger - rangel
+
+            self.set_header("Content-Range", "bytes %d-%d/%d" % (rangel, ranger, stat_result.st_size))
+            self.set_header("Content-Length", length+1)
+            self.set_header("Accept-Ranges", "bytes")
+            self.set_status(206)
+            chunk_size = 1024 * 8
+            with open(abspath, "rb") as file:
+               file.seek(rangel)
+               while rangel+chunk_size < ranger:
+                  rangel = rangel + chunk_size
+                  self.write(file.read(chunk_size))
+               self.write(file.read())
+            self.flush()
 
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
