@@ -647,6 +647,41 @@ class GenSequenceHandler(RequestHandler):
         self.finish("3")
 
 
+class GenCoroutineSequenceHandler(RequestHandler):
+    @asynchronous
+    @gen.coroutine
+    def get(self):
+        self.io_loop = self.request.connection.stream.io_loop
+        self.io_loop.add_callback((yield gen.Callback("k1")))
+        yield gen.Wait("k1")
+        self.write("1")
+        self.io_loop.add_callback((yield gen.Callback("k2")))
+        yield gen.Wait("k2")
+        self.write("2")
+        # reuse an old key
+        self.io_loop.add_callback((yield gen.Callback("k1")))
+        yield gen.Wait("k1")
+        self.finish("3")
+
+
+class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
+    @asynchronous
+    @gen.coroutine
+    def get(self):
+        self.io_loop = self.request.connection.stream.io_loop
+        self.io_loop.add_callback((yield gen.Callback("k1")))
+        yield gen.Wait("k1")
+        self.write("1")
+        self.io_loop.add_callback((yield gen.Callback("k2")))
+        yield gen.Wait("k2")
+        self.write("2")
+        # reuse an old key
+        self.io_loop.add_callback((yield gen.Callback("k1")))
+        yield gen.Wait("k1")
+        # just write, don't finish
+        self.write("3")
+
+
 class GenTaskHandler(RequestHandler):
     @asynchronous
     @gen.engine
@@ -661,6 +696,16 @@ class GenTaskHandler(RequestHandler):
 class GenExceptionHandler(RequestHandler):
     @asynchronous
     @gen.engine
+    def get(self):
+        # This test depends on the order of the two decorators.
+        io_loop = self.request.connection.stream.io_loop
+        yield gen.Task(io_loop.add_callback)
+        raise Exception("oops")
+
+
+class GenCoroutineExceptionHandler(RequestHandler):
+    @asynchronous
+    @gen.coroutine
     def get(self):
         # This test depends on the order of the two decorators.
         io_loop = self.request.connection.stream.io_loop
@@ -688,13 +733,25 @@ class GenWebTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
             ('/sequence', GenSequenceHandler),
+            ('/coroutine_sequence', GenCoroutineSequenceHandler),
+            ('/coroutine_unfinished_sequence',
+             GenCoroutineUnfinishedSequenceHandler),
             ('/task', GenTaskHandler),
             ('/exception', GenExceptionHandler),
+            ('/coroutine_exception', GenCoroutineExceptionHandler),
             ('/yield_exception', GenYieldExceptionHandler),
         ])
 
     def test_sequence_handler(self):
         response = self.fetch('/sequence')
+        self.assertEqual(response.body, b"123")
+
+    def test_coroutine_sequence_handler(self):
+        response = self.fetch('/coroutine_sequence')
+        self.assertEqual(response.body, b"123")
+
+    def test_coroutine_unfinished_sequence_handler(self):
+        response = self.fetch('/coroutine_unfinished_sequence')
         self.assertEqual(response.body, b"123")
 
     def test_task_handler(self):
@@ -705,6 +762,12 @@ class GenWebTest(AsyncHTTPTestCase):
         # Make sure we get an error and not a timeout
         with ExpectLog(app_log, "Uncaught exception GET /exception"):
             response = self.fetch('/exception')
+        self.assertEqual(500, response.code)
+
+    def test_coroutine_exception_handler(self):
+        # Make sure we get an error and not a timeout
+        with ExpectLog(app_log, "Uncaught exception GET /coroutine_exception"):
+            response = self.fetch('/coroutine_exception')
         self.assertEqual(500, response.code)
 
     def test_yield_exception_handler(self):
