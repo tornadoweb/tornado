@@ -182,10 +182,21 @@ class HTTPConnection(object):
         self.protocol = protocol
         self._request = None
         self._request_finished = False
+        self._write_callback = None
+        self._close_callback = None
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
         self.stream.read_until(b"\r\n\r\n", self._header_callback)
+
+    def _clear_callbacks(self):
+        """Clears the per-request callbacks.
+
+        This is run in between requests to allow the previous handler
+        to be garbage collected (and prevent spurious close callbacks),
+        and when the connection is closed (to break up cycles and
+        facilitate garbage collection in cpython).
+        """
         self._write_callback = None
         self._close_callback = None
 
@@ -205,13 +216,15 @@ class HTTPConnection(object):
         self._close_callback = None
         callback()
         # Delete any unfinished callbacks to break up reference cycles.
-        self._write_callback = None
+        self._header_callback = None
+        self._clear_callbacks()
 
     def close(self):
         self.stream.close()
         # Remove this reference to self, which would otherwise cause a
         # cycle and delay garbage collection of this connection.
         self._header_callback = None
+        self._clear_callbacks()
 
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
@@ -258,6 +271,7 @@ class HTTPConnection(object):
                 disconnect = True
         self._request = None
         self._request_finished = False
+        self._clear_callbacks()
         if disconnect:
             self.close()
             return
