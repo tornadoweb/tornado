@@ -25,7 +25,7 @@ except ImportError:
 
 kwargs = {}
 
-version = "3.0b1"
+version = "3.0b2"
 
 distutils.core.setup(
     name="tornado",

@@ -73,6 +73,7 @@ import traceback
 import types
 import uuid
 
+from tornado.concurrent import Future
 from tornado import escape
 from tornado import httputil
 from tornado import locale
@@ -1165,6 +1166,8 @@ def asynchronous(method):
               self.finish()
 
     """
+    # Delay the IOLoop import because it's not available on app engine.
+    from tornado.ioloop import IOLoop
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if self.application._wsgi:
@@ -1172,7 +1175,20 @@ def asynchronous(method):
         self._auto_finish = False
         with stack_context.ExceptionStackContext(
                 self._stack_context_handle_exception):
-            return method(self, *args, **kwargs)
+            result = method(self, *args, **kwargs)
+            if isinstance(result, Future):
+                # If @asynchronous is used with @gen.coroutine, (but
+                # not @gen.engine), we can automatically finish the
+                # request when the future resolves.  Additionally,
+                # the Future will swallow any exceptions so we need
+                # to throw them back out to the stack context to finish
+                # the request.
+                def future_complete(f):
+                    f.result()
+                    if not self._finished:
+                        self.finish()
+                IOLoop.current().add_future(result, future_complete)
+            return result
     return wrapper
 
 
