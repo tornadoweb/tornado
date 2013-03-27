@@ -27,6 +27,10 @@ kwargs = {}
 
 version = "3.0b2"
 
+# http://packages.python.org/distribute/python3.html#note-on-compatibility-with-setuptools
+if sys.version_info >= (3,):
+    kwargs['use_2to3'] = True
+
 distutils.core.setup(
     name="tornado",
     version=version,
