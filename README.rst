@@ -77,7 +77,7 @@ features may require one of the following libraries:
   versions of Python)
 * `concurrent.futures <https://pypi.python.org/pypi/futures>`_ is the
   recommended thread pool for use with Tornado and enables the use of
-  `~tornado.netutil.ThreadedResolver`.  It is needed only on Python 2;
+  ``tornado.netutil.ThreadedResolver``.  It is needed only on Python 2;
   Python 3 includes this package in the standard library.
 * `pycurl <http://pycurl.sourceforge.net>`_ is used by the optional
   ``tornado.curl_httpclient``.  Libcurl version 7.18.2 or higher is required;
