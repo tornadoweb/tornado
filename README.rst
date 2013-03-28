@@ -13,7 +13,7 @@ applications that require a long-lived connection to each user.
 Quick links
 -----------
 
-* :doc:`Documentation <http://www.tornadoweb.org/en/stable/>`_
+* `Documentation <http://www.tornadoweb.org/en/stable/>`_
 * `Source (github) <https://github.com/facebook/tornado>`_
 * `Mailing list <http://groups.google.com/group/python-tornado>`_
 * `Wiki <https://github.com/facebook/tornado/wiki/Links>`_
