@@ -38,13 +38,14 @@ distutils.core.setup(
         # in the sdist tarball)
         "tornado.test": [
             "README",
-            "test.crt",
-            "test.key",
-            "static/robots.txt",
-            "templates/utf8.html",
             "csv_translations/fr_FR.csv",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po",
+            "options_test.cfg",
+            "static/robots.txt",
+            "templates/utf8.html",
+            "test.crt",
+            "test.key",
             ],
         },
     author="Facebook",

@@ -69,7 +69,7 @@ import textwrap
 from tornado.escape import _unicode
 from tornado.log import define_logging_options
 from tornado import stack_context
-from tornado.util import basestring_type
+from tornado.util import basestring_type, exec_in
 
 
 class Error(Exception):
@@ -211,7 +211,8 @@ class OptionParser(object):
         from multiple sources.
         """
         config = {}
-        execfile(path, config, config)
+        with open(path) as f:
+            exec_in(f.read(), config, config)
         for name in config:
             if name in self._options:
                 self._options[name].set(config[name])
