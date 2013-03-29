@@ -98,7 +98,7 @@ latex_documents = [
 # this link must be referenced as :current_tarball:`z`
 extlinks = {
     'current_tarball': (
-        'https://github.com/downloads/facebook/tornado/tornado-%s.tar.g%%s' % version,
+'https://pypi.python.org/packages/source/t/tornado/tornado-%s.tar.g%%s' % version,
         'tornado-%s.tar.g' % version),
     }
 
