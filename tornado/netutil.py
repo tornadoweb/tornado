@@ -321,7 +321,7 @@ def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
     else:
         return ssl.wrap_socket(socket, **dict(context, **kwargs))
 
-if hasattr(ssl, 'match_hostname'):  # python 3.2+
+if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
     ssl_match_hostname = ssl.match_hostname
     SSLCertificateError = ssl.CertificateError
 else:
