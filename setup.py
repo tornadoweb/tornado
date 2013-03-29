@@ -27,6 +27,9 @@ kwargs = {}
 
 version = "3.1.dev1"
 
+with open('README.rst') as f:
+    long_description = f.read()
+
 distutils.core.setup(
     name="tornado",
     version=version,
@@ -64,5 +67,6 @@ distutils.core.setup(
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
         ],
+    long_description=long_description,
     **kwargs
 )
