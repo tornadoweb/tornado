@@ -49,7 +49,7 @@ Installation
 
     pip install tornado
 
-Tornado is listed in `PyPI <http://pypi.python.org/pypi/tornado>`_ and
+Tornado is listed in `PyPI <http://pypi.python.org/pypi/tornado/>`_ and
 can be installed with ``pip`` or ``easy_install``.  Note that the
 source distribution includes demo applications that are not present
 when Tornado is installed in this way, so you may wish to download a
