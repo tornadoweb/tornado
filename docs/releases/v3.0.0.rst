@@ -50,6 +50,8 @@ Backwards-incompatible changes
 * ``tornado.netutil.TCPServer`` has moved to its own module,
   `tornado.tcpserver`.
 * The Tornado test suite now requires ``unittest2`` when run on Python 2.6.
+* `tornado.options.options` is no longer a subclass of `dict`; attribute-style
+  access is now required.
 
 
 Detailed changes by module
