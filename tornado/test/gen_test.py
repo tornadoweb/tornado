@@ -125,11 +125,28 @@ class GenEngineTest(AsyncTestCase):
             self.stop()
         self.run_gen(f)
 
+    def test_with_arg_tuple(self):
+        @gen.engine
+        def f():
+            (yield gen.Callback((1, 2)))((3, 4))
+            res = yield gen.Wait((1, 2))
+            self.assertEqual((3, 4), res)
+            self.stop()
+        self.run_gen(f)
+
     def test_key_reuse(self):
         @gen.engine
         def f():
             yield gen.Callback("k1")
             yield gen.Callback("k1")
+            self.stop()
+        self.assertRaises(gen.KeyReuseError, self.run_gen, f)
+
+    def test_key_reuse_tuple(self):
+        @gen.engine
+        def f():
+            yield gen.Callback((1, 2))
+            yield gen.Callback((1, 2))
             self.stop()
         self.assertRaises(gen.KeyReuseError, self.run_gen, f)
 
@@ -141,10 +158,25 @@ class GenEngineTest(AsyncTestCase):
             self.stop()
         self.assertRaises(gen.UnknownKeyError, self.run_gen, f)
 
+    def test_key_mismatch_tuple(self):
+        @gen.engine
+        def f():
+            yield gen.Callback((1, 2))
+            yield gen.Wait((2, 3))
+            self.stop()
+        self.assertRaises(gen.UnknownKeyError, self.run_gen, f)
+
     def test_leaked_callback(self):
         @gen.engine
         def f():
             yield gen.Callback("k1")
+            self.stop()
+        self.assertRaises(gen.LeakedCallbackError, self.run_gen, f)
+
+    def test_leaked_callback_tuple(self):
+        @gen.engine
+        def f():
+            yield gen.Callback((1, 2))
             self.stop()
         self.assertRaises(gen.LeakedCallbackError, self.run_gen, f)
 
@@ -165,6 +197,12 @@ class GenEngineTest(AsyncTestCase):
         @gen.engine
         def f():
             yield 42
+        self.assertRaises(gen.BadYieldError, self.run_gen, f)
+
+    def test_bogus_yield_tuple(self):
+        @gen.engine
+        def f():
+            yield (1, 2)
         self.assertRaises(gen.BadYieldError, self.run_gen, f)
 
     def test_reuse(self):
@@ -404,11 +442,28 @@ class GenEngineTest(AsyncTestCase):
         with self.assertRaises(gen.ReturnValueIgnoredError):
             self.run_gen(f)
 
+    def test_sync_raise_return_value_tuple(self):
+        @gen.engine
+        def f():
+            raise gen.Return((1, 2))
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
     def test_async_raise_return_value(self):
         @gen.engine
         def f():
             yield gen.Task(self.io_loop.add_callback)
             raise gen.Return(42)
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
+    def test_async_raise_return_value_tuple(self):
+        @gen.engine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            raise gen.Return((1, 2))
 
         with self.assertRaises(gen.ReturnValueIgnoredError):
             self.run_gen(f)
@@ -419,6 +474,16 @@ class GenEngineTest(AsyncTestCase):
         @gen.engine
         def f():
             return 42
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
+    def test_return_value_tuple(self):
+        # It is an error to apply @gen.engine to a function that returns
+        # a value.
+        @gen.engine
+        def f():
+            return (1, 2)
 
         with self.assertRaises(gen.ReturnValueIgnoredError):
             self.run_gen(f)

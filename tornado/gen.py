@@ -147,7 +147,7 @@ def engine(func):
                         if value is not None:
                             raise ReturnValueIgnoredError(
                                 "@gen.engine functions cannot return values: "
-                                "%r" % result)
+                                "%r" % (value,))
                         assert value is None
                         deactivate()
                     runner = Runner(result, final_callback)
@@ -155,7 +155,8 @@ def engine(func):
                     return
             if result is not None:
                 raise ReturnValueIgnoredError(
-                    "@gen.engine functions cannot return values: %r" % result)
+                    "@gen.engine functions cannot return values: %r" %
+                    (result,))
             deactivate()
             # no yield, so we're done
     return wrapper
@@ -464,13 +465,13 @@ class Runner(object):
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
         if key in self.pending_callbacks:
-            raise KeyReuseError("key %r is already pending" % key)
+            raise KeyReuseError("key %r is already pending" % (key,))
         self.pending_callbacks.add(key)
 
     def is_ready(self, key):
         """Returns true if a result is available for ``key``."""
         if key not in self.pending_callbacks:
-            raise UnknownKeyError("key %r is not pending" % key)
+            raise UnknownKeyError("key %r is not pending" % (key,))
         return key in self.results
 
     def set_result(self, key, result):
@@ -534,7 +535,8 @@ class Runner(object):
                     except Exception:
                         self.exc_info = sys.exc_info()
                 else:
-                    self.exc_info = (BadYieldError("yielded unknown object %r" % yielded),)
+                    self.exc_info = (BadYieldError(
+                            "yielded unknown object %r" % (yielded,)),)
         finally:
             self.running = False
 
