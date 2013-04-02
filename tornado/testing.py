@@ -377,6 +377,11 @@ def gen_test(f):
     return wrapper
 
 
+# Without this attribute, nosetests will try to run gen_test as a test
+# anywhere it is imported.
+gen_test.__test__ = False
+
+
 class LogTrapTestCase(unittest.TestCase):
     """A test case that captures and discards all logging output
     if the test passes.
