@@ -40,9 +40,9 @@ import socket
 import sys
 
 try:
-    from io import StringIO  # py3
-except ImportError:
     from cStringIO import StringIO  # py2
+except ImportError:
+    from io import StringIO  # py3
 
 # Tornado's own test suite requires the updated unittest module
 # (either py27+ or unittest2) so tornado.test.util enforces
