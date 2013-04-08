@@ -297,7 +297,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
     def test_empty_body(self):
         response = self.fetch("/expecting_empty_body", method="POST")
         self.assertEqual(response.code, 200)
-        self.assertEqual(response.body, "ok")
+        self.assertEqual(response.body, b'ok')
 
     def test_connection_refused(self):
         server_socket, port = bind_unused_port()
