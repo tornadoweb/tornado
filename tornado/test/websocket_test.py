@@ -32,3 +32,14 @@ class WebSocketTest(AsyncHTTPTestCase):
         ws.read_message(self.stop)
         response = self.wait().result()
         self.assertEqual(response, 'hello')
+    
+    @gen_test
+    def test_websocket_fail(self):
+        try:
+            ws = yield websocket_connect(
+                'ws://localhost:%d/no_websock' % self.get_http_port(),
+                io_loop=self.io_loop)
+        except:
+            pass
+        else:
+            self.fail('Should\'ve caught an Exception')

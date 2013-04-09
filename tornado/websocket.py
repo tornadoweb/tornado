@@ -746,6 +746,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     def _on_close(self):
         self.on_message(None)
 
+    def _on_body(self, body):
+        self.connect_future.set_exception(Exception('Could not connect.'))
+
     def _handle_1xx(self, code):
         assert code == 101
         assert self.headers['Upgrade'].lower() == 'websocket'
