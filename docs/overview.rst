@@ -971,25 +971,39 @@ Debug mode and automatic reloading
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you pass ``debug=True`` to the ``Application`` constructor, the app
-will be run in debug mode. In this mode, templates will not be cached
-and the app will watch for changes to its source files and reload itself
-when anything changes. This reduces the need to manually restart the
-server during development. However, certain failures (such as syntax
-errors at import time) can still take the server down in a way that
-debug mode cannot currently recover from.
+will be run in debug/development mode. In this mode, several features
+intended for convenience while developing will be enabled:
+
+* The app will watch for changes to its source files and reload itself
+  when anything changes. This reduces the need to manually restart the
+  server during development. However, certain failures (such as syntax
+  errors at import time) can still take the server down in a way that
+  debug mode cannot currently recover from.
+* Templates will not be cached, nor will static file hashes (used by the
+  ``static_url`` function)
+* When an exception in a ``RequestHandler`` is not caught, an error
+  page including a stack trace will be generated.
 
 Debug mode is not compatible with ``HTTPServer``'s multi-process mode.
-You must not give ``HTTPServer.start`` an argument greater than 1 if you
-are using debug mode.
+You must not give ``HTTPServer.start`` an argument other than 1 (or
+call `tornado.process.fork_processes`) if you are using debug mode.
 
 The automatic reloading feature of debug mode is available as a
-standalone module in ``tornado.autoreload``, and is optionally used by
-the test runner in ``tornado.testing.main``.
+standalone module in ``tornado.autoreload``.  The two can be used in
+combination to provide extra robustness against syntax errors: set
+``debug=True`` within the app to detect changes while it is running,
+and start it with ``python -m tornado.autoreload myserver.py`` to catch
+any syntax errors or other errors at startup.
 
 Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
 because it re-executes Python using ``sys.executable`` and ``sys.argv``.
 Additionally, modifying these variables will cause reloading to behave
 incorrectly.
+
+On some platforms (including Windows and Mac OSX prior to 10.6), the
+process cannot be updated "in-place", so when a code change is
+detected the old server exits and a new one starts.  This has been
+known to confuse some IDEs.
 
 
 Running Tornado in production
