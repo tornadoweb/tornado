@@ -93,6 +93,11 @@ class HostEchoHandler(RequestHandler):
         self.write(self.request.headers["Host"])
 
 
+class EmptyBodyHandler(RequestHandler):
+    def post(self):
+        self.write("ok")
+
+
 class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(SimpleHTTPClientTestCase, self).setUp()
@@ -115,6 +120,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             url("/see_other_post", SeeOtherPostHandler),
             url("/see_other_get", SeeOtherGetHandler),
             url("/host_echo", HostEchoHandler),
+            url("/expecting_empty_body", EmptyBodyHandler)
         ], gzip=True)
 
     def test_singleton(self):
@@ -287,6 +293,11 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
         self.http_client.fetch(url, self.stop)
         response = self.wait()
         self.assertTrue(host_re.match(response.body), response.body)
+
+    def test_empty_body(self):
+        response = self.fetch("/expecting_empty_body", method="POST")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b'ok')
 
     def test_connection_refused(self):
         server_socket, port = bind_unused_port()
