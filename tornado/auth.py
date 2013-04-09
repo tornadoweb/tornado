@@ -1096,6 +1096,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     _OAUTH_AUTHORIZE_URL = "https://graph.facebook.com/oauth/authorize?"
     _OAUTH_NO_CALLBACKS = False
 
+    @_auth_return_future
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
                                code, callback, extra_fields=None):
         """Handles the login for the Facebook user, returning a user object.
@@ -1137,10 +1138,9 @@ class FacebookGraphMixin(OAuth2Mixin):
                                        client_secret, callback, fields))
 
     def _on_access_token(self, redirect_uri, client_id, client_secret,
-                         callback, fields, response):
+                         future, fields, response):
         if response.error:
-            gen_log.warning('Facebook auth error: %s' % str(response))
-            callback(None)
+            future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
             return
 
         args = escape.parse_qs_bytes(escape.native_str(response.body))
@@ -1152,14 +1152,14 @@ class FacebookGraphMixin(OAuth2Mixin):
         self.facebook_request(
             path="/me",
             callback=self.async_callback(
-                self._on_get_user_info, callback, session, fields),
+                self._on_get_user_info, future, session, fields),
             access_token=session["access_token"],
             fields=",".join(fields)
         )
 
-    def _on_get_user_info(self, callback, session, fields, user):
+    def _on_get_user_info(self, future, session, fields, user):
         if user is None:
-            callback(None)
+            future.set_result(None)
             return
 
         fieldmap = {}
@@ -1167,8 +1167,9 @@ class FacebookGraphMixin(OAuth2Mixin):
             fieldmap[field] = user.get(field)
 
         fieldmap.update({"access_token": session["access_token"], "session_expires": session.get("expires")})
-        callback(fieldmap)
+        future.set_result(fieldmap)
 
+    @_auth_return_future
     def facebook_request(self, path, callback, access_token=None,
                          post_args=None, **args):
         """Fetches the given relative API path, e.g., "/btaylor/picture"
@@ -1220,13 +1221,13 @@ class FacebookGraphMixin(OAuth2Mixin):
         else:
             http.fetch(url, callback=callback)
 
-    def _on_facebook_request(self, callback, response):
+    def _on_facebook_request(self, future, response):
         if response.error:
-            gen_log.warning("Error response %s fetching %s", response.error,
-                            response.request.url)
-            callback(None)
+            future.set_exception(AuthError("Error response %s fetching %s", 
+                                    response.error, response.request.url))
             return
-        callback(escape.json_decode(response.body))
+
+        future.set_result(escape.json_decode(response.body))
 
     def get_auth_http_client(self):
         """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
