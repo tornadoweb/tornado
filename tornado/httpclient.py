@@ -373,7 +373,10 @@ class HTTPResponse(object):
     def __init__(self, request, code, headers=None, buffer=None,
                  effective_url=None, error=None, request_time=None,
                  time_info=None, reason=None):
-        self.request = request
+        if isinstance(request, _RequestProxy):
+            self.request = request.request
+        else:
+            self.request = request
         self.code = code
         self.reason = reason or httputil.responses.get(code, "Unknown")
         if headers is not None:

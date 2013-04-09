@@ -334,6 +334,19 @@ Transfer-Encoding: chunked
             self.assertEqual(e.code, 404)
             self.assertEqual(e.response.code, 404)
 
+    @gen_test
+    def test_reuse_request_from_response(self):
+        # The response.request attribute should be an HTTPRequest, not
+        # a _RequestProxy.
+        # This test uses self.http_client.fetch because self.fetch calls
+        # self.get_url on the input unconditionally.
+        url = self.get_url('/hello')
+        response = yield self.http_client.fetch(url)
+        self.assertEqual(response.request.url, url)
+        self.assertTrue(isinstance(response.request, HTTPRequest))
+        response2 = yield self.http_client.fetch(response.request)
+        self.assertEqual(response2.body, b'Hello world!')
+
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):
