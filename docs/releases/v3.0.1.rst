@@ -12,6 +12,8 @@ Apr 8, 2013
   as a (broken) test by ``nose``.
 * Work around a bug in Ubuntu 13.04 betas involving an incomplete backport
   of the `ssl.match_hostname` function.
+* `tornado.websocket.websocket_connect` now fails cleanly when it attempts
+  to connect to a non-websocket url.
 * `tornado.testing.LogTrapTestCase` once again works with byte strings
   on Python 2.
 * The ``request`` attribute of `tornado.httpclient.HTTPResponse` is

@@ -46,6 +46,10 @@ except NameError:
     xrange = range  # py3
 
 
+class WebSocketError(Exception):
+    pass
+
+
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
 
@@ -740,14 +744,19 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         })
 
         super(WebSocketClientConnection, self).__init__(
-            io_loop, None, request, lambda: None, lambda response: None,
+            io_loop, None, request, lambda: None, self._on_http_response,
             104857600, Resolver(io_loop=io_loop))
 
     def _on_close(self):
         self.on_message(None)
 
-    def _on_body(self, body):
-        self.connect_future.set_exception(Exception('Could not connect.'))
+    def _on_http_response(self, response):
+        if not self.connect_future.done():
+            if response.error:
+                self.connect_future.set_exception(response.error)
+            else:
+                self.connect_future.set_exception(WebSocketError(
+                        "Non-websocket response"))
 
     def _handle_1xx(self, code):
         assert code == 101
@@ -798,7 +807,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         pass
 
 
-def websocket_connect(url, io_loop=None, callback=None):
+def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None):
     """Client-side websocket support.
 
     Takes a url and returns a Future whose result is a
@@ -806,7 +815,7 @@ def websocket_connect(url, io_loop=None, callback=None):
     """
     if io_loop is None:
         io_loop = IOLoop.current()
-    request = httpclient.HTTPRequest(url)
+    request = httpclient.HTTPRequest(url, connect_timeout=connect_timeout)
     request = httpclient._RequestProxy(
         request, httpclient.HTTPRequest._DEFAULTS)
     conn = WebSocketClientConnection(io_loop, request)

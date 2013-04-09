@@ -1,17 +1,24 @@
-from tornado.testing import AsyncHTTPTestCase, gen_test
-from tornado.web import Application
-from tornado.websocket import WebSocketHandler, websocket_connect
+from tornado.httpclient import HTTPError
+from tornado.log import gen_log
+from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
+from tornado.web import Application, RequestHandler
+from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError
 
 
 class EchoHandler(WebSocketHandler):
     def on_message(self, message):
         self.write_message(message, isinstance(message, bytes))
 
+class NonWebSocketHandler(RequestHandler):
+    def get(self):
+        self.write('ok')
+
 
 class WebSocketTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
             ('/echo', EchoHandler),
+            ('/non_ws', NonWebSocketHandler),
         ])
 
     @gen_test
@@ -32,14 +39,30 @@ class WebSocketTest(AsyncHTTPTestCase):
         ws.read_message(self.stop)
         response = self.wait().result()
         self.assertEqual(response, 'hello')
-    
+
     @gen_test
-    def test_websocket_fail(self):
-        try:
-            ws = yield websocket_connect(
-                'ws://localhost:%d/no_websock' % self.get_http_port(),
+    def test_websocket_http_fail(self):
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(
+                'ws://localhost:%d/notfound' % self.get_http_port(),
                 io_loop=self.io_loop)
-        except:
-            pass
-        else:
-            self.fail('Should\'ve caught an Exception')
+        self.assertEqual(cm.exception.code, 404)
+
+    @gen_test
+    def test_websocket_http_success(self):
+        with self.assertRaises(WebSocketError):
+            yield websocket_connect(
+                'ws://localhost:%d/non_ws' % self.get_http_port(),
+                io_loop=self.io_loop)
+
+    @gen_test
+    def test_websocket_network_fail(self):
+        sock, port = bind_unused_port()
+        sock.close()
+        with self.assertRaises(HTTPError) as cm:
+            with ExpectLog(gen_log, ".*"):
+                yield websocket_connect(
+                    'ws://localhost:%d/' % port,
+                    io_loop=self.io_loop,
+                    connect_timeout=0.01)
+        self.assertEqual(cm.exception.code, 599)
