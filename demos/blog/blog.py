@@ -53,7 +53,7 @@ class Application(tornado.web.Application):
             xsrf_cookies=True,
             cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
             login_url="/auth/login",
-            autoescape=None,
+            debug=True,
         )
         tornado.web.Application.__init__(self, handlers, **settings)
 
@@ -69,7 +69,7 @@ class BaseHandler(tornado.web.RequestHandler):
         return self.application.db
 
     def get_current_user(self):
-        user_id = self.get_secure_cookie("user")
+        user_id = self.get_secure_cookie("blogdemo_user")
         if not user_id: return None
         return self.db.get("SELECT * FROM authors WHERE id = %s", int(user_id))
 
@@ -170,13 +170,13 @@ class AuthLoginHandler(BaseHandler, tornado.auth.GoogleMixin):
                 return
         else:
             author_id = author["id"]
-        self.set_secure_cookie("user", str(author_id))
+        self.set_secure_cookie("blogdemo_user", str(author_id))
         self.redirect(self.get_argument("next", "/"))
 
 
 class AuthLogoutHandler(BaseHandler):
     def get(self):
-        self.clear_cookie("user")
+        self.clear_cookie("blogdemo_user")
         self.redirect(self.get_argument("next", "/"))
 
 

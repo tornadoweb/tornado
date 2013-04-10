@@ -1,0 +1,12 @@
+
+{
+   "url": "ws://localhost:9001",
+
+   "options": {"failByDrop": false},
+   "outdir": "./reports/clients",
+   "webport": 8080,
+
+   "cases": ["*"],
+   "exclude-cases": ["9.*"],
+   "exclude-agent-cases": {}
+}

@@ -1,19 +1,44 @@
 from __future__ import absolute_import, division, print_function, with_statement
+
+import contextlib
 import functools
+import sys
+import textwrap
+import time
+
+from tornado.concurrent import return_future
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 from tornado.log import app_log
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog
-from tornado.util import b
+from tornado import stack_context
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.test.util import unittest, skipOnTravis
 from tornado.web import Application, RequestHandler, asynchronous
 
 from tornado import gen
 
 
-class GenTest(AsyncTestCase):
+skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 not available')
+
+
+class GenEngineTest(AsyncTestCase):
+    def setUp(self):
+        super(GenEngineTest, self).setUp()
+        self.named_contexts = []
+
+    def named_context(self, name):
+        @contextlib.contextmanager
+        def context():
+            self.named_contexts.append(name)
+            try:
+                yield
+            finally:
+                self.assertEqual(self.named_contexts.pop(), name)
+        return context
+
     def run_gen(self, f):
         f()
-        self.wait()
+        return self.wait()
 
     def delay_callback(self, iterations, callback, arg):
         """Runs callback(arg) after a number of IOLoop iterations."""
@@ -21,7 +46,11 @@ class GenTest(AsyncTestCase):
             callback(arg)
         else:
             self.io_loop.add_callback(functools.partial(
-                    self.delay_callback, iterations - 1, callback, arg))
+                self.delay_callback, iterations - 1, callback, arg))
+
+    @return_future
+    def async_future(self, result, callback):
+        self.io_loop.add_callback(callback, result)
 
     def test_no_yield(self):
         @gen.engine
@@ -96,11 +125,28 @@ class GenTest(AsyncTestCase):
             self.stop()
         self.run_gen(f)
 
+    def test_with_arg_tuple(self):
+        @gen.engine
+        def f():
+            (yield gen.Callback((1, 2)))((3, 4))
+            res = yield gen.Wait((1, 2))
+            self.assertEqual((3, 4), res)
+            self.stop()
+        self.run_gen(f)
+
     def test_key_reuse(self):
         @gen.engine
         def f():
             yield gen.Callback("k1")
             yield gen.Callback("k1")
+            self.stop()
+        self.assertRaises(gen.KeyReuseError, self.run_gen, f)
+
+    def test_key_reuse_tuple(self):
+        @gen.engine
+        def f():
+            yield gen.Callback((1, 2))
+            yield gen.Callback((1, 2))
             self.stop()
         self.assertRaises(gen.KeyReuseError, self.run_gen, f)
 
@@ -112,10 +158,25 @@ class GenTest(AsyncTestCase):
             self.stop()
         self.assertRaises(gen.UnknownKeyError, self.run_gen, f)
 
+    def test_key_mismatch_tuple(self):
+        @gen.engine
+        def f():
+            yield gen.Callback((1, 2))
+            yield gen.Wait((2, 3))
+            self.stop()
+        self.assertRaises(gen.UnknownKeyError, self.run_gen, f)
+
     def test_leaked_callback(self):
         @gen.engine
         def f():
             yield gen.Callback("k1")
+            self.stop()
+        self.assertRaises(gen.LeakedCallbackError, self.run_gen, f)
+
+    def test_leaked_callback_tuple(self):
+        @gen.engine
+        def f():
+            yield gen.Callback((1, 2))
             self.stop()
         self.assertRaises(gen.LeakedCallbackError, self.run_gen, f)
 
@@ -136,6 +197,12 @@ class GenTest(AsyncTestCase):
         @gen.engine
         def f():
             yield 42
+        self.assertRaises(gen.BadYieldError, self.run_gen, f)
+
+    def test_bogus_yield_tuple(self):
+        @gen.engine
+        def f():
+            yield (1, 2)
         self.assertRaises(gen.BadYieldError, self.run_gen, f)
 
     def test_reuse(self):
@@ -216,10 +283,31 @@ class GenTest(AsyncTestCase):
             responses = yield [
                 gen.Task(self.delay_callback, 3, arg="v1"),
                 gen.Task(self.delay_callback, 1, arg="v2"),
-                ]
+            ]
             self.assertEqual(responses, ["v1", "v2"])
             self.stop()
         self.run_gen(f)
+
+    @skipOnTravis
+    @gen_test
+    def test_multi_performance(self):
+        # Yielding a list used to have quadratic performance; make
+        # sure a large list stays reasonable.  On my laptop a list of
+        # 2000 used to take 1.8s, now it takes 0.12.
+        start = time.time()
+        yield [gen.Task(self.io_loop.add_callback) for i in range(2000)]
+        end = time.time()
+        self.assertLess(end - start, 1.0)
+
+    @gen_test
+    def test_future(self):
+        result = yield self.async_future(1)
+        self.assertEqual(result, 1)
+
+    @gen_test
+    def test_multi_future(self):
+        results = yield [self.async_future(1), self.async_future(2)]
+        self.assertEqual(results, [1, 2])
 
     def test_arguments(self):
         @gen.engine
@@ -253,8 +341,6 @@ class GenTest(AsyncTestCase):
     def test_stack_context_leak(self):
         # regression test: repeated invocations of a gen-based
         # function should not result in accumulated stack_contexts
-        from tornado import stack_context
-
         @gen.engine
         def inner(callback):
             yield gen.Task(self.io_loop.add_callback)
@@ -272,8 +358,6 @@ class GenTest(AsyncTestCase):
 
     def test_stack_context_leak_exception(self):
         # same as previous, but with a function that exits with an exception
-        from tornado import stack_context
-
         @gen.engine
         def inner(callback):
             yield gen.Task(self.io_loop.add_callback)
@@ -291,6 +375,324 @@ class GenTest(AsyncTestCase):
             self.stop()
         initial_stack_depth = len(stack_context._state.contexts)
         self.run_gen(outer)
+
+    def function_with_stack_context(self, callback):
+        # Technically this function should stack_context.wrap its callback
+        # upon entry.  However, it is very common for this step to be
+        # omitted.
+        def step2():
+            self.assertEqual(self.named_contexts, ['a'])
+            self.io_loop.add_callback(callback)
+
+        with stack_context.StackContext(self.named_context('a')):
+            self.io_loop.add_callback(step2)
+
+    @gen_test
+    def test_wait_transfer_stack_context(self):
+        # Wait should not pick up contexts from where callback was invoked,
+        # even if that function improperly fails to wrap its callback.
+        cb = yield gen.Callback('k1')
+        self.function_with_stack_context(cb)
+        self.assertEqual(self.named_contexts, [])
+        yield gen.Wait('k1')
+        self.assertEqual(self.named_contexts, [])
+
+    @gen_test
+    def test_task_transfer_stack_context(self):
+        yield gen.Task(self.function_with_stack_context)
+        self.assertEqual(self.named_contexts, [])
+
+    def test_raise_after_stop(self):
+        # This pattern will be used in the following tests so make sure
+        # the exception propagates as expected.
+        @gen.engine
+        def f():
+            self.stop()
+            1 / 0
+
+        with self.assertRaises(ZeroDivisionError):
+            self.run_gen(f)
+
+    def test_sync_raise_return(self):
+        # gen.Return is allowed in @gen.engine, but it may not be used
+        # to return a value.
+        @gen.engine
+        def f():
+            self.stop(42)
+            raise gen.Return()
+
+        result = self.run_gen(f)
+        self.assertEqual(result, 42)
+
+    def test_async_raise_return(self):
+        @gen.engine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            self.stop(42)
+            raise gen.Return()
+
+        result = self.run_gen(f)
+        self.assertEqual(result, 42)
+
+    def test_sync_raise_return_value(self):
+        @gen.engine
+        def f():
+            raise gen.Return(42)
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
+    def test_sync_raise_return_value_tuple(self):
+        @gen.engine
+        def f():
+            raise gen.Return((1, 2))
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
+    def test_async_raise_return_value(self):
+        @gen.engine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            raise gen.Return(42)
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
+    def test_async_raise_return_value_tuple(self):
+        @gen.engine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            raise gen.Return((1, 2))
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
+    def test_return_value(self):
+        # It is an error to apply @gen.engine to a function that returns
+        # a value.
+        @gen.engine
+        def f():
+            return 42
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
+    def test_return_value_tuple(self):
+        # It is an error to apply @gen.engine to a function that returns
+        # a value.
+        @gen.engine
+        def f():
+            return (1, 2)
+
+        with self.assertRaises(gen.ReturnValueIgnoredError):
+            self.run_gen(f)
+
+
+class GenCoroutineTest(AsyncTestCase):
+    def setUp(self):
+        # Stray StopIteration exceptions can lead to tests exiting prematurely,
+        # so we need explicit checks here to make sure the tests run all
+        # the way through.
+        self.finished = False
+        super(GenCoroutineTest, self).setUp()
+
+    def tearDown(self):
+        super(GenCoroutineTest, self).tearDown()
+        assert self.finished
+
+    @gen_test
+    def test_sync_gen_return(self):
+        @gen.coroutine
+        def f():
+            raise gen.Return(42)
+        result = yield f()
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @gen_test
+    def test_async_gen_return(self):
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            raise gen.Return(42)
+        result = yield f()
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @gen_test
+    def test_sync_return(self):
+        @gen.coroutine
+        def f():
+            return 42
+        result = yield f()
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @skipBefore33
+    @gen_test
+    def test_async_return(self):
+        # It is a compile-time error to return a value in a generator
+        # before Python 3.3, so we must test this with exec.
+        # Flatten the real global and local namespace into our fake globals:
+        # it's all global from the perspective of f().
+        global_namespace = dict(globals(), **locals())
+        local_namespace = {}
+        exec(textwrap.dedent("""
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            return 42
+        """), global_namespace, local_namespace)
+        result = yield local_namespace['f']()
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @skipBefore33
+    @gen_test
+    def test_async_early_return(self):
+        # A yield statement exists but is not executed, which means
+        # this function "returns" via an exception.  This exception
+        # doesn't happen before the exception handling is set up.
+        global_namespace = dict(globals(), **locals())
+        local_namespace = {}
+        exec(textwrap.dedent("""
+        @gen.coroutine
+        def f():
+            if True:
+                return 42
+            yield gen.Task(self.io_loop.add_callback)
+        """), global_namespace, local_namespace)
+        result = yield local_namespace['f']()
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @gen_test
+    def test_sync_return_no_value(self):
+        @gen.coroutine
+        def f():
+            return
+        result = yield f()
+        self.assertEqual(result, None)
+        self.finished = True
+
+    @gen_test
+    def test_async_return_no_value(self):
+        # Without a return value we don't need python 3.3.
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            return
+        result = yield f()
+        self.assertEqual(result, None)
+        self.finished = True
+
+    @gen_test
+    def test_sync_raise(self):
+        @gen.coroutine
+        def f():
+            1 / 0
+        # The exception is raised when the future is yielded
+        # (or equivalently when its result method is called),
+        # not when the function itself is called).
+        future = f()
+        with self.assertRaises(ZeroDivisionError):
+            yield future
+        self.finished = True
+
+    @gen_test
+    def test_async_raise(self):
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            1 / 0
+        future = f()
+        with self.assertRaises(ZeroDivisionError):
+            yield future
+        self.finished = True
+
+    @gen_test
+    def test_pass_callback(self):
+        @gen.coroutine
+        def f():
+            raise gen.Return(42)
+        result = yield gen.Task(f)
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @gen_test
+    def test_replace_yieldpoint_exception(self):
+        # Test exception handling: a coroutine can catch one exception
+        # raised by a yield point and raise a different one.
+        @gen.coroutine
+        def f1():
+            1 / 0
+
+        @gen.coroutine
+        def f2():
+            try:
+                yield f1()
+            except ZeroDivisionError:
+                raise KeyError()
+
+        future = f2()
+        with self.assertRaises(KeyError):
+            yield future
+        self.finished = True
+
+    @gen_test
+    def test_swallow_yieldpoint_exception(self):
+        # Test exception handling: a coroutine can catch an exception
+        # raised by a yield point and not raise a different one.
+        @gen.coroutine
+        def f1():
+            1 / 0
+
+        @gen.coroutine
+        def f2():
+            try:
+                yield f1()
+            except ZeroDivisionError:
+                raise gen.Return(42)
+
+        result = yield f2()
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @gen_test
+    def test_replace_context_exception(self):
+        # Test exception handling: exceptions thrown into the stack context
+        # can be caught and replaced.
+        @gen.coroutine
+        def f2():
+            self.io_loop.add_callback(lambda: 1 / 0)
+            try:
+                yield gen.Task(self.io_loop.add_timeout,
+                               self.io_loop.time() + 10)
+            except ZeroDivisionError:
+                raise KeyError()
+
+        future = f2()
+        with self.assertRaises(KeyError):
+            yield future
+        self.finished = True
+
+    @gen_test
+    def test_swallow_context_exception(self):
+        # Test exception handling: exceptions thrown into the stack context
+        # can be caught and ignored.
+        @gen.coroutine
+        def f2():
+            self.io_loop.add_callback(lambda: 1 / 0)
+            try:
+                yield gen.Task(self.io_loop.add_timeout,
+                               self.io_loop.time() + 10)
+            except ZeroDivisionError:
+                raise gen.Return(42)
+
+        result = yield f2()
+        self.assertEqual(result, 42)
+        self.finished = True
 
 
 class GenSequenceHandler(RequestHandler):
@@ -310,6 +712,41 @@ class GenSequenceHandler(RequestHandler):
         self.finish("3")
 
 
+class GenCoroutineSequenceHandler(RequestHandler):
+    @asynchronous
+    @gen.coroutine
+    def get(self):
+        self.io_loop = self.request.connection.stream.io_loop
+        self.io_loop.add_callback((yield gen.Callback("k1")))
+        yield gen.Wait("k1")
+        self.write("1")
+        self.io_loop.add_callback((yield gen.Callback("k2")))
+        yield gen.Wait("k2")
+        self.write("2")
+        # reuse an old key
+        self.io_loop.add_callback((yield gen.Callback("k1")))
+        yield gen.Wait("k1")
+        self.finish("3")
+
+
+class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
+    @asynchronous
+    @gen.coroutine
+    def get(self):
+        self.io_loop = self.request.connection.stream.io_loop
+        self.io_loop.add_callback((yield gen.Callback("k1")))
+        yield gen.Wait("k1")
+        self.write("1")
+        self.io_loop.add_callback((yield gen.Callback("k2")))
+        yield gen.Wait("k2")
+        self.write("2")
+        # reuse an old key
+        self.io_loop.add_callback((yield gen.Callback("k1")))
+        yield gen.Wait("k1")
+        # just write, don't finish
+        self.write("3")
+
+
 class GenTaskHandler(RequestHandler):
     @asynchronous
     @gen.engine
@@ -318,12 +755,22 @@ class GenTaskHandler(RequestHandler):
         client = AsyncHTTPClient(io_loop=io_loop)
         response = yield gen.Task(client.fetch, self.get_argument('url'))
         response.rethrow()
-        self.finish(b("got response: ") + response.body)
+        self.finish(b"got response: " + response.body)
 
 
 class GenExceptionHandler(RequestHandler):
     @asynchronous
     @gen.engine
+    def get(self):
+        # This test depends on the order of the two decorators.
+        io_loop = self.request.connection.stream.io_loop
+        yield gen.Task(io_loop.add_callback)
+        raise Exception("oops")
+
+
+class GenCoroutineExceptionHandler(RequestHandler):
+    @asynchronous
+    @gen.coroutine
     def get(self):
         # This test depends on the order of the two decorators.
         io_loop = self.request.connection.stream.io_loop
@@ -350,19 +797,31 @@ class GenYieldExceptionHandler(RequestHandler):
 class GenWebTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
-                ('/sequence', GenSequenceHandler),
-                ('/task', GenTaskHandler),
-                ('/exception', GenExceptionHandler),
-                ('/yield_exception', GenYieldExceptionHandler),
-                ])
+            ('/sequence', GenSequenceHandler),
+            ('/coroutine_sequence', GenCoroutineSequenceHandler),
+            ('/coroutine_unfinished_sequence',
+             GenCoroutineUnfinishedSequenceHandler),
+            ('/task', GenTaskHandler),
+            ('/exception', GenExceptionHandler),
+            ('/coroutine_exception', GenCoroutineExceptionHandler),
+            ('/yield_exception', GenYieldExceptionHandler),
+        ])
 
     def test_sequence_handler(self):
         response = self.fetch('/sequence')
-        self.assertEqual(response.body, b("123"))
+        self.assertEqual(response.body, b"123")
+
+    def test_coroutine_sequence_handler(self):
+        response = self.fetch('/coroutine_sequence')
+        self.assertEqual(response.body, b"123")
+
+    def test_coroutine_unfinished_sequence_handler(self):
+        response = self.fetch('/coroutine_unfinished_sequence')
+        self.assertEqual(response.body, b"123")
 
     def test_task_handler(self):
         response = self.fetch('/task?url=%s' % url_escape(self.get_url('/sequence')))
-        self.assertEqual(response.body, b("got response: 123"))
+        self.assertEqual(response.body, b"got response: 123")
 
     def test_exception_handler(self):
         # Make sure we get an error and not a timeout
@@ -370,6 +829,12 @@ class GenWebTest(AsyncHTTPTestCase):
             response = self.fetch('/exception')
         self.assertEqual(500, response.code)
 
+    def test_coroutine_exception_handler(self):
+        # Make sure we get an error and not a timeout
+        with ExpectLog(app_log, "Uncaught exception GET /coroutine_exception"):
+            response = self.fetch('/coroutine_exception')
+        self.assertEqual(500, response.code)
+
     def test_yield_exception_handler(self):
         response = self.fetch('/yield_exception')
-        self.assertEqual(response.body, b('ok'))
+        self.assertEqual(response.body, b'ok')

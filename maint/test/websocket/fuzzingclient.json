@@ -1,0 +1,19 @@
+{
+   "options": {"failByDrop": false},
+   "outdir": "./reports/servers",
+
+   "servers": [
+       {"agent": "Tornado/py26", "url": "ws://localhost:9001",
+        "options": {"version": 18}},
+       {"agent": "Tornado/py27", "url": "ws://localhost:9002",
+        "options": {"version": 18}},
+       {"agent": "Tornado/py32", "url": "ws://localhost:9003",
+        "options": {"version": 18}},
+       {"agent": "Tornado/pypy", "url": "ws://localhost:9004",
+        "options": {"version": 18}}
+       ],
+
+   "cases": ["*"],
+   "exclude-cases": ["9.*"],
+   "exclude-agent-cases": {}
+}

@@ -2,8 +2,8 @@
 
 {% block body %}
   <form action="{{ request.path }}" method="post" class="compose">
-    <div style="margin-bottom:5px"><input name="title" type="text" class="title" value="{{ escape(entry.title) if entry else "" }}"/></div>
-    <div style="margin-bottom:5px"><textarea name="markdown" rows="30" cols="40" class="markdown">{{ escape(entry.markdown) if entry else "" }}</textarea></div>
+    <div style="margin-bottom:5px"><input name="title" type="text" class="title" value="{{ entry.title if entry else "" }}"/></div>
+    <div style="margin-bottom:5px"><textarea name="markdown" rows="30" cols="40" class="markdown">{{ entry.markdown if entry else "" }}</textarea></div>
     <div>
       <div style="float:right"><a href="http://daringfireball.net/projects/markdown/syntax">{{ _("Syntax documentation") }}</a></div>
       <input type="submit" value="{{ _("Save changes") if entry else _("Publish post") }}" class="submit"/>
@@ -12,7 +12,7 @@
     {% if entry %}
       <input type="hidden" name="id" value="{{ entry.id }}"/>
     {% end %}
-    {{ xsrf_form_html() }}
+    {% module xsrf_form_html() %}
   </form>
 {% end %}
 
@@ -39,4 +39,3 @@
   //]]>
   </script>
 {% end %}
-

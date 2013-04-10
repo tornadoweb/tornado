@@ -28,12 +28,9 @@ import sys
 from tornado.util import bytes_type, unicode_type, basestring_type, u
 
 try:
-    from urllib.parse import parse_qs  # py3
+    from urllib.parse import parse_qs as _parse_qs  # py3
 except ImportError:
-    try:
-        from urlparse import parse_qs  # Python 2.6+
-    except ImportError:
-        from cgi import parse_qs
+    from urlparse import parse_qs as _parse_qs  # Python 2.6+
 
 try:
     import htmlentitydefs  # py2
@@ -45,30 +42,7 @@ try:
 except ImportError:
     import urllib as urllib_parse  # py2
 
-# json module is in the standard library as of python 2.6; fall back to
-# simplejson if present for older versions.
-try:
-    import json
-    assert hasattr(json, "loads") and hasattr(json, "dumps")
-    _json_decode = json.loads
-    _json_encode = json.dumps
-except Exception:
-    try:
-        import simplejson
-        _json_decode = lambda s: simplejson.loads(_unicode(s))
-        _json_encode = lambda v: simplejson.dumps(v)
-    except ImportError:
-        try:
-            # For Google AppEngine
-            from django.utils import simplejson
-            _json_decode = lambda s: simplejson.loads(_unicode(s))
-            _json_encode = lambda v: simplejson.dumps(v)
-        except ImportError:
-            def _json_decode(s):
-                raise NotImplementedError(
-                    "A JSON parser is required, e.g., simplejson at "
-                    "http://pypi.python.org/pypi/simplejson/")
-            _json_encode = _json_decode
+import json
 
 try:
     unichr
@@ -80,7 +54,7 @@ _XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}
 
 
 def xhtml_escape(value):
-    """Escapes a string so it is valid within XML or XHTML."""
+    """Escapes a string so it is valid within HTML or XML."""
     return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)],
                                 to_basestring(value))
 
@@ -98,12 +72,12 @@ def json_encode(value):
     # the javscript.  Some json libraries do this escaping by default,
     # although python's standard library does not, so we do it here.
     # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
-    return _json_encode(recursive_unicode(value)).replace("</", "<\\/")
+    return json.dumps(value).replace("</", "<\\/")
 
 
 def json_decode(value):
     """Returns Python objects for the given JSON string."""
-    return _json_decode(to_basestring(value))
+    return json.loads(to_basestring(value))
 
 
 def squeeze(value):
@@ -112,7 +86,7 @@ def squeeze(value):
 
 
 def url_escape(value):
-    """Returns a valid URL-encoded version of the given value."""
+    """Returns a URL-encoded version of the given value."""
     return urllib_parse.quote_plus(utf8(value))
 
 # python 3 changed things around enough that we need two separate
@@ -132,7 +106,7 @@ if sys.version_info[0] < 3:
         else:
             return unicode_type(urllib_parse.unquote_plus(utf8(value)), encoding)
 
-    parse_qs_bytes = parse_qs
+    parse_qs_bytes = _parse_qs
 else:
     def url_unescape(value, encoding='utf-8'):
         """Decodes the given value from a URL.
@@ -157,8 +131,8 @@ else:
         """
         # This is gross, but python3 doesn't give us another way.
         # Latin1 is the universal donor of character encodings.
-        result = parse_qs(qs, keep_blank_values, strict_parsing,
-                          encoding='latin1', errors='strict')
+        result = _parse_qs(qs, keep_blank_values, strict_parsing,
+                           encoding='latin1', errors='strict')
         encoded = {}
         for k, v in result.items():
             encoded[k] = [i.encode('latin1') for i in v]
@@ -257,9 +231,9 @@ def linkify(text, shorten=False, extra_params="",
 
     Parameters:
 
-    shorten: Long urls will be shortened for display.
+    * ``shorten``: Long urls will be shortened for display.
 
-    extra_params: Extra text to include in the link tag, or a callable
+    * ``extra_params``: Extra text to include in the link tag, or a callable
         taking the link as an argument and returning the extra text
         e.g. ``linkify(text, extra_params='rel="nofollow" class="external"')``,
         or::
@@ -271,12 +245,13 @@ def linkify(text, shorten=False, extra_params="",
                     return 'class="external" rel="nofollow"'
             linkify(text, extra_params=extra_params_cb)
 
-    require_protocol: Only linkify urls which include a protocol. If this is
-        False, urls such as www.facebook.com will also be linkified.
+    * ``require_protocol``: Only linkify urls which include a protocol. If
+        this is False, urls such as www.facebook.com will also be linkified.
 
-    permitted_protocols: List (or set) of protocols which should be linkified,
-        e.g. linkify(text, permitted_protocols=["http", "ftp", "mailto"]).
-        It is very unsafe to include protocols such as "javascript".
+    * ``permitted_protocols``: List (or set) of protocols which should be
+        linkified, e.g. ``linkify(text, permitted_protocols=["http", "ftp",
+        "mailto"])``. It is very unsafe to include protocols such as
+        ``javascript``.
     """
     if extra_params and not callable(extra_params):
         extra_params = " " + extra_params.strip()
@@ -315,7 +290,7 @@ def linkify(text, shorten=False, extra_params="",
                 # (no more slug, etc), so it really just provides a little
                 # extra indication of shortening.
                 url = url[:proto_len] + parts[0] + "/" + \
-                        parts[1][:8].split('?')[0].split('.')[0]
+                    parts[1][:8].split('?')[0].split('.')[0]
 
             if len(url) > max_len * 1.5:  # still too long
                 url = url[:max_len]

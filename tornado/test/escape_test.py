@@ -5,7 +5,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import tornado.escape
 
 from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode
-from tornado.util import b, u, unicode_type
+from tornado.util import u, unicode_type, bytes_type
 from tornado.test.util import unittest
 
 linkify_tests = [
@@ -123,11 +123,11 @@ linkify_tests = [
      u('<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>')),
 
     ("www.external-link.com and www.internal-link.com/blogs extra",
-     {"extra_params": lambda href:'class="internal"' if href.startswith("http://www.internal-link.com") else 'rel="nofollow" class="external"'},
+     {"extra_params": lambda href: 'class="internal"' if href.startswith("http://www.internal-link.com") else 'rel="nofollow" class="external"'},
      u('<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a> and <a href="http://www.internal-link.com/blogs" class="internal">www.internal-link.com/blogs</a> extra')),
 
     ("www.external-link.com",
-     {"extra_params": lambda href:'    rel="nofollow" class="external"  '},
+     {"extra_params": lambda href: '    rel="nofollow" class="external"  '},
      u('<a href="http://www.external-link.com" rel="nofollow" class="external">www.external-link.com</a>')),
 ]
 
@@ -142,11 +142,11 @@ class EscapeTestCase(unittest.TestCase):
         tests = [
             ("<foo>", "&lt;foo&gt;"),
             (u("<foo>"), u("&lt;foo&gt;")),
-            (b("<foo>"), b("&lt;foo&gt;")),
+            (b"<foo>", b"&lt;foo&gt;"),
 
             ("<>&\"", "&lt;&gt;&amp;&quot;"),
             ("&amp;", "&amp;amp;"),
-            ]
+        ]
         for unescaped, escaped in tests:
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
@@ -159,7 +159,7 @@ class EscapeTestCase(unittest.TestCase):
 
             # unicode strings become utf8
             (u('\u00e9'), '%C3%A9'),
-            ]
+        ]
         for unescaped, escaped in tests:
             self.assertEqual(url_escape(unescaped), escaped)
 
@@ -168,7 +168,7 @@ class EscapeTestCase(unittest.TestCase):
             ('%C3%A9', u('\u00e9'), 'utf8'),
             ('%C3%A9', u('\u00c3\u00a9'), 'latin1'),
             ('%C3%A9', utf8(u('\u00e9')), None),
-            ]
+        ]
         for escaped, unescaped, encoding in tests:
             # input strings to url_unescape should only contain ascii
             # characters, but make sure the function accepts both byte
@@ -185,15 +185,17 @@ class EscapeTestCase(unittest.TestCase):
     def test_json_decode(self):
         # json_decode accepts both bytes and unicode, but strings it returns
         # are always unicode.
-        self.assertEqual(json_decode(b('"foo"')), u("foo"))
+        self.assertEqual(json_decode(b'"foo"'), u("foo"))
         self.assertEqual(json_decode(u('"foo"')), u("foo"))
 
         # Non-ascii bytes are interpreted as utf8
         self.assertEqual(json_decode(utf8(u('"\u00e9"'))), u("\u00e9"))
 
     def test_json_encode(self):
-        # json deals with strings, not bytes, but our encoding function should
-        # accept bytes as well as long as they are utf8.
+        # json deals with strings, not bytes.  On python 2 byte strings will
+        # convert automatically if they are utf8; on python 3 byte strings
+        # are not allowed.
         self.assertEqual(json_decode(json_encode(u("\u00e9"))), u("\u00e9"))
-        self.assertEqual(json_decode(json_encode(utf8(u("\u00e9")))), u("\u00e9"))
-        self.assertRaises(UnicodeDecodeError, json_encode, b("\xe9"))
+        if bytes_type is str:
+            self.assertEqual(json_decode(json_encode(utf8(u("\u00e9")))), u("\u00e9"))
+            self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")

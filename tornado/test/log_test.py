@@ -27,22 +27,20 @@ from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
 from tornado.options import OptionParser
 from tornado.test.util import unittest
-from tornado.util import b, u, bytes_type, basestring_type
+from tornado.util import u, bytes_type, basestring_type
+
 
 @contextlib.contextmanager
 def ignore_bytes_warning():
-    if not hasattr(warnings, 'catch_warnings'):
-        # python 2.5 doesn't have catch_warnings, but it doesn't have
-        # BytesWarning either so there's nothing to catch.
-        yield
-        return
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', category=BytesWarning)
         yield
 
 
 class LogFormatterTest(unittest.TestCase):
-    LINE_RE = re.compile(b("\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)"))
+    # Matches the output of a single logging call (which may be multiple lines
+    # if a traceback was included, so we use the DOTALL option)
+    LINE_RE = re.compile(b"(?s)\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)")
 
     def setUp(self):
         self.formatter = LogFormatter(color=False)
@@ -52,7 +50,7 @@ class LogFormatterTest(unittest.TestCase):
         # encoding issues from the control characters)
         self.formatter._colors = {
             logging.ERROR: u("\u0001"),
-            }
+        }
         self.formatter._normal = u("\u0002")
         self.formatter._color = True
         # construct a Logger directly to bypass getLogger's caching
@@ -87,13 +85,13 @@ class LogFormatterTest(unittest.TestCase):
 
     def test_basic_logging(self):
         self.logger.error("foo")
-        self.assertEqual(self.get_output(), b("foo"))
+        self.assertEqual(self.get_output(), b"foo")
 
     def test_bytes_logging(self):
         with ignore_bytes_warning():
             # This will be "\xe9" on python 2 or "b'\xe9'" on python 3
-            self.logger.error(b("\xe9"))
-            self.assertEqual(self.get_output(), utf8(repr(b("\xe9"))))
+            self.logger.error(b"\xe9")
+            self.assertEqual(self.get_output(), utf8(repr(b"\xe9")))
 
     def test_utf8_logging(self):
         self.logger.error(u("\u00e9").encode("utf8"))
@@ -106,6 +104,18 @@ class LogFormatterTest(unittest.TestCase):
             # they're ascii-only, so this degenerates into another
             # copy of test_bytes_logging.
             self.assertEqual(self.get_output(), utf8(repr(utf8(u("\u00e9")))))
+
+    def test_bytes_exception_logging(self):
+        try:
+            raise Exception(b'\xe9')
+        except Exception:
+            self.logger.exception('caught exception')
+        # This will be "Exception: \xe9" on python 2 or
+        # "Exception: b'\xe9'" on python 3.
+        output = self.get_output()
+        self.assertRegexpMatches(output, br'Exception.*\\xe9')
+        # The traceback contains newlines, which should not have been escaped.
+        self.assertNotIn(br'\n', output)
 
 
 class UnicodeLogFormatterTest(LogFormatterTest):

@@ -20,222 +20,15 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
 import os
+import re
 import socket
+import ssl
 import stat
 
-from tornado import process
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream, SSLIOStream
-from tornado.log import app_log
 from tornado.platform.auto import set_close_exec
-
-try:
-    import ssl  # Python 2.6+
-except ImportError:
-    ssl = None
-
-
-class TCPServer(object):
-    r"""A non-blocking, single-threaded TCP server.
-
-    To use `TCPServer`, define a subclass which overrides the `handle_stream`
-    method.
-
-    `TCPServer` can serve SSL traffic with Python 2.6+ and OpenSSL.
-    To make this server serve SSL traffic, send the ssl_options dictionary
-    argument with the arguments required for the `ssl.wrap_socket` method,
-    including "certfile" and "keyfile"::
-
-       TCPServer(ssl_options={
-           "certfile": os.path.join(data_dir, "mydomain.crt"),
-           "keyfile": os.path.join(data_dir, "mydomain.key"),
-       })
-
-    `TCPServer` initialization follows one of three patterns:
-
-    1. `listen`: simple single-process::
-
-            server = TCPServer()
-            server.listen(8888)
-            IOLoop.instance().start()
-
-    2. `bind`/`start`: simple multi-process::
-
-            server = TCPServer()
-            server.bind(8888)
-            server.start(0)  # Forks multiple sub-processes
-            IOLoop.instance().start()
-
-       When using this interface, an `IOLoop` must *not* be passed
-       to the `TCPServer` constructor.  `start` will always start
-       the server on the default singleton `IOLoop`.
-
-    3. `add_sockets`: advanced multi-process::
-
-            sockets = bind_sockets(8888)
-            tornado.process.fork_processes(0)
-            server = TCPServer()
-            server.add_sockets(sockets)
-            IOLoop.instance().start()
-
-       The `add_sockets` interface is more complicated, but it can be
-       used with `tornado.process.fork_processes` to give you more
-       flexibility in when the fork happens.  `add_sockets` can
-       also be used in single-process servers if you want to create
-       your listening sockets in some way other than
-       `bind_sockets`.
-    """
-    def __init__(self, io_loop=None, ssl_options=None):
-        self.io_loop = io_loop
-        self.ssl_options = ssl_options
-        self._sockets = {}  # fd -> socket object
-        self._pending_sockets = []
-        self._started = False
-
-        # Verify the SSL options. Otherwise we don't get errors until clients
-        # connect. This doesn't verify that the keys are legitimate, but
-        # the SSL module doesn't do that until there is a connected socket
-        # which seems like too much work
-        if self.ssl_options is not None:
-            # Only certfile is required: it can contain both keys
-            if 'certfile' not in self.ssl_options:
-                raise KeyError('missing key "certfile" in ssl_options')
-
-            if not os.path.exists(self.ssl_options['certfile']):
-                raise ValueError('certfile "%s" does not exist' %
-                    self.ssl_options['certfile'])
-            if ('keyfile' in self.ssl_options and
-                    not os.path.exists(self.ssl_options['keyfile'])):
-                raise ValueError('keyfile "%s" does not exist' %
-                    self.ssl_options['keyfile'])
-
-    def listen(self, port, address=""):
-        """Starts accepting connections on the given port.
-
-        This method may be called more than once to listen on multiple ports.
-        `listen` takes effect immediately; it is not necessary to call
-        `TCPServer.start` afterwards.  It is, however, necessary to start
-        the `IOLoop`.
-        """
-        sockets = bind_sockets(port, address=address)
-        self.add_sockets(sockets)
-
-    def add_sockets(self, sockets):
-        """Makes this server start accepting connections on the given sockets.
-
-        The ``sockets`` parameter is a list of socket objects such as
-        those returned by `bind_sockets`.
-        `add_sockets` is typically used in combination with that
-        method and `tornado.process.fork_processes` to provide greater
-        control over the initialization of a multi-process server.
-        """
-        if self.io_loop is None:
-            self.io_loop = IOLoop.instance()
-
-        for sock in sockets:
-            self._sockets[sock.fileno()] = sock
-            add_accept_handler(sock, self._handle_connection,
-                               io_loop=self.io_loop)
-
-    def add_socket(self, socket):
-        """Singular version of `add_sockets`.  Takes a single socket object."""
-        self.add_sockets([socket])
-
-    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128):
-        """Binds this server to the given port on the given address.
-
-        To start the server, call `start`. If you want to run this server
-        in a single process, you can call `listen` as a shortcut to the
-        sequence of `bind` and `start` calls.
-
-        Address may be either an IP address or hostname.  If it's a hostname,
-        the server will listen on all IP addresses associated with the
-        name.  Address may be an empty string or None to listen on all
-        available interfaces.  Family may be set to either ``socket.AF_INET``
-        or ``socket.AF_INET6`` to restrict to ipv4 or ipv6 addresses, otherwise
-        both will be used if available.
-
-        The ``backlog`` argument has the same meaning as for
-        `socket.listen`.
-
-        This method may be called multiple times prior to `start` to listen
-        on multiple ports or interfaces.
-        """
-        sockets = bind_sockets(port, address=address, family=family,
-                               backlog=backlog)
-        if self._started:
-            self.add_sockets(sockets)
-        else:
-            self._pending_sockets.extend(sockets)
-
-    def start(self, num_processes=1):
-        """Starts this server in the IOLoop.
-
-        By default, we run the server in this process and do not fork any
-        additional child process.
-
-        If num_processes is ``None`` or <= 0, we detect the number of cores
-        available on this machine and fork that number of child
-        processes. If num_processes is given and > 1, we fork that
-        specific number of sub-processes.
-
-        Since we use processes and not threads, there is no shared memory
-        between any server code.
-
-        Note that multiple processes are not compatible with the autoreload
-        module (or the ``debug=True`` option to `tornado.web.Application`).
-        When using multiple processes, no IOLoops can be created or
-        referenced until after the call to ``TCPServer.start(n)``.
-        """
-        assert not self._started
-        self._started = True
-        if num_processes != 1:
-            process.fork_processes(num_processes)
-        sockets = self._pending_sockets
-        self._pending_sockets = []
-        self.add_sockets(sockets)
-
-    def stop(self):
-        """Stops listening for new connections.
-
-        Requests currently in progress may still continue after the
-        server is stopped.
-        """
-        for fd, sock in self._sockets.items():
-            self.io_loop.remove_handler(fd)
-            sock.close()
-
-    def handle_stream(self, stream, address):
-        """Override to handle a new `IOStream` from an incoming connection."""
-        raise NotImplementedError()
-
-    def _handle_connection(self, connection, address):
-        if self.ssl_options is not None:
-            assert ssl, "Python 2.6+ and OpenSSL required for SSL"
-            try:
-                connection = ssl.wrap_socket(connection,
-                                             server_side=True,
-                                             do_handshake_on_connect=False,
-                                             **self.ssl_options)
-            except ssl.SSLError as err:
-                if err.args[0] == ssl.SSL_ERROR_EOF:
-                    return connection.close()
-                else:
-                    raise
-            except socket.error as err:
-                if err.args[0] == errno.ECONNABORTED:
-                    return connection.close()
-                else:
-                    raise
-        try:
-            if self.ssl_options is not None:
-                stream = SSLIOStream(connection, io_loop=self.io_loop)
-            else:
-                stream = IOStream(connection, io_loop=self.io_loop)
-            self.handle_stream(stream, address)
-        except Exception:
-            app_log.error("Error in connection callback", exc_info=True)
+from tornado.util import Configurable
 
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
@@ -248,23 +41,30 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     Address may be either an IP address or hostname.  If it's a hostname,
     the server will listen on all IP addresses associated with the
     name.  Address may be an empty string or None to listen on all
-    available interfaces.  Family may be set to either socket.AF_INET
-    or socket.AF_INET6 to restrict to ipv4 or ipv6 addresses, otherwise
+    available interfaces.  Family may be set to either `socket.AF_INET`
+    or `socket.AF_INET6` to restrict to IPv4 or IPv6 addresses, otherwise
     both will be used if available.
 
     The ``backlog`` argument has the same meaning as for
-    ``socket.listen()``.
+    `socket.listen() <socket.socket.listen>`.
 
-    ``flags`` is a bitmask of AI_* flags to ``getaddrinfo``, like
+    ``flags`` is a bitmask of AI_* flags to `~socket.getaddrinfo`, like
     ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
     """
     sockets = []
     if address == "":
         address = None
+    if not socket.has_ipv6 and family == socket.AF_UNSPEC:
+        # Python can be compiled with --disable-ipv6, which causes
+        # operations on AF_INET6 sockets to fail, but does not
+        # automatically exclude those results from getaddrinfo
+        # results.
+        # http://bugs.python.org/issue16208
+        family = socket.AF_INET
     if flags is None:
         flags = socket.AI_PASSIVE
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
-                                  0, flags)):
+                                      0, flags)):
         af, socktype, proto, canonname, sockaddr = res
         sock = socket.socket(af, socktype, proto)
         set_close_exec(sock.fileno())
@@ -288,7 +88,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     return sockets
 
 if hasattr(socket, 'AF_UNIX'):
-    def bind_unix_socket(file, mode=int('600', 8), backlog=128):
+    def bind_unix_socket(file, mode=0o600, backlog=128):
         """Creates a listening unix socket.
 
         If a socket with the given name already exists, it will be deleted.
@@ -319,16 +119,16 @@ if hasattr(socket, 'AF_UNIX'):
 
 
 def add_accept_handler(sock, callback, io_loop=None):
-    """Adds an ``IOLoop`` event handler to accept new connections on ``sock``.
+    """Adds an `.IOLoop` event handler to accept new connections on ``sock``.
 
     When a connection is accepted, ``callback(connection, address)`` will
     be run (``connection`` is a socket object, and ``address`` is the
     address of the other end of the connection).  Note that this signature
     is different from the ``callback(fd, events)`` signature used for
-    ``IOLoop`` handlers.
+    `.IOLoop` handlers.
     """
     if io_loop is None:
-        io_loop = IOLoop.instance()
+        io_loop = IOLoop.current()
 
     def accept_handler(fd, events):
         while True:
@@ -342,11 +142,243 @@ def add_accept_handler(sock, callback, io_loop=None):
     io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
 
 
-class Resolver(object):
-    def __init__(self, io_loop=None, executor=None):
-        self.io_loop = io_loop or IOLoop.instance()
+def is_valid_ip(ip):
+    """Returns true if the given string is a well-formed IP address.
+
+    Supports IPv4 and IPv6.
+    """
+    try:
+        res = socket.getaddrinfo(ip, 0, socket.AF_UNSPEC,
+                                 socket.SOCK_STREAM,
+                                 0, socket.AI_NUMERICHOST)
+        return bool(res)
+    except socket.gaierror as e:
+        if e.args[0] == socket.EAI_NONAME:
+            return False
+        raise
+    return True
+
+
+class Resolver(Configurable):
+    """Configurable asynchronous DNS resolver interface.
+
+    By default, a blocking implementation is used (which simply calls
+    `socket.getaddrinfo`).  An alternative implementation can be
+    chosen with the `Resolver.configure <.Configurable.configure>`
+    class method::
+
+        Resolver.configure('tornado.netutil.ThreadedResolver')
+
+    The implementations of this interface included with Tornado are
+
+    * `tornado.netutil.BlockingResolver`
+    * `tornado.netutil.ThreadedResolver`
+    * `tornado.netutil.OverrideResolver`
+    * `tornado.platform.twisted.TwistedResolver`
+    * `tornado.platform.caresresolver.CaresResolver`
+    """
+    @classmethod
+    def configurable_base(cls):
+        return Resolver
+
+    @classmethod
+    def configurable_default(cls):
+        return BlockingResolver
+
+    def resolve(self, host, port, family=socket.AF_UNSPEC, callback=None):
+        """Resolves an address.
+
+        The ``host`` argument is a string which may be a hostname or a
+        literal IP address.
+
+        Returns a `.Future` whose result is a list of (family,
+        address) pairs, where address is a tuple suitable to pass to
+        `socket.connect <socket.socket.connect>` (i.e. a ``(host,
+        port)`` pair for IPv4; additional fields may be present for
+        IPv6). If a ``callback`` is passed, it will be run with the
+        result as an argument when it is complete.
+        """
+        raise NotImplementedError()
+
+
+class ExecutorResolver(Resolver):
+    def initialize(self, io_loop=None, executor=None):
+        self.io_loop = io_loop or IOLoop.current()
         self.executor = executor or dummy_executor
 
     @run_on_executor
-    def getaddrinfo(self, *args, **kwargs):
-        return socket.getaddrinfo(*args, **kwargs)
+    def resolve(self, host, port, family=socket.AF_UNSPEC):
+        addrinfo = socket.getaddrinfo(host, port, family)
+        results = []
+        for family, socktype, proto, canonname, address in addrinfo:
+            results.append((family, address))
+        return results
+
+
+class BlockingResolver(ExecutorResolver):
+    """Default `Resolver` implementation, using `socket.getaddrinfo`.
+
+    The `.IOLoop` will be blocked during the resolution, although the
+    callback will not be run until the next `.IOLoop` iteration.
+    """
+    def initialize(self, io_loop=None):
+        super(BlockingResolver, self).initialize(io_loop=io_loop)
+
+
+class ThreadedResolver(ExecutorResolver):
+    """Multithreaded non-blocking `Resolver` implementation.
+
+    Requires the `concurrent.futures` package to be installed
+    (available in the standard library since Python 3.2,
+    installable with ``pip install futures`` in older versions).
+
+    The thread pool size can be configured with::
+
+        Resolver.configure('tornado.netutil.ThreadedResolver',
+                           num_threads=10)
+    """
+    def initialize(self, io_loop=None, num_threads=10):
+        from concurrent.futures import ThreadPoolExecutor
+        super(ThreadedResolver, self).initialize(
+            io_loop=io_loop, executor=ThreadPoolExecutor(num_threads))
+
+
+class OverrideResolver(Resolver):
+    """Wraps a resolver with a mapping of overrides.
+
+    This can be used to make local DNS changes (e.g. for testing)
+    without modifying system-wide settings.
+
+    The mapping can contain either host strings or host-port pairs.
+    """
+    def initialize(self, resolver, mapping):
+        self.resolver = resolver
+        self.mapping = mapping
+
+    def resolve(self, host, port, *args, **kwargs):
+        if (host, port) in self.mapping:
+            host, port = self.mapping[(host, port)]
+        elif host in self.mapping:
+            host = self.mapping[host]
+        return self.resolver.resolve(host, port, *args, **kwargs)
+
+
+# These are the keyword arguments to ssl.wrap_socket that must be translated
+# to their SSLContext equivalents (the other arguments are still passed
+# to SSLContext.wrap_socket).
+_SSL_CONTEXT_KEYWORDS = frozenset(['ssl_version', 'certfile', 'keyfile',
+                                   'cert_reqs', 'ca_certs', 'ciphers'])
+
+
+def ssl_options_to_context(ssl_options):
+    """Try to convert an ``ssl_options`` dictionary to an
+    `~ssl.SSLContext` object.
+
+    The ``ssl_options`` dictionary contains keywords to be passed to
+    `ssl.wrap_socket`.  In Python 3.2+, `ssl.SSLContext` objects can
+    be used instead.  This function converts the dict form to its
+    `~ssl.SSLContext` equivalent, and may be used when a component which
+    accepts both forms needs to upgrade to the `~ssl.SSLContext` version
+    to use features like SNI or NPN.
+    """
+    if isinstance(ssl_options, dict):
+        assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
+    if (not hasattr(ssl, 'SSLContext') or
+            isinstance(ssl_options, ssl.SSLContext)):
+        return ssl_options
+    context = ssl.SSLContext(
+        ssl_options.get('ssl_version', ssl.PROTOCOL_SSLv23))
+    if 'certfile' in ssl_options:
+        context.load_cert_chain(ssl_options['certfile'], ssl_options.get('keyfile', None))
+    if 'cert_reqs' in ssl_options:
+        context.verify_mode = ssl_options['cert_reqs']
+    if 'ca_certs' in ssl_options:
+        context.load_verify_locations(ssl_options['ca_certs'])
+    if 'ciphers' in ssl_options:
+        context.set_ciphers(ssl_options['ciphers'])
+    return context
+
+
+def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
+    """Returns an ``ssl.SSLSocket`` wrapping the given socket.
+
+    ``ssl_options`` may be either a dictionary (as accepted by
+    `ssl_options_to_context`) or an `ssl.SSLContext` object.
+    Additional keyword arguments are passed to ``wrap_socket``
+    (either the `~ssl.SSLContext` method or the `ssl` module function
+    as appropriate).
+    """
+    context = ssl_options_to_context(ssl_options)
+    if hasattr(ssl, 'SSLContext') and isinstance(context, ssl.SSLContext):
+        if server_hostname is not None and getattr(ssl, 'HAS_SNI'):
+            # Python doesn't have server-side SNI support so we can't
+            # really unittest this, but it can be manually tested with
+            # python3.2 -m tornado.httpclient https://sni.velox.ch
+            return context.wrap_socket(socket, server_hostname=server_hostname,
+                                       **kwargs)
+        else:
+            return context.wrap_socket(socket, **kwargs)
+    else:
+        return ssl.wrap_socket(socket, **dict(context, **kwargs))
+
+if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
+    ssl_match_hostname = ssl.match_hostname
+    SSLCertificateError = ssl.CertificateError
+else:
+    # match_hostname was added to the standard library ssl module in python 3.2.
+    # The following code was backported for older releases and copied from
+    # https://bitbucket.org/brandon/backports.ssl_match_hostname
+    class SSLCertificateError(ValueError):
+        pass
+
+    def _dnsname_to_pat(dn):
+        pats = []
+        for frag in dn.split(r'.'):
+            if frag == '*':
+                # When '*' is a fragment by itself, it matches a non-empty dotless
+                # fragment.
+                pats.append('[^.]+')
+            else:
+                # Otherwise, '*' matches any dotless fragment.
+                frag = re.escape(frag)
+                pats.append(frag.replace(r'\*', '[^.]*'))
+        return re.compile(r'\A' + r'\.'.join(pats) + r'\Z', re.IGNORECASE)
+
+    def ssl_match_hostname(cert, hostname):
+        """Verify that *cert* (in decoded format as returned by
+        SSLSocket.getpeercert()) matches the *hostname*.  RFC 2818 rules
+        are mostly followed, but IP addresses are not accepted for *hostname*.
+
+        CertificateError is raised on failure. On success, the function
+        returns nothing.
+        """
+        if not cert:
+            raise ValueError("empty or no certificate")
+        dnsnames = []
+        san = cert.get('subjectAltName', ())
+        for key, value in san:
+            if key == 'DNS':
+                if _dnsname_to_pat(value).match(hostname):
+                    return
+                dnsnames.append(value)
+        if not san:
+            # The subject is only checked when subjectAltName is empty
+            for sub in cert.get('subject', ()):
+                for key, value in sub:
+                    # XXX according to RFC 2818, the most specific Common Name
+                    # must be used.
+                    if key == 'commonName':
+                        if _dnsname_to_pat(value).match(hostname):
+                            return
+                        dnsnames.append(value)
+        if len(dnsnames) > 1:
+            raise SSLCertificateError("hostname %r "
+                                      "doesn't match either of %s"
+                                      % (hostname, ', '.join(map(repr, dnsnames))))
+        elif len(dnsnames) == 1:
+            raise SSLCertificateError("hostname %r "
+                                      "doesn't match %r"
+                                      % (hostname, dnsnames[0]))
+        else:
+            raise SSLCertificateError("no appropriate commonName or "
+                                      "subjectAltName fields were found")

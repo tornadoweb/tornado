@@ -48,6 +48,7 @@ access_log = logging.getLogger("tornado.access")
 app_log = logging.getLogger("tornado.application")
 gen_log = logging.getLogger("tornado.general")
 
+
 def _stderr_supports_color():
     color = False
     if curses and sys.stderr.isatty():
@@ -90,13 +91,13 @@ class LogFormatter(logging.Formatter):
                 fg_color = unicode_type(fg_color, "ascii")
             self._colors = {
                 logging.DEBUG: unicode_type(curses.tparm(fg_color, 4),  # Blue
-                                       "ascii"),
+                                            "ascii"),
                 logging.INFO: unicode_type(curses.tparm(fg_color, 2),  # Green
-                                      "ascii"),
+                                           "ascii"),
                 logging.WARNING: unicode_type(curses.tparm(fg_color, 3),  # Yellow
-                                         "ascii"),
+                                              "ascii"),
                 logging.ERROR: unicode_type(curses.tparm(fg_color, 1),  # Red
-                                       "ascii"),
+                                            "ascii"),
             }
             self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
 
@@ -130,18 +131,25 @@ class LogFormatter(logging.Formatter):
         # it's worth it since the encoding errors that would otherwise
         # result are so useless (and tornado is fond of using utf8-encoded
         # byte strings whereever possible).
-        try:
-            message = _unicode(record.message)
-        except UnicodeDecodeError:
-            message = repr(record.message)
+        def safe_unicode(s):
+            try:
+                return _unicode(s)
+            except UnicodeDecodeError:
+                return repr(s)
 
-        formatted = prefix + " " + message
+        formatted = prefix + " " + safe_unicode(record.message)
         if record.exc_info:
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
-            formatted = formatted.rstrip() + "\n" + record.exc_text
+            # exc_text contains multiple lines.  We need to safe_unicode
+            # each line separately so that non-utf8 bytes don't cause
+            # all the newlines to turn into '\n'.
+            lines = [formatted.rstrip()]
+            lines.extend(safe_unicode(ln) for ln in record.exc_text.split('\n'))
+            formatted = '\n'.join(lines)
         return formatted.replace("\n", "\n    ")
+
 
 def enable_pretty_logging(options=None, logger=None):
     """Turns on formatted logging output as configured.
@@ -165,7 +173,7 @@ def enable_pretty_logging(options=None, logger=None):
         logger.addHandler(channel)
 
     if (options.log_to_stderr or
-        (options.log_to_stderr is None and not logger.handlers)):
+            (options.log_to_stderr is None and not logger.handlers)):
         # Set up color if we are in a tty and curses is installed
         channel = logging.StreamHandler()
         channel.setFormatter(LogFormatter())
@@ -177,21 +185,21 @@ def define_logging_options(options=None):
         # late import to prevent cycle
         from tornado.options import options
     options.define("logging", default="info",
-           help=("Set the Python log level. If 'none', tornado won't touch the "
-                 "logging configuration."),
-           metavar="debug|info|warning|error|none")
+                   help=("Set the Python log level. If 'none', tornado won't touch the "
+                         "logging configuration."),
+                   metavar="debug|info|warning|error|none")
     options.define("log_to_stderr", type=bool, default=None,
-           help=("Send log output to stderr (colorized if possible). "
-                 "By default use stderr if --log_file_prefix is not set and "
-                 "no other logging is configured."))
+                   help=("Send log output to stderr (colorized if possible). "
+                         "By default use stderr if --log_file_prefix is not set and "
+                         "no other logging is configured."))
     options.define("log_file_prefix", type=str, default=None, metavar="PATH",
-           help=("Path prefix for log files. "
-                 "Note that if you are running multiple tornado processes, "
-                 "log_file_prefix must be different for each of them (e.g. "
-                 "include the port number)"))
+                   help=("Path prefix for log files. "
+                         "Note that if you are running multiple tornado processes, "
+                         "log_file_prefix must be different for each of them (e.g. "
+                         "include the port number)"))
     options.define("log_file_max_size", type=int, default=100 * 1000 * 1000,
-           help="max size of log files before rollover")
+                   help="max size of log files before rollover")
     options.define("log_file_num_backups", type=int, default=10,
-           help="number of log files to keep")
+                   help="number of log files to keep")
 
     options.add_parse_callback(enable_pretty_logging)

@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, print_function, with_statement
-import time
-from tornado.testing import AsyncTestCase
+
+from tornado import gen
+from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import unittest
 
 
@@ -53,6 +54,25 @@ class SetUpTearDownTest(unittest.TestCase):
         InheritBoth('test').run(result)
         expected = ['setUp', 'test', 'tearDown']
         self.assertEqual(expected, events)
+
+
+class GenTest(AsyncTestCase):
+    def setUp(self):
+        super(GenTest, self).setUp()
+        self.finished = False
+
+    def tearDown(self):
+        self.assertTrue(self.finished)
+        super(GenTest, self).tearDown()
+
+    @gen_test
+    def test_sync(self):
+        self.finished = True
+
+    @gen_test
+    def test_async(self):
+        yield gen.Task(self.io_loop.add_callback)
+        self.finished = True
 
 if __name__ == '__main__':
     unittest.main()

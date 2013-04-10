@@ -1,0 +1,22 @@
+What's new in Tornado 3.0.1
+===========================
+
+Apr 8, 2013
+-----------
+
+* The interface of `tornado.auth.FacebookGraphMixin` is now consistent
+  with its documentation and the rest of the module.  The
+  ``get_authenticated_user`` and ``facebook_request`` methods return a
+  ``Future`` and the ``callback`` argument is optional.
+* The `tornado.testing.gen_test` decorator will no longer be recognized
+  as a (broken) test by ``nose``.
+* Work around a bug in Ubuntu 13.04 betas involving an incomplete backport
+  of the `ssl.match_hostname` function.
+* `tornado.websocket.websocket_connect` now fails cleanly when it attempts
+  to connect to a non-websocket url.
+* `tornado.testing.LogTrapTestCase` once again works with byte strings
+  on Python 2.
+* The ``request`` attribute of `tornado.httpclient.HTTPResponse` is
+  now always an `~tornado.httpclient.HTTPRequest`, never a ``_RequestProxy``.
+* Exceptions raised by the `tornado.gen` module now have better messages
+  when tuples are used as callback keys.

@@ -1,0 +1,74 @@
+What's new in Tornado 2.4
+=========================
+
+Sep 4, 2012
+-----------
+
+General
+~~~~~~~
+
+* Fixed Python 3 bugs in `tornado.auth`, `tornado.locale`, and `tornado.wsgi`.
+
+HTTP clients
+~~~~~~~~~~~~
+
+* Removed ``max_simultaneous_connections`` argument from `tornado.httpclient`
+  (both implementations).  This argument hasn't been useful for some time
+  (if you were using it you probably want ``max_clients`` instead)
+* ``tornado.simple_httpclient`` now accepts and ignores HTTP 1xx status
+  responses.
+
+`tornado.ioloop` and `tornado.iostream`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Fixed a bug introduced in 2.3 that would cause `.IOStream` close callbacks
+  to not run if there were pending reads.
+* Improved error handling in `.SSLIOStream` and SSL-enabled `.TCPServer`.
+* ``SSLIOStream.get_ssl_certificate`` now has a ``binary_form`` argument
+  which is passed to ``SSLSocket.getpeercert``.
+* ``SSLIOStream.write`` can now be called while the connection is in progress,
+  same as non-SSL `.IOStream` (but be careful not to send sensitive data until
+  the connection has completed and the certificate has been verified).
+* `.IOLoop.add_handler` cannot be called more than once with the same file
+  descriptor.  This was always true for ``epoll``, but now the other
+  implementations enforce it too.
+* On Windows, `.TCPServer` uses ``SO_EXCLUSIVEADDRUSER`` instead of ``SO_REUSEADDR``.
+
+`tornado.template`
+~~~~~~~~~~~~~~~~~~
+
+* ``{% break %}`` and ``{% continue %}`` can now be used looping constructs
+  in templates.
+* It is no longer an error for an if/else/for/etc block in a template to
+  have an empty body.
+
+`tornado.testing`
+~~~~~~~~~~~~~~~~~
+
+* New class `tornado.testing.AsyncHTTPSTestCase` is like `.AsyncHTTPTestCase`.
+  but enables SSL for the testing server (by default using a self-signed
+  testing certificate).
+* `tornado.testing.main` now accepts additional keyword arguments and forwards
+  them to `unittest.main`.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+* New method `.RequestHandler.get_template_namespace` can be overridden to
+  add additional variables without modifying keyword arguments to
+  ``render_string``.
+* `.RequestHandler.add_header` now works with `.WSGIApplication`.
+* `.RequestHandler.get_secure_cookie` now handles a potential error case.
+* ``RequestHandler.__init__`` now calls ``super().__init__`` to ensure that
+  all constructors are called when multiple inheritance is used.
+* Docs have been updated with a description of all available
+  :py:attr:`Application settings <tornado.web.Application.settings>`
+
+Other modules
+~~~~~~~~~~~~~
+
+* `.OAuthMixin` now accepts ``"oob"`` as a ``callback_uri``.
+* `.OpenIdMixin` now also returns the ``claimed_id`` field for the user.
+* `tornado.platform.twisted` shutdown sequence is now more compatible.
+* The logging configuration used in `tornado.options` is now more tolerant
+  of non-ascii byte strings.

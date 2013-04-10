@@ -15,13 +15,12 @@
 # under the License.
 
 import functools
-import markdown
 import os.path
 import re
+import tornado.escape
 import tornado.web
 import tornado.wsgi
 import unicodedata
-import wsgiref.handlers
 
 from google.appengine.api import users
 from google.appengine.ext import db
@@ -32,7 +31,7 @@ class Entry(db.Model):
     author = db.UserProperty()
     title = db.StringProperty(required=True)
     slug = db.StringProperty(required=True)
-    markdown = db.TextProperty(required=True)
+    body_source = db.TextProperty(required=True)
     html = db.TextProperty(required=True)
     published = db.DateTimeProperty(auto_now_add=True)
     updated = db.DateTimeProperty(auto_now=True)
@@ -67,10 +66,11 @@ class BaseHandler(tornado.web.RequestHandler):
     def get_login_url(self):
         return users.create_login_url(self.request.uri)
 
-    def render_string(self, template_name, **kwargs):
+    def get_template_namespace(self):
         # Let the templates access the users module to generate login URLs
-        return tornado.web.RequestHandler.render_string(
-            self, template_name, users=users, **kwargs)
+        ns = super(BaseHandler, self).get_template_namespace()
+        ns['users'] = users
+        return ns
 
 
 class HomeHandler(BaseHandler):
@@ -116,8 +116,9 @@ class ComposeHandler(BaseHandler):
         if key:
             entry = Entry.get(key)
             entry.title = self.get_argument("title")
-            entry.markdown = self.get_argument("markdown")
-            entry.html = markdown.markdown(self.get_argument("markdown"))
+            entry.body_source = self.get_argument("body_source")
+            entry.html = tornado.escape.linkify(
+                self.get_argument("body_source"))
         else:
             title = self.get_argument("title")
             slug = unicodedata.normalize("NFKD", title).encode(
@@ -134,8 +135,8 @@ class ComposeHandler(BaseHandler):
                 author=self.current_user,
                 title=title,
                 slug=slug,
-                markdown=self.get_argument("markdown"),
-                html=markdown.markdown(self.get_argument("markdown")),
+                body_source=self.get_argument("body_source"),
+                html=tornado.escape.linkify(self.get_argument("body_source")),
             )
         entry.put()
         self.redirect("/entry/" + entry.slug)
@@ -151,7 +152,6 @@ settings = {
     "template_path": os.path.join(os.path.dirname(__file__), "templates"),
     "ui_modules": {"Entry": EntryModule},
     "xsrf_cookies": True,
-    "autoescape": None,
 }
 application = tornado.wsgi.WSGIApplication([
     (r"/", HomeHandler),
@@ -160,11 +160,3 @@ application = tornado.wsgi.WSGIApplication([
     (r"/entry/([^/]+)", EntryHandler),
     (r"/compose", ComposeHandler),
 ], **settings)
-
-
-def main():
-    wsgiref.handlers.CGIHandler().run(application)
-
-
-if __name__ == "__main__":
-    main()

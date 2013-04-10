@@ -1,0 +1,15 @@
+What's new in Tornado 2.4.1
+===========================
+
+Nov 24, 2012
+------------
+
+Bug fixes
+~~~~~~~~~
+
+* Fixed a memory leak in `tornado.stack_context` that was especially likely
+  with long-running ``@gen.engine`` functions.
+* `tornado.auth.TwitterMixin` now works on Python 3.
+* Fixed a bug in which ``IOStream.read_until_close`` with a streaming callback
+  would sometimes pass the last chunk of data to the final callback instead
+  of the streaming callback.

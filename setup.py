@@ -25,7 +25,10 @@ except ImportError:
 
 kwargs = {}
 
-version = "2.4.post2"
+version = "3.0.1"
+
+with open('README.rst') as f:
+    long_description = f.read()
 
 distutils.core.setup(
     name="tornado",
@@ -38,20 +41,32 @@ distutils.core.setup(
         # in the sdist tarball)
         "tornado.test": [
             "README",
-            "test.crt",
-            "test.key",
-            "static/robots.txt",
-            "templates/utf8.html",
             "csv_translations/fr_FR.csv",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po",
+            "options_test.cfg",
+            "static/robots.txt",
+            "templates/utf8.html",
+            "test.crt",
+            "test.key",
             ],
         },
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
-    download_url="http://github.com/downloads/facebook/tornado/tornado-%s.tar.gz" % version,
     license="http://www.apache.org/licenses/LICENSE-2.0",
-    description="Tornado is an open source version of the scalable, non-blocking web server and and tools that power FriendFeed",
+    description="Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed.",
+    classifiers=[
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.2',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: Implementation :: PyPy',
+        ],
+    long_description=long_description,
     **kwargs
 )

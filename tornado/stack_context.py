@@ -14,20 +14,21 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-'''StackContext allows applications to maintain threadlocal-like state
+"""`StackContext` allows applications to maintain threadlocal-like state
 that follows execution as it moves to other execution contexts.
 
 The motivating examples are to eliminate the need for explicit
-async_callback wrappers (as in tornado.web.RequestHandler), and to
+``async_callback`` wrappers (as in `tornado.web.RequestHandler`), and to
 allow some additional context to be kept for logging.
 
-This is slightly magic, but it's an extension of the idea that an exception
-handler is a kind of stack-local state and when that stack is suspended
-and resumed in a new context that state needs to be preserved.  StackContext
-shifts the burden of restoring that state from each call site (e.g.
-wrapping each AsyncHTTPClient callback in async_callback) to the mechanisms
-that transfer control from one context to another (e.g. AsyncHTTPClient
-itself, IOLoop, thread pools, etc).
+This is slightly magic, but it's an extension of the idea that an
+exception handler is a kind of stack-local state and when that stack
+is suspended and resumed in a new context that state needs to be
+preserved.  `StackContext` shifts the burden of restoring that state
+from each call site (e.g.  wrapping each `.AsyncHTTPClient` callback
+in ``async_callback``) to the mechanisms that transfer control from
+one context to another (e.g. `.AsyncHTTPClient` itself, `.IOLoop`,
+thread pools, etc).
 
 Example usage::
 
@@ -52,7 +53,7 @@ Here are a few rules of thumb for when it's necessary:
 * If you're writing an asynchronous library that doesn't rely on a
   stack_context-aware library like `tornado.ioloop` or `tornado.iostream`
   (for example, if you're writing a thread pool), use
-  `stack_context.wrap()` before any asynchronous operations to capture the
+  `.stack_context.wrap()` before any asynchronous operations to capture the
   stack context from where the operation was started.
 
 * If you're writing an asynchronous library that has some shared
@@ -64,7 +65,7 @@ Here are a few rules of thumb for when it's necessary:
   persist across asynchronous calls, create a new `StackContext` (or
   `ExceptionStackContext`), and make your asynchronous calls in a ``with``
   block that references your `StackContext`.
-'''
+"""
 
 from __future__ import absolute_import, division, print_function, with_statement
 
@@ -77,6 +78,10 @@ import threading
 from tornado.util import raise_exc_info
 
 
+class StackContextInconsistentError(Exception):
+    pass
+
+
 class _State(threading.local):
     def __init__(self):
         self.contexts = ()
@@ -84,7 +89,7 @@ _state = _State()
 
 
 class StackContext(object):
-    '''Establishes the given context as a StackContext that will be transferred.
+    """Establishes the given context as a StackContext that will be transferred.
 
     Note that the parameter is a callable that returns a context
     manager, not the context itself.  That is, where for a
@@ -102,7 +107,7 @@ class StackContext(object):
     deactivating a context does not affect any instances of that
     context that are currently pending).  This is an advanced feature
     and not necessary in most applications.
-    '''
+    """
     def __init__(self, context_factory, _active_cell=None):
         self.context_factory = context_factory
         self.active_cell = _active_cell or [True]
@@ -113,8 +118,10 @@ class StackContext(object):
     def __enter__(self):
         self.old_contexts = _state.contexts
         # _state.contexts is a tuple of (class, arg, active_cell) tuples
-        _state.contexts = (self.old_contexts +
-                           ((StackContext, self.context_factory, self.active_cell),))
+        self.new_contexts = (self.old_contexts +
+                             ((StackContext, self.context_factory,
+                               self.active_cell),))
+        _state.contexts = self.new_contexts
         try:
             self.context = self.context_factory()
             self.context.__enter__()
@@ -127,31 +134,44 @@ class StackContext(object):
         try:
             return self.context.__exit__(type, value, traceback)
         finally:
+            final_contexts = _state.contexts
             _state.contexts = self.old_contexts
+            # Generator coroutines and with-statements with non-local
+            # effects interact badly.  Check here for signs of
+            # the stack getting out of sync.
+            # Note that this check comes after restoring _state.context
+            # so that if it fails things are left in a (relatively)
+            # consistent state.
+            if final_contexts is not self.new_contexts:
+                raise StackContextInconsistentError(
+                    'stack_context inconsistency (may be caused by yield '
+                    'within a "with StackContext" block)')
+            self.old_contexts = self.new_contexts = None
 
 
 class ExceptionStackContext(object):
-    '''Specialization of StackContext for exception handling.
+    """Specialization of StackContext for exception handling.
 
-    The supplied exception_handler function will be called in the
+    The supplied ``exception_handler`` function will be called in the
     event of an uncaught exception in this context.  The semantics are
     similar to a try/finally clause, and intended use cases are to log
     an error, close a socket, or similar cleanup actions.  The
-    exc_info triple (type, value, traceback) will be passed to the
+    ``exc_info`` triple ``(type, value, traceback)`` will be passed to the
     exception_handler function.
 
     If the exception handler returns true, the exception will be
     consumed and will not be propagated to other exception handlers.
-    '''
+    """
     def __init__(self, exception_handler, _active_cell=None):
         self.exception_handler = exception_handler
         self.active_cell = _active_cell or [True]
 
     def __enter__(self):
         self.old_contexts = _state.contexts
-        _state.contexts = (self.old_contexts +
-                           ((ExceptionStackContext, self.exception_handler,
-                             self.active_cell),))
+        self.new_contexts = (self.old_contexts +
+                             ((ExceptionStackContext, self.exception_handler,
+                               self.active_cell),))
+        _state.contexts = self.new_contexts
         return lambda: operator.setitem(self.active_cell, 0, False)
 
     def __exit__(self, type, value, traceback):
@@ -159,17 +179,22 @@ class ExceptionStackContext(object):
             if type is not None:
                 return self.exception_handler(type, value, traceback)
         finally:
+            final_contexts = _state.contexts
             _state.contexts = self.old_contexts
-            self.old_contexts = None
+            if final_contexts is not self.new_contexts:
+                raise StackContextInconsistentError(
+                    'stack_context inconsistency (may be caused by yield '
+                    'within a "with StackContext" block)')
+            self.old_contexts = self.new_contexts = None
 
 
 class NullContext(object):
-    '''Resets the StackContext.
+    """Resets the `StackContext`.
 
-    Useful when creating a shared resource on demand (e.g. an AsyncHTTPClient)
-    where the stack that caused the creating is not relevant to future
-    operations.
-    '''
+    Useful when creating a shared resource on demand (e.g. an
+    `.AsyncHTTPClient`) where the stack that caused the creating is
+    not relevant to future operations.
+    """
     def __enter__(self):
         self.old_contexts = _state.contexts
         _state.contexts = ()
@@ -183,13 +208,13 @@ class _StackContextWrapper(functools.partial):
 
 
 def wrap(fn):
-    '''Returns a callable object that will restore the current StackContext
+    """Returns a callable object that will restore the current `StackContext`
     when executed.
 
     Use this whenever saving a callback to be executed later in a
     different execution context (either in a different thread or
     asynchronously in the same thread).
-    '''
+    """
     if fn is None or fn.__class__ is _StackContextWrapper:
         return fn
     # functools.wraps doesn't appear to work on functools.partial objects

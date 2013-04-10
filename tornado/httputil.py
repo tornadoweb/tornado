@@ -18,29 +18,37 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import urllib
+import datetime
+import numbers
 import re
+import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import b, ObjectDict
+from tornado.util import ObjectDict
 
 try:
     from httplib import responses  # py2
 except ImportError:
     from http.client import responses  # py3
 
+# responses is unused in this file, but we re-export it to other files.
+# Reference it so pyflakes doesn't complain.
+responses
+
 try:
     from urllib import urlencode  # py2
 except ImportError:
     from urllib.parse import urlencode  # py3
 
+
 class HTTPHeaders(dict):
-    """A dictionary that maintains Http-Header-Case for all keys.
+    """A dictionary that maintains ``Http-Header-Case`` for all keys.
 
     Supports multiple values per key via a pair of new methods,
-    add() and get_list().  The regular dictionary interface returns a single
-    value per key, with multiple values joined by a comma.
+    `add()` and `get_list()`.  The regular dictionary interface
+    returns a single value per key, with multiple values joined by a
+    comma.
 
     >>> h = HTTPHeaders({"content-type": "text/html"})
     >>> list(h.keys())
@@ -57,7 +65,7 @@ class HTTPHeaders(dict):
 
     >>> for (k,v) in sorted(h.get_all()):
     ...    print('%s: %s' % (k,v))
-    ... 
+    ...
     Content-Type: text/html
     Set-Cookie: A=B
     Set-Cookie: C=D
@@ -69,7 +77,7 @@ class HTTPHeaders(dict):
         self._as_list = {}
         self._last_key = None
         if (len(args) == 1 and len(kwargs) == 0 and
-            isinstance(args[0], HTTPHeaders)):
+                isinstance(args[0], HTTPHeaders)):
             # Copy constructor
             for k, v in args[0].get_all():
                 self.add(k, v)
@@ -85,7 +93,9 @@ class HTTPHeaders(dict):
         self._last_key = norm_name
         if norm_name in self:
             # bypass our override of __setitem__ since it modifies _as_list
-            dict.__setitem__(self, norm_name, self[norm_name] + ',' + value)
+            dict.__setitem__(self, norm_name,
+                             native_str(self[norm_name]) + ',' +
+                             native_str(value))
             self._as_list[norm_name].append(value)
         else:
             self[norm_name] = value
@@ -101,8 +111,8 @@ class HTTPHeaders(dict):
         If a header has multiple values, multiple pairs will be
         returned with the same name.
         """
-        for name, list in self._as_list.items():
-            for value in list:
+        for name, values in self._as_list.items():
+            for value in values:
                 yield (name, value)
 
     def parse_line(self, line):
@@ -204,13 +214,14 @@ def url_concat(url, args):
 
 
 class HTTPFile(ObjectDict):
-    """Represents an HTTP file. For backwards compatibility, its instance
-    attributes are also accessible as dictionary keys.
+    """Represents a file uploaded via a form.
 
-    :ivar filename:
-    :ivar body:
-    :ivar content_type: The content_type comes from the provided HTTP header
-        and should not be trusted outright given that it can be easily forged.
+    For backwards compatibility, its instance attributes are also
+    accessible as dictionary keys.
+
+    * ``filename``
+    * ``body``
+    * ``content_type``
     """
     pass
 
@@ -218,15 +229,15 @@ class HTTPFile(ObjectDict):
 def parse_body_arguments(content_type, body, arguments, files):
     """Parses a form request body.
 
-    Supports "application/x-www-form-urlencoded" and "multipart/form-data".
-    The content_type parameter should be a string and body should be
-    a byte string.  The arguments and files parameters are dictionaries
-    that will be updated with the parsed contents.
+    Supports ``application/x-www-form-urlencoded`` and
+    ``multipart/form-data``.  The ``content_type`` parameter should be
+    a string and ``body`` should be a byte string.  The ``arguments``
+    and ``files`` parameters are dictionaries that will be updated
+    with the parsed contents.
     """
     if content_type.startswith("application/x-www-form-urlencoded"):
-        uri_arguments = parse_qs_bytes(native_str(body))
+        uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
         for name, values in uri_arguments.items():
-            values = [v for v in values if v]
             if values:
                 arguments.setdefault(name, []).extend(values)
     elif content_type.startswith("multipart/form-data"):
@@ -241,9 +252,9 @@ def parse_body_arguments(content_type, body, arguments, files):
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):
-    """Parses a multipart/form-data body.
+    """Parses a ``multipart/form-data`` body.
 
-    The boundary and data parameters are both byte strings.
+    The ``boundary`` and ``data`` parameters are both byte strings.
     The dictionaries given in the arguments and files parameters
     will be updated with the contents of the body.
     """
@@ -252,24 +263,24 @@ def parse_multipart_form_data(boundary, data, arguments, files):
     # xmpp).  I think we're also supposed to handle backslash-escapes
     # here but I'll save that until we see a client that uses them
     # in the wild.
-    if boundary.startswith(b('"')) and boundary.endswith(b('"')):
+    if boundary.startswith(b'"') and boundary.endswith(b'"'):
         boundary = boundary[1:-1]
-    final_boundary_index = data.rfind(b("--") + boundary + b("--"))
+    final_boundary_index = data.rfind(b"--" + boundary + b"--")
     if final_boundary_index == -1:
         gen_log.warning("Invalid multipart/form-data: no final boundary")
         return
-    parts = data[:final_boundary_index].split(b("--") + boundary + b("\r\n"))
+    parts = data[:final_boundary_index].split(b"--" + boundary + b"\r\n")
     for part in parts:
         if not part:
             continue
-        eoh = part.find(b("\r\n\r\n"))
+        eoh = part.find(b"\r\n\r\n")
         if eoh == -1:
             gen_log.warning("multipart/form-data missing headers")
             continue
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
-        if disposition != "form-data" or not part.endswith(b("\r\n")):
+        if disposition != "form-data" or not part.endswith(b"\r\n"):
             gen_log.warning("Invalid multipart/form-data")
             continue
         value = part[eoh + 4:-2]
@@ -286,9 +297,31 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             arguments.setdefault(name, []).append(value)
 
 
+def format_timestamp(ts):
+    """Formats a timestamp in the format used by HTTP.
+
+    The argument may be a numeric timestamp as returned by `time.time`,
+    a time tuple as returned by `time.gmtime`, or a `datetime.datetime`
+    object.
+
+    >>> format_timestamp(1359312200)
+    'Sun, 27 Jan 2013 18:43:20 GMT'
+    """
+    if isinstance(ts, (tuple, time.struct_time)):
+        pass
+    elif isinstance(ts, datetime.datetime):
+        ts = ts.utctimetuple()
+    elif isinstance(ts, numbers.Real):
+        ts = time.gmtime(ts)
+    else:
+        raise TypeError("unknown timestamp type: %r" % ts)
+    return time.strftime("%a, %d %b %Y %H:%M:%S GMT", ts)
+
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some
 # combinations of semicolons and double quotes.
+
+
 def _parseparam(s):
     while s[:1] == ';':
         s = s[1:]
