@@ -32,6 +32,7 @@ from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type
 import functools
+import inspect
 import logging
 import os
 import re
@@ -354,7 +355,7 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
         return 'https'
 
 
-def gen_test(f):
+def gen_test(timeout=None):
     """Testing equivalent of ``@gen.coroutine``, to be applied to test methods.
 
     ``@gen.coroutine`` cannot be used on tests because the `.IOLoop` is not
@@ -368,13 +369,49 @@ def gen_test(f):
             def test_something(self):
                 response = yield gen.Task(self.fetch('/'))
 
-    """
-    f = gen.coroutine(f)
+    By default, ``@gen_test`` times out after 5 seconds. The timeout may be
+    overridden globally with the TIMEOUT environment variable, or for each
+    test with the ``timeout`` parameter:
 
-    @functools.wraps(f)
-    def wrapper(self):
-        return self.io_loop.run_sync(functools.partial(f, self), timeout=5)
-    return wrapper
+        class MyTest(AsyncHTTPTestCase):
+            @gen_test(timeout=10)
+            def test_something_slow(self):
+                response = yield gen.Task(self.fetch('/'))
+
+    If both the environment variable and the parameter are set, ``gen_test``
+    uses the maximum of the two.
+    """
+    try:
+        env_timeout = float(os.environ.get('TIMEOUT'))
+    except (ValueError, TypeError):
+        env_timeout = None
+
+    def wrap(f):
+        f = gen.coroutine(f)
+
+        @functools.wraps(f)
+        def wrapper(self):
+            return self.io_loop.run_sync(
+                functools.partial(f, self), timeout=timeout)
+        return wrapper
+
+    if inspect.isfunction(timeout):
+        # Used like:
+        #     @gen_test
+        #     def f(self):
+        #         pass
+        # The 'timeout' parameter is actually the test function.
+        f = timeout
+        timeout = env_timeout or 5
+        return wrap(f)
+    else:
+        # Used like @gen_test(timeout=10) or @gen_test(10).
+        if env_timeout is not None:
+            timeout = max(float(timeout), env_timeout)
+        else:
+            timeout = float(timeout)
+
+        return wrap
 
 
 # Without this attribute, nosetests will try to run gen_test as a test

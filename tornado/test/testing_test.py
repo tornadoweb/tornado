@@ -2,9 +2,12 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-from tornado import gen
+from tornado import gen, ioloop
 from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import unittest
+
+import functools
+import os
 
 
 class AsyncTestCaseTest(AsyncTestCase):
@@ -73,6 +76,56 @@ class GenTest(AsyncTestCase):
     def test_async(self):
         yield gen.Task(self.io_loop.add_callback)
         self.finished = True
+
+    def test_timeout(self):
+        # Set a short timeout and exceed it.
+        @gen_test(timeout=0.1)
+        def test(self):
+            yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)
+
+        with self.assertRaises(ioloop.TimeoutError):
+            test(self)
+
+        self.finished = True
+
+    def test_no_timeout(self):
+        # A test that does not exceed its timeout should succeed.
+        @gen_test(timeout=1)
+        def test(self):
+            yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 0.1)
+
+        test(self)
+        self.finished = True
+
+    def test_timeout_environment_variable(self):
+        time = self.io_loop.time
+        add_timeout = self.io_loop.add_timeout
+        old_timeout = os.environ.get('TIMEOUT')
+        try:
+            os.environ['TIMEOUT'] = '0.1'
+
+            @gen_test(timeout=0.5)
+            def test_long_timeout(self):
+                yield gen.Task(add_timeout, time() + 0.25)
+
+            # Uses provided timeout of 0.5 seconds, doesn't time out.
+            self.io_loop.run_sync(
+                functools.partial(test_long_timeout, self))
+
+            @gen_test(timeout=0.01)
+            def test_short_timeout(self):
+                yield gen.Task(add_timeout, time() + 1)
+
+            # Uses environment TIMEOUT of 0.1, times out.
+            with self.assertRaises(ioloop.TimeoutError):
+                test_short_timeout(self)
+
+            self.finished = True
+        finally:
+            if old_timeout is None:
+                del os.environ['TIMEOUT']
+            else:
+                os.environ['TIMEOUT'] = old_timeout
 
 if __name__ == '__main__':
     unittest.main()
