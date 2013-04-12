@@ -227,7 +227,7 @@ class CookieTest(WebTestCase):
         """
         response = self.fetch("/set_expire")
         for set_cookie_val in response.headers.get_list("Set-Cookie"):
-            C = Cookie.SimpleCookie()
+            C = SimpleCookie()
             C.load(set_cookie_val)
             for key, morsel in C.items():
                 self.assertNotEqual(morsel.get("expires"), "Sat,")
