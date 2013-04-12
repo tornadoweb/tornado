@@ -6,7 +6,7 @@ from tornado import gen, ioloop
 from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import unittest
 
-import functools
+import contextlib
 import os
 
 
@@ -59,6 +59,20 @@ class SetUpTearDownTest(unittest.TestCase):
         self.assertEqual(expected, events)
 
 
+@contextlib.contextmanager
+def set_environ(name, value):
+    old_value = os.environ.get('name')
+    os.environ[name] = value
+
+    try:
+        yield
+    finally:
+        if old_value is None:
+            del os.environ[name]
+        else:
+            os.environ[name] = old_value
+
+
 class GenTest(AsyncTestCase):
     def setUp(self):
         super(GenTest, self).setUp()
@@ -99,33 +113,30 @@ class GenTest(AsyncTestCase):
 
     def test_timeout_environment_variable(self):
         time = self.io_loop.time
-        add_timeout = self.io_loop.add_timeout
-        old_timeout = os.environ.get('TIMEOUT')
-        try:
-            os.environ['TIMEOUT'] = '0.1'
 
-            @gen_test(timeout=0.5)
-            def test_long_timeout(self):
-                yield gen.Task(add_timeout, time() + 0.25)
+        @gen_test(timeout=0.5)
+        def test_long_timeout(self):
+            yield gen.Task(self.io_loop.add_timeout, time() + 0.25)
 
-            # Uses provided timeout of 0.5 seconds, doesn't time out.
-            self.io_loop.run_sync(
-                functools.partial(test_long_timeout, self))
+        # Uses provided timeout of 0.5 seconds, doesn't time out.
+        with set_environ('TIMEOUT', '0.1'):
+            test_long_timeout(self)
 
-            @gen_test(timeout=0.01)
-            def test_short_timeout(self):
-                yield gen.Task(add_timeout, time() + 1)
+        self.finished = True
 
-            # Uses environment TIMEOUT of 0.1, times out.
+    def test_no_timeout_environment_variable(self):
+        time = self.io_loop.time
+
+        @gen_test(timeout=0.01)
+        def test_short_timeout(self):
+            yield gen.Task(self.io_loop.add_timeout, time() + 1)
+
+        # Uses environment TIMEOUT of 0.1, times out.
+        with set_environ('TIMEOUT', '0.1'):
             with self.assertRaises(ioloop.TimeoutError):
                 test_short_timeout(self)
 
-            self.finished = True
-        finally:
-            if old_timeout is None:
-                del os.environ['TIMEOUT']
-            else:
-                os.environ['TIMEOUT'] = old_timeout
+        self.finished = True
 
 if __name__ == '__main__':
     unittest.main()
