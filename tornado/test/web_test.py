@@ -11,6 +11,10 @@ from tornado.util import u, bytes_type, ObjectDict, unicode_type
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler
 
 import binascii
+try:
+    from Cookie import SimpleCookie  # py2
+except ImportError:
+    from http.cookies import SimpleCookie  # py3
 import Cookie
 import datetime
 import logging
