@@ -412,7 +412,9 @@ class RequestHandler(object):
             expires = datetime.datetime.utcnow() + datetime.timedelta(
                 days=expires_days)
         if expires:
-            morsel["expires"] = httputil.format_timestamp(expires)
+            expires_format = "%a, %d-%b-%Y %H:%M:%S GMT"
+            morsel["expires"] = httputil.format_timestamp(expires,
+                                                          expires_format)
         if path:
             morsel["path"] = path
         for k, v in kwargs.items():
