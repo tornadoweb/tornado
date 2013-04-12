@@ -253,3 +253,9 @@ class FormatTimestampTest(unittest.TestCase):
 
     def test_datetime(self):
         self.check(datetime.datetime.utcfromtimestamp(self.TIMESTAMP))
+
+    def test_format(self):
+        format = "%A, %d-%b-%y %H:%M:%S GMT"
+        expected = 'Sunday, 27-Jan-13 18:43:20 GMT'
+        self.assertEqual(format_timestamp(self.TIMESTAMP, format),
+                         expected)

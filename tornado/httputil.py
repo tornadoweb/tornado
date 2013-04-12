@@ -297,8 +297,9 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             arguments.setdefault(name, []).append(value)
 
 
-def format_timestamp(ts):
-    """Formats a timestamp in the format used by HTTP.
+def format_timestamp(ts, format="%a, %d %b %Y %H:%M:%S GMT"):
+    """Formats a timestamp in the format used by HTTP or the assigned
+    one.
 
     The argument may be a numeric timestamp as returned by `time.time`,
     a time tuple as returned by `time.gmtime`, or a `datetime.datetime`
@@ -306,6 +307,9 @@ def format_timestamp(ts):
 
     >>> format_timestamp(1359312200)
     'Sun, 27 Jan 2013 18:43:20 GMT'
+
+    >>> format_timestamp(784111777,"%A, %d-%b-%y %H:%M:%S GMT")
+    'Sunday, 06-Nov-94 08:49:37 GMT'
     """
     if isinstance(ts, (tuple, time.struct_time)):
         pass
@@ -315,7 +319,7 @@ def format_timestamp(ts):
         ts = time.gmtime(ts)
     else:
         raise TypeError("unknown timestamp type: %r" % ts)
-    return time.strftime("%a, %d %b %Y %H:%M:%S GMT", ts)
+    return time.strftime(format, ts)
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some
