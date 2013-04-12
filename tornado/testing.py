@@ -32,7 +32,6 @@ from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type
 import functools
-import inspect
 import logging
 import os
 import re
@@ -355,7 +354,7 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
         return 'https'
 
 
-def gen_test(timeout=None):
+def gen_test(func=None, timeout=None):
     """Testing equivalent of ``@gen.coroutine``, to be applied to test methods.
 
     ``@gen.coroutine`` cannot be used on tests because the `.IOLoop` is not
@@ -371,7 +370,7 @@ def gen_test(timeout=None):
 
     By default, ``@gen_test`` times out after 5 seconds. The timeout may be
     overridden globally with the TIMEOUT environment variable, or for each
-    test with the ``timeout`` parameter:
+    test with the ``timeout`` keyword argument:
 
         class MyTest(AsyncHTTPTestCase):
             @gen_test(timeout=10)
@@ -395,22 +394,16 @@ def gen_test(timeout=None):
                 functools.partial(f, self), timeout=timeout)
         return wrapper
 
-    if inspect.isfunction(timeout):
+    if func is not None:
         # Used like:
         #     @gen_test
         #     def f(self):
         #         pass
-        # The 'timeout' parameter is actually the test function.
-        f = timeout
         timeout = env_timeout or 5
-        return wrap(f)
+        return wrap(func)
     else:
-        # Used like @gen_test(timeout=10) or @gen_test(10).
-        if env_timeout is not None:
-            timeout = max(float(timeout), env_timeout)
-        else:
-            timeout = float(timeout)
-
+        # Used like @gen_test(timeout=10)
+        timeout = float(timeout)
         return wrap
 
 
