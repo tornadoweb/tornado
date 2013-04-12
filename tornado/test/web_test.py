@@ -15,7 +15,6 @@ try:
     from Cookie import SimpleCookie  # py2
 except ImportError:
     from http.cookies import SimpleCookie  # py3
-import Cookie
 import datetime
 import logging
 import os
