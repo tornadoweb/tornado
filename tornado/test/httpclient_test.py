@@ -14,9 +14,10 @@ from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPErr
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
+from tornado.log import gen_log
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
-from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test
+from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, url
@@ -190,6 +191,23 @@ Transfer-Encoding: chunked
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
                                     auth_password="open sesame").body,
                          b"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
+
+    def test_basic_auth_explicit_mode(self):
+        self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
+                                    auth_password="open sesame",
+                                    auth_mode="basic").body,
+                         b"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
+
+    def test_unsupported_auth_mode(self):
+        # curl and simple clients handle errors a bit differently; the
+        # important thing is that they don't fall back to basic auth
+        # on an unknown mode.
+        with ExpectLog(gen_log, "uncaught exception", required=False):
+            with self.assertRaises((ValueError, HTTPError)):
+                response = self.fetch("/auth", auth_username="Aladdin",
+                                      auth_password="open sesame",
+                                      auth_mode="asdf")
+                response.rethrow()
 
     def test_follow_redirect(self):
         response = self.fetch("/countdown/2", follow_redirects=False)

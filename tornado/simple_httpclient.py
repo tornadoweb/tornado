@@ -244,6 +244,9 @@ class _HTTPConnection(object):
             username = self.request.auth_username
             password = self.request.auth_password or ''
         if username is not None:
+            if self.request.auth_mode not in (None, "basic"):
+                raise ValueError("unsupported auth_mode %s",
+                                 self.request.auth_mode)
             auth = utf8(username) + b":" + utf8(password)
             self.request.headers["Authorization"] = (b"Basic " +
                                                      base64.b64encode(auth))

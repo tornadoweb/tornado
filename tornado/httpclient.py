@@ -261,7 +261,10 @@ class HTTPRequest(object):
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
         :arg string auth_username: Username for HTTP authentication
         :arg string auth_password: Password for HTTP authentication
-        :arg string auth_mode: Authentication mode (basic, digest)
+        :arg string auth_mode: Authentication mode; default is "basic".
+           Allowed values are implementation-defined; ``curl_httpclient``
+           supports "basic" and "digest"; ``simple_httpclient`` only supports
+           "basic"
         :arg float connect_timeout: Timeout for initial connection in seconds
         :arg float request_timeout: Timeout for entire request in seconds
         :arg if_modified_since: Timestamp for ``If-Modified-Since`` header

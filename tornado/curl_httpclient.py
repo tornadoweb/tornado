@@ -416,6 +416,8 @@ def _curl_setup_request(curl, request, buffer, headers):
             curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
         elif request.auth_mode == "digest":
             curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_DIGEST)
+        else:
+            raise ValueError("Unsupported auth_mode %s" % request.auth_mode)
 
         curl.setopt(pycurl.USERPWD, native_str(userpwd))
         gen_log.debug("%s %s (username: %r)", request.method, request.url,
