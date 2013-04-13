@@ -10,6 +10,20 @@ import contextlib
 import os
 
 
+@contextlib.contextmanager
+def set_environ(name, value):
+    old_value = os.environ.get('name')
+    os.environ[name] = value
+
+    try:
+        yield
+    finally:
+        if old_value is None:
+            del os.environ[name]
+        else:
+            os.environ[name] = old_value
+
+
 class AsyncTestCaseTest(AsyncTestCase):
     def test_exception_in_callback(self):
         self.io_loop.add_callback(lambda: 1 / 0)
@@ -18,6 +32,24 @@ class AsyncTestCaseTest(AsyncTestCase):
             self.fail("did not get expected exception")
         except ZeroDivisionError:
             pass
+
+    def test_wait_timeout(self):
+        time = self.io_loop.time
+
+        # Accept default 5-second timeout, no error
+        self.io_loop.add_timeout(time() + 0.01, self.stop)
+        self.wait()
+
+        # Timeout passed to wait()
+        self.io_loop.add_timeout(time() + 1, self.stop)
+        with self.assertRaises(self.failureException):
+            self.wait(timeout=0.01)
+
+        # Timeout set with environment variable
+        self.io_loop.add_timeout(time() + 1, self.stop)
+        with set_environ('ASYNC_TEST_TIMEOUT', '0.01'):
+            with self.assertRaises(self.failureException):
+                self.wait()
 
     def test_subsequent_wait_calls(self):
         """
@@ -59,20 +91,6 @@ class SetUpTearDownTest(unittest.TestCase):
         self.assertEqual(expected, events)
 
 
-@contextlib.contextmanager
-def set_environ(name, value):
-    old_value = os.environ.get('name')
-    os.environ[name] = value
-
-    try:
-        yield
-    finally:
-        if old_value is None:
-            del os.environ[name]
-        else:
-            os.environ[name] = old_value
-
-
 class GenTest(AsyncTestCase):
     def setUp(self):
         super(GenTest, self).setUp()
@@ -106,7 +124,8 @@ class GenTest(AsyncTestCase):
         # A test that does not exceed its timeout should succeed.
         @gen_test(timeout=1)
         def test(self):
-            yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 0.1)
+            time = self.io_loop.time
+            yield gen.Task(self.io_loop.add_timeout, time() + 0.1)
 
         test(self)
         self.finished = True
@@ -118,7 +137,7 @@ class GenTest(AsyncTestCase):
             yield gen.Task(self.io_loop.add_timeout, time() + 0.25)
 
         # Uses provided timeout of 0.5 seconds, doesn't time out.
-        with set_environ('TIMEOUT', '0.1'):
+        with set_environ('ASYNC_TEST_TIMEOUT', '0.1'):
             test_long_timeout(self)
 
         self.finished = True
@@ -129,8 +148,8 @@ class GenTest(AsyncTestCase):
             time = self.io_loop.time
             yield gen.Task(self.io_loop.add_timeout, time() + 1)
 
-        # Uses environment TIMEOUT of 0.1, times out.
-        with set_environ('TIMEOUT', '0.1'):
+        # Uses environment-variable timeout of 0.1, times out.
+        with set_environ('ASYNC_TEST_TIMEOUT', '0.1'):
             with self.assertRaises(ioloop.TimeoutError):
                 test_short_timeout(self)
 

@@ -82,6 +82,17 @@ def bind_unused_port():
     return sock, port
 
 
+def get_async_test_timeout():
+    """Get the global timeout setting for async tests.
+
+    Returns a float, the timeout in seconds.
+    """
+    try:
+        return float(os.environ.get('ASYNC_TEST_TIMEOUT'))
+    except (ValueError, TypeError):
+        return 5
+
+
 class AsyncTestCase(unittest.TestCase):
     """`~unittest.TestCase` subclass for testing `.IOLoop`-based
     asynchronous code.
@@ -202,14 +213,19 @@ class AsyncTestCase(unittest.TestCase):
             self.__running = False
         self.__stopped = True
 
-    def wait(self, condition=None, timeout=5):
+    def wait(self, condition=None, timeout=None):
         """Runs the `.IOLoop` until stop is called or timeout has passed.
 
-        In the event of a timeout, an exception will be thrown.
+        In the event of a timeout, an exception will be thrown. The default
+        timeout is 5 seconds; it may be overridden with a ``timeout`` keyword
+        argument or globally with the ASYNC_TEST_TIMEOUT environment variable.
 
         If ``condition`` is not None, the `.IOLoop` will be restarted
         after `stop()` until ``condition()`` returns true.
         """
+        if timeout is None:
+            timeout = get_async_test_timeout()
+
         if not self.__stopped:
             if timeout:
                 def timeout_func():
@@ -369,8 +385,8 @@ def gen_test(func=None, timeout=None):
                 response = yield gen.Task(self.fetch('/'))
 
     By default, ``@gen_test`` times out after 5 seconds. The timeout may be
-    overridden globally with the TIMEOUT environment variable, or for each
-    test with the ``timeout`` keyword argument:
+    overridden globally with the ASYNC_TEST_TIMEOUT environment variable,
+    or for each test with the ``timeout`` keyword argument:
 
         class MyTest(AsyncHTTPTestCase):
             @gen_test(timeout=10)
@@ -380,10 +396,8 @@ def gen_test(func=None, timeout=None):
     If both the environment variable and the parameter are set, ``gen_test``
     uses the maximum of the two.
     """
-    try:
-        env_timeout = float(os.environ.get('TIMEOUT'))
-    except (ValueError, TypeError):
-        env_timeout = None
+    if timeout is None:
+        timeout = get_async_test_timeout()
 
     def wrap(f):
         f = gen.coroutine(f)
@@ -399,11 +413,9 @@ def gen_test(func=None, timeout=None):
         #     @gen_test
         #     def f(self):
         #         pass
-        timeout = env_timeout or 5
         return wrap(func)
     else:
         # Used like @gen_test(timeout=10)
-        timeout = float(timeout)
         return wrap
 
 
