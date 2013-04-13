@@ -259,7 +259,7 @@ def wrap(fn):
                 exc = _handle_exception(top, exc)
             else:
                 # Otherwise take shorter path and run stack contexts in reverse order
-                for n in xrange(last_ctx - 1, -1, -1):
+                for n in range(last_ctx - 1, -1, -1):
                     c = stack[n]
 
                     try:
