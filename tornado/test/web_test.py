@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
+from tornado.httputil import format_timestamp
 from tornado.iostream import IOStream
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
@@ -812,6 +813,29 @@ class StaticFileTest(WebTestCase):
         response2 = self.fetch("/static/robots.txt", headers={
             'If-None-Match': response1.headers['Etag']})
         self.assertEqual(response2.code, 304)
+
+    def test_static_if_modified_since_pre_epoch(self):
+        # On windows, the functions that work with time_t do not accept
+        # negative values, and at least one client (processing.js) seems
+        # to use if-modified-since 1/1/1960 as a cache-busting technique.
+        response = self.fetch("/static/robots.txt", headers={
+                'If-Modified-Since': 'Fri, 01 Jan 1960 00:00:00 GMT'})
+        self.assertEqual(response.code, 200)
+
+    def test_static_if_modified_since_time_zone(self):
+        # Instead of the value from Last-Modified, make requests with times
+        # chosen just before and after the known modification time
+        # of the file to ensure that the right time zone is being used
+        # when parsing If-Modified-Since.
+        stat = os.stat(os.path.join(os.path.dirname(__file__),
+                                    'static/robots.txt'))
+
+        response = self.fetch('/static/robots.txt', headers={
+                'If-Modified-Since': format_timestamp(stat.st_mtime - 1)})
+        self.assertEqual(response.code, 200)
+        response = self.fetch('/static/robots.txt', headers={
+                'If-Modified-Since': format_timestamp(stat.st_mtime + 1)})
+        self.assertEqual(response.code, 304)
 
 
 @wsgi_safe

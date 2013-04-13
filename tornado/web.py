@@ -1638,7 +1638,7 @@ class StaticFileHandler(RequestHandler):
             raise HTTPError(403, "%s is not a file", path)
 
         stat_result = os.stat(abspath)
-        modified = datetime.datetime.fromtimestamp(stat_result[stat.ST_MTIME])
+        modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
 
         self.set_header("Last-Modified", modified)
 
@@ -1660,7 +1660,7 @@ class StaticFileHandler(RequestHandler):
         ims_value = self.request.headers.get("If-Modified-Since")
         if ims_value is not None:
             date_tuple = email.utils.parsedate(ims_value)
-            if_since = datetime.datetime.fromtimestamp(time.mktime(date_tuple))
+            if_since = datetime.datetime(*date_tuple[:6])
             if if_since >= modified:
                 self.set_status(304)
                 return
