@@ -112,10 +112,9 @@ class GenTest(AsyncTestCase):
         self.finished = True
 
     def test_timeout_environment_variable(self):
-        time = self.io_loop.time
-
         @gen_test(timeout=0.5)
         def test_long_timeout(self):
+            time = self.io_loop.time
             yield gen.Task(self.io_loop.add_timeout, time() + 0.25)
 
         # Uses provided timeout of 0.5 seconds, doesn't time out.
@@ -125,10 +124,9 @@ class GenTest(AsyncTestCase):
         self.finished = True
 
     def test_no_timeout_environment_variable(self):
-        time = self.io_loop.time
-
         @gen_test(timeout=0.01)
         def test_short_timeout(self):
+            time = self.io_loop.time
             yield gen.Task(self.io_loop.add_timeout, time() + 1)
 
         # Uses environment TIMEOUT of 0.1, times out.
