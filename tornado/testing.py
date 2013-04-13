@@ -169,7 +169,7 @@ class AsyncTestCase(unittest.TestCase):
         return IOLoop()
 
     def _handle_exception(self, typ, value, tb):
-        self.__failure = sys.exc_info()
+        self.__failure = (typ, value, tb)
         self.stop()
         return True
 
