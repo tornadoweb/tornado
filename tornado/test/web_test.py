@@ -11,10 +11,6 @@ from tornado.util import u, bytes_type, ObjectDict, unicode_type
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler
 
 import binascii
-try:
-    from Cookie import SimpleCookie  # py2
-except ImportError:
-    from http.cookies import SimpleCookie  # py3
 import datetime
 import logging
 import os
@@ -151,12 +147,19 @@ class CookieTest(WebTestCase):
                 expires = datetime.datetime(2012, 7, 14, 8, 33, 0)
                 self.set_cookie("foo", "bar", expires=expires)
 
+        class SetCookieExpireLegacyFormatHandler(RequestHandler):
+            def get(self):
+                expires = datetime.datetime(2012, 7, 14, 8, 33, 0)
+                self.set_cookie("foo", "bar", expires=expires,
+                                expires_in_legacy_format=True)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
                 ("/special_char", SetCookieSpecialCharHandler),
                 ("/set_overwrite", SetCookieOverwriteHandler),
                 ("/set_expire", SetCookieExpireHandler),
+                ("/set_expire_lf", SetCookieExpireLegacyFormatHandler),
                 ]
 
     def test_set_cookie(self):
@@ -214,22 +217,18 @@ class CookieTest(WebTestCase):
     def test_set_cookie_expire(self):
         response = self.fetch("/set_expire")
         headers = sorted(response.headers.get_list("Set-Cookie"))
-        self.assertEqual(headers[0],
-            'foo=bar; expires=Sat, 14-Jul-2012 08:33:00 GMT; Path=/')
+        self.assertEqual(
+            headers[0],
+            'foo=bar; expires=Sat, 14 Jul 2012 08:33:00 GMT; Path=/'
+        )
 
-    def test_regression_set_cookie_expire_value_is_parsable(self):
-        """
-        A regression test, Tornado used to format the expires
-        datetime the way HTTP formats datetime. It must be the way
-        Netscape did it and this test uses core python Morsel objects
-        to proof it.
-        """
-        response = self.fetch("/set_expire")
-        for set_cookie_val in response.headers.get_list("Set-Cookie"):
-            C = SimpleCookie()
-            C.load(set_cookie_val)
-            for key, morsel in C.items():
-                self.assertNotEqual(morsel.get("expires"), "Sat,")
+    def test_set_cookie_expire_legacy_format(self):
+        response = self.fetch("/set_expire_lf")
+        headers = sorted(response.headers.get_list("Set-Cookie"))
+        self.assertEqual(
+            headers[0],
+            'foo=bar; expires=Sat, 14-Jul-2012 08:33:00 GMT; Path=/'
+        )
 
 
 class AuthRedirectRequestHandler(RequestHandler):
