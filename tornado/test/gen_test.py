@@ -838,3 +838,6 @@ class GenWebTest(AsyncHTTPTestCase):
     def test_yield_exception_handler(self):
         response = self.fetch('/yield_exception')
         self.assertEqual(response.body, b'ok')
+
+if __name__ == '__main__':
+    unittest.main()
