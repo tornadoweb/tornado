@@ -172,7 +172,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # libcurl is ready.  After each timeout, resync the scheduled
         # timeout with libcurl's current state.
         new_timeout = self._multi.timeout()
-        if new_timeout != -1:
+        if new_timeout >= 0:
             self._set_timeout(new_timeout)
 
     def _handle_force_timeout(self):
