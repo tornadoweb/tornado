@@ -72,6 +72,7 @@ import tornado
 import traceback
 import types
 import uuid
+import weakref
 
 from tornado.concurrent import Future
 from tornado import escape
@@ -1125,12 +1126,14 @@ class RequestHandler(object):
             self.send_error(500, exc_info=sys.exc_info())
 
     def _ui_module(self, name, module):
+        ref = weakref.ref(self)
         def render(*args, **kwargs):
-            if not hasattr(self, "_active_modules"):
-                self._active_modules = {}
-            if name not in self._active_modules:
-                self._active_modules[name] = module(self)
-            rendered = self._active_modules[name].render(*args, **kwargs)
+            handler = ref()
+            if not hasattr(handler, "_active_modules"):
+                handler._active_modules = {}
+            if name not in handler._active_modules:
+                handler._active_modules[name] = module(handler)
+            rendered = handler._active_modules[name].render(*args, **kwargs)
             return rendered
         return render
 
