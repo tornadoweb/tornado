@@ -172,7 +172,7 @@ class TwitterServerShowUserHandler(RequestHandler):
         assert 'oauth_signature' in self.request.arguments
         assert self.get_argument('oauth_consumer_key') == 'test_twitter_consumer_key'
         assert self.get_argument('oauth_signature_method') == 'HMAC-SHA1'
-        assert self.get_argument('oauth_version') == '1.0a'
+        assert self.get_argument('oauth_version') == '1.0'
         assert self.get_argument('oauth_token') == 'hjkl'
         self.write(dict(screen_name=screen_name, name=screen_name.capitalize()))
 

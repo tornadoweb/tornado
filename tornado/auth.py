@@ -367,7 +367,7 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=escape.to_basestring(binascii.b2a_hex(uuid.uuid4().bytes)),
-            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
+            oauth_version="1.0",
         )
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
             if callback_uri == "oob":
@@ -409,7 +409,7 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=escape.to_basestring(binascii.b2a_hex(uuid.uuid4().bytes)),
-            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
+            oauth_version="1.0",
         )
         if "verifier" in request_token:
             args["oauth_verifier"] = request_token["verifier"]
@@ -488,7 +488,7 @@ class OAuthMixin(object):
             oauth_signature_method="HMAC-SHA1",
             oauth_timestamp=str(int(time.time())),
             oauth_nonce=escape.to_basestring(binascii.b2a_hex(uuid.uuid4().bytes)),
-            oauth_version=getattr(self, "_OAUTH_VERSION", "1.0a"),
+            oauth_version="1.0",
         )
         args = {}
         args.update(base_args)
