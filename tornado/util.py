@@ -17,8 +17,6 @@ import sys
 import zlib
 
 
-import sys
-
 class ObjectDict(dict):
     """Makes a dictionary behave like an object, with attribute-style access.
     """
@@ -75,10 +73,6 @@ def import_object(name):
     True
     >>> import_object('tornado') is tornado
     True
-    >>> import_object('missing_module')
-    Traceback (most recent call last):
-        ...
-    ImportError: No module named missing_module
     >>> import_object('tornado.missing_module')
     Traceback (most recent call last):
         ...
@@ -92,8 +86,8 @@ def import_object(name):
     try:
         return getattr(obj, parts[-1])
     except AttributeError:
-        exc_info = sys.exc_info()
-        raise ImportError, "No module named %s" % parts[-1], exc_info[2] 
+        raise ImportError("No module named %s" % parts[-1])
+
 
 # Fake unicode literal support:  Python 3.2 doesn't have the u'' marker for
 # literal strings, and alternative solutions like "from __future__ import
