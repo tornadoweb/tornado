@@ -747,6 +747,9 @@ class RequestHandler(object):
             self._log()
         self._finished = True
         self.on_finish()
+        # Break up a reference cycle between this handler and the
+        # _ui_module closures to allow for faster GC on CPython.
+        self.ui = None
 
     def send_error(self, status_code=500, **kwargs):
         """Sends the given HTTP error code to the browser.
