@@ -1437,8 +1437,10 @@ class Application(object):
         args = []
         kwargs = {}
         handlers = self._get_host_handlers(request)
+        redirect_handler_class = self.settings.get("redirect_handler_class",
+                                            RedirectHandler)
         if not handlers:
-            handler = RedirectHandler(
+            handler = redirect_handler_class(
                 self, request, url="http://" + self.default_host + "/")
         else:
             for spec in handlers:
@@ -1466,7 +1468,9 @@ class Application(object):
                             args = [unquote(s) for s in match.groups()]
                     break
             if not handler:
-                handler = ErrorHandler(self, request, status_code=404)
+                error_handler_class = self.settings.get("error_handler_class",
+                                                    ErrorHandler)
+                handler = error_handler_class(self, request, status_code=404)
 
         # In debug mode, re-compile templates and reload static files on every
         # request so you don't need to restart to see changes
