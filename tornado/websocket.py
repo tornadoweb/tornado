@@ -210,6 +210,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         Once the close handshake is successful the socket will be closed.
         """
         self.ws_connection.close()
+        self.ws_connection = None
 
     def allow_draft76(self):
         """Override to enable support for the older "draft76" protocol.
