@@ -341,13 +341,43 @@ class HTTPServerTest(AsyncHTTPTestCase):
         self.assertEqual(200, response.code)
         self.assertEqual(json_decode(response.body), {})
 
-    def test_empty_request(self):
-        stream = IOStream(socket.socket(), io_loop=self.io_loop)
-        stream.connect(('localhost', self.get_http_port()), self.stop)
+
+class HTTPServerRawTest(AsyncHTTPTestCase):
+    def get_app(self):
+        return Application([
+                ('/echo', EchoHandler),
+                ])
+
+    def setUp(self):
+        super(HTTPServerRawTest, self).setUp()
+        self.stream = IOStream(socket.socket())
+        self.stream.connect(('localhost', self.get_http_port()), self.stop)
         self.wait()
-        stream.close()
+
+    def tearDown(self):
+        self.stream.close()
+        super(HTTPServerRawTest, self).tearDown()
+
+    def test_empty_request(self):
+        self.stream.close()
         self.io_loop.add_timeout(datetime.timedelta(seconds=0.001), self.stop)
         self.wait()
+
+    def test_malformed_first_line(self):
+        with ExpectLog(gen_log, '.*Malformed HTTP request line'):
+            self.stream.write(b'asdf\r\n\r\n')
+            # TODO: need an async version of ExpectLog so we don't need
+            # hard-coded timeouts here.
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
+                                     self.stop)
+            self.wait()
+
+    def test_malformed_headers(self):
+        with ExpectLog(gen_log, '.*Malformed HTTP headers'):
+            self.stream.write(b'GET / HTTP/1.0\r\nasdf\r\n\r\n')
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
+                                     self.stop)
+            self.wait()
 
 
 class XHeaderTest(HandlerBaseTestCase):

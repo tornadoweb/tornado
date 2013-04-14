@@ -294,7 +294,11 @@ class HTTPConnection(object):
                 raise _BadRequestException("Malformed HTTP request line")
             if not version.startswith("HTTP/"):
                 raise _BadRequestException("Malformed HTTP version in HTTP Request-Line")
-            headers = httputil.HTTPHeaders.parse(data[eol:])
+            try:
+                headers = httputil.HTTPHeaders.parse(data[eol:])
+            except ValueError:
+                # Probably from split() if there was no ':' in the line
+                raise _BadRequestException("Malformed HTTP headers")
 
             # HTTPRequest wants an IP, not a full socket address
             if self.address_family in (socket.AF_INET, socket.AF_INET6):
