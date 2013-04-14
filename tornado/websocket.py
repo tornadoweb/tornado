@@ -24,6 +24,7 @@ import array
 import base64
 import collections
 import functools
+import weakref
 import hashlib
 import os
 import struct
@@ -266,7 +267,7 @@ class WebSocketProtocol(object):
     """Base class for WebSocket protocol versions.
     """
     def __init__(self, handler):
-        self.handler = handler
+        self.handler = weakref.proxy(handler)
         self.request = handler.request
         self.stream = handler.stream
         self.client_terminated = False
