@@ -1,0 +1,25 @@
+<html>
+<head>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="http://postmessage.freebaseapps.com/postmessage.js"></script>
+<script>
+  $(function () {
+
+    pm.bind("Update", function(params) {
+        console.log(params)
+        $("#put_here").append(params)
+    });
+   });
+</script>
+</head>
+<body>
+example tornado using iframe and postmessage.js to cross-domain browsers
+<br/><br/>
+write here: <div id="put_here"></div>
+<br/>
+<br/>
+iframe:
+<iframe src="http://localhost:8888/keepalive.js"></iframe>
+<br/>
+</body>
+</html>
