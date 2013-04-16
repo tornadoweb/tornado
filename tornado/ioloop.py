@@ -505,7 +505,11 @@ class PollIOLoop(IOLoop):
         if all_fds:
             for fd in self._handlers.keys():
                 try:
-                    os.close(fd)
+                    close_method = getattr(fd, 'close', None)
+                    if close_method is not None:
+                        close_method()
+                    else:
+                        os.close(fd)
                 except Exception:
                     gen_log.debug("error closing fd %s", fd, exc_info=True)
         self._waker.close()
