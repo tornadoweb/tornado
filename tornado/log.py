@@ -62,6 +62,9 @@ def check_log_handlers():
     must explicitly configure logging if we've made it this
     far without anything.
     '''
+    for parent in (None, 'tornado'):
+        if logging.getLogger(parent).handlers:
+            return
     for logger in (access_log, app_log, gen_log):
         if not logger.handlers:
             _basic_config(logger)
