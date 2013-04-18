@@ -428,6 +428,8 @@ class BaseIOStream(object):
         self._read_buffer_size += len(chunk)
         if self._read_buffer_size >= self.max_buffer_size:
             gen_log.error("Reached maximum read buffer size")
+            self._read_buffer = None
+            self._write_buffer = None
             self.close()
             raise IOError("Reached maximum read buffer size")
         return len(chunk)
