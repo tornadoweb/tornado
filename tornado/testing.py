@@ -386,7 +386,7 @@ def gen_test(func=None, timeout=None):
 
     By default, ``@gen_test`` times out after 5 seconds. The timeout may be
     overridden globally with the ASYNC_TEST_TIMEOUT environment variable,
-    or for each test with the ``timeout`` keyword argument:
+    or for each test with the ``timeout`` keyword argument::
 
         class MyTest(AsyncHTTPTestCase):
             @gen_test(timeout=10)

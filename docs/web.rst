@@ -14,8 +14,10 @@
    .. automethod:: RequestHandler.prepare
    .. automethod:: RequestHandler.on_finish
 
-   Implement any of the following methods to handle the corresponding
-   HTTP method.
+   .. _verbs:
+
+   Implement any of the following methods (collectively known as the
+   HTTP verb methods) to handle the corresponding HTTP method.
 
    .. automethod:: RequestHandler.get
    .. automethod:: RequestHandler.post
@@ -38,10 +40,11 @@
    .. attribute:: RequestHandler.path_args
    .. attribute:: RequestHandler.path_kwargs
 
-      The ``path_args`` and ``path_kwargs`` attributes contain the positional
-      and keyword arguments that are passed to the `get`/`post`/etc methods.
-      These attributes are set before those methods are called, so the values
-      are available during `prepare`.
+      The ``path_args`` and ``path_kwargs`` attributes contain the
+      positional and keyword arguments that are passed to the
+      :ref:`HTTP verb methods <verbs>`.  These attributes are set
+      before those methods are called, so the values are available
+      during `prepare`.
 
    Output
    ^^^^^^

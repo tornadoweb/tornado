@@ -194,7 +194,7 @@ class RequestHandler(object):
         raise HTTPError(405)
 
     def prepare(self):
-        """Called at the beginning of a request before `get`/`post`/etc.
+        """Called at the beginning of a request before  `get`/`post`/etc.
 
         Override this method to perform common initialization regardless
         of the request method.
@@ -1151,6 +1151,13 @@ class RequestHandler(object):
 
 def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.
+
+    This decorator should only be applied to the :ref:`HTTP verb
+    methods <verbs>`; its behavior is undefined for any other method.
+    This decorator does not *make* a method asynchronous; it tells
+    the framework that the method *is* asynchronous.  For this decorator
+    to be useful the method must (at least sometimes) do something
+    asynchronous.
 
     If this decorator is given, the response is not finished when the
     method returns. It is up to the request handler to call

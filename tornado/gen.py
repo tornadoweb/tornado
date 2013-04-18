@@ -121,7 +121,7 @@ def engine(func):
     In most cases, functions decorated with `engine` should take
     a ``callback`` argument and invoke it with their result when
     they are finished.  One notable exception is the
-    `~tornado.web.RequestHandler` ``get``/``post``/etc methods,
+    `~tornado.web.RequestHandler` :ref:`HTTP verb methods <verbs>`,
     which use ``self.finish()`` in place of a callback argument.
     """
     @functools.wraps(func)
@@ -166,7 +166,7 @@ def coroutine(func):
     Any generator that yields objects from this module must be wrapped
     in either this decorator or `engine`.  These decorators only work
     on functions that are already asynchronous.  For
-    `~tornado.web.RequestHandler` ``get``/``post``/etc methods, this
+    `~tornado.web.RequestHandler` :ref:`HTTP verb methods <verbs>` methods, this
     means that both the `tornado.web.asynchronous` and
     `tornado.gen.coroutine` decorators must be used (for proper
     exception handling, ``asynchronous`` should come before
