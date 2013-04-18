@@ -32,7 +32,6 @@ import datetime
 import errno
 import functools
 import heapq
-import logging
 import numbers
 import os
 import select
@@ -42,7 +41,7 @@ import time
 import traceback
 
 from tornado.concurrent import Future, TracebackFuture
-from tornado.log import app_log, gen_log
+from tornado.log import app_log, gen_log, check_log_handlers
 from tornado import stack_context
 from tornado.util import Configurable
 
@@ -541,15 +540,7 @@ class PollIOLoop(IOLoop):
                           action if action is not None else signal.SIG_DFL)
 
     def start(self):
-        if not logging.getLogger().handlers:
-            # The IOLoop catches and logs exceptions, so it's
-            # important that log output be visible.  However, python's
-            # default behavior for non-root loggers (prior to python
-            # 3.2) is to print an unhelpful "no handlers could be
-            # found" message rather than the actual log entry, so we
-            # must explicitly configure logging if we've made it this
-            # far without anything.
-            logging.basicConfig()
+        check_log_handlers()
         if self._stopped:
             self._stopped = False
             return

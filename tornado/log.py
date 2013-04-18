@@ -49,6 +49,27 @@ app_log = logging.getLogger("tornado.application")
 gen_log = logging.getLogger("tornado.general")
 
 
+def _basic_config(logger):
+    logger.addHandler(logging.StreamHandler())
+
+
+def check_log_handlers():
+    '''The IOLoop catches and logs exceptions, so it's
+    important that log output be visible.  However, python's
+    default behavior for non-root loggers (prior to python
+    3.2) is to print an unhelpful "no handlers could be
+    found" message rather than the actual log entry, so we
+    must explicitly configure logging if we've made it this
+    far without anything.
+    '''
+    for parent in (None, 'tornado'):
+        if logging.getLogger(parent).handlers:
+            return
+    for logger in (access_log, app_log, gen_log):
+        if not logger.handlers:
+            _basic_config(logger)
+
+
 def _stderr_supports_color():
     color = False
     if curses and sys.stderr.isatty():
