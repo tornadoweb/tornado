@@ -242,6 +242,8 @@ class BaseIOStream(object):
             if self._state is not None:
                 self.io_loop.remove_handler(self.fileno())
                 self._state = None
+            self._read_buffer = collections.deque()
+            self._write_buffer = collections.deque()
             self.close_fd()
             self._closed = True
         self._maybe_run_close_callback()
