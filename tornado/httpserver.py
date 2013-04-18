@@ -431,8 +431,10 @@ class HTTPRequest(object):
         # xheaders can override the defaults
         if connection and connection.xheaders:
             # Squid uses X-Forwarded-For, others use X-Real-Ip
+            ip = self.headers.get("X-Forwarded-For", self.remote_ip)
+            ip = ip.split(',')[-1].strip()
             ip = self.headers.get(
-                "X-Real-Ip", self.headers.get("X-Forwarded-For", self.remote_ip))
+                "X-Real-Ip", ip)
             if netutil.is_valid_ip(ip):
                 self.remote_ip = ip
             # AWS uses X-Forwarded-Proto
