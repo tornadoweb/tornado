@@ -413,6 +413,7 @@ class HTTPRequest(object):
                  body=None, remote_ip=None, protocol=None, host=None,
                  files=None, connection=None):
         self.method = method
+
         self.uri = uri
         self.version = version
         self.headers = headers or httputil.HTTPHeaders()
@@ -441,7 +442,6 @@ class HTTPRequest(object):
             if proto in ("http", "https"):
                 self.protocol = proto
 
-
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}
         self.connection = connection
@@ -449,6 +449,8 @@ class HTTPRequest(object):
         self._finish_time = None
 
         self.path, sep, self.query = uri.partition('?')
+        _, sep, self.fragment = uri.partition('#')
+
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
 
     def supports_http_1_1(self):
