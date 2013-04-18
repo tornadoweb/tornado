@@ -112,7 +112,7 @@ Discussion and support
 
 You can discuss Tornado on `the Tornado developer mailing list
 <http://groups.google.com/group/python-tornado>`_, and report bugs on
-the `GitHub issue trackier
+the `GitHub issue tracker
 <https://github.com/facebook/tornado/issues>`_.  Links to additional
 resources can be found on the `Tornado wiki
 <https://github.com/facebook/tornado/wiki/Links>`_.
