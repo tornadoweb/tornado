@@ -348,6 +348,8 @@ def _curl_setup_request(curl, request, buffer, headers):
     if request.proxy_host and request.proxy_port:
         curl.setopt(pycurl.PROXY, request.proxy_host)
         curl.setopt(pycurl.PROXYPORT, request.proxy_port)
+        if request.proxy_type:
+            curl.setopt(pycurl.PROXYTYPE, request.proxy_type)
         if request.proxy_username:
             credentials = '%s:%s' % (request.proxy_username,
                                      request.proxy_password)
