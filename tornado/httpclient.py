@@ -248,8 +248,9 @@ class HTTPRequest(object):
                  max_redirects=None, user_agent=None, use_gzip=None,
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
-                 proxy_host=None, proxy_port=None, proxy_username=None,
-                 proxy_password=None, allow_nonstandard_methods=None,
+                 proxy_host=None, proxy_port=None, proxy_type=None,
+                 proxy_username=None, proxy_password=None,
+                 allow_nonstandard_methods=None,
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
                  client_key=None, client_cert=None):
@@ -290,11 +291,15 @@ class HTTPRequest(object):
         :arg callable prepare_curl_callback: If set, will be called with
            a ``pycurl.Curl`` object to allow the application to make additional
            ``setopt`` calls.
-        :arg string proxy_host: HTTP proxy hostname.  To use proxies,
+        :arg string proxy_host: proxy hostname.  To use proxies,
            ``proxy_host`` and ``proxy_port`` must be set; ``proxy_username`` and
            ``proxy_pass`` are optional.  Proxies are currently only supported
            with ``curl_httpclient``.
-        :arg int proxy_port: HTTP proxy port
+        :arg int proxy_port: proxy port
+        :arg string proxy_type: Available options for this are
+           CURLPROXY_HTTP, CURLPROXY_HTTP_1_0, CURLPROXY_SOCKS4,
+           CURLPROXY_SOCKS5, CURLPROXY_SOCKS4A and CURLPROXY_SOCKS5_HOSTNAME.
+           The HTTP type is default.
         :arg string proxy_username: HTTP proxy username
         :arg string proxy_password: HTTP proxy password
         :arg bool allow_nonstandard_methods: Allow unknown values for ``method``
@@ -318,6 +323,7 @@ class HTTPRequest(object):
                 if_modified_since)
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
+        self.proxy_type = proxy_type
         self.proxy_username = proxy_username
         self.proxy_password = proxy_password
         self.url = url
