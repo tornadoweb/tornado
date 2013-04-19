@@ -261,6 +261,12 @@ class EchoHandler(RequestHandler):
     def post(self):
         self.write(recursive_unicode(self.request.arguments))
 
+
+class EchoWithFragmentHandler(RequestHandler):
+    def get(self):
+        self.write("%s\n%s" % (self.request.fragment, self.request.query))
+
+
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
         self.errors = {}
@@ -304,6 +310,7 @@ class TypeCheckHandler(RequestHandler):
 class HTTPServerTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([("/echo", EchoHandler),
+                            ("/echofrag.*", EchoWithFragmentHandler),
                             ("/typecheck", TypeCheckHandler),
                             ("//doubleslash", EchoHandler),
                             ])
@@ -340,6 +347,30 @@ class HTTPServerTest(AsyncHTTPTestCase):
         response = self.fetch("//doubleslash")
         self.assertEqual(200, response.code)
         self.assertEqual(json_decode(response.body), {})
+
+    def test_url_fragment(self):
+        # Even though [RFC 3986](http://tools.ietf.org/html/rfc3986#section-3.5) specifically state that:
+        #     "...the fragment identifier is not used in the scheme-specific processing of a URI; instead,
+        #     the fragment identifier is separated from the rest of the URI prior to a dereference, and thus
+        #     the identifying information within the fragment itself is dereferenced solely by the user agent,
+        #     regardless of the URI scheme."
+        # It is somewhat dubious on whether a web framework like tornado should ignore the fragment.
+        # Users might need it to decide on what to serve. Consider this other part of the spec:
+        #     "As with any URI, use of a fragment identifier component does not imply that a retrieval action
+        #     will take place.  A URI with a fragment identifier may be used to refer to the secondary resource
+        #     without any implication that the primary resource is accessible or will ever be accessed."
+        # All of this considered, this change only allows users to use fragments if they do see fit.
+        response = self.fetch("/echofrag#frag=123")
+        self.assertEqual(200, response.code)
+        frag, sep, query = _unicode(response.body).partition('\n')
+        self.assertEqual("frag=123", frag)
+
+    def test_url_fragment_with_query(self):
+        response = self.fetch("/echofrag?test=123#frag=456")
+        self.assertEqual(200, response.code)
+        frag, sep, query = _unicode(response.body).partition('\n')
+        self.assertEqual("test=123", query)
+        self.assertEqual("frag=456", frag)
 
 
 class HTTPServerRawTest(AsyncHTTPTestCase):
