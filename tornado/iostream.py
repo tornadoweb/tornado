@@ -242,8 +242,6 @@ class BaseIOStream(object):
             if self._state is not None:
                 self.io_loop.remove_handler(self.fileno())
                 self._state = None
-            self._read_buffer = collections.deque()
-            self._write_buffer = collections.deque()
             self.close_fd()
             self._closed = True
         self._maybe_run_close_callback()
@@ -430,6 +428,8 @@ class BaseIOStream(object):
         self._read_buffer_size += len(chunk)
         if self._read_buffer_size >= self.max_buffer_size:
             gen_log.error("Reached maximum read buffer size")
+            self._read_buffer = None
+            self._write_buffer = None
             self.close()
             raise IOError("Reached maximum read buffer size")
         return len(chunk)
