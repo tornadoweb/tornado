@@ -448,8 +448,8 @@ class HTTPRequest(object):
         self._start_time = time.time()
         self._finish_time = None
 
-        self.path, sep, self.query = uri.partition('?')
-        _, sep, self.fragment = uri.partition('#')
+        path, sep, self.fragment = uri.partition('#')
+        self.path, sep, self.query = path.partition('?')
 
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
 

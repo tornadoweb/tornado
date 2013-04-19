@@ -264,7 +264,7 @@ class EchoHandler(RequestHandler):
 
 class EchoWithFragmentHandler(RequestHandler):
     def get(self):
-        self.write(self.request.fragment)
+        self.write("%s\n%s" % (self.request.fragment, self.request.query))
 
 
 class TypeCheckHandler(RequestHandler):
@@ -310,7 +310,7 @@ class TypeCheckHandler(RequestHandler):
 class HTTPServerTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([("/echo", EchoHandler),
-                            ("/echofrag.+", EchoWithFragmentHandler),
+                            ("/echofrag.*", EchoWithFragmentHandler),
                             ("/typecheck", TypeCheckHandler),
                             ("//doubleslash", EchoHandler),
                             ])
@@ -362,7 +362,15 @@ class HTTPServerTest(AsyncHTTPTestCase):
         # All of this considered, this change only allows users to use fragments if they do see fit.
         response = self.fetch("/echofrag#frag=123")
         self.assertEqual(200, response.code)
-        self.assertEqual(response.body, "frag=123")
+        frag, sep, query = _unicode(response.body).partition('\n')
+        self.assertEqual("frag=123", frag)
+
+    def test_url_fragment_with_query(self):
+        response = self.fetch("/echofrag?test=123#frag=456")
+        self.assertEqual(200, response.code)
+        frag, sep, query = _unicode(response.body).partition('\n')
+        self.assertEqual("test=123", query)
+        self.assertEqual("frag=456", frag)
 
 
 class HTTPServerRawTest(AsyncHTTPTestCase):
