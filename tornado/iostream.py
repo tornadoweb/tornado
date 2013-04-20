@@ -811,7 +811,7 @@ class SSLIOStream(IOStream):
             return True
 
     def _handle_read(self):
-        if self._ssl_accepting:
+        if self._ssl_accepting and self.socket._connected:
             self._do_ssl_handshake()
             return
         super(SSLIOStream, self)._handle_read()
