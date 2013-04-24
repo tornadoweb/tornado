@@ -397,14 +397,29 @@ class XHeaderTest(HandlerBaseTestCase):
             self.fetch_json("/", headers=valid_ipv4)["remote_ip"],
             "4.4.4.4")
 
+        valid_ipv4_list = {"X-Forwarded-For": "127.0.0.1, 4.4.4.4"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv4_list)["remote_ip"],
+            "4.4.4.4")
+
         valid_ipv6 = {"X-Real-IP": "2620:0:1cfe:face:b00c::3"}
         self.assertEqual(
             self.fetch_json("/", headers=valid_ipv6)["remote_ip"],
             "2620:0:1cfe:face:b00c::3")
 
+        valid_ipv6_list = {"X-Forwarded-For": "::1, 2620:0:1cfe:face:b00c::3"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv6_list)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3")
+
         invalid_chars = {"X-Real-IP": "4.4.4.4<script>"}
         self.assertEqual(
             self.fetch_json("/", headers=invalid_chars)["remote_ip"],
+            "127.0.0.1")
+
+        invalid_chars_list = {"X-Forwarded-For": "4.4.4.4, 5.5.5.5<script>"}
+        self.assertEqual(
+            self.fetch_json("/", headers=invalid_chars_list)["remote_ip"],
             "127.0.0.1")
 
         invalid_host = {"X-Real-IP": "www.google.com"}
