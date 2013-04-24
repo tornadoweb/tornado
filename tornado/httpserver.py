@@ -212,9 +212,10 @@ class HTTPConnection(object):
         self.stream.set_close_callback(self._on_connection_close)
 
     def _on_connection_close(self):
-        callback = self._close_callback
-        self._close_callback = None
-        callback()
+        if self._close_callback is not None:
+            callback = self._close_callback
+            self._close_callback = None
+            callback()
         # Delete any unfinished callbacks to break up reference cycles.
         self._header_callback = None
         self._clear_callbacks()
