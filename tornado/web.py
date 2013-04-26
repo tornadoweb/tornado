@@ -386,8 +386,12 @@ class RequestHandler(object):
         return default
 
     def set_cookie(self, name, value, domain=None, expires=None, path="/",
-                   expires_days=None, **kwargs):
+                   expires_days=None, expires_in_legacy_format=False,
+                   **kwargs):
         """Sets the given cookie name/value with the given options.
+
+        The expire attribute gets formatted due to RFC 6265 unless
+        `expires_in_legacy_format` is set to True.
 
         Additional keyword arguments are set on the Cookie.Morsel
         directly.
@@ -411,8 +415,12 @@ class RequestHandler(object):
         if expires_days is not None and not expires:
             expires = datetime.datetime.utcnow() + datetime.timedelta(
                 days=expires_days)
-        if expires:
+        if expires and not expires_in_legacy_format:
             morsel["expires"] = httputil.format_timestamp(expires)
+        elif expires and expires_in_legacy_format:
+            expires_format = "%a, %d-%b-%Y %H:%M:%S GMT"
+            morsel["expires"] = httputil.format_timestamp(expires,
+                                                          expires_format)
         if path:
             morsel["path"] = path
         for k, v in kwargs.items():

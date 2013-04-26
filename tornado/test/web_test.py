@@ -143,11 +143,24 @@ class CookieTest(WebTestCase):
                 # Attributes from the first call are not carried over.
                 self.set_cookie("a", "e")
 
+        class SetCookieExpireHandler(RequestHandler):
+            def get(self):
+                expires = datetime.datetime(2012, 7, 14, 8, 33, 0)
+                self.set_cookie("foo", "bar", expires=expires)
+
+        class SetCookieExpireLegacyFormatHandler(RequestHandler):
+            def get(self):
+                expires = datetime.datetime(2012, 7, 14, 8, 33, 0)
+                self.set_cookie("foo", "bar", expires=expires,
+                                expires_in_legacy_format=True)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
                 ("/special_char", SetCookieSpecialCharHandler),
                 ("/set_overwrite", SetCookieOverwriteHandler),
+                ("/set_expire", SetCookieExpireHandler),
+                ("/set_expire_lf", SetCookieExpireLegacyFormatHandler),
                 ]
 
     def test_set_cookie(self):
@@ -201,6 +214,22 @@ class CookieTest(WebTestCase):
         headers = response.headers.get_list("Set-Cookie")
         self.assertEqual(sorted(headers),
                          ["a=e; Path=/", "c=d; Domain=example.com; Path=/"])
+
+    def test_set_cookie_expire(self):
+        response = self.fetch("/set_expire")
+        headers = sorted(response.headers.get_list("Set-Cookie"))
+        self.assertEqual(
+            headers[0],
+            'foo=bar; expires=Sat, 14 Jul 2012 08:33:00 GMT; Path=/'
+        )
+
+    def test_set_cookie_expire_legacy_format(self):
+        response = self.fetch("/set_expire_lf")
+        headers = sorted(response.headers.get_list("Set-Cookie"))
+        self.assertEqual(
+            headers[0],
+            'foo=bar; expires=Sat, 14-Jul-2012 08:33:00 GMT; Path=/'
+        )
 
 
 class AuthRedirectRequestHandler(RequestHandler):
