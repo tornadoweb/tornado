@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import datetime
 import os
 import tornado.locale
 from tornado.escape import utf8
@@ -48,3 +49,11 @@ class LocaleDataTest(unittest.TestCase):
         self.assertTrue(isinstance(name, unicode_type))
         self.assertEqual(name, u('Espa\u00f1ol'))
         self.assertEqual(utf8(name), b'Espa\xc3\xb1ol')
+
+
+class EnglishTest(unittest.TestCase):
+    def test_format_date(self):
+        locale = tornado.locale.get('en_US')
+        date = datetime.datetime(2013, 4, 28, 18, 35)
+        self.assertEqual(locale.format_date(date, full_format=True),
+                         'April 28, 2013 at 6:35 pm')

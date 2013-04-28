@@ -43,6 +43,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import csv
 import datetime
+import numbers
 import os
 import re
 
@@ -287,7 +288,7 @@ class Locale(object):
         """
         if self.code.startswith("ru"):
             relative = False
-        if type(date) in (int, long, float):
+        if isinstance(date, numbers.Real):
             date = datetime.datetime.utcfromtimestamp(date)
         now = datetime.datetime.utcnow()
         if date > now:
