@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, print_function, with_statement
+import gc
 import logging
+import operator
 import textwrap
 import sys
 from tornado.httpclient import AsyncHTTPClient
@@ -88,6 +90,11 @@ if __name__ == '__main__':
     define('ioloop_time_monotonic', default=False)
     define('resolver', type=str, default=None,
            callback=Resolver.configure)
+    define('debug_gc', type=str, multiple=True,
+           help="A comma-separated list of gc module debug constants, "
+           "e.g. DEBUG_STATS or DEBUG_COLLECTABLE,DEBUG_OBJECTS",
+           callback=lambda values: gc.set_debug(
+            reduce(operator.or_, (getattr(gc, v) for v in values))))
 
     def configure_ioloop():
         kwargs = {}
