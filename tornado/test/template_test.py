@@ -199,7 +199,7 @@ three{%end%}
         loader = DictLoader({
             "base.html": "{% module Template('sub.html') %}",
             "sub.html": "{{1/0}}",
-        }, namespace={"_modules": ObjectDict({"Template": lambda path, **kwargs: loader.load(path).generate(**kwargs)})})
+        }, namespace={"_tt_modules": ObjectDict({"Template": lambda path, **kwargs: loader.load(path).generate(**kwargs)})})
         try:
             loader.load("base.html").generate()
         except ZeroDivisionError:

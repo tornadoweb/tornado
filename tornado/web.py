@@ -131,14 +131,15 @@ class RequestHandler(object):
         self.path_kwargs = None
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
                              application.ui_methods.items())
-        # UIModules are available as both `modules` and `_modules` in the
+        # UIModules are available as both `modules` and `_tt_modules` in the
         # template namespace.  Historically only `modules` was available
         # but could be clobbered by user additions to the namespace.
-        # The template {% module %} directive looks in `_modules` to avoid
+        # The template {% module %} directive looks in `_tt_modules` to avoid
         # possible conflicts.
-        self.ui["_modules"] = ObjectDict((n, self._ui_module(n, m)) for n, m in
-                                         application.ui_modules.items())
-        self.ui["modules"] = self.ui["_modules"]
+        self.ui["_tt_modules"] = ObjectDict(
+            (n, self._ui_module(n, m)) for n, m in
+            application.ui_modules.items())
+        self.ui["modules"] = self.ui["_tt_modules"]
         self.clear()
         # Check since connection is not available in WSGI
         if getattr(self.request, "connection", None):

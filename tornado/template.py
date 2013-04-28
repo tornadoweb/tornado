@@ -84,6 +84,9 @@ hand, but instead use the `~.RequestHandler.render` and
 `tornado.web.RequestHandler`, which load templates automatically based
 on the ``template_path`` `.Application` setting.
 
+Variable names beginning with ``_tt_`` are reserved by the template
+system and should not be used by application code.
+
 Syntax Reference
 ----------------
 
@@ -252,8 +255,8 @@ class Template(object):
             "squeeze": escape.squeeze,
             "linkify": escape.linkify,
             "datetime": datetime,
-            "_utf8": escape.utf8,  # for internal use
-            "_string_types": (unicode_type, bytes_type),
+            "_tt_utf8": escape.utf8,  # for internal use
+            "_tt_string_types": (unicode_type, bytes_type),
             # __name__ and __loader__ allow the traceback mechanism to find
             # the generated source code.
             "__name__": self.name.replace('.', '_'),
@@ -262,7 +265,7 @@ class Template(object):
         namespace.update(self.namespace)
         namespace.update(kwargs)
         exec_in(self.compiled, namespace)
-        execute = namespace["_execute"]
+        execute = namespace["_tt_execute"]
         # Clear the traceback module's cache of source data now that
         # we've generated a new template (mainly for this module's
         # unittests, where different tests reuse the same name).
@@ -403,12 +406,12 @@ class _File(_Node):
         self.line = 0
 
     def generate(self, writer):
-        writer.write_line("def _execute():", self.line)
+        writer.write_line("def _tt_execute():", self.line)
         with writer.indent():
-            writer.write_line("_buffer = []", self.line)
-            writer.write_line("_append = _buffer.append", self.line)
+            writer.write_line("_tt_buffer = []", self.line)
+            writer.write_line("_tt_append = _tt_buffer.append", self.line)
             self.body.generate(writer)
-            writer.write_line("return _utf8('').join(_buffer)", self.line)
+            writer.write_line("return _tt_utf8('').join(_tt_buffer)", self.line)
 
     def each_child(self):
         return (self.body,)
@@ -477,15 +480,15 @@ class _ApplyBlock(_Node):
         return (self.body,)
 
     def generate(self, writer):
-        method_name = "apply%d" % writer.apply_counter
+        method_name = "_tt_apply%d" % writer.apply_counter
         writer.apply_counter += 1
         writer.write_line("def %s():" % method_name, self.line)
         with writer.indent():
-            writer.write_line("_buffer = []", self.line)
-            writer.write_line("_append = _buffer.append", self.line)
+            writer.write_line("_tt_buffer = []", self.line)
+            writer.write_line("_tt_append = _tt_buffer.append", self.line)
             self.body.generate(writer)
-            writer.write_line("return _utf8('').join(_buffer)", self.line)
-        writer.write_line("_append(_utf8(%s(%s())))" % (
+            writer.write_line("return _tt_utf8('').join(_tt_buffer)", self.line)
+        writer.write_line("_tt_append(_tt_utf8(%s(%s())))" % (
             self.method, method_name), self.line)
 
 
@@ -533,21 +536,21 @@ class _Expression(_Node):
         self.raw = raw
 
     def generate(self, writer):
-        writer.write_line("_tmp = %s" % self.expression, self.line)
-        writer.write_line("if isinstance(_tmp, _string_types):"
-                          " _tmp = _utf8(_tmp)", self.line)
-        writer.write_line("else: _tmp = _utf8(str(_tmp))", self.line)
+        writer.write_line("_tt_tmp = %s" % self.expression, self.line)
+        writer.write_line("if isinstance(_tt_tmp, _tt_string_types):"
+                          " _tt_tmp = _tt_utf8(_tt_tmp)", self.line)
+        writer.write_line("else: _tt_tmp = _tt_utf8(str(_tt_tmp))", self.line)
         if not self.raw and writer.current_template.autoescape is not None:
             # In python3 functions like xhtml_escape return unicode,
             # so we have to convert to utf8 again.
-            writer.write_line("_tmp = _utf8(%s(_tmp))" %
+            writer.write_line("_tt_tmp = _tt_utf8(%s(_tt_tmp))" %
                               writer.current_template.autoescape, self.line)
-        writer.write_line("_append(_tmp)", self.line)
+        writer.write_line("_tt_append(_tt_tmp)", self.line)
 
 
 class _Module(_Expression):
     def __init__(self, expression, line):
-        super(_Module, self).__init__("_modules." + expression, line,
+        super(_Module, self).__init__("_tt_modules." + expression, line,
                                       raw=True)
 
 
@@ -567,7 +570,7 @@ class _Text(_Node):
             value = re.sub(r"(\s*\n\s*)", "\n", value)
 
         if value:
-            writer.write_line('_append(%r)' % escape.utf8(value), self.line)
+            writer.write_line('_tt_append(%r)' % escape.utf8(value), self.line)
 
 
 class ParseError(Exception):
