@@ -215,7 +215,12 @@ class ExecutorResolver(Resolver):
 
     @run_on_executor
     def resolve(self, host, port, family=socket.AF_UNSPEC):
-        addrinfo = socket.getaddrinfo(host, port, family)
+        # On Solaris, getaddrinfo fails if the given port is not found
+        # in /etc/services and no socket type is given, so we must pass
+        # one here.  The socket type used here doesn't seem to actually
+        # matter (we discard the one we get back in the results),
+        # so the addresses we return should still be usable with SOCK_DGRAM.
+        addrinfo = socket.getaddrinfo(host, port, family, socket.SOCK_STREAM)
         results = []
         for family, socktype, proto, canonname, address in addrinfo:
             results.append((family, address))
