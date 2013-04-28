@@ -493,13 +493,13 @@ class GenEngineTest(AsyncTestCase):
 
     @skipNotCPython
     def test_task_refcounting(self):
-        # Task with arguments on CPython should be relased immediately after
+        # Task with arguments on CPython should be released immediately after
         # engine stop. And should not be delayed to garbage collection.
         class Task(gen.Task):
             "Task class which count self instances release."
-            relased = 0
+            released = 0
             def __del__(self):
-                type(self).relased += 1
+                type(self).released += 1
 
         @gen.engine
         def f():
@@ -507,7 +507,7 @@ class GenEngineTest(AsyncTestCase):
             self.stop()
 
         self.run_gen(f)
-        self.assertEqual(Task.relased, 2)
+        self.assertEqual(Task.released, 2)
 
 
 class GenCoroutineTest(AsyncTestCase):
