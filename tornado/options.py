@@ -61,6 +61,7 @@ instances to define isolated sets of options, such as for subcommands.
 from __future__ import absolute_import, division, print_function, with_statement
 
 import datetime
+import numbers
 import re
 import sys
 import os
@@ -339,7 +340,7 @@ class _Option(object):
         if self.multiple:
             self._value = []
             for part in value.split(","):
-                if self.type in (int, long):
+                if issubclass(self.type, numbers.Integral):
                     # allow ranges of the form X:Y (inclusive at both ends)
                     lo, _, hi = part.partition(":")
                     lo = _parse(lo)
