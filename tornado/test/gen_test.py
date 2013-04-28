@@ -5,6 +5,7 @@ import functools
 import sys
 import textwrap
 import time
+import platform
 
 from tornado.concurrent import return_future
 from tornado.escape import url_escape
@@ -19,6 +20,8 @@ from tornado import gen
 
 
 skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 not available')
+skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
+                                'Not CPython implementation')
 
 
 class GenEngineTest(AsyncTestCase):
@@ -487,6 +490,24 @@ class GenEngineTest(AsyncTestCase):
 
         with self.assertRaises(gen.ReturnValueIgnoredError):
             self.run_gen(f)
+
+    @skipNotCPython
+    def test_task_refcounting(self):
+        # Task with arguments on CPython should be relased immediately after
+        # engine stop. And should not be delayed to garbage collection.
+        class Task(gen.Task):
+            "Task class which count self instances release."
+            relased = 0
+            def __del__(self):
+                type(self).relased += 1
+
+        @gen.engine
+        def f():
+            yield Task(lambda _arg, callback: callback(), Task(None))
+            self.stop()
+
+        self.run_gen(f)
+        self.assertEqual(Task.relased, 2)
 
 
 class GenCoroutineTest(AsyncTestCase):
