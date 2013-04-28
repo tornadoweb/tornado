@@ -151,6 +151,9 @@ class StackContext(object):
                     'stack_context inconsistency (may be caused by yield '
                     'within a "with StackContext" block)')
 
+            # Break up a reference to itself to allow for faster GC on CPython.
+            self.new_contexts = None
+
 
 class ExceptionStackContext(object):
     """Specialization of StackContext for exception handling.
@@ -189,6 +192,9 @@ class ExceptionStackContext(object):
                 raise StackContextInconsistentError(
                     'stack_context inconsistency (may be caused by yield '
                     'within a "with StackContext" block)')
+
+            # Break up a reference to itself to allow for faster GC on CPython.
+            self.new_contexts = None
 
 
 class NullContext(object):
