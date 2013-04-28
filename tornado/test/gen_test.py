@@ -503,7 +503,7 @@ class GenEngineTest(AsyncTestCase):
 
         @gen.engine
         def f():
-            yield Task(lambda _arg, callback: callback(), Task(None))
+            yield Task(self.io_loop.add_callback, arg=Task(None))
             self.stop()
 
         self.run_gen(f)
