@@ -135,8 +135,15 @@ def add_accept_handler(sock, callback, io_loop=None):
             try:
                 connection, address = sock.accept()
             except socket.error as e:
+                # EWOULDBLOCK and EAGAIN indicate we have accepted every
+                # connection that is available.
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     return
+                # ECONNABORTED indicates that there was a connection
+                # but it was closed while still in the accept queue.
+                # (observed on FreeBSD).
+                if e.args[0] == errno.ECONNABORTED:
+                    continue
                 raise
             callback(connection, address)
     io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)

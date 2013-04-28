@@ -764,7 +764,7 @@ class SSLIOStream(IOStream):
             elif err.args[0] == ssl.SSL_ERROR_SSL:
                 try:
                     peer = self.socket.getpeername()
-                except:
+                except Exception:
                     peer = '(not connected)'
                 gen_log.warning("SSL Error on %d %s: %s",
                                 self.socket.fileno(), peer, err)
@@ -773,6 +773,11 @@ class SSLIOStream(IOStream):
         except socket.error as err:
             if err.args[0] in (errno.ECONNABORTED, errno.ECONNRESET):
                 return self.close(exc_info=True)
+        except AttributeError:
+            # On Linux, if the connection was reset before the call to
+            # wrap_socket, do_handshake will fail with an
+            # AttributeError.
+            return self.close(exc_info=True)
         else:
             self._ssl_accepting = False
             if not self._verify_cert(self.socket.getpeercert()):

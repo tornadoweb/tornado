@@ -216,7 +216,17 @@ class TCPServer(object):
                 else:
                     raise
             except socket.error as err:
-                if err.args[0] == errno.ECONNABORTED:
+                # If the connection is closed immediately after it is created
+                # (as in a port scan), we can get one of several errors.
+                # wrap_socket makes an internal call to getpeername,
+                # which may return either EINVAL (Mac OS X) or ENOTCONN
+                # (Linux).  If it returns ENOTCONN, this error is
+                # silently swallowed by the ssl module, so we need to
+                # catch another error later on (AttributeError in
+                # SSLIOStream._do_ssl_handshake).
+                # To test this behavior, try nmap with the -sT flag.
+                # https://github.com/facebook/tornado/pull/750
+                if err.args[0] in (errno.ECONNABORTED, errno.EINVAL):
                     return connection.close()
                 else:
                     raise
