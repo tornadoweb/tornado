@@ -180,23 +180,23 @@ class HTTPConnection(object):
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
         self.protocol = protocol
-        self._request = None
-        self._request_finished = False
-        self._write_callback = None
-        self._close_callback = None
+        self._clear_request_state()
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
         self._header_callback = stack_context.wrap(self._on_headers)
+        self.stream.set_close_callback(self._on_connection_close)
         self.stream.read_until(b"\r\n\r\n", self._header_callback)
 
-    def _clear_callbacks(self):
-        """Clears the per-request callbacks.
+    def _clear_request_state(self):
+        """Clears the per-request state.
 
         This is run in between requests to allow the previous handler
         to be garbage collected (and prevent spurious close callbacks),
         and when the connection is closed (to break up cycles and
         facilitate garbage collection in cpython).
         """
+        self._request = None
+        self._request_finished = False
         self._write_callback = None
         self._close_callback = None
 
@@ -209,7 +209,6 @@ class HTTPConnection(object):
         recommended approach prior to Tornado 3.0).
         """
         self._close_callback = stack_context.wrap(callback)
-        self.stream.set_close_callback(self._on_connection_close)
 
     def _on_connection_close(self):
         if self._close_callback is not None:
@@ -218,25 +217,23 @@ class HTTPConnection(object):
             callback()
         # Delete any unfinished callbacks to break up reference cycles.
         self._header_callback = None
-        self._clear_callbacks()
+        self._clear_request_state()
 
     def close(self):
         self.stream.close()
         # Remove this reference to self, which would otherwise cause a
         # cycle and delay garbage collection of this connection.
         self._header_callback = None
-        self._clear_callbacks()
+        self._clear_request_state()
 
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
-        assert self._request, "Request closed"
         if not self.stream.closed():
             self._write_callback = stack_context.wrap(callback)
             self.stream.write(chunk, self._on_write_complete)
 
     def finish(self):
         """Finishes the request."""
-        assert self._request, "Request closed"
         self._request_finished = True
         if not self.stream.writing():
             self._finish_request()
@@ -257,7 +254,7 @@ class HTTPConnection(object):
             self._finish_request()
 
     def _finish_request(self):
-        if self.no_keep_alive:
+        if self.no_keep_alive or self._request is None:
             disconnect = True
         else:
             connection_header = self._request.headers.get("Connection")
@@ -270,9 +267,7 @@ class HTTPConnection(object):
                 disconnect = connection_header != "keep-alive"
             else:
                 disconnect = True
-        self._request = None
-        self._request_finished = False
-        self._clear_callbacks()
+        self._clear_request_state()
         if disconnect:
             self.close()
             return
