@@ -396,13 +396,21 @@ class BaseIOStream(object):
             return
         self._check_closed()
         try:
-            # See comments in _handle_read about incrementing _pending_callbacks
-            self._pending_callbacks += 1
-            while not self.closed():
-                if self._read_to_buffer() == 0:
-                    break
-        finally:
-            self._pending_callbacks -= 1
+            try:
+                # See comments in _handle_read about incrementing _pending_callbacks
+                self._pending_callbacks += 1
+                while not self.closed():
+                    if self._read_to_buffer() == 0:
+                        break
+            finally:
+                self._pending_callbacks -= 1
+        except Exception:
+            # If there was an in _read_to_buffer, we called close() already,
+            # but couldn't run the close callback because of _pending_callbacks.
+            # Before we escape from this function, run the close callback if
+            # applicable.
+            self._maybe_run_close_callback()
+            raise
         if self._read_from_buffer():
             return
         self._maybe_add_error_listener()
