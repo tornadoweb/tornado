@@ -261,19 +261,24 @@ class TestIOStreamMixin(object):
         server, client = self.make_iostream_pair()
         try:
             chunks = []
+            closed = [False]
 
-            def callback(data):
+            def streaming_callback(data):
                 chunks.append(data)
                 self.stop()
-            client.read_until_close(callback=callback,
-                                    streaming_callback=callback)
+            def close_callback(data):
+                assert not data, data
+                closed[0] = True
+                self.stop()
+            client.read_until_close(callback=close_callback,
+                                    streaming_callback=streaming_callback)
             server.write(b"1234")
-            self.wait()
-            server.write(b"5678")
+            self.wait(condition=lambda: len(chunks) == 1)
+            server.write(b"5678", self.stop)
             self.wait()
             server.close()
-            self.wait()
-            self.assertEqual(chunks, [b"1234", b"5678", b""])
+            self.wait(condition=lambda: closed[0])
+            self.assertEqual(chunks, [b"1234", b"5678"])
         finally:
             server.close()
             client.close()

@@ -234,6 +234,10 @@ class BaseIOStream(object):
                 if any(exc_info):
                     self.error = exc_info[1]
             if self._read_until_close:
+                if (self._streaming_callback is not None and
+                    self._read_buffer_size):
+                    self._run_callback(self._streaming_callback,
+                                       self._consume(self._read_buffer_size))
                 callback = self._read_callback
                 self._read_callback = None
                 self._read_until_close = False
