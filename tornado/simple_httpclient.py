@@ -89,7 +89,11 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def _process_queue(self):
         with stack_context.NullContext():
             while self.queue and len(self.active) < self.max_clients:
-                request, callback = self.queue.popleft()
+                try:
+                    request, callback = self.queue.popleft()
+                except IndexError:
+                    # The queue might have been emptied in _release_fetch.
+                    break
                 key = object()
                 self.active[key] = (request, callback)
                 release_callback = functools.partial(self._release_fetch, key)
