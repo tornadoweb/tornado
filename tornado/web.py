@@ -1110,20 +1110,33 @@ class RequestHandler(object):
             " (" + self.request.remote_ip + ")"
 
     def _handle_request_exception(self, e):
+        self.log_exception(*sys.exc_info())
         if isinstance(e, HTTPError):
-            if e.log_message:
-                format = "%d %s: " + e.log_message
-                args = [e.status_code, self._request_summary()] + list(e.args)
-                gen_log.warning(format, *args)
             if e.status_code not in httputil.responses and not e.reason:
                 gen_log.error("Bad HTTP status code: %d", e.status_code)
                 self.send_error(500, exc_info=sys.exc_info())
             else:
                 self.send_error(e.status_code, exc_info=sys.exc_info())
         else:
-            app_log.error("Uncaught exception %s\n%r", self._request_summary(),
-                          self.request, exc_info=True)
             self.send_error(500, exc_info=sys.exc_info())
+
+    def log_exception(self, typ, value, tb):
+        """Override to customize logging of uncaught exceptions.
+
+        By default logs instances of `HTTPError` as warnings without
+        stack traces (on the ``tornado.general`` logger), and all
+        other exceptions as errors with stack traces (on the
+        ``tornado.application`` logger).
+        """
+        if isinstance(value, HTTPError):
+            if value.log_message:
+                format = "%d %s: " + value.log_message
+                args = ([value.status_code, self._request_summary()] +
+                        list(value.args))
+                gen_log.warning(format, *args)
+        else:
+            app_log.error("Uncaught exception %s\n%r", self._request_summary(),
+                          self.request, exc_info=(typ, value, tb))
 
     def _ui_module(self, name, module):
         def render(*args, **kwargs):
