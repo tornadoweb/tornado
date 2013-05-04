@@ -98,12 +98,15 @@ class AsyncTestCase(unittest.TestCase):
     asynchronous code.
 
     The unittest framework is synchronous, so the test must be
-    complete by the time the test method returns.  This class provides
-    the `stop()` and `wait()` methods for this purpose.  The test
+    complete by the time the test method returns.  This means that
+    asynchronous code cannot be used in quite the same way as usual.
+    To write test functions that use the same ``yield``-based patterns
+    used with the `tornado.gen` module, decorate your test methods
+    with `tornado.testing.gen_test` instead of
+    `tornado.gen.coroutine`.  This class also provides the `stop()`
+    and `wait()` methods for a more manual style of testing.  The test
     method itself must call ``self.wait()``, and asynchronous
     callbacks should call ``self.stop()`` to signal completion.
-    Alternately, the `gen_test` decorator can be used to use yield points
-    from the `tornado.gen` module.
 
     By default, a new `.IOLoop` is constructed for each test and is available
     as ``self.io_loop``.  This `.IOLoop` should be used in the construction of
@@ -118,8 +121,17 @@ class AsyncTestCase(unittest.TestCase):
 
     Example::
 
-        # This test uses argument passing between self.stop and self.wait.
+        # This test uses coroutine style.
         class MyTestCase(AsyncTestCase):
+            @tornado.testing.gen_test
+            def test_http_fetch(self):
+                client = AsyncHTTPClient(self.io_loop)
+                response = yield client.fetch("http://www.tornadoweb.org")
+                # Test contents of response
+                self.assertIn("FriendFeed", response.body)
+
+        # This test uses argument passing between self.stop and self.wait.
+        class MyTestCase2(AsyncTestCase):
             def test_http_fetch(self):
                 client = AsyncHTTPClient(self.io_loop)
                 client.fetch("http://www.tornadoweb.org/", self.stop)
@@ -128,7 +140,7 @@ class AsyncTestCase(unittest.TestCase):
                 self.assertIn("FriendFeed", response.body)
 
         # This test uses an explicit callback-based style.
-        class MyTestCase2(AsyncTestCase):
+        class MyTestCase3(AsyncTestCase):
             def test_http_fetch(self):
                 client = AsyncHTTPClient(self.io_loop)
                 client.fetch("http://www.tornadoweb.org/", self.handle_fetch)
