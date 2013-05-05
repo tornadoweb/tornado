@@ -273,6 +273,19 @@ class BaseIOStream(object):
         """Returns true if the stream has been closed."""
         return self._closed
 
+    def set_nodelay(self, value):
+        """Sets the no-delay flag for this stream.
+
+        By default, data written to TCP streams may be held for a time
+        to make the most efficient use of bandwidth (according to
+        Nagle's algorithm).  The no-delay flag requests that data be
+        written as soon as possible, even if doing so would consume
+        additional bandwidth.
+
+        This flag is currently defined only for TCP-based ``IOStreams``.
+        """
+        pass
+
     def _handle_events(self, fd, events):
         if self.closed():
             gen_log.warning("Got events for closed stream %d", fd)
@@ -725,6 +738,12 @@ class IOStream(BaseIOStream):
             self._connect_callback = None
             self._run_callback(callback)
         self._connecting = False
+
+    def set_nodelay(self, value):
+        if (self.socket is not None and
+            self.socket.family in (socket.AF_INET, socket.AF_INET6)):
+            self.socket.setsockopt(socket.IPPROTO_TCP,
+                                   socket.TCP_NODELAY, 1)
 
 
 class SSLIOStream(IOStream):

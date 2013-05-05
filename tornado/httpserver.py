@@ -235,6 +235,9 @@ class HTTPConnection(object):
     def finish(self):
         """Finishes the request."""
         self._request_finished = True
+        # No more data is coming, so instruct TCP to send any remaining
+        # data immediately instead of waiting for a full packet or ack.
+        self.stream.set_nodelay(True)
         if not self.stream.writing():
             self._finish_request()
 
@@ -276,6 +279,10 @@ class HTTPConnection(object):
             # directly, because in some cases the stream doesn't discover
             # that it's closed until you try to read from it.
             self.stream.read_until(b"\r\n\r\n", self._header_callback)
+
+            # Turn Nagle's algorithm back on, leaving the stream in its
+            # default state for the next request.
+            self.stream.set_nodelay(False)
         except iostream.StreamClosedError:
             self.close()
 

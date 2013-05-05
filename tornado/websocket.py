@@ -227,6 +227,20 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         return False
 
+    def set_nodelay(self, value):
+        """Set the no-delay flag for this stream.
+
+        By default, small messages may be delayed and/or combined to minimize
+        the number of packets sent.  This can sometimes cause 200-500ms delays
+        due to the interaction between Nagle's algorithm and TCP delayed
+        ACKs.  To reduce this delay (at the expense of possibly increasing
+        bandwidth usage), call ``self.set_nodelay(True)`` once the websocket
+        connection is established.
+
+        See `.IOStream.set_nodelay` for additional details.
+        """
+        self.stream.set_nodelay(value)
+
     def get_websocket_scheme(self):
         """Return the url scheme used for this request, either "ws" or "wss".
 

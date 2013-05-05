@@ -279,9 +279,11 @@ class _HTTPConnection(object):
             if b'\n' in line:
                 raise ValueError('Newline in header: ' + repr(line))
             request_lines.append(line)
-        self.stream.write(b"\r\n".join(request_lines) + b"\r\n\r\n")
+        request_str = b"\r\n".join(request_lines) + b"\r\n\r\n"
         if self.request.body is not None:
-            self.stream.write(self.request.body)
+            request_str += self.request.body
+        self.stream.set_nodelay(True)
+        self.stream.write(request_str)
         self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
 
     def _release(self):
