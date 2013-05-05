@@ -104,6 +104,22 @@ except ImportError:
     from urllib.parse import urlencode  # py3
 
 
+class _UIModuleNamespace(object):
+    """Lazy namespace which creates UIModule proxies bound to a handler."""
+    def __init__(self, handler, ui_modules):
+        self.handler = handler
+        self.ui_modules = ui_modules
+
+    def __getitem__(self, key):
+        return self.handler._ui_module(key, self.ui_modules[key])
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(str(e))
+
+
 class RequestHandler(object):
     """Subclass this class and define `get()` or `post()` to make a handler.
 
@@ -136,9 +152,8 @@ class RequestHandler(object):
         # but could be clobbered by user additions to the namespace.
         # The template {% module %} directive looks in `_tt_modules` to avoid
         # possible conflicts.
-        self.ui["_tt_modules"] = ObjectDict(
-            (n, self._ui_module(n, m)) for n, m in
-            application.ui_modules.items())
+        self.ui["_tt_modules"] = _UIModuleNamespace(self,
+                                                    application.ui_modules)
         self.ui["modules"] = self.ui["_tt_modules"]
         self.clear()
         # Check since connection is not available in WSGI
