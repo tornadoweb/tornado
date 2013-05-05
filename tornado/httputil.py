@@ -18,6 +18,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import collections
 import datetime
 import numbers
 import re
@@ -41,6 +42,35 @@ try:
 except ImportError:
     from urllib.parse import urlencode  # py3
 
+class _NormalizedHeaderCache(dict):
+    """Dynamic cached mapping of header names to Http-Header-Case.
+
+    Implemented as a dict subclass so that cache hits are as fast as a
+    normal dict lookup, without the overhead of a python function
+    call.
+
+    >>> normalized_headers = _NormalizedHeaderCache(10)
+    >>> normalized_headers["coNtent-TYPE"]
+    'Content-Type'
+    """
+    def __init__(self, size):
+        super(_NormalizedHeaderCache, self).__init__()
+        self.size = size
+        self.queue = collections.deque()
+
+    def __missing__(self, key):
+        normalized = "-".join([w.capitalize() for w in key.split("-")])
+        self[key] = normalized
+        self.queue.append(key)
+        if len(self.queue) > self.size:
+            # Limit the size of the cache.  LRU would be better, but this
+            # simpler approach should be fine.  In Python 2.7+ we could
+            # use OrderedDict (or in 3.2+, @functools.lru_cache).
+            old_key = self.queue.popleft()
+            del self[old_key]
+        return normalized
+
+_normalized_headers = _NormalizedHeaderCache(1000)
 
 class HTTPHeaders(dict):
     """A dictionary that maintains ``Http-Header-Case`` for all keys.
@@ -89,7 +119,7 @@ class HTTPHeaders(dict):
 
     def add(self, name, value):
         """Adds a new value for the given key."""
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         self._last_key = norm_name
         if norm_name in self:
             # bypass our override of __setitem__ since it modifies _as_list
@@ -102,7 +132,7 @@ class HTTPHeaders(dict):
 
     def get_list(self, name):
         """Returns all values for the given header as a list."""
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         return self._as_list.get(norm_name, [])
 
     def get_all(self):
@@ -150,24 +180,24 @@ class HTTPHeaders(dict):
     # dict implementation overrides
 
     def __setitem__(self, name, value):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         dict.__setitem__(self, norm_name, value)
         self._as_list[norm_name] = [value]
 
     def __getitem__(self, name):
-        return dict.__getitem__(self, HTTPHeaders._normalize_name(name))
+        return dict.__getitem__(self, _normalized_headers[name])
 
     def __delitem__(self, name):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         dict.__delitem__(self, norm_name)
         del self._as_list[norm_name]
 
     def __contains__(self, name):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         return dict.__contains__(self, norm_name)
 
     def get(self, name, default=None):
-        return dict.get(self, HTTPHeaders._normalize_name(name), default)
+        return dict.get(self, _normalized_headers[name], default)
 
     def update(self, *args, **kwargs):
         # dict.update bypasses our __setitem__
@@ -177,26 +207,6 @@ class HTTPHeaders(dict):
     def copy(self):
         # default implementation returns dict(self), not the subclass
         return HTTPHeaders(self)
-
-    _NORMALIZED_HEADER_RE = re.compile(r'^[A-Z0-9][a-z0-9]*(-[A-Z0-9][a-z0-9]*)*$')
-    _normalized_headers = {}
-
-    @staticmethod
-    def _normalize_name(name):
-        """Converts a name to Http-Header-Case.
-
-        >>> HTTPHeaders._normalize_name("coNtent-TYPE")
-        'Content-Type'
-        """
-        try:
-            return HTTPHeaders._normalized_headers[name]
-        except KeyError:
-            if HTTPHeaders._NORMALIZED_HEADER_RE.match(name):
-                normalized = name
-            else:
-                normalized = "-".join([w.capitalize() for w in name.split("-")])
-            HTTPHeaders._normalized_headers[name] = normalized
-            return normalized
 
 
 def url_concat(url, args):
