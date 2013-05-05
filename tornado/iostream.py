@@ -742,8 +742,15 @@ class IOStream(BaseIOStream):
     def set_nodelay(self, value):
         if (self.socket is not None and
             self.socket.family in (socket.AF_INET, socket.AF_INET6)):
-            self.socket.setsockopt(socket.IPPROTO_TCP,
-                                   socket.TCP_NODELAY, 1 if value else 0)
+            try:
+                self.socket.setsockopt(socket.IPPROTO_TCP,
+                                       socket.TCP_NODELAY, 1 if value else 0)
+            except socket.error as e:
+                # Sometimes setsockopt will fail if the socket is closed
+                # at the wrong time.  This can happen with HTTPServer
+                # resetting the value to false between requests.
+                if e.errno != errno.EINVAL:
+                    raise
 
 
 class SSLIOStream(IOStream):
