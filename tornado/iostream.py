@@ -743,7 +743,7 @@ class IOStream(BaseIOStream):
         if (self.socket is not None and
             self.socket.family in (socket.AF_INET, socket.AF_INET6)):
             self.socket.setsockopt(socket.IPPROTO_TCP,
-                                   socket.TCP_NODELAY, 1)
+                                   socket.TCP_NODELAY, 1 if value else 0)
 
 
 class SSLIOStream(IOStream):
