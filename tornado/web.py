@@ -301,6 +301,8 @@ class RequestHandler(object):
         if name in self._headers:
             del self._headers[name]
 
+    _INVALID_HEADER_CHAR_RE = re.compile(br"[\x00-\x1f]")
+
     def _convert_header_value(self, value):
         if isinstance(value, bytes_type):
             pass
@@ -316,7 +318,8 @@ class RequestHandler(object):
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request. Also cap length to
         # prevent obviously erroneous values.
-        if len(value) > 4000 or re.search(br"[\x00-\x1f]", value):
+        if (len(value) > 4000 or
+            RequestHandler._INVALID_HEADER_CHAR_RE.search(value)):
             raise ValueError("Unsafe header value %r", value)
         return value
 
