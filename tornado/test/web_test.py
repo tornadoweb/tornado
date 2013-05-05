@@ -9,7 +9,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule
 
 import binascii
 import datetime
@@ -501,6 +501,10 @@ class WSGISafeWebTest(WebTestCase):
         return dict(template_loader=loader,
                     autoescape="xhtml_escape",
                     cookie_secret=self.COOKIE_SECRET)
+
+    def tearDown(self):
+        super(WSGISafeWebTest, self).tearDown()
+        RequestHandler._template_loaders.clear()
 
     def get_handlers(self):
         urls = [
@@ -1174,3 +1178,43 @@ class ExceptionHandlerTest(SimpleHandlerTestCase):
                        'custom logging for PermissionError: not allowed'):
             response = self.fetch('/?exc=permission')
             self.assertEqual(response.code, 403)
+
+
+@wsgi_safe
+class UIMethodUIModuleTest(SimpleHandlerTestCase):
+    """Test that UI methods and modules are created correctly and
+    associated with the handler.
+    """
+    class Handler(RequestHandler):
+        def get(self):
+            self.render('foo.html')
+
+        def value(self):
+            return self.get_argument("value")
+
+    def get_app_kwargs(self):
+        def my_ui_method(handler, x):
+            return "In my_ui_method(%s) with handler value %s." % (
+                x, handler.value())
+        class MyModule(UIModule):
+            def render(self, x):
+                return "In MyModule(%s) with handler value %s." % (
+                    x, self.handler.value())
+
+        loader = DictLoader({
+                'foo.html': '{{ my_ui_method(42) }} {% module MyModule(123) %}',
+                })
+        return dict(template_loader=loader,
+                    ui_methods={'my_ui_method': my_ui_method},
+                    ui_modules={'MyModule': MyModule})
+
+    def tearDown(self):
+        super(UIMethodUIModuleTest, self).tearDown()
+        # TODO: fix template loader caching so this isn't necessary.
+        RequestHandler._template_loaders.clear()
+
+    def test_ui_method(self):
+        response = self.fetch('/?value=asdf')
+        self.assertEqual(response.body,
+                         b'In my_ui_method(42) with handler value asdf. '
+                         b'In MyModule(123) with handler value asdf.')
