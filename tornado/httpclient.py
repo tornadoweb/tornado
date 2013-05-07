@@ -414,6 +414,14 @@ class HTTPResponse(object):
 
     body = property(_get_body)
 
+    def get_content_charset(self):
+        """Gets the charset of the response body"""
+        content_type = self.headers['Content-Type']
+
+        # Example: 'application/json;charset=utf-8' -> 'utf-8'
+        charset = content_type.split(';')[1].split('=')[1]
+        return charset
+
     def rethrow(self):
         """If there was an error on the request, raise an `HTTPError`."""
         if self.error:
