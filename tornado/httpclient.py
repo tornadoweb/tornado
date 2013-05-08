@@ -53,7 +53,7 @@ class HTTPClient(object):
             print response.body
         except httpclient.HTTPError as e:
             print "Error:", e
-        httpclient.close()
+        http_client.close()
     """
     def __init__(self, async_client_class=None, **kwargs):
         self._io_loop = IOLoop()
