@@ -258,6 +258,7 @@ class HTTPRequest(object):
         :arg string url: URL to fetch
         :arg string method: HTTP method, e.g. "GET" or "POST"
         :arg headers: Additional HTTP headers to pass on the request
+        :arg body: HTTP body to pass on the request
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
         :arg string auth_username: Username for HTTP "Basic" authentication
         :arg string auth_password: Password for HTTP "Basic" authentication
