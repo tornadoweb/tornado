@@ -64,6 +64,9 @@ def xhtml_unescape(value):
     return re.sub(r"&(#?)(\w+?);", _convert_entity, _unicode(value))
 
 
+# The fact that json_encode wraps json.dumps is an implementation detail.
+# Please see https://github.com/facebook/tornado/pull/706
+# before sending a pull request that adds **kwargs to this function.
 def json_encode(value):
     """JSON-encodes the given Python object."""
     # JSON permits but does not require forward slashes to be escaped.
