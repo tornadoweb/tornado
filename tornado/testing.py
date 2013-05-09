@@ -77,7 +77,7 @@ def bind_unused_port():
 
     Returns a tuple (socket, port).
     """
-    [sock] = netutil.bind_sockets(0, 'localhost', family=socket.AF_INET)
+    [sock] = netutil.bind_sockets(None, 'localhost', family=socket.AF_INET)
     port = sock.getsockname()[1]
     return sock, port
 
