@@ -189,25 +189,25 @@ class RequestHandler(object):
         return self.application.settings
 
     def head(self, *args, **kwargs):
-        raise HTTPError(405)
+        raise MethodNotAllowedError(self.request.method)
 
     def get(self, *args, **kwargs):
-        raise HTTPError(405)
+        raise MethodNotAllowedError(self.request.method)
 
     def post(self, *args, **kwargs):
-        raise HTTPError(405)
+        raise MethodNotAllowedError(self.request.method)
 
     def delete(self, *args, **kwargs):
-        raise HTTPError(405)
+        raise MethodNotAllowedError(self.request.method)
 
     def patch(self, *args, **kwargs):
-        raise HTTPError(405)
+        raise MethodNotAllowedError(self.request.method)
 
     def put(self, *args, **kwargs):
-        raise HTTPError(405)
+        raise MethodNotAllowedError(self.request.method)
 
     def options(self, *args, **kwargs):
-        raise HTTPError(405)
+        raise MethodNotAllowedError(self.request.method)
 
     def prepare(self):
         """Called at the beginning of a request before  `get`/`post`/etc.
@@ -354,7 +354,7 @@ class RequestHandler(object):
         args = self.get_arguments(name, strip=strip)
         if not args:
             if default is self._ARG_DEFAULT:
-                raise HTTPError(400, "Missing argument %s" % name)
+                raise MissingArgumentError(name)
             return default
         return args[-1]
 
@@ -1589,6 +1589,32 @@ class HTTPError(Exception):
             return message + " (" + (self.log_message % self.args) + ")"
         else:
             return message
+
+
+class MissingArgumentError(HTTPError):
+    """An exception occuring when get_argument was called for a missing argument
+
+    Takes in addition to `HTTPError` arguments missing_argument and stores it value
+
+    :arg string missing_argument: The name of the argument wanted to be retrieved
+    """
+    def __init__(self, missing_argument=None, status_code=400, log_message=None, *args, **kwargs):
+        if log_message is None:
+            log_message = "Missing argument %s" % missing_argument
+        super(MissingArgumentError, self).__init__(status_code, log_message, *args, **kwargs)
+        self.missing_argument = missing_argument
+
+
+class MethodNotAllowedError(HTTPError):
+    """An exception occuring when the method is not supported by the handler
+
+    Takes in addition to `HTTPError` arguments method and stores it value
+
+    :arg string method: The name of the method that was called
+    """
+    def __init__(self, method=None, status_code=405, log_message=None, *args, **kwargs):
+        super(MethodNotAllowedError, self).__init__(status_code, log_message, *args, **kwargs)
+        self.method = method
 
 
 class ErrorHandler(RequestHandler):
