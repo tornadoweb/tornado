@@ -1633,8 +1633,12 @@ class StaticFileHandler(RequestHandler):
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
         ])
 
-    The local root directory of the content should be passed as the ``path``
-    argument to the handler.
+    The handler constructor requires a ``path`` argument, which specifies the
+    local root directory of the content to be served.
+
+    Note that a capture group in the regex is required to parse the value for
+    the ``path`` argument to the get() method (different than the constructor 
+    argument above); see `URLSpec` for details.
 
     To support aggressive browser caching, if the argument ``v`` is given
     with the path, we set an infinite HTTP expiration header. So, if you
