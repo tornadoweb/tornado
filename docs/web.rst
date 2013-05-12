@@ -193,6 +193,7 @@
    Everything else
    ---------------
    .. autoexception:: HTTPError
+   .. autoexception:: MissingArgumentError
    .. autoclass:: UIModule
       :members:
 

@@ -9,7 +9,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule, MissingArgumentError
 
 import binascii
 import datetime
@@ -1218,3 +1218,21 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
         self.assertEqual(response.body,
                          b'In my_ui_method(42) with handler value asdf. '
                          b'In MyModule(123) with handler value asdf.')
+
+
+@wsgi_safe
+class GetArgumentErrorTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            try:
+                self.get_argument('foo')
+                self.write({})
+            except MissingArgumentError as e:
+                self.write({'arg_name': e.arg_name,
+                            'log_message': e.log_message})
+
+    def test_catch_error(self):
+        response = self.fetch('/')
+        self.assertEqual(json_decode(response.body),
+                         {'arg_name': 'foo',
+                          'log_message': 'Missing argument foo'})

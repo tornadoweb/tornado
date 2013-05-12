@@ -328,7 +328,7 @@ class RequestHandler(object):
         """Returns the value of the argument with the given name.
 
         If default is not provided, the argument is considered to be
-        required, and we throw an HTTP 400 exception if it is missing.
+        required, and we raise a `MissingArgumentError` if it is missing.
 
         If the argument appears in the url more than once, we return the
         last value.
@@ -338,7 +338,7 @@ class RequestHandler(object):
         args = self.get_arguments(name, strip=strip)
         if not args:
             if default is self._ARG_DEFAULT:
-                raise HTTPError(400, "Missing argument %s" % name)
+                raise MissingArgumentError(name)
             return default
         return args[-1]
 
@@ -1573,6 +1573,18 @@ class HTTPError(Exception):
             return message + " (" + (self.log_message % self.args) + ")"
         else:
             return message
+
+
+class MissingArgumentError(HTTPError):
+    """Exception raised by `RequestHandler.get_argument`.
+
+    This is a subclass of `HTTPError`, so if it is uncaught a 400 response
+    code will be used instead of 500 (and a stack trace will not be logged).
+    """
+    def __init__(self, arg_name):
+        super(MissingArgumentError, self).__init__(
+            400, 'Missing argument %s' % arg_name)
+        self.arg_name = arg_name
 
 
 class ErrorHandler(RequestHandler):
