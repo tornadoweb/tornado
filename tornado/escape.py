@@ -88,41 +88,67 @@ def squeeze(value):
     return re.sub(r"[\x00-\x20]+", " ", value).strip()
 
 
-def url_escape(value):
-    """Returns a URL-encoded version of the given value."""
-    return urllib_parse.quote_plus(utf8(value))
+def url_escape(value, plus=True):
+    """Returns a URL-encoded version of the given value.
+
+    If ``plus`` is true (the default), spaces will be represented
+    as "+" instead of "%20".  This is appropriate for query strings
+    but not for the path component of a URL.  Note that this default
+    is the reverse of Python's urllib module.
+    """
+    quote = urllib_parse.quote_plus if plus else urllib_parse.quote
+    return quote(utf8(value))
+
 
 # python 3 changed things around enough that we need two separate
 # implementations of url_unescape.  We also need our own implementation
 # of parse_qs since python 3's version insists on decoding everything.
 if sys.version_info[0] < 3:
-    def url_unescape(value, encoding='utf-8'):
+    def url_unescape(value, encoding='utf-8', plus=True):
         """Decodes the given value from a URL.
 
         The argument may be either a byte or unicode string.
 
         If encoding is None, the result will be a byte string.  Otherwise,
         the result is a unicode string in the specified encoding.
+
+        If ``plus`` is true (the default), plus signs will be interpreted
+        as spaces (literal plus signs must be represented as "%2B").  This
+        is appropriate for query strings and form-encoded values but not
+        for the path component of a URL.  Note that this default is the
+        reverse of Python's urllib module.
         """
+        unquote = (urllib_parse.unquote_plus if plus else urllib_parse.unquote)
         if encoding is None:
-            return urllib_parse.unquote_plus(utf8(value))
+            return unquote(utf8(value))
         else:
-            return unicode_type(urllib_parse.unquote_plus(utf8(value)), encoding)
+            return unicode_type(unquote(utf8(value)), encoding)
 
     parse_qs_bytes = _parse_qs
 else:
-    def url_unescape(value, encoding='utf-8'):
+    def url_unescape(value, encoding='utf-8', plus=True):
         """Decodes the given value from a URL.
 
         The argument may be either a byte or unicode string.
 
         If encoding is None, the result will be a byte string.  Otherwise,
         the result is a unicode string in the specified encoding.
+
+        If ``plus`` is true (the default), plus signs will be interpreted
+        as spaces (literal plus signs must be represented as "%2B").  This
+        is appropriate for query strings and form-encoded values but not
+        for the path component of a URL.  Note that this default is the
+        reverse of Python's urllib module.
         """
         if encoding is None:
+            if plus:
+                # unquote_to_bytes doesn't have a _plus variant
+                value = to_basestring(value).replace('+', ' ')
             return urllib_parse.unquote_to_bytes(value)
         else:
-            return urllib_parse.unquote_plus(to_basestring(value), encoding=encoding)
+            unquote = (urllib_parse.unquote_plus if plus
+                       else urllib_parse.unquote)
+            return unquote(to_basestring(value), encoding=encoding)
 
     def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
         """Parses a query string like urlparse.parse_qs, but returns the
