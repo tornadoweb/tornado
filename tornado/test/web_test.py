@@ -559,6 +559,18 @@ class WSGISafeWebTest(WebTestCase):
                                 u('query'): [u('bytes'), u('c3a9')],
                                 })
 
+    def test_decode_argument_plus(self):
+        # These urls are all equivalent.
+        urls = ["/decode_arg/1%20%2B%201?foo=1%20%2B%201&encoding=utf-8",
+                "/decode_arg/1%20+%201?foo=1+%2B+1&encoding=utf-8"]
+        for url in urls:
+            response = self.fetch(url)
+            response.rethrow()
+            data = json_decode(response.body)
+            self.assertEqual(data, {u('path'): [u('unicode'), u('1 + 1')],
+                                    u('query'): [u('unicode'), u('1 + 1')],
+                                    })
+
     def test_reverse_url(self):
         self.assertEqual(self.app.reverse_url('decode_arg', 'foo'),
                          '/decode_arg/foo')
@@ -568,6 +580,8 @@ class WSGISafeWebTest(WebTestCase):
                          '/decode_arg/%E9')
         self.assertEqual(self.app.reverse_url('decode_arg', u('\u00e9')),
                          '/decode_arg/%C3%A9')
+        self.assertEqual(self.app.reverse_url('decode_arg', '1 + 1'),
+                         '/decode_arg/1%20%2B%201')
 
     def test_uimodule_unescaped(self):
         response = self.fetch("/linkify")

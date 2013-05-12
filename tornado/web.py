@@ -1477,7 +1477,8 @@ class Application(object):
                         def unquote(s):
                             if s is None:
                                 return s
-                            return escape.url_unescape(s, encoding=None)
+                            return escape.url_unescape(s, encoding=None,
+                                                       plus=False)
                         # Pass matched groups to the handler.  Since
                         # match.groups() includes both named and unnamed groups,
                         # we want to use either groups or groupdict but not both.
@@ -2148,7 +2149,7 @@ class URLSpec(object):
         for a in args:
             if not isinstance(a, (unicode_type, bytes_type)):
                 a = str(a)
-            converted_args.append(escape.url_escape(utf8(a)))
+            converted_args.append(escape.url_escape(utf8(a), plus=False))
         return self._path % tuple(converted_args)
 
 url = URLSpec
