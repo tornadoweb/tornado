@@ -547,7 +547,7 @@ class BaseIOStream(object):
                     self._write_buffer_frozen = True
                     break
                 else:
-                    if e.args[0] != errno.EPIPE:
+                    if e.args[0] not in (errno.EPIPE, errno.ECONNRESET):
                         # Broken pipe errors are usually caused by connection
                         # reset, and its better to not log EPIPE errors to
                         # minimize log spam
