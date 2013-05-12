@@ -547,8 +547,12 @@ class BaseIOStream(object):
                     self._write_buffer_frozen = True
                     break
                 else:
-                    gen_log.warning("Write error on %d: %s",
-                                    self.fileno(), e)
+                    if e.args[0] != errno.EPIPE:
+                        # Broken pipe errors are usually caused by connection
+                        # reset, and its better to not log EPIPE errors to
+                        # minimize log spam
+                        gen_log.warning("Write error on %d: %s",
+                                        self.fileno(), e)
                     self.close(exc_info=True)
                     return
         if not self._write_buffer and self._write_callback:
