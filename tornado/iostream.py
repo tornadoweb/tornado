@@ -64,10 +64,10 @@ class BaseIOStream(object):
     Subclasses must implement `fileno`, `close_fd`, `write_to_fd`,
     `read_from_fd`, and optionally `get_fd_error`.
     """
-    def __init__(self, io_loop=None, max_buffer_size=104857600,
+    def __init__(self, io_loop=None, max_buffer_size=None,
                  read_chunk_size=4096):
         self.io_loop = io_loop or ioloop.IOLoop.current()
-        self.max_buffer_size = max_buffer_size
+        self.max_buffer_size = max_buffer_size or 104857600
         self.read_chunk_size = read_chunk_size
         self.error = None
         self._read_buffer = collections.deque()
