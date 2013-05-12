@@ -104,22 +104,6 @@ except ImportError:
     from urllib.parse import urlencode  # py3
 
 
-class _UIModuleNamespace(object):
-    """Lazy namespace which creates UIModule proxies bound to a handler."""
-    def __init__(self, handler, ui_modules):
-        self.handler = handler
-        self.ui_modules = ui_modules
-
-    def __getitem__(self, key):
-        return self.handler._ui_module(key, self.ui_modules[key])
-
-    def __getattr__(self, key):
-        try:
-            return self[key]
-        except KeyError as e:
-            raise AttributeError(str(e))
-
-
 class RequestHandler(object):
     """Subclass this class and define `get()` or `post()` to make a handler.
 
@@ -1637,7 +1621,7 @@ class StaticFileHandler(RequestHandler):
     local root directory of the content to be served.
 
     Note that a capture group in the regex is required to parse the value for
-    the ``path`` argument to the get() method (different than the constructor 
+    the ``path`` argument to the get() method (different than the constructor
     argument above); see `URLSpec` for details.
 
     To support aggressive browser caching, if the argument ``v`` is given
@@ -2062,6 +2046,22 @@ class TemplateModule(UIModule):
 
     def html_body(self):
         return "".join(self._get_resources("html_body"))
+
+
+class _UIModuleNamespace(object):
+    """Lazy namespace which creates UIModule proxies bound to a handler."""
+    def __init__(self, handler, ui_modules):
+        self.handler = handler
+        self.ui_modules = ui_modules
+
+    def __getitem__(self, key):
+        return self.handler._ui_module(key, self.ui_modules[key])
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(str(e))
 
 
 class URLSpec(object):
