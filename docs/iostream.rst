@@ -21,6 +21,7 @@
    .. automethod:: BaseIOStream.closed
    .. automethod:: BaseIOStream.reading
    .. automethod:: BaseIOStream.writing
+   .. automethod:: BaseIOStream.set_nodelay
 
    Methods for subclasses
    ^^^^^^^^^^^^^^^^^^^^^^

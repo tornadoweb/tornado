@@ -95,6 +95,7 @@
    .. automethod:: RequestHandler.get_status
    .. automethod:: RequestHandler.get_template_path
    .. automethod:: RequestHandler.get_user_locale
+   .. automethod:: RequestHandler.log_exception
    .. automethod:: RequestHandler.on_connection_close
    .. automethod:: RequestHandler.require_setting
    .. automethod:: RequestHandler.reverse_url
