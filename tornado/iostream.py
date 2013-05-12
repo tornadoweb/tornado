@@ -543,7 +543,7 @@ class BaseIOStream(object):
                 _merge_prefix(self._write_buffer, num_bytes)
                 self._write_buffer.popleft()
             except socket.error as e:
-                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN, errno.WSAECONNRESET):
                     self._write_buffer_frozen = True
                     break
                 else:
