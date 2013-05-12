@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 from tornado import gen
 from tornado.log import app_log
-from tornado.stack_context import StackContext, wrap, NullContext, StackContextInconsistentError, ExceptionStackContext
+from tornado.stack_context import StackContext, wrap, NullContext, StackContextInconsistentError, ExceptionStackContext, run_with_stack_context
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.web import asynchronous, Application, RequestHandler
@@ -177,6 +177,26 @@ class StackContextTest(AsyncTestCase):
             self.io_loop.add_callback(cb)
         yield gen.Wait('k1')
 
+    def test_run_with_stack_context(self):
+        @gen.coroutine
+        def f1():
+            self.assertEqual(self.active_contexts, ['c1'])
+            yield run_with_stack_context(
+                StackContext(functools.partial(self.context, 'c1')),
+                f2)
+            self.assertEqual(self.active_contexts, ['c1'])
+
+        @gen.coroutine
+        def f2():
+            self.assertEqual(self.active_contexts, ['c1', 'c2'])
+            yield gen.Task(self.io_loop.add_callback)
+            self.assertEqual(self.active_contexts, ['c1', 'c2'])
+
+        self.assertEqual(self.active_contexts, [])
+        run_with_stack_context(
+            StackContext(functools.partial(self.context, 'c1')),
+            f1)
+        self.assertEqual(self.active_contexts, [])
 
 if __name__ == '__main__':
     unittest.main()

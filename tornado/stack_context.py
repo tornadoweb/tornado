@@ -303,3 +303,27 @@ def _handle_exception(tail, exc):
         tail = tail.old_contexts[1]
 
     return exc
+
+
+def run_with_stack_context(context, func):
+    """Run a coroutine ``func`` in the given `StackContext`.
+
+    It is not safe to have a ``yield`` statement within a ``with StackContext``
+    block, so it is difficult to use stack context with `.gen.coroutine`.
+    This helper function runs the function in the correct context while
+    keeping the ``yield`` and ``with`` statements syntactically separate.
+
+    Example::
+
+        @gen.coroutine
+        def incorrect():
+            with StackContext(ctx):
+                # ERROR: this will raise StackContextInconsistentError
+                yield other_coroutine()
+
+        @gen.coroutine
+        def correct():
+            yield run_with_stack_context(StackContext(ctx), other_coroutine)
+    """
+    with context:
+        return func()
