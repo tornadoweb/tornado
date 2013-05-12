@@ -1250,3 +1250,31 @@ class GetArgumentErrorTest(SimpleHandlerTestCase):
         self.assertEqual(json_decode(response.body),
                          {'arg_name': 'foo',
                           'log_message': 'Missing argument foo'})
+
+
+class MultipleExceptionTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        exc_count = 0
+
+        @asynchronous
+        def get(self):
+            from tornado.ioloop import IOLoop
+            IOLoop.current().add_callback(lambda: 1 / 0)
+            IOLoop.current().add_callback(lambda: 1 / 0)
+
+        def log_exception(self, typ, value, tb):
+            MultipleExceptionTest.Handler.exc_count += 1
+
+    def test_multi_exception(self):
+        # This test verifies that multiple exceptions raised into the same
+        # ExceptionStackContext do not generate extraneous log entries
+        # due to "Cannot send error response after headers written".
+        # log_exception is called, but it does not proceed to send_error.
+        response = self.fetch('/')
+        self.assertEqual(response.code, 500)
+        response = self.fetch('/')
+        self.assertEqual(response.code, 500)
+        # Each of our two requests generated two exceptions, we should have
+        # seen at least three of them by now (the fourth may still be
+        # in the queue).
+        self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)

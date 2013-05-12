@@ -1113,6 +1113,11 @@ class RequestHandler(object):
 
     def _handle_request_exception(self, e):
         self.log_exception(*sys.exc_info())
+        if self._finished:
+            # Extra errors after the request has been finished should
+            # be logged, but there is no reason to continue to try and
+            # send a response.
+            return
         if isinstance(e, HTTPError):
             if e.status_code not in httputil.responses and not e.reason:
                 gen_log.error("Bad HTTP status code: %d", e.status_code)
