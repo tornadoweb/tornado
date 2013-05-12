@@ -11,11 +11,12 @@ import weakref
 from tornado.concurrent import return_future
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
+from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipOnTravis
-from tornado.web import Application, RequestHandler, asynchronous
+from tornado.web import Application, RequestHandler, asynchronous, HTTPError
 
 from tornado import gen
 
@@ -735,7 +736,6 @@ class GenSequenceHandler(RequestHandler):
 
 
 class GenCoroutineSequenceHandler(RequestHandler):
-    @asynchronous
     @gen.coroutine
     def get(self):
         self.io_loop = self.request.connection.stream.io_loop
@@ -816,6 +816,32 @@ class GenYieldExceptionHandler(RequestHandler):
             self.finish('ok')
 
 
+class UndecoratedCoroutinesHandler(RequestHandler):
+    @gen.coroutine
+    def prepare(self):
+        self.chunks = []
+        yield gen.Task(IOLoop.current().add_callback)
+        self.chunks.append('1')
+
+    @gen.coroutine
+    def get(self):
+        self.chunks.append('2')
+        yield gen.Task(IOLoop.current().add_callback)
+        self.chunks.append('3')
+        yield gen.Task(IOLoop.current().add_callback)
+        self.write(''.join(self.chunks))
+
+
+class AsyncPrepareErrorHandler(RequestHandler):
+    @gen.coroutine
+    def prepare(self):
+        yield gen.Task(IOLoop.current().add_callback)
+        raise HTTPError(403)
+
+    def get(self):
+        self.finish('ok')
+
+
 class GenWebTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
@@ -827,6 +853,8 @@ class GenWebTest(AsyncHTTPTestCase):
             ('/exception', GenExceptionHandler),
             ('/coroutine_exception', GenCoroutineExceptionHandler),
             ('/yield_exception', GenYieldExceptionHandler),
+            ('/undecorated_coroutine', UndecoratedCoroutinesHandler),
+            ('/async_prepare_error', AsyncPrepareErrorHandler),
         ])
 
     def test_sequence_handler(self):
@@ -860,6 +888,14 @@ class GenWebTest(AsyncHTTPTestCase):
     def test_yield_exception_handler(self):
         response = self.fetch('/yield_exception')
         self.assertEqual(response.body, b'ok')
+
+    def test_undecorated_coroutines(self):
+        response = self.fetch('/undecorated_coroutine')
+        self.assertEqual(response.body, b'123')
+
+    def test_async_prepare_error_handler(self):
+        response = self.fetch('/async_prepare_error')
+        self.assertEqual(response.code, 403)
 
 if __name__ == '__main__':
     unittest.main()

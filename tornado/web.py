@@ -198,6 +198,12 @@ class RequestHandler(object):
 
         Override this method to perform common initialization regardless
         of the request method.
+
+        Asynchronous support: Decorate this method with `.gen.coroutine`
+        or `.return_future` to make it asynchronous (the
+        `asynchronous` decorator cannot be used on `prepare`).
+        If this method returns a `.Future` execution will not proceed
+        until the `.Future` is done.
         """
         pass
 
@@ -1077,14 +1083,39 @@ class RequestHandler(object):
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
                     self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
-            self.prepare()
-            if not self._finished:
-                getattr(self, self.request.method.lower())(
-                    *self.path_args, **self.path_kwargs)
-                if self._auto_finish and not self._finished:
-                    self.finish()
+            self._when_complete(self.prepare(), self._execute_method)
         except Exception as e:
             self._handle_request_exception(e)
+
+    def _when_complete(self, result, callback):
+        try:
+            if result is None:
+                callback()
+            elif isinstance(result, Future):
+                if result.done():
+                    if result.result() is not None:
+                        raise ValueError('Expected None, got %r' % result)
+                    callback()
+                else:
+                    # Delayed import of IOLoop because it's not available
+                    # on app engine
+                    from tornado.ioloop import IOLoop
+                    IOLoop.current().add_future(
+                        result, functools.partial(self._when_complete,
+                                                  callback=callback))
+            else:
+                raise ValueError("Expected Future or None, got %r" % result)
+        except Exception as e:
+            self._handle_request_exception(e)
+
+    def _execute_method(self):
+        method = getattr(self, self.request.method.lower())
+        self._when_complete(method(*self.path_args, **self.path_kwargs),
+                            self._execute_finish)
+
+    def _execute_finish(self):
+        if self._auto_finish and not self._finished:
+            self.finish()
 
     def _generate_headers(self):
         reason = self._reason
@@ -1172,6 +1203,11 @@ class RequestHandler(object):
 
 def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.
+
+    This decorator is unnecessary if the method is also decorated with
+    ``@gen.coroutine`` (it is legal but unnecessary to use the two
+    decorators together, in which case ``@asynchronous`` must be
+    first).
 
     This decorator should only be applied to the :ref:`HTTP verb
     methods <verbs>`; its behavior is undefined for any other method.
