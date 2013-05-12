@@ -144,7 +144,7 @@ class HTTPServer(TCPServer):
 
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, protocol=None, **kwargs):
+                 xheaders=False, ssl_options=None, protocol=None, spdy_options=None, **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
@@ -155,7 +155,6 @@ class HTTPServer(TCPServer):
     def handle_stream(self, stream, address):
         HTTPConnection(stream, address, self.request_callback,
                        self.no_keep_alive, self.xheaders, self.protocol)
-
 
 class _BadRequestException(Exception):
     """Exception class for malformed HTTP requests."""
