@@ -1278,3 +1278,18 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
         # seen at least three of them by now (the fourth may still be
         # in the queue).
         self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
+
+
+class SetCurrentUserTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def prepare(self):
+            self.current_user = 'Ben'
+
+        def get(self):
+            self.write('Hello %s' % self.current_user)
+
+    def test_set_current_user(self):
+        # Ensure that current_user can be assigned to normally for apps
+        # that want to forgo the lazy get_current_user property
+        response = self.fetch('/')
+        self.assertEqual(response.body, b'Hello Ben')

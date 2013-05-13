@@ -900,6 +900,10 @@ class RequestHandler(object):
             self._current_user = self.get_current_user()
         return self._current_user
 
+    @current_user.setter
+    def current_user(self, value):
+        self._current_user = value
+
     def get_current_user(self):
         """Override to determine the current user from, e.g., a cookie."""
         return None
