@@ -241,8 +241,11 @@ class RequestHandler(object):
             "Date": httputil.format_timestamp(time.gmtime()),
         })
         self.set_default_headers()
-        if not self.request.supports_http_1_1():
-            if self.request.headers.get("Connection") == "Keep-Alive":
+        if (not self.request.supports_http_1_1() and
+            getattr(self.request, 'connection', None) and
+            not self.request.connection.no_keep_alive):
+            conn_header = self.request.headers.get("Connection")
+            if conn_header and (conn_header.lower() == "keep-alive"):
                 self.set_header("Connection", "Keep-Alive")
         self._write_buffer = []
         self._status_code = 200
