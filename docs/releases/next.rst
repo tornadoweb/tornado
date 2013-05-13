@@ -85,3 +85,21 @@ In progress
 * Arguments extracted from the url path are now decoded with
   `.url_unescape` with ``plus=False``, so plus signs are left as-is
   instead of being turned into spaces.
+* `.RequestHandler.send_error` will now only be called once per request,
+  even if multiple exceptions are caught by the stack context.
+* The `tornado.web.asynchronous` decorator is no longer necessary for
+  methods that return a `.Future` (i.e. those that use the `.gen.coroutine`
+  or `.return_future` decorators)
+* `.RequestHandler.prepare` may now be asynchronous if it returns a
+  `.Future`.  The `~tornado.web.asynchronous` decorator is not used with
+  ``prepare``; one of the `.Future`-related decorators should be used instead.
+* ``RequestHandler.current_user`` may now be assigned to normally.
+* The `.HTTPServer` ``no_keep_alive`` option is now respected with
+  HTTP 1.0 connections that explicitly pass ``Connection: keep-alive``.
+* The ``Connection: keep-alive`` check for HTTP 1.0 connections is now
+  case-insensitive.
+* The stub handles left behind by `.IOLoop.remove_timeout` will now get
+  cleaned up instead of waiting to expire.
+* `.RequestHandler.redirect` no longer silently strips control characters
+  and whitespace.  It is now an error to pass control characters, newlines
+  or tabs.
