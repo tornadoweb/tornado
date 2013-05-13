@@ -1677,6 +1677,15 @@ class StaticFileHandler(RequestHandler):
         application = web.Application([
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
         ])
+        
+        
+    if you want explore folder of static path 
+    
+        application = web.Application([
+            (r"/static/(.*)", web.StaticFileHandler, 
+                {"path": "/var/www", "folder": True}),
+        ])
+        
 
     The handler constructor requires a ``path`` argument, which specifies the
     local root directory of the content to be served.
@@ -1696,9 +1705,10 @@ class StaticFileHandler(RequestHandler):
     _static_hashes = {}
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(self, path, default_filename=None):
+    def initialize(self, path, default_filename=None, folder=False):
         self.root = os.path.abspath(path) + os.path.sep
         self.default_filename = default_filename
+        self.folder = folder
 
     @classmethod
     def reset(cls):
@@ -1707,6 +1717,33 @@ class StaticFileHandler(RequestHandler):
 
     def head(self, path):
         self.get(path, include_body=False)
+        
+    """templ.html:
+    
+        <div>head</div>
+        {% for folder_url in folder_url_list %}
+            <li>-d-<a href="{{ folder_url }}">{{ folder_url }}</a></li>
+        {% end %}
+        {% for file_url in file_url_list %}
+            <li>-f-<a href="{{ file_url }}">{{ file_url }}</a></li>
+        {% end %}
+        <div>tail</div>
+        
+    class TestHandler(tornado.web.StaticFileHandler):
+      def render_folder(self, folder_url_list, file_url_list):
+          self.render("templ.html", 
+              folder_url_list=folder_url_list, file_url_list=file_url_list)
+                
+    (r"/static_test/(.*)", TestHandler, 
+                {"path": r"/var/www", "folder": True}),
+    """         
+    def render_folder(self, folders, files):
+        a = []
+        for folder in folders:
+            a.append('''&nbsp;d&nbsp;<a href="%s">%s</a>''' % (folder, folder)) 
+        for file in files:
+            a.append('''&nbsp;.&nbsp;<a href="%s">%s</a>''' % (file, file))            
+        self.finish("<br/>".join(a))
 
     def get(self, path, include_body=True):
         path = self.parse_url_path(path)
@@ -1726,7 +1763,25 @@ class StaticFileHandler(RequestHandler):
         if not os.path.exists(abspath):
             raise HTTPError(404)
         if not os.path.isfile(abspath):
-            raise HTTPError(403, "%s is not a file", path)
+            if(not self.folder):
+                raise HTTPError(403, "%s is not a file", path)
+            else:
+                folder_url_list = []
+                file_url_list = []
+                for root, dirs, files in os.walk(abspath):
+                    dirs.sort()
+                    for dir in dirs:
+                        r = root.replace(abspath, self.request.path) + "/"
+                        url = r + dir
+                        folder_url_list.append(url.replace("\\", "/").replace("//", "/"))
+                    files.sort()    
+                    for file in files:
+                        r = root.replace(abspath, self.request.path) + "/"
+                        url = r + file
+                        file_url_list.append(url.replace("\\", "/").replace("//", "/"))                    
+                    break
+                self.render_folder(folder_url_list, file_url_list)                
+            return
 
         stat_result = os.stat(abspath)
         modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
