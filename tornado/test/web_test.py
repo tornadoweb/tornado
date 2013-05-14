@@ -443,6 +443,8 @@ class RedirectHandler(RequestHandler):
     def get(self):
         if self.get_argument('permanent', None) is not None:
             self.redirect('/', permanent=int(self.get_argument('permanent')))
+        if self.get_argument('temporary', None) is not None:
+            self.redirect('/', temporary=int(self.get_argument('temporary')))
         elif self.get_argument('status', None) is not None:
             self.redirect('/', status=int(self.get_argument('status')))
         else:
@@ -627,6 +629,8 @@ js_embed()
     def test_redirect(self):
         response = self.fetch("/redirect?permanent=1", follow_redirects=False)
         self.assertEqual(response.code, 301)
+        response = self.fetch("/redirect?temporary=1", follow_redirects=False)
+        self.assertEqual(response.code, 307)
         response = self.fetch("/redirect?permanent=0", follow_redirects=False)
         self.assertEqual(response.code, 302)
         response = self.fetch("/redirect?status=307", follow_redirects=False)
