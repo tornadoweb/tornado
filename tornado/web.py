@@ -496,12 +496,14 @@ class RequestHandler(object):
         if self._headers_written:
             raise Exception("Cannot redirect after headers have been written")
         if status is None:
-            if self.request.supports_http_1_1() and temporary:
+            if temporary:
                 status = 307
             else:
                 status = 301 if permanent else 302
         else:
             assert isinstance(status, int) and 300 <= status <= 399
+        if not self.request.supports_http_1_1() and status in [303, 307]:
+            raise HTTPError(505)
         self.set_status(status)
         self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
                                                      utf8(url)))
