@@ -140,6 +140,9 @@ class DummyExecutor(object):
             future.set_exc_info(sys.exc_info())
         return future
 
+    def shutdown(self, wait=True):
+        pass
+
 dummy_executor = DummyExecutor()
 
 

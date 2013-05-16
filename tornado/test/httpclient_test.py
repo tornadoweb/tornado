@@ -431,6 +431,7 @@ class SyncHTTPClientTest(unittest.TestCase):
     def tearDown(self):
         self.server_ioloop.add_callback(self.server_ioloop.stop)
         self.server_thread.join()
+        self.http_client.close()
         self.server_ioloop.close(all_fds=True)
 
     def get_url(self, path):

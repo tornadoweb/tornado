@@ -127,39 +127,39 @@ class SimpleHTTPClientTestMixin(object):
                         SimpleAsyncHTTPClient(io_loop2))
 
     def test_connection_limit(self):
-        client = self.create_client(max_clients=2)
-        self.assertEqual(client.max_clients, 2)
-        seen = []
-        # Send 4 requests.  Two can be sent immediately, while the others
-        # will be queued
-        for i in range(4):
-            client.fetch(self.get_url("/trigger"),
-                         lambda response, i=i: (seen.append(i), self.stop()))
-        self.wait(condition=lambda: len(self.triggers) == 2)
-        self.assertEqual(len(client.queue), 2)
+        with closing(self.create_client(max_clients=2)) as client:
+            self.assertEqual(client.max_clients, 2)
+            seen = []
+            # Send 4 requests.  Two can be sent immediately, while the others
+            # will be queued
+            for i in range(4):
+                client.fetch(self.get_url("/trigger"),
+                             lambda response, i=i: (seen.append(i), self.stop()))
+            self.wait(condition=lambda: len(self.triggers) == 2)
+            self.assertEqual(len(client.queue), 2)
 
-        # Finish the first two requests and let the next two through
-        self.triggers.popleft()()
-        self.triggers.popleft()()
-        self.wait(condition=lambda: (len(self.triggers) == 2 and
-                                     len(seen) == 2))
-        self.assertEqual(set(seen), set([0, 1]))
-        self.assertEqual(len(client.queue), 0)
+            # Finish the first two requests and let the next two through
+            self.triggers.popleft()()
+            self.triggers.popleft()()
+            self.wait(condition=lambda: (len(self.triggers) == 2 and
+                                         len(seen) == 2))
+            self.assertEqual(set(seen), set([0, 1]))
+            self.assertEqual(len(client.queue), 0)
 
-        # Finish all the pending requests
-        self.triggers.popleft()()
-        self.triggers.popleft()()
-        self.wait(condition=lambda: len(seen) == 4)
-        self.assertEqual(set(seen), set([0, 1, 2, 3]))
-        self.assertEqual(len(self.triggers), 0)
+            # Finish all the pending requests
+            self.triggers.popleft()()
+            self.triggers.popleft()()
+            self.wait(condition=lambda: len(seen) == 4)
+            self.assertEqual(set(seen), set([0, 1, 2, 3]))
+            self.assertEqual(len(self.triggers), 0)
 
     def test_redirect_connection_limit(self):
         # following redirects should not consume additional connections
-        client = self.create_client(max_clients=1)
-        client.fetch(self.get_url('/countdown/3'), self.stop,
-                     max_redirects=3)
-        response = self.wait()
-        response.rethrow()
+        with closing(self.create_client(max_clients=1)) as client:
+            client.fetch(self.get_url('/countdown/3'), self.stop,
+                         max_redirects=3)
+            response = self.wait()
+            response.rethrow()
 
     def test_default_certificates_exist(self):
         open(_DEFAULT_CA_CERTS).close()

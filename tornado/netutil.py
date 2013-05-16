@@ -207,11 +207,19 @@ class Resolver(Configurable):
         """
         raise NotImplementedError()
 
+    def close(self):
+        """Closes the `Resolver`, freeing any resources used."""
+        pass
+
 
 class ExecutorResolver(Resolver):
     def initialize(self, io_loop=None, executor=None):
         self.io_loop = io_loop or IOLoop.current()
         self.executor = executor or dummy_executor
+
+    def close(self):
+        self.executor.shutdown()
+        self.executor = None
 
     @run_on_executor
     def resolve(self, host, port, family=socket.AF_UNSPEC):
@@ -266,6 +274,9 @@ class OverrideResolver(Resolver):
     def initialize(self, resolver, mapping):
         self.resolver = resolver
         self.mapping = mapping
+
+    def close(self):
+        self.resolver.close()
 
     def resolve(self, host, port, *args, **kwargs):
         if (host, port) in self.mapping:
