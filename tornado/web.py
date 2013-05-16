@@ -1822,7 +1822,7 @@ class StaticFileHandler(RequestHandler):
                     hashes[abs_path] = None
             hsh = hashes.get(abs_path)
             if hsh:
-                return hsh[:5]
+                return hsh
         return None
 
     def parse_url_path(self, url_path):
@@ -1835,6 +1835,15 @@ class StaticFileHandler(RequestHandler):
         if os.path.sep != "/":
             url_path = url_path.replace("/", os.path.sep)
         return url_path
+
+    def compute_etag(self):
+        # Note: compute the etag for static files using get_version so that the
+        # entire file is always considered, even when the request includes a
+        # Range header, so the response will only be a portion of the file.
+        version_hash = self.get_version(self.settings, self.path_args[0])
+        if not version_hash:
+            return None
+        return '"%s"' %(version_hash, )
 
 
 class FallbackHandler(RequestHandler):
