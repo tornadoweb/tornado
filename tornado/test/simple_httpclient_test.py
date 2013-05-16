@@ -17,7 +17,7 @@ from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, ExpectLog
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipOnTravis
 from tornado.web import RequestHandler, Application, asynchronous, url
 
@@ -93,11 +93,7 @@ class HostEchoHandler(RequestHandler):
         self.write(self.request.headers["Host"])
 
 
-class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
-    def setUp(self):
-        super(SimpleHTTPClientTestCase, self).setUp()
-        self.http_client = SimpleAsyncHTTPClient(self.io_loop)
-
+class SimpleHTTPClientTestMixin(object):
     def get_app(self):
         # callable objects to finish pending /trigger requests
         self.triggers = collections.deque()
@@ -131,8 +127,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
                         SimpleAsyncHTTPClient(io_loop2))
 
     def test_connection_limit(self):
-        client = SimpleAsyncHTTPClient(self.io_loop, max_clients=2,
-                                       force_instance=True)
+        client = self.create_client(max_clients=2)
         self.assertEqual(client.max_clients, 2)
         seen = []
         # Send 4 requests.  Two can be sent immediately, while the others
@@ -160,8 +155,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
 
     def test_redirect_connection_limit(self):
         # following redirects should not consume additional connections
-        client = SimpleAsyncHTTPClient(self.io_loop, max_clients=1,
-                                       force_instance=True)
+        client = self.create_client(max_clients=1)
         client.fetch(self.get_url('/countdown/3'), self.stop,
                      max_redirects=3)
         response = self.wait()
@@ -305,6 +299,27 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             expected_message = os.strerror(errno.ECONNREFUSED)
             self.assertTrue(expected_message in str(response.error),
                             response.error)
+
+
+class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
+    def setUp(self):
+        super(SimpleHTTPClientTestCase, self).setUp()
+        self.http_client = self.create_client()
+
+    def create_client(self, **kwargs):
+        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
+                                     **kwargs)
+
+
+class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
+    def setUp(self):
+        super(SimpleHTTPSClientTestCase, self).setUp()
+        self.http_client = self.create_client()
+
+    def create_client(self, **kwargs):
+        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
+                                     defaults=dict(validate_cert=False),
+                                     **kwargs)
 
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase):

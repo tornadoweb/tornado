@@ -872,7 +872,7 @@ class SSLIOStream(IOStream):
     def connect(self, address, callback=None, server_hostname=None):
         # Save the user's callback and run it after the ssl handshake
         # has completed.
-        self._ssl_connect_callback = callback
+        self._ssl_connect_callback = stack_context.wrap(callback)
         self._server_hostname = server_hostname
         super(SSLIOStream, self).connect(address, callback=None)
 
