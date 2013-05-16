@@ -113,6 +113,31 @@ class OptionsTest(unittest.TestCase):
         options.foo = 2
         self.assertEqual(values, [2])
 
+    def _sample_options(self):
+        options = OptionParser()
+        options.define('a', default=1)
+        options.define('b', default=2)
+        return options
+
+    def test_iter(self):
+        options = self._sample_options()
+        # OptionParsers always define 'help'.
+        self.assertEqual(set(['a', 'b', 'help']), set(iter(options)))
+
+    def test_items(self):
+        options = self._sample_options()
+        # OptionParsers always define 'help'.
+        expected = [('a', 1), ('b', 2), ('help', options.help)]
+        actual = sorted(options.items())
+        self.assertEqual(expected, actual)
+
+    def test_as_dict(self):
+        options = self._sample_options()
+        options_dict = options.as_dict()
+        # OptionParsers always define 'help'.
+        expected = {'a': 1, 'b': 2, 'help': options.help}
+        self.assertEqual(expected, options_dict)
+
     @unittest.skipIf(mock is None, 'mock package not present')
     def test_mock_patch(self):
         # ensure that our setattr hooks don't interfere with mock.patch

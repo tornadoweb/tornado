@@ -101,6 +101,27 @@ class OptionParser(object):
             return self._options[name].set(value)
         raise AttributeError("Unrecognized option %r" % name)
 
+    def __iter__(self):
+        return iter(self._options)
+
+    def __getitem__(self, item):
+        return self._options[item]
+
+    def items(self):
+        """A sequence of (name, value) pairs."""
+        return [(name, opt.value()) for name, opt in self._options.items()]
+
+    def as_dict(self):
+        """A dict of names and values.
+
+        Useful for copying options into Application settings::
+
+            from tornado import options
+            options.parse_command_line()
+            application = Application(handler, **options.options.as_dict())
+        """
+        return dict(self.items())
+
     def define(self, name, default=None, type=None, help=None, metavar=None,
                multiple=False, group=None, callback=None):
         """Defines a new command line option.
