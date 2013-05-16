@@ -104,22 +104,6 @@ except ImportError:
     from urllib.parse import urlencode  # py3
 
 
-class _UIModuleNamespace(object):
-    """Lazy namespace which creates UIModule proxies bound to a handler."""
-    def __init__(self, handler, ui_modules):
-        self.handler = handler
-        self.ui_modules = ui_modules
-
-    def __getitem__(self, key):
-        return self.handler._ui_module(key, self.ui_modules[key])
-
-    def __getattr__(self, key):
-        try:
-            return self[key]
-        except KeyError as e:
-            raise AttributeError(str(e))
-
-
 class RequestHandler(object):
     """Subclass this class and define `get()` or `post()` to make a handler.
 
@@ -214,6 +198,12 @@ class RequestHandler(object):
 
         Override this method to perform common initialization regardless
         of the request method.
+
+        Asynchronous support: Decorate this method with `.gen.coroutine`
+        or `.return_future` to make it asynchronous (the
+        `asynchronous` decorator cannot be used on `prepare`).
+        If this method returns a `.Future` execution will not proceed
+        until the `.Future` is done.
         """
         pass
 
@@ -251,8 +241,11 @@ class RequestHandler(object):
             "Date": httputil.format_timestamp(time.gmtime()),
         })
         self.set_default_headers()
-        if not self.request.supports_http_1_1():
-            if self.request.headers.get("Connection") == "Keep-Alive":
+        if (not self.request.supports_http_1_1() and
+            getattr(self.request, 'connection', None) and
+            not self.request.connection.no_keep_alive):
+            conn_header = self.request.headers.get("Connection")
+            if conn_header and (conn_header.lower() == "keep-alive"):
                 self.set_header("Connection", "Keep-Alive")
         self._write_buffer = []
         self._status_code = 200
@@ -344,7 +337,7 @@ class RequestHandler(object):
         """Returns the value of the argument with the given name.
 
         If default is not provided, the argument is considered to be
-        required, and we throw an HTTP 400 exception if it is missing.
+        required, and we raise a `MissingArgumentError` if it is missing.
 
         If the argument appears in the url more than once, we return the
         last value.
@@ -354,7 +347,7 @@ class RequestHandler(object):
         args = self.get_arguments(name, strip=strip)
         if not args:
             if default is self._ARG_DEFAULT:
-                raise HTTPError(400, "Missing argument %s" % name)
+                raise MissingArgumentError(name)
             return default
         return args[-1]
 
@@ -507,10 +500,8 @@ class RequestHandler(object):
         else:
             assert isinstance(status, int) and 300 <= status <= 399
         self.set_status(status)
-        # Remove whitespace
-        url = re.sub(br"[\x00-\x20]+", "", utf8(url))
         self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
-                                                     url))
+                                                     utf8(url)))
         self.finish()
 
     def write(self, chunk):
@@ -910,6 +901,10 @@ class RequestHandler(object):
             self._current_user = self.get_current_user()
         return self._current_user
 
+    @current_user.setter
+    def current_user(self, value):
+        self._current_user = value
+
     def get_current_user(self):
         """Override to determine the current user from, e.g., a cookie."""
         return None
@@ -1093,14 +1088,39 @@ class RequestHandler(object):
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
                     self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
-            self.prepare()
-            if not self._finished:
-                getattr(self, self.request.method.lower())(
-                    *self.path_args, **self.path_kwargs)
-                if self._auto_finish and not self._finished:
-                    self.finish()
+            self._when_complete(self.prepare(), self._execute_method)
         except Exception as e:
             self._handle_request_exception(e)
+
+    def _when_complete(self, result, callback):
+        try:
+            if result is None:
+                callback()
+            elif isinstance(result, Future):
+                if result.done():
+                    if result.result() is not None:
+                        raise ValueError('Expected None, got %r' % result)
+                    callback()
+                else:
+                    # Delayed import of IOLoop because it's not available
+                    # on app engine
+                    from tornado.ioloop import IOLoop
+                    IOLoop.current().add_future(
+                        result, functools.partial(self._when_complete,
+                                                  callback=callback))
+            else:
+                raise ValueError("Expected Future or None, got %r" % result)
+        except Exception as e:
+            self._handle_request_exception(e)
+
+    def _execute_method(self):
+        method = getattr(self, self.request.method.lower())
+        self._when_complete(method(*self.path_args, **self.path_kwargs),
+                            self._execute_finish)
+
+    def _execute_finish(self):
+        if self._auto_finish and not self._finished:
+            self.finish()
 
     def _generate_headers(self):
         reason = self._reason
@@ -1129,6 +1149,11 @@ class RequestHandler(object):
 
     def _handle_request_exception(self, e):
         self.log_exception(*sys.exc_info())
+        if self._finished:
+            # Extra errors after the request has been finished should
+            # be logged, but there is no reason to continue to try and
+            # send a response.
+            return
         if isinstance(e, HTTPError):
             if e.status_code not in httputil.responses and not e.reason:
                 gen_log.error("Bad HTTP status code: %d", e.status_code)
@@ -1183,6 +1208,11 @@ class RequestHandler(object):
 
 def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.
+
+    This decorator is unnecessary if the method is also decorated with
+    ``@gen.coroutine`` (it is legal but unnecessary to use the two
+    decorators together, in which case ``@asynchronous`` must be
+    first).
 
     This decorator should only be applied to the :ref:`HTTP verb
     methods <verbs>`; its behavior is undefined for any other method.
@@ -1493,7 +1523,8 @@ class Application(object):
                         def unquote(s):
                             if s is None:
                                 return s
-                            return escape.url_unescape(s, encoding=None)
+                            return escape.url_unescape(s, encoding=None,
+                                                       plus=False)
                         # Pass matched groups to the handler.  Since
                         # match.groups() includes both named and unnamed groups,
                         # we want to use either groups or groupdict but not both.
@@ -1591,6 +1622,18 @@ class HTTPError(Exception):
             return message
 
 
+class MissingArgumentError(HTTPError):
+    """Exception raised by `RequestHandler.get_argument`.
+
+    This is a subclass of `HTTPError`, so if it is uncaught a 400 response
+    code will be used instead of 500 (and a stack trace will not be logged).
+    """
+    def __init__(self, arg_name):
+        super(MissingArgumentError, self).__init__(
+            400, 'Missing argument %s' % arg_name)
+        self.arg_name = arg_name
+
+
 class ErrorHandler(RequestHandler):
     """Generates an error response with ``status_code`` for all requests."""
     def initialize(self, status_code):
@@ -1633,8 +1676,12 @@ class StaticFileHandler(RequestHandler):
             (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
         ])
 
-    The local root directory of the content should be passed as the ``path``
-    argument to the handler.
+    The handler constructor requires a ``path`` argument, which specifies the
+    local root directory of the content to be served.
+
+    Note that a capture group in the regex is required to parse the value for
+    the ``path`` argument to the get() method (different than the constructor
+    argument above); see `URLSpec` for details.
 
     To support aggressive browser caching, if the argument ``v`` is given
     with the path, we set an infinite HTTP expiration header. So, if you
@@ -2060,6 +2107,22 @@ class TemplateModule(UIModule):
         return "".join(self._get_resources("html_body"))
 
 
+class _UIModuleNamespace(object):
+    """Lazy namespace which creates UIModule proxies bound to a handler."""
+    def __init__(self, handler, ui_modules):
+        self.handler = handler
+        self.ui_modules = ui_modules
+
+    def __getitem__(self, key):
+        return self.handler._ui_module(key, self.ui_modules[key])
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(str(e))
+
+
 class URLSpec(object):
     """Specifies mappings between URLs and handlers."""
     def __init__(self, pattern, handler_class, kwargs=None, name=None):
@@ -2132,7 +2195,7 @@ class URLSpec(object):
         for a in args:
             if not isinstance(a, (unicode_type, bytes_type)):
                 a = str(a)
-            converted_args.append(escape.url_escape(utf8(a)))
+            converted_args.append(escape.url_escape(utf8(a), plus=False))
         return self._path % tuple(converted_args)
 
 url = URLSpec

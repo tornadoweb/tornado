@@ -14,6 +14,7 @@ from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, asynchronous
+from contextlib import closing
 import datetime
 import os
 import shutil
@@ -183,22 +184,23 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         return Application(self.get_handlers())
 
     def raw_fetch(self, headers, body):
-        client = SimpleAsyncHTTPClient(self.io_loop)
-        conn = RawRequestHTTPConnection(
-            self.io_loop, client,
-            httpclient._RequestProxy(
-                httpclient.HTTPRequest(self.get_url("/")),
-                dict(httpclient.HTTPRequest._DEFAULTS)),
-            None, self.stop,
-            1024 * 1024, Resolver(io_loop=self.io_loop))
-        conn.set_request(
-            b"\r\n".join(headers +
-                         [utf8("Content-Length: %d\r\n" % len(body))]) +
-            b"\r\n" + body)
-        response = self.wait()
-        client.close()
-        response.rethrow()
-        return response
+        with closing(Resolver(io_loop=self.io_loop)) as resolver:
+            with closing(SimpleAsyncHTTPClient(self.io_loop,
+                                               resolver=resolver)) as client:
+                conn = RawRequestHTTPConnection(
+                    self.io_loop, client,
+                    httpclient._RequestProxy(
+                        httpclient.HTTPRequest(self.get_url("/")),
+                        dict(httpclient.HTTPRequest._DEFAULTS)),
+                    None, self.stop,
+                    1024 * 1024, resolver)
+                conn.set_request(
+                    b"\r\n".join(headers +
+                                 [utf8("Content-Length: %d\r\n" % len(body))]) +
+                    b"\r\n" + body)
+                response = self.wait()
+                response.rethrow()
+                return response
 
     def test_multipart_form(self):
         # Encodings here are tricky:  Headers are latin1, bodies can be

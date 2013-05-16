@@ -157,6 +157,20 @@ class TestIOLoop(AsyncTestCase):
         self.wait()
         self.io_loop.remove_timeout(handle)
 
+    def test_remove_timeout_cleanup(self):
+        # Add and remove enough callbacks to trigger cleanup.
+        # Not a very thorough test, but it ensures that the cleanup code
+        # gets executed and doesn't blow up.  This test is only really useful
+        # on PollIOLoop subclasses, but it should run silently on any
+        # implementation.
+        for i in range(2000):
+            timeout = self.io_loop.add_timeout(self.io_loop.time() + 3600,
+                                               lambda: None)
+            self.io_loop.remove_timeout(timeout)
+        # HACK: wait two IOLoop iterations for the GC to happen.
+        self.io_loop.add_callback(lambda: self.io_loop.add_callback(self.stop))
+        self.wait()
+
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
 # automatically set as current.

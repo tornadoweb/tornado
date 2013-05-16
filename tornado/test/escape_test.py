@@ -151,7 +151,7 @@ class EscapeTestCase(unittest.TestCase):
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
 
-    def test_url_escape(self):
+    def test_url_escape_unicode(self):
         tests = [
             # byte strings are passed through as-is
             (u('\u00e9').encode('utf8'), '%C3%A9'),
@@ -163,7 +163,7 @@ class EscapeTestCase(unittest.TestCase):
         for unescaped, escaped in tests:
             self.assertEqual(url_escape(unescaped), escaped)
 
-    def test_url_unescape(self):
+    def test_url_unescape_unicode(self):
         tests = [
             ('%C3%A9', u('\u00e9'), 'utf8'),
             ('%C3%A9', u('\u00c3\u00a9'), 'latin1'),
@@ -175,6 +175,19 @@ class EscapeTestCase(unittest.TestCase):
             # and unicode strings.
             self.assertEqual(url_unescape(to_unicode(escaped), encoding), unescaped)
             self.assertEqual(url_unescape(utf8(escaped), encoding), unescaped)
+
+    def test_url_escape_quote_plus(self):
+        unescaped = '+ #%'
+        plus_escaped = '%2B+%23%25'
+        escaped = '%2B%20%23%25'
+        self.assertEqual(url_escape(unescaped), plus_escaped)
+        self.assertEqual(url_escape(unescaped, plus=False), escaped)
+        self.assertEqual(url_unescape(plus_escaped), unescaped)
+        self.assertEqual(url_unescape(escaped, plus=False), unescaped)
+        self.assertEqual(url_unescape(plus_escaped, encoding=None),
+                         utf8(unescaped))
+        self.assertEqual(url_unescape(escaped, encoding=None, plus=False),
+                         utf8(unescaped))
 
     def test_escape_return_types(self):
         # On python2 the escape methods should generally return the same

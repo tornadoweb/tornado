@@ -237,7 +237,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         bandwidth usage), call ``self.set_nodelay(True)`` once the websocket
         connection is established.
 
-        See `.IOStream.set_nodelay` for additional details.
+        See `.BaseIOStream.set_nodelay` for additional details.
         """
         self.stream.set_nodelay(value)
 
@@ -758,12 +758,14 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             'Sec-WebSocket-Version': '13',
         })
 
+        self.resolver = Resolver(io_loop=io_loop)
         super(WebSocketClientConnection, self).__init__(
             io_loop, None, request, lambda: None, self._on_http_response,
-            104857600, Resolver(io_loop=io_loop))
+            104857600, self.resolver)
 
     def _on_close(self):
         self.on_message(None)
+        self.resolver.close()
 
     def _on_http_response(self, response):
         if not self.connect_future.done():

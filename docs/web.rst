@@ -18,6 +18,8 @@
 
    Implement any of the following methods (collectively known as the
    HTTP verb methods) to handle the corresponding HTTP method.
+   These methods can be made asynchronous with one of the following
+   decorators: `.gen.coroutine`, `.return_future`, or `asynchronous`.
 
    .. automethod:: RequestHandler.get
    .. automethod:: RequestHandler.post
@@ -95,6 +97,7 @@
    .. automethod:: RequestHandler.get_status
    .. automethod:: RequestHandler.get_template_path
    .. automethod:: RequestHandler.get_user_locale
+   .. automethod:: RequestHandler.log_exception
    .. automethod:: RequestHandler.on_connection_close
    .. automethod:: RequestHandler.require_setting
    .. automethod:: RequestHandler.reverse_url
@@ -193,6 +196,7 @@
    Everything else
    ---------------
    .. autoexception:: HTTPError
+   .. autoexception:: MissingArgumentError
    .. autoclass:: UIModule
       :members:
 

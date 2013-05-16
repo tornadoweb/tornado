@@ -9,7 +9,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule, MissingArgumentError
 
 import binascii
 import datetime
@@ -559,6 +559,18 @@ class WSGISafeWebTest(WebTestCase):
                                 u('query'): [u('bytes'), u('c3a9')],
                                 })
 
+    def test_decode_argument_plus(self):
+        # These urls are all equivalent.
+        urls = ["/decode_arg/1%20%2B%201?foo=1%20%2B%201&encoding=utf-8",
+                "/decode_arg/1%20+%201?foo=1+%2B+1&encoding=utf-8"]
+        for url in urls:
+            response = self.fetch(url)
+            response.rethrow()
+            data = json_decode(response.body)
+            self.assertEqual(data, {u('path'): [u('unicode'), u('1 + 1')],
+                                    u('query'): [u('unicode'), u('1 + 1')],
+                                    })
+
     def test_reverse_url(self):
         self.assertEqual(self.app.reverse_url('decode_arg', 'foo'),
                          '/decode_arg/foo')
@@ -568,6 +580,8 @@ class WSGISafeWebTest(WebTestCase):
                          '/decode_arg/%E9')
         self.assertEqual(self.app.reverse_url('decode_arg', u('\u00e9')),
                          '/decode_arg/%C3%A9')
+        self.assertEqual(self.app.reverse_url('decode_arg', '1 + 1'),
+                         '/decode_arg/1%20%2B%201')
 
     def test_uimodule_unescaped(self):
         response = self.fetch("/linkify")
@@ -1218,3 +1232,64 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
         self.assertEqual(response.body,
                          b'In my_ui_method(42) with handler value asdf. '
                          b'In MyModule(123) with handler value asdf.')
+
+
+@wsgi_safe
+class GetArgumentErrorTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            try:
+                self.get_argument('foo')
+                self.write({})
+            except MissingArgumentError as e:
+                self.write({'arg_name': e.arg_name,
+                            'log_message': e.log_message})
+
+    def test_catch_error(self):
+        response = self.fetch('/')
+        self.assertEqual(json_decode(response.body),
+                         {'arg_name': 'foo',
+                          'log_message': 'Missing argument foo'})
+
+
+class MultipleExceptionTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        exc_count = 0
+
+        @asynchronous
+        def get(self):
+            from tornado.ioloop import IOLoop
+            IOLoop.current().add_callback(lambda: 1 / 0)
+            IOLoop.current().add_callback(lambda: 1 / 0)
+
+        def log_exception(self, typ, value, tb):
+            MultipleExceptionTest.Handler.exc_count += 1
+
+    def test_multi_exception(self):
+        # This test verifies that multiple exceptions raised into the same
+        # ExceptionStackContext do not generate extraneous log entries
+        # due to "Cannot send error response after headers written".
+        # log_exception is called, but it does not proceed to send_error.
+        response = self.fetch('/')
+        self.assertEqual(response.code, 500)
+        response = self.fetch('/')
+        self.assertEqual(response.code, 500)
+        # Each of our two requests generated two exceptions, we should have
+        # seen at least three of them by now (the fourth may still be
+        # in the queue).
+        self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
+
+
+class SetCurrentUserTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def prepare(self):
+            self.current_user = 'Ben'
+
+        def get(self):
+            self.write('Hello %s' % self.current_user)
+
+    def test_set_current_user(self):
+        # Ensure that current_user can be assigned to normally for apps
+        # that want to forgo the lazy get_current_user property
+        response = self.fetch('/')
+        self.assertEqual(response.body, b'Hello Ben')

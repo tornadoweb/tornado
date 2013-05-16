@@ -64,10 +64,10 @@ class BaseIOStream(object):
     Subclasses must implement `fileno`, `close_fd`, `write_to_fd`,
     `read_from_fd`, and optionally `get_fd_error`.
     """
-    def __init__(self, io_loop=None, max_buffer_size=104857600,
+    def __init__(self, io_loop=None, max_buffer_size=None,
                  read_chunk_size=4096):
         self.io_loop = io_loop or ioloop.IOLoop.current()
-        self.max_buffer_size = max_buffer_size
+        self.max_buffer_size = max_buffer_size or 104857600
         self.read_chunk_size = read_chunk_size
         self.error = None
         self._read_buffer = collections.deque()
@@ -547,8 +547,12 @@ class BaseIOStream(object):
                     self._write_buffer_frozen = True
                     break
                 else:
-                    gen_log.warning("Write error on %d: %s",
-                                    self.fileno(), e)
+                    if e.args[0] not in (errno.EPIPE, errno.ECONNRESET):
+                        # Broken pipe errors are usually caused by connection
+                        # reset, and its better to not log EPIPE errors to
+                        # minimize log spam
+                        gen_log.warning("Write error on %d: %s",
+                                        self.fileno(), e)
                     self.close(exc_info=True)
                     return
         if not self._write_buffer and self._write_callback:
@@ -868,7 +872,7 @@ class SSLIOStream(IOStream):
     def connect(self, address, callback=None, server_hostname=None):
         # Save the user's callback and run it after the ssl handshake
         # has completed.
-        self._ssl_connect_callback = callback
+        self._ssl_connect_callback = stack_context.wrap(callback)
         self._server_hostname = server_hostname
         super(SSLIOStream, self).connect(address, callback=None)
 
