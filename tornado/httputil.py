@@ -235,6 +235,63 @@ class HTTPFile(ObjectDict):
     """
     pass
 
+def parse_request_range(range_header):
+    """Parses a Range header.
+
+    Returns either ``None`` or an instance of ``slice``::
+
+        >>> rh = parse_request_range("bytes=1-2")
+        >>> rh
+        slice(1, 3, None)
+        >>> [0, 1, 2, 3, 4][rh]
+        [1, 2]
+        >>> parse_request_range("bytes=6-")
+        slice(6, None, None)
+        >>> parse_request_range("bytes=")
+        slice(None, None, None)
+        >>> parse_request_range("foo=42")
+        >>> parse_request_range("bytes=1-2,6-10")
+
+    Note: only supports one range (ex, ``bytes=1-2,6-10`` is not allowed).
+    """
+    unit, _, value = range_header.partition("=")
+    unit, value = unit.strip(), value.strip()
+    if unit != "bytes":
+        return None
+    start_b, _, end_b = value.partition("-")
+    try:
+        start = _int_or_none(start_b)
+        end = _int_or_none(end_b)
+    except ValueError:
+        return None
+    if end is not None:
+        end += 1
+    return slice(start, end)
+
+def get_content_range(data, request_range):
+    """ Returns a suitable Content-Range header::
+
+        >>> print(get_content_range("abcd", slice(None, 1)))
+        0-0/4
+        >>> print(get_content_range("abcd", slice(1, 3)))
+        1-2/4
+        >>> print(get_content_range("abcd", slice(None, None)))
+        0-3/4
+    """
+
+    data_len = len(data)
+    return "%s-%s/%s" %(
+        request_range.start or 0,
+        (request_range.stop or data_len) - 1,
+        data_len,
+    )
+
+def _int_or_none(val):
+    val = val.strip()
+    if val == "":
+        return None
+    return int(val)
+
 
 def parse_body_arguments(content_type, body, arguments, files):
     """Parses a form request body.

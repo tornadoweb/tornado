@@ -1754,8 +1754,17 @@ class StaticFileHandler(RequestHandler):
                 self.set_status(304)
                 return
 
+        request_range = None
+        range_header = self.request.headers.get("Range")
+        if range_header:
+            request_range = httputil.parse_request_range(range_header)
+
         with open(abspath, "rb") as file:
             data = file.read()
+            if request_range:
+                content_range = httputil.get_content_range(data, request_range)
+                self.set_header("Content-Range", content_range)
+                data = data[request_range]
             if include_body:
                 self.write(data)
             else:
