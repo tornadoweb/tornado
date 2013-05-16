@@ -139,8 +139,8 @@ class OptionParser(object):
         by later flags.
         """
         if name in self._options:
-            raise Error("Option %r already defined in %s", name,
-                        self._options[name].file_name)
+            raise Error("Option %r already defined in %s" %
+                        (name, self._options[name].file_name))
         frame = sys._getframe(0)
         options_file = frame.f_code.co_filename
         file_name = frame.f_back.f_code.co_filename
