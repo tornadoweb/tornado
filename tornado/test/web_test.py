@@ -811,10 +811,11 @@ class StaticFileTest(WebTestCase):
 
     def test_absolute_static_url(self):
         response = self.fetch("/abs_static_url/robots.txt")
-        self.assertEqual(response.body,
-                         utf8(self.get_url("/") +
-                              "static/robots.txt?v=" +
-                              self.robots_txt_hash))
+        self.assertEqual(response.body, (
+            utf8(self.get_url("/")) +
+            b"static/robots.txt?v=" +
+            self.robots_txt_hash
+        ))
 
     def test_include_host_override(self):
         self._trigger_include_host_check(False)
@@ -864,8 +865,8 @@ class StaticFileTest(WebTestCase):
 
     def test_static_etag(self):
         response = self.fetch('/static/robots.txt')
-        self.assertEqual(response.headers.get("Etag"),
-                         b'"%s"' %(self.robots_txt_hash, ))
+        self.assertEqual(utf8(response.headers.get("Etag")),
+                         b'"' + self.robots_txt_hash + b'"')
 
 
 @wsgi_safe
