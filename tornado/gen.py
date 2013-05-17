@@ -498,6 +498,7 @@ class Runner(object):
                         if not self.yield_point.is_ready():
                             return
                         next = self.yield_point.get_result()
+                        self.yield_point = None
                     except Exception:
                         self.exc_info = sys.exc_info()
                 try:
