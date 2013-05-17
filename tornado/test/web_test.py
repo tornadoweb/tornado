@@ -868,6 +868,21 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(utf8(response.headers.get("Etag")),
                          b'"' + self.robots_txt_hash + b'"')
 
+    def test_static_with_range(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=0-9'})
+        self.assertEqual(response.body, b"User-agent")
+        self.assertEqual(utf8(response.headers.get("Etag")),
+                         b'"' + self.robots_txt_hash + b'"')
+        self.assertEqual(response.headers.get("Content-Length"), "10")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "0-9/26")
+
+    def test_static_invalid_range(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'asdf'})
+        self.assertEqual(response.code, 406)
+
 
 @wsgi_safe
 class CustomStaticFileTest(WebTestCase):
