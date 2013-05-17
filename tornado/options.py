@@ -105,7 +105,7 @@ class OptionParser(object):
         return iter(self._options)
 
     def __getitem__(self, item):
-        return self._options[item]
+        return self._options[item].value()
 
     def items(self):
         """A sequence of (name, value) pairs."""

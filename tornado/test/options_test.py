@@ -124,6 +124,10 @@ class OptionsTest(unittest.TestCase):
         # OptionParsers always define 'help'.
         self.assertEqual(set(['a', 'b', 'help']), set(iter(options)))
 
+    def test_getitem(self):
+        options = self._sample_options()
+        self.assertEqual(1, options['a'])
+
     def test_items(self):
         options = self._sample_options()
         # OptionParsers always define 'help'.
