@@ -1754,10 +1754,15 @@ class StaticFileHandler(RequestHandler):
                 self.set_status(304)
                 return
 
+        self.set_header("Accept-Ranges", "bytes")
         request_range = None
         range_header = self.request.headers.get("Range")
         if range_header:
             request_range = httputil.parse_request_range(range_header)
+            if not request_range:
+                # 406: Not Acceptable
+                self.set_status(406)
+                return
 
         with open(abspath, "rb") as file:
             data = file.read()
