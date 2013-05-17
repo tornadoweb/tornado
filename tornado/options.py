@@ -111,16 +111,31 @@ class OptionParser(object):
         """A sequence of (name, value) pairs."""
         return [(name, opt.value()) for name, opt in self._options.items()]
 
-    def as_dict(self):
-        """A dict of names and values.
+    def groups(self):
+        """The set of option-groups created by ``define``."""
+        return set(opt.group_name for opt in self._options.values())
+
+    def group_dict(self, group=None):
+        """A dict of option names and values.
+
+        If ``group`` is given, get options only from the named group; otherwise
+        all options are included.
 
         Useful for copying options into Application settings::
 
-            from tornado import options
-            options.parse_command_line()
-            application = Application(handler, **options.options.as_dict())
+            from tornado.options import define, parse_command_line, options
+
+            define('template_path', group='application')
+            define('static_path', group='application')
+
+            parse_command_line()
+
+            application = Application(
+                handlers, **options.group_dict('application'))
         """
-        return dict(self.items())
+        return dict(
+            (name, opt.value()) for name, opt in self._options.items()
+            if not group or group == opt.group_name)
 
     def define(self, name, default=None, type=None, help=None, metavar=None,
                multiple=False, group=None, callback=None):

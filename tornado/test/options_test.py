@@ -135,12 +135,23 @@ class OptionsTest(unittest.TestCase):
         actual = sorted(options.items())
         self.assertEqual(expected, actual)
 
-    def test_as_dict(self):
-        options = self._sample_options()
-        options_dict = options.as_dict()
-        # OptionParsers always define 'help'.
+    def test_group_dict(self):
+        options = OptionParser()
+        options.define('a', default=1)
+        options.define('b', group='b_group', default=2)
+
+        frame = sys._getframe(0)
+        this_file = frame.f_code.co_filename
+        self.assertEqual(set(['b_group', '', this_file]), options.groups())
+
+        default_group_dict = options.group_dict()
         expected = {'a': 1, 'b': 2, 'help': options.help}
-        self.assertEqual(expected, options_dict)
+        self.assertEqual(expected, default_group_dict)
+
+        b_group_dict = options.group_dict('b_group')
+        self.assertEqual({'b': 2}, b_group_dict)
+
+        self.assertEqual({}, options.group_dict('nonexistent'))
 
     @unittest.skipIf(mock is None, 'mock package not present')
     def test_mock_patch(self):
