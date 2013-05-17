@@ -235,7 +235,7 @@ class HTTPFile(ObjectDict):
     """
     pass
 
-def parse_request_range(range_header):
+def parse_request_range(range_header, ):
     """Parses a Range header.
 
     Returns either ``None`` or an instance of ``slice``::
@@ -247,12 +247,18 @@ def parse_request_range(range_header):
         [1, 2]
         >>> parse_request_range("bytes=6-")
         slice(6, None, None)
+        >>> parse_request_range("bytes=-6")
+        slice(-6, None, None)
         >>> parse_request_range("bytes=")
         slice(None, None, None)
         >>> parse_request_range("foo=42")
         >>> parse_request_range("bytes=1-2,6-10")
 
     Note: only supports one range (ex, ``bytes=1-2,6-10`` is not allowed).
+
+    See [0] for the details of the range header.
+
+    [0]: http://greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#byte.ranges
     """
     unit, _, value = range_header.partition("=")
     unit, value = unit.strip(), value.strip()
@@ -265,7 +271,11 @@ def parse_request_range(range_header):
     except ValueError:
         return None
     if end is not None:
-        end += 1
+        if start is None:
+            start = -end
+            end = None
+        else:
+            end += 1
     return slice(start, end)
 
 def get_content_range(data, request_range):
@@ -280,11 +290,12 @@ def get_content_range(data, request_range):
     """
 
     data_len = len(data)
-    return "%s-%s/%s" %(
-        request_range.start or 0,
-        (request_range.stop or data_len) - 1,
-        data_len,
-    )
+    start, stop = request_range.start, request_range.stop
+    start = start or 0
+    if start < 0:
+        start = data_len + start
+    stop = (stop or data_len) - 1
+    return "%s-%s/%s" %(start, stop, data_len)
 
 def _int_or_none(val):
     val = val.strip()

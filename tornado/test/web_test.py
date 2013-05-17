@@ -878,6 +878,22 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"),
                          "0-9/26")
 
+    def test_static_with_range_end_edge(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=22-'})
+        self.assertEqual(response.body, b": /\n")
+        self.assertEqual(response.headers.get("Content-Length"), "4")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "22-25/26")
+
+    def test_static_with_range_neg_end(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=-4'})
+        self.assertEqual(response.body, b": /\n")
+        self.assertEqual(response.headers.get("Content-Length"), "4")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "22-25/26")
+
     def test_static_invalid_range(self):
         response = self.fetch('/static/robots.txt', headers={
                 'Range': 'asdf'})
