@@ -82,6 +82,13 @@ class ContentLength304Handler(RequestHandler):
         # want to simulate servers that include the headers anyway.
         pass
 
+class AllMethodsHandler(RequestHandler):
+    SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
+
+    def method(self):
+        self.write(self.request.method)
+
+    get = post = put = delete = options = patch = other = method
 
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
@@ -99,6 +106,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/echopost", EchoPostHandler),
             url("/user_agent", UserAgentHandler),
             url("/304_with_content_length", ContentLength304Handler),
+            url("/all_methods", AllMethodsHandler),
         ], gzip=True)
 
     def test_hello_world(self):
@@ -364,6 +372,19 @@ Transfer-Encoding: chunked
         self.assertTrue(isinstance(response.request, HTTPRequest))
         response2 = yield self.http_client.fetch(response.request)
         self.assertEqual(response2.body, b'Hello world!')
+
+    def test_all_methods(self):
+        for method in ['GET', 'DELETE', 'OPTIONS']:
+            response = self.fetch('/all_methods', method=method)
+            self.assertEqual(response.body, utf8(method))
+        for method in ['POST', 'PUT', 'PATCH']:
+            response = self.fetch('/all_methods', method=method, body=b'')
+            self.assertEqual(response.body, utf8(method))
+        response = self.fetch('/all_methods', method='HEAD')
+        self.assertEqual(response.body, b'')
+        response = self.fetch('/all_methods', method='OTHER',
+                              allow_nonstandard_methods=True)
+        self.assertEqual(response.body, b'OTHER')
 
 
 class RequestProxyTest(unittest.TestCase):

@@ -1280,6 +1280,7 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
         self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
 
 
+@wsgi_safe
 class SetCurrentUserTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def prepare(self):
@@ -1293,3 +1294,74 @@ class SetCurrentUserTest(SimpleHandlerTestCase):
         # that want to forgo the lazy get_current_user property
         response = self.fetch('/')
         self.assertEqual(response.body, b'Hello Ben')
+
+
+@wsgi_safe
+class UnimplementedHTTPMethodsTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        pass
+
+    def test_unimplemented_standard_methods(self):
+        for method in ['HEAD', 'GET', 'DELETE', 'OPTIONS']:
+            response = self.fetch('/', method=method)
+            self.assertEqual(response.code, 405)
+        for method in ['POST', 'PUT']:
+            response = self.fetch('/', method=method, body=b'')
+            self.assertEqual(response.code, 405)
+
+class UnimplementedNonStandardMethodsTest(SimpleHandlerTestCase):
+    # wsgiref.validate complains about unknown methods in a way that makes
+    # this test not wsgi_safe.
+    class Handler(RequestHandler):
+        def other(self):
+            # Even though this method exists, it won't get called automatically
+            # because it is not in SUPPORTED_METHODS.
+            self.write('other')
+
+    def test_unimplemented_patch(self):
+        # PATCH is recently standardized; Tornado supports it by default
+        # but wsgiref.validate doesn't like it.
+        response = self.fetch('/', method='PATCH', body=b'')
+        self.assertEqual(response.code, 405)
+
+    def test_unimplemented_other(self):
+        response = self.fetch('/', method='OTHER',
+                              allow_nonstandard_methods=True)
+        self.assertEqual(response.code, 405)
+
+@wsgi_safe
+class AllHTTPMethodsTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def method(self):
+            self.write(self.request.method)
+
+        get = delete = options = post = put = method
+
+    def test_standard_methods(self):
+        response = self.fetch('/', method='HEAD')
+        self.assertEqual(response.body, b'')
+        for method in ['GET', 'DELETE', 'OPTIONS']:
+            response = self.fetch('/', method=method)
+            self.assertEqual(response.body, utf8(method))
+        for method in ['POST', 'PUT']:
+            response = self.fetch('/', method=method, body=b'')
+            self.assertEqual(response.body, utf8(method))
+
+class PatchMethodTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
+
+        def patch(self):
+            self.write('patch')
+
+        def other(self):
+            self.write('other')
+
+    def test_patch(self):
+        response = self.fetch('/', method='PATCH', body=b'')
+        self.assertEqual(response.body, b'patch')
+
+    def test_other(self):
+        response = self.fetch('/', method='OTHER',
+                              allow_nonstandard_methods=True)
+        self.assertEqual(response.body, b'other')
