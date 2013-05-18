@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import logging
-from redbot.droid import ResourceExpertDroid
+from redbot.resource import HttpResource
 import redbot.speak as rs
 import thor
 import threading
@@ -63,22 +63,22 @@ class TestMixin(object):
                   expected_status=200, allowed_warnings=None,
                   allowed_errors=None):
         url = self.get_url(path)
-        state = self.run_redbot(url, method, body, headers)
-        if not state.res_complete:
-            if isinstance(state.res_error, Exception):
-                logging.warning((state.res_error.desc, vars(state.res_error), url))
-                raise state.res_error
+        red = self.run_redbot(url, method, body, headers)
+        if not red.response.complete:
+            if isinstance(red.response.http_error, Exception):
+                logging.warning((red.response.http_error.desc, vars(red.response.http_error), url))
+                raise red.response.http_error.res_error
             else:
                 raise Exception("unknown error; incomplete response")
 
-        self.assertEqual(int(state.res_status), expected_status)
+        self.assertEqual(int(red.response.status_code), expected_status)
 
         allowed_warnings = (allowed_warnings or []) + self.get_allowed_warnings()
         allowed_errors = (allowed_errors or []) + self.get_allowed_errors()
 
         errors = []
         warnings = []
-        for msg in state.messages:
+        for msg in red.response.notes:
             if msg.level == 'bad':
                 logger = logging.error
                 if not isinstance(msg, tuple(allowed_errors)):
@@ -100,8 +100,8 @@ class TestMixin(object):
                          (len(warnings), len(errors)))
 
     def run_redbot(self, url, method, body, headers):
-        red = ResourceExpertDroid(url, method=method, req_body=body,
-                                  req_hdrs=headers)
+        red = HttpResource(url, method=method, req_body=body,
+                           req_hdrs=headers)
         def work():
             red.run(thor.stop)
             thor.run()
@@ -110,7 +110,7 @@ class TestMixin(object):
         thread.start()
         self.wait()
         thread.join()
-        return red.state
+        return red
 
     def test_hello(self):
         self.check_url('/hello')
