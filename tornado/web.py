@@ -730,13 +730,10 @@ class RequestHandler(object):
             if (self._status_code == 200 and
                 self.request.method in ("GET", "HEAD") and
                     "Etag" not in self._headers):
-                etag = self.compute_etag()
-                if etag is not None:
-                    self.set_header("Etag", etag)
-                    inm = self.request.headers.get("If-None-Match")
-                    if inm and inm.find(etag) != -1:
-                        self._write_buffer = []
-                        self.set_status(304)
+                self.set_etag_header()
+                if self.check_etag_header():
+                    self._write_buffer = []
+                    self.set_status(304)
             if self._status_code == 304:
                 assert not self._write_buffer, "Cannot send body with 304"
                 self._clear_headers_for_304()
@@ -1062,6 +1059,30 @@ class RequestHandler(object):
         for part in self._write_buffer:
             hasher.update(part)
         return '"%s"' % hasher.hexdigest()
+
+    def set_etag_header(self):
+        """Sets the response's Etag header using ``self.compute_etag()``.
+
+        Note: no header will be set if ``compute_etag()`` returns ``None``.
+        """
+        etag = self.compute_etag()
+        if etag is not None:
+            self.set_header("Etag", etag)
+
+    def check_etag_header(self):
+        """Checks the ``Etag`` header against requests's ``If-None-Match``.
+
+        Returns ``True`` if the request's Etag matches and a 304 should be
+        returned. For example::
+
+            self.set_etag_header()
+            if self.check_etag_header():
+                self.set_status(304)
+                return
+        """
+        etag = self._headers.get("Etag")
+        inm = utf8(self.request.headers.get("If-None-Match", ""))
+        return bool(etag and inm and inm.find(etag) >= 0)
 
     def _stack_context_handle_exception(self, type, value, traceback):
         try:
@@ -1754,6 +1775,11 @@ class StaticFileHandler(RequestHandler):
                 self.set_status(304)
                 return
 
+        self.set_etag_header()
+        if self.check_etag_header():
+            self.set_status(304)
+            return
+
         self.set_header("Accept-Ranges", "bytes")
         request_range = None
         range_header = self.request.headers.get("Range")
@@ -1771,6 +1797,8 @@ class StaticFileHandler(RequestHandler):
         with open(abspath, "rb") as file:
             data = file.read()
             if request_range:
+                # 206: Partial Content
+                self.set_status(206)
                 content_range = httputil.get_content_range(data, request_range)
                 self.set_header("Content-Range", content_range)
                 data = data[request_range]

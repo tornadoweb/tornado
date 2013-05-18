@@ -871,6 +871,7 @@ class StaticFileTest(WebTestCase):
     def test_static_with_range(self):
         response = self.fetch('/static/robots.txt', headers={
                 'Range': 'bytes=0-9'})
+        self.assertEqual(response.code, 206)
         self.assertEqual(response.body, b"User-agent")
         self.assertEqual(utf8(response.headers.get("Etag")),
                          b'"' + self.robots_txt_hash + b'"')
