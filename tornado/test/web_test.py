@@ -897,7 +897,7 @@ class StaticFileTest(WebTestCase):
     def test_static_invalid_range(self):
         response = self.fetch('/static/robots.txt', headers={
                 'Range': 'asdf'})
-        self.assertEqual(response.code, 406)
+        self.assertEqual(response.code, 416)
 
 
 @wsgi_safe

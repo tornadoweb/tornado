@@ -1760,8 +1760,11 @@ class StaticFileHandler(RequestHandler):
         if range_header:
             request_range = httputil.parse_request_range(range_header)
             if not request_range:
-                # 406: Not Acceptable
-                self.set_status(406)
+                # 416: Range Not Satisfiable
+                self.set_status(416)
+                self.set_header("Content-Type", "text/plain")
+                self.write(utf8("The provided Range header is not valid: %r\n"
+                                "Note: multiple ranges are not supported"))
                 return
 
         with open(abspath, "rb") as file:
