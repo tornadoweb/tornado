@@ -235,7 +235,7 @@ class HTTPFile(ObjectDict):
     """
     pass
 
-def parse_request_range(range_header, ):
+def parse_request_range(range_header):
     """Parses a Range header.
 
     Returns either ``None`` or an instance of ``slice``::

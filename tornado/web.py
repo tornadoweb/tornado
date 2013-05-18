@@ -1764,7 +1764,8 @@ class StaticFileHandler(RequestHandler):
                 self.set_status(416)
                 self.set_header("Content-Type", "text/plain")
                 self.write(utf8("The provided Range header is not valid: %r\n"
-                                "Note: multiple ranges are not supported"))
+                                "Note: multiple ranges are not supported."
+                                 %(range_header, )))
                 return
 
         with open(abspath, "rb") as file:
