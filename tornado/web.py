@@ -1881,7 +1881,7 @@ class StaticFileHandler(RequestHandler):
         In instance methods, this method's result is available as
         ``self.absolute_path``.
         """
-        root = self.settings["static_path"]
+        root = os.path.abspath(self.settings["static_path"])
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
         if not (absolute_path + os.path.sep).startswith(root):
