@@ -690,7 +690,11 @@ class RequestHandler(object):
         has been run, the previous callback will be discarded.
         """
         if self.application._wsgi:
-            raise Exception("WSGI applications do not support flush()")
+            # WSGI applications cannot usefully support flush, so just make
+            # it a no-op (and run the callback immediately).
+            if callback is not None:
+                callback()
+            return
 
         chunk = b"".join(self._write_buffer)
         self._write_buffer = []
@@ -1750,9 +1754,10 @@ class StaticFileHandler(RequestHandler):
     of another server or CDN), override `make_static_url`, `parse_url_path`,
     `get_cache_time`, and/or `get_version`.
 
-    To replace all interaction with the filesystem (e.g. to serve static
-    content from a database), override `get_content`, `get_modified_time`,
-    `get_absolute_path`, and `validate_absolute_path`.
+    To replace all interaction with the filesystem (e.g. to serve
+    static content from a database), override `get_content`,
+    `get_content_size`, `get_modified_time`, `get_absolute_path`, and
+    `validate_absolute_path`.
     """
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
@@ -1809,12 +1814,18 @@ class StaticFileHandler(RequestHandler):
                             httputil._get_content_range(start, end, size))
         else:
             start = end = None
-        data = self.get_content(self.absolute_path, start, end)
-        if include_body:
-            self.write(data)
-        else:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes_type):
+            content = [content]
+        content_length = 0
+        for chunk in content:
+            if include_body:
+                self.write(chunk)
+            else:
+                content_length += len(chunk)
+        if not include_body:
             assert self.request.method == "HEAD"
-            self.set_header("Content-Length", len(data))
+            self.set_header("Content-Length", content_length)
 
     def compute_etag(self):
         """Sets the ``Etag`` header based on static url version.
@@ -1922,15 +1933,31 @@ class StaticFileHandler(RequestHandler):
         signature is different from other overridable class methods
         (no ``settings`` argument); this is deliberate to ensure that
         ``abspath`` is able to stand on its own as a cache key.
+
+        This method should either return a byte string or an iterator
+        of byte strings.  The latter is preferred for large files
+        as it helps reduce memory fragmentation.
         """
         with open(abspath, "rb") as file:
             if start is not None:
                 file.seek(start)
             if end is not None:
                 remaining = end - (start or 0)
-                return file.read(remaining)
             else:
-                return file.read()
+                remaining = None
+            while True:
+                chunk_size = 64 * 1024
+                if remaining is not None and remaining < chunk_size:
+                    chunk_size = remaining
+                chunk = file.read(chunk_size)
+                if chunk:
+                    if remaining is not None:
+                        remaining -= len(chunk)
+                    yield chunk
+                else:
+                    if remaining is not None:
+                        assert remaining == 0
+                    return
 
     @classmethod
     def get_content_version(cls, abspath):
@@ -1940,7 +1967,13 @@ class StaticFileHandler(RequestHandler):
         default implementation is a hash of the file's contents.
         """
         data = cls.get_content(abspath)
-        return hashlib.md5(data).hexdigest()
+        hasher = hashlib.md5()
+        if isinstance(data, bytes_type):
+            hasher.update(data)
+        else:
+            for chunk in data:
+                hasher.update(chunk)
+        return hasher.hexdigest()
 
     def _stat(self):
         if not hasattr(self, '_stat_result'):
