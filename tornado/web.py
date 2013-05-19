@@ -1052,6 +1052,8 @@ class RequestHandler(object):
     def compute_etag(self):
         """Computes the etag header to be used for this request.
 
+        By default uses a hash of the content written so far.
+
         May be overridden to provide custom etag implementations,
         or may return None to disable tornado's default etag support.
         """
@@ -1064,6 +1066,8 @@ class RequestHandler(object):
         """Sets the response's Etag header using ``self.compute_etag()``.
 
         Note: no header will be set if ``compute_etag()`` returns ``None``.
+
+        This method is called automatically when the request is finished.
         """
         etag = self.compute_etag()
         if etag is not None:
@@ -1079,6 +1083,12 @@ class RequestHandler(object):
             if self.check_etag_header():
                 self.set_status(304)
                 return
+
+        This method is called automatically when the request is finished,
+        but may be called earlier for applications that override
+        `compute_etag` and want to do an early check for ``If-None-Match``
+        before completing the request.  The ``Etag`` header should be set
+        (perhaps with `set_etag_header`) before calling this method.
         """
         etag = self._headers.get("Etag")
         inm = utf8(self.request.headers.get("If-None-Match", ""))
@@ -1690,11 +1700,16 @@ class RedirectHandler(RequestHandler):
 class StaticFileHandler(RequestHandler):
     """A simple handler that can serve static content from a directory.
 
-    To map a path to this handler for a static data directory ``/var/www``,
+    A `StaticFileHandler` is configured automatically if you pass the
+    ``static_path`` keyword argument to `Application`.  This handler
+    can be customized with the ``static_url_prefix``, ``static_handler_class``,
+    and ``static_handler_args`` settings.
+
+    To map an additional path to this handler for a static data directory
     you would add a line to your application like::
 
         application = web.Application([
-            (r"/static/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
+            (r"/content/(.*)", web.StaticFileHandler, {"path": "/var/www"}),
         ])
 
     The handler constructor requires a ``path`` argument, which specifies the
@@ -1704,11 +1719,36 @@ class StaticFileHandler(RequestHandler):
     the ``path`` argument to the get() method (different than the constructor
     argument above); see `URLSpec` for details.
 
-    To support aggressive browser caching, if the argument ``v`` is given
-    with the path, we set an infinite HTTP expiration header. So, if you
-    want browsers to cache a file indefinitely, send them to, e.g.,
-    ``/static/images/myimage.png?v=xxx``. Override `get_cache_time` method for
-    more fine-grained cache control.
+    To maximize the effectiveness of browser caching, this class supports
+    versioned urls (by default using the argument ``?v=``).  If a version
+    is given, we instruct the browser to cache this file indefinitely.
+    `make_static_url` (also available as `RequestHandler.static_url`) can
+    be used to construct a versioned url.
+
+    This handler is intended primarily for use in development and light-duty
+    file serving; for heavy traffic it will be more efficient to use
+    a dedicated static file server (such as nginx or Apache).  We support
+    the HTTP ``Accept-Ranges`` mechanism to return partial content (because
+    some browsers require this functionality to be present to seek in
+    HTML5 audio or video), but this handler should not be used with
+    files that are too large to fit comfortably in memory.
+
+    **Subclassing notes**
+
+    This class is designed to be extensible by subclassing, but because
+    of the way static urls are generated with class methods rather than
+    instance methods, the inheritance patterns are somewhat unusual.
+    Be sure to use the ``@classmethod`` decorator when overriding a
+    class method.  Instance methods may use the attributes ``self.path``
+    ``self.absolute_path``, and ``self.modified``.
+
+    To change the way static urls are generated (e.g. to match the behavior
+    of another server or CDN), override `make_static_url`, `parse_url_path`,
+    `get_cache_time`, and/or `get_version`.
+
+    To replace all interaction with the filesystem (e.g. to serve static
+    content from a database), override `get_content`, `get_modified_time`,
+    `get_absolute_path`, and `validate_absolute_path`.
     """
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
@@ -1731,8 +1771,8 @@ class StaticFileHandler(RequestHandler):
         # Set up our path instance variables.
         self.path = self.parse_url_path(path)
         del path  # make sure we don't refer to path instead of self.path again
-        self.absolute_path = self.get_absolute_path(self.settings, self.path)
-        self.validate_absolute_path()
+        absolute_path = self.get_absolute_path(self.settings, self.path)
+        self.absolute_path = self.validate_absolute_path(absolute_path)
 
         self.modified = self.get_modified_time()
         self.set_headers()
@@ -1744,7 +1784,7 @@ class StaticFileHandler(RequestHandler):
         request_range = None
         range_header = self.request.headers.get("Range")
         if range_header:
-            request_range = httputil.parse_request_range(range_header)
+            request_range = httputil._parse_request_range(range_header)
             if not request_range:
                 self.set_status(416)  # Range Not Satisfiable
                 self.set_header("Content-Type", "text/plain")
@@ -1756,7 +1796,7 @@ class StaticFileHandler(RequestHandler):
         data = self.get_content(self.absolute_path)
         if request_range:
             self.set_status(206)  # Partial Content
-            content_range = httputil.get_content_range(data, request_range)
+            content_range = httputil._get_content_range(data, request_range)
             self.set_header("Content-Range", content_range)
             data = data[request_range]
         if include_body:
@@ -1765,55 +1805,20 @@ class StaticFileHandler(RequestHandler):
             assert self.request.method == "HEAD"
             self.set_header("Content-Length", len(data))
 
-    @classmethod
-    def get_absolute_path(cls, settings, path):
-        """Retrieve the absolute path on the filesystem where the resource
-        corresponding to the given URL ``path`` can be found.
+    def compute_etag(self):
+        """Sets the ``Etag`` header based on static url version.
 
-        This method also handles the validation of the given path and ensures
-        resources outside of the static directory cannot be accessed.
+        This allows efficient ``If-None-Match`` checks against cached
+        versions, and sends the correct ``Etag`` for a partial response
+        (i.e. the same ``Etag`` as the full file).
         """
-        root = settings["static_path"]
-        abspath = os.path.abspath(os.path.join(root, path))
-        return abspath
-
-    def validate_absolute_path(self):
-        root = self.settings["static_path"]
-        # os.path.abspath strips a trailing /
-        # it needs to be temporarily added back for requests to root/
-        if not (self.absolute_path + os.path.sep).startswith(root):
-            raise HTTPError(403, "%s is not in root static directory",
-                            self.path)
-        if (os.path.isdir(self.absolute_path) and
-            self.default_filename is not None):
-            # need to look at the request.path here for when path is empty
-            # but there is some prefix to the path that was already
-            # trimmed by the routing
-            if not self.request.path.endswith("/"):
-                self.redirect(self.request.path + "/")
-                return
-            self.absolute_path = os.path.join(self.absolute_path,
-                                              self.default_filename)
-        if not os.path.exists(self.absolute_path):
-            raise HTTPError(404)
-        if not os.path.isfile(self.absolute_path):
-            raise HTTPError(403, "%s is not a file", self.path)
-
-    def get_modified_time(self):
-        stat_result = os.stat(self.absolute_path)
-        modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
-        return modified
-
-    def get_content_type(self):
-        mime_type, encoding = mimetypes.guess_type(self.absolute_path)
-        return mime_type
+        version_hash = self.get_version(self.settings, self.path_args[0])
+        if not version_hash:
+            return None
+        return '"%s"' %(version_hash, )
 
     def set_headers(self):
-        """Sets the content and caching headers on the response.
-
-        Returns True if the content should be returned, and False
-        if a 304 should be returned instead.
-        """
+        """Sets the content and caching headers on the response."""
         self.set_header("Accept-Ranges", "bytes")
         self.set_etag_header()
 
@@ -1833,6 +1838,7 @@ class StaticFileHandler(RequestHandler):
         self.set_extra_headers(self.path)
 
     def should_return_304(self):
+        """Returns True if the headers indicate that we should return 304."""
         if self.check_etag_header():
             return True
 
@@ -1848,12 +1854,81 @@ class StaticFileHandler(RequestHandler):
         return False
 
     @classmethod
+    def get_absolute_path(cls, settings, path):
+        """Returns the absolute location of ``path``.
+
+        This class method may be overridden in subclasses.  By default
+        it returns a filesystem path, but other strings may be used
+        as long as they are unique and understood by the subclass's
+        overridden `get_content`.
+        """
+        root = settings["static_path"]
+        abspath = os.path.abspath(os.path.join(root, path))
+        return abspath
+
+    def validate_absolute_path(self, absolute_path):
+        """Validate and return the absolute path.
+
+        This is an instance method called during request processing,
+        so it may raise `HTTPError` or use methods like
+        `RequestHandler.redirect` (return None after redirecting to
+        halt further processing).  This is where 404 errors for missing files
+        are generated.
+
+        This method may modify the path before returning it, but note that
+        any such modifications will not be understood by `make_static_url`.
+
+        In instance methods, this method's result is available as
+        ``self.absolute_path``.
+        """
+        root = self.settings["static_path"]
+        # os.path.abspath strips a trailing /
+        # it needs to be temporarily added back for requests to root/
+        if not (absolute_path + os.path.sep).startswith(root):
+            raise HTTPError(403, "%s is not in root static directory",
+                            self.path)
+        if (os.path.isdir(absolute_path) and
+            self.default_filename is not None):
+            # need to look at the request.path here for when path is empty
+            # but there is some prefix to the path that was already
+            # trimmed by the routing
+            if not self.request.path.endswith("/"):
+                self.redirect(self.request.path + "/")
+                return
+            absolute_path = os.path.join(absolute_path, self.default_filename)
+        if not os.path.exists(absolute_path):
+            raise HTTPError(404)
+        if not os.path.isfile(absolute_path):
+            raise HTTPError(403, "%s is not a file", self.path)
+        return absolute_path
+
+    @classmethod
     def get_content(cls, abspath):
         """Retrieve the content of the requested resource which is located
-        at the given absolute ``path``.
+        at the given absolute path.
+
+        This class method may be overridden by subclasses.  Note that its
+        signature is different from other overridable class methods
+        (no ``settings`` argument); this is deliberate to ensure that
+        ``abspath`` is able to stand on its own as a cache key.
         """
         with open(abspath, "rb") as file:
             return file.read()
+
+    def get_modified_time(self):
+        """Returns the time that ``self.absolute_path`` was last modified.
+
+        May be overridden in subclasses.  Should return a `~datetime.datetime`
+        object or None.
+        """
+        stat_result = os.stat(self.absolute_path)
+        modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
+        return modified
+
+    def get_content_type(self):
+        """Returns the ``Content-Type`` header to be used for this request."""
+        mime_type, encoding = mimetypes.guess_type(self.absolute_path)
+        return mime_type
 
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
@@ -1889,6 +1964,19 @@ class StaticFileHandler(RequestHandler):
             return static_url_prefix + path + "?v=" + version_hash
         return static_url_prefix + path
 
+    def parse_url_path(self, url_path):
+        """Converts a static URL path into a filesystem path.
+
+        ``url_path`` is the path component of the URL with
+        ``static_url_prefix`` removed.  The return value should be
+        filesystem path relative to ``static_path``.
+
+        This is the inverse of `make_static_url`.
+        """
+        if os.path.sep != "/":
+            url_path = url_path.replace("/", os.path.sep)
+        return url_path
+
     @classmethod
     def get_version(cls, settings, path):
         """Generate the version string to be used in static URLs.
@@ -1916,26 +2004,6 @@ class StaticFileHandler(RequestHandler):
             if hsh:
                 return hsh
         return None
-
-    def parse_url_path(self, url_path):
-        """Converts a static URL path into a filesystem path.
-
-        ``url_path`` is the path component of the URL with
-        ``static_url_prefix`` removed.  The return value should be
-        filesystem path relative to ``static_path``.
-        """
-        if os.path.sep != "/":
-            url_path = url_path.replace("/", os.path.sep)
-        return url_path
-
-    def compute_etag(self):
-        # Note: compute the etag for static files using get_version so that the
-        # entire file is always considered, even when the request includes a
-        # Range header, so the response will only be a portion of the file.
-        version_hash = self.get_version(self.settings, self.path_args[0])
-        if not version_hash:
-            return None
-        return '"%s"' %(version_hash, )
 
 
 class FallbackHandler(RequestHandler):

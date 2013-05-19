@@ -235,24 +235,24 @@ class HTTPFile(ObjectDict):
     """
     pass
 
-def parse_request_range(range_header):
+def _parse_request_range(range_header):
     """Parses a Range header.
 
-    Returns either ``None`` or an instance of ``slice``::
+    Returns either ``None`` or an instance of ``slice``:
 
-        >>> rh = parse_request_range("bytes=1-2")
-        >>> rh
-        slice(1, 3, None)
-        >>> [0, 1, 2, 3, 4][rh]
-        [1, 2]
-        >>> parse_request_range("bytes=6-")
-        slice(6, None, None)
-        >>> parse_request_range("bytes=-6")
-        slice(-6, None, None)
-        >>> parse_request_range("bytes=")
-        slice(None, None, None)
-        >>> parse_request_range("foo=42")
-        >>> parse_request_range("bytes=1-2,6-10")
+    >>> rh = _parse_request_range("bytes=1-2")
+    >>> rh
+    slice(1, 3, None)
+    >>> [0, 1, 2, 3, 4][rh]
+    [1, 2]
+    >>> _parse_request_range("bytes=6-")
+    slice(6, None, None)
+    >>> _parse_request_range("bytes=-6")
+    slice(-6, None, None)
+    >>> _parse_request_range("bytes=")
+    slice(None, None, None)
+    >>> _parse_request_range("foo=42")
+    >>> _parse_request_range("bytes=1-2,6-10")
 
     Note: only supports one range (ex, ``bytes=1-2,6-10`` is not allowed).
 
@@ -278,15 +278,15 @@ def parse_request_range(range_header):
             end += 1
     return slice(start, end)
 
-def get_content_range(data, request_range):
-    """ Returns a suitable Content-Range header::
+def _get_content_range(data, request_range):
+    """Returns a suitable Content-Range header:
 
-        >>> print(get_content_range("abcd", slice(None, 1)))
-        0-0/4
-        >>> print(get_content_range("abcd", slice(1, 3)))
-        1-2/4
-        >>> print(get_content_range("abcd", slice(None, None)))
-        0-3/4
+    >>> print(_get_content_range("abcd", slice(None, 1)))
+    0-0/4
+    >>> print(_get_content_range("abcd", slice(1, 3)))
+    1-2/4
+    >>> print(_get_content_range("abcd", slice(None, None)))
+    0-3/4
     """
 
     data_len = len(data)
