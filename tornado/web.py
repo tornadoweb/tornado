@@ -1732,7 +1732,7 @@ class StaticFileHandler(RequestHandler):
         if not self.set_headers(path):
             return
 
-        body = self.get_content(path)
+        body = self.get_content(self.settings, path)
         if not body:
             return
 
@@ -1755,19 +1755,18 @@ class StaticFileHandler(RequestHandler):
                                  %(range_header, )))
                 return
 
-        with open(self.get_absolute_path(path), "rb") as file:
-            data = file.read()
-            if request_range:
-                # 206: Partial Content
-                self.set_status(206)
-                content_range = httputil.get_content_range(data, request_range)
-                self.set_header("Content-Range", content_range)
-                data = data[request_range]
-            if include_body:
-                self.write(data)
-            else:
-                assert self.request.method == "HEAD"
-                self.set_header("Content-Length", len(data))
+        data = self.get_content(self.settings, path)
+        if request_range:
+            # 206: Partial Content
+            self.set_status(206)
+            content_range = httputil.get_content_range(data, request_range)
+            self.set_header("Content-Range", content_range)
+            data = data[request_range]
+        if include_body:
+            self.write(data)
+        else:
+            assert self.request.method == "HEAD"
+            self.set_header("Content-Length", len(data))
 
 
     def on_finish(self):
@@ -1777,24 +1776,19 @@ class StaticFileHandler(RequestHandler):
         # absolute path as the initial one - which would be chaotic.
         self._abspath = None
 
-    def get_absolute_path(self, path):
+    @classmethod
+    def get_absolute_path(cls, settings, path):
         """Retrieve the absolute path on the filesystem where the resource
         corresponding to the given URL ``path`` can be found.
 
         This method also handles the validation of the given path and ensures
         resources outside of the static directory cannot be accessed.
         """
-        # In case the ``_abspath`` attribute exists and contains a value
-        # other than None the abspath has already been computed and verified.
-        # It can be returned instantly in order to avoid recomputation.
-        abspath = getattr(self, '_abspath', None)
-        if abspath is not None:
-            return abspath
-
-        abspath = os.path.abspath(os.path.join(self.root, path))
+        root = settings["static_path"]
+        abspath = os.path.abspath(os.path.join(root, path))
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
-        if not (abspath + os.path.sep).startswith(self.root):
+        if not (abspath + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory", path)
         if os.path.isdir(abspath) and self.default_filename is not None:
             # need to look at the request.path here for when path is empty
@@ -1808,20 +1802,24 @@ class StaticFileHandler(RequestHandler):
             raise HTTPError(404)
         if not os.path.isfile(abspath):
             raise HTTPError(403, "%s is not a file", path)
-
-        self._abspath = abspath
         return abspath
+
+    def get_modified_time(self, path):
+        abspath = self.get_absolute_path(self.settings, path)
+        stat_result = os.stat(abspath)
+        modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
+        return modified
 
     def set_headers(self, path):
         """Set the response headers in order to ensure that client browsers
         will cache the requested resource and not proceed to retrieve its content
         in the case of a 304 response.
         """
-        abspath = self.get_absolute_path(path)
-        stat_result = os.stat(abspath)
-        modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
+        abspath = self.get_absolute_path(self.settings, path)
+        modified = self.get_modified_time(path)
 
-        self.set_header("Last-Modified", modified)
+        if modified is not None:
+            self.set_header("Last-Modified", modified)
 
         mime_type, encoding = mimetypes.guess_type(abspath)
         if mime_type:
@@ -1847,11 +1845,12 @@ class StaticFileHandler(RequestHandler):
                 return False
         return True
 
-    def get_content(self, path):
+    @classmethod
+    def get_content(cls, settings, path):
         """Retrieve the content of the requested resource which is located
         at the given absolute ``path``.
         """
-        abspath = self.get_absolute_path(path)
+        abspath = cls.get_absolute_path(settings, path)
         with open(abspath, "rb") as file:
             return file.read()
         return None
@@ -1903,14 +1902,13 @@ class StaticFileHandler(RequestHandler):
         The returned value should be a string, or ``None`` if no version
         could be determined.
         """
-        abs_path = os.path.join(settings["static_path"], path)
+        abs_path = cls.get_absolute_path(settings, path)
         with cls._lock:
             hashes = cls._static_hashes
             if abs_path not in hashes:
                 try:
-                    f = open(abs_path, "rb")
-                    hashes[abs_path] = hashlib.md5(f.read()).hexdigest()
-                    f.close()
+                    data = cls.get_content(settings, path)
+                    hashes[abs_path] = hashlib.md5(data).hexdigest()
                 except Exception:
                     gen_log.error("Could not open static file %r", path)
                     hashes[abs_path] = None

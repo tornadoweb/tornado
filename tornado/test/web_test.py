@@ -905,19 +905,14 @@ class StaticFileTest(WebTestCase):
 class CustomStaticFileTest(WebTestCase):
     def get_handlers(self):
         class MyStaticFileHandler(StaticFileHandler):
-            def get(self, path):
-                path = self.parse_url_path(path)
-                if path != "foo.txt":
-                    raise Exception("unexpected path: %r" % path)
-                self.write("bar")
-
             @classmethod
             def make_static_url(cls, settings, path):
-                cls.get_version(settings, path)
+                version = cls.get_version(settings, path)
                 extension_index = path.rindex('.')
                 before_version = path[:extension_index]
                 after_version = path[(extension_index + 1):]
-                return '/static/%s.%s.%s' % (before_version, 42, after_version)
+                return '/static/%s.%s.%s' % (before_version, version,
+                                             after_version)
 
             @classmethod
             def parse_url_path(cls, url_path):
@@ -925,6 +920,22 @@ class CustomStaticFileTest(WebTestCase):
                 version_index = url_path.rindex('.', 0, extension_index)
                 return '%s%s' % (url_path[:version_index],
                                  url_path[extension_index:])
+
+            @classmethod
+            def get_absolute_path(cls, settings, path):
+                return path
+
+            @classmethod
+            def get_content(self, settings, path):
+                if path == 'foo.txt':
+                    return b'bar'
+
+            def get_modified_time(self, path):
+                return None
+
+            @classmethod
+            def get_version(cls, settings, path):
+                return "42"
 
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
