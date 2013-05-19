@@ -900,6 +900,60 @@ class StaticFileTest(WebTestCase):
                 'Range': 'asdf'})
         self.assertEqual(response.code, 416)
 
+    def test_static_head(self):
+        response = self.fetch('/static/robots.txt', method='HEAD')
+        self.assertEqual(response.code, 200)
+        # No body was returned, but we did get the right content length.
+        self.assertEqual(response.body, b'')
+        self.assertEqual(response.headers['Content-Length'], '26')
+        self.assertEqual(utf8(response.headers['Etag']),
+                         b'"' + self.robots_txt_hash + b'"')
+
+    def test_static_head_range(self):
+        response = self.fetch('/static/robots.txt', method='HEAD',
+                              headers={'Range': 'bytes=1-4'})
+        self.assertEqual(response.code, 206)
+        self.assertEqual(response.body, b'')
+        self.assertEqual(response.headers['Content-Length'], '4')
+        self.assertEqual(utf8(response.headers['Etag']),
+                         b'"' + self.robots_txt_hash + b'"')
+
+    def test_static_range_if_none_match(self):
+        response = self.fetch('/static/robots.txt', headers={
+            'Range': 'bytes=1-4',
+            'If-None-Match': b'"' + self.robots_txt_hash + b'"'})
+        self.assertEqual(response.code, 304)
+        self.assertEqual(response.body, b'')
+        self.assertTrue('Content-Length' not in response.headers)
+        self.assertEqual(utf8(response.headers['Etag']),
+                         b'"' + self.robots_txt_hash + b'"')
+
+    def test_static_404(self):
+        response = self.fetch('/static/blarg')
+        self.assertEqual(response.code, 404)
+
+
+@wsgi_safe
+class StaticDefaultFilenameTest(WebTestCase):
+    def get_app_kwargs(self):
+        return dict(static_path=os.path.join(os.path.dirname(__file__),
+                                             'static'),
+                    static_handler_args=dict(default_filename='index.html'))
+
+    def get_handlers(self):
+        return []
+
+    def test_static_default_filename(self):
+        response = self.fetch('/static/dir/', follow_redirects=False)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b'this is the index\n', response.body)
+
+    def test_static_default_redirect(self):
+        response = self.fetch('/static/dir', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertTrue(response.headers['Location'].endswith('/static/dir/'))
+
+
 
 @wsgi_safe
 class CustomStaticFileTest(WebTestCase):

@@ -1773,6 +1773,8 @@ class StaticFileHandler(RequestHandler):
         del path  # make sure we don't refer to path instead of self.path again
         absolute_path = self.get_absolute_path(self.settings, self.path)
         self.absolute_path = self.validate_absolute_path(absolute_path)
+        if self.absolute_path is None:
+            return
 
         self.modified = self.get_modified_time()
         self.set_headers()
@@ -1812,7 +1814,7 @@ class StaticFileHandler(RequestHandler):
         versions, and sends the correct ``Etag`` for a partial response
         (i.e. the same ``Etag`` as the full file).
         """
-        version_hash = self.get_version(self.settings, self.path_args[0])
+        version_hash = self._get_cached_version(self.absolute_path)
         if not version_hash:
             return None
         return '"%s"' %(version_hash, )
@@ -1893,7 +1895,7 @@ class StaticFileHandler(RequestHandler):
             # but there is some prefix to the path that was already
             # trimmed by the routing
             if not self.request.path.endswith("/"):
-                self.redirect(self.request.path + "/")
+                self.redirect(self.request.path + "/", permanent=True)
                 return
             absolute_path = os.path.join(absolute_path, self.default_filename)
         if not os.path.exists(absolute_path):
@@ -1914,6 +1916,16 @@ class StaticFileHandler(RequestHandler):
         """
         with open(abspath, "rb") as file:
             return file.read()
+
+    @classmethod
+    def get_content_version(cls, abspath):
+        """Returns a version string for the resource at the given path.
+
+        This class method may be overridden by subclasses.  The
+        default implementation is a hash of the file's contents.
+        """
+        data = cls.get_content(abspath)
+        return hashlib.md5(data).hexdigest()
 
     def get_modified_time(self):
         """Returns the time that ``self.absolute_path`` was last modified.
@@ -1981,24 +1993,27 @@ class StaticFileHandler(RequestHandler):
     def get_version(cls, settings, path):
         """Generate the version string to be used in static URLs.
 
-        This method may be overridden in subclasses (but note that it
-        is a class method rather than a static method).  The default
-        implementation uses a hash of the file's contents.
-
         ``settings`` is the `Application.settings` dictionary and ``path``
         is the relative location of the requested asset on the filesystem.
         The returned value should be a string, or ``None`` if no version
         could be determined.
+
+        This method was previously recommended for subclasses to override;
+        `get_content_version` is now preferred as it allows the base
+        class to handle caching of the result.
         """
         abs_path = cls.get_absolute_path(settings, path)
+        return cls._get_cached_version(abs_path)
+
+    @classmethod
+    def _get_cached_version(cls, abs_path):
         with cls._lock:
             hashes = cls._static_hashes
             if abs_path not in hashes:
                 try:
-                    data = cls.get_content(abs_path)
-                    hashes[abs_path] = hashlib.md5(data).hexdigest()
+                    hashes[abs_path] = cls.get_content_version(abs_path)
                 except Exception:
-                    gen_log.error("Could not open static file %r", path)
+                    gen_log.error("Could not open static file %r", abs_path)
                     hashes[abs_path] = None
             hsh = hashes.get(abs_path)
             if hsh:
