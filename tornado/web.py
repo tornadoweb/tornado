@@ -987,7 +987,7 @@ class RequestHandler(object):
         return '<input type="hidden" name="_xsrf" value="' + \
             escape.xhtml_escape(self.xsrf_token) + '"/>'
 
-    def static_url(self, path, include_host=None):
+    def static_url(self, path, include_host=None, include_version=True):
         """Returns a static URL for the given relative static file path.
 
         This method requires you set the ``static_path`` setting in your
@@ -997,7 +997,8 @@ class RequestHandler(object):
         We append ``?v=<signature>`` to the returned URL, which makes our
         static file handler set an infinite expiration header on the
         returned content. The signature is based on the content of the
-        file.
+        file. This behavior can be avoided in case the ``include_version``
+        is set to False, i.e ?v=<signature> is not appended.
 
         By default this method returns URLs relative to the current
         host, but if ``include_host`` is true the URL returned will be
@@ -1006,8 +1007,8 @@ class RequestHandler(object):
         calls that do not pass ``include_host`` as a keyword argument.
         """
         self.require_setting("static_path", "static_url")
-        static_handler_class = self.settings.get(
-            "static_handler_class", StaticFileHandler)
+        get_url = self.settings.get("static_handler_class",
+                                    StaticFileHandler).make_static_url
 
         if include_host is None:
             include_host = getattr(self, "include_host", False)
@@ -1016,7 +1017,8 @@ class RequestHandler(object):
             base = self.request.protocol + "://" + self.request.host
         else:
             base = ""
-        return base + static_handler_class.make_static_url(self.settings, path)
+
+        return base + get_url(self.settings, path, include_version)
 
     def async_callback(self, callback, *args, **kwargs):
         """Obsolete - catches exceptions from the wrapped function.
@@ -1960,7 +1962,7 @@ class StaticFileHandler(RequestHandler):
         return self.CACHE_MAX_AGE if "v" in self.request.arguments else 0
 
     @classmethod
-    def make_static_url(cls, settings, path):
+    def make_static_url(cls, settings, path, include_version=True):
         """Constructs a versioned url for the given path.
 
         This method may be overridden in subclasses (but note that it is
@@ -1969,12 +1971,20 @@ class StaticFileHandler(RequestHandler):
         ``settings`` is the `Application.settings` dictionary.  ``path``
         is the static path being requested.  The url returned should be
         relative to the current host.
+
+        ``include_version`` determines whether the generated URL should
+        include the query string containing the version hash of the
+        file corresponding to the given ``path``.
         """
-        static_url_prefix = settings.get('static_url_prefix', '/static/')
+        url = settings.get('static_url_prefix', '/static/') + path
+        if not include_version:
+            return url
+
         version_hash = cls.get_version(settings, path)
-        if version_hash:
-            return static_url_prefix + path + "?v=" + version_hash
-        return static_url_prefix + path
+        if not version_hash:
+            return url
+
+        return '%s?v=%s' % (url, version_hash)
 
     def parse_url_path(self, url_path):
         """Converts a static URL path into a filesystem path.

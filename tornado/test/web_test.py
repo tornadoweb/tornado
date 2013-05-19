@@ -760,13 +760,11 @@ class StaticFileTest(WebTestCase):
     def get_handlers(self):
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
-                self.write(self.static_url(path))
+                with_v = int(self.get_argument('include_version', 1))
+                self.write(self.static_url(path, include_version=with_v))
 
-        class AbsoluteStaticUrlHandler(RequestHandler):
+        class AbsoluteStaticUrlHandler(StaticUrlHandler):
             include_host = True
-
-            def get(self, path):
-                self.write(self.static_url(path))
 
         class OverrideStaticUrlHandler(RequestHandler):
             def get(self, path):
@@ -816,6 +814,15 @@ class StaticFileTest(WebTestCase):
             b"static/robots.txt?v=" +
             self.robots_txt_hash
         ))
+
+    def test_relative_version_exclusion(self):
+        response = self.fetch("/static_url/robots.txt?include_version=0")
+        self.assertEqual(response.body, b"/static/robots.txt")
+
+    def test_absolute_version_exclusion(self):
+        response = self.fetch("/abs_static_url/robots.txt?include_version=0")
+        self.assertEqual(response.body,
+                         utf8(self.get_url("/") + "static/robots.txt"))
 
     def test_include_host_override(self):
         self._trigger_include_host_check(False)
@@ -960,12 +967,12 @@ class CustomStaticFileTest(WebTestCase):
     def get_handlers(self):
         class MyStaticFileHandler(StaticFileHandler):
             @classmethod
-            def make_static_url(cls, settings, path):
-                version = cls.get_version(settings, path)
+            def make_static_url(cls, settings, path, include_version=True):
+                version_hash = cls.get_version(settings, path)
                 extension_index = path.rindex('.')
                 before_version = path[:extension_index]
                 after_version = path[(extension_index + 1):]
-                return '/static/%s.%s.%s' % (before_version, version,
+                return '/static/%s.%s.%s' % (before_version, version_hash,
                                              after_version)
 
             def parse_url_path(self, url_path):
