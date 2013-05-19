@@ -753,6 +753,10 @@ class ErrorResponseTest(WebTestCase):
 
 @wsgi_safe
 class StaticFileTest(WebTestCase):
+    # The expected MD5 hash of robots.txt, used in tests that call
+    # StaticFileHandler.get_version
+    robots_txt_hash = b"f71d20196d4caf35b6a670db8c70b03d"
+
     def get_handlers(self):
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
@@ -802,12 +806,16 @@ class StaticFileTest(WebTestCase):
 
     def test_static_url(self):
         response = self.fetch("/static_url/robots.txt")
-        self.assertEqual(response.body, b"/static/robots.txt?v=f71d2")
+        self.assertEqual(response.body,
+                         b"/static/robots.txt?v=" + self.robots_txt_hash)
 
     def test_absolute_static_url(self):
         response = self.fetch("/abs_static_url/robots.txt")
-        self.assertEqual(response.body,
-                         utf8(self.get_url("/") + "static/robots.txt?v=f71d2"))
+        self.assertEqual(response.body, (
+            utf8(self.get_url("/")) +
+            b"static/robots.txt?v=" +
+            self.robots_txt_hash
+        ))
 
     def test_include_host_override(self):
         self._trigger_include_host_check(False)
@@ -854,6 +862,43 @@ class StaticFileTest(WebTestCase):
         response = self.fetch('/static/robots.txt', headers={
                 'If-Modified-Since': format_timestamp(stat.st_mtime + 1)})
         self.assertEqual(response.code, 304)
+
+    def test_static_etag(self):
+        response = self.fetch('/static/robots.txt')
+        self.assertEqual(utf8(response.headers.get("Etag")),
+                         b'"' + self.robots_txt_hash + b'"')
+
+    def test_static_with_range(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=0-9'})
+        self.assertEqual(response.code, 206)
+        self.assertEqual(response.body, b"User-agent")
+        self.assertEqual(utf8(response.headers.get("Etag")),
+                         b'"' + self.robots_txt_hash + b'"')
+        self.assertEqual(response.headers.get("Content-Length"), "10")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "0-9/26")
+
+    def test_static_with_range_end_edge(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=22-'})
+        self.assertEqual(response.body, b": /\n")
+        self.assertEqual(response.headers.get("Content-Length"), "4")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "22-25/26")
+
+    def test_static_with_range_neg_end(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=-4'})
+        self.assertEqual(response.body, b": /\n")
+        self.assertEqual(response.headers.get("Content-Length"), "4")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "22-25/26")
+
+    def test_static_invalid_range(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'asdf'})
+        self.assertEqual(response.code, 416)
 
 
 @wsgi_safe
