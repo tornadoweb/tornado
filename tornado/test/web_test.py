@@ -914,8 +914,7 @@ class CustomStaticFileTest(WebTestCase):
                 return '/static/%s.%s.%s' % (before_version, version,
                                              after_version)
 
-            @classmethod
-            def parse_url_path(cls, url_path):
+            def parse_url_path(self, url_path):
                 extension_index = url_path.rindex('.')
                 version_index = url_path.rindex('.', 0, extension_index)
                 return '%s%s' % (url_path[:version_index],
@@ -925,12 +924,16 @@ class CustomStaticFileTest(WebTestCase):
             def get_absolute_path(cls, settings, path):
                 return path
 
+            def validate_absolute_path(self):
+                pass
+
             @classmethod
-            def get_content(self, settings, path):
+            def get_content(self, path):
                 if path == 'foo.txt':
                     return b'bar'
+                raise Exception("unexpected path %r" % path)
 
-            def get_modified_time(self, path):
+            def get_modified_time(self):
                 return None
 
             @classmethod

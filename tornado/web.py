@@ -1728,37 +1728,34 @@ class StaticFileHandler(RequestHandler):
         self.get(path, include_body=False)
 
     def get(self, path, include_body=True):
-        path = self.parse_url_path(path)
-        if not self.set_headers(path):
-            return
+        # Set up our path instance variables.
+        self.path = self.parse_url_path(path)
+        del path  # make sure we don't refer to path instead of self.path again
+        self.absolute_path = self.get_absolute_path(self.settings, self.path)
+        self.validate_absolute_path()
 
-        body = self.get_content(self.settings, path)
-        if not body:
-            return
+        self.modified = self.get_modified_time()
+        self.set_headers()
 
-        self.set_etag_header()
-        if self.check_etag_header():
+        if self.should_return_304():
             self.set_status(304)
             return
 
-        self.set_header("Accept-Ranges", "bytes")
         request_range = None
         range_header = self.request.headers.get("Range")
         if range_header:
             request_range = httputil.parse_request_range(range_header)
             if not request_range:
-                # 416: Range Not Satisfiable
-                self.set_status(416)
+                self.set_status(416)  # Range Not Satisfiable
                 self.set_header("Content-Type", "text/plain")
-                self.write(utf8("The provided Range header is not valid: %r\n"
-                                "Note: multiple ranges are not supported."
-                                 %(range_header, )))
+                self.write("The provided Range header is not valid: %r\n"
+                           "Note: multiple ranges are not supported."
+                           % range_header)
                 return
 
-        data = self.get_content(self.settings, path)
+        data = self.get_content(self.absolute_path)
         if request_range:
-            # 206: Partial Content
-            self.set_status(206)
+            self.set_status(206)  # Partial Content
             content_range = httputil.get_content_range(data, request_range)
             self.set_header("Content-Range", content_range)
             data = data[request_range]
@@ -1767,14 +1764,6 @@ class StaticFileHandler(RequestHandler):
         else:
             assert self.request.method == "HEAD"
             self.set_header("Content-Length", len(data))
-
-
-    def on_finish(self):
-        # Cleanup the cached computation of the absolute path associated with
-        # the requested resource. This is crucial in order to ensure accurate
-        # responses in upcoming requests which would otherwise utilize the same
-        # absolute path as the initial one - which would be chaotic.
-        self._abspath = None
 
     @classmethod
     def get_absolute_path(cls, settings, path):
@@ -1786,53 +1775,66 @@ class StaticFileHandler(RequestHandler):
         """
         root = settings["static_path"]
         abspath = os.path.abspath(os.path.join(root, path))
+        return abspath
+
+    def validate_absolute_path(self):
+        root = self.settings["static_path"]
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
-        if not (abspath + os.path.sep).startswith(root):
-            raise HTTPError(403, "%s is not in root static directory", path)
-        if os.path.isdir(abspath) and self.default_filename is not None:
+        if not (self.absolute_path + os.path.sep).startswith(root):
+            raise HTTPError(403, "%s is not in root static directory",
+                            self.path)
+        if (os.path.isdir(self.absolute_path) and
+            self.default_filename is not None):
             # need to look at the request.path here for when path is empty
             # but there is some prefix to the path that was already
             # trimmed by the routing
             if not self.request.path.endswith("/"):
                 self.redirect(self.request.path + "/")
                 return
-            abspath = os.path.join(abspath, self.default_filename)
-        if not os.path.exists(abspath):
+            self.absolute_path = os.path.join(self.absolute_path,
+                                              self.default_filename)
+        if not os.path.exists(self.absolute_path):
             raise HTTPError(404)
-        if not os.path.isfile(abspath):
-            raise HTTPError(403, "%s is not a file", path)
-        return abspath
+        if not os.path.isfile(self.absolute_path):
+            raise HTTPError(403, "%s is not a file", self.path)
 
-    def get_modified_time(self, path):
-        abspath = self.get_absolute_path(self.settings, path)
-        stat_result = os.stat(abspath)
+    def get_modified_time(self):
+        stat_result = os.stat(self.absolute_path)
         modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
         return modified
 
-    def set_headers(self, path):
-        """Set the response headers in order to ensure that client browsers
-        will cache the requested resource and not proceed to retrieve its content
-        in the case of a 304 response.
+    def get_content_type(self):
+        mime_type, encoding = mimetypes.guess_type(self.absolute_path)
+        return mime_type
+
+    def set_headers(self):
+        """Sets the content and caching headers on the response.
+
+        Returns True if the content should be returned, and False
+        if a 304 should be returned instead.
         """
-        abspath = self.get_absolute_path(self.settings, path)
-        modified = self.get_modified_time(path)
+        self.set_header("Accept-Ranges", "bytes")
+        self.set_etag_header()
 
-        if modified is not None:
-            self.set_header("Last-Modified", modified)
+        if self.modified is not None:
+            self.set_header("Last-Modified", self.modified)
 
-        mime_type, encoding = mimetypes.guess_type(abspath)
-        if mime_type:
-            self.set_header("Content-Type", mime_type)
+        content_type = self.get_content_type()
+        if content_type:
+            self.set_header("Content-Type", content_type)
 
-        cache_time = self.get_cache_time(path, modified, mime_type)
-
+        cache_time = self.get_cache_time(self.path, self.modified, content_type)
         if cache_time > 0:
             self.set_header("Expires", datetime.datetime.utcnow() +
                             datetime.timedelta(seconds=cache_time))
             self.set_header("Cache-Control", "max-age=" + str(cache_time))
 
-        self.set_extra_headers(path)
+        self.set_extra_headers(self.path)
+
+    def should_return_304(self):
+        if self.check_etag_header():
+            return True
 
         # Check the If-Modified-Since, and don't send the result if the
         # content has not been modified
@@ -1840,20 +1842,18 @@ class StaticFileHandler(RequestHandler):
         if ims_value is not None:
             date_tuple = email.utils.parsedate(ims_value)
             if_since = datetime.datetime(*date_tuple[:6])
-            if if_since >= modified:
-                self.set_status(304)
-                return False
-        return True
+            if if_since >= self.modified:
+                return True
+
+        return False
 
     @classmethod
-    def get_content(cls, settings, path):
+    def get_content(cls, abspath):
         """Retrieve the content of the requested resource which is located
         at the given absolute ``path``.
         """
-        abspath = cls.get_absolute_path(settings, path)
         with open(abspath, "rb") as file:
             return file.read()
-        return None
 
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
@@ -1907,7 +1907,7 @@ class StaticFileHandler(RequestHandler):
             hashes = cls._static_hashes
             if abs_path not in hashes:
                 try:
-                    data = cls.get_content(settings, path)
+                    data = cls.get_content(abs_path)
                     hashes[abs_path] = hashlib.md5(data).hexdigest()
                 except Exception:
                     gen_log.error("Could not open static file %r", path)
