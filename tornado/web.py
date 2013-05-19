@@ -1799,12 +1799,17 @@ class StaticFileHandler(RequestHandler):
                            % range_header)
                 return
 
-        data = self.get_content(self.absolute_path)
         if request_range:
+            start, end = request_range
+            size = self.get_content_size()
+            if start < 0:
+                start += size
             self.set_status(206)  # Partial Content
-            content_range = httputil._get_content_range(data, request_range)
-            self.set_header("Content-Range", content_range)
-            data = data[request_range]
+            self.set_header("Content-Range",
+                            httputil._get_content_range(start, end, size))
+        else:
+            start = end = None
+        data = self.get_content(self.absolute_path, start, end)
         if include_body:
             self.write(data)
         else:
@@ -1909,7 +1914,7 @@ class StaticFileHandler(RequestHandler):
         return absolute_path
 
     @classmethod
-    def get_content(cls, abspath):
+    def get_content(cls, abspath, start=None, end=None):
         """Retrieve the content of the requested resource which is located
         at the given absolute path.
 
@@ -1919,7 +1924,13 @@ class StaticFileHandler(RequestHandler):
         ``abspath`` is able to stand on its own as a cache key.
         """
         with open(abspath, "rb") as file:
-            return file.read()
+            if start is not None:
+                file.seek(start)
+            if end is not None:
+                remaining = end - (start or 0)
+                return file.read(remaining)
+            else:
+                return file.read()
 
     @classmethod
     def get_content_version(cls, abspath):
@@ -1931,13 +1942,27 @@ class StaticFileHandler(RequestHandler):
         data = cls.get_content(abspath)
         return hashlib.md5(data).hexdigest()
 
+    def _stat(self):
+        if not hasattr(self, '_stat_result'):
+            self._stat_result = os.stat(self.absolute_path)
+        return self._stat_result
+
+    def get_content_size(self):
+        """Retrieve the total size of the resource at the given path.
+
+        This method may be overridden by subclasses. It will only
+        be called if a partial result is requested from `get_content`
+        """
+        stat_result = self._stat()
+        return stat_result[stat.ST_SIZE]
+
     def get_modified_time(self):
         """Returns the time that ``self.absolute_path`` was last modified.
 
         May be overridden in subclasses.  Should return a `~datetime.datetime`
         object or None.
         """
-        stat_result = os.stat(self.absolute_path)
+        stat_result = self._stat()
         modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
         return modified
 

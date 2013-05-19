@@ -238,19 +238,21 @@ class HTTPFile(ObjectDict):
 def _parse_request_range(range_header):
     """Parses a Range header.
 
-    Returns either ``None`` or an instance of ``slice``:
+    Returns either ``None`` or tuple ``(start, end)``.
+    Note that while the HTTP headers use inclusive byte positions,
+    this method returns indexes suitable for use in slices.
 
-    >>> rh = _parse_request_range("bytes=1-2")
-    >>> rh
-    slice(1, 3, None)
-    >>> [0, 1, 2, 3, 4][rh]
+    >>> start, end = _parse_request_range("bytes=1-2")
+    >>> start, end
+    (1, 3)
+    >>> [0, 1, 2, 3, 4][start:end]
     [1, 2]
     >>> _parse_request_range("bytes=6-")
-    slice(6, None, None)
+    (6, None)
     >>> _parse_request_range("bytes=-6")
-    slice(-6, None, None)
+    (-6, None)
     >>> _parse_request_range("bytes=")
-    slice(None, None, None)
+    (None, None)
     >>> _parse_request_range("foo=42")
     >>> _parse_request_range("bytes=1-2,6-10")
 
@@ -276,26 +278,21 @@ def _parse_request_range(range_header):
             end = None
         else:
             end += 1
-    return slice(start, end)
+    return (start, end)
 
-def _get_content_range(data, request_range):
+def _get_content_range(start, end, total):
     """Returns a suitable Content-Range header:
 
-    >>> print(_get_content_range("abcd", slice(None, 1)))
+    >>> print(_get_content_range(None, 1, 4))
     0-0/4
-    >>> print(_get_content_range("abcd", slice(1, 3)))
+    >>> print(_get_content_range(1, 3, 4))
     1-2/4
-    >>> print(_get_content_range("abcd", slice(None, None)))
+    >>> print(_get_content_range(None, None, 4))
     0-3/4
     """
-
-    data_len = len(data)
-    start, stop = request_range.start, request_range.stop
     start = start or 0
-    if start < 0:
-        start = data_len + start
-    stop = (stop or data_len) - 1
-    return "%s-%s/%s" %(start, stop, data_len)
+    end = (end or total) - 1
+    return "%s-%s/%s" % (start, end, total)
 
 def _int_or_none(val):
     val = val.strip()

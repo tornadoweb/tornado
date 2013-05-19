@@ -989,7 +989,8 @@ class CustomStaticFileTest(WebTestCase):
                 return absolute_path
 
             @classmethod
-            def get_content(self, path):
+            def get_content(self, path, start=None, end=None):
+                assert start is None and end is None
                 if path == 'CustomStaticFileTest:foo.txt':
                     return b'bar'
                 raise Exception("unexpected path %r" % path)
