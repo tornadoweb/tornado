@@ -346,6 +346,16 @@ class GenEngineTest(AsyncTestCase):
     def test_stack_context_leak(self):
         # regression test: repeated invocations of a gen-based
         # function should not result in accumulated stack_contexts
+        def _stack_depth():
+            head = stack_context._state.contexts[1]
+            length = 0
+
+            while head is not None:
+                length += 1
+                head = head.old_contexts[1]
+
+            return length
+
         @gen.engine
         def inner(callback):
             yield gen.Task(self.io_loop.add_callback)
@@ -355,10 +365,11 @@ class GenEngineTest(AsyncTestCase):
         def outer():
             for i in range(10):
                 yield gen.Task(inner)
-            stack_increase = len(stack_context._state.contexts) - initial_stack_depth
+
+            stack_increase = _stack_depth() - initial_stack_depth
             self.assertTrue(stack_increase <= 2)
             self.stop()
-        initial_stack_depth = len(stack_context._state.contexts)
+        initial_stack_depth = _stack_depth()
         self.run_gen(outer)
 
     def test_stack_context_leak_exception(self):
