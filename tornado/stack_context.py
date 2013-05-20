@@ -106,10 +106,10 @@ class StackContext(object):
     context that are currently pending).  This is an advanced feature
     and not necessary in most applications.
     """
-    def __init__(self, context_factory, _active=True):
+    def __init__(self, context_factory):
         self.context_factory = context_factory
         self.contexts = []
-        self.active = _active
+        self.active = True
 
     def _deactivate(self):
         self.active = False
@@ -175,9 +175,9 @@ class ExceptionStackContext(object):
     If the exception handler returns true, the exception will be
     consumed and will not be propagated to other exception handlers.
     """
-    def __init__(self, exception_handler, _active=True):
+    def __init__(self, exception_handler):
         self.exception_handler = exception_handler
-        self.active = _active
+        self.active = True
 
     def _deactivate(self):
         self.active = False
