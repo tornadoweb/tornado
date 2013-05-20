@@ -73,8 +73,6 @@ import sys
 import threading
 import operator
 
-from collections import deque
-
 from tornado.util import raise_exc_info
 
 
