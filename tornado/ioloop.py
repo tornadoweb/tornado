@@ -803,6 +803,7 @@ class PeriodicCallback(object):
     def _schedule_next(self):
         if self._running:
             current_time = self.io_loop.time()
-            while self._next_timeout <= current_time:
-                self._next_timeout += self.callback_time / 1000.0
+            self._next_timeout += self.callback_time / 1000.0
+            if self._next_timeout < current_time:
+                self._next_timeout = current_time
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
