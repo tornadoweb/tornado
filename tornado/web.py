@@ -1816,8 +1816,8 @@ class StaticFileHandler(RequestHandler):
             # ``Range: bytes=0-``.
             if size != (end or size) - (start or 0):
                 self.set_status(206)  # Partial Content
-            self.set_header("Content-Range",
-                            httputil._get_content_range(start, end, size))
+                self.set_header("Content-Range",
+                                httputil._get_content_range(start, end, size))
         else:
             start = end = None
         content = self.get_content(self.absolute_path, start, end)

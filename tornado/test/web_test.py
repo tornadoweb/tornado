@@ -896,7 +896,7 @@ class StaticFileTest(WebTestCase):
         with open(robots_file_path) as f:
             self.assertEqual(response.body, utf8(f.read()))
         self.assertEqual(response.headers.get("Content-Length"), "26")
-        self.assertEqual(response.headers.get("Content-Range"), "0-25/26")
+        self.assertEqual(response.headers.get("Content-Range"), None)
 
     def test_static_with_range_end_edge(self):
         response = self.fetch('/static/robots.txt', headers={
