@@ -52,6 +52,7 @@ request.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+
 import base64
 import binascii
 import datetime
@@ -1797,11 +1798,17 @@ class StaticFileHandler(RequestHandler):
         with open(abspath, "rb") as file:
             data = file.read()
             if request_range:
-                # 206: Partial Content
-                self.set_status(206)
+                data_sliced = data[request_range]
+                # Note: only return HTTP 206 if less than the entire range has
+                # been requested. Not only is this semantically correct, but
+                # Chrome refuses to play audio if it gets an HTTP 206 in
+                # response to ``Range: bytes=0-``.
+                if len(data) != len(data_sliced):
+                    # 206: Partial Content
+                    self.set_status(206)
                 content_range = httputil.get_content_range(data, request_range)
                 self.set_header("Content-Range", content_range)
-                data = data[request_range]
+                data = data_sliced
             if include_body:
                 self.write(data)
             else:
