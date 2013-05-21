@@ -1810,6 +1810,10 @@ class StaticFileHandler(RequestHandler):
             size = self.get_content_size()
             if start < 0:
                 start += size
+            # Note: only return HTTP 206 if less than the entire range has been
+            # requested. Not only is this semantically correct, but Chrome
+            # refuses to play audio if it gets an HTTP 206 in response to
+            # ``Range: bytes=0-``.
             if size != (end or size) - (start or 0):
                 self.set_status(206)  # Partial Content
             self.set_header("Content-Range",
