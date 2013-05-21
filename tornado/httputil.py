@@ -235,6 +235,71 @@ class HTTPFile(ObjectDict):
     """
     pass
 
+def _parse_request_range(range_header):
+    """Parses a Range header.
+
+    Returns either ``None`` or tuple ``(start, end)``.
+    Note that while the HTTP headers use inclusive byte positions,
+    this method returns indexes suitable for use in slices.
+
+    >>> start, end = _parse_request_range("bytes=1-2")
+    >>> start, end
+    (1, 3)
+    >>> [0, 1, 2, 3, 4][start:end]
+    [1, 2]
+    >>> _parse_request_range("bytes=6-")
+    (6, None)
+    >>> _parse_request_range("bytes=-6")
+    (-6, None)
+    >>> _parse_request_range("bytes=")
+    (None, None)
+    >>> _parse_request_range("foo=42")
+    >>> _parse_request_range("bytes=1-2,6-10")
+
+    Note: only supports one range (ex, ``bytes=1-2,6-10`` is not allowed).
+
+    See [0] for the details of the range header.
+
+    [0]: http://greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#byte.ranges
+    """
+    unit, _, value = range_header.partition("=")
+    unit, value = unit.strip(), value.strip()
+    if unit != "bytes":
+        return None
+    start_b, _, end_b = value.partition("-")
+    try:
+        start = _int_or_none(start_b)
+        end = _int_or_none(end_b)
+    except ValueError:
+        return None
+    if end is not None:
+        if start is None:
+            start = -end
+            end = None
+        else:
+            end += 1
+    return (start, end)
+
+def _get_content_range(start, end, total):
+    """Returns a suitable Content-Range header:
+
+    >>> print(_get_content_range(None, 1, 4))
+    0-0/4
+    >>> print(_get_content_range(1, 3, 4))
+    1-2/4
+    >>> print(_get_content_range(None, None, 4))
+    0-3/4
+    """
+    start = start or 0
+    end = (end or total) - 1
+    return "%s-%s/%s" % (start, end, total)
+
+def _int_or_none(val):
+    val = val.strip()
+    if val == "":
+        return None
+    return int(val)
+
 
 def parse_body_arguments(content_type, body, arguments, files):
     """Parses a form request body.

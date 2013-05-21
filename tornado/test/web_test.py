@@ -753,16 +753,19 @@ class ErrorResponseTest(WebTestCase):
 
 @wsgi_safe
 class StaticFileTest(WebTestCase):
+    # The expected MD5 hash of robots.txt, used in tests that call
+    # StaticFileHandler.get_version
+    robots_txt_hash = b"f71d20196d4caf35b6a670db8c70b03d"
+    static_dir = os.path.join(os.path.dirname(__file__), 'static')
+
     def get_handlers(self):
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
-                self.write(self.static_url(path))
+                with_v = int(self.get_argument('include_version', 1))
+                self.write(self.static_url(path, include_version=with_v))
 
-        class AbsoluteStaticUrlHandler(RequestHandler):
+        class AbsoluteStaticUrlHandler(StaticUrlHandler):
             include_host = True
-
-            def get(self, path):
-                self.write(self.static_url(path))
 
         class OverrideStaticUrlHandler(RequestHandler):
             def get(self, path):
@@ -790,8 +793,7 @@ class StaticFileTest(WebTestCase):
                 ('/override_static_url/(.*)', OverrideStaticUrlHandler)]
 
     def get_app_kwargs(self):
-        return dict(static_path=os.path.join(os.path.dirname(__file__),
-                                             'static'))
+        return dict(static_path=self.static_dir)
 
     def test_static_files(self):
         response = self.fetch('/robots.txt')
@@ -802,12 +804,25 @@ class StaticFileTest(WebTestCase):
 
     def test_static_url(self):
         response = self.fetch("/static_url/robots.txt")
-        self.assertEqual(response.body, b"/static/robots.txt?v=f71d2")
+        self.assertEqual(response.body,
+                         b"/static/robots.txt?v=" + self.robots_txt_hash)
 
     def test_absolute_static_url(self):
         response = self.fetch("/abs_static_url/robots.txt")
+        self.assertEqual(response.body, (
+            utf8(self.get_url("/")) +
+            b"static/robots.txt?v=" +
+            self.robots_txt_hash
+        ))
+
+    def test_relative_version_exclusion(self):
+        response = self.fetch("/static_url/robots.txt?include_version=0")
+        self.assertEqual(response.body, b"/static/robots.txt")
+
+    def test_absolute_version_exclusion(self):
+        response = self.fetch("/abs_static_url/robots.txt?include_version=0")
         self.assertEqual(response.body,
-                         utf8(self.get_url("/") + "static/robots.txt?v=f71d2"))
+                         utf8(self.get_url("/") + "static/robots.txt"))
 
     def test_include_host_override(self):
         self._trigger_include_host_check(False)
@@ -855,31 +870,149 @@ class StaticFileTest(WebTestCase):
                 'If-Modified-Since': format_timestamp(stat.st_mtime + 1)})
         self.assertEqual(response.code, 304)
 
+    def test_static_etag(self):
+        response = self.fetch('/static/robots.txt')
+        self.assertEqual(utf8(response.headers.get("Etag")),
+                         b'"' + self.robots_txt_hash + b'"')
+
+    def test_static_with_range(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=0-9'})
+        self.assertEqual(response.code, 206)
+        self.assertEqual(response.body, b"User-agent")
+        self.assertEqual(utf8(response.headers.get("Etag")),
+                         b'"' + self.robots_txt_hash + b'"')
+        self.assertEqual(response.headers.get("Content-Length"), "10")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "0-9/26")
+
+    def test_static_with_range_full_file(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=0-'})
+        # Note: Chrome refuses to play audio if it gets an HTTP 206 in response
+        # to ``Range: bytes=0-`` :(
+        self.assertEqual(response.code, 200)
+        robots_file_path = os.path.join(self.static_dir, "robots.txt")
+        with open(robots_file_path) as f:
+            self.assertEqual(response.body, utf8(f.read()))
+        self.assertEqual(response.headers.get("Content-Length"), "26")
+        self.assertEqual(response.headers.get("Content-Range"), None)
+
+    def test_static_with_range_end_edge(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=22-'})
+        self.assertEqual(response.body, b": /\n")
+        self.assertEqual(response.headers.get("Content-Length"), "4")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "22-25/26")
+
+    def test_static_with_range_neg_end(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=-4'})
+        self.assertEqual(response.body, b": /\n")
+        self.assertEqual(response.headers.get("Content-Length"), "4")
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "22-25/26")
+
+    def test_static_invalid_range(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'asdf'})
+        self.assertEqual(response.code, 416)
+
+    def test_static_head(self):
+        response = self.fetch('/static/robots.txt', method='HEAD')
+        self.assertEqual(response.code, 200)
+        # No body was returned, but we did get the right content length.
+        self.assertEqual(response.body, b'')
+        self.assertEqual(response.headers['Content-Length'], '26')
+        self.assertEqual(utf8(response.headers['Etag']),
+                         b'"' + self.robots_txt_hash + b'"')
+
+    def test_static_head_range(self):
+        response = self.fetch('/static/robots.txt', method='HEAD',
+                              headers={'Range': 'bytes=1-4'})
+        self.assertEqual(response.code, 206)
+        self.assertEqual(response.body, b'')
+        self.assertEqual(response.headers['Content-Length'], '4')
+        self.assertEqual(utf8(response.headers['Etag']),
+                         b'"' + self.robots_txt_hash + b'"')
+
+    def test_static_range_if_none_match(self):
+        response = self.fetch('/static/robots.txt', headers={
+            'Range': 'bytes=1-4',
+            'If-None-Match': b'"' + self.robots_txt_hash + b'"'})
+        self.assertEqual(response.code, 304)
+        self.assertEqual(response.body, b'')
+        self.assertTrue('Content-Length' not in response.headers)
+        self.assertEqual(utf8(response.headers['Etag']),
+                         b'"' + self.robots_txt_hash + b'"')
+
+    def test_static_404(self):
+        response = self.fetch('/static/blarg')
+        self.assertEqual(response.code, 404)
+
+
+@wsgi_safe
+class StaticDefaultFilenameTest(WebTestCase):
+    def get_app_kwargs(self):
+        return dict(static_path=os.path.join(os.path.dirname(__file__),
+                                             'static'),
+                    static_handler_args=dict(default_filename='index.html'))
+
+    def get_handlers(self):
+        return []
+
+    def test_static_default_filename(self):
+        response = self.fetch('/static/dir/', follow_redirects=False)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b'this is the index\n', response.body)
+
+    def test_static_default_redirect(self):
+        response = self.fetch('/static/dir', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertTrue(response.headers['Location'].endswith('/static/dir/'))
+
+
 
 @wsgi_safe
 class CustomStaticFileTest(WebTestCase):
     def get_handlers(self):
         class MyStaticFileHandler(StaticFileHandler):
-            def get(self, path):
-                path = self.parse_url_path(path)
-                if path != "foo.txt":
-                    raise Exception("unexpected path: %r" % path)
-                self.write("bar")
-
             @classmethod
             def make_static_url(cls, settings, path):
-                cls.get_version(settings, path)
+                version_hash = cls.get_version(settings, path)
                 extension_index = path.rindex('.')
                 before_version = path[:extension_index]
                 after_version = path[(extension_index + 1):]
-                return '/static/%s.%s.%s' % (before_version, 42, after_version)
+                return '/static/%s.%s.%s' % (before_version, version_hash,
+                                             after_version)
 
-            @classmethod
-            def parse_url_path(cls, url_path):
+            def parse_url_path(self, url_path):
                 extension_index = url_path.rindex('.')
                 version_index = url_path.rindex('.', 0, extension_index)
                 return '%s%s' % (url_path[:version_index],
                                  url_path[extension_index:])
+
+            @classmethod
+            def get_absolute_path(cls, settings, path):
+                return 'CustomStaticFileTest:' + path
+
+            def validate_absolute_path(self, absolute_path):
+                return absolute_path
+
+            @classmethod
+            def get_content(self, path, start=None, end=None):
+                assert start is None and end is None
+                if path == 'CustomStaticFileTest:foo.txt':
+                    return b'bar'
+                raise Exception("unexpected path %r" % path)
+
+            def get_modified_time(self):
+                return None
+
+            @classmethod
+            def get_version(cls, settings, path):
+                return "42"
 
         class StaticUrlHandler(RequestHandler):
             def get(self, path):
@@ -1280,6 +1413,7 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
         self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
 
 
+@wsgi_safe
 class SetCurrentUserTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def prepare(self):
@@ -1293,3 +1427,74 @@ class SetCurrentUserTest(SimpleHandlerTestCase):
         # that want to forgo the lazy get_current_user property
         response = self.fetch('/')
         self.assertEqual(response.body, b'Hello Ben')
+
+
+@wsgi_safe
+class UnimplementedHTTPMethodsTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        pass
+
+    def test_unimplemented_standard_methods(self):
+        for method in ['HEAD', 'GET', 'DELETE', 'OPTIONS']:
+            response = self.fetch('/', method=method)
+            self.assertEqual(response.code, 405)
+        for method in ['POST', 'PUT']:
+            response = self.fetch('/', method=method, body=b'')
+            self.assertEqual(response.code, 405)
+
+class UnimplementedNonStandardMethodsTest(SimpleHandlerTestCase):
+    # wsgiref.validate complains about unknown methods in a way that makes
+    # this test not wsgi_safe.
+    class Handler(RequestHandler):
+        def other(self):
+            # Even though this method exists, it won't get called automatically
+            # because it is not in SUPPORTED_METHODS.
+            self.write('other')
+
+    def test_unimplemented_patch(self):
+        # PATCH is recently standardized; Tornado supports it by default
+        # but wsgiref.validate doesn't like it.
+        response = self.fetch('/', method='PATCH', body=b'')
+        self.assertEqual(response.code, 405)
+
+    def test_unimplemented_other(self):
+        response = self.fetch('/', method='OTHER',
+                              allow_nonstandard_methods=True)
+        self.assertEqual(response.code, 405)
+
+@wsgi_safe
+class AllHTTPMethodsTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def method(self):
+            self.write(self.request.method)
+
+        get = delete = options = post = put = method
+
+    def test_standard_methods(self):
+        response = self.fetch('/', method='HEAD')
+        self.assertEqual(response.body, b'')
+        for method in ['GET', 'DELETE', 'OPTIONS']:
+            response = self.fetch('/', method=method)
+            self.assertEqual(response.body, utf8(method))
+        for method in ['POST', 'PUT']:
+            response = self.fetch('/', method=method, body=b'')
+            self.assertEqual(response.body, utf8(method))
+
+class PatchMethodTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
+
+        def patch(self):
+            self.write('patch')
+
+        def other(self):
+            self.write('other')
+
+    def test_patch(self):
+        response = self.fetch('/', method='PATCH', body=b'')
+        self.assertEqual(response.body, b'patch')
+
+    def test_other(self):
+        response = self.fetch('/', method='OTHER',
+                              allow_nonstandard_methods=True)
+        self.assertEqual(response.body, b'other')

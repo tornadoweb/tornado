@@ -103,3 +103,22 @@ In progress
 * `.RequestHandler.redirect` no longer silently strips control characters
   and whitespace.  It is now an error to pass control characters, newlines
   or tabs.
+* `.StaticFileHandler` has been reorganized internally and now has additional
+  extension points that can be overridden in subclasses.
+* `.StaticFileHandler` now supports HTTP ``Range`` requests.
+  `.StaticFileHandler` is still not suitable for files too large to
+  comfortably fit in memory, but ``Range`` support is necessary in some
+  browsers to enable seeking of HTML5 audio and video.
+* `.StaticFileHandler` now uses longer hashes by default, and uses the same
+  hashes for ``Etag`` as it does for versioned urls.
+* `.StaticFileHandler.make_static_url` and `.RequestHandler.static_url`
+  now have an additional keyword argument ``include_version`` to suppress
+  the url versioning.
+* `.StaticFileHandler` now reads its file in chunks, which will reduce
+  memory fragmentation.
+* Fixed a case where errors in ``SSLIOStream.connect`` (and
+  ``SimpleAsyncHTTPClient``) were not being reported correctly.
+* `.Resolver` now has a `~.Resolver.close` method.
+* Fixed a potential memory leak with long chains of `tornado.gen` coroutines.
+* ``curl_httpclient`` now supports the ``PATCH`` and ``OPTIONS`` methods
+  without the use of ``allow_nonstandard_methods=True``.
