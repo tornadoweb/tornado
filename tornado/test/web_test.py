@@ -756,6 +756,7 @@ class StaticFileTest(WebTestCase):
     # The expected MD5 hash of robots.txt, used in tests that call
     # StaticFileHandler.get_version
     robots_txt_hash = b"f71d20196d4caf35b6a670db8c70b03d"
+    static_dir = os.path.join(os.path.dirname(__file__), 'static')
 
     def get_handlers(self):
         class StaticUrlHandler(RequestHandler):
@@ -792,8 +793,7 @@ class StaticFileTest(WebTestCase):
                 ('/override_static_url/(.*)', OverrideStaticUrlHandler)]
 
     def get_app_kwargs(self):
-        return dict(static_path=os.path.join(os.path.dirname(__file__),
-                                             'static'))
+        return dict(static_path=self.static_dir)
 
     def test_static_files(self):
         response = self.fetch('/robots.txt')
@@ -885,6 +885,18 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Length"), "10")
         self.assertEqual(response.headers.get("Content-Range"),
                          "0-9/26")
+
+    def test_static_with_range_full_file(self):
+        response = self.fetch('/static/robots.txt', headers={
+                'Range': 'bytes=0-'})
+        # Note: Chrome refuses to play audio if it gets an HTTP 206 in response
+        # to ``Range: bytes=0-`` :(
+        self.assertEqual(response.code, 200)
+        robots_file_path = os.path.join(self.static_dir, "robots.txt")
+        with open(robots_file_path) as f:
+            self.assertEqual(response.body, utf8(f.read()))
+        self.assertEqual(response.headers.get("Content-Length"), "26")
+        self.assertEqual(response.headers.get("Content-Range"), None)
 
     def test_static_with_range_end_edge(self):
         response = self.fetch('/static/robots.txt', headers={
