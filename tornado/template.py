@@ -281,7 +281,6 @@ class Template(object):
             ancestors.reverse()
             for ancestor in ancestors:
                 ancestor.find_named_blocks(loader, named_blocks)
-            self.file.find_named_blocks(loader, named_blocks)
             writer = _CodeWriter(buffer, named_blocks, loader, ancestors[0].template,
                                  compress_whitespace)
             ancestors[0].generate(writer)

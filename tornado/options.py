@@ -139,8 +139,8 @@ class OptionParser(object):
         by later flags.
         """
         if name in self._options:
-            raise Error("Option %r already defined in %s", name,
-                        self._options[name].file_name)
+            raise Error("Option %r already defined in %s" %
+                        (name, self._options[name].file_name))
         frame = sys._getframe(0)
         options_file = frame.f_code.co_filename
         file_name = frame.f_back.f_code.co_filename
@@ -360,11 +360,11 @@ class _Option(object):
                 raise Error("Option %r is required to be a list of %s" %
                             (self.name, self.type.__name__))
             for item in value:
-                if item != None and not isinstance(item, self.type):
+                if item is not None and not isinstance(item, self.type):
                     raise Error("Option %r is required to be a list of %s" %
                                 (self.name, self.type.__name__))
         else:
-            if value != None and not isinstance(value, self.type):
+            if value is not None and not isinstance(value, self.type):
                 raise Error("Option %r is required to be a %s (%s given)" %
                             (self.name, self.type.__name__, type(value)))
         self._value = value

@@ -169,3 +169,11 @@ class OptionsTest(unittest.TestCase):
         options.define('foo', type=int, multiple=True)
         options.parse_command_line(['main.py', '--foo=1,3,5:7'])
         self.assertEqual(options.foo, [1, 3, 5, 6, 7])
+
+    def test_error_redefine(self):
+        options = OptionParser()
+        options.define('foo')
+        with self.assertRaises(Error) as cm:
+            options.define('foo')
+        self.assertRegexpMatches(str(cm.exception),
+                                 'Option.*foo.*already defined')

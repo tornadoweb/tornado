@@ -46,6 +46,7 @@ distutils.core.setup(
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po",
             "options_test.cfg",
             "static/robots.txt",
+            "static/dir/index.html",
             "templates/utf8.html",
             "test.crt",
             "test.key",
