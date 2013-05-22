@@ -537,7 +537,7 @@ class Runner(object):
                         self.exc_info = sys.exc_info()
                 else:
                     self.exc_info = (BadYieldError(
-                            "yielded unknown object %r" % (yielded,)),)
+                        "yielded unknown object %r" % (yielded,)),)
         finally:
             self.running = False
 
