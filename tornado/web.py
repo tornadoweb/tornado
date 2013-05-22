@@ -244,7 +244,7 @@ class RequestHandler(object):
         self.set_default_headers()
         if (not self.request.supports_http_1_1() and
             getattr(self.request, 'connection', None) and
-            not self.request.connection.no_keep_alive):
+                not self.request.connection.no_keep_alive):
             conn_header = self.request.headers.get("Connection")
             if conn_header and (conn_header.lower() == "keep-alive"):
                 self.set_header("Connection", "Keep-Alive")
@@ -328,7 +328,7 @@ class RequestHandler(object):
         # additional headers or split the request. Also cap length to
         # prevent obviously erroneous values.
         if (len(value) > 4000 or
-            RequestHandler._INVALID_HEADER_CHAR_RE.search(value)):
+                RequestHandler._INVALID_HEADER_CHAR_RE.search(value)):
             raise ValueError("Unsafe header value %r", value)
         return value
 
@@ -1280,6 +1280,7 @@ def asynchronous(method):
     """
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
+
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if self.application._wsgi:
@@ -1843,7 +1844,7 @@ class StaticFileHandler(RequestHandler):
         version_hash = self._get_cached_version(self.absolute_path)
         if not version_hash:
             return None
-        return '"%s"' %(version_hash, )
+        return '"%s"' % (version_hash, )
 
     def set_headers(self):
         """Sets the content and caching headers on the response."""
@@ -1916,7 +1917,7 @@ class StaticFileHandler(RequestHandler):
             raise HTTPError(403, "%s is not in root static directory",
                             self.path)
         if (os.path.isdir(absolute_path) and
-            self.default_filename is not None):
+                self.default_filename is not None):
             # need to look at the request.path here for when path is empty
             # but there is some prefix to the path that was already
             # trimmed by the routing
