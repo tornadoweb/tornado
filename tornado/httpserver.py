@@ -446,7 +446,6 @@ class HTTPRequest(object):
             if proto in ("http", "https"):
                 self.protocol = proto
 
-
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}
         self.connection = connection
