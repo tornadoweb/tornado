@@ -1223,8 +1223,8 @@ class FacebookGraphMixin(OAuth2Mixin):
 
     def _on_facebook_request(self, future, response):
         if response.error:
-            future.set_exception(AuthError("Error response %s fetching %s", 
-                                    response.error, response.request.url))
+            future.set_exception(AuthError("Error response %s fetching %s" %
+                                           (response.error, response.request.url)))
             return
 
         future.set_result(escape.json_decode(response.body))
