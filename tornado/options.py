@@ -115,11 +115,8 @@ class OptionParser(object):
         """The set of option-groups created by ``define``."""
         return set(opt.group_name for opt in self._options.values())
 
-    def group_dict(self, group=None):
-        """A dict of option names and values.
-
-        If ``group`` is given, get options only from the named group; otherwise
-        all options are included.
+    def group_dict(self, group):
+        """The names and values of options in a group.
 
         Useful for copying options into Application settings::
 
@@ -136,6 +133,11 @@ class OptionParser(object):
         return dict(
             (name, opt.value()) for name, opt in self._options.items()
             if not group or group == opt.group_name)
+
+    def as_dict(self):
+        """The names and values of all options."""
+        return dict(
+            (name, opt.value()) for name, opt in self._options.items())
 
     def define(self, name, default=None, type=None, help=None, metavar=None,
                multiple=False, group=None, callback=None):
