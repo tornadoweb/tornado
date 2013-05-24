@@ -327,7 +327,7 @@ class HTTPRequest(object):
         self.body = utf8(body)
         self.auth_username = auth_username
         self.auth_password = auth_password
-        self.auth_mode = auth_mode        
+        self.auth_mode = auth_mode
         self.connect_timeout = connect_timeout
         self.request_timeout = request_timeout
         self.follow_redirects = follow_redirects
