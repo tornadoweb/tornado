@@ -13,6 +13,7 @@ from tornado.web import RequestHandler, authenticated, Application, asynchronous
 
 import binascii
 import datetime
+import email.utils
 import logging
 import os
 import re
@@ -1160,8 +1161,8 @@ class DateHeaderTest(SimpleHandlerTestCase):
 
     def test_date_header(self):
         response = self.fetch('/')
-        header_date = datetime.datetime.strptime(response.headers['Date'],
-                                                 "%a, %d %b %Y %H:%M:%S GMT")
+        header_date = datetime.datetime(
+            *email.utils.parsedate(response.headers['Date'])[:6])
         self.assertTrue(header_date - datetime.datetime.utcnow() <
                         datetime.timedelta(seconds=2))
 

@@ -18,8 +18,10 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import calendar
 import collections
 import datetime
+import email.utils
 import numbers
 import re
 import time
@@ -382,15 +384,15 @@ def format_timestamp(ts):
     >>> format_timestamp(1359312200)
     'Sun, 27 Jan 2013 18:43:20 GMT'
     """
-    if isinstance(ts, (tuple, time.struct_time)):
+    if isinstance(ts, numbers.Real):
         pass
+    elif isinstance(ts, (tuple, time.struct_time)):
+        ts = calendar.timegm(ts)
     elif isinstance(ts, datetime.datetime):
-        ts = ts.utctimetuple()
-    elif isinstance(ts, numbers.Real):
-        ts = time.gmtime(ts)
+        ts = calendar.timegm(ts.utctimetuple())
     else:
         raise TypeError("unknown timestamp type: %r" % ts)
-    return time.strftime("%a, %d %b %Y %H:%M:%S GMT", ts)
+    return email.utils.formatdate(ts, usegmt=True)
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some

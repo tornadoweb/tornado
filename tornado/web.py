@@ -239,7 +239,7 @@ class RequestHandler(object):
         self._headers = httputil.HTTPHeaders({
             "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
-            "Date": httputil.format_timestamp(time.gmtime()),
+            "Date": httputil.format_timestamp(time.time()),
         })
         self.set_default_headers()
         if (not self.request.supports_http_1_1() and
