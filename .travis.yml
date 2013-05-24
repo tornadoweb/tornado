@@ -13,6 +13,7 @@ install:
     # always install unittest2 on py26 even if $DEPS is unset
     - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install --use-mirrors unittest2; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then pip install --use-mirrors futures mock pycares pycurl twisted http://pypi.python.org/packages/source/M/Monotime/Monotime-1.0.tar.gz; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then pip install --use-mirrors sphinx; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' && $DEPS == true ]]; then pip install --use-mirrors futures mock; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then pip install --use-mirrors pycares mock; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.3' && $DEPS == true ]]; then pip install --use-mirrors pycares; fi
@@ -35,3 +36,4 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python -m tornado.test.runtests --resolver=tornado.platform.twisted.TwistedResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION != pypy && $DEPS == true ]]; then python -m tornado.test.runtests --resolver=tornado.platform.caresresolver.CaresResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.3' ]]; then python -m tornado.test.runtests --ioloop_time_monotonic; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi

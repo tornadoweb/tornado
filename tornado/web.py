@@ -239,7 +239,7 @@ class RequestHandler(object):
         self._headers = httputil.HTTPHeaders({
             "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
-            "Date": httputil.format_timestamp(time.gmtime()),
+            "Date": httputil.format_timestamp(time.time()),
         })
         self.set_default_headers()
         if (not self.request.supports_http_1_1() and
@@ -1154,9 +1154,10 @@ class RequestHandler(object):
             self._handle_request_exception(e)
 
     def _execute_method(self):
-        method = getattr(self, self.request.method.lower())
-        self._when_complete(method(*self.path_args, **self.path_kwargs),
-                            self._execute_finish)
+        if not self._finished:
+            method = getattr(self, self.request.method.lower())
+            self._when_complete(method(*self.path_args, **self.path_kwargs),
+                                self._execute_finish)
 
     def _execute_finish(self):
         if self._auto_finish and not self._finished:
@@ -2034,8 +2035,9 @@ class StaticFileHandler(RequestHandler):
         This method may be overridden in subclasses (but note that it
         is a class method rather than an instance method).  Subclasses
         are only required to implement the signature
-        ``make_static_url(cls, settings, path)``; other keyword arguments
-        may be passed through `static_url` but are not standard.
+        ``make_static_url(cls, settings, path)``; other keyword
+        arguments may be passed through `~RequestHandler.static_url`
+        but are not standard.
 
         ``settings`` is the `Application.settings` dictionary.  ``path``
         is the static path being requested.  The url returned should be

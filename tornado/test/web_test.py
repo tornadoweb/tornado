@@ -13,6 +13,7 @@ from tornado.web import RequestHandler, authenticated, Application, asynchronous
 
 import binascii
 import datetime
+import email.utils
 import logging
 import os
 import re
@@ -1160,8 +1161,8 @@ class DateHeaderTest(SimpleHandlerTestCase):
 
     def test_date_header(self):
         response = self.fetch('/')
-        header_date = datetime.datetime.strptime(response.headers['Date'],
-                                                 "%a, %d %b %Y %H:%M:%S GMT")
+        header_date = datetime.datetime(
+            *email.utils.parsedate(response.headers['Date'])[:6])
         self.assertTrue(header_date - datetime.datetime.utcnow() <
                         datetime.timedelta(seconds=2))
 
@@ -1498,3 +1499,20 @@ class PatchMethodTest(SimpleHandlerTestCase):
         response = self.fetch('/', method='OTHER',
                               allow_nonstandard_methods=True)
         self.assertEqual(response.body, b'other')
+
+
+@wsgi_safe
+class FinishInPrepareTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def prepare(self):
+            self.finish('done')
+
+        def get(self):
+            # It's difficult to assert for certain that a method did not
+            # or will not be called in an asynchronous context, but this
+            # will be logged noisily if it is reached.
+            raise Exception('should not reach this method')
+
+    def test_finish_in_prepare(self):
+        response = self.fetch('/')
+        self.assertEqual(response.body, b'done')
