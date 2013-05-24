@@ -1154,9 +1154,10 @@ class RequestHandler(object):
             self._handle_request_exception(e)
 
     def _execute_method(self):
-        method = getattr(self, self.request.method.lower())
-        self._when_complete(method(*self.path_args, **self.path_kwargs),
-                            self._execute_finish)
+        if not self._finished:
+            method = getattr(self, self.request.method.lower())
+            self._when_complete(method(*self.path_args, **self.path_kwargs),
+                                self._execute_finish)
 
     def _execute_finish(self):
         if self._auto_finish and not self._finished:
