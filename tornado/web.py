@@ -2034,8 +2034,9 @@ class StaticFileHandler(RequestHandler):
         This method may be overridden in subclasses (but note that it
         is a class method rather than an instance method).  Subclasses
         are only required to implement the signature
-        ``make_static_url(cls, settings, path)``; other keyword arguments
-        may be passed through `static_url` but are not standard.
+        ``make_static_url(cls, settings, path)``; other keyword
+        arguments may be passed through `~RequestHandler.static_url`
+        but are not standard.
 
         ``settings`` is the `Application.settings` dictionary.  ``path``
         is the static path being requested.  The url returned should be
