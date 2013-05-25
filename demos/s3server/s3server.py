@@ -223,7 +223,12 @@ class ObjectHandler(BaseRequestHandler):
             info.st_mtime))
         object_file = open(path, "rb")
         try:
-            self.finish(object_file.read())
+            chunk = object_file.read(1048576)
+            while chunk:
+                self.write(chunk)
+                self.flush()
+                chunk = object_file.read(1048576)
+            self.finish()
         finally:
             object_file.close()
 
