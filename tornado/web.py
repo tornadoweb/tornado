@@ -1767,7 +1767,7 @@ class StaticFileHandler(RequestHandler):
     _lock = threading.Lock()  # protects _static_hashes
 
     def initialize(self, path, default_filename=None):
-        self.root = os.path.abspath(path) + os.path.sep
+        self.root = path
         self.default_filename = default_filename
 
     @classmethod
@@ -1782,8 +1782,9 @@ class StaticFileHandler(RequestHandler):
         # Set up our path instance variables.
         self.path = self.parse_url_path(path)
         del path  # make sure we don't refer to path instead of self.path again
-        absolute_path = self.get_absolute_path(self.settings, self.path)
-        self.absolute_path = self.validate_absolute_path(absolute_path)
+        absolute_path = self.get_absolute_path(self.root, self.path)
+        self.absolute_path = self.validate_absolute_path(
+            self.root, absolute_path)
         if self.absolute_path is None:
             return
 
@@ -1883,20 +1884,25 @@ class StaticFileHandler(RequestHandler):
         return False
 
     @classmethod
-    def get_absolute_path(cls, settings, path):
-        """Returns the absolute location of ``path``.
+    def get_absolute_path(cls, root, path):
+        """Returns the absolute location of ``path`` relative to ``root``.
+
+        ``root`` is the path configured for this `StaticFileHandler`
+        (in most cases the ``static_path`` `Application` setting).
 
         This class method may be overridden in subclasses.  By default
         it returns a filesystem path, but other strings may be used
         as long as they are unique and understood by the subclass's
         overridden `get_content`.
         """
-        root = settings["static_path"]
         abspath = os.path.abspath(os.path.join(root, path))
         return abspath
 
-    def validate_absolute_path(self, absolute_path):
+    def validate_absolute_path(self, root, absolute_path):
         """Validate and return the absolute path.
+
+        ``root`` is the configured path for the `StaticFileHandler`,
+        and ``path`` is the result of `get_absolute_path`
 
         This is an instance method called during request processing,
         so it may raise `HTTPError` or use methods like
@@ -1910,7 +1916,6 @@ class StaticFileHandler(RequestHandler):
         In instance methods, this method's result is available as
         ``self.absolute_path``.
         """
-        root = os.path.abspath(self.settings["static_path"])
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
         if not (absolute_path + os.path.sep).startswith(root):
@@ -2084,7 +2089,7 @@ class StaticFileHandler(RequestHandler):
         `get_content_version` is now preferred as it allows the base
         class to handle caching of the result.
         """
-        abs_path = cls.get_absolute_path(settings, path)
+        abs_path = cls.get_absolute_path(settings['static_path'], path)
         return cls._get_cached_version(abs_path)
 
     @classmethod

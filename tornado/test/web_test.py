@@ -1012,7 +1012,7 @@ class CustomStaticFileTest(WebTestCase):
             def get_absolute_path(cls, settings, path):
                 return 'CustomStaticFileTest:' + path
 
-            def validate_absolute_path(self, absolute_path):
+            def validate_absolute_path(self, root, absolute_path):
                 return absolute_path
 
             @classmethod
