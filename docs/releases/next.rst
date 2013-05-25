@@ -122,3 +122,15 @@ In progress
 * Fixed a potential memory leak with long chains of `tornado.gen` coroutines.
 * ``curl_httpclient`` now supports the ``PATCH`` and ``OPTIONS`` methods
   without the use of ``allow_nonstandard_methods=True``.
+* `tornado.options.options` and other `.OptionParser` instances support some
+  new dict-like methods: `~.OptionParser.items()`, iteration over keys,
+  and (read-only) access to options with square braket syntax.
+  `.OptionParser.group_dict` returns all options with a given group
+  name, and `.OptionParser.as_dict` returns all options.
+* Fixed a potential CPU DoS when ``tornado.netutil.ssl_match_hostname``
+  is used on certificates with an abusive wildcard pattern.
+* Fixed a problem with the ``Date`` header and cookie expiration dates
+  when the system locale is set to a non-english configuration.
+* Worked around a class of bugs in libcurl that would result in
+  errors from `.IOLoop.update_handler` in various scenarios including
+  digest authentication and socks proxies.
