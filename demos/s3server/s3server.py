@@ -59,7 +59,6 @@ def start(port, root_directory="/tmp/s3", bucket_depth=0):
     http_server.listen(port)
     ioloop.IOLoop.instance().start()
 
-
 class S3Application(web.Application):
     """Implementation of an S3-like storage server based on local files.
 
@@ -258,7 +257,6 @@ class ObjectHandler(BaseRequestHandler):
         part_number = self._get_part_number()
         upload_id = self._get_upload_id()
         if part_number and upload_id:
-            path = path + ".%s" % part_number
             object_file = MultipartUploaderFactory(upload_id, None)
             if not object_file:
                 raise web.HTTPError(404, "No such upload ID %r" % upload_id)
