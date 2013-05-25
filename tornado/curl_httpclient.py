@@ -111,13 +111,19 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 del self._fds[fd]
         else:
             ioloop_event = event_map[event]
-            if fd not in self._fds:
-                self.io_loop.add_handler(fd, self._handle_events,
-                                         ioloop_event)
-                self._fds[fd] = ioloop_event
-            else:
-                self.io_loop.update_handler(fd, ioloop_event)
-                self._fds[fd] = ioloop_event
+            # libcurl sometimes closes a socket and then opens a new
+            # one using the same FD without giving us a POLL_NONE in
+            # between.  This is a problem with the epoll IOLoop,
+            # because the kernel can tell when a socket is closed and
+            # removes it from the epoll automatically, causing future
+            # update_handler calls to fail.  Since we can't tell when
+            # this has happened, always use remove and re-add
+            # instead of update.
+            if fd in self._fds:
+                self.io_loop.remove_handler(fd)
+            self.io_loop.add_handler(fd, self._handle_events,
+                                     ioloop_event)
+            self._fds[fd] = ioloop_event
 
     def _set_timeout(self, msecs):
         """Called by libcurl to schedule a timeout."""
