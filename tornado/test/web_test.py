@@ -22,6 +22,7 @@ import sys
 
 wsgi_safe_tests = []
 
+relpath = lambda *a: os.path.join(os.path.dirname(__file__), *a)
 
 def wsgi_safe(cls):
     wsgi_safe_tests.append(cls)
@@ -794,7 +795,7 @@ class StaticFileTest(WebTestCase):
                 ('/override_static_url/(.*)', OverrideStaticUrlHandler)]
 
     def get_app_kwargs(self):
-        return dict(static_path=self.static_dir)
+        return dict(static_path=relpath('static'))
 
     def test_static_files(self):
         response = self.fetch('/robots.txt')
@@ -861,8 +862,7 @@ class StaticFileTest(WebTestCase):
         # chosen just before and after the known modification time
         # of the file to ensure that the right time zone is being used
         # when parsing If-Modified-Since.
-        stat = os.stat(os.path.join(os.path.dirname(__file__),
-                                    'static/robots.txt'))
+        stat = os.stat(relpath('static/robots.txt'))
 
         response = self.fetch('/static/robots.txt', headers={
                 'If-Modified-Since': format_timestamp(stat.st_mtime - 1)})
@@ -956,8 +956,7 @@ class StaticFileTest(WebTestCase):
 @wsgi_safe
 class StaticDefaultFilenameTest(WebTestCase):
     def get_app_kwargs(self):
-        return dict(static_path=os.path.join(os.path.dirname(__file__),
-                                             'static'),
+        return dict(static_path=relpath('static'),
                     static_handler_args=dict(default_filename='index.html'))
 
     def get_handlers(self):
@@ -973,6 +972,21 @@ class StaticDefaultFilenameTest(WebTestCase):
         self.assertEqual(response.code, 301)
         self.assertTrue(response.headers['Location'].endswith('/static/dir/'))
 
+
+@wsgi_safe
+class StaticFileWithPathTest(WebTestCase):
+    def get_app_kwargs(self):
+        return dict(static_path=relpath('static'),
+                    static_handler_args=dict(default_filename='index.html'))
+
+    def get_handlers(self):
+        return [("/foo/(.*)", StaticFileHandler, {
+            "path": relpath("templates/"),
+        })]
+
+    def test_serve(self):
+        response = self.fetch("/foo/utf8.html")
+        self.assertEqual(response.body, b"H\xc3\xa9llo\n")
 
 
 @wsgi_safe
