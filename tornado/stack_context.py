@@ -243,7 +243,10 @@ def _remove_deactivated(contexts):
         while parent is not None and not parent.active:
             parent = parent.old_contexts[1]
 
-            ctx.old_contexts = parent.old_contexts
+            if parent is not None:
+                ctx.old_contexts = parent.old_contexts
+            else:
+                ctx.old_contexts = (tuple(), None)
 
         ctx = parent
 
