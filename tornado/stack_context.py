@@ -240,10 +240,11 @@ def _remove_deactivated(contexts):
     while ctx is not None:
         parent = ctx.old_contexts[1]
 
-        while parent is not None and not parent.active:
-            parent = parent.old_contexts[1]
-
+        while parent is not None:
+            if parent.active:
+                break
             ctx.old_contexts = parent.old_contexts
+            parent = parent.old_contexts[1]
 
         ctx = parent
 
@@ -267,6 +268,7 @@ def wrap(fn):
     cap_contexts = [_state.contexts]
 
     def wrapped(*args, **kwargs):
+        ret = None
         try:
             # Capture old state
             current_state = _state.contexts
@@ -298,7 +300,7 @@ def wrap(fn):
             # Execute callback if no exception happened while restoring state
             if top is None:
                 try:
-                    fn(*args, **kwargs)
+                    ret = fn(*args, **kwargs)
                 except:
                     exc = sys.exc_info()
                     top = contexts[1]
@@ -330,6 +332,7 @@ def wrap(fn):
                 raise_exc_info(exc)
         finally:
             _state.contexts = current_state
+        return ret
 
     wrapped._wrapped = True
     return wrapped
