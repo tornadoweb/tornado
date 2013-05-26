@@ -136,7 +136,7 @@ def engine(func):
             if runner is not None:
                 return runner.handle_exception(typ, value, tb)
             return False
-        with ExceptionStackContext(handle_exception):
+        with ExceptionStackContext(handle_exception) as deactivate:
             try:
                 result = func(*args, **kwargs)
             except (Return, StopIteration) as e:
@@ -149,6 +149,7 @@ def engine(func):
                                 "@gen.engine functions cannot return values: "
                                 "%r" % (value,))
                         assert value is None
+                        deactivate()
                     runner = Runner(result, final_callback)
                     runner.run()
                     return
@@ -156,6 +157,7 @@ def engine(func):
                 raise ReturnValueIgnoredError(
                     "@gen.engine functions cannot return values: %r" %
                     (result,))
+            deactivate()
             # no yield, so we're done
     return wrapper
 
@@ -208,21 +210,24 @@ def coroutine(func):
                 typ, value, tb = sys.exc_info()
             future.set_exc_info((typ, value, tb))
             return True
-        with ExceptionStackContext(handle_exception):
+        with ExceptionStackContext(handle_exception) as deactivate:
             try:
                 result = func(*args, **kwargs)
             except (Return, StopIteration) as e:
                 result = getattr(e, 'value', None)
             except Exception:
+                deactivate()
                 future.set_exc_info(sys.exc_info())
                 return future
             else:
                 if isinstance(result, types.GeneratorType):
                     def final_callback(value):
+                        deactivate()
                         future.set_result(value)
                     runner = Runner(result, final_callback)
                     runner.run()
                     return future
+            deactivate()
             future.set_result(result)
         return future
     return wrapper
