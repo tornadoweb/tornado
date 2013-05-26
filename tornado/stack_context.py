@@ -71,6 +71,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import sys
 import threading
+import operator
 
 from tornado.util import raise_exc_info
 
@@ -108,6 +109,10 @@ class StackContext(object):
     def __init__(self, context_factory):
         self.context_factory = context_factory
         self.contexts = []
+        self.active = True
+
+    def _deactivate(self):
+        self.active = False
 
     # StackContext protocol
     def enter(self):
@@ -132,6 +137,8 @@ class StackContext(object):
         except:
             _state.contexts = self.old_contexts
             raise
+
+        return self._deactivate
 
     def __exit__(self, type, value, traceback):
         try:
@@ -170,6 +177,10 @@ class ExceptionStackContext(object):
     """
     def __init__(self, exception_handler):
         self.exception_handler = exception_handler
+        self.active = True
+
+    def _deactivate(self):
+        self.active = False
 
     def exit(self, type, value, traceback):
         if type is not None:
@@ -179,6 +190,8 @@ class ExceptionStackContext(object):
         self.old_contexts = _state.contexts
         self.new_contexts = (self.old_contexts[0], self)
         _state.contexts = self.new_contexts
+
+        return self._deactivate
 
     def __exit__(self, type, value, traceback):
         try:
@@ -212,6 +225,31 @@ class NullContext(object):
         _state.contexts = self.old_contexts
 
 
+def _remove_deactivated(contexts):
+    """Remove deactivated handlers from the chain"""
+    # Clean ctx handlers
+    stack_contexts = tuple([h for h in contexts[0] if h.active])
+
+    # Find new head
+    head = contexts[1]
+    while head is not None and not head.active:
+        head = head.old_contexts[1]
+
+    # Process chain
+    ctx = head
+    while ctx is not None:
+        parent = ctx.old_contexts[1]
+
+        while parent is not None and not parent.active:
+            parent = parent.old_contexts[1]
+
+            ctx.old_contexts = parent.old_contexts
+
+        ctx = parent
+
+    return (stack_contexts, head)
+
+
 def wrap(fn):
     """Returns a callable object that will restore the current `StackContext`
     when executed.
@@ -225,13 +263,18 @@ def wrap(fn):
         return fn
 
     # Capture current stack head
-    contexts = _state.contexts
+    # TODO: Any other better way to store contexts and update them in wrapped function?
+    cap_contexts = [_state.contexts]
 
-    #@functools.wraps
     def wrapped(*args, **kwargs):
         try:
-            # Force local state - switch to new stack chain
+            # Capture old state
             current_state = _state.contexts
+
+            # Remove deactivated items
+            cap_contexts[0] = contexts = _remove_deactivated(cap_contexts[0])
+
+            # Force new state
             _state.contexts = contexts
 
             # Current exception
