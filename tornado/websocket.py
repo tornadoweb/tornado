@@ -238,6 +238,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         connection is established.
 
         See `.BaseIOStream.set_nodelay` for additional details.
+
+        .. versionadded:: 3.1
         """
         self.stream.set_nodelay(value)
 

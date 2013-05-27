@@ -1205,6 +1205,12 @@ class FacebookGraphMixin(OAuth2Mixin):
                         self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
+
+        The given path is relative to ``self._FACEBOOK_BASE_URL``,
+        by default "https://graph.facebook.com".
+
+        .. versionchanged:: 3.1
+           Added the ability to override ``self._FACEBOOK_BASE_URL``.
         """
         url = self._FACEBOOK_BASE_URL + path
         all_args = {}

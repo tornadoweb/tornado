@@ -108,11 +108,17 @@ class OptionParser(object):
         return self._options[item].value()
 
     def items(self):
-        """A sequence of (name, value) pairs."""
+        """A sequence of (name, value) pairs.
+
+        .. versionadded:: 3.1
+        """
         return [(name, opt.value()) for name, opt in self._options.items()]
 
     def groups(self):
-        """The set of option-groups created by ``define``."""
+        """The set of option-groups created by ``define``.
+
+        .. versionadded:: 3.1
+        """
         return set(opt.group_name for opt in self._options.values())
 
     def group_dict(self, group):
@@ -129,13 +135,18 @@ class OptionParser(object):
 
             application = Application(
                 handlers, **options.group_dict('application'))
+
+        .. versionadded:: 3.1
         """
         return dict(
             (name, opt.value()) for name, opt in self._options.items()
             if not group or group == opt.group_name)
 
     def as_dict(self):
-        """The names and values of all options."""
+        """The names and values of all options.
+
+        .. versionadded:: 3.1
+        """
         return dict(
             (name, opt.value()) for name, opt in self._options.items())
 

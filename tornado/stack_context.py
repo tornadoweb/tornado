@@ -369,6 +369,8 @@ def run_with_stack_context(context, func):
         @gen.coroutine
         def correct():
             yield run_with_stack_context(StackContext(ctx), other_coroutine)
+
+    .. versionadded:: 3.1
     """
     with context:
         return func()

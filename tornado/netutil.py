@@ -208,7 +208,11 @@ class Resolver(Configurable):
         raise NotImplementedError()
 
     def close(self):
-        """Closes the `Resolver`, freeing any resources used."""
+        """Closes the `Resolver`, freeing any resources used.
+
+        .. versionadded:: 3.1
+
+        """
         pass
 
 

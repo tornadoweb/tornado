@@ -379,7 +379,10 @@ class HTTPRequest(object):
 
        Client's IP address as a string.  If ``HTTPServer.xheaders`` is set,
        will pass along the real IP address provided by a load balancer
-       in the ``X-Real-Ip`` header
+       in the ``X-Real-Ip`` or ``X-Forwarded-For`` header.
+
+    .. versionchanged:: 3.1
+       The list format of ``X-Forwarded-For`` is now supported.
 
     .. attribute:: protocol
 

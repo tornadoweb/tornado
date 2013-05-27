@@ -49,6 +49,7 @@ Multiple modules
 * Worked around a class of bugs in libcurl that would result in
   errors from `.IOLoop.update_handler` in various scenarios including
   digest authentication and socks proxies.
+* The ``TCP_NODELAY`` flag is now set when appropriate in ``simple_httpclient``.
 
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
@@ -59,8 +60,7 @@ Multiple modules
   (it chooses the last, i.e. nearest one).
 * Memory is now reclaimed promptly on CPython when an HTTP request
   fails because it exceeded the maximum upload size.
-* The ``TCP_NODELAY`` flag is now set when appropriate in `.HTTPServer`
-  and ``simple_httpclient``.
+* The ``TCP_NODELAY`` flag is now set when appropriate in `.HTTPServer`.
 * The `.HTTPServer` ``no_keep_alive`` option is now respected with
   HTTP 1.0 connections that explicitly pass ``Connection: keep-alive``.
 * The ``Connection: keep-alive`` check for HTTP 1.0 connections is now
@@ -89,8 +89,7 @@ Multiple modules
   callback.
 * The `.IOStream` close callback is now run more reliably if there is
   an exception in ``_try_inline_read``.
-* New methods `.BaseIOStream.set_nodelay` and
-  `.WebSocketHandler.set_nodelay` can be used to set the
+* New method `.BaseIOStream.set_nodelay` can be used to set the
   ``TCP_NODELAY`` flag.
 * Fixed a case where errors in ``SSLIOStream.connect`` (and
   ``SimpleAsyncHTTPClient``) were not being reported correctly.
@@ -206,6 +205,12 @@ Multiple modules
   memory fragmentation.
 * Fixed a problem with the ``Date`` header and cookie expiration dates
   when the system locale is set to a non-english configuration.
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+* New method `.WebSocketHandler.set_nodelay` can be used to set the
+  ``TCP_NODELAY`` flag.
 
 `tornado.wsgi`
 ~~~~~~~~~~~~~~

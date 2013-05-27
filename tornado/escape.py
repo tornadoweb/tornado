@@ -95,6 +95,9 @@ def url_escape(value, plus=True):
     as "+" instead of "%20".  This is appropriate for query strings
     but not for the path component of a URL.  Note that this default
     is the reverse of Python's urllib module.
+
+    .. versionadded:: 3.1
+        The ``plus`` argument
     """
     quote = urllib_parse.quote_plus if plus else urllib_parse.quote
     return quote(utf8(value))
@@ -117,6 +120,9 @@ if sys.version_info[0] < 3:
         is appropriate for query strings and form-encoded values but not
         for the path component of a URL.  Note that this default is the
         reverse of Python's urllib module.
+
+        .. versionadded:: 3.1
+           The ``plus`` argument
         """
         unquote = (urllib_parse.unquote_plus if plus else urllib_parse.unquote)
         if encoding is None:
@@ -139,6 +145,9 @@ else:
         is appropriate for query strings and form-encoded values but not
         for the path component of a URL.  Note that this default is the
         reverse of Python's urllib module.
+
+        .. versionadded:: 3.1
+           The ``plus`` argument
         """
         if encoding is None:
             if plus:

@@ -283,6 +283,8 @@ class BaseIOStream(object):
         additional bandwidth.
 
         This flag is currently defined only for TCP-based ``IOStreams``.
+
+        .. versionadded:: 3.1
         """
         pass
 

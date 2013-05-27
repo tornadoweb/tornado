@@ -311,6 +311,9 @@ class HTTPRequest(object):
            ``simple_httpclient`` and true in ``curl_httpclient``
         :arg string client_key: Filename for client SSL key, if any
         :arg string client_cert: Filename for client SSL certificate, if any
+
+        .. versionadded:: 3.1
+           The ``auth_mode`` argument.
         """
         if headers is None:
             headers = httputil.HTTPHeaders()

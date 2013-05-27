@@ -86,6 +86,8 @@ def get_async_test_timeout():
     """Get the global timeout setting for async tests.
 
     Returns a float, the timeout in seconds.
+
+    .. versionadded:: 3.1
     """
     try:
         return float(os.environ.get('ASYNC_TEST_TIMEOUT'))
@@ -228,12 +230,16 @@ class AsyncTestCase(unittest.TestCase):
     def wait(self, condition=None, timeout=None):
         """Runs the `.IOLoop` until stop is called or timeout has passed.
 
-        In the event of a timeout, an exception will be thrown. The default
-        timeout is 5 seconds; it may be overridden with a ``timeout`` keyword
-        argument or globally with the ASYNC_TEST_TIMEOUT environment variable.
+        In the event of a timeout, an exception will be thrown. The
+        default timeout is 5 seconds; it may be overridden with a
+        ``timeout`` keyword argument or globally with the
+        ``ASYNC_TEST_TIMEOUT`` environment variable.
 
         If ``condition`` is not None, the `.IOLoop` will be restarted
         after `stop()` until ``condition()`` returns true.
+
+        .. versionchanged:: 3.1
+           Added the ``ASYNC_TEST_TIMEOUT`` environment variable.
         """
         if timeout is None:
             timeout = get_async_test_timeout()
@@ -397,7 +403,7 @@ def gen_test(func=None, timeout=None):
                 response = yield gen.Task(self.fetch('/'))
 
     By default, ``@gen_test`` times out after 5 seconds. The timeout may be
-    overridden globally with the ASYNC_TEST_TIMEOUT environment variable,
+    overridden globally with the ``ASYNC_TEST_TIMEOUT`` environment variable,
     or for each test with the ``timeout`` keyword argument::
 
         class MyTest(AsyncHTTPTestCase):
@@ -405,8 +411,9 @@ def gen_test(func=None, timeout=None):
             def test_something_slow(self):
                 response = yield gen.Task(self.fetch('/'))
 
-    If both the environment variable and the parameter are set, ``gen_test``
-    uses the maximum of the two.
+    .. versionadded:: 3.1
+       The ``timeout`` argument and ``ASYNC_TEST_TIMEOUT`` environment
+       variable.
     """
     if timeout is None:
         timeout = get_async_test_timeout()
