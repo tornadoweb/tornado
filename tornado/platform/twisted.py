@@ -83,7 +83,6 @@ import twisted.names.resolve
 
 from zope.interface import implementer
 
-from tornado.concurrent import return_future
 from tornado.escape import utf8
 from tornado import gen
 import tornado.ioloop

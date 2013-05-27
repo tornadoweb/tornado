@@ -23,7 +23,6 @@ import collections
 import datetime
 import email.utils
 import numbers
-import re
 import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
