@@ -149,10 +149,11 @@ class StackContextTest(AsyncTestCase):
             # Remove the test's stack context to make sure we can cover
             # the case where the last context is deactivated.
             with NullContext():
-                with StackContext(functools.partial(self.context, 'c0')) as c0,\
-                     StackContext(functools.partial(self.context, 'c1')) as c1,\
-                     StackContext(functools.partial(self.context, 'c2')) as c2:
-                    return (wrap(check_contexts), [c0, c1, c2])
+                partial = functools.partial
+                with StackContext(partial(self.context, 'c0')) as c0:
+                    with StackContext(partial(self.context, 'c1')) as c1:
+                        with StackContext(partial(self.context, 'c2')) as c2:
+                            return (wrap(check_contexts), [c0, c1, c2])
 
         # First make sure the test mechanism works without any deactivations
         func, deactivate_callbacks = make_wrapped_function()
