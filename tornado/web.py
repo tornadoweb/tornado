@@ -1877,9 +1877,10 @@ class StaticFileHandler(RequestHandler):
         ims_value = self.request.headers.get("If-Modified-Since")
         if ims_value is not None:
             date_tuple = email.utils.parsedate(ims_value)
-            if_since = datetime.datetime(*date_tuple[:6])
-            if if_since >= self.modified:
-                return True
+            if date_tuple is not None:
+                if_since = datetime.datetime(*date_tuple[:6])
+                if if_since >= self.modified:
+                    return True
 
         return False
 
