@@ -362,7 +362,7 @@ else:
                 # than one wildcard per fragment.  A survery of established
                 # policy among SSL implementations showed it to be a
                 # reasonable choice.
-                raise CertificateError(
+                raise SSLCertificateError(
                     "too many wildcards in certificate DNS name: " + repr(dn))
             if frag == '*':
                 # When '*' is a fragment by itself, it matches a non-empty dotless
