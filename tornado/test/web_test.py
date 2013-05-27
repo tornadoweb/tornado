@@ -24,6 +24,7 @@ wsgi_safe_tests = []
 
 relpath = lambda *a: os.path.join(os.path.dirname(__file__), *a)
 
+
 def wsgi_safe(cls):
     wsgi_safe_tests.append(cls)
     return cls
@@ -189,7 +190,7 @@ class CookieTest(WebTestCase):
         data = [('foo=a=b', 'a=b'),
                 ('foo="a=b"', 'a=b'),
                 ('foo="a;b"', 'a;b'),
-                #('foo=a\\073b', 'a;b'),  # even encoded, ";" is a delimiter
+                # ('foo=a\\073b', 'a;b'),  # even encoded, ";" is a delimiter
                 ('foo="a\\073b"', 'a;b'),
                 ('foo="a\\"b"', 'a"b'),
                 ]
@@ -854,7 +855,7 @@ class StaticFileTest(WebTestCase):
         # negative values, and at least one client (processing.js) seems
         # to use if-modified-since 1/1/1960 as a cache-busting technique.
         response = self.fetch("/static/robots.txt", headers={
-                'If-Modified-Since': 'Fri, 01 Jan 1960 00:00:00 GMT'})
+            'If-Modified-Since': 'Fri, 01 Jan 1960 00:00:00 GMT'})
         self.assertEqual(response.code, 200)
 
     def test_static_if_modified_since_time_zone(self):
@@ -865,10 +866,10 @@ class StaticFileTest(WebTestCase):
         stat = os.stat(relpath('static/robots.txt'))
 
         response = self.fetch('/static/robots.txt', headers={
-                'If-Modified-Since': format_timestamp(stat.st_mtime - 1)})
+            'If-Modified-Since': format_timestamp(stat.st_mtime - 1)})
         self.assertEqual(response.code, 200)
         response = self.fetch('/static/robots.txt', headers={
-                'If-Modified-Since': format_timestamp(stat.st_mtime + 1)})
+            'If-Modified-Since': format_timestamp(stat.st_mtime + 1)})
         self.assertEqual(response.code, 304)
 
     def test_static_etag(self):
@@ -878,7 +879,7 @@ class StaticFileTest(WebTestCase):
 
     def test_static_with_range(self):
         response = self.fetch('/static/robots.txt', headers={
-                'Range': 'bytes=0-9'})
+            'Range': 'bytes=0-9'})
         self.assertEqual(response.code, 206)
         self.assertEqual(response.body, b"User-agent")
         self.assertEqual(utf8(response.headers.get("Etag")),
@@ -889,7 +890,7 @@ class StaticFileTest(WebTestCase):
 
     def test_static_with_range_full_file(self):
         response = self.fetch('/static/robots.txt', headers={
-                'Range': 'bytes=0-'})
+            'Range': 'bytes=0-'})
         # Note: Chrome refuses to play audio if it gets an HTTP 206 in response
         # to ``Range: bytes=0-`` :(
         self.assertEqual(response.code, 200)
@@ -901,7 +902,7 @@ class StaticFileTest(WebTestCase):
 
     def test_static_with_range_end_edge(self):
         response = self.fetch('/static/robots.txt', headers={
-                'Range': 'bytes=22-'})
+            'Range': 'bytes=22-'})
         self.assertEqual(response.body, b": /\n")
         self.assertEqual(response.headers.get("Content-Length"), "4")
         self.assertEqual(response.headers.get("Content-Range"),
@@ -909,7 +910,7 @@ class StaticFileTest(WebTestCase):
 
     def test_static_with_range_neg_end(self):
         response = self.fetch('/static/robots.txt', headers={
-                'Range': 'bytes=-4'})
+            'Range': 'bytes=-4'})
         self.assertEqual(response.body, b": /\n")
         self.assertEqual(response.headers.get("Content-Length"), "4")
         self.assertEqual(response.headers.get("Content-Range"),
@@ -917,7 +918,7 @@ class StaticFileTest(WebTestCase):
 
     def test_static_invalid_range(self):
         response = self.fetch('/static/robots.txt', headers={
-                'Range': 'asdf'})
+            'Range': 'asdf'})
         self.assertEqual(response.code, 416)
 
     def test_static_head(self):
@@ -1364,8 +1365,8 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
                     x, self.handler.value())
 
         loader = DictLoader({
-                'foo.html': '{{ my_ui_method(42) }} {% module MyModule(123) %}',
-                })
+            'foo.html': '{{ my_ui_method(42) }} {% module MyModule(123) %}',
+        })
         return dict(template_loader=loader,
                     ui_methods={'my_ui_method': my_ui_method},
                     ui_modules={'MyModule': MyModule})
@@ -1457,6 +1458,7 @@ class UnimplementedHTTPMethodsTest(SimpleHandlerTestCase):
             response = self.fetch('/', method=method, body=b'')
             self.assertEqual(response.code, 405)
 
+
 class UnimplementedNonStandardMethodsTest(SimpleHandlerTestCase):
     # wsgiref.validate complains about unknown methods in a way that makes
     # this test not wsgi_safe.
@@ -1477,6 +1479,7 @@ class UnimplementedNonStandardMethodsTest(SimpleHandlerTestCase):
                               allow_nonstandard_methods=True)
         self.assertEqual(response.code, 405)
 
+
 @wsgi_safe
 class AllHTTPMethodsTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
@@ -1494,6 +1497,7 @@ class AllHTTPMethodsTest(SimpleHandlerTestCase):
         for method in ['POST', 'PUT']:
             response = self.fetch('/', method=method, body=b'')
             self.assertEqual(response.body, utf8(method))
+
 
 class PatchMethodTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):

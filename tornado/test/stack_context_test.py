@@ -174,7 +174,6 @@ class StackContextTest(AsyncTestCase):
         deactivate_callbacks[2]()
         self.assertEqual(func(), ['c0', 'c1'])
 
-
     def test_isolation_nonempty(self):
         # f2 and f3 are a chain of operations started in context c1.
         # f2 is incidentally run under context c2, but that context should

@@ -23,7 +23,7 @@ from tornado import gen
 
 skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 not available')
 skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
-                                'Not CPython implementation')
+                                 'Not CPython implementation')
 
 
 class GenEngineTest(AsyncTestCase):
@@ -510,7 +510,8 @@ class GenEngineTest(AsyncTestCase):
         # without waiting for garbage collection.
         @gen.engine
         def f():
-            class Foo(object): pass
+            class Foo(object):
+                pass
             arg = Foo()
             self.arg_ref = weakref.ref(arg)
             task = gen.Task(self.io_loop.add_callback, arg=arg)

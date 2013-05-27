@@ -9,6 +9,7 @@ class EchoHandler(WebSocketHandler):
     def on_message(self, message):
         self.write_message(message, isinstance(message, bytes))
 
+
 class NonWebSocketHandler(RequestHandler):
     def get(self):
         self.write('ok')

@@ -263,6 +263,7 @@ class EchoHandler(RequestHandler):
     def post(self):
         self.write(recursive_unicode(self.request.arguments))
 
+
 class TypeCheckHandler(RequestHandler):
     def prepare(self):
         self.errors = {}
@@ -347,8 +348,8 @@ class HTTPServerTest(AsyncHTTPTestCase):
 class HTTPServerRawTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
-                ('/echo', EchoHandler),
-                ])
+            ('/echo', EchoHandler),
+        ])
 
     def setUp(self):
         super(HTTPServerRawTest, self).setUp()
@@ -386,7 +387,7 @@ class XHeaderTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
         def get(self):
             self.write(dict(remote_ip=self.request.remote_ip,
-                remote_protocol=self.request.protocol))
+                            remote_protocol=self.request.protocol))
 
     def get_httpserver_options(self):
         return dict(xheaders=True)

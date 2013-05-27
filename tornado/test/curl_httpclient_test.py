@@ -65,6 +65,7 @@ class DigestAuthHandler(RequestHandler):
                             'Digest realm="%s", nonce="%s", opaque="%s"' %
                             (realm, nonce, opaque))
 
+
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):

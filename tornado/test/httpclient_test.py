@@ -82,6 +82,7 @@ class ContentLength304Handler(RequestHandler):
         # want to simulate servers that include the headers anyway.
         pass
 
+
 class AllMethodsHandler(RequestHandler):
     SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
 

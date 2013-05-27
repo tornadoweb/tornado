@@ -773,7 +773,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                 self.connect_future.set_exception(response.error)
             else:
                 self.connect_future.set_exception(WebSocketError(
-                        "Non-websocket response"))
+                    "Non-websocket response"))
 
     def _handle_1xx(self, code):
         assert code == 101
