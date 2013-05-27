@@ -1095,6 +1095,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     _OAUTH_ACCESS_TOKEN_URL = "https://graph.facebook.com/oauth/access_token?"
     _OAUTH_AUTHORIZE_URL = "https://graph.facebook.com/oauth/authorize?"
     _OAUTH_NO_CALLBACKS = False
+    _FACEBOOK_BASE_URL = "https://graph.facebook.com"
 
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
@@ -1205,7 +1206,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                         return
                     self.finish("Posted a message!")
         """
-        url = "https://graph.facebook.com" + path
+        url = self._FACEBOOK_BASE_URL + path
         all_args = {}
         if access_token:
             all_args["access_token"] = access_token

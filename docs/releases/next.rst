@@ -18,8 +18,11 @@ Multiple modules
 `tornado.auth`
 ~~~~~~~~~~~~~~
 
-* `tornado.auth.OAuthMixin` always sends ``oauth_version=1.0`` in its
+* `~tornado.auth.OAuthMixin` always sends ``oauth_version=1.0`` in its
   request as required by the spec.
+* `~tornado.auth.FacebookGraphMixin` now uses ``self._FACEBOOK_BASE_URL``
+  in `~.FacebookGraphMixin.facebook_request` to allow the base url to be
+  overridden.
 
 `tornado.escape`
 ~~~~~~~~~~~~~~~~
