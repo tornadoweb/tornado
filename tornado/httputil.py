@@ -289,15 +289,15 @@ def _get_content_range(start, end, total):
     """Returns a suitable Content-Range header:
 
     >>> print(_get_content_range(None, 1, 4))
-    0-0/4
+    bytes 0-0/4
     >>> print(_get_content_range(1, 3, 4))
-    1-2/4
+    bytes 1-2/4
     >>> print(_get_content_range(None, None, 4))
-    0-3/4
+    bytes 0-3/4
     """
     start = start or 0
     end = (end or total) - 1
-    return "%s-%s/%s" % (start, end, total)
+    return "bytes %s-%s/%s" % (start, end, total)
 
 
 def _int_or_none(val):
