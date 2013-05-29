@@ -919,7 +919,21 @@ class StaticFileTest(WebTestCase):
     def test_static_invalid_range(self):
         response = self.fetch('/static/robots.txt', headers={
             'Range': 'asdf'})
+        self.assertEqual(response.code, 200)
+
+    def test_static_unsatisfiable_range_zero_suffix(self):
+        response = self.fetch('/static/robots.txt', headers={
+            'Range': 'bytes=-0'})
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "bytes */26")
         self.assertEqual(response.code, 416)
+
+    def test_static_unsatisfiable_range_invalid_start(self):
+        response = self.fetch('/static/robots.txt', headers={
+            'Range': 'bytes=26'})
+        self.assertEqual(response.code, 416)
+        self.assertEqual(response.headers.get("Content-Range"),
+                         "bytes */26")
 
     def test_static_head(self):
         response = self.fetch('/static/robots.txt', method='HEAD')

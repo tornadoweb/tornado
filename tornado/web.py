@@ -1810,19 +1810,22 @@ class StaticFileHandler(RequestHandler):
         request_range = None
         range_header = self.request.headers.get("Range")
         if range_header:
+            # As per RFC 2616 14.16, if an invalid Range header is specified,
+            # the request will be treated as if the header didn't exist.
             request_range = httputil._parse_request_range(range_header)
-            if not request_range:
-                self.set_status(416)  # Range Not Satisfiable
-                self.set_header("Content-Type", "text/plain")
-                self.write("The provided Range header is not valid: %r\n"
-                           "Note: multiple ranges are not supported."
-                           % range_header)
-                return
 
         if request_range:
             start, end = request_range
             size = self.get_content_size()
-            if start < 0:
+            if (start is not None and start >= size) or end == 0:
+                # As per RFC 2616 14.35.1, a range is not satisfiable only: if
+                # the first requested byte is equal to or greater than the
+                # content, or when a suffix with length 0 is specified
+                self.set_status(416)  # Range Not Satisfiable
+                self.set_header("Content-Type", "text/plain")
+                self.set_header("Content-Range", "bytes */%s" %(size, ))
+                return
+            if start is not None and start < 0:
                 start += size
             # Note: only return HTTP 206 if less than the entire range has been
             # requested. Not only is this semantically correct, but Chrome

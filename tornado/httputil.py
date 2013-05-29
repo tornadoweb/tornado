@@ -255,6 +255,8 @@ def _parse_request_range(range_header):
     (6, None)
     >>> _parse_request_range("bytes=-6")
     (-6, None)
+    >>> _parse_request_range("bytes=-0")
+    (None, 0)
     >>> _parse_request_range("bytes=")
     (None, None)
     >>> _parse_request_range("foo=42")
@@ -278,8 +280,9 @@ def _parse_request_range(range_header):
         return None
     if end is not None:
         if start is None:
-            start = -end
-            end = None
+            if end != 0:
+                start = -end
+                end = None
         else:
             end += 1
     return (start, end)
