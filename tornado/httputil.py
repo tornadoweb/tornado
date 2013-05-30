@@ -255,6 +255,8 @@ def _parse_request_range(range_header):
     (6, None)
     >>> _parse_request_range("bytes=-6")
     (-6, None)
+    >>> _parse_request_range("bytes=-0")
+    (None, 0)
     >>> _parse_request_range("bytes=")
     (None, None)
     >>> _parse_request_range("foo=42")
@@ -278,8 +280,9 @@ def _parse_request_range(range_header):
         return None
     if end is not None:
         if start is None:
-            start = -end
-            end = None
+            if end != 0:
+                start = -end
+                end = None
         else:
             end += 1
     return (start, end)
@@ -289,15 +292,15 @@ def _get_content_range(start, end, total):
     """Returns a suitable Content-Range header:
 
     >>> print(_get_content_range(None, 1, 4))
-    0-0/4
+    bytes 0-0/4
     >>> print(_get_content_range(1, 3, 4))
-    1-2/4
+    bytes 1-2/4
     >>> print(_get_content_range(None, None, 4))
-    0-3/4
+    bytes 0-3/4
     """
     start = start or 0
     end = (end or total) - 1
-    return "%s-%s/%s" % (start, end, total)
+    return "bytes %s-%s/%s" % (start, end, total)
 
 
 def _int_or_none(val):
