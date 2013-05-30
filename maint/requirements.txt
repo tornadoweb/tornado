@@ -1,25 +1,26 @@
 # Frozen pip requirements for tools used in the development of tornado
 
 # Tornado's optional dependencies
-Twisted==12.3.0
+Twisted==13.0.0
 futures==2.1.3
 mock==1.0.1
-pycares==0.4.0
+pycares==0.5.0
 pycurl==7.19.0
 
 # Other useful tools
 Sphinx==1.1.3
-autopep8==0.8.7
+autopep8==0.9
 coverage==3.6
-pep8==1.4.4
-pyflakes==0.6.1
-tox==1.4.2
-virtualenv==1.8.2
+pep8==1.4.5
+pyflakes==0.7.2
+tox==1.4.3
+virtualenv==1.9.1
 
 # Indirect dependencies
-Jinja2==2.6
+Jinja2==2.7
+MarkupSafe==0.18
 Pygments==1.6
 docutils==0.10
-py==1.4.13
+py==1.4.14
 wsgiref==0.1.2
 zope.interface==4.0.5

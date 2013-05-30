@@ -232,6 +232,11 @@ class IOLoop(Configurable):
         be allowed to return before attempting to call `IOLoop.close()`.
         Therefore the call to `close` will usually appear just after
         the call to `start` rather than near the call to `stop`.
+
+        .. versionchanged:: 3.1
+           If the `IOLoop` implementation supports non-integer objects
+           for "file descriptors", those objects will have their
+           ``close`` method when ``all_fds`` is true.
         """
         raise NotImplementedError()
 

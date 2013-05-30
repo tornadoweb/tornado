@@ -77,6 +77,9 @@ class TCPServer(object):
        also be used in single-process servers if you want to create
        your listening sockets in some way other than
        `~tornado.netutil.bind_sockets`.
+
+    .. versionadded:: 3.1
+       The ``max_buffer_size`` argument.
     """
     def __init__(self, io_loop=None, ssl_options=None, max_buffer_size=None):
         self.io_loop = io_loop

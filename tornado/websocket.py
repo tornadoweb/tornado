@@ -238,6 +238,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         connection is established.
 
         See `.BaseIOStream.set_nodelay` for additional details.
+
+        .. versionadded:: 3.1
         """
         self.stream.set_nodelay(value)
 
@@ -773,7 +775,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                 self.connect_future.set_exception(response.error)
             else:
                 self.connect_future.set_exception(WebSocketError(
-                        "Non-websocket response"))
+                    "Non-websocket response"))
 
     def _handle_1xx(self, code):
         assert code == 101

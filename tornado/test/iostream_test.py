@@ -156,7 +156,7 @@ class TestIOStreamMixin(object):
             self.fail()
         server.read_until_close(callback=closed_callback,
                                 streaming_callback=self.stop)
-        self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
+        # self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
         data = self.wait()
         self.assertEqual(data, b"efgh")
         server.close()

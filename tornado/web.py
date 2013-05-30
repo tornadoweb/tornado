@@ -205,6 +205,9 @@ class RequestHandler(object):
         `asynchronous` decorator cannot be used on `prepare`).
         If this method returns a `.Future` execution will not proceed
         until the `.Future` is done.
+
+        .. versionadded:: 3.1
+           Asynchronous support.
         """
         pass
 
@@ -244,7 +247,7 @@ class RequestHandler(object):
         self.set_default_headers()
         if (not self.request.supports_http_1_1() and
             getattr(self.request, 'connection', None) and
-            not self.request.connection.no_keep_alive):
+                not self.request.connection.no_keep_alive):
             conn_header = self.request.headers.get("Connection")
             if conn_header and (conn_header.lower() == "keep-alive"):
                 self.set_header("Connection", "Keep-Alive")
@@ -328,7 +331,7 @@ class RequestHandler(object):
         # additional headers or split the request. Also cap length to
         # prevent obviously erroneous values.
         if (len(value) > 4000 or
-            RequestHandler._INVALID_HEADER_CHAR_RE.search(value)):
+                RequestHandler._INVALID_HEADER_CHAR_RE.search(value)):
             raise ValueError("Unsafe header value %r", value)
         return value
 
@@ -1211,6 +1214,8 @@ class RequestHandler(object):
         stack traces (on the ``tornado.general`` logger), and all
         other exceptions as errors with stack traces (on the
         ``tornado.application`` logger).
+
+        .. versionadded:: 3.1
         """
         if isinstance(value, HTTPError):
             if value.log_message:
@@ -1278,6 +1283,8 @@ def asynchronous(method):
               self.write("Downloaded!")
               self.finish()
 
+    .. versionadded:: 3.1
+       The ability to use ``@gen.coroutine`` without ``@asynchronous``.
     """
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
@@ -1668,6 +1675,8 @@ class MissingArgumentError(HTTPError):
 
     This is a subclass of `HTTPError`, so if it is uncaught a 400 response
     code will be used instead of 500 (and a stack trace will not be logged).
+
+    .. versionadded:: 3.1
     """
     def __init__(self, arg_name):
         super(MissingArgumentError, self).__init__(
@@ -1760,6 +1769,9 @@ class StaticFileHandler(RequestHandler):
     static content from a database), override `get_content`,
     `get_content_size`, `get_modified_time`, `get_absolute_path`, and
     `validate_absolute_path`.
+
+    .. versionchanged:: 3.1
+       Many of the methods for subclasses were added in Tornado 3.1.
     """
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
@@ -1767,7 +1779,7 @@ class StaticFileHandler(RequestHandler):
     _lock = threading.Lock()  # protects _static_hashes
 
     def initialize(self, path, default_filename=None):
-        self.root = os.path.abspath(path) + os.path.sep
+        self.root = path
         self.default_filename = default_filename
 
     @classmethod
@@ -1782,8 +1794,9 @@ class StaticFileHandler(RequestHandler):
         # Set up our path instance variables.
         self.path = self.parse_url_path(path)
         del path  # make sure we don't refer to path instead of self.path again
-        absolute_path = self.get_absolute_path(self.settings, self.path)
-        self.absolute_path = self.validate_absolute_path(absolute_path)
+        absolute_path = self.get_absolute_path(self.root, self.path)
+        self.absolute_path = self.validate_absolute_path(
+            self.root, absolute_path)
         if self.absolute_path is None:
             return
 
@@ -1840,14 +1853,19 @@ class StaticFileHandler(RequestHandler):
         This allows efficient ``If-None-Match`` checks against cached
         versions, and sends the correct ``Etag`` for a partial response
         (i.e. the same ``Etag`` as the full file).
+
+        .. versionadded:: 3.1
         """
         version_hash = self._get_cached_version(self.absolute_path)
         if not version_hash:
             return None
-        return '"%s"' %(version_hash, )
+        return '"%s"' % (version_hash, )
 
     def set_headers(self):
-        """Sets the content and caching headers on the response."""
+        """Sets the content and caching headers on the response.
+
+        .. versionadded:: 3.1
+        """
         self.set_header("Accept-Ranges", "bytes")
         self.set_etag_header()
 
@@ -1867,7 +1885,10 @@ class StaticFileHandler(RequestHandler):
         self.set_extra_headers(self.path)
 
     def should_return_304(self):
-        """Returns True if the headers indicate that we should return 304."""
+        """Returns True if the headers indicate that we should return 304.
+
+        .. versionadded:: 3.1
+        """
         if self.check_etag_header():
             return True
 
@@ -1876,27 +1897,35 @@ class StaticFileHandler(RequestHandler):
         ims_value = self.request.headers.get("If-Modified-Since")
         if ims_value is not None:
             date_tuple = email.utils.parsedate(ims_value)
-            if_since = datetime.datetime(*date_tuple[:6])
-            if if_since >= self.modified:
-                return True
+            if date_tuple is not None:
+                if_since = datetime.datetime(*date_tuple[:6])
+                if if_since >= self.modified:
+                    return True
 
         return False
 
     @classmethod
-    def get_absolute_path(cls, settings, path):
-        """Returns the absolute location of ``path``.
+    def get_absolute_path(cls, root, path):
+        """Returns the absolute location of ``path`` relative to ``root``.
+
+        ``root`` is the path configured for this `StaticFileHandler`
+        (in most cases the ``static_path`` `Application` setting).
 
         This class method may be overridden in subclasses.  By default
         it returns a filesystem path, but other strings may be used
         as long as they are unique and understood by the subclass's
         overridden `get_content`.
+
+        .. versionadded:: 3.1
         """
-        root = settings["static_path"]
         abspath = os.path.abspath(os.path.join(root, path))
         return abspath
 
-    def validate_absolute_path(self, absolute_path):
+    def validate_absolute_path(self, root, absolute_path):
         """Validate and return the absolute path.
+
+        ``root`` is the configured path for the `StaticFileHandler`,
+        and ``path`` is the result of `get_absolute_path`
 
         This is an instance method called during request processing,
         so it may raise `HTTPError` or use methods like
@@ -1909,15 +1938,17 @@ class StaticFileHandler(RequestHandler):
 
         In instance methods, this method's result is available as
         ``self.absolute_path``.
+
+        .. versionadded:: 3.1
         """
-        root = os.path.abspath(self.settings["static_path"])
+        root = os.path.abspath(root)
         # os.path.abspath strips a trailing /
         # it needs to be temporarily added back for requests to root/
         if not (absolute_path + os.path.sep).startswith(root):
             raise HTTPError(403, "%s is not in root static directory",
                             self.path)
         if (os.path.isdir(absolute_path) and
-            self.default_filename is not None):
+                self.default_filename is not None):
             # need to look at the request.path here for when path is empty
             # but there is some prefix to the path that was already
             # trimmed by the routing
@@ -1944,6 +1975,8 @@ class StaticFileHandler(RequestHandler):
         This method should either return a byte string or an iterator
         of byte strings.  The latter is preferred for large files
         as it helps reduce memory fragmentation.
+
+        .. versionadded:: 3.1
         """
         with open(abspath, "rb") as file:
             if start is not None:
@@ -1972,6 +2005,8 @@ class StaticFileHandler(RequestHandler):
 
         This class method may be overridden by subclasses.  The
         default implementation is a hash of the file's contents.
+
+        .. versionadded:: 3.1
         """
         data = cls.get_content(abspath)
         hasher = hashlib.md5()
@@ -1992,6 +2027,8 @@ class StaticFileHandler(RequestHandler):
 
         This method may be overridden by subclasses. It will only
         be called if a partial result is requested from `get_content`
+
+        .. versionadded:: 3.1
         """
         stat_result = self._stat()
         return stat_result[stat.ST_SIZE]
@@ -2001,13 +2038,18 @@ class StaticFileHandler(RequestHandler):
 
         May be overridden in subclasses.  Should return a `~datetime.datetime`
         object or None.
+
+        .. versionadded:: 3.1
         """
         stat_result = self._stat()
         modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
         return modified
 
     def get_content_type(self):
-        """Returns the ``Content-Type`` header to be used for this request."""
+        """Returns the ``Content-Type`` header to be used for this request.
+
+        .. versionadded:: 3.1
+        """
         mime_type, encoding = mimetypes.guess_type(self.absolute_path)
         return mime_type
 
@@ -2080,11 +2122,12 @@ class StaticFileHandler(RequestHandler):
         The returned value should be a string, or ``None`` if no version
         could be determined.
 
-        This method was previously recommended for subclasses to override;
-        `get_content_version` is now preferred as it allows the base
-        class to handle caching of the result.
+        .. versionchanged:: 3.1
+           This method was previously recommended for subclasses to override;
+           `get_content_version` is now preferred as it allows the base
+           class to handle caching of the result.
         """
-        abs_path = cls.get_absolute_path(settings, path)
+        abs_path = cls.get_absolute_path(settings['static_path'], path)
         return cls._get_cached_version(abs_path)
 
     @classmethod

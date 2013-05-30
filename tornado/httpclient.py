@@ -311,6 +311,9 @@ class HTTPRequest(object):
            ``simple_httpclient`` and true in ``curl_httpclient``
         :arg string client_key: Filename for client SSL key, if any
         :arg string client_cert: Filename for client SSL certificate, if any
+
+        .. versionadded:: 3.1
+           The ``auth_mode`` argument.
         """
         if headers is None:
             headers = httputil.HTTPHeaders()
@@ -327,7 +330,7 @@ class HTTPRequest(object):
         self.body = utf8(body)
         self.auth_username = auth_username
         self.auth_password = auth_password
-        self.auth_mode = auth_mode        
+        self.auth_mode = auth_mode
         self.connect_timeout = connect_timeout
         self.request_timeout = request_timeout
         self.follow_redirects = follow_redirects

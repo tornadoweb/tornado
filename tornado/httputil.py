@@ -23,7 +23,6 @@ import collections
 import datetime
 import email.utils
 import numbers
-import re
 import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
@@ -43,6 +42,7 @@ try:
     from urllib import urlencode  # py2
 except ImportError:
     from urllib.parse import urlencode  # py3
+
 
 class _NormalizedHeaderCache(dict):
     """Dynamic cached mapping of header names to Http-Header-Case.
@@ -73,6 +73,7 @@ class _NormalizedHeaderCache(dict):
         return normalized
 
 _normalized_headers = _NormalizedHeaderCache(1000)
+
 
 class HTTPHeaders(dict):
     """A dictionary that maintains ``Http-Header-Case`` for all keys.
@@ -237,6 +238,7 @@ class HTTPFile(ObjectDict):
     """
     pass
 
+
 def _parse_request_range(range_header):
     """Parses a Range header.
 
@@ -282,6 +284,7 @@ def _parse_request_range(range_header):
             end += 1
     return (start, end)
 
+
 def _get_content_range(start, end, total):
     """Returns a suitable Content-Range header:
 
@@ -295,6 +298,7 @@ def _get_content_range(start, end, total):
     start = start or 0
     end = (end or total) - 1
     return "%s-%s/%s" % (start, end, total)
+
 
 def _int_or_none(val):
     val = val.strip()

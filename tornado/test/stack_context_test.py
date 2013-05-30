@@ -3,7 +3,8 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 from tornado import gen
 from tornado.log import app_log
-from tornado.stack_context import StackContext, wrap, NullContext, StackContextInconsistentError, ExceptionStackContext, run_with_stack_context
+from tornado.stack_context import (StackContext, wrap, NullContext, StackContextInconsistentError,
+                                   ExceptionStackContext, run_with_stack_context, _state)
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.web import asynchronous, Application, RequestHandler
@@ -94,6 +95,84 @@ class StackContextTest(AsyncTestCase):
         with StackContext(functools.partial(self.context, 'application')):
             library_function(final_callback)
         self.wait()
+
+    def test_deactivate(self):
+        deactivate_callbacks = []
+
+        def f1():
+            with StackContext(functools.partial(self.context, 'c1')) as c1:
+                deactivate_callbacks.append(c1)
+                self.io_loop.add_callback(f2)
+
+        def f2():
+            with StackContext(functools.partial(self.context, 'c2')) as c2:
+                deactivate_callbacks.append(c2)
+                self.io_loop.add_callback(f3)
+
+        def f3():
+            with StackContext(functools.partial(self.context, 'c3')) as c3:
+                deactivate_callbacks.append(c3)
+                self.io_loop.add_callback(f4)
+
+        def f4():
+            self.assertEqual(self.active_contexts, ['c1', 'c2', 'c3'])
+            deactivate_callbacks[1]()
+            # deactivating a context doesn't remove it immediately,
+            # but it will be missing from the next iteration
+            self.assertEqual(self.active_contexts, ['c1', 'c2', 'c3'])
+            self.io_loop.add_callback(f5)
+
+        def f5():
+            self.assertEqual(self.active_contexts, ['c1', 'c3'])
+            self.stop()
+        self.io_loop.add_callback(f1)
+        self.wait()
+
+    def test_deactivate_order(self):
+        # Stack context deactivation has separate logic for deactivation at
+        # the head and tail of the stack, so make sure it works in any order.
+        def check_contexts():
+            # Make sure that the full-context array and the exception-context
+            # linked lists are consistent with each other.
+            full_contexts, chain = _state.contexts
+            exception_contexts = []
+            while chain is not None:
+                exception_contexts.append(chain)
+                chain = chain.old_contexts[1]
+            self.assertEqual(list(reversed(full_contexts)), exception_contexts)
+            return list(self.active_contexts)
+
+        def make_wrapped_function():
+            """Wraps a function in three stack contexts, and returns
+            the function along with the deactivation functions.
+            """
+            # Remove the test's stack context to make sure we can cover
+            # the case where the last context is deactivated.
+            with NullContext():
+                partial = functools.partial
+                with StackContext(partial(self.context, 'c0')) as c0:
+                    with StackContext(partial(self.context, 'c1')) as c1:
+                        with StackContext(partial(self.context, 'c2')) as c2:
+                            return (wrap(check_contexts), [c0, c1, c2])
+
+        # First make sure the test mechanism works without any deactivations
+        func, deactivate_callbacks = make_wrapped_function()
+        self.assertEqual(func(), ['c0', 'c1', 'c2'])
+
+        # Deactivate the tail
+        func, deactivate_callbacks = make_wrapped_function()
+        deactivate_callbacks[0]()
+        self.assertEqual(func(), ['c1', 'c2'])
+
+        # Deactivate the middle
+        func, deactivate_callbacks = make_wrapped_function()
+        deactivate_callbacks[1]()
+        self.assertEqual(func(), ['c0', 'c2'])
+
+        # Deactivate the head
+        func, deactivate_callbacks = make_wrapped_function()
+        deactivate_callbacks[2]()
+        self.assertEqual(func(), ['c0', 'c1'])
 
     def test_isolation_nonempty(self):
         # f2 and f3 are a chain of operations started in context c1.

@@ -235,7 +235,7 @@ class BaseIOStream(object):
                     self.error = exc_info[1]
             if self._read_until_close:
                 if (self._streaming_callback is not None and
-                    self._read_buffer_size):
+                        self._read_buffer_size):
                     self._run_callback(self._streaming_callback,
                                        self._consume(self._read_buffer_size))
                 callback = self._read_callback
@@ -283,6 +283,8 @@ class BaseIOStream(object):
         additional bandwidth.
 
         This flag is currently defined only for TCP-based ``IOStreams``.
+
+        .. versionadded:: 3.1
         """
         pass
 
@@ -745,7 +747,7 @@ class IOStream(BaseIOStream):
 
     def set_nodelay(self, value):
         if (self.socket is not None and
-            self.socket.family in (socket.AF_INET, socket.AF_INET6)):
+                self.socket.family in (socket.AF_INET, socket.AF_INET6)):
             try:
                 self.socket.setsockopt(socket.IPPROTO_TCP,
                                        socket.TCP_NODELAY, 1 if value else 0)
