@@ -208,6 +208,18 @@ class TwitterServerShowUserHandler(RequestHandler):
         self.write(dict(screen_name=screen_name, name=screen_name.capitalize()))
 
 
+class TwitterServerVerifyCredentialsHandler(RequestHandler):
+    def get(self):
+        assert 'oauth_nonce' in self.request.arguments
+        assert 'oauth_timestamp' in self.request.arguments
+        assert 'oauth_signature' in self.request.arguments
+        assert self.get_argument('oauth_consumer_key') == 'test_twitter_consumer_key'
+        assert self.get_argument('oauth_signature_method') == 'HMAC-SHA1'
+        assert self.get_argument('oauth_version') == '1.0'
+        assert self.get_argument('oauth_token') == 'hjkl'
+        self.write(dict(screen_name='foo', name='Foo'))
+
+
 class GoogleOpenIdClientLoginHandler(RequestHandler, GoogleMixin):
     def initialize(self, test):
         self._OPENID_ENDPOINT = test.get_url('/openid/server/authenticate')
@@ -262,6 +274,7 @@ class AuthTest(AsyncHTTPTestCase):
 
                 ('/twitter/server/access_token', TwitterServerAccessTokenHandler),
                 (r'/twitter/api/users/show/(.*)\.json', TwitterServerShowUserHandler),
+                (r'/twitter/api/account/verify_credentials\.json', TwitterServerVerifyCredentialsHandler),
             ],
             http_client=self.http_client,
             twitter_consumer_key='test_twitter_consumer_key',
