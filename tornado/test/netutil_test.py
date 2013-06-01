@@ -53,7 +53,7 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
         self.resolver = ThreadedResolver(io_loop=self.io_loop)
 
     def tearDown(self):
-        self.resolver.executor.shutdown()
+        self.resolver.close()
         super(ThreadedResolverTest, self).tearDown()
 
 
