@@ -6,6 +6,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin, GoogleMixin, AuthError
+from tornado.concurrent import Future
 from tornado.escape import json_decode
 from tornado import gen
 from tornado.log import gen_log
@@ -24,7 +25,9 @@ class OpenIdClientLoginHandler(RequestHandler, OpenIdMixin):
             self.get_authenticated_user(
                 self.on_user, http_client=self.settings['http_client'])
             return
-        self.authenticate_redirect()
+        res = self.authenticate_redirect()
+        assert isinstance(res, Future)
+        assert res.done()
 
     def on_user(self, user):
         if user is None:
@@ -55,7 +58,8 @@ class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
             self.get_authenticated_user(
                 self.on_user, http_client=self.settings['http_client'])
             return
-        self.authorize_redirect(http_client=self.settings['http_client'])
+        res = self.authorize_redirect(http_client=self.settings['http_client'])
+        assert isinstance(res, Future)
 
     def on_user(self, user):
         if user is None:
@@ -98,7 +102,9 @@ class OAuth2ClientLoginHandler(RequestHandler, OAuth2Mixin):
         self._OAUTH_AUTHORIZE_URL = test.get_url('/oauth2/server/authorize')
 
     def get(self):
-        self.authorize_redirect()
+        res = self.authorize_redirect()
+        assert isinstance(res, Future)
+        assert res.done()
 
 
 class TwitterClientHandler(RequestHandler, TwitterMixin):
@@ -124,6 +130,31 @@ class TwitterClientLoginHandler(TwitterClientHandler):
         if user is None:
             raise Exception("user is None")
         self.finish(user)
+
+
+class TwitterClientLoginGenEngineHandler(TwitterClientHandler):
+    @asynchronous
+    @gen.engine
+    def get(self):
+        if self.get_argument("oauth_token", None):
+            user = yield self.get_authenticated_user()
+            self.finish(user)
+        else:
+            # Old style: with @gen.engine we can ignore the Future from
+            # authorize_redirect.
+            self.authorize_redirect()
+
+
+class TwitterClientLoginGenCoroutineHandler(TwitterClientHandler):
+    @gen.coroutine
+    def get(self):
+        if self.get_argument("oauth_token", None):
+            user = yield self.get_authenticated_user()
+            self.finish(user)
+        else:
+            # New style: with @gen.coroutine the result must be yielded
+            # or else the request will be auto-finished too soon.
+            yield self.authorize_redirect()
 
 
 class TwitterClientShowUserHandler(TwitterClientHandler):
@@ -186,7 +217,9 @@ class GoogleOpenIdClientLoginHandler(RequestHandler, GoogleMixin):
         if self.get_argument("openid.mode", None):
             self.get_authenticated_user(self.on_user)
             return
-        self.authenticate_redirect()
+        res = self.authenticate_redirect()
+        assert isinstance(res, Future)
+        assert res.done()
 
     def on_user(self, user):
         if user is None:
@@ -216,6 +249,8 @@ class AuthTest(AsyncHTTPTestCase):
                 ('/oauth2/client/login', OAuth2ClientLoginHandler, dict(test=self)),
 
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
+                ('/twitter/client/login_gen_engine', TwitterClientLoginGenEngineHandler, dict(test=self)),
+                ('/twitter/client/login_gen_coroutine', TwitterClientLoginGenCoroutineHandler, dict(test=self)),
                 ('/twitter/client/show_user', TwitterClientShowUserHandler, dict(test=self)),
                 ('/twitter/client/show_user_future', TwitterClientShowUserFutureHandler, dict(test=self)),
                 ('/google/client/openid_login', GoogleOpenIdClientLoginHandler, dict(test=self)),
@@ -305,9 +340,9 @@ class AuthTest(AsyncHTTPTestCase):
         self.assertEqual(response.code, 302)
         self.assertTrue('/oauth2/server/authorize?' in response.headers['Location'])
 
-    def test_twitter_redirect(self):
+    def base_twitter_redirect(self, url):
         # Same as test_oauth10a_redirect
-        response = self.fetch('/twitter/client/login', follow_redirects=False)
+        response = self.fetch(url, follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertTrue(response.headers['Location'].endswith(
             '/oauth1/server/authorize?oauth_token=zxcv'))
@@ -315,6 +350,15 @@ class AuthTest(AsyncHTTPTestCase):
         self.assertTrue(
             '_oauth_request_token="enhjdg==|MTIzNA=="' in response.headers['Set-Cookie'],
             response.headers['Set-Cookie'])
+
+    def test_twitter_redirect(self):
+        self.base_twitter_redirect('/twitter/client/login')
+
+    def test_twitter_redirect_gen_engine(self):
+        self.base_twitter_redirect('/twitter/client/login_gen_engine')
+
+    def test_twitter_redirect_gen_coroutine(self):
+        self.base_twitter_redirect('/twitter/client/login_gen_coroutine')
 
     def test_twitter_get_user(self):
         response = self.fetch(
