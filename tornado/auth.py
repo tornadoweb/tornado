@@ -409,7 +409,7 @@ class OAuthMixin(object):
     def _on_request_token(self, authorize_url, callback_uri, callback,
                           response):
         if response.error:
-            raise Exception("Could not get request token")
+            raise Exception("Could not get request token: %s" % response.error)
         request_token = _oauth_parse_response(response.body)
         data = (base64.b64encode(escape.utf8(request_token["key"])) + b"|" +
                 base64.b64encode(escape.utf8(request_token["secret"])))
