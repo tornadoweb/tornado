@@ -281,8 +281,9 @@ class SimpleHTTPClientTestMixin(object):
     def test_connection_refused(self):
         server_socket, port = bind_unused_port()
         server_socket.close()
-        self.http_client.fetch("http://localhost:%d/" % port, self.stop)
-        response = self.wait()
+        with ExpectLog(gen_log, ".*", required=False):
+            self.http_client.fetch("http://localhost:%d/" % port, self.stop)
+            response = self.wait()
         self.assertEqual(599, response.code)
 
         if sys.platform != 'cygwin':
