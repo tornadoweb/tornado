@@ -723,7 +723,7 @@ class TwitterMixin(OAuthMixin):
     @gen.coroutine
     def _oauth_get_user_future(self, access_token):
         user = yield self.twitter_request(
-            "/users/show/" + escape.native_str(access_token["screen_name"]),
+            "/account/verify_credentials",
             access_token=access_token)
         if user:
             user["username"] = user["screen_name"]
