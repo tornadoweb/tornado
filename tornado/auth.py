@@ -590,7 +590,7 @@ class TwitterMixin(OAuthMixin):
     _OAUTH_AUTHORIZE_URL = "http://api.twitter.com/oauth/authorize"
     _OAUTH_AUTHENTICATE_URL = "http://api.twitter.com/oauth/authenticate"
     _OAUTH_NO_CALLBACKS = False
-    _TWITTER_BASE_URL = "http://api.twitter.com/1"
+    _TWITTER_BASE_URL = "http://api.twitter.com/1.1"
 
     def authenticate_redirect(self, callback_uri=None):
         """Just like `~OAuthMixin.authorize_redirect`, but
