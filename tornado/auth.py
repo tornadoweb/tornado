@@ -618,12 +618,12 @@ class TwitterMixin(OAuthMixin):
     and all of the custom Twitter user attributes described at
     https://dev.twitter.com/docs/api/1.1/get/users/show
     """
-    _OAUTH_REQUEST_TOKEN_URL = "http://api.twitter.com/oauth/request_token"
-    _OAUTH_ACCESS_TOKEN_URL = "http://api.twitter.com/oauth/access_token"
-    _OAUTH_AUTHORIZE_URL = "http://api.twitter.com/oauth/authorize"
-    _OAUTH_AUTHENTICATE_URL = "http://api.twitter.com/oauth/authenticate"
+    _OAUTH_REQUEST_TOKEN_URL = "https://api.twitter.com/oauth/request_token"
+    _OAUTH_ACCESS_TOKEN_URL = "https://api.twitter.com/oauth/access_token"
+    _OAUTH_AUTHORIZE_URL = "https://api.twitter.com/oauth/authorize"
+    _OAUTH_AUTHENTICATE_URL = "https://api.twitter.com/oauth/authenticate"
     _OAUTH_NO_CALLBACKS = False
-    _TWITTER_BASE_URL = "http://api.twitter.com/1"
+    _TWITTER_BASE_URL = "https://api.twitter.com/1.1"
 
     @return_future
     def authenticate_redirect(self, callback_uri=None, callback=None):
