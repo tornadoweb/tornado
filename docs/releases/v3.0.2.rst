@@ -1,0 +1,12 @@
+What's new in Tornado 3.0.2
+===========================
+
+Jun 2, 2013
+-----------
+
+* `tornado.auth.TwitterMixin` now defaults to version 1.1 of the
+  Twitter API, instead of version 1.0 which is being `discontinued on
+  June 11 <https://dev.twitter.com/calendar>`_.  It also now uses HTTPS
+  when talking to Twitter.
+* Fixed a potential memory leak with a long chain of `.gen.coroutine`
+  or `.gen.engine` functions.
