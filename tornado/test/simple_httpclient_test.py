@@ -205,8 +205,7 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipOnTravis
     def test_request_timeout(self):
-        with ExpectLog(gen_log, "uncaught exception"):
-            response = self.fetch('/trigger?wake=false', request_timeout=0.1)
+        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
         self.assertEqual(response.code, 599)
         self.assertTrue(0.099 < response.request_time < 0.15, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
@@ -226,9 +225,8 @@ class SimpleHTTPClientTestMixin(object):
         url = self.get_url("/hello").replace("localhost", "[::1]")
 
         # ipv6 is currently disabled by default and must be explicitly requested
-        with ExpectLog(gen_log, "uncaught exception"):
-            self.http_client.fetch(url, self.stop)
-            response = self.wait()
+        self.http_client.fetch(url, self.stop)
+        response = self.wait()
         self.assertEqual(response.code, 599)
 
         self.http_client.fetch(url, self.stop, allow_ipv6=True)
@@ -241,11 +239,10 @@ class SimpleHTTPClientTestMixin(object):
         response = self.fetch("/content_length?value=2,%202,2")
         self.assertEqual(response.body, b"ok")
 
-        with ExpectLog(gen_log, "uncaught exception"):
-            response = self.fetch("/content_length?value=2,4")
-            self.assertEqual(response.code, 599)
-            response = self.fetch("/content_length?value=2,%202,3")
-            self.assertEqual(response.code, 599)
+        response = self.fetch("/content_length?value=2,4")
+        self.assertEqual(response.code, 599)
+        response = self.fetch("/content_length?value=2,%202,3")
+        self.assertEqual(response.code, 599)
 
     def test_head_request(self):
         response = self.fetch("/head", method="HEAD")
@@ -268,9 +265,8 @@ class SimpleHTTPClientTestMixin(object):
         self.assertEqual(response.headers["Content-length"], "0")
 
         # 204 status with non-zero content length is malformed
-        with ExpectLog(gen_log, "uncaught exception"):
-            response = self.fetch("/no_content?error=1")
-            self.assertEqual(response.code, 599)
+        response = self.fetch("/no_content?error=1")
+        self.assertEqual(response.code, 599)
 
     def test_host_header(self):
         host_re = re.compile(b"^localhost:[0-9]+$")
@@ -285,7 +281,7 @@ class SimpleHTTPClientTestMixin(object):
     def test_connection_refused(self):
         server_socket, port = bind_unused_port()
         server_socket.close()
-        with ExpectLog(gen_log, ".*"):
+        with ExpectLog(gen_log, ".*", required=False):
             self.http_client.fetch("http://localhost:%d/" % port, self.stop)
             response = self.wait()
         self.assertEqual(599, response.code)
