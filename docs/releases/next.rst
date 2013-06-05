@@ -23,6 +23,17 @@ Multiple modules
 * `~tornado.auth.FacebookGraphMixin` now uses ``self._FACEBOOK_BASE_URL``
   in `~.FacebookGraphMixin.facebook_request` to allow the base url to be
   overridden.
+* The ``authenticate_redirect`` and ``authorize_redirect`` methods in the
+  `tornado.auth` mixin classes all now return Futures.  These methods
+  are asynchronous in `.OAuthMixin` and derived classes, although they
+  do not take a callback.  The `.Future` these methods return must be
+  yielded if they are called from a function decorated with `.gen.coroutine`
+  (but not `.gen.engine`).
+* `.TwitterMixin` now uses ``/account/verify_credentials`` to get information
+  about the logged-in user, which is more robust against changing screen
+  names.
+* The ``demos`` directory (in the source distribution) has a new
+  ``twitter`` demo using `.TwitterMixin`.
 
 `tornado.escape`
 ~~~~~~~~~~~~~~~~
@@ -50,6 +61,8 @@ Multiple modules
   errors from `.IOLoop.update_handler` in various scenarios including
   digest authentication and socks proxies.
 * The ``TCP_NODELAY`` flag is now set when appropriate in ``simple_httpclient``.
+* ``simple_httpclient`` no longer logs exceptions, since those exceptions
+  are made available to the caller as ``HTTPResponse.error``.
 
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
@@ -65,6 +78,9 @@ Multiple modules
   HTTP 1.0 connections that explicitly pass ``Connection: keep-alive``.
 * The ``Connection: keep-alive`` check for HTTP 1.0 connections is now
   case-insensitive.
+* The `str` and `repr` of `tornado.httpserver.HTTPRequest` no longer
+  include the request body, reducing log spam on errors (and potential
+  exposure/retention of private data).
 
 `tornado.httputil`
 ~~~~~~~~~~~~~~~~~~
@@ -106,6 +122,10 @@ Multiple modules
 * `.Resolver` now has a `~.Resolver.close` method.
 * Fixed a potential CPU DoS when ``tornado.netutil.ssl_match_hostname``
   is used on certificates with an abusive wildcard pattern.
+* All instances of `.ThreadedResolver` now share a single thread pool,
+  whose size is set by the first one to be created (or the static
+  ``Resolver.configure`` method).
+* `.ExecutorResolver` is now documented for public use.
 
 `tornado.options`
 ~~~~~~~~~~~~~~~~~
