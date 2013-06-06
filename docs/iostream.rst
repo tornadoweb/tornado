@@ -43,3 +43,8 @@
 
    .. autoclass:: PipeIOStream
       :members:
+
+   Exceptions
+   ----------
+
+   .. autoexception:: StreamClosedError

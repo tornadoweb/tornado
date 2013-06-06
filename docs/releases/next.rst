@@ -229,6 +229,9 @@ Multiple modules
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
 
+* `.WebSocketHandler` now catches `.StreamClosedError` and runs
+  `~.WebSocketHandler.on_close` immediately instead of logging a
+  stack trace.
 * New method `.WebSocketHandler.set_nodelay` can be used to set the
   ``TCP_NODELAY`` flag.
 

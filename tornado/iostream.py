@@ -48,6 +48,12 @@ except ImportError:
 
 
 class StreamClosedError(IOError):
+    """Exception raised by `IOStream` methods when the stream is closed.
+
+    Note that the close callback is scheduled to run *after* other
+    callbacks on the stream (to allow for buffered data to be processed),
+    so you may see this error before you see the close callback.
+    """
     pass
 
 
