@@ -35,6 +35,7 @@ from tornado.concurrent import Future
 from tornado.escape import utf8, native_str
 from tornado import httpclient
 from tornado.ioloop import IOLoop
+from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
 from tornado import simple_httpclient
@@ -588,7 +589,10 @@ class WebSocketProtocol13(WebSocketProtocol):
             opcode = 0x1
         message = tornado.escape.utf8(message)
         assert isinstance(message, bytes_type)
-        self._write_frame(True, opcode, message)
+        try:
+            self._write_frame(True, opcode, message)
+        except StreamClosedError:
+            self._abort()
 
     def write_ping(self, data):
         """Send ping frame."""
@@ -596,7 +600,10 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._write_frame(True, 0x9, data)
 
     def _receive_frame(self):
-        self.stream.read_bytes(2, self._on_frame_start)
+        try:
+            self.stream.read_bytes(2, self._on_frame_start)
+        except StreamClosedError:
+            self._abort()
 
     def _on_frame_start(self, data):
         header, payloadlen = struct.unpack("BB", data)
@@ -614,34 +621,46 @@ class WebSocketProtocol13(WebSocketProtocol):
             # control frames must have payload < 126
             self._abort()
             return
-        if payloadlen < 126:
-            self._frame_length = payloadlen
+        try:
+            if payloadlen < 126:
+                self._frame_length = payloadlen
+                if self._masked_frame:
+                    self.stream.read_bytes(4, self._on_masking_key)
+                else:
+                    self.stream.read_bytes(self._frame_length, self._on_frame_data)
+            elif payloadlen == 126:
+                self.stream.read_bytes(2, self._on_frame_length_16)
+            elif payloadlen == 127:
+                self.stream.read_bytes(8, self._on_frame_length_64)
+        except StreamClosedError:
+            self._abort()
+
+    def _on_frame_length_16(self, data):
+        self._frame_length = struct.unpack("!H", data)[0]
+        try:
             if self._masked_frame:
                 self.stream.read_bytes(4, self._on_masking_key)
             else:
                 self.stream.read_bytes(self._frame_length, self._on_frame_data)
-        elif payloadlen == 126:
-            self.stream.read_bytes(2, self._on_frame_length_16)
-        elif payloadlen == 127:
-            self.stream.read_bytes(8, self._on_frame_length_64)
-
-    def _on_frame_length_16(self, data):
-        self._frame_length = struct.unpack("!H", data)[0]
-        if self._masked_frame:
-            self.stream.read_bytes(4, self._on_masking_key)
-        else:
-            self.stream.read_bytes(self._frame_length, self._on_frame_data)
+        except StreamClosedError:
+            self._abort()
 
     def _on_frame_length_64(self, data):
         self._frame_length = struct.unpack("!Q", data)[0]
-        if self._masked_frame:
-            self.stream.read_bytes(4, self._on_masking_key)
-        else:
-            self.stream.read_bytes(self._frame_length, self._on_frame_data)
+        try:
+            if self._masked_frame:
+                self.stream.read_bytes(4, self._on_masking_key)
+            else:
+                self.stream.read_bytes(self._frame_length, self._on_frame_data)
+        except StreamClosedError:
+            self._abort()
 
     def _on_masking_key(self, data):
         self._frame_mask = data
-        self.stream.read_bytes(self._frame_length, self._on_masked_frame_data)
+        try:
+            self.stream.read_bytes(self._frame_length, self._on_masked_frame_data)
+        except StreamClosedError:
+            self._abort()
 
     def _apply_mask(self, mask, data):
         mask = array.array("B", mask)

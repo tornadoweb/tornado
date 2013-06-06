@@ -1,3 +1,5 @@
+from tornado.concurrent import Future
+from tornado import gen
 from tornado.httpclient import HTTPError
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
@@ -6,8 +8,14 @@ from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketErro
 
 
 class EchoHandler(WebSocketHandler):
+    def initialize(self, close_future):
+        self.close_future = close_future
+
     def on_message(self, message):
         self.write_message(message, isinstance(message, bytes))
+
+    def on_close(self):
+        self.close_future.set_result(None)
 
 
 class NonWebSocketHandler(RequestHandler):
@@ -17,8 +25,9 @@ class NonWebSocketHandler(RequestHandler):
 
 class WebSocketTest(AsyncHTTPTestCase):
     def get_app(self):
+        self.close_future = Future()
         return Application([
-            ('/echo', EchoHandler),
+            ('/echo', EchoHandler, dict(close_future=self.close_future)),
             ('/non_ws', NonWebSocketHandler),
         ])
 
@@ -67,3 +76,12 @@ class WebSocketTest(AsyncHTTPTestCase):
                     io_loop=self.io_loop,
                     connect_timeout=0.01)
         self.assertEqual(cm.exception.code, 599)
+
+    @gen_test
+    def test_websocket_close_buffered_data(self):
+        ws = yield websocket_connect(
+            'ws://localhost:%d/echo' % self.get_http_port())
+        ws.write_message('hello')
+        ws.write_message('world')
+        ws.stream.close()
+        yield self.close_future
