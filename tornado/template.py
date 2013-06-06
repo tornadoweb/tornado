@@ -618,7 +618,7 @@ class _CodeWriter(object):
         return IncludeTemplate()
 
     def write_line(self, line, line_number, indent=None):
-        if indent == None:
+        if indent is None:
             indent = self._indent
         line_comment = '  # %s:%d' % (self.current_template.name, line_number)
         if self.include_stack:
