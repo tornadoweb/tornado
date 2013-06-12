@@ -66,7 +66,12 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                       0, flags)):
         af, socktype, proto, canonname, sockaddr = res
-        sock = socket.socket(af, socktype, proto)
+        try:
+            sock = socket.socket(af, socktype, proto)
+        except socket.error as e:
+            if e.args[0] == errno.EAFNOSUPPORT:
+                continue
+            raise
         set_close_exec(sock.fileno())
         if os.name != 'nt':
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
