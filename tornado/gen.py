@@ -19,7 +19,6 @@ For example, the following asynchronous handler::
 could be written with ``gen`` as::
 
     class GenAsyncHandler(RequestHandler):
-        @asynchronous
         @gen.coroutine
         def get(self):
             http_client = AsyncHTTPClient()
@@ -166,13 +165,7 @@ def coroutine(func):
     """Decorator for asynchronous generators.
 
     Any generator that yields objects from this module must be wrapped
-    in either this decorator or `engine`.  These decorators only work
-    on functions that are already asynchronous.  For
-    `~tornado.web.RequestHandler` :ref:`HTTP verb methods <verbs>` methods, this
-    means that both the `tornado.web.asynchronous` and
-    `tornado.gen.coroutine` decorators must be used (for proper
-    exception handling, ``asynchronous`` should come before
-    ``gen.coroutine``).
+    in either this decorator or `engine`.
 
     Coroutines may "return" by raising the special exception
     `Return(value) <Return>`.  In Python 3.3+, it is also possible for
