@@ -189,7 +189,7 @@ class Subprocess(object):
     _waiting = {}
 
     def __init__(self, *args, **kwargs):
-        self.io_loop = kwargs.pop('io_loop', None)
+        self.io_loop = kwargs.pop('io_loop', None) or ioloop.IOLoop.current()
         to_close = []
         if kwargs.get('stdin') is Subprocess.STREAM:
             in_r, in_w = _pipe_cloexec()
