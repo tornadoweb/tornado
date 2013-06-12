@@ -33,6 +33,7 @@ from binascii import hexlify
 from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
+from tornado.platform.auto import set_close_exec
 from tornado import stack_context
 
 try:
@@ -67,6 +68,13 @@ def _reseed_random():
     except NotImplementedError:
         seed = int(time.time() * 1000) ^ os.getpid()
     random.seed(seed)
+
+
+def _pipe_cloexec():
+    r, w = os.pipe()
+    set_close_exec(r)
+    set_close_exec(w)
+    return r, w
 
 
 _task_id = None
@@ -184,17 +192,17 @@ class Subprocess(object):
         self.io_loop = kwargs.pop('io_loop', None)
         to_close = []
         if kwargs.get('stdin') is Subprocess.STREAM:
-            in_r, in_w = os.pipe()
+            in_r, in_w = _pipe_cloexec()
             kwargs['stdin'] = in_r
             to_close.append(in_r)
             self.stdin = PipeIOStream(in_w, io_loop=self.io_loop)
         if kwargs.get('stdout') is Subprocess.STREAM:
-            out_r, out_w = os.pipe()
+            out_r, out_w = _pipe_cloexec()
             kwargs['stdout'] = out_w
             to_close.append(out_w)
             self.stdout = PipeIOStream(out_r, io_loop=self.io_loop)
         if kwargs.get('stderr') is Subprocess.STREAM:
-            err_r, err_w = os.pipe()
+            err_r, err_w = _pipe_cloexec()
             kwargs['stderr'] = err_w
             to_close.append(err_w)
             self.stderr = PipeIOStream(err_r, io_loop=self.io_loop)

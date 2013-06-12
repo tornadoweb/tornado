@@ -154,6 +154,20 @@ class SubprocessTest(AsyncTestCase):
         data = self.wait()
         self.assertEqual(data, b"")
 
+    def test_close_stdin(self):
+        # Close the parent's stdin handle and see that the child recognizes it.
+        subproc = Subprocess([sys.executable, '-u', '-i'],
+                             stdin=Subprocess.STREAM,
+                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
+                             io_loop=self.io_loop)
+        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
+        subproc.stdout.read_until(b'>>> ', self.stop)
+        self.wait()
+        subproc.stdin.close()
+        subproc.stdout.read_until_close(self.stop)
+        data = self.wait()
+        self.assertEqual(data, b"\n")
+
     def test_stderr(self):
         subproc = Subprocess([sys.executable, '-u', '-c',
                               r"import sys; sys.stderr.write('hello\n')"],
