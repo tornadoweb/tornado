@@ -146,6 +146,9 @@ class EscapeTestCase(unittest.TestCase):
 
             ("<>&\"", "&lt;&gt;&amp;&quot;"),
             ("&amp;", "&amp;amp;"),
+
+            (u("<\u00e9>"), u("&lt;\u00e9&gt;")),
+            (b"<\xc3\xa9>", b"&lt;\xc3\xa9&gt;"),
         ]
         for unescaped, escaped in tests:
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
