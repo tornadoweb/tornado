@@ -306,10 +306,10 @@ class OAuthMixin(object):
         """Redirects the user to obtain OAuth authorization for this service.
 
         The ``callback_uri`` may be omitted if you have previously
-        registered a callback URI with the third-party service.  For some
-        sevices (including Twitter and Friendfeed), you must use a
-        previously-registered callback URI and cannot specify a callback
-        via this method.
+        registered a callback URI with the third-party service.  For
+        some sevices (including Friendfeed), you must use a
+        previously-registered callback URI and cannot specify a
+        callback via this method.
 
         This method sets a cookie called ``_oauth_request_token`` which is
         subsequently used (and cleared) in `get_authenticated_user` for
