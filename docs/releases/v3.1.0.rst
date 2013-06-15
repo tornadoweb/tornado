@@ -1,8 +1,8 @@
-What's new in the next version of Tornado
-=========================================
+What's new in Tornado 3.1
+=========================
 
-In progress
------------
+Jun 15, 2013
+------------
 
 Multiple modules
 ~~~~~~~~~~~~~~~~
