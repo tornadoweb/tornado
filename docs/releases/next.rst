@@ -126,6 +126,7 @@ Multiple modules
   whose size is set by the first one to be created (or the static
   ``Resolver.configure`` method).
 * `.ExecutorResolver` is now documented for public use.
+* `.bind_sockets` now works in configurations with incomplete IPv6 support.
 
 `tornado.options`
 ~~~~~~~~~~~~~~~~~
@@ -136,6 +137,15 @@ Multiple modules
   and (read-only) access to options with square braket syntax.
   `.OptionParser.group_dict` returns all options with a given group
   name, and `.OptionParser.as_dict` returns all options.
+
+`tornado.process`
+~~~~~~~~~~~~~~~~~
+
+* `tornado.process.Subprocess` no longer leaks file descriptors into
+  the child process, which fixes a problem in which the child could not
+  detect that the parent process had closed its stdin pipe.
+* `.Subprocess.set_exit_callback` now works for subprocesses created
+  without an explicit ``io_loop`` parameter.
 
 `tornado.stack_context`
 ~~~~~~~~~~~~~~~~~~~~~~~
