@@ -242,10 +242,12 @@ class WSGIContainer(object):
             return response.append
         app_response = self.wsgi_application(
             WSGIContainer.environ(request), start_response)
-        response.extend(app_response)
-        body = b"".join(response)
-        if hasattr(app_response, "close"):
-            app_response.close()
+        try:
+            response.extend(app_response)
+            body = b"".join(response)
+        finally:
+            if hasattr(app_response, "close"):
+                app_response.close()
         if not data:
             raise Exception("WSGI app did not call start_response")
 
