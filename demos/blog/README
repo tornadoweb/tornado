@@ -18,7 +18,8 @@ need to set up MySQL and the database schema for the demo to run.
 
 3. Install Python prerequisites
 
-   Install the packages MySQL-python and torndb (e.g. using pip or easy_install)
+   Install the packages MySQL-python, torndb, and markdown (e.g. using pip or
+   easy_install)
 
 3. Connect to MySQL and create a database and user for the blog.
 

@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 from tornado.test.util import unittest
 
 
@@ -9,20 +9,23 @@ class ImportTest(unittest.TestCase):
         # least ensure that there are no syntax errors.
         import tornado.auth
         import tornado.autoreload
+        import tornado.concurrent
         # import tornado.curl_httpclient  # depends on pycurl
         import tornado.escape
+        import tornado.gen
         import tornado.httpclient
         import tornado.httpserver
         import tornado.httputil
         import tornado.ioloop
         import tornado.iostream
         import tornado.locale
-        import tornado.options
+        import tornado.log
         import tornado.netutil
-        # import tornado.platform.twisted # depends on twisted
+        import tornado.options
         import tornado.process
         import tornado.simple_httpclient
         import tornado.stack_context
+        import tornado.tcpserver
         import tornado.template
         import tornado.testing
         import tornado.util
@@ -40,11 +43,3 @@ class ImportTest(unittest.TestCase):
             pass
         else:
             import tornado.curl_httpclient
-
-    def test_import_twisted(self):
-        try:
-            import twisted
-        except ImportError:
-            pass
-        else:
-            import tornado.platform.twisted

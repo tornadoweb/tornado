@@ -1,10 +1,10 @@
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 from wsgiref.validate import validator
 
 from tornado.escape import json_decode
 from tornado.test.httpserver_test import TypeCheckHandler
 from tornado.testing import AsyncHTTPTestCase
-from tornado.util import b
+from tornado.util import u
 from tornado.web import RequestHandler
 from tornado.wsgi import WSGIApplication, WSGIContainer
 
@@ -14,14 +14,14 @@ class WSGIContainerTest(AsyncHTTPTestCase):
         status = "200 OK"
         response_headers = [("Content-Type", "text/plain")]
         start_response(status, response_headers)
-        return [b("Hello world!")]
+        return [b"Hello world!"]
 
     def get_app(self):
         return WSGIContainer(validator(self.wsgi_app))
 
     def test_simple(self):
         response = self.fetch("/")
-        self.assertEqual(response.body, b("Hello world!"))
+        self.assertEqual(response.body, b"Hello world!")
 
 
 class WSGIApplicationTest(AsyncHTTPTestCase):
@@ -39,18 +39,18 @@ class WSGIApplicationTest(AsyncHTTPTestCase):
         # fits better in our async testing framework and the wsgiref
         # validator should keep us honest
         return WSGIContainer(validator(WSGIApplication([
-                        ("/", HelloHandler),
-                        ("/path/(.*)", PathQuotingHandler),
-                        ("/typecheck", TypeCheckHandler),
-                        ])))
+            ("/", HelloHandler),
+            ("/path/(.*)", PathQuotingHandler),
+            ("/typecheck", TypeCheckHandler),
+        ])))
 
     def test_simple(self):
         response = self.fetch("/")
-        self.assertEqual(response.body, b("Hello world!"))
+        self.assertEqual(response.body, b"Hello world!")
 
     def test_path_quoting(self):
         response = self.fetch("/path/foo%20bar%C3%A9")
-        self.assertEqual(response.body, u"foo bar\u00e9".encode("utf-8"))
+        self.assertEqual(response.body, u("foo bar\u00e9").encode("utf-8"))
 
     def test_types(self):
         headers = {"Cookie": "foo=bar"}
@@ -76,7 +76,7 @@ class WSGIConnectionTest(httpserver_test.HTTPConnectionTest):
 
 def wrap_web_tests():
     result = {}
-    for cls in web_test.wsgi_safe:
+    for cls in web_test.wsgi_safe_tests:
         class WSGIWrappedTest(cls):
             def get_app(self):
                 self.app = WSGIApplication(self.get_handlers(),

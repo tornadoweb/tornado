@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import collections
 from contextlib import closing
@@ -17,9 +17,8 @@ from tornado.log import gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, ExpectLog
-from tornado.test.util import unittest
-from tornado.util import b
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
+from tornado.test.util import unittest, skipOnTravis
 from tornado.web import RequestHandler, Application, asynchronous, url
 
 
@@ -94,11 +93,7 @@ class HostEchoHandler(RequestHandler):
         self.write(self.request.headers["Host"])
 
 
-class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
-    def setUp(self):
-        super(SimpleHTTPClientTestCase, self).setUp()
-        self.http_client = SimpleAsyncHTTPClient(self.io_loop)
-
+class SimpleHTTPClientTestMixin(object):
     def get_app(self):
         # callable objects to finish pending /trigger requests
         self.triggers = collections.deque()
@@ -116,7 +111,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             url("/see_other_post", SeeOtherPostHandler),
             url("/see_other_get", SeeOtherGetHandler),
             url("/host_echo", HostEchoHandler),
-            ], gzip=True)
+        ], gzip=True)
 
     def test_singleton(self):
         # Class "constructor" reuses objects on the same IOLoop
@@ -132,41 +127,39 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
                         SimpleAsyncHTTPClient(io_loop2))
 
     def test_connection_limit(self):
-        client = SimpleAsyncHTTPClient(self.io_loop, max_clients=2,
-                                       force_instance=True)
-        self.assertEqual(client.max_clients, 2)
-        seen = []
-        # Send 4 requests.  Two can be sent immediately, while the others
-        # will be queued
-        for i in range(4):
-            client.fetch(self.get_url("/trigger"),
-                         lambda response, i=i: (seen.append(i), self.stop()))
-        self.wait(condition=lambda: len(self.triggers) == 2)
-        self.assertEqual(len(client.queue), 2)
+        with closing(self.create_client(max_clients=2)) as client:
+            self.assertEqual(client.max_clients, 2)
+            seen = []
+            # Send 4 requests.  Two can be sent immediately, while the others
+            # will be queued
+            for i in range(4):
+                client.fetch(self.get_url("/trigger"),
+                             lambda response, i=i: (seen.append(i), self.stop()))
+            self.wait(condition=lambda: len(self.triggers) == 2)
+            self.assertEqual(len(client.queue), 2)
 
-        # Finish the first two requests and let the next two through
-        self.triggers.popleft()()
-        self.triggers.popleft()()
-        self.wait(condition=lambda: (len(self.triggers) == 2 and
-                                     len(seen) == 2))
-        self.assertEqual(set(seen), set([0, 1]))
-        self.assertEqual(len(client.queue), 0)
+            # Finish the first two requests and let the next two through
+            self.triggers.popleft()()
+            self.triggers.popleft()()
+            self.wait(condition=lambda: (len(self.triggers) == 2 and
+                                         len(seen) == 2))
+            self.assertEqual(set(seen), set([0, 1]))
+            self.assertEqual(len(client.queue), 0)
 
-        # Finish all the pending requests
-        self.triggers.popleft()()
-        self.triggers.popleft()()
-        self.wait(condition=lambda: len(seen) == 4)
-        self.assertEqual(set(seen), set([0, 1, 2, 3]))
-        self.assertEqual(len(self.triggers), 0)
+            # Finish all the pending requests
+            self.triggers.popleft()()
+            self.triggers.popleft()()
+            self.wait(condition=lambda: len(seen) == 4)
+            self.assertEqual(set(seen), set([0, 1, 2, 3]))
+            self.assertEqual(len(self.triggers), 0)
 
     def test_redirect_connection_limit(self):
         # following redirects should not consume additional connections
-        client = SimpleAsyncHTTPClient(self.io_loop, max_clients=1,
-                                       force_instance=True)
-        client.fetch(self.get_url('/countdown/3'), self.stop,
-                     max_redirects=3)
-        response = self.wait()
-        response.rethrow()
+        with closing(self.create_client(max_clients=1)) as client:
+            client.fetch(self.get_url('/countdown/3'), self.stop,
+                         max_redirects=3)
+            response = self.wait()
+            response.rethrow()
 
     def test_default_certificates_exist(self):
         open(_DEFAULT_CA_CERTS).close()
@@ -179,11 +172,11 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
         response = self.fetch("/chunk", use_gzip=False,
                               headers={"Accept-Encoding": "gzip"})
         self.assertEqual(response.headers["Content-Encoding"], "gzip")
-        self.assertNotEqual(response.body, b("asdfqwer"))
+        self.assertNotEqual(response.body, b"asdfqwer")
         # Our test data gets bigger when gzipped.  Oops.  :)
         self.assertEqual(len(response.body), 34)
         f = gzip.GzipFile(mode="r", fileobj=response.buffer)
-        self.assertEqual(f.read(), b("asdfqwer"))
+        self.assertEqual(f.read(), b"asdfqwer")
 
     def test_max_redirects(self):
         response = self.fetch("/countdown/5", max_redirects=3)
@@ -207,14 +200,14 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             self.assertEqual(200, response.code)
             self.assertTrue(response.request.url.endswith("/see_other_post"))
             self.assertTrue(response.effective_url.endswith("/see_other_get"))
-            #request is the original request, is a POST still
+            # request is the original request, is a POST still
             self.assertEqual("POST", response.request.method)
 
+    @skipOnTravis
     def test_request_timeout(self):
-        with ExpectLog(gen_log, "uncaught exception"):
-            response = self.fetch('/trigger?wake=false', request_timeout=0.1)
+        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
         self.assertEqual(response.code, 599)
-        self.assertTrue(0.099 < response.request_time < 0.12, response.request_time)
+        self.assertTrue(0.099 < response.request_time < 0.15, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
@@ -223,7 +216,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
     def test_ipv6(self):
         try:
             self.http_server.listen(self.get_http_port(), address='::1')
-        except socket.gaierror, e:
+        except socket.gaierror as e:
             if e.args[0] == socket.EAI_ADDRFAMILY:
                 # python supports ipv6, but it's not configured on the network
                 # interface, so skip this test.
@@ -232,26 +225,24 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
         url = self.get_url("/hello").replace("localhost", "[::1]")
 
         # ipv6 is currently disabled by default and must be explicitly requested
-        with ExpectLog(gen_log, "uncaught exception"):
-            self.http_client.fetch(url, self.stop)
-            response = self.wait()
+        self.http_client.fetch(url, self.stop)
+        response = self.wait()
         self.assertEqual(response.code, 599)
 
         self.http_client.fetch(url, self.stop, allow_ipv6=True)
         response = self.wait()
-        self.assertEqual(response.body, b("Hello world!"))
+        self.assertEqual(response.body, b"Hello world!")
 
     def test_multiple_content_length_accepted(self):
         response = self.fetch("/content_length?value=2,2")
-        self.assertEqual(response.body, b("ok"))
+        self.assertEqual(response.body, b"ok")
         response = self.fetch("/content_length?value=2,%202,2")
-        self.assertEqual(response.body, b("ok"))
+        self.assertEqual(response.body, b"ok")
 
-        with ExpectLog(gen_log, "uncaught exception"):
-            response = self.fetch("/content_length?value=2,4")
-            self.assertEqual(response.code, 599)
-            response = self.fetch("/content_length?value=2,%202,3")
-            self.assertEqual(response.code, 599)
+        response = self.fetch("/content_length?value=2,4")
+        self.assertEqual(response.code, 599)
+        response = self.fetch("/content_length?value=2,%202,3")
+        self.assertEqual(response.code, 599)
 
     def test_head_request(self):
         response = self.fetch("/head", method="HEAD")
@@ -264,7 +255,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(response.headers["content-length"], "2")
         self.assertEqual(response.headers["access-control-allow-origin"], "*")
-        self.assertEqual(response.body, b("ok"))
+        self.assertEqual(response.body, b"ok")
 
     def test_no_content(self):
         response = self.fetch("/no_content")
@@ -274,12 +265,11 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.headers["Content-length"], "0")
 
         # 204 status with non-zero content length is malformed
-        with ExpectLog(gen_log, "uncaught exception"):
-            response = self.fetch("/no_content?error=1")
-            self.assertEqual(response.code, 599)
+        response = self.fetch("/no_content?error=1")
+        self.assertEqual(response.code, 599)
 
     def test_host_header(self):
-        host_re = re.compile(b("^localhost:[0-9]+$"))
+        host_re = re.compile(b"^localhost:[0-9]+$")
         response = self.fetch("/host_echo")
         self.assertTrue(host_re.match(response.body))
 
@@ -291,7 +281,7 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
     def test_connection_refused(self):
         server_socket, port = bind_unused_port()
         server_socket.close()
-        with ExpectLog(gen_log, ".*"):
+        with ExpectLog(gen_log, ".*", required=False):
             self.http_client.fetch("http://localhost:%d/" % port, self.stop)
             response = self.wait()
         self.assertEqual(599, response.code)
@@ -305,6 +295,27 @@ class SimpleHTTPClientTestCase(AsyncHTTPTestCase):
             expected_message = os.strerror(errno.ECONNREFUSED)
             self.assertTrue(expected_message in str(response.error),
                             response.error)
+
+
+class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
+    def setUp(self):
+        super(SimpleHTTPClientTestCase, self).setUp()
+        self.http_client = self.create_client()
+
+    def create_client(self, **kwargs):
+        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
+                                     **kwargs)
+
+
+class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
+    def setUp(self):
+        super(SimpleHTTPSClientTestCase, self).setUp()
+        self.http_client = self.create_client()
+
+    def create_client(self, **kwargs):
+        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
+                                     defaults=dict(validate_cert=False),
+                                     **kwargs)
 
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase):
@@ -343,12 +354,12 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
     def respond_100(self, request):
         self.request = request
         self.request.connection.stream.write(
-            b("HTTP/1.1 100 CONTINUE\r\n\r\n"),
+            b"HTTP/1.1 100 CONTINUE\r\n\r\n",
             self.respond_200)
 
     def respond_200(self):
         self.request.connection.stream.write(
-            b("HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA"),
+            b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA",
             self.request.connection.stream.close)
 
     def get_app(self):
@@ -357,4 +368,31 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
 
     def test_100_continue(self):
         res = self.fetch('/')
-        self.assertEqual(res.body, b('A'))
+        self.assertEqual(res.body, b'A')
+
+
+class HostnameMappingTestCase(AsyncHTTPTestCase):
+    def setUp(self):
+        super(HostnameMappingTestCase, self).setUp()
+        self.http_client = SimpleAsyncHTTPClient(
+            self.io_loop,
+            hostname_mapping={
+                'www.example.com': '127.0.0.1',
+                ('foo.example.com', 8000): ('127.0.0.1', self.get_http_port()),
+            })
+
+    def get_app(self):
+        return Application([url("/hello", HelloWorldHandler), ])
+
+    def test_hostname_mapping(self):
+        self.http_client.fetch(
+            'http://www.example.com:%d/hello' % self.get_http_port(), self.stop)
+        response = self.wait()
+        response.rethrow()
+        self.assertEqual(response.body, b'Hello world!')
+
+    def test_port_mapping(self):
+        self.http_client.fetch('http://foo.example.com:8000/hello', self.stop)
+        response = self.wait()
+        response.rethrow()
+        self.assertEqual(response.body, b'Hello world!')

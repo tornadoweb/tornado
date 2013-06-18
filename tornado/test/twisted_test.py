@@ -17,13 +17,12 @@
 Unittest for the twisted-style reactor.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import os
 import shutil
 import signal
 import tempfile
-import thread
 import threading
 
 try:
@@ -31,9 +30,6 @@ try:
     from twisted.internet.defer import Deferred
     from twisted.internet.interfaces import IReadDescriptor, IWriteDescriptor
     from twisted.internet.protocol import Protocol
-    from twisted.web.client import Agent
-    from twisted.web.resource import Resource
-    from twisted.web.server import Site
     from twisted.python import log
     from tornado.platform.twisted import TornadoReactor, TwistedIOLoop
     from zope.interface import implementer
@@ -41,10 +37,26 @@ try:
 except ImportError:
     have_twisted = False
 
+# The core of Twisted 12.3.0 is available on python 3, but twisted.web is not
+# so test for it separately.
+try:
+    from twisted.web.client import Agent
+    from twisted.web.resource import Resource
+    from twisted.web.server import Site
+    have_twisted_web = True
+except ImportError:
+    have_twisted_web = False
+
+try:
+    import thread  # py2
+except ImportError:
+    import _thread as thread  # py3
+
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
+from tornado.platform.select import SelectIOLoop
 from tornado.testing import bind_unused_port
 from tornado.test.util import unittest
 from tornado.util import import_object
@@ -52,6 +64,7 @@ from tornado.web import RequestHandler, Application
 
 skipIfNoTwisted = unittest.skipUnless(have_twisted,
                                       "twisted module not present")
+
 
 def save_signal_handlers():
     saved = {}
@@ -67,7 +80,7 @@ def save_signal_handlers():
 
 
 def restore_signal_handlers(saved):
-    for sig, handler in saved.iteritems():
+    for sig, handler in saved.items():
         signal.signal(sig, handler)
 
 
@@ -82,6 +95,7 @@ class ReactorTestCase(unittest.TestCase):
         restore_signal_handlers(self._saved_signals)
 
 
+@skipIfNoTwisted
 class ReactorWhenRunningTest(ReactorTestCase):
     def test_whenRunning(self):
         self._whenRunningCalled = False
@@ -98,8 +112,9 @@ class ReactorWhenRunningTest(ReactorTestCase):
 
     def anotherWhenRunningCallback(self):
         self._anotherWhenRunningCalled = True
-ReactorWhenRunningTest = skipIfNoTwisted(ReactorWhenRunningTest)
 
+
+@skipIfNoTwisted
 class ReactorCallLaterTest(ReactorTestCase):
     def test_callLater(self):
         self._laterCalled = False
@@ -116,9 +131,9 @@ class ReactorCallLaterTest(ReactorTestCase):
         self._laterCalled = True
         self._called = self._reactor.seconds()
         self._reactor.stop()
-ReactorCallLaterTest = skipIfNoTwisted(ReactorCallLaterTest)
 
 
+@skipIfNoTwisted
 class ReactorTwoCallLaterTest(ReactorTestCase):
     def test_callLater(self):
         self._later1Called = False
@@ -145,9 +160,9 @@ class ReactorTwoCallLaterTest(ReactorTestCase):
         self._later2Called = True
         self._called2 = self._reactor.seconds()
         self._reactor.stop()
-ReactorTwoCallLaterTest = skipIfNoTwisted(ReactorTwoCallLaterTest)
 
 
+@skipIfNoTwisted
 class ReactorCallFromThreadTest(ReactorTestCase):
     def setUp(self):
         super(ReactorCallFromThreadTest, self).setUp()
@@ -174,9 +189,9 @@ class ReactorCallFromThreadTest(ReactorTestCase):
     def testCallFromThread(self):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
-ReactorCallFromThreadTest = skipIfNoTwisted(ReactorCallFromThreadTest)
 
 
+@skipIfNoTwisted
 class ReactorCallInThread(ReactorTestCase):
     def setUp(self):
         super(ReactorCallInThread, self).setUp()
@@ -192,7 +207,6 @@ class ReactorCallInThread(ReactorTestCase):
     def testCallInThread(self):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
-ReactorCallInThread = skipIfNoTwisted(ReactorCallInThread)
 
 
 class Reader(object):
@@ -244,6 +258,7 @@ if have_twisted:
     Writer = implementer(IWriteDescriptor)(Writer)
 
 
+@skipIfNoTwisted
 class ReactorReaderWriterTest(ReactorTestCase):
     def _set_nonblocking(self, fd):
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -272,13 +287,13 @@ class ReactorReaderWriterTest(ReactorTestCase):
         self.shouldWrite = True
 
         def checkReadInput(fd):
-            self.assertEquals(fd.read(1), 'x')
+            self.assertEquals(fd.read(1), b'x')
             self._reactor.stop()
 
         def writeOnce(fd):
             if self.shouldWrite:
                 self.shouldWrite = False
-                fd.write('x')
+                fd.write(b'x')
         self._reader = Reader(self._p1, checkReadInput)
         self._writer = Writer(self._p2, writeOnce)
 
@@ -325,20 +340,23 @@ class ReactorReaderWriterTest(ReactorTestCase):
     def testNoWriter(self):
         self._reactor.callWhenRunning(self._testNoWriter)
         self._reactor.run()
-ReactorReaderWriterTest = skipIfNoTwisted(ReactorReaderWriterTest)
 
 # Test various combinations of twisted and tornado http servers,
 # http clients, and event loop interfaces.
 
 
+@skipIfNoTwisted
+@unittest.skipIf(not have_twisted_web, 'twisted web not present')
 class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.saved_signals = save_signal_handlers()
         self.io_loop = IOLoop()
+        self.io_loop.make_current()
         self.reactor = TornadoReactor(self.io_loop)
 
     def tearDown(self):
         self.reactor.disconnectAll()
+        self.io_loop.clear_current()
         self.io_loop.close(all_fds=True)
         restore_signal_handlers(self.saved_signals)
 
@@ -437,7 +455,6 @@ class CompatibilityTests(unittest.TestCase):
         response = self.twisted_fetch(
             'http://localhost:%d' % self.tornado_port, self.run_reactor)
         self.assertEqual(response, 'Hello from tornado!')
-CompatibilityTests = skipIfNoTwisted(CompatibilityTests)
 
 
 if have_twisted:
@@ -454,30 +471,28 @@ if have_twisted:
         'twisted.internet.test.test_core.SystemEventTestsBuilder': [
             'test_iterate',  # deliberately not supported
             'test_runAfterCrash',  # fails because TwistedIOLoop uses the global reactor
-            ] if issubclass(IOLoop.configured_class(), TwistedIOLoop) else [
+        ] if issubclass(IOLoop.configured_class(), TwistedIOLoop) else [
             'test_iterate',  # deliberately not supported
-            ],
+        ],
         'twisted.internet.test.test_fdset.ReactorFDSetTestsBuilder': [
             "test_lostFileDescriptor",  # incompatible with epoll and kqueue
-            ],
+        ],
         'twisted.internet.test.test_process.ProcessTestsBuilder': [
-            # Doesn't work on python 2.5
-            'test_systemCallUninterruptedByChildExit',
-            ],
+        ],
         # Process tests appear to work on OSX 10.7, but not 10.6
         #'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
         #    'test_systemCallUninterruptedByChildExit',
         #    ],
         'twisted.internet.test.test_tcp.TCPClientTestsBuilder': [
             'test_badContext',  # ssl-related; see also SSLClientTestsMixin
-            ],
+        ],
         'twisted.internet.test.test_tcp.TCPPortTestsBuilder': [
             # These use link-local addresses and cause firewall prompts on mac
             'test_buildProtocolIPv6AddressScopeID',
             'test_portGetHostOnIPv6ScopeID',
             'test_serverGetHostOnIPv6ScopeID',
             'test_serverGetPeerOnIPv6ScopeID',
-            ],
+        ],
         'twisted.internet.test.test_tcp.TCPConnectionTestsBuilder': [],
         'twisted.internet.test.test_tcp.WriteSequenceTests': [],
         'twisted.internet.test.test_tcp.AbortConnectionTestCase': [],
@@ -498,13 +513,13 @@ if have_twisted:
             'test_sendFileDescriptorTriggersPauseProducing',
             'test_descriptorDeliveredBeforeBytes',
             'test_avoidLeakingFileDescriptors',
-            ],
+        ],
         'twisted.internet.test.test_unix.UNIXDatagramTestsBuilder': [
             'test_listenOnLinuxAbstractNamespace',
-            ],
+        ],
         'twisted.internet.test.test_unix.UNIXPortTestsBuilder': [],
-        }
-    for test_name, blacklist in twisted_tests.iteritems():
+    }
+    for test_name, blacklist in twisted_tests.items():
         try:
             test_class = import_object(test_name)
         except (ImportError, AttributeError):
@@ -557,8 +572,44 @@ if have_twisted:
     # leave it turned off, but while working on these tests you may want
     # to uncomment one of the other lines instead.
     log.defaultObserver.stop()
-    #import sys; log.startLogging(sys.stderr, setStdout=0)
-    #log.startLoggingWithObserver(log.PythonLoggingObserver().emit, setStdout=0)
+    # import sys; log.startLogging(sys.stderr, setStdout=0)
+    # log.startLoggingWithObserver(log.PythonLoggingObserver().emit, setStdout=0)
+    # import logging; logging.getLogger('twisted').setLevel(logging.WARNING)
+
+if have_twisted:
+    class LayeredTwistedIOLoop(TwistedIOLoop):
+        """Layers a TwistedIOLoop on top of a TornadoReactor on a SelectIOLoop.
+
+        This is of course silly, but is useful for testing purposes to make
+        sure we're implementing both sides of the various interfaces
+        correctly.  In some tests another TornadoReactor is layered on top
+        of the whole stack.
+        """
+        def initialize(self):
+            # When configured to use LayeredTwistedIOLoop we can't easily
+            # get the next-best IOLoop implementation, so use the lowest common
+            # denominator.
+            self.real_io_loop = SelectIOLoop()
+            reactor = TornadoReactor(io_loop=self.real_io_loop)
+            super(LayeredTwistedIOLoop, self).initialize(reactor=reactor)
+            self.add_callback(self.make_current)
+
+        def close(self, all_fds=False):
+            super(LayeredTwistedIOLoop, self).close(all_fds=all_fds)
+            # HACK: This is the same thing that test_class.unbuildReactor does.
+            for reader in self.reactor._internalReaders:
+                self.reactor.removeReader(reader)
+                reader.connectionLost(None)
+            self.real_io_loop.close(all_fds=all_fds)
+
+        def stop(self):
+            # One of twisted's tests fails if I don't delay crash()
+            # until the reactor has started, but if I move this to
+            # TwistedIOLoop then the tests fail when I'm *not* running
+            # tornado-on-twisted-on-tornado.  I'm clearly missing something
+            # about the startup/crash semantics, but since stop and crash
+            # are really only used in tests it doesn't really matter.
+            self.reactor.callWhenRunning(self.reactor.crash)
 
 if __name__ == "__main__":
     unittest.main()

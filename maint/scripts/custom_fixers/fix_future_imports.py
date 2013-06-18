@@ -22,11 +22,12 @@ class FixFutureImports(fixer_base.BaseFix):
         new = FromImport("__future__",
                          [Name("absolute_import", prefix=" "), Comma(),
                           Name("division", prefix=" "), Comma(),
+                          Name("print_function", prefix=" "), Comma(),
                           Name("with_statement", prefix=" ")])
         if old is not None:
             new.prefix = old.prefix
         return new
-       
+
     def transform(self, node, results):
         self.found_future_import = True
         return self.new_future_import(node)
@@ -56,5 +57,3 @@ class FixFutureImports(fixer_base.BaseFix):
             pos = 0
         tree.insert_child(pos, self.new_future_import(None))
         tree.insert_child(pos+1, Newline())  # terminates the import stmt
-
-

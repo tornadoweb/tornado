@@ -51,11 +51,7 @@ var updater = {
 
     start: function() {
         var url = "ws://" + location.host + "/chatsocket";
-        if ("WebSocket" in window) {
-	    updater.socket = new WebSocket(url);
-        } else {
-            updater.socket = new MozWebSocket(url);
-        }
+	updater.socket = new WebSocket(url);
 	updater.socket.onmessage = function(event) {
 	    updater.showMessage(JSON.parse(event.data));
 	}

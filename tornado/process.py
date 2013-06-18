@@ -14,12 +14,14 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Utilities for working with multiple processes."""
+"""Utilities for working with multiple processes, including both forking
+the server into multiple processes and managing subprocesses.
+"""
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
-import functools
+import multiprocessing
 import os
 import signal
 import subprocess
@@ -31,21 +33,21 @@ from binascii import hexlify
 from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
+from tornado.platform.auto import set_close_exec
 from tornado import stack_context
 
 try:
-    import multiprocessing  # Python 2.6+
-except ImportError:
-    multiprocessing = None
+    long  # py2
+except NameError:
+    long = int  # py3
 
 
 def cpu_count():
     """Returns the number of processors on this machine."""
-    if multiprocessing is not None:
-        try:
-            return multiprocessing.cpu_count()
-        except NotImplementedError:
-            pass
+    try:
+        return multiprocessing.cpu_count()
+    except NotImplementedError:
+        pass
     try:
         return os.sysconf("SC_NPROCESSORS_CONF")
     except ValueError:
@@ -66,6 +68,13 @@ def _reseed_random():
     except NotImplementedError:
         seed = int(time.time() * 1000) ^ os.getpid()
     random.seed(seed)
+
+
+def _pipe_cloexec():
+    r, w = os.pipe()
+    set_close_exec(r)
+    set_close_exec(w)
+    return r, w
 
 
 _task_id = None
@@ -125,7 +134,7 @@ def fork_processes(num_processes, max_restarts=100):
     while children:
         try:
             pid, status = os.wait()
-        except OSError, e:
+        except OSError as e:
             if e.errno == errno.EINTR:
                 continue
             raise
@@ -162,6 +171,7 @@ def task_id():
     global _task_id
     return _task_id
 
+
 class Subprocess(object):
     """Wraps ``subprocess.Popen`` with IOStream support.
 
@@ -169,8 +179,8 @@ class Subprocess(object):
     additions:
 
     * ``stdin``, ``stdout``, and ``stderr`` may have the value
-      `tornado.process.Subprocess.STREAM`, which will make the corresponding
-      attribute of the resulting Subprocess a `PipeIOStream`.
+      ``tornado.process.Subprocess.STREAM``, which will make the corresponding
+      attribute of the resulting Subprocess a `.PipeIOStream`.
     * A new keyword argument ``io_loop`` may be used to pass in an IOLoop.
     """
     STREAM = object()
@@ -179,23 +189,23 @@ class Subprocess(object):
     _waiting = {}
 
     def __init__(self, *args, **kwargs):
-        self.io_loop = kwargs.pop('io_loop', None)
+        self.io_loop = kwargs.pop('io_loop', None) or ioloop.IOLoop.current()
         to_close = []
         if kwargs.get('stdin') is Subprocess.STREAM:
-            in_r, in_w = os.pipe()
+            in_r, in_w = _pipe_cloexec()
             kwargs['stdin'] = in_r
             to_close.append(in_r)
             self.stdin = PipeIOStream(in_w, io_loop=self.io_loop)
         if kwargs.get('stdout') is Subprocess.STREAM:
-            out_r, out_w = os.pipe()
+            out_r, out_w = _pipe_cloexec()
             kwargs['stdout'] = out_w
             to_close.append(out_w)
             self.stdout = PipeIOStream(out_r, io_loop=self.io_loop)
         if kwargs.get('stderr') is Subprocess.STREAM:
-            err_r, err_w = os.pipe()
+            err_r, err_w = _pipe_cloexec()
             kwargs['stderr'] = err_w
             to_close.append(err_w)
-            self.stdout = PipeIOStream(err_r, io_loop=self.io_loop)
+            self.stderr = PipeIOStream(err_r, io_loop=self.io_loop)
         self.proc = subprocess.Popen(*args, **kwargs)
         for fd in to_close:
             os.close(fd)
@@ -229,15 +239,15 @@ class Subprocess(object):
     def initialize(cls, io_loop=None):
         """Initializes the ``SIGCHILD`` handler.
 
-        The signal handler is run on an IOLoop to avoid locking issues.
-        Note that the IOLoop used for signal handling need not be the
+        The signal handler is run on an `.IOLoop` to avoid locking issues.
+        Note that the `.IOLoop` used for signal handling need not be the
         same one used by individual Subprocess objects (as long as the
-        IOLoops are each running in separate threads).
+        ``IOLoops`` are each running in separate threads).
         """
         if cls._initialized:
             return
         if io_loop is None:
-            io_loop = ioloop.IOLoop.instance()
+            io_loop = ioloop.IOLoop.current()
         cls._old_sigchld = signal.signal(
             signal.SIGCHLD,
             lambda sig, frame: io_loop.add_callback_from_signal(cls._cleanup))
@@ -253,14 +263,14 @@ class Subprocess(object):
 
     @classmethod
     def _cleanup(cls):
-        for pid in cls._waiting.keys():
+        for pid in list(cls._waiting.keys()):  # make a copy
             cls._try_cleanup_process(pid)
 
     @classmethod
     def _try_cleanup_process(cls, pid):
         try:
             ret_pid, status = os.waitpid(pid, os.WNOHANG)
-        except OSError, e:
+        except OSError as e:
             if e.args[0] == errno.ECHILD:
                 return
         if ret_pid == 0:

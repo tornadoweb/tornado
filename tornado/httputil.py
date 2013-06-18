@@ -16,25 +16,75 @@
 
 """HTTP utility code shared by clients and servers."""
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
-import urllib
-import re
+import calendar
+import collections
+import datetime
+import email.utils
+import numbers
+import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import b, ObjectDict
+from tornado.util import ObjectDict
+
+try:
+    from httplib import responses  # py2
+except ImportError:
+    from http.client import responses  # py3
+
+# responses is unused in this file, but we re-export it to other files.
+# Reference it so pyflakes doesn't complain.
+responses
+
+try:
+    from urllib import urlencode  # py2
+except ImportError:
+    from urllib.parse import urlencode  # py3
+
+
+class _NormalizedHeaderCache(dict):
+    """Dynamic cached mapping of header names to Http-Header-Case.
+
+    Implemented as a dict subclass so that cache hits are as fast as a
+    normal dict lookup, without the overhead of a python function
+    call.
+
+    >>> normalized_headers = _NormalizedHeaderCache(10)
+    >>> normalized_headers["coNtent-TYPE"]
+    'Content-Type'
+    """
+    def __init__(self, size):
+        super(_NormalizedHeaderCache, self).__init__()
+        self.size = size
+        self.queue = collections.deque()
+
+    def __missing__(self, key):
+        normalized = "-".join([w.capitalize() for w in key.split("-")])
+        self[key] = normalized
+        self.queue.append(key)
+        if len(self.queue) > self.size:
+            # Limit the size of the cache.  LRU would be better, but this
+            # simpler approach should be fine.  In Python 2.7+ we could
+            # use OrderedDict (or in 3.2+, @functools.lru_cache).
+            old_key = self.queue.popleft()
+            del self[old_key]
+        return normalized
+
+_normalized_headers = _NormalizedHeaderCache(1000)
 
 
 class HTTPHeaders(dict):
-    """A dictionary that maintains Http-Header-Case for all keys.
+    """A dictionary that maintains ``Http-Header-Case`` for all keys.
 
     Supports multiple values per key via a pair of new methods,
-    add() and get_list().  The regular dictionary interface returns a single
-    value per key, with multiple values joined by a comma.
+    `add()` and `get_list()`.  The regular dictionary interface
+    returns a single value per key, with multiple values joined by a
+    comma.
 
     >>> h = HTTPHeaders({"content-type": "text/html"})
-    >>> h.keys()
+    >>> list(h.keys())
     ['Content-Type']
     >>> h["Content-Type"]
     'text/html'
@@ -47,7 +97,7 @@ class HTTPHeaders(dict):
     ['A=B', 'C=D']
 
     >>> for (k,v) in sorted(h.get_all()):
-    ...    print '%s: %s' % (k,v)
+    ...    print('%s: %s' % (k,v))
     ...
     Content-Type: text/html
     Set-Cookie: A=B
@@ -60,7 +110,7 @@ class HTTPHeaders(dict):
         self._as_list = {}
         self._last_key = None
         if (len(args) == 1 and len(kwargs) == 0 and
-            isinstance(args[0], HTTPHeaders)):
+                isinstance(args[0], HTTPHeaders)):
             # Copy constructor
             for k, v in args[0].get_all():
                 self.add(k, v)
@@ -72,18 +122,20 @@ class HTTPHeaders(dict):
 
     def add(self, name, value):
         """Adds a new value for the given key."""
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         self._last_key = norm_name
         if norm_name in self:
             # bypass our override of __setitem__ since it modifies _as_list
-            dict.__setitem__(self, norm_name, self[norm_name] + ',' + value)
+            dict.__setitem__(self, norm_name,
+                             native_str(self[norm_name]) + ',' +
+                             native_str(value))
             self._as_list[norm_name].append(value)
         else:
             self[norm_name] = value
 
     def get_list(self, name):
         """Returns all values for the given header as a list."""
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         return self._as_list.get(norm_name, [])
 
     def get_all(self):
@@ -92,8 +144,8 @@ class HTTPHeaders(dict):
         If a header has multiple values, multiple pairs will be
         returned with the same name.
         """
-        for name, list in self._as_list.iteritems():
-            for value in list:
+        for name, values in self._as_list.items():
+            for value in values:
                 yield (name, value)
 
     def parse_line(self, line):
@@ -119,7 +171,7 @@ class HTTPHeaders(dict):
         """Returns a dictionary from HTTP header text.
 
         >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
-        >>> sorted(h.iteritems())
+        >>> sorted(h.items())
         [('Content-Length', '42'), ('Content-Type', 'text/html')]
         """
         h = cls()
@@ -131,53 +183,33 @@ class HTTPHeaders(dict):
     # dict implementation overrides
 
     def __setitem__(self, name, value):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         dict.__setitem__(self, norm_name, value)
         self._as_list[norm_name] = [value]
 
     def __getitem__(self, name):
-        return dict.__getitem__(self, HTTPHeaders._normalize_name(name))
+        return dict.__getitem__(self, _normalized_headers[name])
 
     def __delitem__(self, name):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         dict.__delitem__(self, norm_name)
         del self._as_list[norm_name]
 
     def __contains__(self, name):
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = _normalized_headers[name]
         return dict.__contains__(self, norm_name)
 
     def get(self, name, default=None):
-        return dict.get(self, HTTPHeaders._normalize_name(name), default)
+        return dict.get(self, _normalized_headers[name], default)
 
     def update(self, *args, **kwargs):
         # dict.update bypasses our __setitem__
-        for k, v in dict(*args, **kwargs).iteritems():
+        for k, v in dict(*args, **kwargs).items():
             self[k] = v
 
     def copy(self):
         # default implementation returns dict(self), not the subclass
         return HTTPHeaders(self)
-
-    _NORMALIZED_HEADER_RE = re.compile(r'^[A-Z0-9][a-z0-9]*(-[A-Z0-9][a-z0-9]*)*$')
-    _normalized_headers = {}
-
-    @staticmethod
-    def _normalize_name(name):
-        """Converts a name to Http-Header-Case.
-
-        >>> HTTPHeaders._normalize_name("coNtent-TYPE")
-        'Content-Type'
-        """
-        try:
-            return HTTPHeaders._normalized_headers[name]
-        except KeyError:
-            if HTTPHeaders._NORMALIZED_HEADER_RE.match(name):
-                normalized = name
-            else:
-                normalized = "-".join([w.capitalize() for w in name.split("-")])
-            HTTPHeaders._normalized_headers[name] = normalized
-            return normalized
 
 
 def url_concat(url, args):
@@ -191,33 +223,105 @@ def url_concat(url, args):
         return url
     if url[-1] not in ('?', '&'):
         url += '&' if ('?' in url) else '?'
-    return url + urllib.urlencode(args)
+    return url + urlencode(args)
 
 
 class HTTPFile(ObjectDict):
-    """Represents an HTTP file. For backwards compatibility, its instance
-    attributes are also accessible as dictionary keys.
+    """Represents a file uploaded via a form.
 
-    :ivar filename:
-    :ivar body:
-    :ivar content_type: The content_type comes from the provided HTTP header
-        and should not be trusted outright given that it can be easily forged.
+    For backwards compatibility, its instance attributes are also
+    accessible as dictionary keys.
+
+    * ``filename``
+    * ``body``
+    * ``content_type``
     """
     pass
+
+
+def _parse_request_range(range_header):
+    """Parses a Range header.
+
+    Returns either ``None`` or tuple ``(start, end)``.
+    Note that while the HTTP headers use inclusive byte positions,
+    this method returns indexes suitable for use in slices.
+
+    >>> start, end = _parse_request_range("bytes=1-2")
+    >>> start, end
+    (1, 3)
+    >>> [0, 1, 2, 3, 4][start:end]
+    [1, 2]
+    >>> _parse_request_range("bytes=6-")
+    (6, None)
+    >>> _parse_request_range("bytes=-6")
+    (-6, None)
+    >>> _parse_request_range("bytes=-0")
+    (None, 0)
+    >>> _parse_request_range("bytes=")
+    (None, None)
+    >>> _parse_request_range("foo=42")
+    >>> _parse_request_range("bytes=1-2,6-10")
+
+    Note: only supports one range (ex, ``bytes=1-2,6-10`` is not allowed).
+
+    See [0] for the details of the range header.
+
+    [0]: http://greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#byte.ranges
+    """
+    unit, _, value = range_header.partition("=")
+    unit, value = unit.strip(), value.strip()
+    if unit != "bytes":
+        return None
+    start_b, _, end_b = value.partition("-")
+    try:
+        start = _int_or_none(start_b)
+        end = _int_or_none(end_b)
+    except ValueError:
+        return None
+    if end is not None:
+        if start is None:
+            if end != 0:
+                start = -end
+                end = None
+        else:
+            end += 1
+    return (start, end)
+
+
+def _get_content_range(start, end, total):
+    """Returns a suitable Content-Range header:
+
+    >>> print(_get_content_range(None, 1, 4))
+    bytes 0-0/4
+    >>> print(_get_content_range(1, 3, 4))
+    bytes 1-2/4
+    >>> print(_get_content_range(None, None, 4))
+    bytes 0-3/4
+    """
+    start = start or 0
+    end = (end or total) - 1
+    return "bytes %s-%s/%s" % (start, end, total)
+
+
+def _int_or_none(val):
+    val = val.strip()
+    if val == "":
+        return None
+    return int(val)
 
 
 def parse_body_arguments(content_type, body, arguments, files):
     """Parses a form request body.
 
-    Supports "application/x-www-form-urlencoded" and "multipart/form-data".
-    The content_type parameter should be a string and body should be
-    a byte string.  The arguments and files parameters are dictionaries
-    that will be updated with the parsed contents.
+    Supports ``application/x-www-form-urlencoded`` and
+    ``multipart/form-data``.  The ``content_type`` parameter should be
+    a string and ``body`` should be a byte string.  The ``arguments``
+    and ``files`` parameters are dictionaries that will be updated
+    with the parsed contents.
     """
     if content_type.startswith("application/x-www-form-urlencoded"):
-        uri_arguments = parse_qs_bytes(native_str(body))
-        for name, values in uri_arguments.iteritems():
-            values = [v for v in values if v]
+        uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
+        for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
     elif content_type.startswith("multipart/form-data"):
@@ -232,9 +336,9 @@ def parse_body_arguments(content_type, body, arguments, files):
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):
-    """Parses a multipart/form-data body.
+    """Parses a ``multipart/form-data`` body.
 
-    The boundary and data parameters are both byte strings.
+    The ``boundary`` and ``data`` parameters are both byte strings.
     The dictionaries given in the arguments and files parameters
     will be updated with the contents of the body.
     """
@@ -243,24 +347,24 @@ def parse_multipart_form_data(boundary, data, arguments, files):
     # xmpp).  I think we're also supposed to handle backslash-escapes
     # here but I'll save that until we see a client that uses them
     # in the wild.
-    if boundary.startswith(b('"')) and boundary.endswith(b('"')):
+    if boundary.startswith(b'"') and boundary.endswith(b'"'):
         boundary = boundary[1:-1]
-    final_boundary_index = data.rfind(b("--") + boundary + b("--"))
+    final_boundary_index = data.rfind(b"--" + boundary + b"--")
     if final_boundary_index == -1:
         gen_log.warning("Invalid multipart/form-data: no final boundary")
         return
-    parts = data[:final_boundary_index].split(b("--") + boundary + b("\r\n"))
+    parts = data[:final_boundary_index].split(b"--" + boundary + b"\r\n")
     for part in parts:
         if not part:
             continue
-        eoh = part.find(b("\r\n\r\n"))
+        eoh = part.find(b"\r\n\r\n")
         if eoh == -1:
             gen_log.warning("multipart/form-data missing headers")
             continue
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
-        if disposition != "form-data" or not part.endswith(b("\r\n")):
+        if disposition != "form-data" or not part.endswith(b"\r\n"):
             gen_log.warning("Invalid multipart/form-data")
             continue
         value = part[eoh + 4:-2]
@@ -277,9 +381,31 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             arguments.setdefault(name, []).append(value)
 
 
+def format_timestamp(ts):
+    """Formats a timestamp in the format used by HTTP.
+
+    The argument may be a numeric timestamp as returned by `time.time`,
+    a time tuple as returned by `time.gmtime`, or a `datetime.datetime`
+    object.
+
+    >>> format_timestamp(1359312200)
+    'Sun, 27 Jan 2013 18:43:20 GMT'
+    """
+    if isinstance(ts, numbers.Real):
+        pass
+    elif isinstance(ts, (tuple, time.struct_time)):
+        ts = calendar.timegm(ts)
+    elif isinstance(ts, datetime.datetime):
+        ts = calendar.timegm(ts.utctimetuple())
+    else:
+        raise TypeError("unknown timestamp type: %r" % ts)
+    return email.utils.formatdate(ts, usegmt=True)
+
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some
 # combinations of semicolons and double quotes.
+
+
 def _parseparam(s):
     while s[:1] == ';':
         s = s[1:]
@@ -300,7 +426,7 @@ def _parse_header(line):
 
     """
     parts = _parseparam(';' + line)
-    key = parts.next()
+    key = next(parts)
     pdict = {}
     for p in parts:
         i = p.find('=')

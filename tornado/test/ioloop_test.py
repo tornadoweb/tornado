@@ -1,18 +1,20 @@
 #!/usr/bin/env python
 
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 import contextlib
 import datetime
 import functools
+import socket
 import sys
 import threading
 import time
 
-from tornado.ioloop import IOLoop
+from tornado import gen
+from tornado.ioloop import IOLoop, TimeoutError
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis
 
 try:
     from concurrent import futures
@@ -21,6 +23,7 @@ except ImportError:
 
 
 class TestIOLoop(AsyncTestCase):
+    @skipOnTravis
     def test_add_callback_wakeup(self):
         # Make sure that add_callback from inside a running IOLoop
         # wakes up the IOLoop immediately instead of waiting for a timeout.
@@ -38,6 +41,7 @@ class TestIOLoop(AsyncTestCase):
         self.assertAlmostEqual(time.time(), self.start_time, places=2)
         self.assertTrue(self.called)
 
+    @skipOnTravis
     def test_add_callback_wakeup_other_thread(self):
         def target():
             # sleep a bit to let the ioloop go into its poll loop
@@ -98,6 +102,7 @@ class TestIOLoop(AsyncTestCase):
         # Issue #635: add_callback() should raise a clean exception
         # if called while another thread is closing the IOLoop.
         closing = threading.Event()
+
         def target():
             other_ioloop.add_callback(other_ioloop.stop)
             other_ioloop.start()
@@ -110,7 +115,7 @@ class TestIOLoop(AsyncTestCase):
         for i in range(1000):
             try:
                 other_ioloop.add_callback(lambda: None)
-            except RuntimeError, e:
+            except RuntimeError as e:
                 self.assertEqual("IOLoop is closing", str(e))
                 break
 
@@ -126,6 +131,63 @@ class TestIOLoop(AsyncTestCase):
             # exception as a test failure.
             self.io_loop.add_callback(lambda: 1 / 0)
         self.wait()
+
+    @skipIfNonUnix  # just because socketpair is so convenient
+    def test_read_while_writeable(self):
+        # Ensure that write events don't come in while we're waiting for
+        # a read and haven't asked for writeability. (the reverse is
+        # difficult to test for)
+        client, server = socket.socketpair()
+        try:
+            def handler(fd, events):
+                self.assertEqual(events, IOLoop.READ)
+                self.stop()
+            self.io_loop.add_handler(client.fileno(), handler, IOLoop.READ)
+            self.io_loop.add_timeout(self.io_loop.time() + 0.01,
+                                     functools.partial(server.send, b'asdf'))
+            self.wait()
+            self.io_loop.remove_handler(client.fileno())
+        finally:
+            client.close()
+            server.close()
+
+    def test_remove_timeout_after_fire(self):
+        # It is not an error to call remove_timeout after it has run.
+        handle = self.io_loop.add_timeout(self.io_loop.time(), self.stop())
+        self.wait()
+        self.io_loop.remove_timeout(handle)
+
+    def test_remove_timeout_cleanup(self):
+        # Add and remove enough callbacks to trigger cleanup.
+        # Not a very thorough test, but it ensures that the cleanup code
+        # gets executed and doesn't blow up.  This test is only really useful
+        # on PollIOLoop subclasses, but it should run silently on any
+        # implementation.
+        for i in range(2000):
+            timeout = self.io_loop.add_timeout(self.io_loop.time() + 3600,
+                                               lambda: None)
+            self.io_loop.remove_timeout(timeout)
+        # HACK: wait two IOLoop iterations for the GC to happen.
+        self.io_loop.add_callback(lambda: self.io_loop.add_callback(self.stop))
+        self.wait()
+
+
+# Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
+# automatically set as current.
+class TestIOLoopCurrent(unittest.TestCase):
+    def setUp(self):
+        self.io_loop = IOLoop()
+
+    def tearDown(self):
+        self.io_loop.close()
+
+    def test_current(self):
+        def f():
+            self.current_io_loop = IOLoop.current()
+            self.io_loop.stop()
+        self.io_loop.add_callback(f)
+        self.io_loop.start()
+        self.assertIs(self.current_io_loop, self.io_loop)
 
 
 class TestIOLoopAddCallback(AsyncTestCase):
@@ -184,6 +246,7 @@ class TestIOLoopAddCallbackFromSignal(TestIOLoopAddCallback):
         self.io_loop.add_callback_from_signal(callback, *args, **kwargs)
 
 
+@unittest.skipIf(futures is None, "futures module not present")
 class TestIOLoopFutures(AsyncTestCase):
     def test_add_future_threads(self):
         with futures.ThreadPoolExecutor(1) as pool:
@@ -195,6 +258,7 @@ class TestIOLoopFutures(AsyncTestCase):
 
     def test_add_future_stack_context(self):
         ready = threading.Event()
+
         def task():
             # we must wait for the ioloop callback to be scheduled before
             # the task completes to ensure that add_future adds the callback
@@ -203,9 +267,11 @@ class TestIOLoopFutures(AsyncTestCase):
             ready.wait(1)
             assert ready.isSet(), "timed out"
             raise Exception("worker")
+
         def callback(future):
             self.future = future
             raise Exception("callback")
+
         def handle_exception(typ, value, traceback):
             self.exception = value
             self.stop()
@@ -221,9 +287,47 @@ class TestIOLoopFutures(AsyncTestCase):
 
         self.assertEqual(self.exception.args[0], "callback")
         self.assertEqual(self.future.exception().args[0], "worker")
-TestIOLoopFutures = unittest.skipIf(
-    futures is None, "futures module not present")(TestIOLoopFutures)
 
+
+class TestIOLoopRunSync(unittest.TestCase):
+    def setUp(self):
+        self.io_loop = IOLoop()
+
+    def tearDown(self):
+        self.io_loop.close()
+
+    def test_sync_result(self):
+        self.assertEqual(self.io_loop.run_sync(lambda: 42), 42)
+
+    def test_sync_exception(self):
+        with self.assertRaises(ZeroDivisionError):
+            self.io_loop.run_sync(lambda: 1 / 0)
+
+    def test_async_result(self):
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            raise gen.Return(42)
+        self.assertEqual(self.io_loop.run_sync(f), 42)
+
+    def test_async_exception(self):
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_callback)
+            1 / 0
+        with self.assertRaises(ZeroDivisionError):
+            self.io_loop.run_sync(f)
+
+    def test_current(self):
+        def f():
+            self.assertIs(IOLoop.current(), self.io_loop)
+        self.io_loop.run_sync(f)
+
+    def test_timeout(self):
+        @gen.coroutine
+        def f():
+            yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)
+        self.assertRaises(TimeoutError, self.io_loop.run_sync, f, timeout=0.01)
 
 if __name__ == "__main__":
     unittest.main()

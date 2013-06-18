@@ -14,15 +14,24 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""A module to automatically restart the server when a module is modified.
+"""xAutomatically restart the server when a source file is modified.
 
-Most applications should not call this module directly.  Instead, pass the
+Most applications should not access this module directly.  Instead, pass the
 keyword argument ``debug=True`` to the `tornado.web.Application` constructor.
 This will enable autoreload mode as well as checking for changes to templates
-and static resources.
+and static resources.  Note that restarting is a destructive operation
+and any requests in progress will be aborted when the process restarts.
 
-This module depends on IOLoop, so it will not work in WSGI applications
-and Google AppEngine.  It also will not work correctly when HTTPServer's
+This module can also be used as a command-line wrapper around scripts
+such as unit test runners.  See the `main` method for details.
+
+The command-line wrapper and Application debug modes can be used together.
+This combination is encouraged as the wrapper catches syntax errors and
+other import-time failures, while debug mode catches changes once
+the server has started.
+
+This module depends on `.IOLoop`, so it will not work in WSGI applications
+and Google App Engine.  It also will not work correctly when `.HTTPServer`'s
 multi-process mode is used.
 
 Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
@@ -31,7 +40,7 @@ Additionally, modifying these variables will cause reloading to behave
 incorrectly.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import os
 import sys
@@ -79,6 +88,7 @@ import weakref
 from tornado import ioloop
 from tornado.log import gen_log
 from tornado import process
+from tornado.util import exec_in
 
 try:
     import signal
@@ -91,19 +101,16 @@ _reload_hooks = []
 _reload_attempted = False
 _io_loops = weakref.WeakKeyDictionary()
 
-def start(io_loop=None, check_time=500):
-    """Restarts the process automatically when a module is modified.
 
-    We run on the I/O loop, and restarting is a destructive operation,
-    so will terminate any pending requests.
-    """
-    io_loop = io_loop or ioloop.IOLoop.instance()
+def start(io_loop=None, check_time=500):
+    """Begins watching source files for changes using the given `.IOLoop`. """
+    io_loop = io_loop or ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return
     _io_loops[io_loop] = True
     if len(_io_loops) > 1:
         gen_log.warning("tornado.autoreload started more than once in the same process")
-    add_reload_hook(functools.partial(_close_all_fds, io_loop))
+    add_reload_hook(functools.partial(io_loop.close, all_fds=True))
     modify_times = {}
     callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
@@ -135,18 +142,10 @@ def add_reload_hook(fn):
 
     Note that for open file and socket handles it is generally
     preferable to set the ``FD_CLOEXEC`` flag (using `fcntl` or
-    `tornado.platform.auto.set_close_exec`) instead of using a reload
-    hook to close them.
+    ``tornado.platform.auto.set_close_exec``) instead
+    of using a reload hook to close them.
     """
     _reload_hooks.append(fn)
-
-
-def _close_all_fds(io_loop):
-    for fd in io_loop._handlers.keys():
-        try:
-            os.close(fd)
-        except Exception:
-            pass
 
 
 def _reload_on_update(modify_times):
@@ -204,7 +203,7 @@ def _reload():
     # to ensure that the new process sees the same path we did.
     path_prefix = '.' + os.pathsep
     if (sys.path[0] == '' and
-        not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
+            not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
         os.environ["PYTHONPATH"] = (path_prefix +
                                     os.environ.get("PYTHONPATH", ""))
     if sys.platform == 'win32':
@@ -263,7 +262,7 @@ def main():
         script = sys.argv[1]
         sys.argv = sys.argv[1:]
     else:
-        print >>sys.stderr, _USAGE
+        print(_USAGE, file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -277,11 +276,11 @@ def main():
                 # Use globals as our "locals" dictionary so that
                 # something that tries to import __main__ (e.g. the unittest
                 # module) will see the right things.
-                exec f.read() in globals(), globals()
-    except SystemExit, e:
+                exec_in(f.read(), globals(), globals())
+    except SystemExit as e:
         logging.basicConfig()
         gen_log.info("Script exited with status %s", e.code)
-    except Exception, e:
+    except Exception as e:
         logging.basicConfig()
         gen_log.warning("Script exited with uncaught exception", exc_info=True)
         # If an exception occurred at import time, the file with the error

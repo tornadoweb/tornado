@@ -25,19 +25,10 @@ except ImportError:
 
 kwargs = {}
 
-# Build the epoll extension for Linux systems with Python < 2.6
-extensions = []
-major, minor = sys.version_info[:2]
-python_26 = (major > 2 or (major == 2 and minor >= 6))
-if "linux" in sys.platform.lower() and not python_26:
-    extensions.append(distutils.core.Extension(
-        "tornado.epoll", ["tornado/epoll.c"]))
+version = "3.1"
 
-version = "2.4.post2"
-
-if major >= 3:
-    import setuptools  # setuptools is required for use_2to3
-    kwargs["use_2to3"] = True
+with open('README.rst') as f:
+    long_description = f.read()
 
 distutils.core.setup(
     name="tornado",
@@ -50,21 +41,33 @@ distutils.core.setup(
         # in the sdist tarball)
         "tornado.test": [
             "README",
-            "test.crt",
-            "test.key",
-            "static/robots.txt",
-            "templates/utf8.html",
             "csv_translations/fr_FR.csv",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo",
             "gettext_translations/fr_FR/LC_MESSAGES/tornado_test.po",
+            "options_test.cfg",
+            "static/robots.txt",
+            "static/dir/index.html",
+            "templates/utf8.html",
+            "test.crt",
+            "test.key",
             ],
         },
-    ext_modules = extensions,
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
-    download_url="http://github.com/downloads/facebook/tornado/tornado-%s.tar.gz" % version,
     license="http://www.apache.org/licenses/LICENSE-2.0",
-    description="Tornado is an open source version of the scalable, non-blocking web server and and tools that power FriendFeed",
+    description="Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed.",
+    classifiers=[
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.2',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: Implementation :: PyPy',
+        ],
+    long_description=long_description,
     **kwargs
 )

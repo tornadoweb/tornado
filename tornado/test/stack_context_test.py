@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
+from tornado import gen
 from tornado.log import app_log
-from tornado.stack_context import StackContext, wrap, NullContext
-from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog
+from tornado.stack_context import (StackContext, wrap, NullContext, StackContextInconsistentError,
+                                   ExceptionStackContext, run_with_stack_context, _state)
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
-from tornado.util import b
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
@@ -51,7 +52,7 @@ class HTTPStackContextTest(AsyncHTTPTestCase):
             self.http_client.fetch(self.get_url('/'), self.handle_response)
             self.wait()
         self.assertEqual(self.response.code, 500)
-        self.assertTrue(b('got expected exception') in self.response.body)
+        self.assertTrue(b'got expected exception' in self.response.body)
 
     def handle_response(self, response):
         self.response = response
@@ -77,7 +78,7 @@ class StackContextTest(AsyncTestCase):
             callback = wrap(callback)
             with StackContext(functools.partial(self.context, 'library')):
                 self.io_loop.add_callback(
-                  functools.partial(library_inner_callback, callback))
+                    functools.partial(library_inner_callback, callback))
 
         def library_inner_callback(callback):
             self.assertEqual(self.active_contexts[-2:],
@@ -127,6 +128,52 @@ class StackContextTest(AsyncTestCase):
         self.io_loop.add_callback(f1)
         self.wait()
 
+    def test_deactivate_order(self):
+        # Stack context deactivation has separate logic for deactivation at
+        # the head and tail of the stack, so make sure it works in any order.
+        def check_contexts():
+            # Make sure that the full-context array and the exception-context
+            # linked lists are consistent with each other.
+            full_contexts, chain = _state.contexts
+            exception_contexts = []
+            while chain is not None:
+                exception_contexts.append(chain)
+                chain = chain.old_contexts[1]
+            self.assertEqual(list(reversed(full_contexts)), exception_contexts)
+            return list(self.active_contexts)
+
+        def make_wrapped_function():
+            """Wraps a function in three stack contexts, and returns
+            the function along with the deactivation functions.
+            """
+            # Remove the test's stack context to make sure we can cover
+            # the case where the last context is deactivated.
+            with NullContext():
+                partial = functools.partial
+                with StackContext(partial(self.context, 'c0')) as c0:
+                    with StackContext(partial(self.context, 'c1')) as c1:
+                        with StackContext(partial(self.context, 'c2')) as c2:
+                            return (wrap(check_contexts), [c0, c1, c2])
+
+        # First make sure the test mechanism works without any deactivations
+        func, deactivate_callbacks = make_wrapped_function()
+        self.assertEqual(func(), ['c0', 'c1', 'c2'])
+
+        # Deactivate the tail
+        func, deactivate_callbacks = make_wrapped_function()
+        deactivate_callbacks[0]()
+        self.assertEqual(func(), ['c1', 'c2'])
+
+        # Deactivate the middle
+        func, deactivate_callbacks = make_wrapped_function()
+        deactivate_callbacks[1]()
+        self.assertEqual(func(), ['c0', 'c2'])
+
+        # Deactivate the head
+        func, deactivate_callbacks = make_wrapped_function()
+        deactivate_callbacks[2]()
+        self.assertEqual(func(), ['c0', 'c1'])
+
     def test_isolation_nonempty(self):
         # f2 and f3 are a chain of operations started in context c1.
         # f2 is incidentally run under context c2, but that context should
@@ -169,6 +216,66 @@ class StackContextTest(AsyncTestCase):
         self.io_loop.add_callback(f1)
         self.wait()
 
+    def test_yield_in_with(self):
+        @gen.engine
+        def f():
+            with StackContext(functools.partial(self.context, 'c1')):
+                # This yield is a problem: the generator will be suspended
+                # and the StackContext's __exit__ is not called yet, so
+                # the context will be left on _state.contexts for anything
+                # that runs before the yield resolves.
+                yield gen.Task(self.io_loop.add_callback)
+
+        with self.assertRaises(StackContextInconsistentError):
+            f()
+            self.wait()
+
+    @gen_test
+    def test_yield_outside_with(self):
+        # This pattern avoids the problem in the previous test.
+        cb = yield gen.Callback('k1')
+        with StackContext(functools.partial(self.context, 'c1')):
+            self.io_loop.add_callback(cb)
+        yield gen.Wait('k1')
+
+    def test_yield_in_with_exception_stack_context(self):
+        # As above, but with ExceptionStackContext instead of StackContext.
+        @gen.engine
+        def f():
+            with ExceptionStackContext(lambda t, v, tb: False):
+                yield gen.Task(self.io_loop.add_callback)
+
+        with self.assertRaises(StackContextInconsistentError):
+            f()
+            self.wait()
+
+    @gen_test
+    def test_yield_outside_with_exception_stack_context(self):
+        cb = yield gen.Callback('k1')
+        with ExceptionStackContext(lambda t, v, tb: False):
+            self.io_loop.add_callback(cb)
+        yield gen.Wait('k1')
+
+    def test_run_with_stack_context(self):
+        @gen.coroutine
+        def f1():
+            self.assertEqual(self.active_contexts, ['c1'])
+            yield run_with_stack_context(
+                StackContext(functools.partial(self.context, 'c1')),
+                f2)
+            self.assertEqual(self.active_contexts, ['c1'])
+
+        @gen.coroutine
+        def f2():
+            self.assertEqual(self.active_contexts, ['c1', 'c2'])
+            yield gen.Task(self.io_loop.add_callback)
+            self.assertEqual(self.active_contexts, ['c1', 'c2'])
+
+        self.assertEqual(self.active_contexts, [])
+        run_with_stack_context(
+            StackContext(functools.partial(self.context, 'c1')),
+            f1)
+        self.assertEqual(self.active_contexts, [])
 
 if __name__ == '__main__':
     unittest.main()

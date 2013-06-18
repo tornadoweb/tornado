@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 import logging
 import os
 import signal
@@ -15,15 +15,17 @@ from tornado.process import fork_processes, task_id, Subprocess
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase
 from tornado.test.util import unittest, skipIfNonUnix
-from tornado.util import b
 from tornado.web import RequestHandler, Application
 
 
 def skip_if_twisted():
-    if IOLoop.configured_class().__name__ == 'TwistedIOLoop':
+    if IOLoop.configured_class().__name__.endswith('TwistedIOLoop'):
         raise unittest.SkipTest("Process tests not compatible with TwistedIOLoop")
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
+
+
+@skipIfNonUnix
 class ProcessTest(unittest.TestCase):
     def get_app(self):
         class ProcessHandler(RequestHandler):
@@ -69,7 +71,7 @@ class ProcessTest(unittest.TestCase):
                 id = fork_processes(3, max_restarts=3)
                 self.assertTrue(id is not None)
                 signal.alarm(5)  # child processes
-            except SystemExit, e:
+            except SystemExit as e:
                 # if we exit cleanly from fork_processes, all the child processes
                 # finished with status 0
                 self.assertEqual(e.code, 0)
@@ -94,7 +96,7 @@ class ProcessTest(unittest.TestCase):
                     def fetch(url, fail_ok=False):
                         try:
                             return client.fetch(get_url(url))
-                        except HTTPError, e:
+                        except HTTPError as e:
                             if not (fail_ok and e.code == 599):
                                 raise
 
@@ -109,9 +111,9 @@ class ProcessTest(unittest.TestCase):
                     # Disabled because on the mac a process dying with a signal
                     # can trigger an "Application exited abnormally; send error
                     # report to Apple?" prompt.
-                    #fetch("/?signal=%d" % signal.SIGTERM, fail_ok=True)
-                    #fetch("/?signal=%d" % signal.SIGABRT, fail_ok=True)
-                    #int(fetch("/").body)
+                    # fetch("/?signal=%d" % signal.SIGTERM, fail_ok=True)
+                    # fetch("/?signal=%d" % signal.SIGABRT, fail_ok=True)
+                    # int(fetch("/").body)
 
                     # Now kill them normally so they won't be restarted
                     fetch("/?exit=0", fail_ok=True)
@@ -128,9 +130,9 @@ class ProcessTest(unittest.TestCase):
             except Exception:
                 logging.error("exception in child process %d", id, exc_info=True)
                 raise
-ProcessTest = skipIfNonUnix(ProcessTest)
 
 
+@skipIfNonUnix
 class SubprocessTest(AsyncTestCase):
     def test_subprocess(self):
         subproc = Subprocess([sys.executable, '-u', '-i'],
@@ -138,19 +140,43 @@ class SubprocessTest(AsyncTestCase):
                              stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
                              io_loop=self.io_loop)
         self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
-        subproc.stdout.read_until(b('>>> '), self.stop)
+        subproc.stdout.read_until(b'>>> ', self.stop)
         self.wait()
-        subproc.stdin.write(b("print('hello')\n"))
-        subproc.stdout.read_until(b('\n'), self.stop)
+        subproc.stdin.write(b"print('hello')\n")
+        subproc.stdout.read_until(b'\n', self.stop)
         data = self.wait()
-        self.assertEqual(data, b("hello\n"))
+        self.assertEqual(data, b"hello\n")
 
-        subproc.stdout.read_until(b(">>> "), self.stop)
+        subproc.stdout.read_until(b">>> ", self.stop)
         self.wait()
-        subproc.stdin.write(b("raise SystemExit\n"))
+        subproc.stdin.write(b"raise SystemExit\n")
         subproc.stdout.read_until_close(self.stop)
         data = self.wait()
-        self.assertEqual(data, b(""))
+        self.assertEqual(data, b"")
+
+    def test_close_stdin(self):
+        # Close the parent's stdin handle and see that the child recognizes it.
+        subproc = Subprocess([sys.executable, '-u', '-i'],
+                             stdin=Subprocess.STREAM,
+                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
+                             io_loop=self.io_loop)
+        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
+        subproc.stdout.read_until(b'>>> ', self.stop)
+        self.wait()
+        subproc.stdin.close()
+        subproc.stdout.read_until_close(self.stop)
+        data = self.wait()
+        self.assertEqual(data, b"\n")
+
+    def test_stderr(self):
+        subproc = Subprocess([sys.executable, '-u', '-c',
+                              r"import sys; sys.stderr.write('hello\n')"],
+                             stderr=Subprocess.STREAM,
+                             io_loop=self.io_loop)
+        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
+        subproc.stderr.read_until(b'\n', self.stop)
+        data = self.wait()
+        self.assertEqual(data, b'hello\n')
 
     def test_sigchild(self):
         # Twisted's SIGCHLD handler and Subprocess's conflict with each other.
@@ -176,4 +202,3 @@ class SubprocessTest(AsyncTestCase):
         ret = self.wait()
         self.assertEqual(subproc.returncode, ret)
         self.assertEqual(ret, -signal.SIGTERM)
-SubprocessTest = skipIfNonUnix(SubprocessTest)

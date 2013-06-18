@@ -1,29 +1,27 @@
 #!/usr/bin/env python
 
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 from tornado import httpclient, simple_httpclient, netutil
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream
 from tornado.log import gen_log
+from tornado.netutil import ssl_options_to_context, Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
-from tornado.util import b, bytes_type
+from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, asynchronous
+from contextlib import closing
 import datetime
 import os
 import shutil
 import socket
+import ssl
 import sys
 import tempfile
-
-try:
-    import ssl
-except ImportError:
-    ssl = None
 
 
 class HandlerBaseTestCase(AsyncHTTPTestCase):
@@ -49,7 +47,6 @@ class HelloWorldRequestHandler(RequestHandler):
         self.finish("Got %d bytes in POST" % len(self.request.body))
 
 
-skipIfNoSSL = unittest.skipIf(ssl is None, "ssl module not present")
 # In pre-1.0 versions of openssl, SSLv23 clients always send SSLv2
 # ClientHello messages, which are rejected by SSLv3 and TLSv1
 # servers.  Note that while the OPENSSL_VERSION_INFO was formally
@@ -76,13 +73,13 @@ class SSLTestMixin(object):
 
     def test_ssl(self):
         response = self.fetch('/')
-        self.assertEqual(response.body, b("Hello world"))
+        self.assertEqual(response.body, b"Hello world")
 
     def test_large_post(self):
         response = self.fetch('/',
                               method='POST',
                               body='A' * 5000)
-        self.assertEqual(response.body, b("Got 5000 bytes in POST"))
+        self.assertEqual(response.body, b"Got 5000 bytes in POST")
 
     def test_non_ssl_request(self):
         # Make sure the server closes the connection when it gets a non-ssl
@@ -105,18 +102,27 @@ class SSLTestMixin(object):
 class SSLv23Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv23
-SSLv23Test = skipIfNoSSL(SSLv23Test)
 
 
+@skipIfOldSSL
 class SSLv3Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_SSLv3
-SSLv3Test = skipIfNoSSL(skipIfOldSSL(SSLv3Test))
 
+
+@skipIfOldSSL
 class TLSv1Test(BaseSSLTest, SSLTestMixin):
     def get_ssl_version(self):
         return ssl.PROTOCOL_TLSv1
-TLSv1Test = skipIfNoSSL(skipIfOldSSL(TLSv1Test))
+
+
+@unittest.skipIf(not hasattr(ssl, 'SSLContext'), 'ssl.SSLContext not present')
+class SSLContextTest(BaseSSLTest, SSLTestMixin):
+    def get_ssl_options(self):
+        context = ssl_options_to_context(
+            AsyncHTTPSTestCase.get_ssl_options(self))
+        assert isinstance(context, ssl.SSLContext)
+        return context
 
 
 class BadSSLOptionsTest(unittest.TestCase):
@@ -127,25 +133,25 @@ class BadSSLOptionsTest(unittest.TestCase):
         })
 
     def test_missing_key(self):
-        '''A missing SSL key should cause an immediate exception.'''
+        """A missing SSL key should cause an immediate exception."""
 
         application = Application()
         module_dir = os.path.dirname(__file__)
         existing_certificate = os.path.join(module_dir, 'test.crt')
 
         self.assertRaises(ValueError, HTTPServer, application, ssl_options={
-           "certfile": "/__mising__.crt",
-        })
+                          "certfile": "/__mising__.crt",
+                          })
         self.assertRaises(ValueError, HTTPServer, application, ssl_options={
-           "certfile": existing_certificate,
-           "keyfile": "/__missing__.key"
-        })
+                          "certfile": existing_certificate,
+                          "keyfile": "/__missing__.key"
+                          })
 
         # This actually works because both files exist
-        server = HTTPServer(application, ssl_options={
-           "certfile": existing_certificate,
-           "keyfile": existing_certificate
-        })
+        HTTPServer(application, ssl_options={
+                   "certfile": existing_certificate,
+                   "keyfile": existing_certificate
+                   })
 
 
 class MultipartTestHandler(RequestHandler):
@@ -164,7 +170,7 @@ class RawRequestHTTPConnection(simple_httpclient._HTTPConnection):
     def _on_connect(self):
         self.stream.write(self.__next_request)
         self.__next_request = None
-        self.stream.read_until(b("\r\n\r\n"), self._on_headers)
+        self.stream.read_until(b"\r\n\r\n", self._on_headers)
 
 # This test is also called from wsgi_test
 
@@ -178,47 +184,48 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         return Application(self.get_handlers())
 
     def raw_fetch(self, headers, body):
-        client = SimpleAsyncHTTPClient(self.io_loop)
-        conn = RawRequestHTTPConnection(
-            self.io_loop, client,
-            httpclient._RequestProxy(
-                httpclient.HTTPRequest(self.get_url("/")),
-                dict(httpclient.HTTPRequest._DEFAULTS)),
-            None, self.stop,
-            1024 * 1024)
-        conn.set_request(
-            b("\r\n").join(headers +
-                           [utf8("Content-Length: %d\r\n" % len(body))]) +
-            b("\r\n") + body)
-        response = self.wait()
-        client.close()
-        response.rethrow()
-        return response
+        with closing(Resolver(io_loop=self.io_loop)) as resolver:
+            with closing(SimpleAsyncHTTPClient(self.io_loop,
+                                               resolver=resolver)) as client:
+                conn = RawRequestHTTPConnection(
+                    self.io_loop, client,
+                    httpclient._RequestProxy(
+                        httpclient.HTTPRequest(self.get_url("/")),
+                        dict(httpclient.HTTPRequest._DEFAULTS)),
+                    None, self.stop,
+                    1024 * 1024, resolver)
+                conn.set_request(
+                    b"\r\n".join(headers +
+                                 [utf8("Content-Length: %d\r\n" % len(body))]) +
+                    b"\r\n" + body)
+                response = self.wait()
+                response.rethrow()
+                return response
 
     def test_multipart_form(self):
         # Encodings here are tricky:  Headers are latin1, bodies can be
         # anything (we use utf8 by default).
         response = self.raw_fetch([
-                b("POST /multipart HTTP/1.0"),
-                b("Content-Type: multipart/form-data; boundary=1234567890"),
-                b("X-Header-encoding-test: \xe9"),
-                ],
-                                  b("\r\n").join([
-                    b("Content-Disposition: form-data; name=argument"),
-                    b(""),
-                    u"\u00e1".encode("utf-8"),
-                    b("--1234567890"),
-                    u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode("utf8"),
-                    b(""),
-                    u"\u00fa".encode("utf-8"),
-                    b("--1234567890--"),
-                    b(""),
-                    ]))
+            b"POST /multipart HTTP/1.0",
+            b"Content-Type: multipart/form-data; boundary=1234567890",
+            b"X-Header-encoding-test: \xe9",
+        ],
+            b"\r\n".join([
+            b"Content-Disposition: form-data; name=argument",
+            b"",
+            u("\u00e1").encode("utf-8"),
+            b"--1234567890",
+            u('Content-Disposition: form-data; name="files"; filename="\u00f3"').encode("utf8"),
+            b"",
+            u("\u00fa").encode("utf-8"),
+            b"--1234567890--",
+            b"",
+            ]))
         data = json_decode(response.body)
-        self.assertEqual(u"\u00e9", data["header"])
-        self.assertEqual(u"\u00e1", data["argument"])
-        self.assertEqual(u"\u00f3", data["filename"])
-        self.assertEqual(u"\u00fa", data["filebody"])
+        self.assertEqual(u("\u00e9"), data["header"])
+        self.assertEqual(u("\u00e1"), data["argument"])
+        self.assertEqual(u("\u00f3"), data["filename"])
+        self.assertEqual(u("\u00fa"), data["filebody"])
 
     def test_100_continue(self):
         # Run through a 100-continue interaction by hand:
@@ -227,30 +234,33 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         stream = IOStream(socket.socket(), io_loop=self.io_loop)
         stream.connect(("localhost", self.get_http_port()), callback=self.stop)
         self.wait()
-        stream.write(b("\r\n").join([b("POST /hello HTTP/1.1"),
-                                     b("Content-Length: 1024"),
-                                     b("Expect: 100-continue"),
-                                     b("Connection: close"),
-                                     b("\r\n")]), callback=self.stop)
+        stream.write(b"\r\n".join([b"POST /hello HTTP/1.1",
+                                   b"Content-Length: 1024",
+                                   b"Expect: 100-continue",
+                                   b"Connection: close",
+                                   b"\r\n"]), callback=self.stop)
         self.wait()
-        stream.read_until(b("\r\n\r\n"), self.stop)
+        stream.read_until(b"\r\n\r\n", self.stop)
         data = self.wait()
-        self.assertTrue(data.startswith(b("HTTP/1.1 100 ")), data)
-        stream.write(b("a") * 1024)
-        stream.read_until(b("\r\n"), self.stop)
+        self.assertTrue(data.startswith(b"HTTP/1.1 100 "), data)
+        stream.write(b"a" * 1024)
+        stream.read_until(b"\r\n", self.stop)
         first_line = self.wait()
-        self.assertTrue(first_line.startswith(b("HTTP/1.1 200")), first_line)
-        stream.read_until(b("\r\n\r\n"), self.stop)
+        self.assertTrue(first_line.startswith(b"HTTP/1.1 200"), first_line)
+        stream.read_until(b"\r\n\r\n", self.stop)
         header_data = self.wait()
         headers = HTTPHeaders.parse(native_str(header_data.decode('latin1')))
         stream.read_bytes(int(headers["Content-Length"]), self.stop)
         body = self.wait()
-        self.assertEqual(body, b("Got 1024 bytes in POST"))
+        self.assertEqual(body, b"Got 1024 bytes in POST")
         stream.close()
 
 
 class EchoHandler(RequestHandler):
     def get(self):
+        self.write(recursive_unicode(self.request.arguments))
+
+    def post(self):
         self.write(recursive_unicode(self.request.arguments))
 
 
@@ -266,19 +276,19 @@ class TypeCheckHandler(RequestHandler):
             ('host', str),
             ('path', str),
             ('query', str),
-            ]
+        ]
         for field, expected_type in fields:
             self.check_type(field, getattr(self.request, field), expected_type)
 
-        self.check_type('header_key', self.request.headers.keys()[0], str)
-        self.check_type('header_value', self.request.headers.values()[0], str)
+        self.check_type('header_key', list(self.request.headers.keys())[0], str)
+        self.check_type('header_value', list(self.request.headers.values())[0], str)
 
-        self.check_type('cookie_key', self.request.cookies.keys()[0], str)
-        self.check_type('cookie_value', self.request.cookies.values()[0].value, str)
+        self.check_type('cookie_key', list(self.request.cookies.keys())[0], str)
+        self.check_type('cookie_value', list(self.request.cookies.values())[0].value, str)
         # secure cookies
 
-        self.check_type('arg_key', self.request.arguments.keys()[0], str)
-        self.check_type('arg_value', self.request.arguments.values()[0][0], bytes_type)
+        self.check_type('arg_key', list(self.request.arguments.keys())[0], str)
+        self.check_type('arg_value', list(self.request.arguments.values())[0][0], bytes_type)
 
     def post(self):
         self.check_type('body', self.request.body, bytes_type)
@@ -304,12 +314,17 @@ class HTTPServerTest(AsyncHTTPTestCase):
     def test_query_string_encoding(self):
         response = self.fetch("/echo?foo=%C3%A9")
         data = json_decode(response.body)
-        self.assertEqual(data, {u"foo": [u"\u00e9"]})
+        self.assertEqual(data, {u("foo"): [u("\u00e9")]})
 
     def test_empty_query_string(self):
         response = self.fetch("/echo?foo=&foo=")
         data = json_decode(response.body)
-        self.assertEqual(data, {u"foo": [u"", u""]})
+        self.assertEqual(data, {u("foo"): [u(""), u("")]})
+
+    def test_empty_post_parameters(self):
+        response = self.fetch("/echo", method="POST", body="foo=&bar=")
+        data = json_decode(response.body)
+        self.assertEqual(data, {u("foo"): [u("")], u("bar"): [u("")]})
 
     def test_types(self):
         headers = {"Cookie": "foo=bar"}
@@ -329,30 +344,65 @@ class HTTPServerTest(AsyncHTTPTestCase):
         self.assertEqual(200, response.code)
         self.assertEqual(json_decode(response.body), {})
 
-    def test_empty_request(self):
-        stream = IOStream(socket.socket(), io_loop=self.io_loop)
-        stream.connect(('localhost', self.get_http_port()), self.stop)
+
+class HTTPServerRawTest(AsyncHTTPTestCase):
+    def get_app(self):
+        return Application([
+            ('/echo', EchoHandler),
+        ])
+
+    def setUp(self):
+        super(HTTPServerRawTest, self).setUp()
+        self.stream = IOStream(socket.socket())
+        self.stream.connect(('localhost', self.get_http_port()), self.stop)
         self.wait()
-        stream.close()
+
+    def tearDown(self):
+        self.stream.close()
+        super(HTTPServerRawTest, self).tearDown()
+
+    def test_empty_request(self):
+        self.stream.close()
         self.io_loop.add_timeout(datetime.timedelta(seconds=0.001), self.stop)
         self.wait()
+
+    def test_malformed_first_line(self):
+        with ExpectLog(gen_log, '.*Malformed HTTP request line'):
+            self.stream.write(b'asdf\r\n\r\n')
+            # TODO: need an async version of ExpectLog so we don't need
+            # hard-coded timeouts here.
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
+                                     self.stop)
+            self.wait()
+
+    def test_malformed_headers(self):
+        with ExpectLog(gen_log, '.*Malformed HTTP headers'):
+            self.stream.write(b'GET / HTTP/1.0\r\nasdf\r\n\r\n')
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
+                                     self.stop)
+            self.wait()
 
 
 class XHeaderTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
         def get(self):
-            self.write(dict(remote_ip=self.request.remote_ip))
+            self.write(dict(remote_ip=self.request.remote_ip,
+                            remote_protocol=self.request.protocol))
 
     def get_httpserver_options(self):
         return dict(xheaders=True)
 
     def test_ip_headers(self):
-        self.assertEqual(self.fetch_json("/")["remote_ip"],
-                         "127.0.0.1")
+        self.assertEqual(self.fetch_json("/")["remote_ip"], "127.0.0.1")
 
         valid_ipv4 = {"X-Real-IP": "4.4.4.4"}
         self.assertEqual(
             self.fetch_json("/", headers=valid_ipv4)["remote_ip"],
+            "4.4.4.4")
+
+        valid_ipv4_list = {"X-Forwarded-For": "127.0.0.1, 4.4.4.4"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv4_list)["remote_ip"],
             "4.4.4.4")
 
         valid_ipv6 = {"X-Real-IP": "2620:0:1cfe:face:b00c::3"}
@@ -360,15 +410,65 @@ class XHeaderTest(HandlerBaseTestCase):
             self.fetch_json("/", headers=valid_ipv6)["remote_ip"],
             "2620:0:1cfe:face:b00c::3")
 
+        valid_ipv6_list = {"X-Forwarded-For": "::1, 2620:0:1cfe:face:b00c::3"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv6_list)["remote_ip"],
+            "2620:0:1cfe:face:b00c::3")
+
         invalid_chars = {"X-Real-IP": "4.4.4.4<script>"}
         self.assertEqual(
             self.fetch_json("/", headers=invalid_chars)["remote_ip"],
+            "127.0.0.1")
+
+        invalid_chars_list = {"X-Forwarded-For": "4.4.4.4, 5.5.5.5<script>"}
+        self.assertEqual(
+            self.fetch_json("/", headers=invalid_chars_list)["remote_ip"],
             "127.0.0.1")
 
         invalid_host = {"X-Real-IP": "www.google.com"}
         self.assertEqual(
             self.fetch_json("/", headers=invalid_host)["remote_ip"],
             "127.0.0.1")
+
+    def test_scheme_headers(self):
+        self.assertEqual(self.fetch_json("/")["remote_protocol"], "http")
+
+        https_scheme = {"X-Scheme": "https"}
+        self.assertEqual(
+            self.fetch_json("/", headers=https_scheme)["remote_protocol"],
+            "https")
+
+        https_forwarded = {"X-Forwarded-Proto": "https"}
+        self.assertEqual(
+            self.fetch_json("/", headers=https_forwarded)["remote_protocol"],
+            "https")
+
+        bad_forwarded = {"X-Forwarded-Proto": "unknown"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bad_forwarded)["remote_protocol"],
+            "http")
+
+
+class SSLXHeaderTest(AsyncHTTPSTestCase, HandlerBaseTestCase):
+    def get_app(self):
+        return Application([('/', XHeaderTest.Handler)])
+
+    def get_httpserver_options(self):
+        output = super(SSLXHeaderTest, self).get_httpserver_options()
+        output['xheaders'] = True
+        return output
+
+    def test_request_without_xprotocol(self):
+        self.assertEqual(self.fetch_json("/")["remote_protocol"], "https")
+
+        http_scheme = {"X-Scheme": "http"}
+        self.assertEqual(
+            self.fetch_json("/", headers=http_scheme)["remote_protocol"], "http")
+
+        bad_scheme = {"X-Scheme": "unknown"}
+        self.assertEqual(
+            self.fetch_json("/", headers=bad_scheme)["remote_protocol"], "https")
+
 
 class ManualProtocolTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
@@ -382,6 +482,8 @@ class ManualProtocolTest(HandlerBaseTestCase):
         self.assertEqual(self.fetch_json('/')['protocol'], 'https')
 
 
+@unittest.skipIf(not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin',
+                 "unix sockets not supported on this platform")
 class UnixSocketTest(AsyncTestCase):
     """HTTPServers can listen on Unix sockets too.
 
@@ -409,20 +511,18 @@ class UnixSocketTest(AsyncTestCase):
         stream = IOStream(socket.socket(socket.AF_UNIX), io_loop=self.io_loop)
         stream.connect(sockfile, self.stop)
         self.wait()
-        stream.write(b("GET /hello HTTP/1.0\r\n\r\n"))
-        stream.read_until(b("\r\n"), self.stop)
+        stream.write(b"GET /hello HTTP/1.0\r\n\r\n")
+        stream.read_until(b"\r\n", self.stop)
         response = self.wait()
-        self.assertEqual(response, b("HTTP/1.0 200 OK\r\n"))
-        stream.read_until(b("\r\n\r\n"), self.stop)
+        self.assertEqual(response, b"HTTP/1.0 200 OK\r\n")
+        stream.read_until(b"\r\n\r\n", self.stop)
         headers = HTTPHeaders.parse(self.wait().decode('latin1'))
         stream.read_bytes(int(headers["Content-Length"]), self.stop)
         body = self.wait()
-        self.assertEqual(body, b("Hello world"))
+        self.assertEqual(body, b"Hello world")
         stream.close()
         server.stop()
-UnixSocketTest = unittest.skipIf(
-    not hasattr(socket, 'AF_UNIX') or sys.platform == 'cygwin',
-    "unix sockets not supported on this platform")
+
 
 class KeepAliveTest(AsyncHTTPTestCase):
     """Tests various scenarios for HTTP 1.1 keep-alive support.
@@ -431,8 +531,6 @@ class KeepAliveTest(AsyncHTTPTestCase):
     connection reuse and closing.
     """
     def get_app(self):
-        test = self
-
         class HelloHandler(RequestHandler):
             def get(self):
                 self.finish('Hello world')
@@ -441,7 +539,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
             def get(self):
                 # 512KB should be bigger than the socket buffers so it will
                 # be written out in chunks.
-                self.write(''.join(chr(i % 256) * 1024 for i in xrange(512)))
+                self.write(''.join(chr(i % 256) * 1024 for i in range(512)))
 
         class FinishOnCloseHandler(RequestHandler):
             @asynchronous
@@ -460,7 +558,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
 
     def setUp(self):
         super(KeepAliveTest, self).setUp()
-        self.http_version = b('HTTP/1.1')
+        self.http_version = b'HTTP/1.1'
 
     def tearDown(self):
         # We just closed the client side of the socket; let the IOLoop run
@@ -479,10 +577,10 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.wait()
 
     def read_headers(self):
-        self.stream.read_until(b('\r\n'), self.stop)
+        self.stream.read_until(b'\r\n', self.stop)
         first_line = self.wait()
-        self.assertTrue(first_line.startswith(self.http_version + b(' 200')), first_line)
-        self.stream.read_until(b('\r\n\r\n'), self.stop)
+        self.assertTrue(first_line.startswith(self.http_version + b' 200'), first_line)
+        self.stream.read_until(b'\r\n\r\n', self.stop)
         header_bytes = self.wait()
         headers = HTTPHeaders.parse(header_bytes.decode('latin1'))
         return headers
@@ -491,7 +589,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
         headers = self.read_headers()
         self.stream.read_bytes(int(headers['Content-Length']), self.stop)
         body = self.wait()
-        self.assertEqual(b('Hello world'), body)
+        self.assertEqual(b'Hello world', body)
 
     def close(self):
         self.stream.close()
@@ -499,15 +597,15 @@ class KeepAliveTest(AsyncHTTPTestCase):
 
     def test_two_requests(self):
         self.connect()
-        self.stream.write(b('GET / HTTP/1.1\r\n\r\n'))
+        self.stream.write(b'GET / HTTP/1.1\r\n\r\n')
         self.read_response()
-        self.stream.write(b('GET / HTTP/1.1\r\n\r\n'))
+        self.stream.write(b'GET / HTTP/1.1\r\n\r\n')
         self.read_response()
         self.close()
 
     def test_request_close(self):
         self.connect()
-        self.stream.write(b('GET / HTTP/1.1\r\nConnection: close\r\n\r\n'))
+        self.stream.write(b'GET / HTTP/1.1\r\nConnection: close\r\n\r\n')
         self.read_response()
         self.stream.read_until_close(callback=self.stop)
         data = self.wait()
@@ -516,9 +614,9 @@ class KeepAliveTest(AsyncHTTPTestCase):
 
     # keepalive is supported for http 1.0 too, but it's opt-in
     def test_http10(self):
-        self.http_version = b('HTTP/1.0')
+        self.http_version = b'HTTP/1.0'
         self.connect()
-        self.stream.write(b('GET / HTTP/1.0\r\n\r\n'))
+        self.stream.write(b'GET / HTTP/1.0\r\n\r\n')
         self.read_response()
         self.stream.read_until_close(callback=self.stop)
         data = self.wait()
@@ -526,31 +624,31 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.close()
 
     def test_http10_keepalive(self):
-        self.http_version = b('HTTP/1.0')
+        self.http_version = b'HTTP/1.0'
         self.connect()
-        self.stream.write(b('GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n'))
+        self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
         self.read_response()
-        self.stream.write(b('GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n'))
+        self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
         self.read_response()
         self.close()
 
     def test_pipelined_requests(self):
         self.connect()
-        self.stream.write(b('GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n'))
+        self.stream.write(b'GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n')
         self.read_response()
         self.read_response()
         self.close()
 
     def test_pipelined_cancel(self):
         self.connect()
-        self.stream.write(b('GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n'))
+        self.stream.write(b'GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n')
         # only read once
         self.read_response()
         self.close()
 
     def test_cancel_during_download(self):
         self.connect()
-        self.stream.write(b('GET /large HTTP/1.1\r\n\r\n'))
+        self.stream.write(b'GET /large HTTP/1.1\r\n\r\n')
         self.read_headers()
         self.stream.read_bytes(1024, self.stop)
         self.wait()
@@ -558,6 +656,6 @@ class KeepAliveTest(AsyncHTTPTestCase):
 
     def test_finish_while_closed(self):
         self.connect()
-        self.stream.write(b('GET /finish_on_close HTTP/1.1\r\n\r\n'))
+        self.stream.write(b'GET /finish_on_close HTTP/1.1\r\n\r\n')
         self.read_headers()
         self.close()

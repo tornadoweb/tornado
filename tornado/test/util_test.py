@@ -1,8 +1,15 @@
-from __future__ import absolute_import, division, with_statement
+# coding: utf-8
+from __future__ import absolute_import, division, print_function, with_statement
 import sys
 
-from tornado.util import raise_exc_info, Configurable
+from tornado.escape import utf8
+from tornado.util import raise_exc_info, Configurable, u, exec_in, ArgReplacer
 from tornado.test.util import unittest
+
+try:
+    from cStringIO import StringIO  # py2
+except ImportError:
+    from io import StringIO  # py3
 
 
 class RaiseExcInfoTest(unittest.TestCase):
@@ -22,8 +29,9 @@ class RaiseExcInfoTest(unittest.TestCase):
         try:
             raise_exc_info(exc_info)
             self.fail("didn't get expected exception")
-        except TwoArgException, e:
+        except TwoArgException as e:
             self.assertIs(e, exc_info[1])
+
 
 class TestConfigurable(Configurable):
     @classmethod
@@ -34,13 +42,16 @@ class TestConfigurable(Configurable):
     def configurable_default(cls):
         return TestConfig1
 
+
 class TestConfig1(TestConfigurable):
     def initialize(self, a=None):
         self.a = a
 
+
 class TestConfig2(TestConfigurable):
     def initialize(self, b=None):
         self.b = b
+
 
 class ConfigurableTest(unittest.TestCase):
     def setUp(self):
@@ -112,3 +123,42 @@ class ConfigurableTest(unittest.TestCase):
         # args bound in configure don't apply when using the subclass directly
         obj = TestConfig2()
         self.assertIs(obj.b, None)
+
+
+class UnicodeLiteralTest(unittest.TestCase):
+    def test_unicode_escapes(self):
+        self.assertEqual(utf8(u('\u00e9')), b'\xc3\xa9')
+
+
+class ExecInTest(unittest.TestCase):
+    # This test is python 2 only because there are no new future imports
+    # defined in python 3 yet.
+    @unittest.skipIf(sys.version_info >= print_function.getMandatoryRelease(),
+                     'no testable future imports')
+    def test_no_inherit_future(self):
+        # This file has from __future__ import print_function...
+        f = StringIO()
+        print('hello', file=f)
+        # ...but the template doesn't
+        exec_in('print >> f, "world"', dict(f=f))
+        self.assertEqual(f.getvalue(), 'hello\nworld\n')
+
+
+class ArgReplacerTest(unittest.TestCase):
+    def setUp(self):
+        def function(x, y, callback=None, z=None):
+            pass
+        self.replacer = ArgReplacer(function, 'callback')
+
+    def test_omitted(self):
+        self.assertEqual(self.replacer.replace('new', (1, 2), dict()),
+                         (None, (1, 2), dict(callback='new')))
+
+    def test_position(self):
+        self.assertEqual(self.replacer.replace('new', (1, 2, 'old', 3), dict()),
+                         ('old', [1, 2, 'new', 3], dict()))
+
+    def test_keyword(self):
+        self.assertEqual(self.replacer.replace('new', (1,),
+                                               dict(y=2, callback='old', z=3)),
+                         ('old', (1,), dict(y=2, callback='new', z=3)))

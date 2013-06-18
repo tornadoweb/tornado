@@ -14,13 +14,14 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 """KQueue-based IOLoop implementation for BSD/Mac systems."""
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import select
 
 from tornado.ioloop import IOLoop, PollIOLoop
 
 assert hasattr(select, 'kqueue'), 'kqueue not supported'
+
 
 class _KQueue(object):
     """A kqueue-based event loop for BSD/Mac systems."""
@@ -52,11 +53,11 @@ class _KQueue(object):
         kevents = []
         if events & IOLoop.WRITE:
             kevents.append(select.kevent(
-                    fd, filter=select.KQ_FILTER_WRITE, flags=flags))
+                fd, filter=select.KQ_FILTER_WRITE, flags=flags))
         if events & IOLoop.READ or not kevents:
             # Always read when there is not a write
             kevents.append(select.kevent(
-                    fd, filter=select.KQ_FILTER_READ, flags=flags))
+                fd, filter=select.KQ_FILTER_READ, flags=flags))
         # Even though control() takes a list, it seems to return EINVAL
         # on Mac OS X (10.6) when there is more than one event in the list.
         for kevent in kevents:

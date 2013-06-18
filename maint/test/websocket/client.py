@@ -1,32 +1,46 @@
 #!/usr/bin/env python
-import sys
-from tornado.options import options, define, parse_command_line
-from twisted.python import log
-from twisted.internet import reactor
-from autobahntestsuite.fuzzing import FuzzingClientFactory
 
-define('servers', type=str, multiple=True,
-       default=['Tornado=ws://localhost:9000'])
+import logging
 
-define('cases', type=str, multiple=True,
-       default=["*"])
-define('exclude', type=str, multiple=True,
-       default=["9.*"])
+from tornado import gen
+from tornado.ioloop import IOLoop
+from tornado.options import define, options, parse_command_line
+from tornado.websocket import WebSocketConnect
+
+define('url', default='ws://localhost:9001')
+define('name', default='Tornado')
+
+@gen.engine
+def run_tests():
+    url = options.url + '/getCaseCount'
+    control_ws = yield WebSocketConnect(url, None)
+    num_tests = int((yield control_ws.read_message()))
+    logging.info('running %d cases', num_tests)
+    msg = yield control_ws.read_message()
+    assert msg is None
+
+    for i in range(1, num_tests + 1):
+        logging.info('running test case %d', i)
+        url = options.url + '/runCase?case=%d&agent=%s' % (i, options.name)
+        test_ws = yield WebSocketConnect(url, None)
+        while True:
+            message = yield test_ws.read_message()
+            if message is None:
+                break
+            test_ws.write_message(message, binary=isinstance(message, bytes))
+
+    url = options.url + '/updateReports?agent=%s' % options.name
+    update_ws = yield WebSocketConnect(url, None)
+    msg = yield update_ws.read_message()
+    assert msg is None
+    IOLoop.instance().stop()
+
+def main():
+    parse_command_line()
+
+    IOLoop.instance().add_callback(run_tests)
+
+    IOLoop.instance().start()
 
 if __name__ == '__main__':
-   parse_command_line()
-   log.startLogging(sys.stdout)
-   servers = []
-   for server in options.servers:
-      name, _, url = server.partition('=')
-      servers.append({"agent": name, "url": url, "options": {"version": 17}})
-   spec = {
-       "options": {"failByDrop": False},
-       "enable-ssl": False,
-       "servers": servers,
-       "cases": options.cases,
-       "exclude-cases": options.exclude,
-       "exclude-agent-cases": {},
-       }
-   fuzzer = FuzzingClientFactory(spec)
-   reactor.run()
+    main()

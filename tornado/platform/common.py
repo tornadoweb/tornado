@@ -1,11 +1,10 @@
 """Lowest-common-denominator implementations of platform functionality."""
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
 import socket
 
 from tornado.platform import interface
-from tornado.util import b
 
 
 class Waker(interface.Waker):
@@ -43,9 +42,9 @@ class Waker(interface.Waker):
             try:
                 self.writer.connect(connect_address)
                 break    # success
-            except socket.error, detail:
+            except socket.error as detail:
                 if (not hasattr(errno, 'WSAEADDRINUSE') or
-                    detail[0] != errno.WSAEADDRINUSE):
+                        detail[0] != errno.WSAEADDRINUSE):
                     # "Address already in use" is the only error
                     # I've seen on two WinXP Pro SP2 boxes, under
                     # Pythons 2.3.5 and 2.4.1.
@@ -74,7 +73,7 @@ class Waker(interface.Waker):
 
     def wake(self):
         try:
-            self.writer.send(b("x"))
+            self.writer.send(b"x")
         except (IOError, socket.error):
             pass
 

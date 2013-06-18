@@ -29,33 +29,39 @@ provides WSGI support in two ways:
   and Tornado handlers in a single server.
 """
 
-from __future__ import absolute_import, division, with_statement
+from __future__ import absolute_import, division, print_function, with_statement
 
-import Cookie
-import httplib
 import sys
 import time
 import tornado
-import urllib
 
 from tornado import escape
 from tornado import httputil
 from tornado.log import access_log
 from tornado import web
-from tornado.escape import native_str, utf8, parse_qs_bytes
-from tornado.util import b, bytes_type
+from tornado.escape import native_str, parse_qs_bytes
+from tornado.util import bytes_type, unicode_type
 
 try:
     from io import BytesIO  # python 3
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
 
+try:
+    import Cookie  # py2
+except ImportError:
+    import http.cookies as Cookie  # py3
+
+try:
+    import urllib.parse as urllib_parse  # py3
+except ImportError:
+    import urllib as urllib_parse
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings
 # that are smuggled inside objects of type unicode (via the latin1 encoding).
 # These functions are like those in the tornado.escape module, but defined
 # here to minimize the temptation to use them in non-wsgi contexts.
-if str is unicode:
+if str is unicode_type:
     def to_wsgi_str(s):
         assert isinstance(s, bytes_type)
         return s.decode('latin1')
@@ -76,11 +82,11 @@ else:
 class WSGIApplication(web.Application):
     """A WSGI equivalent of `tornado.web.Application`.
 
-    WSGIApplication is very similar to web.Application, except no
-    asynchronous methods are supported (since WSGI does not support
-    non-blocking requests properly). If you call self.flush() or other
-    asynchronous methods in your request handlers running in a
-    WSGIApplication, we throw an exception.
+    `WSGIApplication` is very similar to `tornado.web.Application`,
+    except no asynchronous methods are supported (since WSGI does not
+    support non-blocking requests properly). If you call
+    ``self.flush()`` or other asynchronous methods in your request
+    handlers running in a `WSGIApplication`, we throw an exception.
 
     Example usage::
 
@@ -99,13 +105,15 @@ class WSGIApplication(web.Application):
             server = wsgiref.simple_server.make_server('', 8888, application)
             server.serve_forever()
 
-    See the 'appengine' demo for an example of using this module to run
-    a Tornado app on Google AppEngine.
+    See the `appengine demo
+    <https://github.com/facebook/tornado/tree/master/demos/appengine>`_
+    for an example of using this module to run a Tornado app on Google
+    App Engine.
 
-    Since no asynchronous methods are available for WSGI applications, the
-    httpclient and auth modules are both not available for WSGI applications.
-    We support the same interface, but handlers running in a WSGIApplication
-    do not support flush() or asynchronous methods.
+    WSGI applications use the same `.RequestHandler` class, but not
+    ``@asynchronous`` methods or ``flush()``.  This means that it is
+    not possible to use `.AsyncHTTPClient`, or the `tornado.auth` or
+    `tornado.websocket` modules.
     """
     def __init__(self, handlers=None, default_host="", **settings):
         web.Application.__init__(self, handlers, default_host, transforms=[],
@@ -116,7 +124,7 @@ class WSGIApplication(web.Application):
         assert handler._finished
         reason = handler._reason
         status = str(handler._status_code) + " " + reason
-        headers = handler._headers.items() + handler._list_headers
+        headers = list(handler._headers.get_all())
         if hasattr(handler, "_new_cookie"):
             for cookie in handler._new_cookie.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))
@@ -128,10 +136,10 @@ class WSGIApplication(web.Application):
 class HTTPRequest(object):
     """Mimics `tornado.httpserver.HTTPRequest` for WSGI applications."""
     def __init__(self, environ):
-        """Parses the given WSGI environ to construct the request."""
+        """Parses the given WSGI environment to construct the request."""
         self.method = environ["REQUEST_METHOD"]
-        self.path = urllib.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
-        self.path += urllib.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
+        self.path = urllib_parse.quote(from_wsgi_str(environ.get("SCRIPT_NAME", "")))
+        self.path += urllib_parse.quote(from_wsgi_str(environ.get("PATH_INFO", "")))
         self.uri = self.path
         self.arguments = {}
         self.query = environ.get("QUERY_STRING", "")
@@ -200,7 +208,7 @@ class HTTPRequest(object):
 class WSGIContainer(object):
     r"""Makes a WSGI-compatible function runnable on Tornado's HTTP server.
 
-    Wrap a WSGI function in a WSGIContainer and pass it to HTTPServer to
+    Wrap a WSGI function in a `WSGIContainer` and pass it to `.HTTPServer` to
     run it. For example::
 
         def simple_app(environ, start_response):
@@ -235,7 +243,7 @@ class WSGIContainer(object):
         app_response = self.wsgi_application(
             WSGIContainer.environ(request), start_response)
         response.extend(app_response)
-        body = b("").join(response)
+        body = b"".join(response)
         if hasattr(app_response, "close"):
             app_response.close()
         if not data:
@@ -255,10 +263,10 @@ class WSGIContainer(object):
 
         parts = [escape.utf8("HTTP/1.1 " + data["status"] + "\r\n")]
         for key, value in headers:
-            parts.append(escape.utf8(key) + b(": ") + escape.utf8(value) + b("\r\n"))
-        parts.append(b("\r\n"))
+            parts.append(escape.utf8(key) + b": " + escape.utf8(value) + b"\r\n")
+        parts.append(b"\r\n")
         parts.append(body)
-        request.write(b("").join(parts))
+        request.write(b"".join(parts))
         request.finish()
         self._log(status_code, request)
 
@@ -276,7 +284,8 @@ class WSGIContainer(object):
         environ = {
             "REQUEST_METHOD": request.method,
             "SCRIPT_NAME": "",
-            "PATH_INFO": to_wsgi_str(escape.url_unescape(request.path, encoding=None)),
+            "PATH_INFO": to_wsgi_str(escape.url_unescape(
+            request.path, encoding=None, plus=False)),
             "QUERY_STRING": request.query,
             "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,
@@ -294,7 +303,7 @@ class WSGIContainer(object):
             environ["CONTENT_TYPE"] = request.headers.pop("Content-Type")
         if "Content-Length" in request.headers:
             environ["CONTENT_LENGTH"] = request.headers.pop("Content-Length")
-        for key, value in request.headers.iteritems():
+        for key, value in request.headers.items():
             environ["HTTP_" + key.replace("-", "_").upper()] = value
         return environ
 

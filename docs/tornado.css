@@ -1,0 +1,73 @@
+@import url("default.css");
+
+/* These style tweaks are probably going to turn out to be a little fragile.
+   They're currently based on the default theme from sphinx 1.0.7.
+*/
+
+div.body h1,
+div.body h2,
+div.body h3,
+div.body h4,
+div.body h5,
+div.body h6,
+div.sphinxsidebar h3,
+div.sphinxsidebar h4 {
+    font-weight: bold;
+    border-bottom: none;
+}
+
+pre {
+    line-height: 14pt;
+    margin: 17pt;
+    padding-left: 1em;
+    border: none;
+    border-left: 1px solid #ccc;
+}
+
+div.body p, div.body dd, div.body li {
+    text-align: left;
+}
+
+.highlight {
+    background: #fff !important;
+}
+
+th.field-name {
+    background: #fff;
+}
+
+tt {
+    background: #fff;
+}
+
+/* "related" = top header */
+div.related {
+    position: fixed;
+}
+
+/* body settings copied from div.sphinxsidebar so following a link to a
+   specific object positions that object below the fixed header */
+div.body {
+    top: 30px;
+    bottom: 0;
+    right: 0;
+    left: 230px;
+    margin: 0;
+    position: fixed;
+    overflow: auto;
+    height: auto;
+}
+
+div.related, div.sphinxsidebar {
+    font-family: Calibri, sans-serif;
+}
+
+div.section {
+    max-width: 850px;
+}
+
+/* sphinx renders an em tag inside internal reference links; we don't want
+   these to be italic */
+a.reference.internal em {
+    font-style: normal;
+}
