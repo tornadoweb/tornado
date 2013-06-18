@@ -1130,7 +1130,7 @@ class RequestHandler(object):
                 self.request._read_body(exec_req_cb)
             else:
                 exec_req_cb()
-        except Exception, e:
+        except Exception as e:
             self._handle_request_exception(e)
 
     def _execute_request(self, *args, **kwargs):
