@@ -256,12 +256,13 @@ class StackContextTest(AsyncTestCase):
             self.io_loop.add_callback(cb)
         yield gen.Wait('k1')
 
+    @gen_test
     def test_run_with_stack_context(self):
         @gen.coroutine
         def f1():
             self.assertEqual(self.active_contexts, ['c1'])
             yield run_with_stack_context(
-                StackContext(functools.partial(self.context, 'c1')),
+                StackContext(functools.partial(self.context, 'c2')),
                 f2)
             self.assertEqual(self.active_contexts, ['c1'])
 
@@ -272,7 +273,7 @@ class StackContextTest(AsyncTestCase):
             self.assertEqual(self.active_contexts, ['c1', 'c2'])
 
         self.assertEqual(self.active_contexts, [])
-        run_with_stack_context(
+        yield run_with_stack_context(
             StackContext(functools.partial(self.context, 'c1')),
             f1)
         self.assertEqual(self.active_contexts, [])
