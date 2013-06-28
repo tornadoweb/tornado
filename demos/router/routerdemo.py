@@ -11,7 +11,7 @@ from action import index
 from tornado.router import load_handlers
 
 if __name__ == "__main__":
-    import pdb;pdb.set_trace()
+
     handlers = load_handlers()
     for h in handlers:
         print h
