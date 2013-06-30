@@ -1142,7 +1142,7 @@ class RequestHandler(object):
             elif isinstance(result, Future):
                 if result.done():
                     if result.result() is not None:
-                        raise ValueError('Expected None, got %r' % result)
+                        raise ValueError('Expected None, got %r' % result.result())
                     callback()
                 else:
                     # Delayed import of IOLoop because it's not available
