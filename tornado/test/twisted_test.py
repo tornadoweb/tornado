@@ -478,6 +478,10 @@ if have_twisted:
             "test_lostFileDescriptor",  # incompatible with epoll and kqueue
         ],
         'twisted.internet.test.test_process.ProcessTestsBuilder': [
+            # Only work as root.  Twisted's "skip" functionality works
+            # with py27+, but not unittest2 on py26.
+            'test_changeGID',
+            'test_changeUID',
         ],
         # Process tests appear to work on OSX 10.7, but not 10.6
         #'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
