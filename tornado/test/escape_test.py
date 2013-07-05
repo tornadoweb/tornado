@@ -144,7 +144,7 @@ class EscapeTestCase(unittest.TestCase):
             (u("<foo>"), u("&lt;foo&gt;")),
             (b"<foo>", b"&lt;foo&gt;"),
 
-            ("<>&\"", "&lt;&gt;&amp;&quot;"),
+            ("<>&\"'", "&lt;&gt;&amp;&quot;&#39;"),
             ("&amp;", "&amp;amp;"),
 
             (u("<\u00e9>"), u("&lt;\u00e9&gt;")),

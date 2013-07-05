@@ -49,8 +49,9 @@ try:
 except NameError:
     unichr = chr
 
-_XHTML_ESCAPE_RE = re.compile('[&<>"]')
-_XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}
+_XHTML_ESCAPE_RE = re.compile('[&<>"\']')
+_XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
+                      '\'': '&#39;'}
 
 
 def xhtml_escape(value):
