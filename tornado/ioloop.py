@@ -605,6 +605,9 @@ class PollIOLoop(IOLoop):
                 self._callbacks = []
             for callback in callbacks:
                 self._run_callback(callback)
+            # Closures may be holding on to a lot of memory, so allow
+            # them to be freed before we go into our poll wait.
+            del callbacks
 
             if self._timeouts:
                 now = self.time()
@@ -616,6 +619,7 @@ class PollIOLoop(IOLoop):
                     elif self._timeouts[0].deadline <= now:
                         timeout = heapq.heappop(self._timeouts)
                         self._run_callback(timeout.callback)
+                        del timeout
                     else:
                         seconds = self._timeouts[0].deadline - now
                         poll_timeout = min(seconds, poll_timeout)
