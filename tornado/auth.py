@@ -1158,7 +1158,7 @@ class FacebookMixin(object):
 class FacebookGraphMixin(OAuth2Mixin):
     """Facebook authentication using the new Graph API and OAuth2."""
     _OAUTH_ACCESS_TOKEN_URL = "https://graph.facebook.com/oauth/access_token?"
-    _OAUTH_AUTHORIZE_URL = "https://graph.facebook.com/oauth/authorize?"
+    _OAUTH_AUTHORIZE_URL = "https://www.facebook.com/dialog/oauth?"
     _OAUTH_NO_CALLBACKS = False
     _FACEBOOK_BASE_URL = "https://graph.facebook.com"
 
