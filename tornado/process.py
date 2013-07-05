@@ -190,23 +190,34 @@ class Subprocess(object):
 
     def __init__(self, *args, **kwargs):
         self.io_loop = kwargs.pop('io_loop', None) or ioloop.IOLoop.current()
+        # All FDs we create should be closed on error; those in to_close
+        # should be closed in the parent process on success.
+        pipe_fds = []
         to_close = []
         if kwargs.get('stdin') is Subprocess.STREAM:
             in_r, in_w = _pipe_cloexec()
             kwargs['stdin'] = in_r
+            pipe_fds.extend((in_r, in_w))
             to_close.append(in_r)
             self.stdin = PipeIOStream(in_w, io_loop=self.io_loop)
         if kwargs.get('stdout') is Subprocess.STREAM:
             out_r, out_w = _pipe_cloexec()
             kwargs['stdout'] = out_w
+            pipe_fds.extend((out_r, out_w))
             to_close.append(out_w)
             self.stdout = PipeIOStream(out_r, io_loop=self.io_loop)
         if kwargs.get('stderr') is Subprocess.STREAM:
             err_r, err_w = _pipe_cloexec()
             kwargs['stderr'] = err_w
+            pipe_fds.extend((err_r, err_w))
             to_close.append(err_w)
             self.stderr = PipeIOStream(err_r, io_loop=self.io_loop)
-        self.proc = subprocess.Popen(*args, **kwargs)
+        try:
+            self.proc = subprocess.Popen(*args, **kwargs)
+        except:
+            for fd in pipe_fds:
+                os.close(fd)
+            raise
         for fd in to_close:
             os.close(fd)
         for attr in ['stdin', 'stdout', 'stderr', 'pid']:
