@@ -56,7 +56,7 @@ import hmac
 import time
 import uuid
 
-from tornado.concurrent import Future, chain_future, return_future
+from tornado.concurrent import TracebackFuture, chain_future, return_future
 from tornado import gen
 from tornado import httpclient
 from tornado import escape
@@ -99,7 +99,7 @@ def _auth_return_future(f):
 
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
-        future = Future()
+        future = TracebackFuture()
         callback, args, kwargs = replacer.replace(future, args, kwargs)
         if callback is not None:
             future.add_done_callback(

@@ -33,7 +33,7 @@ import functools
 import time
 import weakref
 
-from tornado.concurrent import Future
+from tornado.concurrent import TracebackFuture
 from tornado.escape import utf8
 from tornado import httputil, stack_context
 from tornado.ioloop import IOLoop
@@ -174,7 +174,7 @@ class AsyncHTTPClient(Configurable):
         # where normal dicts get converted to HTTPHeaders objects.
         request.headers = httputil.HTTPHeaders(request.headers)
         request = _RequestProxy(request, self.defaults)
-        future = Future()
+        future = TracebackFuture()
         if callback is not None:
             callback = stack_context.wrap(callback)
 

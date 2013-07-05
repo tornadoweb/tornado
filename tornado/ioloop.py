@@ -356,7 +356,7 @@ class IOLoop(Configurable):
                 if isinstance(result, Future):
                     future_cell[0] = result
                 else:
-                    future_cell[0] = Future()
+                    future_cell[0] = TracebackFuture()
                     future_cell[0].set_result(result)
             self.add_future(future_cell[0], lambda future: self.stop())
         self.add_callback(run)

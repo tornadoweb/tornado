@@ -31,7 +31,7 @@ import time
 import tornado.escape
 import tornado.web
 
-from tornado.concurrent import Future
+from tornado.concurrent import TracebackFuture
 from tornado.escape import utf8, native_str
 from tornado import httpclient
 from tornado.ioloop import IOLoop
@@ -764,7 +764,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     """WebSocket client connection."""
     def __init__(self, io_loop, request):
-        self.connect_future = Future()
+        self.connect_future = TracebackFuture()
         self.read_future = None
         self.read_queue = collections.deque()
         self.key = base64.b64encode(os.urandom(16))
@@ -825,7 +825,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         ready.
         """
         assert self.read_future is None
-        future = Future()
+        future = TracebackFuture()
         if self.read_queue:
             future.set_result(self.read_queue.popleft())
         else:
