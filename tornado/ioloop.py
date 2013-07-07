@@ -607,7 +607,7 @@ class PollIOLoop(IOLoop):
                 self._run_callback(callback)
             # Closures may be holding on to a lot of memory, so allow
             # them to be freed before we go into our poll wait.
-            del callbacks
+            callbacks = callback = None
 
             if self._timeouts:
                 now = self.time()
