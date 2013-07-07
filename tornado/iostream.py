@@ -274,6 +274,10 @@ class BaseIOStream(object):
             self._run_callback(cb)
             # Delete any unfinished callbacks to break up reference cycles.
             self._read_callback = self._write_callback = None
+            # Clear the buffers so they can be cleared immediately even
+            # if the IOStream object is kept alive by a reference cycle.
+            # TODO: Clear the read buffer too; it currently breaks some tests.
+            self._write_buffer = None
 
     def reading(self):
         """Returns true if we are currently reading from the stream."""
