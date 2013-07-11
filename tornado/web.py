@@ -1827,6 +1827,10 @@ class StaticFileHandler(RequestHandler):
                 return
             if start is not None and start < 0:
                 start += size
+            if end is not None and end > size:
+                # Clients sometimes blindly use a large range to limit their
+                # download size; cap the endpoint at the actual file size.
+                end = size
             # Note: only return HTTP 206 if less than the entire range has been
             # requested. Not only is this semantically correct, but Chrome
             # refuses to play audio if it gets an HTTP 206 in response to
