@@ -1564,6 +1564,7 @@ class Application(object):
             for spec in handlers:
                 match = spec.regex.match(request.path)
                 if match:
+                    request.spec = spec
                     handler = spec.handler_class(self, request, **spec.kwargs)
                     if spec.regex.groups:
                         # None-safe wrapper around url_unescape to handle
