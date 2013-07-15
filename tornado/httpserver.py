@@ -149,6 +149,7 @@ class HTTPServer(TCPServer):
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
         self.protocol = protocol
+        self.spec = None
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
