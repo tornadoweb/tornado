@@ -543,3 +543,21 @@ class TestPipeIOStream(AsyncTestCase):
         self.assertEqual(data, b"ld")
 
         rs.close()
+
+    def test_pipe_iostream_big_write(self):
+        r, w = os.pipe()
+
+        rs = PipeIOStream(r, io_loop=self.io_loop)
+        ws = PipeIOStream(w, io_loop=self.io_loop)
+
+        NUM_BYTES = 1048576
+
+        # Write 1MB of data, which should fill the buffer
+        ws.write(b"1" * NUM_BYTES)
+
+        rs.read_bytes(NUM_BYTES, self.stop)
+        data = self.wait()
+        self.assertEqual(data, b"1" * NUM_BYTES)
+
+        ws.close()
+        rs.close()
