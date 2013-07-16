@@ -2309,8 +2309,11 @@ class UIModule(object):
         self.handler = handler
         self.request = handler.request
         self.ui = handler.ui
-        self.current_user = handler.current_user
         self.locale = handler.locale
+
+    @property
+    def current_user(self):
+        return self.handler.current_user
 
     def render(self, *args, **kwargs):
         """Overridden in subclasses to return this module's output."""
