@@ -957,8 +957,8 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
         The API itself defaults some of these values that cna be overwritten by the overwrites object.
         They are:
-         * approval_prompt = auto
-         * access_type = online
+        approval_prompt = auto
+        access_type = online
         """
         extra_params = {
             "scope": ' '.join(scope),
