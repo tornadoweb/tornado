@@ -339,7 +339,7 @@ class _HTTPConnection(object):
     def _on_headers(self, data):
         data = native_str(data.decode("latin1"))
         first_line, _, header_data = data.partition("\n")
-        match = re.match("HTTP/1.[01] ([0-9]+) ([^\r]*)", first_line)
+        match = re.match("HTTP/1.[01] ([0-9]+)\s?([^\r]*)", first_line)
         assert match
         code = int(match.group(1))
         self.headers = HTTPHeaders.parse(header_data)
