@@ -14,3 +14,4 @@ In Progress
   while idle.
 * `.FacebookGraphMixin` has been updated to use the current Facebook login
   URL, which saves a redirect.
+* `.GoogleOAuth2Mixin` has been added so that Google's OAuth2 only apps are able to get a context without OpenID (which uses OAuth 1).
