@@ -801,6 +801,10 @@ class SSLIOStream(IOStream):
         self._handshake_writing = False
         self._ssl_connect_callback = None
         self._server_hostname = None
+        self._initiate_handshake()
+
+    def _initiate_handshake(self):
+        self._add_io_state(self.io_loop.READ | self.io_loop.WRITE)
 
     def reading(self):
         return self._handshake_reading or super(SSLIOStream, self).reading()
