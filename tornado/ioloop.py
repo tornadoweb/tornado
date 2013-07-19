@@ -59,6 +59,9 @@ except ImportError:
 from tornado.platform.auto import set_close_exec, Waker
 
 
+_POLL_TIMEOUT = 3600.0
+
+
 class TimeoutError(Exception):
     pass
 
@@ -596,7 +599,7 @@ class PollIOLoop(IOLoop):
                 pass
 
         while True:
-            poll_timeout = 3600.0
+            poll_timeout = _POLL_TIMEOUT
 
             # Prevent IO event starvation by delaying new callbacks
             # to the next iteration of the event loop.
