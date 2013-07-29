@@ -202,6 +202,14 @@ class HTTPHeaders(dict):
     def get(self, name, default=None):
         return dict.get(self, _normalized_headers[name], default)
 
+    def setdefault(self, key, default=None):
+        # dict.update bypasses our __setitem__
+        try:
+            return self[key]
+        except KeyError:
+            self[key] = default
+        return default
+
     def update(self, *args, **kwargs):
         # dict.update bypasses our __setitem__
         for k, v in dict(*args, **kwargs).items():

@@ -273,8 +273,8 @@ class _HTTPConnection(object):
             else:
                 assert self.request.body is None
         if self.request.body is not None:
-            self.request.headers["Content-Length"] = str(len(
-                self.request.body))
+            self.request.headers.setdefault("Content-Length", str(len(
+                self.request.body)))
         if (self.request.method == "POST" and
                 "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
