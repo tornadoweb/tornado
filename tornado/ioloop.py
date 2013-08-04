@@ -682,11 +682,9 @@ class PollIOLoop(IOLoop):
                         # Happens when the client closes the connection
                         pass
                     else:
-                        app_log.error("Exception in I/O handler for fd %s",
-                                      fd, exc_info=True)
+                        self.handle_callback_exception(self._handlers.get(fd))
                 except Exception:
-                    app_log.error("Exception in I/O handler for fd %s",
-                                  fd, exc_info=True)
+                    self.handle_callback_exception(self._handlers.get(fd))
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
         if self._blocking_signal_threshold is not None:
@@ -820,7 +818,7 @@ class PeriodicCallback(object):
         try:
             self.callback()
         except Exception:
-            app_log.error("Error in periodic callback", exc_info=True)
+            self.io_loop.handle_callback_exception(self.callback)
         self._schedule_next()
 
     def _schedule_next(self):
