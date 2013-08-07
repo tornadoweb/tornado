@@ -420,23 +420,37 @@ def _parseparam(s):
 
 
 def _parse_header(line):
-    """Parse a Content-type like header.
+    r"""Parse a Content-type like header.
 
     Return the main content-type and a dictionary of options.
 
+    >>> d = _parse_header("CD: fd; foo=\"bar\"; file*=utf-8''T%C3%A4st")[1]
+    >>> d['file'] == 'T\u00e4st'
+    True
+    >>> d['foo']
+    'bar'
     """
     parts = _parseparam(';' + line)
     key = next(parts)
-    pdict = {}
+    # decode_params treats first argument special, but we already stripped key
+    params = [('Dummy', 'value')]
     for p in parts:
         i = p.find('=')
         if i >= 0:
             name = p[:i].strip().lower()
             value = p[i + 1:].strip()
-            if len(value) >= 2 and value[0] == value[-1] == '"':
+            if len(value) >= 2 and value[0] == value[-1] == '"' and False:
                 value = value[1:-1]
                 value = value.replace('\\\\', '\\').replace('\\"', '"')
-            pdict[name] = value
+            params.append((name, value))
+    params = email.utils.decode_params(params)
+    params.pop(0) # get rid of the dummy again
+    pdict = {}
+    for name, value in params:
+        value = email.utils.collapse_rfc2231_value(value)
+        if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+            value = value[1:-1]
+        pdict[name] = value
     return key, pdict
 
 
