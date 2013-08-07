@@ -425,7 +425,7 @@ def _parse_header(line):
     Return the main content-type and a dictionary of options.
 
     >>> d = _parse_header("CD: fd; foo=\"bar\"; file*=utf-8''T%C3%A4st")[1]
-    >>> d['file'] == 'T\u00e4st'
+    >>> d['file'] == r'T\u00e4st'.encode('ascii').decode('unicode_escape')
     True
     >>> d['foo']
     'bar'
