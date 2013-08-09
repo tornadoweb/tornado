@@ -245,8 +245,7 @@ class _HTTPConnection(object):
                     'proxy_username', 'proxy_password'):
             if getattr(self.request, key, None):
                 raise NotImplementedError('%s not supported' % key)
-        if "Connection" not in self.request.headers:
-            self.request.headers["Connection"] = "close"
+        self.request.headers.setdefault("Connection", "close")
         if "Host" not in self.request.headers:
             if '@' in self.parsed.netloc:
                 self.request.headers["Host"] = self.parsed.netloc.rpartition('@')[-1]
@@ -273,11 +272,11 @@ class _HTTPConnection(object):
             else:
                 assert self.request.body is None
         if self.request.body is not None:
-            self.request.headers.setdefault("Content-Length", str(len(
-                self.request.body)))
-        if (self.request.method == "POST" and
-                "Content-Type" not in self.request.headers):
-            self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
+            self.request.headers.setdefault("Content-Length",
+                                            str(len(self.request.body)))
+        if self.request.method == "POST":
+            self.request.headers.setdefault("Content-Type",
+                                            "application/x-www-form-urlencoded")
         if self.request.use_gzip:
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
