@@ -7,7 +7,7 @@ from tornado.httputil import HTTPHeaders
 from tornado.iostream import IOStream, SSLIOStream
 from tornado.netutil import Resolver, OverrideResolver
 from tornado.log import gen_log
-from tornado import stack_context
+from tornado import stack_context, gen
 from tornado.util import GzipDecompressor
 
 import base64
@@ -231,6 +231,7 @@ class _HTTPConnection(object):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
+    @gen.engine
     def _on_connect(self):
         self._remove_timeout()
         if self.request.request_timeout:
@@ -266,14 +267,20 @@ class _HTTPConnection(object):
                                                      base64.b64encode(auth))
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
+        body = self.request.body
         if not self.request.allow_nonstandard_methods:
             if self.request.method in ("POST", "PATCH", "PUT"):
-                assert self.request.body is not None
+                assert body is not None
             else:
-                assert self.request.body is None
-        if self.request.body is not None:
-            self.request.headers.setdefault("Content-Length",
-                                            str(len(self.request.body)))
+                assert body is None
+        if body is not None:
+            is_stream = hasattr(body, 'read')
+            if is_stream:
+                if 'Content-Length' not in self.request.headers:
+                    raise ValueError("Content-Length header required "
+                                     "for streaming requests.")
+            else:
+                self.request.headers["Content-Length"] = str(len(body))
         if self.request.method == "POST":
             self.request.headers.setdefault("Content-Type",
                                             "application/x-www-form-urlencoded")
@@ -289,11 +296,16 @@ class _HTTPConnection(object):
                 raise ValueError('Newline in header: ' + repr(line))
             request_lines.append(line)
         request_str = b"\r\n".join(request_lines) + b"\r\n\r\n"
-        if self.request.body is not None:
-            request_str += self.request.body
         self.stream.set_nodelay(True)
         self.stream.write(request_str)
         self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
+        if body is not None:
+            if is_stream:
+                reader = iter(lambda: body.read(32 * 1024), '')
+                for chunk in reader:
+                    yield gen.Task(self.stream.write, chunk)
+            else:
+                self.stream.write(body)
 
     def _release(self):
         if self.release_callback is not None:
