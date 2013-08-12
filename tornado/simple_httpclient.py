@@ -274,8 +274,7 @@ class _HTTPConnection(object):
             else:
                 assert body is None
         if body is not None:
-            is_stream = isinstance(body, collections.Iterable)
-            if is_stream:
+            if self.request.body_streaming:
                 if 'Content-Length' not in self.request.headers:
                     raise ValueError("Content-Length header required "
                                      "for streaming requests.")
@@ -300,7 +299,7 @@ class _HTTPConnection(object):
         self.stream.write(request_str)
         self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
         if body is not None:
-            if is_stream:
+            if self.request.body_streaming:
                 for chunk in body:
                     yield gen.Task(self.stream.write, chunk)
             else:

@@ -251,7 +251,7 @@ class HTTPRequest(object):
                  proxy_host=None, proxy_port=None, proxy_username=None,
                  proxy_password=None, allow_nonstandard_methods=None,
                  validate_cert=None, ca_certs=None,
-                 allow_ipv6=None,
+                 allow_ipv6=None, body_streaming=False,
                  client_key=None, client_cert=None):
         r"""All parameters except ``url`` are optional.
 
@@ -327,7 +327,11 @@ class HTTPRequest(object):
         self.url = url
         self.method = method
         self.headers = headers
-        self.body = utf8(body)
+        self.body_streaming = body_streaming
+        if self.body_streaming:
+            self.body = body
+        else:
+            self.body = utf8(body)
         self.auth_username = auth_username
         self.auth_password = auth_password
         self.auth_mode = auth_mode
