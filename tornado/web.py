@@ -442,10 +442,10 @@ class RequestHandler(object):
         self.set_cookie(name, value="", path=path, expires=expires,
                         domain=domain)
 
-    def clear_all_cookies(self):
+    def clear_all_cookies(self, path="/", domain=None):
         """Deletes all the cookies the user sent with this request."""
         for name in self.request.cookies:
-            self.clear_cookie(name)
+            self.clear_cookie(name, path=path, domain=domain)
 
     def set_secure_cookie(self, name, value, expires_days=30, **kwargs):
         """Signs and timestamps a cookie so it cannot be forged.
