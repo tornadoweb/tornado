@@ -437,13 +437,23 @@ class RequestHandler(object):
             morsel[k] = v
 
     def clear_cookie(self, name, path="/", domain=None):
-        """Deletes the cookie with the given name."""
+        """Deletes the cookie with the given name.
+
+        Due to limitations of the cookie protocol, you must pass the same
+        path and domain to clear a cookie as were used when that cookie
+        was set (but there is no way to find out on the server side
+        which values were used for a given cookie).
+        """
         expires = datetime.datetime.utcnow() - datetime.timedelta(days=365)
         self.set_cookie(name, value="", path=path, expires=expires,
                         domain=domain)
 
     def clear_all_cookies(self, path="/", domain=None):
-        """Deletes all the cookies the user sent with this request."""
+        """Deletes all the cookies the user sent with this request.
+
+        See `clear_cookie` for more information on the path and domain
+        parameters.
+        """
         for name in self.request.cookies:
             self.clear_cookie(name, path=path, domain=domain)
 
