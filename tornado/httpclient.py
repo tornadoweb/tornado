@@ -144,9 +144,16 @@ class AsyncHTTPClient(Configurable):
 
     def close(self):
         """Destroys this HTTP client, freeing any file descriptors used.
-        Not needed in normal use, but may be helpful in unittests that
-        create and destroy http clients.  No other methods may be called
-        on the `AsyncHTTPClient` after ``close()``.
+
+        This method is **not needed in normal use** due to the way
+        that `AsyncHTTPClient` objects are transparently reused.
+        ``close()`` is generally only necessary when either the
+        `.IOLoop` is also being closed, or the ``force_instance=True``
+        argument was used when creating the `AsyncHTTPClient`.
+
+        No other methods may be called on the `AsyncHTTPClient` after
+        ``close()``.
+
         """
         if self._async_clients().get(self.io_loop) is self:
             del self._async_clients()[self.io_loop]
