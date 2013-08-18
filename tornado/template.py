@@ -169,6 +169,10 @@ with ``{# ... #}``.
 
         {% module Template("foo.html", arg=42) %}
 
+    ``UIModules`` are a feature of the `tornado.web.RequestHandler`
+    class (and specifically its ``render`` method) and will not work
+    when the template system is used on its own in other contexts.
+
 ``{% raw *expr* %}``
     Outputs the result of the given expression without autoescaping.
 
