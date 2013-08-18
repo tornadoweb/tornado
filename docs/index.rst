@@ -103,9 +103,12 @@ features may require one of the following libraries:
 
 **Platforms**: Tornado should run on any Unix-like platform, although
 for the best performance and scalability only Linux (with ``epoll``)
-and BSD (with ``kqueue``) are recommended (even though Mac OS X is
-derived from BSD and supports kqueue, its networking performance is
-generally poor so it is recommended only for development use).
+and BSD (with ``kqueue``) are recommended for production deployment
+(even though Mac OS X is derived from BSD and supports kqueue, its
+networking performance is generally poor so it is recommended only for
+development use).  Tornado will also run on Windows, although this
+configuration is not officially supported and is recommended only for
+development use.
 
 Discussion and support
 ----------------------
