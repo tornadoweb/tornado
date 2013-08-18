@@ -51,6 +51,10 @@ class WebSocketError(Exception):
     pass
 
 
+class WebSocketClosedError(WebSocketError):
+    pass
+
+
 class WebSocketHandler(tornado.web.RequestHandler):
     """Subclass this class to create a basic WebSocket handler.
 
@@ -160,6 +164,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         message will be sent as utf8; in binary mode any byte string
         is allowed.
         """
+        if self.ws_connection is None:
+            raise WebSocketClosedError()
         if isinstance(message, dict):
             message = tornado.escape.json_encode(message)
         self.ws_connection.write_message(message, binary=binary)
@@ -195,6 +201,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def ping(self, data):
         """Send ping frame to the remote end."""
+        if self.ws_connection is None:
+            raise WebSocketClosedError()
         self.ws_connection.write_ping(data)
 
     def on_pong(self, data):
@@ -210,8 +218,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         Once the close handshake is successful the socket will be closed.
         """
-        self.ws_connection.close()
-        self.ws_connection = None
+        if self.ws_connection:
+            self.ws_connection.close()
+            self.ws_connection = None
 
     def allow_draft76(self):
         """Override to enable support for the older "draft76" protocol.
