@@ -1644,7 +1644,50 @@ class Application(object):
         log_method("%d %s %.2fms", handler.get_status(),
                    handler._request_summary(), request_time)
 
+    def route(self, url):
+        """Url route for RequestHandler
 
+        A decorator that is used to register a RequestHandler for a
+        given URL rule.
+
+        example::
+
+            import tornado.ioloop
+            import tornado.web
+
+            application = tornado.web.Application()
+            
+            @application.route(r"/")
+            class MainHandler(tornado.web.RequestHandler):
+                def get(self):
+                    self.write("Hello, world")
+
+            if __name__ == "__main__":
+                application.listen(8888)
+                tornado.ioloop.IOLoop.instance().start()
+
+
+        """
+
+        def decorator(handler):
+            handlers = []
+            handlers.append((url, handler))
+            if self.settings.get("static_path"):
+                path = self.settings["static_path"]
+                static_url_prefix = settings.get("static_url_prefix", "/static/")
+                static_handler_class = settings.get("static_handler_class", StaticFileHandler)
+                static_handler_args = settings.get("static_handler_args", {})
+                static_handler_args['path'] = path
+                for pattern in [re.escape(static_url_prefix) + r"(.*)",
+                                r"/(favicon\.ico)", r"/(robots\.txt)"]:
+                    handlers.insert(0, (pattern, static_handler_class,
+                                    static_handler_args))
+            if handlers:
+                self.add_handlers(".*$", handlers)
+                        
+        return decorator
+
+    
 class HTTPError(Exception):
     """An exception that will turn into an HTTP error response.
 
