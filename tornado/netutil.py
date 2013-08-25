@@ -159,6 +159,10 @@ def is_valid_ip(ip):
 
     Supports IPv4 and IPv6.
     """
+    if not ip or '\x00' in ip:
+        # getaddrinfo resolves empty strings to localhost, and truncates
+        # on zero bytes.
+        return False
     try:
         res = socket.getaddrinfo(ip, 0, socket.AF_UNSPEC,
                                  socket.SOCK_STREAM,
