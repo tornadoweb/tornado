@@ -952,7 +952,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     _OAUTH_NO_CALLBACKS = False
 
     def authorize_redirect(self, redirect_uri=None, client_id=None, 
-                          scope=['openid', 'email'], response_type="code", overwrites={}):
+                          scope=['openid', 'email'], response_type="code", extra_params={}):
         """Redirect the user to Google to authenticate them.
 
         The API itself defaults some of these values that cna be overwritten by the overwrites object.
@@ -960,12 +960,10 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         approval_prompt = auto
         access_type = online
         """
-        extra_params = {
+        extra_params.update({
             "scope": ' '.join(scope),
             "response_type": response_type,
-        }
-
-        extra_params.update(overwrites)
+        })
 
         OAuth2Mixin.authorize_redirect(self,
             self.request.protocol + '://' + self.request.host + (redirect_uri or self.request.uri),
