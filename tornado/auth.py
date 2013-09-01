@@ -966,7 +966,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         })
 
         OAuth2Mixin.authorize_redirect(self,
-            self.request.protocol + '://' + self.request.host + (redirect_uri or self.request.uri),
+            (redirect_uri or self.request.uri),
             self.settings['google_consumer_key'],
             '', extra_params)
 
