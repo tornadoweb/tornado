@@ -405,7 +405,7 @@ class HeavyloadAsyncHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestC
     def test_heavyload_timeout(self):
         with closing(self.create_client(max_clients=1)) as client:
             client.fetch(self.get_url('/trigger?wake=false'), self.stop, request_timeout=10)
-            client.fetch(self.get_url('/hello'), self.stop, async_timeout=3)
+            client.fetch(self.get_url('/hello'), self.stop, connect_timeout=3)
             response = self.wait()
 
             self.assertEqual(response.code, 599)

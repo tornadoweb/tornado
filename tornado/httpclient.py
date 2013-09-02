@@ -241,7 +241,6 @@ class HTTPRequest(object):
     _DEFAULTS = dict(
         connect_timeout=20.0,
         request_timeout=20.0,
-        async_timeout=20.0,
         follow_redirects=True,
         max_redirects=5,
         use_gzip=True,
@@ -252,7 +251,6 @@ class HTTPRequest(object):
     def __init__(self, url, method="GET", headers=None, body=None,
                  auth_username=None, auth_password=None, auth_mode=None,
                  connect_timeout=None, request_timeout=None,
-                 async_timeout=None,
                  if_modified_since=None, follow_redirects=None,
                  max_redirects=None, user_agent=None, use_gzip=None,
                  network_interface=None, streaming_callback=None,
@@ -342,7 +340,6 @@ class HTTPRequest(object):
         self.auth_mode = auth_mode
         self.connect_timeout = connect_timeout
         self.request_timeout = request_timeout
-        self.async_timeout = async_timeout
         self.follow_redirects = follow_redirects
         self.max_redirects = max_redirects
         self.user_agent = user_agent
