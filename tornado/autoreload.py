@@ -21,6 +21,8 @@ keyword argument ``debug=True`` to the `tornado.web.Application` constructor.
 This will enable autoreload mode as well as checking for changes to templates
 and static resources.  Note that restarting is a destructive operation
 and any requests in progress will be aborted when the process restarts.
+(If you want to disable autoreload while keeping debug on pass in also the
+keyword argument ``autoreload=False``).
 
 This module can also be used as a command-line wrapper around scripts
 such as unit test runners.  See the `main` method for details.

@@ -92,7 +92,8 @@ def fork_processes(num_processes, max_restarts=100):
     between any server code.
 
     Note that multiple processes are not compatible with the autoreload
-    module (or the debug=True option to `tornado.web.Application`).
+    module (or the ``autoreload=True`` option to `tornado.web.Application`
+    which defaults to True when ``debug=True``).
     When using multiple processes, no IOLoops can be created or
     referenced until after the call to ``fork_processes``.
 
