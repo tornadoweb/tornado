@@ -548,7 +548,8 @@ class OAuth2Mixin(object):
     """
     @return_future
     def authorize_redirect(self, redirect_uri=None, client_id=None,
-                           client_secret=None, extra_params=None,
+                           client_secret=None, scope=None,
+                           response_type="code", extra_params=None,
                            callback=None):
         """Redirects the user to obtain OAuth authorization for this service.
 
@@ -566,10 +567,13 @@ class OAuth2Mixin(object):
         """
         args = {
             "redirect_uri": redirect_uri,
-            "client_id": client_id
+            "client_id": client_id,
+            "response_type": response_type
         }
         if extra_params:
             args.update(extra_params)
+        if scope:
+            args['scope'] = ' '.join(scope)
         self.redirect(
             url_concat(self._OAUTH_AUTHORIZE_URL, args))
         callback()
@@ -950,29 +954,11 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     _OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
     _OAUTH_ACCESS_TOKEN_URL = "https://accounts.google.com/o/oauth2/token"
     _OAUTH_NO_CALLBACKS = False
-
-    def authorize_redirect(self, redirect_uri=None, client_id=None, 
-                          scope=['openid', 'email'], response_type="code", extra_params={}):
-        """Redirect the user to Google to authenticate them.
-
-        The API itself defaults some of these values that cna be overwritten by the overwrites object.
-        They are:
-        approval_prompt = auto
-        access_type = online
-        """
-        extra_params.update({
-            "scope": ' '.join(scope),
-            "response_type": response_type,
-        })
-
-        OAuth2Mixin.authorize_redirect(self,
-            (redirect_uri or self.request.uri),
-            self.settings['google_consumer_key'],
-            '', extra_params)
+    _OAUTH_SETTINGS_KEY = 'google_oauth'
 
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, code, callback):
-        """Handles the login for the Facebook user, returning a user object.
+        """Handles the login for the Google user, returning a user object.
 
         Example usage::
 
@@ -982,23 +968,23 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                 def get(self):
                     if self.get_argument("code", False):
                         user = yield self.get_authenticated_user(
-                            redirect_uri='/auth/google',
+                            redirect_uri='http://your.site.com/auth/google',
                             code=self.get_argument("code"))
                         # Save the user with e.g. set_secure_cookie
                     else:
                         yield self.authorize_redirect(
-                            redirect_uri='/auth/google',
+                            redirect_uri='http://your.site.com/auth/google',
                             client_id=self.settings["google_consumer_key"],
                             scope=['openid', 'email'],
                             response_type='code',
                             extra_params={"approval_prompt": "auto"})
         """
         http = self.get_auth_http_client()
-        body = urllib.urlencode({
-            "redirect_uri": self.request.protocol + '://' + self.request.host + redirect_uri,
+        body = urllib_parse.urlencode({
+            "redirect_uri": redirect_uri,
             "code": code,
-            "client_id": self.settings['google_consumer_key'],
-            "client_secret": self.settings['google_consumer_secret'],
+            "client_id": self.settings[self._OAUTH_SETTINGS_KEY]['key'],
+            "client_secret": self.settings[self._OAUTH_SETTINGS_KEY]['secret'],
             "grant_type": "authorization_code",
         })
 
@@ -1012,8 +998,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             future.set_exception(AuthError('Google auth error: %s' % str(response)))
             return
 
-        args = json.loads(escape.native_str(response.body))
-
+        args = escape.json_decode(response.body)
         future.set_result(args)
 
     def get_auth_http_client(self):
