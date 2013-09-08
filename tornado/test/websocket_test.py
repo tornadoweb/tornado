@@ -1,6 +1,5 @@
 from tornado.concurrent import Future
-from tornado import gen
-from tornado.httpclient import HTTPError
+from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.web import Application, RequestHandler
@@ -18,6 +17,11 @@ class EchoHandler(WebSocketHandler):
         self.close_future.set_result(None)
 
 
+class HeaderHandler(WebSocketHandler):
+    def open(self):
+        self.write_message(self.request.headers.get('X-Test', ''))
+
+
 class NonWebSocketHandler(RequestHandler):
     def get(self):
         self.write('ok')
@@ -29,6 +33,7 @@ class WebSocketTest(AsyncHTTPTestCase):
         return Application([
             ('/echo', EchoHandler, dict(close_future=self.close_future)),
             ('/non_ws', NonWebSocketHandler),
+            ('/header', HeaderHandler),
         ])
 
     @gen_test
@@ -85,3 +90,12 @@ class WebSocketTest(AsyncHTTPTestCase):
         ws.write_message('world')
         ws.stream.close()
         yield self.close_future
+
+    @gen_test
+    def test_websocket_headers(self):
+        # Ensure that arbitrary headers can be passed through websocket_connect.
+        ws = yield websocket_connect(
+            HTTPRequest('ws://localhost:%d/header' % self.get_http_port(),
+                        headers={'X-Test': 'hello'}))
+        response = yield ws.read_message()
+        self.assertEqual(response, 'hello')
