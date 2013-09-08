@@ -250,7 +250,7 @@ class RequestHandler(object):
                 not self.request.connection.no_keep_alive):
             conn_header = self.request.headers.get("Connection")
             if conn_header and (conn_header.lower() == "keep-alive"):
-                self.set_header("Connection", "Keep-Alive")
+                self._headers["Connection"] = "Keep-Alive"
         self._write_buffer = []
         self._status_code = 200
         self._reason = httputil.responses[200]
