@@ -1653,3 +1653,48 @@ class FinishInPrepareTest(SimpleHandlerTestCase):
     def test_finish_in_prepare(self):
         response = self.fetch('/')
         self.assertEqual(response.body, b'done')
+
+
+@wsgi_safe
+class Default404Test(WebTestCase):
+    def get_handlers(self):
+        # If there are no handlers at all a default redirect handler gets added.
+        return [('/foo', RequestHandler)]
+
+    def test_404(self):
+        response = self.fetch('/')
+        self.assertEqual(response.code, 404)
+        self.assertEqual(response.body,
+                         b'<html><title>404: Not Found</title>'
+                         b'<body>404: Not Found</body></html>')
+
+@wsgi_safe
+class Custom404Test(WebTestCase):
+    def get_handlers(self):
+        return [('/foo', RequestHandler)]
+
+    def get_app_kwargs(self):
+        class Custom404Handler(RequestHandler):
+            def get(self):
+                self.set_status(404)
+                self.write('custom 404 response')
+
+        return dict(default_handler_class=Custom404Handler)
+
+    def test_404(self):
+        response = self.fetch('/')
+        self.assertEqual(response.code, 404)
+        self.assertEqual(response.body, b'custom 404 response')
+
+@wsgi_safe
+class DefaultHandlerArgumentsTest(WebTestCase):
+    def get_handlers(self):
+        return [('/foo', RequestHandler)]
+
+    def get_app_kwargs(self):
+        return dict(default_handler_class=ErrorHandler,
+                    default_handler_args=dict(status_code=403))
+
+    def test_403(self):
+        response = self.fetch('/')
+        self.assertEqual(response.code, 403)

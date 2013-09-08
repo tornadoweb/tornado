@@ -1597,7 +1597,14 @@ class Application(object):
                             args = [unquote(s) for s in match.groups()]
                     break
             if not handler:
-                handler = ErrorHandler(self, request, status_code=404)
+                if self.settings.get('default_handler_class'):
+                    handler_class = self.settings['default_handler_class']
+                    handler_args = self.settings.get(
+                        'default_handler_args', {})
+                else:
+                    handler_class = ErrorHandler
+                    handler_args = dict(status_code=404)
+                handler = handler_class(self, request, **handler_args)
 
         # In debug mode, re-compile templates and reload static files on every
         # request so you don't need to restart to see changes
