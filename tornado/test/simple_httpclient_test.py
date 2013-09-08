@@ -122,9 +122,9 @@ class SimpleHTTPClientTestMixin(object):
                         SimpleAsyncHTTPClient(self.io_loop,
                                               force_instance=True))
         # different IOLoops use different objects
-        io_loop2 = IOLoop()
-        self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is not
-                        SimpleAsyncHTTPClient(io_loop2))
+        with closing(IOLoop()) as io_loop2:
+            self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is not
+                            SimpleAsyncHTTPClient(io_loop2))
 
     def test_connection_limit(self):
         with closing(self.create_client(max_clients=2)) as client:

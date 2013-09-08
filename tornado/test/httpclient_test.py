@@ -442,8 +442,8 @@ class SyncHTTPClientTest(unittest.TestCase):
 
         sock, self.port = bind_unused_port()
         app = Application([('/', HelloWorldHandler)])
-        server = HTTPServer(app, io_loop=self.server_ioloop)
-        server.add_socket(sock)
+        self.server = HTTPServer(app, io_loop=self.server_ioloop)
+        self.server.add_socket(sock)
 
         self.server_thread = threading.Thread(target=self.server_ioloop.start)
         self.server_thread.start()
@@ -451,7 +451,10 @@ class SyncHTTPClientTest(unittest.TestCase):
         self.http_client = HTTPClient()
 
     def tearDown(self):
-        self.server_ioloop.add_callback(self.server_ioloop.stop)
+        def stop_server():
+            self.server.stop()
+            self.server_ioloop.stop()
+        self.server_ioloop.add_callback(stop_server)
         self.server_thread.join()
         self.http_client.close()
         self.server_ioloop.close(all_fds=True)
