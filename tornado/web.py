@@ -1301,15 +1301,16 @@ def stream_body(cls):
                self.finish()
 
     """
+    if hasattr(cls, 'post'):
+        cls.post = asynchronous(cls.post)
+    if hasattr(cls, 'put'):
+        cls.put = asynchronous(cls.put)
+    
     class StreamBody(cls):
         def __init__(self, *args, **kwargs):
             if args[0]._wsgi:
                 raise Exception("@stream_body is not supported for WSGI apps")
             self._read_body = False
-            if hasattr(cls, 'post'):
-                cls.post = asynchronous(cls.post)
-            if hasattr(cls, 'put'):
-                cls.put = asynchronous(cls.put)
             cls.__init__(self, *args, **kwargs)
     return StreamBody
 
