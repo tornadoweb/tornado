@@ -319,10 +319,7 @@ class HTTPConnection(object):
                 content_length = int(content_length)
                 if content_length > self.stream.max_buffer_size:
                     raise _BadRequestException("Content-Length too long")
-                if headers.get("Expect") == "100-continue":
-                    self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
-                self.stream.read_bytes(content_length, self._on_request_body)
-                return
+                self._request.content_length = content_length
 
             self.request_callback(self._request)
         except _BadRequestException as e:
@@ -330,14 +327,6 @@ class HTTPConnection(object):
                          self.address[0], e)
             self.close()
             return
-
-    def _on_request_body(self, data):
-        self._request.body = data
-        if self._request.method in ("POST", "PATCH", "PUT"):
-            httputil.parse_body_arguments(
-                self._request.headers.get("Content-Type", ""), data,
-                self._request.arguments, self._request.files)
-        self.request_callback(self._request)
 
 
 class HTTPRequest(object):
@@ -457,6 +446,24 @@ class HTTPRequest(object):
 
         self.path, sep, self.query = uri.partition('?')
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
+
+    def request_continue(self):
+        '''Send a 100-Continue, telling the client to send the request body'''
+        if self.headers.get("Expect") == "100-continue":
+            self.connection.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
+
+    def _read_body(self, exec_req_cb):
+        self.request_continue()
+        self.connection.stream.read_bytes(self.content_length,
+            lambda data: self._on_request_body(data, exec_req_cb))
+
+    def _on_request_body(self, data, exec_req_cb):
+        self.body = data
+        if self.method in ("POST", "PATCH", "PUT"):
+            httputil.parse_body_arguments(
+                self.headers.get("Content-Type", ""), data,
+                self.arguments, self.files)
+        exec_req_cb()
 
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""

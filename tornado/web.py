@@ -1133,6 +1133,18 @@ class RequestHandler(object):
         try:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
+            # read and parse the request body, if not disabled
+            exec_req_cb = lambda: self._execute_request(*args, **kwargs)
+            if (getattr(self, '_read_body', True) and
+                hasattr(self.request, 'content_length')):
+                self.request._read_body(exec_req_cb)
+            else:
+                exec_req_cb()
+        except Exception as e:
+            self._handle_request_exception(e)
+
+    def _execute_request(self, *args, **kwargs):
+        try:
             self.path_args = [self.decode_argument(arg) for arg in args]
             self.path_kwargs = dict((k, self.decode_argument(v, name=k))
                                     for (k, v) in kwargs.items())
@@ -1260,6 +1272,57 @@ class RequestHandler(object):
                    "Content-Type", "Last-Modified"]
         for h in headers:
             self.clear_header(h)
+
+
+def stream_body(cls):
+    """Wrap RequestHandler classes with this to prevent the
+    request body of PUT and POST request from being read and parsed
+    automatically.
+
+    If this decorator is given, the request body is not read and parsed
+    when a PUT or POST handler method is executed. It is up to the request
+    handler to read the body from the stream in the HTTP connection.
+
+    Using this decorator automatically implies the asynchronous decorator.
+
+    Without this decorator, the request body is automatically read and
+    parsed before a PUT or POST method is executed. ::
+
+       @web.stream_body
+       class StreamHandler(web.RequestHandler):
+
+           def put(self):
+               self.read_bytes = 0
+               self.request.request_continue()
+               self.read_chunks()
+
+           def read_chunks(self, chunk=''):
+               self.read_bytes += len(chunk)
+               chunk_length = min(10000,
+                   self.request.content_length - self.read_bytes)
+               if chunk_length > 0:
+                 self.request.connection.stream.read_bytes(
+                     chunk_length, self.read_chunks)
+               else:
+                   self.uploaded()
+
+           def uploaded(self):
+               self.write('Uploaded %d bytes' % self.read_bytes)
+               self.finish()
+
+    """
+    if hasattr(cls, 'post'):
+        cls.post = asynchronous(cls.post)
+    if hasattr(cls, 'put'):
+        cls.put = asynchronous(cls.put)
+    
+    class StreamBody(cls):
+        def __init__(self, *args, **kwargs):
+            if args[0]._wsgi:
+                raise Exception("@stream_body is not supported for WSGI apps")
+            self._read_body = False
+            cls.__init__(self, *args, **kwargs)
+    return StreamBody
 
 
 def asynchronous(method):
