@@ -326,8 +326,15 @@ class HTTPConnection(object):
 
             self.request_callback(self._request)
         except _BadRequestException as e:
+            # HTTPRequest wants an IP, not a full socket address
+            if self.address_family in (socket.AF_INET, socket.AF_INET6):
+                remote_ip = self.address[0]
+            else:
+                # Unix (or other) socket; fake the remote address
+                remote_ip = '0.0.0.0'
+                
             gen_log.info("Malformed HTTP request from %s: %s",
-                         self.address[0], e)
+                         remote_ip, e)
             self.close()
             return
 
