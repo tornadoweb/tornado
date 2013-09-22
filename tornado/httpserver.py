@@ -326,8 +326,8 @@ class HTTPConnection(object):
 
             self.request_callback(self._request)
         except _BadRequestException as e:
-            gen_log.info("Malformed HTTP request from %s: %s",
-                         self.address[0], e)
+            gen_log.info("Malformed HTTP request from %r: %s",
+                         self.address, e)
             self.close()
             return
 

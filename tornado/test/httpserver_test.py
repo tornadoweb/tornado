@@ -497,31 +497,41 @@ class UnixSocketTest(AsyncTestCase):
     def setUp(self):
         super(UnixSocketTest, self).setUp()
         self.tmpdir = tempfile.mkdtemp()
+        self.sockfile = os.path.join(self.tmpdir, "test.sock")
+        sock = netutil.bind_unix_socket(self.sockfile)
+        app = Application([("/hello", HelloWorldRequestHandler)])
+        self.server = HTTPServer(app, io_loop=self.io_loop)
+        self.server.add_socket(sock)
+        self.stream = IOStream(socket.socket(socket.AF_UNIX), io_loop=self.io_loop)
+        self.stream.connect(self.sockfile, self.stop)
+        self.wait()
 
     def tearDown(self):
+        self.stream.close()
+        self.server.stop()
         shutil.rmtree(self.tmpdir)
         super(UnixSocketTest, self).tearDown()
 
     def test_unix_socket(self):
-        sockfile = os.path.join(self.tmpdir, "test.sock")
-        sock = netutil.bind_unix_socket(sockfile)
-        app = Application([("/hello", HelloWorldRequestHandler)])
-        server = HTTPServer(app, io_loop=self.io_loop)
-        server.add_socket(sock)
-        stream = IOStream(socket.socket(socket.AF_UNIX), io_loop=self.io_loop)
-        stream.connect(sockfile, self.stop)
-        self.wait()
-        stream.write(b"GET /hello HTTP/1.0\r\n\r\n")
-        stream.read_until(b"\r\n", self.stop)
+        self.stream.write(b"GET /hello HTTP/1.0\r\n\r\n")
+        self.stream.read_until(b"\r\n", self.stop)
         response = self.wait()
         self.assertEqual(response, b"HTTP/1.0 200 OK\r\n")
-        stream.read_until(b"\r\n\r\n", self.stop)
+        self.stream.read_until(b"\r\n\r\n", self.stop)
         headers = HTTPHeaders.parse(self.wait().decode('latin1'))
-        stream.read_bytes(int(headers["Content-Length"]), self.stop)
+        self.stream.read_bytes(int(headers["Content-Length"]), self.stop)
         body = self.wait()
         self.assertEqual(body, b"Hello world")
-        stream.close()
-        server.stop()
+
+    def test_unix_socket_bad_request(self):
+        # Unix sockets don't have remote addresses so they just return an
+        # empty string.
+        with ExpectLog(gen_log, "Malformed HTTP request from ''"):
+            self.stream.write(b"garbage\r\n\r\n")
+            self.stream.read_until_close(self.stop)
+            response = self.wait()
+        self.assertEqual(response, b"")
+
 
 
 class KeepAliveTest(AsyncHTTPTestCase):
