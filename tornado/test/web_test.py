@@ -288,7 +288,7 @@ class EchoHandler(RequestHandler):
                 if type(value) != bytes_type:
                     raise Exception("incorrect type for value: %r" %
                                     type(value))
-            for value in self.get_arguments(key):
+            for value in self.get_arguments(key, self.request.arguments):
                 if type(value) != unicode_type:
                     raise Exception("incorrect type for value: %r" %
                                     type(value))

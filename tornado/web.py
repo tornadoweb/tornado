@@ -348,14 +348,45 @@ class RequestHandler(object):
 
         The returned value is always unicode.
         """
-        args = self.get_arguments(name, strip=strip)
+        return self._get_argument(name, self.request.arguments, default, strip)
+
+    def get_body_argument(self, name, default=_ARG_DEFAULT, strip=True):
+        """Returns the value of the argument with the given name
+        from the request body.
+
+        If default is not provided, the argument is considered to be
+        required, and we raise a `MissingArgumentError` if it is missing.
+
+        If the argument appears in the url more than once, we return the
+        last value.
+
+        The returned value is always unicode.
+        """
+        return self._get_argument(name, self.request.body_arguments, default, strip)
+
+    def get_query_argument(self, name, default=_ARG_DEFAULT, strip=True):
+        """Returns the value of the argument with the given name
+        from the request query string.
+
+        If default is not provided, the argument is considered to be
+        required, and we raise a `MissingArgumentError` if it is missing.
+
+        If the argument appears in the url more than once, we return the
+        last value.
+
+        The returned value is always unicode.
+        """
+        return self._get_argument(name, self.request.query_arguments, default, strip)
+
+    def _get_argument(self, name, source, default=_ARG_DEFAULT, strip=True):
+        args = self.get_arguments(name, source, strip=strip)
         if not args:
             if default is self._ARG_DEFAULT:
                 raise MissingArgumentError(name)
             return default
         return args[-1]
 
-    def get_arguments(self, name, strip=True):
+    def get_arguments(self, name, source, strip=True):
         """Returns a list of the arguments with the given name.
 
         If the argument is not present, returns an empty list.
@@ -364,7 +395,7 @@ class RequestHandler(object):
         """
 
         values = []
-        for v in self.request.arguments.get(name, []):
+        for v in source.get(name, []):
             v = self.decode_argument(v, name=name)
             if isinstance(v, unicode_type):
                 # Get rid of any weird control chars (unless decoding gave
