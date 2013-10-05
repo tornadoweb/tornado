@@ -175,7 +175,10 @@ class HTTPRequest(object):
         # Parse request body
         self.files = {}
         httputil.parse_body_arguments(self.headers.get("Content-Type", ""),
-                                      self.body, self.arguments, self.files)
+                                      self.body, self.body_arguments, self.files)
+
+        for k, v in self.body_arguments.iteritems():
+            self.arguments.setdefault(k, []).extend(v)
 
         self._start_time = time.time()
         self._finish_time = None
