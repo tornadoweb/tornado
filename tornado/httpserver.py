@@ -339,7 +339,7 @@ class HTTPConnection(object):
                 self._request.headers.get("Content-Type", ""), data,
                 self._request.body_arguments, self._request.files)
 
-            for k, v in self._request.body_arguments.iteritems():
+            for k, v in self._request.body_arguments.items():
                 self._request.arguments.setdefault(k, []).extend(v)
         self.request_callback(self._request)
 
