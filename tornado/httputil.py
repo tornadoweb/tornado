@@ -310,7 +310,7 @@ def _int_or_none(val):
     return int(val)
 
 
-def parse_body_arguments(content_type, body, arguments, body_arguments, files):
+def parse_body_arguments(content_type, body, arguments, files):
     """Parses a form request body.
 
     Supports ``application/x-www-form-urlencoded`` and
@@ -324,19 +324,18 @@ def parse_body_arguments(content_type, body, arguments, body_arguments, files):
         for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
-                body_arguments.setdefault(name, []).extend(values)
     elif content_type.startswith("multipart/form-data"):
         fields = content_type.split(";")
         for field in fields:
             k, sep, v = field.strip().partition("=")
             if k == "boundary" and v:
-                parse_multipart_form_data(utf8(v), body, arguments, body_arguments, files)
+                parse_multipart_form_data(utf8(v), body, arguments, files)
                 break
         else:
             gen_log.warning("Invalid multipart/form-data")
 
 
-def parse_multipart_form_data(boundary, data, arguments, body_arguments, files):
+def parse_multipart_form_data(boundary, data, arguments, files):
     """Parses a ``multipart/form-data`` body.
 
     The ``boundary`` and ``data`` parameters are both byte strings.
@@ -380,7 +379,6 @@ def parse_multipart_form_data(boundary, data, arguments, body_arguments, files):
                 content_type=ctype))
         else:
             arguments.setdefault(name, []).append(value)
-            body_arguments.setdefault(name, []).append(value)
 
 
 def format_timestamp(ts):

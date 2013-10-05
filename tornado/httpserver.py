@@ -337,7 +337,10 @@ class HTTPConnection(object):
         if self._request.method in ("POST", "PATCH", "PUT"):
             httputil.parse_body_arguments(
                 self._request.headers.get("Content-Type", ""), data,
-                self._request.arguments, self._request.body_arguments, self._request.files)
+                self._request.body_arguments, self._request.files)
+
+            for k, v in self._request.body_arguments.iteritems():
+                self._request.arguments.setdefault(k, []).extend(v)
         self.request_callback(self._request)
 
 

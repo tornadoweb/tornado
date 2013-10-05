@@ -348,7 +348,16 @@ class RequestHandler(object):
 
         The returned value is always unicode.
         """
-        return self._get_argument(name, self.request.arguments, default, strip)
+        return self._get_argument(name, default, self.request.arguments, strip)
+
+    def get_arguments(self, name, strip=True):
+        """Returns a list of the arguments with the given name.
+
+        If the argument is not present, returns an empty list.
+
+        The returned values are always unicode.
+        """
+        return self._get_arguments(name, self.request.arguments, strip)
 
     def get_body_argument(self, name, default=_ARG_DEFAULT, strip=True):
         """Returns the value of the argument with the given name
@@ -362,7 +371,16 @@ class RequestHandler(object):
 
         The returned value is always unicode.
         """
-        return self._get_argument(name, self.request.body_arguments, default, strip)
+        return self._get_argument(name, default, self.request.body_arguments, strip)
+
+    def get_body_arguments(self, name, strip=True):
+        """Returns a list of the body arguments with the given name.
+
+        If the argument is not present, returns an empty list.
+
+        The returned values are always unicode.
+        """
+        return self._get_arguments(name, self.request.body_arguments, strip)
 
     def get_query_argument(self, name, default=_ARG_DEFAULT, strip=True):
         """Returns the value of the argument with the given name
@@ -376,24 +394,26 @@ class RequestHandler(object):
 
         The returned value is always unicode.
         """
-        return self._get_argument(name, self.request.query_arguments, default, strip)
+        return self._get_argument(name, default, self.request.query_arguments, strip)
 
-    def _get_argument(self, name, source, default=_ARG_DEFAULT, strip=True):
-        args = self.get_arguments(name, source, strip=strip)
+    def get_query_arguments(self, name, strip=True):
+        """Returns a list of the query arguments with the given name.
+
+        If the argument is not present, returns an empty list.
+
+        The returned values are always unicode.
+        """
+        return self._get_arguments(name, self.request.query_arguments, strip)
+
+    def _get_argument(self, name, default, source, strip=True):
+        args = self._get_arguments(name, source, strip=strip)
         if not args:
             if default is self._ARG_DEFAULT:
                 raise MissingArgumentError(name)
             return default
         return args[-1]
 
-    def get_arguments(self, name, source, strip=True):
-        """Returns a list of the arguments with the given name.
-
-        If the argument is not present, returns an empty list.
-
-        The returned values are always unicode.
-        """
-
+    def _get_arguments(self, name, source, strip=True):
         values = []
         for v in source.get(name, []):
             v = self.decode_argument(v, name=name)
