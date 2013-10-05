@@ -29,6 +29,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import socket
 import ssl
 import time
+import copy
 
 from tornado.escape import native_str, parse_qs_bytes
 from tornado import httputil
@@ -336,7 +337,10 @@ class HTTPConnection(object):
         if self._request.method in ("POST", "PATCH", "PUT"):
             httputil.parse_body_arguments(
                 self._request.headers.get("Content-Type", ""), data,
-                self._request.arguments, self._request.files)
+                self._request.body_arguments, self._request.files)
+
+            for k, v in self._request.body_arguments.items():
+                self._request.arguments.setdefault(k, []).extend(v)
         self.request_callback(self._request)
 
 
@@ -457,6 +461,8 @@ class HTTPRequest(object):
 
         self.path, sep, self.query = uri.partition('?')
         self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
+        self.query_arguments = copy.deepcopy(self.arguments)
+        self.body_arguments = {}
 
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics"""

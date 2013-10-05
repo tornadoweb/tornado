@@ -33,6 +33,10 @@
 
    .. automethod:: RequestHandler.get_argument
    .. automethod:: RequestHandler.get_arguments
+   .. automethod:: RequestHandler.get_query_argument
+   .. automethod:: RequestHandler.get_query_arguments
+   .. automethod:: RequestHandler.get_body_argument
+   .. automethod:: RequestHandler.get_body_arguments
    .. automethod:: RequestHandler.decode_argument
    .. attribute:: RequestHandler.request
 
