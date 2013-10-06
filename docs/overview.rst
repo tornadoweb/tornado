@@ -972,26 +972,30 @@ Debug mode and automatic reloading
 
 If you pass ``debug=True`` to the ``Application`` constructor, the app
 will be run in debug/development mode. In this mode, several features
-intended for convenience while developing will be enabled:
+intended for convenience while developing will be enabled (each of which
+is also available as an individual flag; if both are specified the
+individual flag takes precedence):
 
-* The app will watch for changes to its source files and reload itself
-  when anything changes. This reduces the need to manually restart the
-  server during development. However, certain failures (such as syntax
-  errors at import time) can still take the server down in a way that
-  debug mode cannot currently recover from.
-* Templates will not be cached, nor will static file hashes (used by the
-  ``static_url`` function)
-* When an exception in a ``RequestHandler`` is not caught, an error
-  page including a stack trace will be generated.
+* ``autoreload=True``: The app will watch for changes to its source
+  files and reload itself when anything changes. This reduces the need
+  to manually restart the server during development. However, certain
+  failures (such as syntax errors at import time) can still take the
+  server down in a way that debug mode cannot currently recover from.
+* ``compiled_template_cache=False``: Templates will not be cached.
+* ``static_hash_cache=False``: Static file hashes (used by the
+  ``static_url`` function) will not be cached
+* ``serve_traceback=True``: When an exception in a ``RequestHandler``
+  is not caught, an error page including a stack trace will be
+  generated.
 
-Debug mode is not compatible with ``HTTPServer``'s multi-process mode.
+Autoreload mode is not compatible with ``HTTPServer``'s multi-process mode.
 You must not give ``HTTPServer.start`` an argument other than 1 (or
-call `tornado.process.fork_processes`) if you are using debug mode.
+call `tornado.process.fork_processes`) if you are using autoreload mode.
 
 The automatic reloading feature of debug mode is available as a
 standalone module in ``tornado.autoreload``.  The two can be used in
 combination to provide extra robustness against syntax errors: set
-``debug=True`` within the app to detect changes while it is running,
+``autoreload=True`` within the app to detect changes while it is running,
 and start it with ``python -m tornado.autoreload myserver.py`` to catch
 any syntax errors or other errors at startup.
 

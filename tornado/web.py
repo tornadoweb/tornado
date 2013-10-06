@@ -889,7 +889,7 @@ class RequestHandler(object):
             else:
                 self.finish(self.get_error_html(status_code, **kwargs))
             return
-        if self.settings.get("debug_traceback") and "exc_info" in kwargs:
+        if self.settings.get("serve_traceback") and "exc_info" in kwargs:
             # in debug mode, try to send a traceback
             self.set_header('Content-Type', 'text/plain')
             for line in traceback.format_exception(*kwargs["exc_info"]):
@@ -1500,8 +1500,9 @@ class Application(object):
 
         if self.settings.get('debug'):
             self.settings.setdefault('autoreload', True)
-            self.settings.setdefault('template_cache', False)
-            self.settings.setdefault('debug_traceback', True)
+            self.settings.setdefault('compiled_template_cache', False)
+            self.settings.setdefault('static_hash_cache', False)
+            self.settings.setdefault('serve_traceback', True)
 
         # Automatically reload modified modules
         if self.settings.get('autoreload') and not wsgi:
@@ -1665,10 +1666,11 @@ class Application(object):
         # If template cache is disabled (usually in the debug mode),
         # re-compile templates and reload static files on every
         # request so you don't need to restart to see changes
-        if not self.settings.get("template_cache"):
+        if not self.settings.get("compiled_template_cache", True):
             with RequestHandler._template_loader_lock:
                 for loader in RequestHandler._template_loaders.values():
                     loader.reset()
+        if not self.settings.get('static_hash_cache', True):
             StaticFileHandler.reset()
 
         handler._execute(transforms, *args, **kwargs)
