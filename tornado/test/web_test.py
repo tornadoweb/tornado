@@ -20,6 +20,11 @@ import re
 import socket
 import sys
 
+try:
+    import urllib.parse as urllib_parse  # py3
+except ImportError:
+    import urllib as urllib_parse  # py2
+
 wsgi_safe_tests = []
 
 relpath = lambda *a: os.path.join(os.path.dirname(__file__), *a)
@@ -482,6 +487,19 @@ class GetArgumentHandler(RequestHandler):
     def get(self):
         self.write(self.get_argument("foo", "default"))
 
+    def post(self):
+        self.write(self.get_argument("foo", "default"))
+
+
+class GetQueryArgumentHandler(RequestHandler):
+    def post(self):
+        self.write(self.get_query_argument("foo", "default"))
+
+
+class GetBodyArgumentHandler(RequestHandler):
+    def post(self):
+        self.write(self.get_body_argument("foo", "default"))
+
 
 # This test is shared with wsgi_test.py
 @wsgi_safe
@@ -521,6 +539,8 @@ class WSGISafeWebTest(WebTestCase):
             url("/redirect", RedirectHandler),
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
+            url("/get_query_argument", GetQueryArgumentHandler),
+            url("/get_body_argument", GetBodyArgumentHandler),
         ]
         return urls
 
@@ -645,6 +665,36 @@ js_embed()
         response = self.fetch("/get_argument?foo=")
         self.assertEqual(response.body, b"")
         response = self.fetch("/get_argument")
+        self.assertEqual(response.body, b"default")
+
+        # test merging of query and body arguments
+        # body arguments overwrite query arguments
+        body = urllib_parse.urlencode(dict(foo="hello"))
+        response = self.fetch("/get_argument?foo=bar", method="POST", body=body)
+        self.assertEqual(response.body, b"hello")
+
+    def test_get_query_arguments(self):
+        # send as a post so we can ensure the separation between query
+        # string and body arguments.
+        body = urllib_parse.urlencode(dict(foo="hello"))
+        response = self.fetch("/get_query_argument?foo=bar", method="POST", body=body)
+        self.assertEqual(response.body, b"bar")
+        response = self.fetch("/get_query_argument?foo=", method="POST", body=body)
+        self.assertEqual(response.body, b"")
+        response = self.fetch("/get_query_argument", method="POST", body=body)
+        self.assertEqual(response.body, b"default")
+
+    def test_get_body_arguments(self):
+        body = urllib_parse.urlencode(dict(foo="bar"))
+        response = self.fetch("/get_body_argument?foo=hello", method="POST", body=body)
+        self.assertEqual(response.body, b"bar")
+
+        body = urllib_parse.urlencode(dict(foo=""))
+        response = self.fetch("/get_body_argument?foo=hello", method="POST", body=body)
+        self.assertEqual(response.body, b"")
+
+        body = urllib_parse.urlencode(dict())
+        response = self.fetch("/get_body_argument?foo=hello", method="POST", body=body)
         self.assertEqual(response.body, b"default")
 
     def test_no_gzip(self):
