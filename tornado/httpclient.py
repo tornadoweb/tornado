@@ -32,6 +32,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import functools
 import time
 import weakref
+import ssl
 
 from tornado.concurrent import TracebackFuture
 from tornado.escape import utf8
@@ -246,7 +247,8 @@ class HTTPRequest(object):
         use_gzip=True,
         proxy_password='',
         allow_nonstandard_methods=False,
-        validate_cert=True)
+        validate_cert=True,
+        ssl_protocol=ssl.PROTOCOL_SSLv3)
 
     def __init__(self, url, method="GET", headers=None, body=None,
                  auth_username=None, auth_password=None, auth_mode=None,
@@ -259,7 +261,7 @@ class HTTPRequest(object):
                  proxy_password=None, allow_nonstandard_methods=None,
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
-                 client_key=None, client_cert=None):
+                 client_key=None, client_cert=None, ssl_protocol=None):
         r"""All parameters except ``url`` are optional.
 
         :arg string url: URL to fetch
@@ -318,6 +320,7 @@ class HTTPRequest(object):
            ``simple_httpclient`` and true in ``curl_httpclient``
         :arg string client_key: Filename for client SSL key, if any
         :arg string client_cert: Filename for client SSL certificate, if any
+        :arg string ssl_protocol: A specific protocol from the local ssl module
 
         .. versionadded:: 3.1
            The ``auth_mode`` argument.
@@ -354,6 +357,7 @@ class HTTPRequest(object):
         self.allow_ipv6 = allow_ipv6
         self.client_key = client_key
         self.client_cert = client_cert
+        self.ssl_protocol = ssl_protocol
         self.start_time = time.time()
 
 
