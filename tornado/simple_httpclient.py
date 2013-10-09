@@ -210,7 +210,7 @@ class _HTTPConnection(object):
                 # This is really only necessary for pre-1.0 versions
                 # of openssl, but python 2.6 doesn't expose version
                 # information.
-                ssl_options["ssl_version"] = ssl.PROTOCOL_SSLv3
+                ssl_options["ssl_version"] = self.request.ssl_protocol
 
             return SSLIOStream(socket.socket(af),
                                io_loop=self.io_loop,
