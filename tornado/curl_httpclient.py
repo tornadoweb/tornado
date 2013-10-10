@@ -337,8 +337,10 @@ def _curl_setup_request(curl, request, buffer, headers):
         # ported pycurl package, but in the meantime this lambda will
         # make it work for downloading (utf8) text.
         curl.setopt(pycurl.WRITEFUNCTION, lambda s: write_function(utf8(s)))
-    curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
-    curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
+    if request.follow_redirects is not None:
+        curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
+    if request.max_redirects is not None:
+        curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
     curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000 * request.connect_timeout))
     curl.setopt(pycurl.TIMEOUT_MS, int(1000 * request.request_timeout))
     if request.user_agent:
