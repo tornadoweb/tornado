@@ -774,7 +774,7 @@ class IOStream(BaseIOStream):
                 # Sometimes setsockopt will fail if the socket is closed
                 # at the wrong time.  This can happen with HTTPServer
                 # resetting the value to false between requests.
-                if e.errno != errno.EINVAL:
+                if e.errno not in (errno.EINVAL, errno.ECONNRESET):
                     raise
 
 
