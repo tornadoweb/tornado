@@ -1369,6 +1369,12 @@ def asynchronous(method):
                     if not self._finished:
                         self.finish()
                 IOLoop.current().add_future(result, future_complete)
+                # Once we have done this, hide the Future from our
+                # caller (i.e. RequestHandler._when_complete), which
+                # would otherwise set up its own callback and
+                # exception handler (resulting in exceptions being
+                # logged twice).
+                return None
             return result
     return wrapper
 
