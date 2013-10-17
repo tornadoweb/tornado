@@ -404,6 +404,10 @@ class Multi(YieldPoint):
     a list of ``YieldPoints``.
     """
     def __init__(self, children):
+        self.keys = None
+        if isinstance(children, dict):
+            self.keys = list(children.keys())
+            children = children.values()
         self.children = []
         for i in children:
             if isinstance(i, Future):
@@ -423,7 +427,11 @@ class Multi(YieldPoint):
         return not self.unfinished_children
 
     def get_result(self):
-        return [i.get_result() for i in self.children]
+        result = (i.get_result() for i in self.children)
+        if self.keys:
+            return dict(zip(self.keys, result))
+        else:
+            return list(result)
 
 
 class _NullYieldPoint(YieldPoint):
@@ -523,7 +531,7 @@ class Runner(object):
                     self.finished = True
                     self.yield_point = _null_yield_point
                     raise
-                if isinstance(yielded, list):
+                if isinstance(yielded, (list, dict)):
                     yielded = Multi(yielded)
                 elif isinstance(yielded, Future):
                     yielded = YieldFuture(yielded)
