@@ -38,8 +38,8 @@ since it is both shorter and provides better exception handling)::
     def get(self):
         yield gen.Task(AsyncHTTPClient().fetch, "http://example.com")
 
-You can also yield a list of ``Futures`` and/or ``Tasks``, which will be
-started at the same time and run in parallel; a list of results will
+You can also yield a list or dict of ``Futures`` and/or ``Tasks``, which will be
+started at the same time and run in parallel; a list or dict of results will
 be returned when they are all finished::
 
     @gen.coroutine
@@ -47,6 +47,10 @@ be returned when they are all finished::
         http_client = AsyncHTTPClient()
         response1, response2 = yield [http_client.fetch(url1),
                                       http_client.fetch(url2)]
+        response_dict = yield dict(response3=http_client.fetch(url3),
+                                   response4=http_client.fetch(url4))
+        response3 = response_dict['response3']
+        response4 = response_dict['response4']
 
 For more complicated interfaces, `Task` can be split into two parts:
 `Callback` and `Wait`::
