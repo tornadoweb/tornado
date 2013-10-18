@@ -5,19 +5,24 @@ from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, Expec
 from tornado.web import Application, RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError
 
+class TestWebSocketHandler(WebSocketHandler):
+    """Base class for testing handlers that exposes the on_close event.
 
-class EchoHandler(WebSocketHandler):
+    This allows for deterministic cleanup of the associated socket.
+    """
     def initialize(self, close_future):
         self.close_future = close_future
-
-    def on_message(self, message):
-        self.write_message(message, isinstance(message, bytes))
 
     def on_close(self):
         self.close_future.set_result(None)
 
 
-class HeaderHandler(WebSocketHandler):
+class EchoHandler(TestWebSocketHandler):
+    def on_message(self, message):
+        self.write_message(message, isinstance(message, bytes))
+
+
+class HeaderHandler(TestWebSocketHandler):
     def open(self):
         self.write_message(self.request.headers.get('X-Test', ''))
 
@@ -33,7 +38,7 @@ class WebSocketTest(AsyncHTTPTestCase):
         return Application([
             ('/echo', EchoHandler, dict(close_future=self.close_future)),
             ('/non_ws', NonWebSocketHandler),
-            ('/header', HeaderHandler),
+            ('/header', HeaderHandler, dict(close_future=self.close_future)),
         ])
 
     @gen_test
@@ -44,6 +49,8 @@ class WebSocketTest(AsyncHTTPTestCase):
         ws.write_message('hello')
         response = yield ws.read_message()
         self.assertEqual(response, 'hello')
+        ws.close()
+        yield self.close_future
 
     def test_websocket_callbacks(self):
         websocket_connect(
@@ -54,6 +61,8 @@ class WebSocketTest(AsyncHTTPTestCase):
         ws.read_message(self.stop)
         response = self.wait().result()
         self.assertEqual(response, 'hello')
+        ws.close()
+        yield self.close_future
 
     @gen_test
     def test_websocket_http_fail(self):
@@ -99,3 +108,5 @@ class WebSocketTest(AsyncHTTPTestCase):
                         headers={'X-Test': 'hello'}))
         response = yield ws.read_message()
         self.assertEqual(response, 'hello')
+        ws.close()
+        yield self.close_future

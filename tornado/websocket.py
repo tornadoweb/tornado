@@ -793,6 +793,12 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             io_loop, None, request, lambda: None, self._on_http_response,
             104857600, self.resolver)
 
+    def close(self):
+        """Closes the websocket connection."""
+        if self.protocol is not None:
+            self.protocol.close()
+            self.protocol = None
+
     def _on_close(self):
         self.on_message(None)
         self.resolver.close()
