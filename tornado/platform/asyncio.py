@@ -2,7 +2,11 @@
 
 This is a work in progress and interfaces are subject to change.
 
-To test: python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOLoop
+To test:
+python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOLoop
+python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOMainLoop
+(the tests log a few warnings with AsyncIOMainLoop because they leave some
+unfinished callbacks on the event loop that fail when it resumes)
 """
 import asyncio
 import datetime
@@ -12,11 +16,10 @@ import os
 from tornado.ioloop import IOLoop
 from tornado import stack_context
 
-# This name is really unfortunate.
-class AsyncIOLoop(IOLoop):
-    def initialize(self):
-        # TODO: we need a way to use the global get_event_loop.
-        self.asyncio_loop = asyncio.events.new_event_loop()
+class BaseAsyncIOLoop(IOLoop):
+    def initialize(self, asyncio_loop, close_loop=False):
+        self.asyncio_loop = asyncio_loop
+        self.close_loop = close_loop
         self.asyncio_loop.call_soon(self.make_current)
         # Maps fd to handler function (as in IOLoop.add_handler)
         self.handlers = {}
@@ -31,7 +34,8 @@ class AsyncIOLoop(IOLoop):
             self.remove_handler(fd)
             if all_fds:
                 os.close(fd)
-        self.asyncio_loop.close()
+        if self.close_loop:
+            self.asyncio_loop.close()
 
     def add_handler(self, fd, handler, events):
         if fd in self.handlers:
@@ -117,3 +121,14 @@ class AsyncIOLoop(IOLoop):
                 self._run_callback, stack_context.wrap(callback), *args)
 
     add_callback_from_signal = add_callback
+
+
+class AsyncIOMainLoop(BaseAsyncIOLoop):
+    def initialize(self):
+        super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
+                                                close_loop=False)
+
+class AsyncIOLoop(BaseAsyncIOLoop):
+    def initialize(self):
+        super(AsyncIOLoop, self).initialize(asyncio.new_event_loop(),
+                                            close_loop=True)

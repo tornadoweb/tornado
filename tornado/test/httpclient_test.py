@@ -433,11 +433,16 @@ class HTTPResponseTestCase(unittest.TestCase):
 
 class SyncHTTPClientTest(unittest.TestCase):
     def setUp(self):
-        if IOLoop.configured_class().__name__ == 'TwistedIOLoop':
+        if IOLoop.configured_class().__name__ in ('TwistedIOLoop',
+                                                  'AsyncIOMainLoop'):
             # TwistedIOLoop only supports the global reactor, so we can't have
             # separate IOLoops for client and server threads.
+            # AsyncIOMainLoop doesn't work with the default policy
+            # (although it could with some tweaks to this test and a
+            # policy that created loops for non-main threads).
             raise unittest.SkipTest(
-                'Sync HTTPClient not compatible with TwistedIOLoop')
+                'Sync HTTPClient not compatible with TwistedIOLoop or '
+                'AsyncIOMainLoop')
         self.server_ioloop = IOLoop()
 
         sock, self.port = bind_unused_port()
