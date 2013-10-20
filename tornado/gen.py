@@ -38,8 +38,8 @@ since it is both shorter and provides better exception handling)::
     def get(self):
         yield gen.Task(AsyncHTTPClient().fetch, "http://example.com")
 
-You can also yield a list of ``Futures`` and/or ``Tasks``, which will be
-started at the same time and run in parallel; a list of results will
+You can also yield a list or dict of ``Futures`` and/or ``Tasks``, which will be
+started at the same time and run in parallel; a list or dict of results will
 be returned when they are all finished::
 
     @gen.coroutine
@@ -47,6 +47,10 @@ be returned when they are all finished::
         http_client = AsyncHTTPClient()
         response1, response2 = yield [http_client.fetch(url1),
                                       http_client.fetch(url2)]
+        response_dict = yield dict(response3=http_client.fetch(url3),
+                                   response4=http_client.fetch(url4))
+        response3 = response_dict['response3']
+        response4 = response_dict['response4']
 
 For more complicated interfaces, `Task` can be split into two parts:
 `Callback` and `Wait`::
@@ -404,6 +408,10 @@ class Multi(YieldPoint):
     a list of ``YieldPoints``.
     """
     def __init__(self, children):
+        self.keys = None
+        if isinstance(children, dict):
+            self.keys = list(children.keys())
+            children = children.values()
         self.children = []
         for i in children:
             if isinstance(i, Future):
@@ -423,7 +431,11 @@ class Multi(YieldPoint):
         return not self.unfinished_children
 
     def get_result(self):
-        return [i.get_result() for i in self.children]
+        result = (i.get_result() for i in self.children)
+        if self.keys:
+            return dict(zip(self.keys, result))
+        else:
+            return list(result)
 
 
 class _NullYieldPoint(YieldPoint):
@@ -523,7 +535,7 @@ class Runner(object):
                     self.finished = True
                     self.yield_point = _null_yield_point
                     raise
-                if isinstance(yielded, list):
+                if isinstance(yielded, (list, dict)):
                     yielded = Multi(yielded)
                 elif isinstance(yielded, Future):
                     yielded = YieldFuture(yielded)

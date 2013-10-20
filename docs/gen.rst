@@ -18,7 +18,8 @@
    their result method will be called automatically when they are
    ready.  Additionally, lists of any combination of these objects may
    be yielded; the result is a list of the results of each yield point
-   in the same order.
+   in the same order. Yielding dicts with these objects in values will
+   return dict with results at the same keys.
 
    .. autoclass:: Task
 
