@@ -432,7 +432,7 @@ class Multi(YieldPoint):
 
     def get_result(self):
         result = (i.get_result() for i in self.children)
-        if self.keys:
+        if self.keys is not None:
             return dict(zip(self.keys, result))
         else:
             return list(result)

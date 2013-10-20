@@ -327,6 +327,14 @@ class GenEngineTest(AsyncTestCase):
         self.assertLess(end - start, 1.0)
 
     @gen_test
+    def test_multi_empty(self):
+        # Empty lists or dicts should return the same type.
+        x = yield []
+        self.assertTrue(isinstance(x, list))
+        y = yield {}
+        self.assertTrue(isinstance(y, dict))
+
+    @gen_test
     def test_future(self):
         result = yield self.async_future(1)
         self.assertEqual(result, 1)
