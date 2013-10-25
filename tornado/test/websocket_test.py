@@ -2,8 +2,14 @@ from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
+from tornado.test.util import unittest
 from tornado.web import Application, RequestHandler
-from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError
+from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError, _websocket_mask_python
+
+try:
+    from tornado import speedups
+except ImportError:
+    speedups = None
 
 class TestWebSocketHandler(WebSocketHandler):
     """Base class for testing handlers that exposes the on_close event.
@@ -110,3 +116,22 @@ class WebSocketTest(AsyncHTTPTestCase):
         self.assertEqual(response, 'hello')
         ws.close()
         yield self.close_future
+
+
+class MaskFunctionMixin(object):
+    # Subclasses should define self.mask(mask, data)
+    def test_mask(self):
+        self.assertEqual(self.mask(b'abcd', b''), b'')
+        self.assertEqual(self.mask(b'abcd', b'b'), b'\x03')
+        self.assertEqual(self.mask(b'abcd', b'54321'), b'TVPVP')
+        self.assertEqual(self.mask(b'ZXCV', b'98765432'), b'c`t`olpd')
+
+
+class PythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
+    def mask(self, mask, data):
+        return _websocket_mask_python(mask, data)
+
+@unittest.skipIf(speedups is None, "tornado.speedups module not present")
+class CythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
+    def mask(self, mask, data):
+        return speedups.websocket_mask(mask, data)

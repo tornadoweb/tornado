@@ -23,6 +23,11 @@ try:
 except ImportError:
     pass
 
+try:
+    from Cython.Build import cythonize
+except ImportError:
+    cythonize = None
+
 kwargs = {}
 
 version = "3.2.dev2"
@@ -30,10 +35,16 @@ version = "3.2.dev2"
 with open('README.rst') as f:
     long_description = f.read()
 
+if cythonize is not None:
+    extensions = cythonize('tornado/speedups.pyx')
+else:
+    extensions = []
+
 distutils.core.setup(
     name="tornado",
     version=version,
     packages = ["tornado", "tornado.test", "tornado.platform"],
+    ext_modules = extensions,
     package_data = {
         "tornado": ["ca-certificates.crt"],
         # data files need to be listed both here (which determines what gets

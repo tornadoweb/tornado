@@ -586,7 +586,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             frame += struct.pack("!BQ", 127 | mask_bit, l)
         if self.mask_outgoing:
             mask = os.urandom(4)
-            data = mask + self._apply_mask(mask, data)
+            data = mask + _websocket_mask(mask, data)
         frame += data
         self.stream.write(frame)
 
@@ -671,21 +671,8 @@ class WebSocketProtocol13(WebSocketProtocol):
         except StreamClosedError:
             self._abort()
 
-    def _apply_mask(self, mask, data):
-        mask = array.array("B", mask)
-        unmasked = array.array("B", data)
-        for i in xrange(len(data)):
-            unmasked[i] = unmasked[i] ^ mask[i % 4]
-        if hasattr(unmasked, 'tobytes'):
-            # tostring was deprecated in py32.  It hasn't been removed,
-            # but since we turn on deprecation warnings in our tests
-            # we need to use the right one.
-            return unmasked.tobytes()
-        else:
-            return unmasked.tostring()
-
     def _on_masked_frame_data(self, data):
-        self._on_frame_data(self._apply_mask(self._frame_mask, data))
+        self._on_frame_data(_websocket_mask(self._frame_mask, data))
 
     def _on_frame_data(self, data):
         if self._frame_opcode_is_control:
@@ -882,3 +869,29 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None):
     if callback is not None:
         io_loop.add_future(conn.connect_future, callback)
     return conn.connect_future
+
+def _websocket_mask_python(mask, data):
+    """Websocket masking function.
+
+    `mask` is a `bytes` object of length 4; `data` is a `bytes` object of any length.
+    Returns a `bytes` object of the same length as `data` with the mask applied
+    as specified in section 5.3 of RFC 6455.
+
+    This pure-python implementation may be replaced by an optimized version when available.
+    """
+    mask = array.array("B", mask)
+    unmasked = array.array("B", data)
+    for i in xrange(len(data)):
+        unmasked[i] = unmasked[i] ^ mask[i % 4]
+    if hasattr(unmasked, 'tobytes'):
+        # tostring was deprecated in py32.  It hasn't been removed,
+        # but since we turn on deprecation warnings in our tests
+        # we need to use the right one.
+        return unmasked.tobytes()
+    else:
+        return unmasked.tostring()
+
+try:
+    from tornado.speedups import websocket_mask as _websocket_mask
+except ImportError:
+    _websocket_mask = _websocket_mask_python
