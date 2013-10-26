@@ -51,7 +51,7 @@ gen_log = logging.getLogger("tornado.general")
 
 def _stderr_supports_color():
     color = False
-    if curses and sys.stderr.isatty():
+    if curses and hasattr(sys.stderr, 'isatty') and sys.stderr.isatty():
         try:
             curses.setupterm()
             if curses.tigetnum("colors") > 0:
