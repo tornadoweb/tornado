@@ -125,6 +125,15 @@ class MaskFunctionMixin(object):
         self.assertEqual(self.mask(b'abcd', b'b'), b'\x03')
         self.assertEqual(self.mask(b'abcd', b'54321'), b'TVPVP')
         self.assertEqual(self.mask(b'ZXCV', b'98765432'), b'c`t`olpd')
+        # Include test cases with \x00 bytes (to ensure that the C
+        # extension isn't depending on null-terminated strings) and
+        # bytes with the high bit set (to smoke out signedness issues).
+        self.assertEqual(self.mask(b'\x00\x01\x02\x03',
+                                   b'\xff\xfb\xfd\xfc\xfe\xfa'),
+                         b'\xff\xfa\xff\xff\xfe\xfb')
+        self.assertEqual(self.mask(b'\xff\xfb\xfd\xfc',
+                                   b'\x00\x01\x02\x03\x04\x05'),
+                         b'\xff\xfa\xff\xff\xfb\xfe')
 
 
 class PythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
