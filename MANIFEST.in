@@ -13,4 +13,3 @@ include tornado/test/test.crt
 include tornado/test/test.key
 include README.rst
 include runtests.sh
-global-exclude _auto2to3*
