@@ -1560,11 +1560,6 @@ class Application(object):
                 pattern = spec[0]
                 handler = spec[1]
 
-                if isinstance(handler, str):
-                    # import the Module and instantiate the class
-                    # Must be a fully qualified name (module.ClassName)
-                    handler = import_object(handler)
-
                 if len(spec) == 3:
                     kwargs = spec[2]
                 else:
@@ -2526,7 +2521,7 @@ class _UIModuleNamespace(object):
 
 class URLSpec(object):
     """Specifies mappings between URLs and handlers."""
-    def __init__(self, pattern, handler_class, kwargs=None, name=None):
+    def __init__(self, pattern, handler, kwargs=None, name=None):
         """Parameters:
 
         * ``pattern``: Regular expression to be matched.  Any groups
@@ -2547,7 +2542,13 @@ class URLSpec(object):
         assert len(self.regex.groupindex) in (0, self.regex.groups), \
             ("groups in url regexes must either be all named or all "
              "positional: %r" % self.regex.pattern)
-        self.handler_class = handler_class
+        
+        if isinstance(handler, str):
+            # import the Module and instantiate the class
+            # Must be a fully qualified name (module.ClassName)
+            handler = import_object(handler)
+        
+        self.handler_class = handler
         self.kwargs = kwargs or {}
         self.name = name
         self._path, self._group_count = self._find_groups()
