@@ -61,6 +61,11 @@ class SimpleHandlerTestCase(WebTestCase):
         return [('/', self.Handler)]
 
 
+class HelloHandler(RequestHandler):
+    def get(self):
+        self.write('hello')
+
+
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
     def __init__(self):
@@ -1760,3 +1765,21 @@ class DefaultHandlerArgumentsTest(WebTestCase):
     def test_403(self):
         response = self.fetch('/')
         self.assertEqual(response.code, 403)
+
+
+@wsgi_safe
+class HandlerByNameTest(WebTestCase):
+    def get_handlers(self):
+        # All three are equivalent.
+        return [('/hello1', HelloHandler),
+                ('/hello2', 'tornado.test.web_test.HelloHandler'),
+                url('/hello3', 'tornado.test.web_test.HelloHandler'),
+                ]
+
+    def test_handler_by_name(self):
+        resp = self.fetch('/hello1')
+        self.assertEqual(resp.body, b'hello')
+        resp = self.fetch('/hello2')
+        self.assertEqual(resp.body, b'hello')
+        resp = self.fetch('/hello3')
+        self.assertEqual(resp.body, b'hello')
