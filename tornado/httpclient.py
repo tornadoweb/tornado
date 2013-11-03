@@ -282,7 +282,8 @@ class HTTPRequest(object):
         :arg int max_redirects: Limit for ``follow_redirects``
         :arg string user_agent: String to send as ``User-Agent`` header
         :arg bool use_gzip: Request gzip encoding from the server
-        :arg string network_interface: Network interface to use for request
+        :arg string network_interface: Network interface to use for request.
+           ``curl_httpclient`` only; see note below.
         :arg callable streaming_callback: If set, ``streaming_callback`` will
            be run with each chunk of data as it is received, and
            ``HTTPResponse.body`` and ``HTTPResponse.buffer`` will be empty in
@@ -310,14 +311,26 @@ class HTTPRequest(object):
         :arg bool validate_cert: For HTTPS requests, validate the server's
            certificate?
         :arg string ca_certs: filename of CA certificates in PEM format,
-           or None to use defaults.  Note that in ``curl_httpclient``, if
-           any request uses a custom ``ca_certs`` file, they all must (they
-           don't have to all use the same ``ca_certs``, but it's not possible
-           to mix requests with ``ca_certs`` and requests that use the defaults.
+           or None to use defaults.  See note below when used with
+           ``curl_httpclient``.
         :arg bool allow_ipv6: Use IPv6 when available?  Default is false in
            ``simple_httpclient`` and true in ``curl_httpclient``
-        :arg string client_key: Filename for client SSL key, if any
-        :arg string client_cert: Filename for client SSL certificate, if any
+        :arg string client_key: Filename for client SSL key, if any.  See
+           note below when used with ``curl_httpclient``.
+        :arg string client_cert: Filename for client SSL certificate, if any.
+           See note below when used with ``curl_httpclient``.
+
+        .. note::
+
+            When using ``curl_httpclient`` certain options may be
+            inherited by subsequent fetches because ``pycurl`` does
+            not allow them to be cleanly reset.  This applies to the
+            ``ca_certs``, ``client_key``, ``client_cert``, and
+            ``network_interface`` arguments.  If you use these
+            options, you should pass them on every request (you don't
+            have to always use the same values, but it's not possible
+            to mix requests that specify these options with ones that
+            use the defaults).
 
         .. versionadded:: 3.1
            The ``auth_mode`` argument.

@@ -360,6 +360,7 @@ def _curl_setup_request(curl, request, buffer, headers):
             curl.setopt(pycurl.PROXYUSERPWD, credentials)
     else:
         curl.setopt(pycurl.PROXY, '')
+        curl.unsetopt(pycurl.PROXYUSERPWD)
     if request.validate_cert:
         curl.setopt(pycurl.SSL_VERIFYPEER, 1)
         curl.setopt(pycurl.SSL_VERIFYHOST, 2)
@@ -382,6 +383,8 @@ def _curl_setup_request(curl, request, buffer, headers):
         # that we can't reach, so allow ipv6 unless the user asks to disable.
         # (but see version check in _process_queue above)
         curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)
+    else:
+        curl.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_WHATEVER)
 
     # Set the request method through curl's irritating interface which makes
     # up names for almost every single method
