@@ -199,10 +199,10 @@ class _HTTPConnection(object):
             # the SSL_OP_NO_SSLv2, but that wasn't exposed to python
             # until 3.2.  Python 2.7 adds the ciphers argument, which
             # can also be used to disable SSLv2.  As a last resort
-            # on python 2.6, we set ssl_version to SSLv3.  This is
+            # on python 2.6, we set ssl_version to TLSv1.  This is
             # more narrow than we'd like since it also breaks
-            # compatibility with servers configured for TLSv1 only,
-            # but nearly all servers support SSLv3:
+            # compatibility with servers configured for SSLv3 only,
+            # but nearly all servers support both SSLv3 and TLSv1:
             # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
             if sys.version_info >= (2, 7):
                 ssl_options["ciphers"] = "DEFAULT:!SSLv2"
@@ -210,7 +210,7 @@ class _HTTPConnection(object):
                 # This is really only necessary for pre-1.0 versions
                 # of openssl, but python 2.6 doesn't expose version
                 # information.
-                ssl_options["ssl_version"] = ssl.PROTOCOL_SSLv3
+                ssl_options["ssl_version"] = ssl.PROTOCOL_TLSv1
 
             return SSLIOStream(socket.socket(af),
                                io_loop=self.io_loop,
