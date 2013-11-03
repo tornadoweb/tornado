@@ -396,3 +396,21 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         response = self.wait()
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
+
+
+class HeavyloadAsyncHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
+    def create_client(self, **kwargs):
+        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True, **kwargs)
+
+    def test_heavyload_timeout(self):
+        with closing(self.create_client(max_clients=1)) as client:
+            client.fetch(self.get_url('/trigger?wake=false'), self.stop, request_timeout=10)
+            client.fetch(self.get_url('/hello'), self.stop, connect_timeout=3)
+            response = self.wait()
+
+            self.assertEqual(response.code, 599)
+            self.assertTrue(2.9 < response.request_time < 3.1, response.request_time)
+            self.assertEqual(str(response.error), "HTTP 599: Timeout")
+            self.triggers.popleft()()
+
+
