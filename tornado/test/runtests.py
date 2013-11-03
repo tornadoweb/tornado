@@ -13,6 +13,11 @@ from tornado.netutil import Resolver
 from tornado.options import define, options, add_parse_callback
 from tornado.test.util import unittest
 
+try:
+    reduce  # py2
+except NameError:
+    from functools import reduce  # py3
+
 TEST_MODULES = [
     'tornado.httputil.doctests',
     'tornado.iostream.doctests',
