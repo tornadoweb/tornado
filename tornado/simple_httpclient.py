@@ -72,6 +72,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.max_clients = max_clients
         self.queue = collections.deque()
         self.active = {}
+        self.waiting = {}
         self.max_buffer_size = max_buffer_size
         if resolver:
             self.resolver = resolver
@@ -89,7 +90,13 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             self.resolver.close()
 
     def fetch_impl(self, request, callback):
-        self.queue.append((request, callback))
+        key = object()
+        self.queue.append((key, request, callback))
+        if not len(self.active) < self.max_clients:
+            timeout_handle = self.io_loop.add_timeout(
+                    request.start_time + min(request.connect_timeout, request.request_timeout),
+                    functools.partial(self._on_timeout, key))
+            self.waiting[key] = (request, callback, timeout_handle)
         self._process_queue()
         if self.queue:
             gen_log.debug("max_clients limit reached, request queued. "
@@ -99,8 +106,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def _process_queue(self):
         with stack_context.NullContext():
             while self.queue and len(self.active) < self.max_clients:
-                request, callback = self.queue.popleft()
-                key = object()
+                key, request, callback = self.queue.popleft()
+                self._remove_timeout(key)
                 self.active[key] = (request, callback)
                 release_callback = functools.partial(self._release_fetch, key)
                 self._handle_request(request, release_callback, callback)
@@ -112,6 +119,21 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def _release_fetch(self, key):
         del self.active[key]
         self._process_queue()
+
+    def _remove_timeout(self, key):
+        if key in self.waiting:
+            request, callback, timeout_handle = self.waiting[key]
+            self.io_loop.remove_timeout(timeout_handle)
+            del self.waiting[key]
+
+    def _on_timeout(self, key):
+        request, callback, timeout_handle = self.waiting[key]
+        self.queue.remove((key, request, callback))
+        timeout_response = HTTPResponse(
+                request, 599, error=HTTPError(599, "Timeout"),
+                request_time=self.io_loop.time() - request.start_time)
+        self.io_loop.add_callback(callback, timeout_response)
+        del self.waiting[key]
 
 
 class _HTTPConnection(object):
