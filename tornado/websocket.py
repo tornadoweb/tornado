@@ -789,6 +789,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     def _on_close(self):
         self.on_message(None)
         self.resolver.close()
+        super(WebSocketClientConnection, self)._on_close()
 
     def _on_http_response(self, response):
         if not self.connect_future.done():
