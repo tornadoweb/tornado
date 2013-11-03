@@ -31,3 +31,4 @@ In Progress
   arguments, just like `~.RequestHandler.clear_cookie`.
 * The embedded ``ca-certificats.crt`` file has been updated with the current
   Mozilla CA list.
+* `.GoogleOAuth2Mixin` has been added so that Google's OAuth2 only apps are able to get a context without OpenID (which uses OAuth 1).
