@@ -548,9 +548,8 @@ class OAuth2Mixin(object):
     """
     @return_future
     def authorize_redirect(self, redirect_uri=None, client_id=None,
-                           client_secret=None, scope=None,
-                           response_type="code", extra_params=None,
-                           callback=None):
+                           client_secret=None, extra_params=None,
+                           callback=None, scope=None, response_type="code"):
         """Redirects the user to obtain OAuth authorization for this service.
 
         Some providers require that you register a redirect URL with
