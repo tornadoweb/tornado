@@ -296,6 +296,22 @@ class SimpleHTTPClientTestMixin(object):
             self.assertTrue(expected_message in str(response.error),
                             response.error)
 
+    def test_queue_timeout(self):
+        with closing(self.create_client(max_clients=1)) as client:
+            client.fetch(self.get_url('/trigger'), self.stop,
+                         request_timeout=10)
+            # Wait for the trigger request to block, not complete.
+            self.wait()
+            client.fetch(self.get_url('/hello'), self.stop,
+                         connect_timeout=0.1)
+            response = self.wait()
+
+            self.assertEqual(response.code, 599)
+            self.assertTrue(response.request_time < 1, response.request_time)
+            self.assertEqual(str(response.error), "HTTP 599: Timeout")
+            self.triggers.popleft()()
+            self.wait()
+
 
 class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
     def setUp(self):
@@ -396,21 +412,3 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         response = self.wait()
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
-
-
-class HeavyloadAsyncHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
-    def create_client(self, **kwargs):
-        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True, **kwargs)
-
-    def test_heavyload_timeout(self):
-        with closing(self.create_client(max_clients=1)) as client:
-            client.fetch(self.get_url('/trigger?wake=false'), self.stop, request_timeout=10)
-            client.fetch(self.get_url('/hello'), self.stop, connect_timeout=3)
-            response = self.wait()
-
-            self.assertEqual(response.code, 599)
-            self.assertTrue(2.9 < response.request_time < 3.1, response.request_time)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout")
-            self.triggers.popleft()()
-
-

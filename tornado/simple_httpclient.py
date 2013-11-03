@@ -94,9 +94,12 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.queue.append((key, request, callback))
         if not len(self.active) < self.max_clients:
             timeout_handle = self.io_loop.add_timeout(
-                    request.start_time + min(request.connect_timeout, request.request_timeout),
+                    self.io_loop.time() + min(request.connect_timeout,
+                                              request.request_timeout),
                     functools.partial(self._on_timeout, key))
-            self.waiting[key] = (request, callback, timeout_handle)
+        else:
+            timeout_handle = None
+        self.waiting[key] = (request, callback, timeout_handle)
         self._process_queue()
         if self.queue:
             gen_log.debug("max_clients limit reached, request queued. "
@@ -107,6 +110,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         with stack_context.NullContext():
             while self.queue and len(self.active) < self.max_clients:
                 key, request, callback = self.queue.popleft()
+                if key not in self.waiting:
+                    continue
                 self._remove_timeout(key)
                 self.active[key] = (request, callback)
                 release_callback = functools.partial(self._release_fetch, key)
@@ -123,7 +128,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def _remove_timeout(self, key):
         if key in self.waiting:
             request, callback, timeout_handle = self.waiting[key]
-            self.io_loop.remove_timeout(timeout_handle)
+            if timeout_handle is not None:
+                self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
 
     def _on_timeout(self, key):
