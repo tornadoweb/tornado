@@ -370,6 +370,8 @@ class RequestHandler(object):
         last value.
 
         The returned value is always unicode.
+
+        .. versionadded:: 3.2
         """
         return self._get_argument(name, default, self.request.body_arguments, strip)
 
@@ -379,6 +381,8 @@ class RequestHandler(object):
         If the argument is not present, returns an empty list.
 
         The returned values are always unicode.
+
+        .. versionadded:: 3.2
         """
         return self._get_arguments(name, self.request.body_arguments, strip)
 
@@ -393,6 +397,8 @@ class RequestHandler(object):
         last value.
 
         The returned value is always unicode.
+
+        .. versionadded:: 3.2
         """
         return self._get_argument(name, default, self.request.query_arguments, strip)
 
@@ -402,6 +408,8 @@ class RequestHandler(object):
         If the argument is not present, returns an empty list.
 
         The returned values are always unicode.
+
+        .. versionadded:: 3.2
         """
         return self._get_arguments(name, self.request.query_arguments, strip)
 
@@ -2542,12 +2550,12 @@ class URLSpec(object):
         assert len(self.regex.groupindex) in (0, self.regex.groups), \
             ("groups in url regexes must either be all named or all "
              "positional: %r" % self.regex.pattern)
-        
+
         if isinstance(handler, str):
             # import the Module and instantiate the class
             # Must be a fully qualified name (module.ClassName)
             handler = import_object(handler)
-        
+
         self.handler_class = handler
         self.kwargs = kwargs or {}
         self.name = name

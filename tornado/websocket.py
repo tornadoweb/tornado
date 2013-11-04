@@ -52,6 +52,10 @@ class WebSocketError(Exception):
 
 
 class WebSocketClosedError(WebSocketError):
+    """Raised by operations on a closed connection.
+
+    .. versionadded:: 3.2
+    """
     pass
 
 
@@ -163,6 +167,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
         encoded as json).  If the ``binary`` argument is false, the
         message will be sent as utf8; in binary mode any byte string
         is allowed.
+
+        If the connection is already closed, raises `WebSocketClosedError`.
+
+        .. versionchanged:: 3.2
+           `WebSocketClosedError` was added (previously a closed connection
+           would raise an `AttributeError`)
         """
         if self.ws_connection is None:
             raise WebSocketClosedError()
@@ -781,7 +791,10 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             104857600, self.resolver)
 
     def close(self):
-        """Closes the websocket connection."""
+        """Closes the websocket connection.
+
+        .. versionadded:: 3.2
+        """
         if self.protocol is not None:
             self.protocol.close()
             self.protocol = None
@@ -853,6 +866,9 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None):
 
     Takes a url and returns a Future whose result is a
     `WebSocketClientConnection`.
+
+    .. versionchanged:: 3.2
+       Also accepts ``HTTPRequest`` objects in place of urls.
     """
     if io_loop is None:
         io_loop = IOLoop.current()

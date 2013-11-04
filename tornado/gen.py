@@ -52,6 +52,9 @@ be returned when they are all finished::
         response3 = response_dict['response3']
         response4 = response_dict['response4']
 
+.. versionchanged:: 3.2
+   Dict support added.
+
 For more complicated interfaces, `Task` can be split into two parts:
 `Callback` and `Wait`::
 

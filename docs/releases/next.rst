@@ -31,4 +31,42 @@ In Progress
   arguments, just like `~.RequestHandler.clear_cookie`.
 * The embedded ``ca-certificats.crt`` file has been updated with the current
   Mozilla CA list.
-* `.GoogleOAuth2Mixin` has been added so that Google's OAuth2 only apps are able to get a context without OpenID (which uses OAuth 1).
+* `.GoogleOAuth2Mixin` has been added so that Google's OAuth2 only apps are
+  able to get a context without OpenID (which uses OAuth 1).
+* `.WebSocketHandler.write_message` now raises `.WebSocketClosedError` instead
+  of `AttributeError` when the connection has been closed.
+* ``simple_httpclient`` now applies the ``connect_timeout`` to requests
+  that are queued and have not yet started.
+* `.is_valid_ip` (and therefore ``HTTPRequest.remote_ip``) now rejects
+  empty strings.
+* `.websocket_connect` now accepts preconstructed ``HTTPRequest`` objects.
+* Fix a bug with `.WebSocketHandler` when used with some proxies that
+  unconditionally modify the ``Connection`` header.
+* New application setting ``default_handler_class`` can be used to easily
+  set up custom 404 pages.
+* Fix some error messages for unix sockets (and other non-IP sockets)
+* New application settings ``autoreload``, ``compiled_template_cache``,
+  ``static_hash_cache``, and ``serve_traceback`` can be used to control
+  individual aspects of debug mode.
+* New methods `.RequestHandler.get_query_argument` and
+  `.RequestHandler.get_body_argument` and new attributes
+  `.HTTPRequest.query_arguments` and `.HTTPRequest.body_arguments` allow access
+  to arguments without intermingling those from the query string with those
+  from the request body.
+* `.websocket_connect` now returns an error immediately for refused connections
+  instead of waiting for the timeout.
+* Exceptions will no longer be logged twice when using both ``@asynchronous``
+  and ``@gen.coroutine``
+* Swallow a spurious exception from ``set_nodelay`` when a connection
+  has been reset.
+* Coroutines may now yield dicts in addition to lists to wait for
+  multiple tasks in parallel.
+* Fix an error from `tornado.log.enable_pretty_logging` when
+  `sys.stderr` does not have an ``isatty`` method.
+* `.WebSocketClientConnection` now has a ``close`` method.
+* It is now possible to specify handlers by name when using the `.URLSpec`
+  class.
+* On Python 2.6, ``simple_httpclient`` now uses TLSv1 instead of SSLv3.
+* Added `.GoogleOAuth2Mixin` support authentication to Google services
+  with OAuth 2 instead of OpenID and OAuth 1.
+* TODO: document asyncio and C extension module.

@@ -131,8 +131,17 @@
 
          General settings:
 
-         * ``debug``: If ``True`` the application runs in debug mode,
-           described in :ref:`debug-mode`.
+         * ``autoreload``: If ``True``, the server process will restart
+           when any source files change, as described in :ref:`debug-mode`.
+           This option is new in Tornado 3.2; previously this functionality
+           was controlled by the ``debug`` setting.
+         * ``debug``: Shorthand for several debug mode settings,
+           described in :ref:`debug-mode`.  Setting ``debug=True`` is
+           equivalent to ``autoreload=True``, ``compiled_template_cache=False``,
+           ``static_hash_cache=False``, ``serve_traceback=True``.
+         * ``default_handler_class`` and ``default_handler_args``:
+           This handler will be used if no other match is found;
+           use this to implement custom 404 pages (new in Tornado 3.2).
          * ``gzip``: If ``True``, responses in textual formats will be
            gzipped automatically.
          * ``log_function``: This function will be called at the end
@@ -140,6 +149,10 @@
            `RequestHandler` object).  The default implementation
            writes to the `logging` module's root logger.  May also be
            customized by overriding `Application.log_request`.
+         * ``serve_traceback``: If true, the default error page
+           will include the traceback of the error.  This option is new in
+           Tornado 3.2; previously this functionality was controlled by
+           the ``debug`` setting.
          * ``ui_modules`` and ``ui_methods``: May be set to a mapping
            of `UIModule` or UI methods to be made available to templates.
            May be set to a module, dictionary, or a list of modules
@@ -166,6 +179,10 @@
            of a function that all output should be passed through.
            Defaults to ``"xhtml_escape"``.  Can be changed on a per-template
            basis with the ``{% autoescape %}`` directive.
+         * ``compiled_template_cache``: Default is ``True``; if ``False``
+           templates will be recompiled on every request.  This option
+           is new in Tornado 3.2; previously this functionality was controlled
+           by the ``debug`` setting.
          * ``template_path``: Directory containing template files.  Can be
            further customized by overriding `RequestHandler.get_template_path`
          * ``template_loader``: Assign to an instance of
@@ -176,6 +193,10 @@
 
          Static file settings:
 
+         * ``static_hash_cache``: Default is ``True``; if ``False``
+           static urls will be recomputed on every request.  This option
+           is new in Tornado 3.2; previously this functionality was controlled
+           by the ``debug`` setting.
          * ``static_path``: Directory from which static files will be
            served.
          * ``static_url_prefix``:  Url prefix for static files,

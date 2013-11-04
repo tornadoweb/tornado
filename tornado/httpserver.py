@@ -407,6 +407,20 @@ class HTTPRequest(object):
        `.RequestHandler.get_argument`, which returns argument values as
        unicode strings.
 
+    .. attribute:: query_arguments
+
+       Same format as ``arguments``, but contains only arguments extracted
+       from the query string.
+
+       .. versionadded:: 3.2
+
+    .. attribute:: body_arguments
+
+       Same format as ``arguments``, but contains only arguments extracted
+       from the request body.
+
+       .. versionadded:: 3.2
+
     .. attribute:: files
 
        File uploads are available in the files property, which maps file
