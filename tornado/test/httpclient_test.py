@@ -387,6 +387,19 @@ Transfer-Encoding: chunked
                               allow_nonstandard_methods=True)
         self.assertEqual(response.body, b'OTHER')
 
+    @gen_test
+    def test_body(self):
+        hello_url = self.get_url('/hello')
+        with self.assertRaises(AssertionError) as context:
+            yield self.http_client.fetch(hello_url, body='data')
+
+        self.assertTrue('must be empty' in str(context.exception))
+
+        with self.assertRaises(AssertionError) as context:
+            yield self.http_client.fetch(hello_url, method='POST')
+
+        self.assertTrue('must not be empty' in str(context.exception))
+
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):
