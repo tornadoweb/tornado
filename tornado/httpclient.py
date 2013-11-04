@@ -385,6 +385,9 @@ class HTTPResponse(object):
 
     * headers: `tornado.httputil.HTTPHeaders` object
 
+    * effective_url: final location of the resource after following any
+      redirects
+
     * buffer: ``cStringIO`` object for response body
 
     * body: response body as string (created on demand from ``self.buffer``)
