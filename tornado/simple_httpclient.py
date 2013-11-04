@@ -302,9 +302,15 @@ class _HTTPConnection(object):
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
             if self.request.method in ("POST", "PATCH", "PUT"):
-                assert self.request.body is not None
+                if self.request.body is None:
+                    raise AssertionError(
+                        'Body must not be empty for "%s" request'
+                        % self.request.method)
             else:
-                assert self.request.body is None
+                if self.request.body is not None:
+                    raise AssertionError(
+                        'Body must be empty for "%s" request'
+                        % self.request.method)
         if self.request.body is not None:
             self.request.headers["Content-Length"] = str(len(
                 self.request.body))
