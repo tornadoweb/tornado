@@ -190,15 +190,18 @@ class _HTTPConnection(object):
                 # so restrict to ipv4 by default.
                 af = socket.AF_INET
 
+            timeout = min(self.request.connect_timeout, self.request.request_timeout)
+            if timeout:
+                self._timeout = self.io_loop.add_timeout(
+                    self.start_time + timeout,
+                    stack_context.wrap(self._on_timeout))
             self.resolver.resolve(host, port, af, callback=self._on_resolve)
 
     def _on_resolve(self, addrinfo):
+        if self.final_callback is None:
+            # final_callback is cleared if we've hit our timeout
+            return
         self.stream = self._create_stream(addrinfo)
-        timeout = min(self.request.connect_timeout, self.request.request_timeout)
-        if timeout:
-            self._timeout = self.io_loop.add_timeout(
-                self.start_time + timeout,
-                stack_context.wrap(self._on_timeout))
         self.stream.set_close_callback(self._on_close)
         # ipv6 addresses are broken (in self.parsed.hostname) until
         # 2.7, here is correctly parsed value calculated in __init__
@@ -261,6 +264,8 @@ class _HTTPConnection(object):
 
     def _on_connect(self):
         self._remove_timeout()
+        if self.final_callback is None:
+            return
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,

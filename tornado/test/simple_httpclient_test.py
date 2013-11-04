@@ -14,6 +14,7 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
+from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
@@ -412,3 +413,23 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         response = self.wait()
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
+
+
+class ResolveTimeoutTestCase(AsyncHTTPTestCase):
+    def setUp(self):
+        # Dummy Resolver subclass that never invokes its callback.
+        class BadResolver(Resolver):
+            def resolve(self, *args, **kwargs):
+                pass
+
+        super(ResolveTimeoutTestCase, self).setUp()
+        self.http_client = SimpleAsyncHTTPClient(
+            self.io_loop,
+            resolver=BadResolver())
+
+    def get_app(self):
+        return Application([url("/hello", HelloWorldHandler), ])
+
+    def test_resolve_timeout(self):
+        response = self.fetch('/hello', connect_timeout=0.1)
+        self.assertEqual(response.code, 599)
