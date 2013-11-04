@@ -1564,15 +1564,8 @@ class Application(object):
 
         for spec in host_handlers:
             if isinstance(spec, (tuple, list)):
-                assert len(spec) in (2, 3)
-                pattern = spec[0]
-                handler = spec[1]
-
-                if len(spec) == 3:
-                    kwargs = spec[2]
-                else:
-                    kwargs = {}
-                spec = URLSpec(pattern, handler, kwargs)
+                assert len(spec) in (2, 3, 4)
+                spec = URLSpec(*spec)
             handlers.append(spec)
             if spec.name:
                 if spec.name in self.named_handlers:
