@@ -1,5 +1,8 @@
 # Frozen pip requirements for tools used in the development of tornado
 
+# Tornado's required dependencies
+backports.ssl-match-hostname==3.4.0.2
+
 # Tornado's optional dependencies
 Twisted==13.0.0
 futures==2.1.3

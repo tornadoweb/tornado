@@ -14,14 +14,15 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import distutils.core
 import sys
-# Importing setuptools adds some features like "setup.py develop", but
-# it's optional so swallow the error if it's not there.
+
 try:
+    # Use setuptools if available, for install_requires (among other things).
     import setuptools
+    from setuptools import setup
 except ImportError:
-    pass
+    setuptools = None
+    from distutils.core import setup
 
 try:
     from Cython.Build import cythonize
@@ -33,18 +34,20 @@ kwargs = {}
 version = "3.2.dev2"
 
 with open('README.rst') as f:
-    long_description = f.read()
+    kwargs['long_description'] = f.read()
 
 if cythonize is not None:
-    extensions = cythonize('tornado/speedups.pyx')
-else:
-    extensions = []
+    kwargs['ext_modules'] = cythonize('tornado/speedups.pyx')
 
-distutils.core.setup(
+if setuptools is not None:
+    # If setuptools is not available, you're on your own for dependencies.
+    if sys.version_info < (3, 2):
+        kwargs['install_requires'] = ['backports.ssl_match_hostname']
+
+setuptools.setup(
     name="tornado",
     version=version,
     packages = ["tornado", "tornado.test", "tornado.platform"],
-    ext_modules = extensions,
     package_data = {
         "tornado": ["ca-certificates.crt"],
         # data files need to be listed both here (which determines what gets
@@ -79,6 +82,5 @@ distutils.core.setup(
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
         ],
-    long_description=long_description,
     **kwargs
 )

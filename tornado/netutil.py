@@ -20,7 +20,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
 import os
-import re
 import socket
 import ssl
 import stat
@@ -30,6 +29,13 @@ from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 from tornado.util import Configurable
 
+if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
+    ssl_match_hostname = ssl.match_hostname
+    SSLCertificateError = ssl.CertificateError
+else:
+    import backports.ssl_match_hostname
+    ssl_match_hostname = backports.ssl_match_hostname.match_hostname
+    SSLCertificateError = backports.ssl_match_hostname.CertificateError
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
     """Creates listening sockets bound to the given port and address.
@@ -391,73 +397,3 @@ def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
             return context.wrap_socket(socket, **kwargs)
     else:
         return ssl.wrap_socket(socket, **dict(context, **kwargs))
-
-if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
-    ssl_match_hostname = ssl.match_hostname
-    SSLCertificateError = ssl.CertificateError
-else:
-    # match_hostname was added to the standard library ssl module in python 3.2.
-    # The following code was backported for older releases and copied from
-    # https://bitbucket.org/brandon/backports.ssl_match_hostname
-    class SSLCertificateError(ValueError):
-        pass
-
-    def _dnsname_to_pat(dn, max_wildcards=1):
-        pats = []
-        for frag in dn.split(r'.'):
-            if frag.count('*') > max_wildcards:
-                # Issue #17980: avoid denials of service by refusing more
-                # than one wildcard per fragment.  A survery of established
-                # policy among SSL implementations showed it to be a
-                # reasonable choice.
-                raise SSLCertificateError(
-                    "too many wildcards in certificate DNS name: " + repr(dn))
-            if frag == '*':
-                # When '*' is a fragment by itself, it matches a non-empty dotless
-                # fragment.
-                pats.append('[^.]+')
-            else:
-                # Otherwise, '*' matches any dotless fragment.
-                frag = re.escape(frag)
-                pats.append(frag.replace(r'\*', '[^.]*'))
-        return re.compile(r'\A' + r'\.'.join(pats) + r'\Z', re.IGNORECASE)
-
-    def ssl_match_hostname(cert, hostname):
-        """Verify that *cert* (in decoded format as returned by
-        SSLSocket.getpeercert()) matches the *hostname*.  RFC 2818 rules
-        are mostly followed, but IP addresses are not accepted for *hostname*.
-
-        CertificateError is raised on failure. On success, the function
-        returns nothing.
-        """
-        if not cert:
-            raise ValueError("empty or no certificate")
-        dnsnames = []
-        san = cert.get('subjectAltName', ())
-        for key, value in san:
-            if key == 'DNS':
-                if _dnsname_to_pat(value).match(hostname):
-                    return
-                dnsnames.append(value)
-        if not dnsnames:
-            # The subject is only checked when there is no dNSName entry
-            # in subjectAltName
-            for sub in cert.get('subject', ()):
-                for key, value in sub:
-                    # XXX according to RFC 2818, the most specific Common Name
-                    # must be used.
-                    if key == 'commonName':
-                        if _dnsname_to_pat(value).match(hostname):
-                            return
-                        dnsnames.append(value)
-        if len(dnsnames) > 1:
-            raise SSLCertificateError("hostname %r "
-                                      "doesn't match either of %s"
-                                      % (hostname, ', '.join(map(repr, dnsnames))))
-        elif len(dnsnames) == 1:
-            raise SSLCertificateError("hostname %r "
-                                      "doesn't match %r"
-                                      % (hostname, dnsnames[0]))
-        else:
-            raise SSLCertificateError("no appropriate commonName or "
-                                      "subjectAltName fields were found")
