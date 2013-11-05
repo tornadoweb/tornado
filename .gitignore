@@ -14,6 +14,3 @@ MANIFEST
 /env/
 # Used in demo apps
 secrets.cfg
-
-# cython-generated
-tornado/speedups.c

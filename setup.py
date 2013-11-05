@@ -14,6 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import platform
 import sys
 
 try:
@@ -24,10 +25,7 @@ except ImportError:
     setuptools = None
     from distutils.core import setup
 
-try:
-    from Cython.Build import cythonize
-except ImportError:
-    cythonize = None
+from distutils.core import Extension
 
 kwargs = {}
 
@@ -36,8 +34,13 @@ version = "3.2.dev2"
 with open('README.rst') as f:
     kwargs['long_description'] = f.read()
 
-if cythonize is not None:
-    kwargs['ext_modules'] = cythonize('tornado/speedups.pyx')
+if platform.python_implementation() == 'CPython':
+    # This extension builds and works on pypy as well, although pypy's jit
+    # produces equivalent performance.
+    kwargs['ext_modules'] = [
+        Extension('tornado.speedups',
+                  sources=['tornado/speedups.c']),
+    ]
 
 if setuptools is not None:
     # If setuptools is not available, you're on your own for dependencies.
