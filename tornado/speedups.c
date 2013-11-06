@@ -5,6 +5,7 @@ static PyObject* websocket_mask(PyObject* self, PyObject* args) {
     int mask_len;
     const char* data;
     int data_len;
+    int i;
 
     if (!PyArg_ParseTuple(args, "s#s#", &mask, &mask_len, &data, &data_len)) {
         return NULL;
@@ -15,7 +16,7 @@ static PyObject* websocket_mask(PyObject* self, PyObject* args) {
         return NULL;
     }
     char* buf = PyBytes_AsString(result);
-    for (int i = 0; i < data_len; i++) {
+    for (i = 0; i < data_len; i++) {
         buf[i] = data[i] ^ mask[i % 4];
     }
 
