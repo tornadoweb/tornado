@@ -768,7 +768,11 @@ class WebSocketProtocol13(WebSocketProtocol):
 
 
 class WebSocketClientConnection(simple_httpclient._HTTPConnection):
-    """WebSocket client connection."""
+    """WebSocket client connection.
+
+    This class should not be instantiated directly; use the
+    `websocket_connect` function instead.
+    """
     def __init__(self, io_loop, request):
         self.connect_future = TracebackFuture()
         self.read_future = None
