@@ -344,6 +344,21 @@ class HTTPServerTest(AsyncHTTPTestCase):
         self.assertEqual(200, response.code)
         self.assertEqual(json_decode(response.body), {})
 
+    def test_malformed_body(self):
+        # parse_qs is pretty forgiving, but it will fail on python 3
+        # if the data is not utf8.  On python 2 parse_qs will work,
+        # but then the recursive_unicode call in EchoHandler will
+        # fail.
+        if str is bytes_type:
+            return
+        with ExpectLog(gen_log, 'Invalid x-www-form-urlencoded body'):
+            response = self.fetch(
+                '/echo', method="POST",
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                body=b'\xe9')
+        self.assertEqual(200, response.code)
+        self.assertEqual(b'{}', response.body)
+
 
 class HTTPServerRawTest(AsyncHTTPTestCase):
     def get_app(self):
