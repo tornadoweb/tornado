@@ -1,0 +1,5 @@
+version_var: ver_tornado
+build_image: registry.pyn.ru:5000/hhbuild:18.04
+build_method: deb_build
+update_method: deb_update
+deploy_method: deb_deploy

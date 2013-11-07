@@ -1,8 +1,10 @@
+.idea
 *.pyc
 *.pyo
 *.so
 *.class
 *~
+.pybuild/
 build/
 /dist/
 MANIFEST
@@ -15,3 +17,10 @@ MANIFEST
 # Used in demo apps
 secrets.cfg
 .mypy_cache/
+debian/python-tornado
+debian/python-tornado.*
+debian/python3-tornado
+debian/python3-tornado.*
+debian/python-module-stampdir
+debian/debhelper-build-stamp
+debian/files

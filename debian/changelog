@@ -1,0 +1,478 @@
+tornado (5.0.2+hh0) unstable; urgency=medium
+
+  * Release Tornado 5.0.2
+
+ -- Automated Build <an.sumin@hh.ru>  Tue, 23 Oct 2018 16:15:44 +0300
+
+tornado (4.5.3+hh3) unstable; urgency=medium
+
+  * HH-83854 fix python3 deps
+  * HH-76660 add .hh-release file
+
+ -- Automated Build <an.sumin@hh.ru>  Wed, 03 Oct 2018 16:15:44 +0300
+
+tornado (4.5.3+hh2) unstable; urgency=medium
+
+  * HH-77482 skip some tests in docker build container
+  * HH-77220 suppress errors in tests
+  * HH-77220 use faster curl.POSTFIELDS
+  * HH-77220 add curl_httpclient and xsrf tests
+  * HH-77220 failproof headers decoding
+  * HH-77220 debianization
+  * Support coroutines compiled with cython
+
+ -- Automated Build <an.sumin@hh.ru>  Tue, 20 Mar 2018 09:13:33 +0300
+
+tornado (4.5.3+hh1) unstable; urgency=medium
+
+  * Release Tornado 4.5.3
+
+ -- Andrey Sumin <an.sumin@hh.ru>  Thu, 18 May 2017 12:26:51 +0300
+
+tornado (3.2.2+hh14) unstable; urgency=medium
+
+  * HH-68307 add option SO_REUSEADDR into bind_sockets
+
+ -- Automated Build <a.kapitonenko@hh.ru>  Tue, 11 Apr 2017 13:57:58 +0300
+
+tornado (3.2.2+hh13) unstable; urgency=medium
+
+  * HH-67908 change SO_REUSEADDR on SO_REUSEPORT for all sockets
+
+ -- Automated Build <a.kapitonenko@hh.ru>  Thu, 06 Apr 2017 14:42:17 +0300
+
+tornado (3.2.2+hh12) unstable; urgency=low
+
+  * HH-67007 log headers decoding exception
+
+ -- Automated Build <an.sumin@hh.ru>  Wed, 22 Feb 2017 13:49:38 +0300
+
+tornado (3.2.2+hh11) unstable; urgency=low
+
+  * HH-63430 remove setting send_post_fields_percentage
+
+ -- Automated Build <a.kapitonenko@hh.ru>  Fri, 14 Oct 2016 17:05:11 +0300
+
+tornado (3.2.2+hh10) unstable; urgency=low
+
+  * Bump version up to 3.2.2+hh10
+
+ -- Automated Build <a.kapitonenko@hh.ru>  Wed, 12 Oct 2016 17:15:13 +0300
+
+tornado (3.2.2+hh9) unstable; urgency=low
+
+  * HH-62743 add setting percentage_of_readfunction_posts
+
+ -- Automated Build <a.kapitonenko@hh.ru>  Wed, 12 Oct 2016 10:28:39 +0300
+
+tornado (3.2.2+hh8) unstable; urgency=low
+
+  * HH-62399 update version in setup.py
+  * HH-62399 add unittest for libcurl < 7.21.5 bug
+
+ -- Automated Build <an.sumin@hh.ru>  Fri, 02 Sep 2016 13:11:45 +0300
+
+tornado (3.2.2+hh7) unstable; urgency=low
+
+  * Bump version up to 3.2.2+hh7
+
+ -- Automated Build <an.ivanov@hh.ru>  Tue, 16 Aug 2016 18:11:38 +0300
+
+tornado (3.2.2+hh6) unstable; urgency=low
+
+  * Bump version up to 3.2.2+hh6
+
+ -- Automated Build <an.sumin@hh.ru>  Tue, 05 Jul 2016 15:50:13 +0300
+
+tornado (3.2.2+hh5) unstable; urgency=low
+
+  * HH-57168 return 403 on malformed XSRF token
+
+ -- Automated Build <a.inozemtsev@hh.ru>  Thu, 17 Dec 2015 17:05:41 +0300
+
+tornado (3.2.2+hh4) unstable; urgency=low
+
+  * HH-51422 remove redundant cookies
+  * HH-51422 add variable to export
+  * HH-51422 fix error when two bad cookies in request
+
+ -- Automated Build <a.inozemtsev@hh.ru>  Mon, 18 May 2015 15:27:02 +0300
+
+tornado (3.2.2+hh3) unstable; urgency=low
+
+  * HH-51907 Always close curl socket
+  * HH-46051 fix bug in SimpleCookie
+  * HH-40589 fail-proof headers decoding
+  * HH-35189 set header length cap to a more appropriate value
+  * HH-28175 force curls to make fresh connections every time
+
+ -- Automated Build <d.smirnov@hh.ru>  Mon, 27 Apr 2015 13:30:21 +0300
+
+tornado (3.2.2+hh2) unstable; urgency=low
+
+  * Tornado 3 release
+
+ -- Andrey Sumin <an.sumin@hh.ru>  Wed, 22 Jan 2014 13:24:48 +0400
+
+tornado (2.0.1+hh24) unstable; urgency=low
+
+  * HH-47948 add tornado.autoreload.watch alias
+
+ -- Automated Build <an.sumin@hh.ru>  Tue, 11 Nov 2014 18:03:16 +0300
+
+tornado (2.0.1+hh23) unstable; urgency=low
+
+  * HH-47618 add alias SimpleCookie = SilentCookie
+
+ -- Automated Build <an.sumin@hh.ru>  Mon, 27 Oct 2014 17:20:43 +0300
+
+tornado (2.0.1+hh22) unstable; urgency=low
+
+  * Bump version up to 2.0.1+hh22
+
+ -- Automated Build <an.sumin@hh.ru>  Mon, 22 Sep 2014 12:30:00 +0400
+
+tornado (2.0.0+hh22) unstable; urgency=low
+
+  * HH-46051 handle invalid cookie name of value
+
+ -- Automated Build <d.smirnov@hh.ru>  Wed, 03 Sep 2014 16:44:12 +0400
+
+tornado (2.0.0+hh21) unstable; urgency=low
+
+  * HH-45859 set log level in enable_pretty_logging
+
+ -- Automated Build <an.sumin@hh.ru>  Fri, 22 Aug 2014 16:34:00 +0400
+
+tornado (2.0.0+hh20) unstable; urgency=low
+
+  * HH-45061 backport write_error from tornado3
+
+ -- Automated Build <an.sumin@hh.ru>  Fri, 01 Aug 2014 00:00:08 +0400
+
+tornado (2.0.0+hh19) unstable; urgency=low
+
+  * HH-44335 remove logging options
+
+ -- Automated Build <an.sumin@hh.ru>  Fri, 04 Jul 2014 17:36:07 +0400
+
+tornado (2.0.0+hh18) unstable; urgency=low
+
+  * HH-40589 fail-proof headers decoding
+
+ -- Andrey Sumin <an.sumin@hh.ru>  Thu, 13 Feb 2014 12:32:53 +0400
+
+tornado (2.0.0+hh17) unstable; urgency=low
+
+  * HH-38149 fix loglevel for file handler
+
+ -- Andrey Sumin <an.sumin@hh.ru>  Tue, 10 Dec 2013 14:44:38 +0400
+
+tornado (2.0.0+hh16) unstable; urgency=low
+
+  * HH-38987 move tornado_util to tornado.server
+
+ -- Andrey Sumin <an.sumin@hh.ru>  Wed, 04 Dec 2013 13:07:26 +0400
+
+tornado (2.0.0+hh15) unstable; urgency=low
+
+  * HH-35189 set header length cap to a more appropriate value
+
+ -- Anton Ivanov <an.ivanov@hh.ru>  Wed, 31 Jul 2013 19:16:50 +0400
+
+tornado (2.0.0+hh14) unstable; urgency=low
+
+  * HH-32949 Perform URL Encoding request headers from IE
+
+ -- Danil Smirnov <d.smirnov@hh.ru>  Tue, 16 Jul 2013 19:56:50 +0400
+
+tornado (2.0.0+hh13) unstable; urgency=low
+
+  * HH-33375 timeout overflow fix in http_client 
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Fri, 26 Apr 2013 12:58:32 +0400
+
+tornado (2.0.0+hh12) unstable; urgency=low
+
+  * HH-32629 Tornado protobuf utilities better version compatibility
+
+ -- Vitaly Glibin (glibin) <v.glibin@hh.ru>  Tue, 05 Mar 2013 16:17:15 +0400
+
+tornado (2.0+hh11) unstable; urgency=low
+
+  * HH-32629 Tornado protobuf utilities version compatibility
+
+ -- Vitaly Glibin (glibin) <v.glibin@hh.ru>  Tue, 05 Mar 2013 14:05:50 +0400
+
+tornado (2.0~hh10) unstable; urgency=low
+
+  * HH-28175 curls always use fresh connections
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Wed, 26 Sep 2012 17:38:46 +0400
+
+tornado (2.0~hh9) unstable; urgency=low
+
+  * HH-28175 curl clients order fix
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Wed, 19 Sep 2012 13:08:12 +0400
+
+tornado (2.0~hh8) unstable; urgency=low
+
+  * fix response header sanitization
+
+ -- Andrey Sumin <an.sumin@hh.ru>  Wed, 20 Jun 2012 15:59:57 +0400
+
+tornado (2.0~hh7) unstable; urgency=low
+
+  * fix ioloop race condition on add_callback
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Sun, 11 Mar 2012 11:50:58 +0400
+
+tornado (2.0~hh6) unstable; urgency=low
+
+  * prevention of zero timeouts
+
+ -- Georgiy Danschin <g.danschin@hh.ru>  Tue, 24 Jan 2012 16:22:44 +0400
+
+tornado (2.0~hh5) unstable; urgency=low
+
+  * use old timeouts when c-ares is not supported
+
+ -- Georgiy Danschin <g.danschin@hh.ru>  Tue, 10 Jan 2012 18:46:42 +0400
+
+tornado (2.0~hh4) unstable; urgency=low
+
+  * timeouts in curl lesss than a second (and pycurl async dns support check)
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Fri, 16 Dec 2011 13:57:10 +0300
+
+tornado (2.0~hh3) unstable; urgency=low
+
+  * HH-20184 another one Bug Fix with mfd data parsing
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Tue, 26 Jul 2011 15:22:26 +0400
+
+tornado (2.0~hh2) unstable; urgency=low
+
+  * HH-20184 Bug Fix with headers parsing
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Tue, 26 Jul 2011 15:22:26 +0400
+
+tornado (2.0~hh1) unstable; urgency=low
+
+  [Andrey Tatarinov]
+  * Merge with upstream; Tornado 2.0
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Wed, 06 Jul 2011 18:43:40 +0400
+
+tornado (1.2.1~hh3) unstable; urgency=low
+
+  * logging for malformed mime parts and 400 responces for them
+
+ -- Alexander Shaposhnikov <a.shaposhnikov@hh.ru>  Wed, 26 Apr 2011 16:08:42 -0400
+
+tornado (1.2.1~hh2) unstable; urgency=low
+
+  * logging for malformed requests and 400 responces for them
+
+ -- Alexander Shaposhnikov <a.shaposhnikov@hh.ru>  Wed, 13 Apr 2011 18:09:42 -0400
+
+tornado (1.2.1~hh1) unstable; urgency=low
+
+  * Merge with upstream 
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Tue, 15 Mar 2011 17:08:42 -0400
+
+tornado (1.1~hh4) unstable; urgency=low
+
+  * Add ability to emit custom headers with web.HTTPErrorEx 
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon, 14 Mar 2011 14:37:42 -0400
+
+tornado (1.1~hh3) unstable; urgency=low
+
+  * 'Content-length' an 'Etag' headers for HEAD method write fixed 
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Tue, 09 Nov 2010 17:13:42 +0300
+
+tornado (1.1~hh2) unstable; urgency=low
+
+  * fix failed merge in tornado/websocket.py
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon, 04 Oct 2010 15:41:41 +0400
+
+tornado (1.1~hh1) unstable; urgency=low
+
+  * merge with 'facebook/master'
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Sun, 03 Oct 2010 17:19:10 +0400
+
+tornado (1.0.1~hh4) unstable; urgency=low
+
+  * lucid to unstable. bljad
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Wed, 25 Aug 2010 16:14:16 +0400
+
+tornado (1.0.1~hh3) lucid; urgency=low
+
+  * fix fix for blank query vals
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Wed, 25 Aug 2010 16:10:55 +0400
+
+tornado (1.0.1~hh2) unstable; urgency=low
+
+  * fix ver.
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Wed, 25 Aug 2010 14:12:55 +0400
+
+tornado (0.2~hh20) unstable; urgency=low
+
+  [ Andrey Tatarinov ]
+  * merge with 'facebook/master'
+
+  [ Pavel Trukhanov ]
+  * url query parse fixed for keeping blank values.
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Wed, 25 Aug 2010 12:23:26 +0400
+
+tornado (0.2~hh19) unstable; urgency=low
+
+  * merge with 'facebook/master'
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon,  7 Jun 2010 12:15:23 +0400
+
+tornado (0.2~hh18) unstable; urgency=low
+
+  * merge with 'facebook/master'
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon,  7 Jun 2010 01:23:23 +0400
+
+tornado (0.2~hh17) unstable; urgency=low
+
+  * clean on_connection_close callback as soon as it stops being useful
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Tue, 25 May 2010 14:50:51 +0400
+
+tornado (0.2~hh16.1) unstable; urgency=low
+
+  * fix control
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Fri, 21 May 2010 15:17:13 +0400
+
+tornado (0.2~hh16) unstable; urgency=low
+
+  * make package architecture = all
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Fri, 21 May 2010 15:02:43 +0400
+
+tornado (0.2~hh15) unstable; urgency=low
+
+  * add ability to set specific logger for web.RequestHandler
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Thu, 20 May 2010 00:22:42 +0400
+
+tornado (0.2~hh14) unstable; urgency=low
+
+  * merge with facebook/master
+  * revert reverting per-module logging (i.e. keep per-module logging)
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Sat, 15 May 2010 00:17:07 +0400
+
+tornado (0.2~hh13.1) unstable; urgency=low
+
+  * bugfix logging setup to console
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon, 19 Apr 2010 17:53:22 +0400
+
+tornado (0.2~hh13) unstable; urgency=low
+
+  * tornado.web.RequestHandler: do not set default headers at the beginning of request handling
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Fri, 16 Apr 2010 19:41:22 +0400
+
+tornado (0.2~hh12) unstable; urgency=low
+
+  * merge with facebook/tornado
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Tue, 06 Apr 2010 19:05:22 +0400
+
+tornado (0.2~hh11) unstable; urgency=low
+
+  * merge with facebook/tornado
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Tue, 23 Mar 2010 15:50:22 +0400
+
+tornado (0.2~hh10.1) unstable; urgency=low
+
+  * bugfix tornado.options
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Tue,  2 Mar 2010 17:12:20 +0400
+
+tornado (0.2~hh10) unstable; urgency=low
+
+  * merge with facebook/tornado
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Tue,  2 Mar 2010 16:51:22 +0400
+
+tornado (0.2~hh9) unstable; urgency=low
+
+  * add arbitary files watchlist in tornado.autoreload
+  * remove tornado.options.parse_config_files
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Tue,  2 Mar 2010 13:26:43 +0400
+
+tornado (0.2~hh8) unstable; urgency=low
+
+  * version bump
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Thu, 28 Jan 2010 17:31:14 +0400
+
+tornado (0.2~hh7) unstable; urgency=low
+
+  * tornado.autorealod: +watch_paths
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Thu, 21 Jan 2010 15:30:49 +0400
+
+tornado (0.2~hh6) unstable; urgency=low
+
+  * fix repository; karmic -> unstable
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Tue, 19 Jan 2010 16:59:20 +0400
+
+tornado (0.2~hh5ubuntu1) karmic; urgency=low
+
+  * rebuild on ubuntu
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon, 18 Jan 2010 00:12:45 +0300
+
+tornado (0.2~hh5) unstable; urgency=low
+
+  * merge upstream changes
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon,  7 Dec 2009 15:30:10 +0400
+
+tornado (0.2~hh4) unstable; urgency=low
+
+  * log tornado.httpclient
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Fri, 27 Nov 2009 15:20:01 +0400
+
+tornado (0.2~hh3) unstable; urgency=low
+
+  * basic pidfile support
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon, 23 Nov 2009 17:05:49 +0300
+
+tornado (0.2~hh2) unstable; urgency=low
+
+  * command-line options parsing improvements
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Mon, 23 Nov 2009 13:10:38 +0300
+
+tornado (0.2~hh1) stable; urgency=low
+
+  * log handler name instead of filename
+  * + parse_config_files
+  * debianization
+
+ -- Andrey Tatarinov <a.tatarinov@hh.ru>  Wed, 18 Nov 2009 15:34:07 +0300
