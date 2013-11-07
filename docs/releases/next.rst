@@ -69,4 +69,21 @@ In Progress
 * On Python 2.6, ``simple_httpclient`` now uses TLSv1 instead of SSLv3.
 * Added `.GoogleOAuth2Mixin` support authentication to Google services
   with OAuth 2 instead of OpenID and OAuth 1.
-* TODO: document asyncio and C extension module.
+* `.Application` now accepts 4-tuples to specify the ``name`` parameter
+  (which previously required constructing a `.URLSpec` object instead of
+  a tuple).
+* ``simple_httpclient`` now enforces the connect timeout during DNS resolution.
+* Tornado now depends on the `backports.ssl_match_hostname
+  <https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ when
+  running on Python 2.  This will be installed automatically when using ``pip``
+  or ``easy_install``
+* Tornado now includes an optional C extension module, which greatly improves
+  performance of websockets.  This extension will be built automatically
+  if a C compiler is found at install time.
+* The `tornado.platform.asyncio` module provides integration with the
+  ``asyncio`` module introduced in Python 3.4.
+* Malformed ``x-www-form-urlencoded`` request bodies will now log a warning
+  and continue instead of causing the request to fail (similar to the existing
+  handling of malformed ``multipart/form-data`` bodies.  This is done mainly
+  because some libraries send this content type by default even when the data
+  is not form-encoded.

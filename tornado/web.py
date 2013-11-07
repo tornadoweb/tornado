@@ -1448,10 +1448,16 @@ class Application(object):
     or (regexp, request_class) tuples. When we receive requests, we
     iterate over the list in order and instantiate an instance of the
     first request class whose regexp matches the request path.
+    The request class can be specified as either a class object or a
+    (fully-qualified) name.
 
-    Each tuple can contain an optional third element, which should be
-    a dictionary if it is present. That dictionary is passed as
-    keyword arguments to the contructor of the handler. This pattern
+    Each tuple can contain additional elements, which correspond to the
+    arguments to the `URLSpec` constructor.  (Prior to Tornado 3.2, this
+    only tuples of two or three elements were allowed).
+
+    A dictionary may be passed as the third element of the tuple,
+    which will be used as keyword arguments to the handler's
+    constructor and `~RequestHandler.initialize` method.  This pattern
     is used for the `StaticFileHandler` in this example (note that a
     `StaticFileHandler` can be installed automatically with the
     static_path setting described below)::
@@ -1474,6 +1480,7 @@ class Application(object):
     and ``/robots.txt`` from the same directory.  A custom subclass of
     `StaticFileHandler` can be specified with the
     ``static_handler_class`` setting.
+
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
                  wsgi=False, **settings):
