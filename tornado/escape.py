@@ -189,8 +189,10 @@ def utf8(value):
     """
     if isinstance(value, _UTF8_TYPES):
         return value
-    assert isinstance(value, unicode_type), \
-        "Expected bytes, unicode, or None; got %r" % type(value)
+    if not isinstance(value, unicode_type):
+        raise TypeError(
+            "Expected bytes, unicode, or None; got %r" % type(value)
+        )
     return value.encode("utf-8")
 
 _TO_UNICODE_TYPES = (unicode_type, type(None))
@@ -204,8 +206,10 @@ def to_unicode(value):
     """
     if isinstance(value, _TO_UNICODE_TYPES):
         return value
-    assert isinstance(value, bytes_type), \
-        "Expected bytes, unicode, or None; got %r" % type(value)
+    if not isinstance(value, bytes_type):
+        raise TypeError(
+            "Expected bytes, unicode, or None; got %r" % type(value)
+        )
     return value.decode("utf-8")
 
 # to_unicode was previously named _unicode not because it was private,
@@ -233,8 +237,10 @@ def to_basestring(value):
     """
     if isinstance(value, _BASESTRING_TYPES):
         return value
-    assert isinstance(value, bytes_type), \
-        "Expected bytes, unicode, or None; got %r" % type(value)
+    if not isinstance(value, bytes_type):
+        raise TypeError(
+            "Expected bytes, unicode, or None; got %r" % type(value)
+        )
     return value.decode("utf-8")
 
 
