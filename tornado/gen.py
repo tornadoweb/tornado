@@ -390,17 +390,26 @@ class YieldFuture(YieldPoint):
         self.io_loop = io_loop or IOLoop.current()
 
     def start(self, runner):
-        self.runner = runner
-        self.key = object()
-        runner.register_callback(self.key)
-        self.io_loop.add_future(self.future, runner.result_callback(self.key))
+        if not self.future.done():
+            self.runner = runner
+            self.key = object()
+            runner.register_callback(self.key)
+            self.io_loop.add_future(self.future, runner.result_callback(self.key))
+        else:
+            self.runner = None
+            self.result = self.future.result()
 
     def is_ready(self):
-        return self.runner.is_ready(self.key)
+        if self.runner is not None:
+            return self.runner.is_ready(self.key)
+        else:
+            return True
 
     def get_result(self):
-        return self.runner.pop_result(self.key).result()
-
+        if self.runner is not None:
+            return self.runner.pop_result(self.key).result()
+        else:
+            return self.result
 
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
