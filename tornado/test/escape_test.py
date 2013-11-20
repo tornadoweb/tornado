@@ -221,3 +221,9 @@ class EscapeTestCase(unittest.TestCase):
         import datetime
         self.assertEqual(json_encode(datetime.datetime(2013,11,20,23,41,4)), 
                          '"2013-11-20T23:41:04"')
+    
+    def test_json_date_encode(self):
+        # convert datetime into json format
+        import datetime
+        self.assertEqual(json_encode(datetime.date(2013,11,20)), 
+                         '"2013-11-20"')
