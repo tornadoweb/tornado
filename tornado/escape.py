@@ -73,8 +73,6 @@ class DatetimeEncoder(json.JSONEncoder):
             return obj.isoformat()
         return json.JSONEncoder.default(self, obj)
 
-_datetime_encoder = DatetimeEncoder()
-
 # The fact that json_encode wraps json.dumps is an implementation detail.
 # Please see https://github.com/facebook/tornado/pull/706
 # before sending a pull request that adds **kwargs to this function.
@@ -88,7 +86,7 @@ def json_encode(value):
     # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
     #
     # date time formating is comman in dumping json
-    return json.dumps(value, cls=_datetime_encoder).replace("</", "<\\/")
+    return json.dumps(value, cls=DatetimeEncoder).replace("</", "<\\/")
 
 
 def json_decode(value):
