@@ -598,100 +598,103 @@ class PollIOLoop(IOLoop):
             except ValueError:  # non-main thread
                 pass
 
-        while True:
-            poll_timeout = _POLL_TIMEOUT
+        try:
+            while True:
+                poll_timeout = _POLL_TIMEOUT
 
-            # Prevent IO event starvation by delaying new callbacks
-            # to the next iteration of the event loop.
-            with self._callback_lock:
-                callbacks = self._callbacks
-                self._callbacks = []
-            for callback in callbacks:
-                self._run_callback(callback)
-            # Closures may be holding on to a lot of memory, so allow
-            # them to be freed before we go into our poll wait.
-            callbacks = callback = None
+                # Prevent IO event starvation by delaying new callbacks
+                # to the next iteration of the event loop.
+                with self._callback_lock:
+                    callbacks = self._callbacks
+                    self._callbacks = []
+                for callback in callbacks:
+                    self._run_callback(callback)
+                # Closures may be holding on to a lot of memory, so allow
+                # them to be freed before we go into our poll wait.
+                callbacks = callback = None
 
-            if self._timeouts:
-                now = self.time()
-                while self._timeouts:
-                    if self._timeouts[0].callback is None:
-                        # the timeout was cancelled
-                        heapq.heappop(self._timeouts)
-                        self._cancellations -= 1
-                    elif self._timeouts[0].deadline <= now:
-                        timeout = heapq.heappop(self._timeouts)
-                        self._run_callback(timeout.callback)
-                        del timeout
-                    else:
-                        seconds = self._timeouts[0].deadline - now
-                        poll_timeout = min(seconds, poll_timeout)
-                        break
-                if (self._cancellations > 512
-                        and self._cancellations > (len(self._timeouts) >> 1)):
-                    # Clean up the timeout queue when it gets large and it's
-                    # more than half cancellations.
-                    self._cancellations = 0
-                    self._timeouts = [x for x in self._timeouts
-                                      if x.callback is not None]
-                    heapq.heapify(self._timeouts)
+                if self._timeouts:
+                    now = self.time()
+                    while self._timeouts:
+                        if self._timeouts[0].callback is None:
+                            # the timeout was cancelled
+                            heapq.heappop(self._timeouts)
+                            self._cancellations -= 1
+                        elif self._timeouts[0].deadline <= now:
+                            timeout = heapq.heappop(self._timeouts)
+                            self._run_callback(timeout.callback)
+                            del timeout
+                        else:
+                            seconds = self._timeouts[0].deadline - now
+                            poll_timeout = min(seconds, poll_timeout)
+                            break
+                    if (self._cancellations > 512
+                            and self._cancellations > (len(self._timeouts) >> 1)):
+                        # Clean up the timeout queue when it gets large and it's
+                        # more than half cancellations.
+                        self._cancellations = 0
+                        self._timeouts = [x for x in self._timeouts
+                                          if x.callback is not None]
+                        heapq.heapify(self._timeouts)
 
-            if self._callbacks:
-                # If any callbacks or timeouts called add_callback,
-                # we don't want to wait in poll() before we run them.
-                poll_timeout = 0.0
+                if self._callbacks:
+                    # If any callbacks or timeouts called add_callback,
+                    # we don't want to wait in poll() before we run them.
+                    poll_timeout = 0.0
 
-            if not self._running:
-                break
+                if not self._running:
+                    break
 
-            if self._blocking_signal_threshold is not None:
-                # clear alarm so it doesn't fire while poll is waiting for
-                # events.
-                signal.setitimer(signal.ITIMER_REAL, 0, 0)
+                if self._blocking_signal_threshold is not None:
+                    # clear alarm so it doesn't fire while poll is waiting for
+                    # events.
+                    signal.setitimer(signal.ITIMER_REAL, 0, 0)
 
-            try:
-                event_pairs = self._impl.poll(poll_timeout)
-            except Exception as e:
-                # Depending on python version and IOLoop implementation,
-                # different exception types may be thrown and there are
-                # two ways EINTR might be signaled:
-                # * e.errno == errno.EINTR
-                # * e.args is like (errno.EINTR, 'Interrupted system call')
-                if (getattr(e, 'errno', None) == errno.EINTR or
-                    (isinstance(getattr(e, 'args', None), tuple) and
-                     len(e.args) == 2 and e.args[0] == errno.EINTR)):
-                    continue
-                else:
-                    raise
-
-            if self._blocking_signal_threshold is not None:
-                signal.setitimer(signal.ITIMER_REAL,
-                                 self._blocking_signal_threshold, 0)
-
-            # Pop one fd at a time from the set of pending fds and run
-            # its handler. Since that handler may perform actions on
-            # other file descriptors, there may be reentrant calls to
-            # this IOLoop that update self._events
-            self._events.update(event_pairs)
-            while self._events:
-                fd, events = self._events.popitem()
                 try:
-                    self._handlers[fd](fd, events)
-                except (OSError, IOError) as e:
-                    if e.args[0] == errno.EPIPE:
-                        # Happens when the client closes the connection
-                        pass
+                    event_pairs = self._impl.poll(poll_timeout)
+                except Exception as e:
+                    # Depending on python version and IOLoop implementation,
+                    # different exception types may be thrown and there are
+                    # two ways EINTR might be signaled:
+                    # * e.errno == errno.EINTR
+                    # * e.args is like (errno.EINTR, 'Interrupted system call')
+                    if (getattr(e, 'errno', None) == errno.EINTR or
+                        (isinstance(getattr(e, 'args', None), tuple) and
+                         len(e.args) == 2 and e.args[0] == errno.EINTR)):
+                        continue
                     else:
+                        raise
+
+                if self._blocking_signal_threshold is not None:
+                    signal.setitimer(signal.ITIMER_REAL,
+                                     self._blocking_signal_threshold, 0)
+
+                # Pop one fd at a time from the set of pending fds and run
+                # its handler. Since that handler may perform actions on
+                # other file descriptors, there may be reentrant calls to
+                # this IOLoop that update self._events
+                self._events.update(event_pairs)
+                while self._events:
+                    fd, events = self._events.popitem()
+                    try:
+                        self._handlers[fd](fd, events)
+                    except (OSError, IOError) as e:
+                        if e.args[0] == errno.EPIPE:
+                            # Happens when the client closes the connection
+                            pass
+                        else:
+                            self.handle_callback_exception(self._handlers.get(fd))
+                    except Exception:
                         self.handle_callback_exception(self._handlers.get(fd))
-                except Exception:
-                    self.handle_callback_exception(self._handlers.get(fd))
-        # reset the stopped flag so another start/stop pair can be issued
-        self._stopped = False
-        if self._blocking_signal_threshold is not None:
-            signal.setitimer(signal.ITIMER_REAL, 0, 0)
-        IOLoop._current.instance = old_current
-        if old_wakeup_fd is not None:
-            signal.set_wakeup_fd(old_wakeup_fd)
+
+        finally:
+            # reset the stopped flag so another start/stop pair can be issued
+            self._stopped = False
+            if self._blocking_signal_threshold is not None:
+                signal.setitimer(signal.ITIMER_REAL, 0, 0)
+            IOLoop._current.instance = old_current
+            if old_wakeup_fd is not None:
+                signal.set_wakeup_fd(old_wakeup_fd)
 
     def stop(self):
         self._running = False
