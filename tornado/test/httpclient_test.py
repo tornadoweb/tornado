@@ -8,6 +8,7 @@ from contextlib import closing
 import functools
 import sys
 import threading
+import time
 
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
@@ -490,3 +491,44 @@ class SyncHTTPClientTest(unittest.TestCase):
         with self.assertRaises(HTTPError) as assertion:
             self.http_client.fetch(self.get_url('/notfound'))
         self.assertEqual(assertion.exception.code, 404)
+
+
+class HTTPRequestTestCase(unittest.TestCase):
+    def test_headers(self):
+        request = HTTPRequest('http://example.com', headers={'foo': 'bar'})
+        self.assertEqual(request.headers, {'foo': 'bar'})
+
+    def test_headers_setter(self):
+        request = HTTPRequest('http://example.com')
+        request.headers = {'bar': 'baz'}
+        self.assertEqual(request.headers, {'bar': 'baz'})
+
+    def test_null_headers_setter(self):
+        request = HTTPRequest('http://example.com')
+        request.headers = None
+        self.assertEqual(request.headers, {})
+
+    def test_if_modified_since(self):
+        request = HTTPRequest(
+            'http://example.com',
+            if_modified_since=time.strptime("01 Jan 10", "%d %b %y")
+        )
+        self.assertEqual(request.if_modified_since,
+                         'Fri, 01 Jan 2010 00:00:00 GMT')
+
+    def test_if_modified_since_setter(self):
+        request = HTTPRequest('http://example.com')
+        request.if_modified_since = time.strptime("02 Jan 10", "%d %b %y")
+        self.assertEqual(
+            request._headers,
+            {'If-Modified-Since': 'Sat, 02 Jan 2010 00:00:00 GMT'}
+        )
+
+    def test_body(self):
+        request = HTTPRequest('http://example.com', body='foo')
+        self.assertEqual(request.body, utf8('foo'))
+
+    def test_body_setter(self):
+        request = HTTPRequest('http://example.com')
+        request.body = 'foo'
+        self.assertEqual(request.body, utf8('foo'))
