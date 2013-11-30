@@ -22,6 +22,7 @@ have crept in over time.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import datetime
 import re
 import sys
 
@@ -65,6 +66,13 @@ def xhtml_unescape(value):
     return re.sub(r"&(#?)(\w+?);", _convert_entity, _unicode(value))
 
 
+class DatetimeEncoder(json.JSONEncoder):
+    """ Datetime encoder for json """
+    def default(self, obj):
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.isoformat()
+        return json.JSONEncoder.default(self, obj)
+
 # The fact that json_encode wraps json.dumps is an implementation detail.
 # Please see https://github.com/facebook/tornado/pull/706
 # before sending a pull request that adds **kwargs to this function.
@@ -76,7 +84,9 @@ def json_encode(value):
     # the javscript.  Some json libraries do this escaping by default,
     # although python's standard library does not, so we do it here.
     # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
-    return json.dumps(value).replace("</", "<\\/")
+    #
+    # date time formating is comman in dumping json
+    return json.dumps(value, cls=DatetimeEncoder).replace("</", "<\\/")
 
 
 def json_decode(value):

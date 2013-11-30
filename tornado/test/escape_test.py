@@ -206,7 +206,7 @@ class EscapeTestCase(unittest.TestCase):
 
         # Non-ascii bytes are interpreted as utf8
         self.assertEqual(json_decode(utf8(u('"\u00e9"'))), u("\u00e9"))
-
+    
     def test_json_encode(self):
         # json deals with strings, not bytes.  On python 2 byte strings will
         # convert automatically if they are utf8; on python 3 byte strings
@@ -215,3 +215,15 @@ class EscapeTestCase(unittest.TestCase):
         if bytes_type is str:
             self.assertEqual(json_decode(json_encode(utf8(u("\u00e9")))), u("\u00e9"))
             self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")
+    
+    def test_json_datetime_encode(self):
+        # convert datetime into json format
+        import datetime
+        self.assertEqual(json_encode(datetime.datetime(2013,11,20,23,41,4)), 
+                         '"2013-11-20T23:41:04"')
+    
+    def test_json_date_encode(self):
+        # convert datetime into json format
+        import datetime
+        self.assertEqual(json_encode(datetime.date(2013,11,20)), 
+                         '"2013-11-20"')
