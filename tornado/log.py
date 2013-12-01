@@ -74,8 +74,21 @@ class LogFormatter(logging.Formatter):
     `tornado.options.parse_command_line` (unless ``--logging=none`` is
     used).
     """
-    def __init__(self, color=True, *args, **kwargs):
-        logging.Formatter.__init__(self, *args, **kwargs)
+    DEFAULT_PREFIX_FORMAT = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]'
+    DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'
+
+    def __init__(self, color=True, prefix_fmt=None, datefmt=None):
+        r"""All parameters except ``url`` are optional.
+
+        :arg bool color: Enables color support
+        :arg string prefix_fmt: Log message prefix format.
+          Prefix is a part of the log message, directly preceding the actual message text.
+        :arg string datefmt: Datetime format.
+          Used for formatting '(asctime)' placeholder in prefix_fmt.
+        """
+        self.__prefix_fmt = prefix_fmt if prefix_fmt is not None else self.DEFAULT_PREFIX_FORMAT
+        datefmt = datefmt if datefmt is not None else self.DEFAULT_DATE_FORMAT
+        logging.Formatter.__init__(self, datefmt=datefmt)
         self._color = color and _stderr_supports_color()
         if self._color:
             # The curses module has some str/bytes confusion in
@@ -107,10 +120,8 @@ class LogFormatter(logging.Formatter):
         except Exception as e:
             record.message = "Bad message (%r): %r" % (e, record.__dict__)
         assert isinstance(record.message, basestring_type)  # guaranteed by logging
-        record.asctime = time.strftime(
-            "%y%m%d %H:%M:%S", self.converter(record.created))
-        prefix = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]' % \
-            record.__dict__
+        record.asctime = self.formatTime(record, self.datefmt)
+        prefix = self.__prefix_fmt % record.__dict__
         if self._color:
             prefix = (self._colors.get(record.levelno, self._normal) +
                       prefix + self._normal)
