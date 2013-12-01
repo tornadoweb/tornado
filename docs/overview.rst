@@ -988,7 +988,7 @@ individual flag takes precedence):
   is not caught, an error page including a stack trace will be
   generated.
 
-Autoreload mode is not compatible with ``HTTPServer``'s multi-process mode.
+Autoreload mode is not compatible with the multi-process mode of ``HTTPServer``.
 You must not give ``HTTPServer.start`` an argument other than 1 (or
 call `tornado.process.fork_processes`) if you are using autoreload mode.
 
