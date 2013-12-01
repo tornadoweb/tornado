@@ -124,11 +124,11 @@ class TracebackFuture(Future):
         self.__exc_info = exc_info
         self.set_exception(exc_info[1])
 
-    def result(self):
+    def result(self, timeout=None):
         if self.__exc_info is not None:
             raise_exc_info(self.__exc_info)
         else:
-            return super(TracebackFuture, self).result()
+            return super(TracebackFuture, self).result(timeout=timeout)
 
 
 class DummyExecutor(object):
