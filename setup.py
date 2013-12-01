@@ -131,7 +131,7 @@ if setuptools is not None:
     if sys.version_info < (3, 2):
         kwargs['install_requires'] = ['backports.ssl_match_hostname']
 
-setuptools.setup(
+setup(
     name="tornado",
     version=version,
     packages = ["tornado", "tornado.test", "tornado.platform"],
