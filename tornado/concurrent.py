@@ -151,6 +151,9 @@ def run_on_executor(fn):
 
     The decorated method may be called with a ``callback`` keyword
     argument and returns a future.
+
+    This decorator should be used only on methods of objects with attributes
+    ``executor`` and ``io_loop``.
     """
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
