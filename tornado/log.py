@@ -33,7 +33,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 import logging
 import logging.handlers
 import sys
-import time
 
 from tornado.escape import _unicode
 from tornado.util import unicode_type, basestring_type
@@ -78,13 +77,13 @@ class LogFormatter(logging.Formatter):
     DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'
 
     def __init__(self, color=True, prefix_fmt=None, datefmt=None):
-        r"""All parameters except ``url`` are optional.
-
+        r"""
         :arg bool color: Enables color support
         :arg string prefix_fmt: Log message prefix format.
-          Prefix is a part of the log message, directly preceding the actual message text.
+          Prefix is a part of the log message, directly preceding the actual
+          message text.
         :arg string datefmt: Datetime format.
-          Used for formatting '(asctime)' placeholder in prefix_fmt.
+          Used for formatting ``(asctime)`` placeholder in ``prefix_fmt``.
         """
         self.__prefix_fmt = prefix_fmt if prefix_fmt is not None else self.DEFAULT_PREFIX_FORMAT
         datefmt = datefmt if datefmt is not None else self.DEFAULT_DATE_FORMAT
