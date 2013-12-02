@@ -64,7 +64,7 @@ For more complicated interfaces, `Task` can be split into two parts:
         def get(self):
             http_client = AsyncHTTPClient()
             http_client.fetch("http://example.com",
-                              callback=(yield gen.Callback("key"))
+                              callback=(yield gen.Callback("key")))
             response = yield gen.Wait("key")
             do_something_with_response(response)
             self.render("template.html")
