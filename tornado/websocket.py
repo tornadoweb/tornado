@@ -773,11 +773,12 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     This class should not be instantiated directly; use the
     `websocket_connect` function instead.
     """
-    def __init__(self, io_loop, request):
+    def __init__(self, io_loop, request, on_message_callback=None):
         self.connect_future = TracebackFuture()
         self.read_future = None
         self.read_queue = collections.deque()
         self.key = base64.b64encode(os.urandom(16))
+        self._on_message_callback = on_message_callback
 
         scheme, sep, rest = request.url.partition(':')
         scheme = {'ws': 'http', 'wss': 'https'}[scheme]
@@ -838,6 +839,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def read_message(self, callback=None):
         """Reads a message from the WebSocket server.
+        
+        If `on_message_callback` was specified at WebSocket
+        initialization, this function will never return messages
 
         Returns a future whose result is the message, or None
         if the connection is closed.  If a callback argument
@@ -855,7 +859,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         return future
 
     def on_message(self, message):
-        if self.read_future is not None:
+        if self._on_message_callback:
+            self._on_message_callback(message)
+        elif self.read_future is not None:
             self.read_future.set_result(message)
             self.read_future = None
         else:
@@ -865,7 +871,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         pass
 
 
-def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None):
+def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None, on_message_callback=None):
     """Client-side websocket support.
 
     Takes a url and returns a Future whose result is a
@@ -886,7 +892,7 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None):
         request = httpclient.HTTPRequest(url, connect_timeout=connect_timeout)
     request = httpclient._RequestProxy(
         request, httpclient.HTTPRequest._DEFAULTS)
-    conn = WebSocketClientConnection(io_loop, request)
+    conn = WebSocketClientConnection(io_loop, request, on_message_callback=on_message_callback)
     if callback is not None:
         io_loop.add_future(conn.connect_future, callback)
     return conn.connect_future
