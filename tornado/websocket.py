@@ -840,7 +840,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     def read_message(self, callback=None):
         """Reads a message from the WebSocket server.
         
-        If `on_message_callback` was specified at WebSocket
+        If on_message_callback was specified at WebSocket
         initialization, this function will never return messages
 
         Returns a future whose result is the message, or None
