@@ -38,8 +38,8 @@ since it is both shorter and provides better exception handling)::
     def get(self):
         yield gen.Task(AsyncHTTPClient().fetch, "http://example.com")
 
-You can also yield a list or dict of ``Futures`` and/or ``Tasks``, which will be
-started at the same time and run in parallel; a list or dict of results will
+You can also yield a list or dict of ``Futures`` and/or ``Tasks``, which will
+be started at the same time and run in parallel; a list or dict of results will
 be returned when they are all finished::
 
     @gen.coroutine
@@ -80,7 +80,8 @@ it was called with one argument, the result is that argument.  If it was
 called with more than one argument or any keyword arguments, the result
 is an `Arguments` object, which is a named tuple ``(args, kwargs)``.
 """
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import (absolute_import, division, print_function,
+                        with_statement)
 
 import collections
 import functools
@@ -204,7 +205,8 @@ def coroutine(func):
 
         def handle_exception(typ, value, tb):
             try:
-                if runner is not None and runner.handle_exception(typ, value, tb):
+                if runner is not None and runner.handle_exception(typ, value,
+                                                                  tb):
                     return True
             except Exception:
                 typ, value, tb = sys.exc_info()
@@ -394,7 +396,8 @@ class YieldFuture(YieldPoint):
             self.runner = runner
             self.key = object()
             runner.register_callback(self.key)
-            self.io_loop.add_future(self.future, runner.result_callback(self.key))
+            self.io_loop.add_future(self.future,
+                                    runner.result_callback(self.key))
         else:
             self.runner = None
             self.result = self.future.result()
@@ -410,6 +413,7 @@ class YieldFuture(YieldPoint):
             return self.runner.pop_result(self.key).result()
         else:
             return self.result
+
 
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
