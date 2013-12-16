@@ -316,6 +316,17 @@ class ThreadedResolver(ExecutorResolver):
             cls._threadpool_pid = pid
         return cls._threadpool
 
+    def resolve(self, host, port, family=socket.AF_UNSPEC, callback=None):
+        # ThreadedResolver runs getaddrinfo on a thread. If the hostname is
+        # unicode, getaddrinfo attempts to import encodings.idna. If this is
+        # done at module-import time, the import lock is already held by the
+        # main thread, leading to deadlock. Avoid it by encoding on the main
+        # thread.
+        if isinstance(host, unicode):
+            host = host.encode('idna')
+
+        return super(ThreadedResolver, self).resolve(
+            host, port, family, callback=callback)
 
 class OverrideResolver(Resolver):
     """Wraps a resolver with a mapping of overrides.
