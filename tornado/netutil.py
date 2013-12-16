@@ -27,7 +27,7 @@ import stat
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.util import Configurable
+from tornado.util import u, Configurable
 
 if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
     ssl_match_hostname = ssl.match_hostname
@@ -36,6 +36,14 @@ else:
     import backports.ssl_match_hostname
     ssl_match_hostname = backports.ssl_match_hostname.match_hostname
     SSLCertificateError = backports.ssl_match_hostname.CertificateError
+
+# ThreadedResolver runs getaddrinfo on a thread. If the hostname is unicode,
+# getaddrinfo attempts to import encodings.idna. If this is done at
+# module-import time, the import lock is already held by the main thread,
+# leading to deadlock. Avoid it by caching the idna encoder on the main
+# thread now.
+u('foo').encode('idna')
+
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
     """Creates listening sockets bound to the given port and address.
