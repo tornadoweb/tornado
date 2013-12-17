@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import socket
+from subprocess import Popen
+import sys
+import time
 
 from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip
 from tornado.testing import AsyncTestCase, gen_test
@@ -55,6 +58,28 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def tearDown(self):
         self.resolver.close()
         super(ThreadedResolverTest, self).tearDown()
+
+
+@unittest.skipIf(futures is None, "futures module not present")
+class ThreadedResolverImportTest(unittest.TestCase):
+    def test_import(self):
+        # Test for a deadlock when importing a module that runs the
+        # ThreadedResolver at import-time. See resolve_test.py for
+        # full explanation.
+        command = [
+            sys.executable,
+            '-c',
+            'import tornado.test.resolve_test']
+
+        start = time.time()
+        popen = Popen(command)
+        while time.time() - start < 20:
+            return_code = popen.poll()
+            if return_code is not None:
+                self.assertEqual(0, return_code)
+                return  # Success.
+
+        self.fail("import timed out")
 
 
 @unittest.skipIf(pycares is None, "pycares module not present")
