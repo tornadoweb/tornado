@@ -32,6 +32,10 @@ except ImportError:
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
 
+_ERROR_NETWORK_CONNECT_TIMEOUT = 522
+_ERROR_NETWORK_REQUEST_TIMEOUT = 524
+_ERROR_QUEUED_TIMEOUT          = 598
+
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -136,7 +140,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         request, callback, timeout_handle = self.waiting[key]
         self.queue.remove((key, request, callback))
         timeout_response = HTTPResponse(
-                request, 599, error=HTTPError(599, "Timeout"),
+                request, _ERROR_QUEUED_TIMEOUT,
+                error=HTTPError(_ERROR_QUEUED_TIMEOUT, "Timeout"),
                 request_time=self.io_loop.time() - request.start_time)
         self.io_loop.add_callback(callback, timeout_response)
         del self.waiting[key]
@@ -252,10 +257,10 @@ class _HTTPConnection(object):
                             io_loop=self.io_loop,
                             max_buffer_size=self.max_buffer_size)
 
-    def _on_timeout(self):
+    def _on_timeout(self, status_code=_ERROR_NETWORK_CONNECT_TIMEOUT):
         self._timeout = None
         if self.final_callback is not None:
-            raise HTTPError(599, "Timeout")
+            raise HTTPError(status_code, "Timeout")
 
     def _remove_timeout(self):
         if self._timeout is not None:
@@ -269,7 +274,8 @@ class _HTTPConnection(object):
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
-                stack_context.wrap(self._on_timeout))
+                stack_context.wrap(functools.partial(self._on_timeout,
+                    status_code=_ERROR_NETWORK_REQUEST_TIMEOUT)))
         if (self.request.method not in self._SUPPORTED_METHODS and
                 not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
@@ -351,7 +357,13 @@ class _HTTPConnection(object):
     def _handle_exception(self, typ, value, tb):
         if self.final_callback:
             self._remove_timeout()
-            self._run_callback(HTTPResponse(self.request, 599, error=value,
+
+            status_code = 599
+
+            if isinstance(value, HTTPError):
+                status_code = value.code
+
+            self._run_callback(HTTPResponse(self.request, status_code, error=value,
                                             request_time=self.io_loop.time() - self.start_time,
                                             ))
 
