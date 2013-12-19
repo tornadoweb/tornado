@@ -163,8 +163,11 @@ def enable_pretty_logging(options=None, logger=None):
         from tornado.options import options
     if options.formatter:
         mod_name, cls_name = options.formatter.rsplit(".", 1)
-        import importlib
-        mod = importlib.import_module(mod_name)
+        try:
+            from importlib import import_module
+        except ImportError:
+            from tornado.importlib_backport import import_module
+        mod = import_module(mod_name)
         formatter_cls = getattr(mod,cls_name)
     if options.logging == 'none':
         return
