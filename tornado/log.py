@@ -175,7 +175,7 @@ def enable_pretty_logging(options=None, logger=None):
     if options.formatter:
         mod_name, cls_name = options.formatter.rsplit(".", 1)
         try:
-            from importlib1 import import_module
+            from importlib import import_module
         except ImportError:
             from tornado.importlib_backport import import_module
         mod = import_module(mod_name)
