@@ -36,7 +36,7 @@ import sys
 import time
 
 from tornado.escape import _unicode
-from tornado.util import unicode_type, basestring_type
+from tornado.util import unicode_type, basestring_type,import_object
 
 try:
     import curses
@@ -101,6 +101,9 @@ class LogFormatter(logging.Formatter):
             }
             self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
 
+    def get_prefix(self,record):
+        return '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]' % record.__dict__
+
     def format(self, record):
         try:
             record.message = record.getMessage()
@@ -109,8 +112,7 @@ class LogFormatter(logging.Formatter):
         assert isinstance(record.message, basestring_type)  # guaranteed by logging
         record.asctime = time.strftime(
             "%y%m%d %H:%M:%S", self.converter(record.created))
-        prefix = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]' % \
-            record.__dict__
+        prefix = self.get_prefix(record)
         if self._color:
             prefix = (self._colors.get(record.levelno, self._normal) +
                       prefix + self._normal)
@@ -159,6 +161,8 @@ def enable_pretty_logging(options=None, logger=None):
     """
     if options is None:
         from tornado.options import options
+    if options.log_output_formatter:
+        formatter_cls = import_object(options.log_output_formatter)
     if options.logging == 'none':
         return
     if logger is None:
@@ -169,14 +173,14 @@ def enable_pretty_logging(options=None, logger=None):
             filename=options.log_file_prefix,
             maxBytes=options.log_file_max_size,
             backupCount=options.log_file_num_backups)
-        channel.setFormatter(LogFormatter(color=False))
+        channel.setFormatter(formatter_cls(color=False))
         logger.addHandler(channel)
 
     if (options.log_to_stderr or
             (options.log_to_stderr is None and not logger.handlers)):
         # Set up color if we are in a tty and curses is installed
         channel = logging.StreamHandler()
-        channel.setFormatter(LogFormatter())
+        channel.setFormatter(formatter_cls())
         logger.addHandler(channel)
 
 
@@ -201,5 +205,7 @@ def define_logging_options(options=None):
                    help="max size of log files before rollover")
     options.define("log_file_num_backups", type=int, default=10,
                    help="number of log files to keep")
+    options.define("log_output_formatter", type=str, default="tornado.log.LogFormatter",
+            help="log formatter class, by default use tornado.log.LogFormatter")
 
     options.add_parse_callback(enable_pretty_logging)
