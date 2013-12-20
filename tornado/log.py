@@ -36,7 +36,7 @@ import sys
 import time
 
 from tornado.escape import _unicode
-from tornado.util import unicode_type, basestring_type
+from tornado.util import unicode_type, basestring_type,import_object
 
 try:
     import curses
@@ -161,14 +161,8 @@ def enable_pretty_logging(options=None, logger=None):
     """
     if options is None:
         from tornado.options import options
-    if options.formatter:
-        mod_name, cls_name = options.formatter.rsplit(".", 1)
-        try:
-            from importlib import import_module
-        except ImportError:
-            from tornado.importlib_backport import import_module
-        mod = import_module(mod_name)
-        formatter_cls = getattr(mod,cls_name)
+    if options.log_output_formatter:
+        formatter_cls = import_object(options.log_output_formatter)
     if options.logging == 'none':
         return
     if logger is None:
@@ -211,7 +205,7 @@ def define_logging_options(options=None):
                    help="max size of log files before rollover")
     options.define("log_file_num_backups", type=int, default=10,
                    help="number of log files to keep")
-    options.define("formatter", type=str, default="tornado.log.LogFormatter",
+    options.define("log_output_formatter", type=str, default="tornado.log.LogFormatter",
             help="log formatter class, by default use tornado.log.LogFormatter")
 
     options.add_parse_callback(enable_pretty_logging)
