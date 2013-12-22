@@ -286,8 +286,6 @@ class Locale(object):
         This method is primarily intended for dates in the past.
         For dates in the future, we fall back to full format.
         """
-        if self.code.startswith("ru"):
-            relative = False
         if isinstance(date, numbers.Real):
             date = datetime.datetime.utcfromtimestamp(date)
         now = datetime.datetime.utcnow()
