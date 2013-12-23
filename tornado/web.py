@@ -447,7 +447,10 @@ class RequestHandler(object):
         The name of the argument is provided if known, but may be None
         (e.g. for unnamed groups in the url regex).
         """
-        return _unicode(value)
+        try:
+            return _unicode(value)
+        except UnicodeDecodeError:
+            raise HTTPError(400, "Invalid unicode: %r" % value)
 
     @property
     def cookies(self):
