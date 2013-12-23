@@ -586,6 +586,14 @@ class WSGISafeWebTest(WebTestCase):
                                 u('query'): [u('bytes'), u('c3a9')],
                                 })
 
+    def test_decode_argument_invalid_unicode(self):
+        # test that invalid unicode in URLs causes 400, not 500
+        with ExpectLog(gen_log, ".*Invalid unicode.*"):
+            response = self.fetch("/typecheck/invalid%FF")
+            self.assertEqual(response.code, 400)
+            response = self.fetch("/typecheck/invalid?foo=%FF")
+            self.assertEqual(response.code, 400)
+
     def test_decode_argument_plus(self):
         # These urls are all equivalent.
         urls = ["/decode_arg/1%20%2B%201?foo=1%20%2B%201&encoding=utf-8",
