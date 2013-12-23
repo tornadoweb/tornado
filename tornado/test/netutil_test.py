@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import signal
 import socket
 from subprocess import Popen
 import sys
@@ -63,21 +64,24 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
 @unittest.skipIf(futures is None, "futures module not present")
 class ThreadedResolverImportTest(unittest.TestCase):
     def test_import(self):
+        TIMEOUT = 5
+
         # Test for a deadlock when importing a module that runs the
         # ThreadedResolver at import-time. See resolve_test.py for
         # full explanation.
         command = [
             sys.executable,
             '-c',
-            'import tornado.test.resolve_test']
+            'import tornado.test.resolve_test_helper']
 
         start = time.time()
-        popen = Popen(command)
-        while time.time() - start < 20:
+        popen = Popen(command, preexec_fn=lambda: signal.alarm(TIMEOUT))
+        while time.time() - start < TIMEOUT:
             return_code = popen.poll()
             if return_code is not None:
                 self.assertEqual(0, return_code)
                 return  # Success.
+            time.sleep(0.05)
 
         self.fail("import timed out")
 
