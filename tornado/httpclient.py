@@ -346,8 +346,8 @@ class HTTPRequest(object):
         self.proxy_password = proxy_password
         self.url = url
         self.method = method
-        self.headers = headers
-        self.body = utf8(body)
+        self._headers = headers
+        self._body = utf8(body)
         self.auth_username = auth_username
         self.auth_password = auth_password
         self.auth_mode = auth_mode
@@ -358,9 +358,9 @@ class HTTPRequest(object):
         self.user_agent = user_agent
         self.use_gzip = use_gzip
         self.network_interface = network_interface
-        self.streaming_callback = stack_context.wrap(streaming_callback)
-        self.header_callback = stack_context.wrap(header_callback)
-        self.prepare_curl_callback = stack_context.wrap(prepare_curl_callback)
+        self._streaming_callback = stack_context.wrap(streaming_callback)
+        self._header_callback = stack_context.wrap(header_callback)
+        self._prepare_curl_callback = stack_context.wrap(prepare_curl_callback)
         self.allow_nonstandard_methods = allow_nonstandard_methods
         self.validate_cert = validate_cert
         self.ca_certs = ca_certs
@@ -368,6 +368,57 @@ class HTTPRequest(object):
         self.client_key = client_key
         self.client_cert = client_cert
         self.start_time = time.time()
+
+    @property
+    def headers(self):
+        return self._headers
+
+    @headers.setter
+    def headers(self, value):
+        if value is None:
+            self._headers = httputil.HTTPHeaders()
+        else:
+            self._headers = value
+
+    @property
+    def if_modified_since(self):
+        return self.headers.get("If-Modified-Since")
+
+    @if_modified_since.setter
+    def if_modified_since(self, value):
+        self.headers["If-Modified-Since"] = httputil.format_timestamp(value)
+
+    @property
+    def body(self):
+        return self._body
+
+    @body.setter
+    def body(self, value):
+        self._body = utf8(value)
+
+    @property
+    def streaming_callback(self):
+        return self._streaming_callback
+
+    @streaming_callback.setter
+    def streaming_callback(self, value):
+        self._streaming_callback = stack_context.wrap(value)
+
+    @property
+    def header_callback(self):
+        return self._header_callback
+
+    @header_callback.setter
+    def header_callback(self, value):
+        self._header_callback = stack_context.wrap(value)
+
+    @property
+    def prepare_curl_callback(self):
+        return self._prepare_curl_callback
+
+    @prepare_curl_callback.setter
+    def prepare_curl_callback(self, value):
+        self._prepare_curl_callback = stack_context.wrap(value)
 
 
 class HTTPResponse(object):
