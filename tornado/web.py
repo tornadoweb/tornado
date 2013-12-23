@@ -450,7 +450,8 @@ class RequestHandler(object):
         try:
             return _unicode(value)
         except UnicodeDecodeError:
-            raise HTTPError(400, "Invalid unicode: %r" % value)
+            raise HTTPError(400, "Invalid unicode in %s: %r" %
+                            (name or "url", value[:40]))
 
     @property
     def cookies(self):
