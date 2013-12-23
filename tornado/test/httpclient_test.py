@@ -508,22 +508,6 @@ class HTTPRequestTestCase(unittest.TestCase):
         request.headers = None
         self.assertEqual(request.headers, {})
 
-    def test_if_modified_since(self):
-        request = HTTPRequest(
-            'http://example.com',
-            if_modified_since=time.strptime("01 Jan 10", "%d %b %y")
-        )
-        self.assertEqual(request.if_modified_since,
-                         'Fri, 01 Jan 2010 00:00:00 GMT')
-
-    def test_if_modified_since_setter(self):
-        request = HTTPRequest('http://example.com')
-        request.if_modified_since = time.strptime("02 Jan 10", "%d %b %y")
-        self.assertEqual(
-            request._headers,
-            {'If-Modified-Since': 'Sat, 02 Jan 2010 00:00:00 GMT'}
-        )
-
     def test_body(self):
         request = HTTPRequest('http://example.com', body='foo')
         self.assertEqual(request.body, utf8('foo'))

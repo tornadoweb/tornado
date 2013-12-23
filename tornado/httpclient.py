@@ -335,10 +335,11 @@ class HTTPRequest(object):
         .. versionadded:: 3.1
            The ``auth_mode`` argument.
         """
-        if headers is None:
-            headers = httputil.HTTPHeaders()
+        # Note that some of these attributes go through property setters
+        # defined below.
+        self.headers = headers
         if if_modified_since:
-            headers["If-Modified-Since"] = httputil.format_timestamp(
+            self.headers["If-Modified-Since"] = httputil.format_timestamp(
                 if_modified_since)
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
@@ -346,8 +347,7 @@ class HTTPRequest(object):
         self.proxy_password = proxy_password
         self.url = url
         self.method = method
-        self._headers = headers
-        self._body = utf8(body)
+        self.body = body
         self.auth_username = auth_username
         self.auth_password = auth_password
         self.auth_mode = auth_mode
@@ -358,9 +358,9 @@ class HTTPRequest(object):
         self.user_agent = user_agent
         self.use_gzip = use_gzip
         self.network_interface = network_interface
-        self._streaming_callback = stack_context.wrap(streaming_callback)
-        self._header_callback = stack_context.wrap(header_callback)
-        self._prepare_curl_callback = stack_context.wrap(prepare_curl_callback)
+        self.streaming_callback = streaming_callback
+        self.header_callback = header_callback
+        self.prepare_curl_callback = prepare_curl_callback
         self.allow_nonstandard_methods = allow_nonstandard_methods
         self.validate_cert = validate_cert
         self.ca_certs = ca_certs
@@ -379,14 +379,6 @@ class HTTPRequest(object):
             self._headers = httputil.HTTPHeaders()
         else:
             self._headers = value
-
-    @property
-    def if_modified_since(self):
-        return self.headers.get("If-Modified-Since")
-
-    @if_modified_since.setter
-    def if_modified_since(self, value):
-        self.headers["If-Modified-Since"] = httputil.format_timestamp(value)
 
     @property
     def body(self):
