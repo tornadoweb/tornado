@@ -7,6 +7,7 @@ import sys
 import time
 
 from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip
+from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import unittest
 
@@ -42,6 +43,23 @@ class _ResolverTestMixin(object):
                                                socket.AF_UNSPEC)
         self.assertIn((socket.AF_INET, ('127.0.0.1', 80)),
                       addrinfo)
+
+    def test_bad_host(self):
+        def handler(exc_typ, exc_val, exc_tb):
+            self.stop(exc_val)
+            return True  # Halt propagation.
+
+        with ExceptionStackContext(handler):
+            self.resolver.resolve('doesntexist', 80, callback=self.stop)
+
+        result = self.wait()
+        self.assertIsInstance(result, Exception)
+
+    @gen_test
+    def test_future_interface_bad_host(self):
+        with self.assertRaises(Exception):
+            yield self.resolver.resolve('doesntexist', 80,
+                                        socket.AF_UNSPEC)
 
 
 class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):
