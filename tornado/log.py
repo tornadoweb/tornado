@@ -60,6 +60,13 @@ def _stderr_supports_color():
     return color
 
 
+def _safe_unicode(s):
+    try:
+        return _unicode(s)
+    except UnicodeDecodeError:
+        return repr(s)
+
+
 class LogFormatter(logging.Formatter):
     """Log formatter used in Tornado.
 
@@ -73,15 +80,25 @@ class LogFormatter(logging.Formatter):
     `tornado.options.parse_command_line` (unless ``--logging=none`` is
     used).
     """
-    DEFAULT_PREFIX_FORMAT = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]'
+    DEFAULT_FORMAT = '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(normal)s %(message)s'
     DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'
+    DEFAULT_COLORS = {
+        logging.DEBUG:      4,  # Blue
+        logging.INFO:       2,  # Green
+        logging.WARNING:    3,  # Yellow
+        logging.ERROR:      1,  # Red
+    }
 
-    def __init__(self, color=True, prefix_fmt=None, datefmt=None):
+    def __init__(self, color=True, fmt=DEFAULT_FORMAT,
+                 datefmt=DEFAULT_DATE_FORMAT, colors=DEFAULT_COLORS):
         r"""
-        :arg bool color: Enables color support
-        :arg string prefix_fmt: Log message prefix format.
-          Prefix is a part of the log message, directly preceding the actual
-          message text.
+        :arg bool color: Enables color support.
+        :arg string fmt: Log message format.
+          It will be applied to the attributes dict of log records. The
+          text between ``%(color)s`` and ``%(normal)s`` will be colored
+          depending on the level if color support is on.
+        :arg dict colors: color mappings from logging level to terminal color
+          code
         :arg string datefmt: Datetime format.
           Used for formatting ``(asctime)`` placeholder in ``prefix_fmt``.
 
@@ -89,11 +106,11 @@ class LogFormatter(logging.Formatter):
 
            Added ``prefix_fmt`` and ``datefmt`` arguments.
         """
-        self.__prefix_fmt = prefix_fmt if prefix_fmt is not None else self.DEFAULT_PREFIX_FORMAT
-        datefmt = datefmt if datefmt is not None else self.DEFAULT_DATE_FORMAT
         logging.Formatter.__init__(self, datefmt=datefmt)
-        self._color = color and _stderr_supports_color()
-        if self._color:
+        self._fmt = fmt
+
+        self._colors = {}
+        if color and _stderr_supports_color():
             # The curses module has some str/bytes confusion in
             # python3.  Until version 3.2.3, most methods return
             # bytes, but only accept strings.  In addition, we want to
@@ -105,62 +122,53 @@ class LogFormatter(logging.Formatter):
                         curses.tigetstr("setf") or "")
             if (3, 0) < sys.version_info < (3, 2, 3):
                 fg_color = unicode_type(fg_color, "ascii")
-            self._colors = {
-                logging.DEBUG: unicode_type(curses.tparm(fg_color, 4),  # Blue
-                                            "ascii"),
-                logging.INFO: unicode_type(curses.tparm(fg_color, 2),  # Green
-                                           "ascii"),
-                logging.WARNING: unicode_type(curses.tparm(fg_color, 3),  # Yellow
-                                              "ascii"),
-                logging.ERROR: unicode_type(curses.tparm(fg_color, 1),  # Red
-                                            "ascii"),
-            }
+
+            for levelno, code in colors.items():
+                self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
             self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
+        else:
+            self._normal = ''
 
     def format(self, record):
         try:
-            record.message = record.getMessage()
+            message = record.getMessage()
+            assert isinstance(message, basestring_type)  # guaranteed by logging
+            # Encoding notes:  The logging module prefers to work with character
+            # strings, but only enforces that log messages are instances of
+            # basestring.  In python 2, non-ascii bytestrings will make
+            # their way through the logging framework until they blow up with
+            # an unhelpful decoding error (with this formatter it happens
+            # when we attach the prefix, but there are other opportunities for
+            # exceptions further along in the framework).
+            #
+            # If a byte string makes it this far, convert it to unicode to
+            # ensure it will make it out to the logs.  Use repr() as a fallback
+            # to ensure that all byte strings can be converted successfully,
+            # but don't do it by default so we don't add extra quotes to ascii
+            # bytestrings.  This is a bit of a hacky place to do this, but
+            # it's worth it since the encoding errors that would otherwise
+            # result are so useless (and tornado is fond of using utf8-encoded
+            # byte strings whereever possible).
+            record.message = _safe_unicode(message)
         except Exception as e:
             record.message = "Bad message (%r): %r" % (e, record.__dict__)
-        assert isinstance(record.message, basestring_type)  # guaranteed by logging
+
         record.asctime = self.formatTime(record, self.datefmt)
-        prefix = self.__prefix_fmt % record.__dict__
-        if self._color:
-            prefix = (self._colors.get(record.levelno, self._normal) +
-                      prefix + self._normal)
 
-        # Encoding notes:  The logging module prefers to work with character
-        # strings, but only enforces that log messages are instances of
-        # basestring.  In python 2, non-ascii bytestrings will make
-        # their way through the logging framework until they blow up with
-        # an unhelpful decoding error (with this formatter it happens
-        # when we attach the prefix, but there are other opportunities for
-        # exceptions further along in the framework).
-        #
-        # If a byte string makes it this far, convert it to unicode to
-        # ensure it will make it out to the logs.  Use repr() as a fallback
-        # to ensure that all byte strings can be converted successfully,
-        # but don't do it by default so we don't add extra quotes to ascii
-        # bytestrings.  This is a bit of a hacky place to do this, but
-        # it's worth it since the encoding errors that would otherwise
-        # result are so useless (and tornado is fond of using utf8-encoded
-        # byte strings whereever possible).
-        def safe_unicode(s):
-            try:
-                return _unicode(s)
-            except UnicodeDecodeError:
-                return repr(s)
+        record.color = self._colors.get(record.levelno, self._normal)
+        record.normal = self._normal
 
-        formatted = prefix + " " + safe_unicode(record.message)
+        formatted = self._fmt % record.__dict__
+
         if record.exc_info:
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
-            # exc_text contains multiple lines.  We need to safe_unicode
+            # exc_text contains multiple lines.  We need to _safe_unicode
             # each line separately so that non-utf8 bytes don't cause
             # all the newlines to turn into '\n'.
             lines = [formatted.rstrip()]
-            lines.extend(safe_unicode(ln) for ln in record.exc_text.split('\n'))
+            lines.extend(_safe_unicode(ln) for ln in record.exc_text.split('\n'))
             formatted = '\n'.join(lines)
         return formatted.replace("\n", "\n    ")
 
