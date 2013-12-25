@@ -24,7 +24,8 @@ import tempfile
 import warnings
 
 from tornado.escape import utf8
-from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
+from tornado.log import (LogFormatter, NcursesColorizer,
+                         define_logging_options, enable_pretty_logging)
 from tornado.options import OptionParser
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, basestring_type
@@ -37,22 +38,24 @@ def ignore_bytes_warning():
         yield
 
 
+class TestColorizer(NcursesColorizer):
+
+    def colorize(self, record):
+        record.color = u("\u0001")
+        record.normal = u("\u0002")
+
+
 class LogFormatterTest(unittest.TestCase):
     # Matches the output of a single logging call (which may be multiple lines
     # if a traceback was included, so we use the DOTALL option)
     LINE_RE = re.compile(b"(?s)\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} log_test:[0-9]+\\]\x02 (.*)")
 
     def setUp(self):
-        self.formatter = LogFormatter(color=False)
         # Fake color support.  We can't guarantee anything about the $TERM
         # variable when the tests are run, so just patch in some values
         # for testing.  (testing with color off fails to expose some potential
         # encoding issues from the control characters)
-        self.formatter._colors = {
-            logging.ERROR: u("\u0001"),
-        }
-        self.formatter._normal = u("\u0002")
-        self.formatter._color = True
+        self.formatter = LogFormatter(colorizer=TestColorizer())
         # construct a Logger directly to bypass getLogger's caching
         self.logger = logging.Logger('LogFormatterTest')
         self.logger.propagate = False
