@@ -187,15 +187,21 @@ class AsyncHTTPClient(Configurable):
 
             def handle_future(future):
                 exc = future.exception()
+
+                status_code = 599
+                if isinstance(exc, HTTPError):
+                    status_code = exc.code
+
                 if isinstance(exc, HTTPError) and exc.response is not None:
                     response = exc.response
                 elif exc is not None:
                     response = HTTPResponse(
-                        request, 599, error=exc,
+                        request, status_code, error=exc,
                         request_time=time.time() - request.start_time)
                 else:
                     response = future.result()
                 self.io_loop.add_callback(callback, response)
+
             future.add_done_callback(handle_future)
 
         def handle_response(response):
