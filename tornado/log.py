@@ -49,9 +49,13 @@ gen_log = logging.getLogger("tornado.general")
 
 
 class Colorizer(object):
+    "Log coloring strategy"
 
     def colorize(self, record):
-        "Colorize and/or set color related format values"
+        """Colorize and/or set color related format values
+
+        :arg logging.LogRecord record: the record being formatted
+        """
         raise NotImplementedError()
 
 
@@ -62,7 +66,7 @@ class NullColorizer(Colorizer):
         record.normal = ''
 
 
-class NcursesColorizer(NullColorizer):
+class NcursesColorizer(Colorizer):
     """
     Colorize text for shell output.
     """
@@ -135,10 +139,10 @@ class LogFormatter(logging.Formatter):
         :arg bool color: Enables color support.
         :arg string fmt: Log message format.
           It will be applied to the attributes dict of log records.
-        :arg Colorizer colorizer: a custom colorizer. implies ``color=True``.
-          With the default colorizer, if supported, the text between
-          ``%(color)s`` and ``%(normal)s`` will be colored depending on the
-          level.
+        :arg tornado.log.Colorizer colorizer: a custom colorizer. 
+          Implies ``color=True``. With the default colorizer, if supported, the
+          text between ``%(color)s`` and ``%(normal)s`` will be colored
+          depending on the level.
         :arg string datefmt: Datetime format.
           Used for formatting ``(asctime)`` placeholder in ``prefix_fmt``.
         """
