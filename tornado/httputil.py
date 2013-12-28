@@ -310,6 +310,9 @@ def _int_or_none(val):
     return int(val)
 
 
+multipart_log = gen_log.getChild('multipart')
+
+
 def parse_body_arguments(content_type, body, arguments, files):
     """Parses a form request body.
 
@@ -323,7 +326,7 @@ def parse_body_arguments(content_type, body, arguments, files):
         try:
             uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
         except Exception as e:
-            gen_log.warning('Invalid x-www-form-urlencoded body: %s', e)
+            multipart_log.warning('Invalid x-www-form-urlencoded body: %s', e)
             uri_arguments = {}
         for name, values in uri_arguments.items():
             if values:
@@ -336,7 +339,7 @@ def parse_body_arguments(content_type, body, arguments, files):
                 parse_multipart_form_data(utf8(v), body, arguments, files)
                 break
         else:
-            gen_log.warning("Invalid multipart/form-data")
+            multipart_log.warning("Invalid multipart/form-data")
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):
@@ -355,7 +358,7 @@ def parse_multipart_form_data(boundary, data, arguments, files):
         boundary = boundary[1:-1]
     final_boundary_index = data.rfind(b"--" + boundary + b"--")
     if final_boundary_index == -1:
-        gen_log.warning("Invalid multipart/form-data: no final boundary")
+        multipart_log.warning("Invalid multipart/form-data: no final boundary")
         return
     parts = data[:final_boundary_index].split(b"--" + boundary + b"\r\n")
     for part in parts:
@@ -363,17 +366,17 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             continue
         eoh = part.find(b"\r\n\r\n")
         if eoh == -1:
-            gen_log.warning("multipart/form-data missing headers")
+            multipart_log.warning("multipart/form-data missing headers")
             continue
         headers = HTTPHeaders.parse(part[:eoh].decode("utf-8"))
         disp_header = headers.get("Content-Disposition", "")
         disposition, disp_params = _parse_header(disp_header)
         if disposition != "form-data" or not part.endswith(b"\r\n"):
-            gen_log.warning("Invalid multipart/form-data")
+            multipart_log.warning("Invalid multipart/form-data")
             continue
         value = part[eoh + 4:-2]
         if not disp_params.get("name"):
-            gen_log.warning("multipart/form-data value missing name")
+            multipart_log.warning("multipart/form-data value missing name")
             continue
         name = disp_params["name"]
         if disp_params.get("filename"):
