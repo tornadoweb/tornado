@@ -2,7 +2,7 @@ from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipOnTravis
 from tornado.web import Application, RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError, _websocket_mask_python
 
@@ -85,6 +85,7 @@ class WebSocketTest(AsyncHTTPTestCase):
                 'ws://localhost:%d/non_ws' % self.get_http_port(),
                 io_loop=self.io_loop)
 
+    @skipOnTravis
     @gen_test
     def test_websocket_network_timeout(self):
         sock, port = bind_unused_port()
