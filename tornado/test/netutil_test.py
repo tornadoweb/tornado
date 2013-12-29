@@ -32,6 +32,13 @@ else:
 
 
 class _ResolverTestMixin(object):
+    def skipOnCares(self):
+        # Some DNS-hijacking ISPs (e.g. Time Warner) return non-empty results
+        # with an NXDOMAIN status code.  Most resolvers treat this as an error;
+        # C-ares returns the results, making the "bad_host" tests unreliable.
+        if self.resolver.__class__.__name__ == 'CaresResolver':
+            self.skipTest("CaresResolver doesn't recognize fake NXDOMAIN")
+
     def test_localhost(self):
         self.resolver.resolve('localhost', 80, callback=self.stop)
         result = self.wait()
@@ -45,6 +52,7 @@ class _ResolverTestMixin(object):
                       addrinfo)
 
     def test_bad_host(self):
+        self.skipOnCares()
         def handler(exc_typ, exc_val, exc_tb):
             self.stop(exc_val)
             return True  # Halt propagation.
@@ -57,6 +65,7 @@ class _ResolverTestMixin(object):
 
     @gen_test
     def test_future_interface_bad_host(self):
+        self.skipOnCares()
         with self.assertRaises(Exception):
             yield self.resolver.resolve('doesntexist', 80,
                                         socket.AF_UNSPEC)
