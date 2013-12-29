@@ -22,6 +22,7 @@ import calendar
 import collections
 import datetime
 import email.utils
+import logging
 import numbers
 import time
 
@@ -310,7 +311,7 @@ def _int_or_none(val):
     return int(val)
 
 
-multipart_log = gen_log.getChild('multipart')
+multipart_log = logging.getLogger(gen_log.name + '.multipart')
 
 
 def parse_body_arguments(content_type, body, arguments, files):
