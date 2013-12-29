@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 from hashlib import md5
 
+from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest
 from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncHTTPTestCase
@@ -51,10 +52,10 @@ class DigestAuthHandler(RequestHandler):
             assert param_dict['nonce'] == nonce
             assert param_dict['username'] == username
             assert param_dict['uri'] == self.request.path
-            h1 = md5('%s:%s:%s' % (username, realm, password)).hexdigest()
-            h2 = md5('%s:%s' % (self.request.method,
-                                self.request.path)).hexdigest()
-            digest = md5('%s:%s:%s' % (h1, nonce, h2)).hexdigest()
+            h1 = md5(utf8('%s:%s:%s' % (username, realm, password))).hexdigest()
+            h2 = md5(utf8('%s:%s' % (self.request.method,
+                                     self.request.path))).hexdigest()
+            digest = md5(utf8('%s:%s:%s' % (h1, nonce, h2))).hexdigest()
             if digest == param_dict['response']:
                 self.write('ok')
             else:
