@@ -21,7 +21,7 @@ Basic usage looks like::
     t = template.Template("<html>{{ myvalue }}</html>")
     print t.generate(myvalue="XXX")
 
-Loader is a class that loads templates from a root directory and caches
+`Loader` is a class that loads templates from a root directory and caches
 the compiled templates::
 
     loader = template.Loader("/home/btaylor")
@@ -56,16 +56,17 @@ interesting. Syntax for the templates::
     {% end %}
 
 Unlike most other template systems, we do not put any restrictions on the
-expressions you can include in your statements. if and for blocks get
-translated exactly into Python, you can do complex expressions like::
+expressions you can include in your statements. ``if`` and ``for`` blocks get
+translated exactly into Python, so you can do complex expressions like::
 
    {% for student in [p for p in people if p.student and p.age > 23] %}
      <li>{{ escape(student.name) }}</li>
    {% end %}
 
 Translating directly to Python means you can apply functions to expressions
-easily, like the escape() function in the examples above. You can pass
-functions in to your template just like any other variable::
+easily, like the ``escape()`` function in the examples above. You can pass
+functions in to your template just like any other variable
+(In a `.RequestHandler`, override `.RequestHandler.get_template_namespace`)::
 
    ### Python code
    def add(x, y):
@@ -75,8 +76,8 @@ functions in to your template just like any other variable::
    ### The template
    {{ add(1, 2) }}
 
-We provide the functions escape(), url_escape(), json_encode(), and squeeze()
-to all templates by default.
+We provide the functions `escape() <.xhtml_escape>`, `.url_escape()`,
+`.json_encode()`, and `.squeeze()` to all templates by default.
 
 Typical applications do not create `Template` or `Loader` instances by
 hand, but instead use the `~.RequestHandler.render` and
