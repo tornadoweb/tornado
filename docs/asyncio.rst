@@ -22,7 +22,7 @@ loops.
         from tornado.platform.asyncio import AsyncIOMainLoop
         import asyncio
         AsyncIOMainLoop().install()
-        asyncio.get_event_loop.run_forever()
+        asyncio.get_event_loop().run_forever()
 
 .. py:class:: AsyncIOLoop
 
