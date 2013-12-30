@@ -23,10 +23,6 @@ install:
     - pip install --use-mirrors coveralls
 
 script:
-    # Must cd somewhere else so python3 doesn't get confused and run
-    # the python2 code from the current directory instead of the installed
-    # 2to3 version.
-    - cd maint
     - export TARGET="-m tornado.test.runtests"
     # We use "python -m coverage" instead of the "bin/coverage" script
     # so we can pass additional arguments to python.  However, this doesn't
