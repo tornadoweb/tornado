@@ -22,7 +22,8 @@ if pycurl is not None:
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
-        client = CurlAsyncHTTPClient(io_loop=self.io_loop)
+        client = CurlAsyncHTTPClient(io_loop=self.io_loop,
+                                     defaults=dict(allow_ipv6=False))
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
@@ -71,7 +72,8 @@ class DigestAuthHandler(RequestHandler):
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(CurlHTTPClientTestCase, self).setUp()
-        self.http_client = CurlAsyncHTTPClient(self.io_loop)
+        self.http_client = CurlAsyncHTTPClient(self.io_loop,
+                                               defaults=dict(allow_ipv6=False))
 
     def get_app(self):
         return Application([
