@@ -24,6 +24,11 @@ script:
     # the python2 code from the current directory instead of the installed
     # 2to3 version.
     - cd maint
+    - export TARGET="-m tornado.test.runtests"
+    # We use "python -m coverage" instead of the "bin/coverage" script
+    # so we can pass additional arguments to python.  However, this doesn't
+    # work on 2.6, so skip coverage on that version.
+    - if [[ $TRAVIS_PYTHON_VERSION != 2.6 ]]; then export TARGET="-m coverage run $TARGET"; fi
     - export TARGET="-m coverage run -m tornado.test.runtests"
     - python $TARGET
     - python $TARGET --ioloop=tornado.platform.select.SelectIOLoop
