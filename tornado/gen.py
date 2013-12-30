@@ -411,6 +411,7 @@ class YieldFuture(YieldPoint):
         else:
             return self.result
 
+
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
 

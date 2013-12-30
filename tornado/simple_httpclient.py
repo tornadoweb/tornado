@@ -94,9 +94,9 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.queue.append((key, request, callback))
         if not len(self.active) < self.max_clients:
             timeout_handle = self.io_loop.add_timeout(
-                    self.io_loop.time() + min(request.connect_timeout,
-                                              request.request_timeout),
-                    functools.partial(self._on_timeout, key))
+                self.io_loop.time() + min(request.connect_timeout,
+                                          request.request_timeout),
+                functools.partial(self._on_timeout, key))
         else:
             timeout_handle = None
         self.waiting[key] = (request, callback, timeout_handle)
@@ -136,8 +136,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         request, callback, timeout_handle = self.waiting[key]
         self.queue.remove((key, request, callback))
         timeout_response = HTTPResponse(
-                request, 599, error=HTTPError(599, "Timeout"),
-                request_time=self.io_loop.time() - request.start_time)
+            request, 599, error=HTTPError(599, "Timeout"),
+            request_time=self.io_loop.time() - request.start_time)
         self.io_loop.add_callback(callback, timeout_response)
         del self.waiting[key]
 

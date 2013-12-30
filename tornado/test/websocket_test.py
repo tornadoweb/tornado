@@ -11,6 +11,7 @@ try:
 except ImportError:
     speedups = None
 
+
 class TestWebSocketHandler(WebSocketHandler):
     """Base class for testing handlers that exposes the on_close event.
 
@@ -152,6 +153,7 @@ class MaskFunctionMixin(object):
 class PythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
     def mask(self, mask, data):
         return _websocket_mask_python(mask, data)
+
 
 @unittest.skipIf(speedups is None, "tornado.speedups module not present")
 class CythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):

@@ -1743,6 +1743,7 @@ class Default404Test(WebTestCase):
                          b'<html><title>404: Not Found</title>'
                          b'<body>404: Not Found</body></html>')
 
+
 @wsgi_safe
 class Custom404Test(WebTestCase):
     def get_handlers(self):
@@ -1760,6 +1761,7 @@ class Custom404Test(WebTestCase):
         response = self.fetch('/')
         self.assertEqual(response.code, 404)
         self.assertEqual(response.body, b'custom 404 response')
+
 
 @wsgi_safe
 class DefaultHandlerArgumentsTest(WebTestCase):
