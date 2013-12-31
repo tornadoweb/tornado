@@ -8,6 +8,8 @@ python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOMain
 (the tests log a few warnings with AsyncIOMainLoop because they leave some
 unfinished callbacks on the event loop that fail when it resumes)
 """
+
+from __future__ import absolute_import, division, print_function, with_statement
 import asyncio
 import datetime
 import functools
