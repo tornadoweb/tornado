@@ -516,6 +516,10 @@ class RequestHandler(object):
 
         See `clear_cookie` for more information on the path and domain
         parameters.
+
+        .. versionchanged:: 3.2
+
+           Added the ``path`` and ``domain`` parameters.
         """
         for name in self.request.cookies:
             self.clear_cookie(name, path=path, domain=domain)

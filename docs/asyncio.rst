@@ -3,6 +3,8 @@
 
 .. module:: tornado.platform.asyncio
 
+.. versionadded:: 3.2
+
 This module integrates Tornado with the ``asyncio`` module introduced
 in Python 3.4 (and available `as a separate download
 <https://pypi.python.org/pypi/asyncio>`_ for Python 3.3).  This makes

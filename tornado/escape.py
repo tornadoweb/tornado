@@ -55,7 +55,16 @@ _XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
 
 
 def xhtml_escape(value):
-    """Escapes a string so it is valid within HTML or XML."""
+    """Escapes a string so it is valid within HTML or XML.
+
+    Escapes the characters ``<``, ``>``, ``"``, ``'``, and ``&``.
+    When used in attribute values the escaped strings must be enclosed
+    in quotes.
+
+    .. versionchanged:: 3.2
+
+       Added the single quote to the list of escaped characters.
+    """
     return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)],
                                 to_basestring(value))
 

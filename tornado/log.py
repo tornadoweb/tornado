@@ -84,6 +84,10 @@ class LogFormatter(logging.Formatter):
           message text.
         :arg string datefmt: Datetime format.
           Used for formatting ``(asctime)`` placeholder in ``prefix_fmt``.
+
+        .. versionchanged:: 3.2
+
+           Added ``prefix_fmt`` and ``datefmt`` arguments.
         """
         self.__prefix_fmt = prefix_fmt if prefix_fmt is not None else self.DEFAULT_PREFIX_FORMAT
         datefmt = datefmt if datefmt is not None else self.DEFAULT_DATE_FORMAT

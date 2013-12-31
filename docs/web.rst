@@ -92,6 +92,7 @@
       The `Application` object serving this request
 
    .. automethod:: RequestHandler.async_callback
+   .. automethod:: RequestHandler.check_etag_header
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
    .. automethod:: RequestHandler.create_template_loader
@@ -105,6 +106,7 @@
    .. automethod:: RequestHandler.on_connection_close
    .. automethod:: RequestHandler.require_setting
    .. automethod:: RequestHandler.reverse_url
+   .. automethod:: RequestHandler.set_etag_header
    .. autoattribute:: RequestHandler.settings
    .. automethod:: RequestHandler.static_url
    .. automethod:: RequestHandler.xsrf_form_html

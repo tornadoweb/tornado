@@ -949,7 +949,10 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
 
 
 class GoogleOAuth2Mixin(OAuth2Mixin):
-    """Google authentication using OAuth2."""
+    """Google authentication using OAuth2.
+
+    .. versionadded:: 3.2
+    """
     _OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
     _OAUTH_ACCESS_TOKEN_URL = "https://accounts.google.com/o/oauth2/token"
     _OAUTH_NO_CALLBACKS = False
