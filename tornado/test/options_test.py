@@ -218,3 +218,52 @@ class OptionsTest(unittest.TestCase):
             options.define('foo')
         self.assertRegexpMatches(str(cm.exception),
                                  'Option.*foo.*already defined')
+
+    def test_choices(self):
+        options = OptionParser()
+        options.define('foo', choices=['a', 'b', 'c'])
+        options.define('bar', type=int, choices=[1, 3, 5])
+        options.parse_command_line(['main.py', '--foo=a', '--bar=1'])
+        self.assertEqual(options.foo, 'a')
+        self.assertEqual(options.bar, 1)
+
+    def test_setattr_choices_check(self):
+        options = OptionParser()
+        options.define('foo', type=int, choices=[1, 5, 10])
+        with self.assertRaises(Error):
+            options.foo = 4
+
+    def test_empty_choices(self):
+        options = OptionParser()
+        with self.assertRaises(Error) as cm:
+            options.define('foo', choices=[])
+        self.assertRegexpMatches(str(cm.exception),
+                                 "Choices can't be empty")
+
+    def test_error_choices_type(self):
+        options = OptionParser()
+        with self.assertRaises(Error) as cm1:
+            options.define('str', choices=[1, 2, 3])
+        with self.assertRaises(Error) as cm2:
+            options.define('str2', type=str, choices=[1, 2, 3])
+        with self.assertRaises(Error) as cm3:
+            options.define('basestring', type=basestring_type,
+                           choices=[1, 2, 3])
+        with self.assertRaises(Error) as cm4:
+            options.define('int', type=int, choices=['a', 'b', 'c'])
+        with self.assertRaises(Error) as cm5:
+            options.define('float', type=float, choices=['a', 'b', 'c'])
+        with self.assertRaises(Error) as cm6:
+            options.define('datetime', type=datetime.datetime,
+                           choices=['a', 'b'])
+        with self.assertRaises(Error) as cm7:
+            options.define('timedelta', type=datetime.timedelta,
+                           choices=[1, 2, 3])
+        error_regex = 'The choices type for option %r must be instances of .*'
+        self.assertRegexpMatches(str(cm1.exception), error_regex % 'str')
+        self.assertRegexpMatches(str(cm2.exception), error_regex % 'str2')
+        self.assertRegexpMatches(str(cm3.exception), error_regex % 'basestring')
+        self.assertRegexpMatches(str(cm4.exception), error_regex % 'int')
+        self.assertRegexpMatches(str(cm5.exception), error_regex % 'float')
+        self.assertRegexpMatches(str(cm6.exception), error_regex % 'datetime')
+        self.assertRegexpMatches(str(cm7.exception), error_regex % 'timedelta')
