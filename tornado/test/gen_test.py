@@ -838,7 +838,6 @@ class GenExceptionHandler(RequestHandler):
 
 
 class GenCoroutineExceptionHandler(RequestHandler):
-    @asynchronous
     @gen.coroutine
     def get(self):
         # This test depends on the order of the two decorators.

@@ -36,7 +36,6 @@ Example usage for Google OpenID::
 
     class GoogleLoginHandler(tornado.web.RequestHandler,
                              tornado.auth.GoogleMixin):
-        @tornado.web.asynchronous
         @tornado.gen.coroutine
         def get(self):
             if self.get_argument("openid.mode", None):
@@ -607,7 +606,6 @@ class TwitterMixin(OAuthMixin):
 
         class TwitterLoginHandler(tornado.web.RequestHandler,
                                   tornado.auth.TwitterMixin):
-            @tornado.web.asynchronous
             @tornado.gen.coroutine
             def get(self):
                 if self.get_argument("oauth_token", None):
@@ -669,7 +667,6 @@ class TwitterMixin(OAuthMixin):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.TwitterMixin):
                 @tornado.web.authenticated
-                @tornado.web.asynchronous
                 @tornado.gen.coroutine
                 def get(self):
                     new_entry = yield self.twitter_request(
@@ -748,7 +745,6 @@ class FriendFeedMixin(OAuthMixin):
 
         class FriendFeedLoginHandler(tornado.web.RequestHandler,
                                      tornado.auth.FriendFeedMixin):
-            @tornado.web.asynchronous
             @tornado.gen.coroutine
             def get(self):
                 if self.get_argument("oauth_token", None):
@@ -793,7 +789,6 @@ class FriendFeedMixin(OAuthMixin):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FriendFeedMixin):
                 @tornado.web.authenticated
-                @tornado.web.asynchronous
                 @tornado.gen.coroutine
                 def get(self):
                     new_entry = yield self.friendfeed_request(
@@ -877,7 +872,6 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
 
         class GoogleLoginHandler(tornado.web.RequestHandler,
                                  tornado.auth.GoogleMixin):
-           @tornado.web.asynchronous
            @tornado.gen.coroutine
            def get(self):
                if self.get_argument("openid.mode", None):
@@ -965,7 +959,6 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         Example usage::
 
             class GoogleOAuth2LoginHandler(LoginHandler, tornado.auth.GoogleOAuth2Mixin):
-                @tornado.web.asynchronous
                 @tornado.gen.coroutine
                 def get(self):
                     if self.get_argument("code", False):
@@ -1237,7 +1230,6 @@ class FacebookGraphMixin(OAuth2Mixin):
         Example usage::
 
             class FacebookGraphLoginHandler(LoginHandler, tornado.auth.FacebookGraphMixin):
-              @tornado.web.asynchronous
               @tornado.gen.coroutine
               def get(self):
                   if self.get_argument("code", False):
@@ -1324,7 +1316,6 @@ class FacebookGraphMixin(OAuth2Mixin):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
                 @tornado.web.authenticated
-                @tornado.web.asynchronous
                 @tornado.gen.coroutine
                 def get(self):
                     new_entry = yield self.facebook_request(

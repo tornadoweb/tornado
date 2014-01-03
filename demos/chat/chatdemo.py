@@ -117,7 +117,6 @@ class MessageUpdatesHandler(BaseHandler):
 
 
 class AuthLoginHandler(BaseHandler, tornado.auth.GoogleMixin):
-    @tornado.web.asynchronous
     @gen.coroutine
     def get(self):
         if self.get_argument("openid.mode", None):

@@ -59,7 +59,6 @@ For more complicated interfaces, `Task` can be split into two parts:
 `Callback` and `Wait`::
 
     class GenAsyncHandler2(RequestHandler):
-        @asynchronous
         @gen.coroutine
         def get(self):
             http_client = AsyncHTTPClient()
