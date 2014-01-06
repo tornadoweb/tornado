@@ -456,6 +456,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         del self.fds[fd]
 
     def start(self):
+        self._setup_logging()
         self.reactor.run()
 
     def stop(self):

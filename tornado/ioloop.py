@@ -301,6 +301,22 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
+    def _setup_logging(self):
+        """The IOLoop catches and logs exceptions, so it's
+        important that log output be visible.  However, python's
+        default behavior for non-root loggers (prior to python
+        3.2) is to print an unhelpful "no handlers could be
+        found" message rather than the actual log entry, so we
+        must explicitly configure logging if we've made it this
+        far without anything.
+
+        This method should be called from start() in subclasses.
+        """
+        if not any([logging.getLogger().handlers,
+                    logging.getLogger('tornado').handlers,
+                    logging.getLogger('tornado.application').handlers]):
+            logging.basicConfig()
+
     def stop(self):
         """Stop the I/O loop.
 
@@ -548,21 +564,6 @@ class PollIOLoop(IOLoop):
         if seconds is not None:
             signal.signal(signal.SIGALRM,
                           action if action is not None else signal.SIG_DFL)
-
-    def _setup_logging(self):
-        """The IOLoop catches and logs exceptions, so it's
-        important that log output be visible.  However, python's
-        default behavior for non-root loggers (prior to python
-        3.2) is to print an unhelpful "no handlers could be
-        found" message rather than the actual log entry, so we
-        must explicitly configure logging if we've made it this
-        far without anything.
-
-        """
-        if not any([logging.getLogger().handlers,
-                    logging.getLogger('tornado').handlers,
-                    logging.getLogger('tornado.application').handlers]):
-            logging.basicConfig()
 
     def start(self):
         self._setup_logging()

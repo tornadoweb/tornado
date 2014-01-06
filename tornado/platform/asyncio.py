@@ -88,6 +88,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.handlers[fd](fd, events)
 
     def start(self):
+        self._setup_logging()
         self.asyncio_loop.run_forever()
 
     def stop(self):
