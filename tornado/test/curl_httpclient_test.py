@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 from hashlib import md5
 
+from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest
 from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncHTTPTestCase
@@ -21,7 +22,8 @@ if pycurl is not None:
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
-        client = CurlAsyncHTTPClient(io_loop=self.io_loop)
+        client = CurlAsyncHTTPClient(io_loop=self.io_loop,
+                                     defaults=dict(allow_ipv6=False))
         # make sure AsyncHTTPClient magic doesn't give us the wrong class
         self.assertTrue(isinstance(client, CurlAsyncHTTPClient))
         return client
@@ -51,10 +53,10 @@ class DigestAuthHandler(RequestHandler):
             assert param_dict['nonce'] == nonce
             assert param_dict['username'] == username
             assert param_dict['uri'] == self.request.path
-            h1 = md5('%s:%s:%s' % (username, realm, password)).hexdigest()
-            h2 = md5('%s:%s' % (self.request.method,
-                                self.request.path)).hexdigest()
-            digest = md5('%s:%s:%s' % (h1, nonce, h2)).hexdigest()
+            h1 = md5(utf8('%s:%s:%s' % (username, realm, password))).hexdigest()
+            h2 = md5(utf8('%s:%s' % (self.request.method,
+                                     self.request.path))).hexdigest()
+            digest = md5(utf8('%s:%s:%s' % (h1, nonce, h2))).hexdigest()
             if digest == param_dict['response']:
                 self.write('ok')
             else:
@@ -70,7 +72,8 @@ class DigestAuthHandler(RequestHandler):
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(CurlHTTPClientTestCase, self).setUp()
-        self.http_client = CurlAsyncHTTPClient(self.io_loop)
+        self.http_client = CurlAsyncHTTPClient(self.io_loop,
+                                               defaults=dict(allow_ipv6=False))
 
     def get_app(self):
         return Application([

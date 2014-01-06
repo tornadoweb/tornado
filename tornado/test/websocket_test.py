@@ -2,7 +2,7 @@ from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipOnTravis
 from tornado.web import Application, RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError, _websocket_mask_python
 
@@ -10,6 +10,7 @@ try:
     from tornado import speedups
 except ImportError:
     speedups = None
+
 
 class TestWebSocketHandler(WebSocketHandler):
     """Base class for testing handlers that exposes the on_close event.
@@ -85,6 +86,7 @@ class WebSocketTest(AsyncHTTPTestCase):
                 'ws://localhost:%d/non_ws' % self.get_http_port(),
                 io_loop=self.io_loop)
 
+    @skipOnTravis
     @gen_test
     def test_websocket_network_timeout(self):
         sock, port = bind_unused_port()
@@ -151,6 +153,7 @@ class MaskFunctionMixin(object):
 class PythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
     def mask(self, mask, data):
         return _websocket_mask_python(mask, data)
+
 
 @unittest.skipIf(speedups is None, "tornado.speedups module not present")
 class CythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):

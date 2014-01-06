@@ -381,12 +381,12 @@ class WebSocketProtocol76(WebSocketProtocol):
             "Sec-WebSocket-Location: %(scheme)s://%(host)s%(uri)s\r\n"
             "%(subprotocol)s"
             "\r\n" % (dict(
-            version=tornado.version,
-            origin=self.request.headers["Origin"],
-            scheme=scheme,
-            host=self.request.host,
-            uri=self.request.uri,
-            subprotocol=subprotocol_header))))
+                version=tornado.version,
+                origin=self.request.headers["Origin"],
+                scheme=scheme,
+                host=self.request.host,
+                uri=self.request.uri,
+                subprotocol=subprotocol_header))))
         self.stream.read_bytes(8, self._handle_challenge)
 
     def challenge_response(self, challenge):
@@ -890,6 +890,7 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None):
     if callback is not None:
         io_loop.add_future(conn.connect_future, callback)
     return conn.connect_future
+
 
 def _websocket_mask_python(mask, data):
     """Websocket masking function.

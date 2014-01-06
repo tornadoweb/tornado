@@ -318,10 +318,12 @@ def _curl_setup_request(curl, request, buffer, headers):
                     [native_str("%s: %s" % i) for i in request.headers.items()])
 
     if request.header_callback:
-        curl.setopt(pycurl.HEADERFUNCTION, request.header_callback)
+        curl.setopt(pycurl.HEADERFUNCTION,
+                    lambda line: request.header_callback(native_str(line)))
     else:
         curl.setopt(pycurl.HEADERFUNCTION,
-                    lambda line: _curl_header_callback(headers, line))
+                    lambda line: _curl_header_callback(headers,
+                                                       native_str(line)))
     if request.streaming_callback:
         write_function = request.streaming_callback
     else:

@@ -294,7 +294,7 @@ class WSGIContainer(object):
             "REQUEST_METHOD": request.method,
             "SCRIPT_NAME": "",
             "PATH_INFO": to_wsgi_str(escape.url_unescape(
-            request.path, encoding=None, plus=False)),
+                request.path, encoding=None, plus=False)),
             "QUERY_STRING": request.query,
             "REMOTE_ADDR": request.remote_ip,
             "SERVER_NAME": host,

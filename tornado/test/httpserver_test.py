@@ -211,15 +211,15 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
             b"X-Header-encoding-test: \xe9",
         ],
             b"\r\n".join([
-            b"Content-Disposition: form-data; name=argument",
-            b"",
-            u("\u00e1").encode("utf-8"),
-            b"--1234567890",
-            u('Content-Disposition: form-data; name="files"; filename="\u00f3"').encode("utf8"),
-            b"",
-            u("\u00fa").encode("utf-8"),
-            b"--1234567890--",
-            b"",
+                b"Content-Disposition: form-data; name=argument",
+                b"",
+                u("\u00e1").encode("utf-8"),
+                b"--1234567890",
+                u('Content-Disposition: form-data; name="files"; filename="\u00f3"').encode("utf8"),
+                b"",
+                u("\u00fa").encode("utf-8"),
+                b"--1234567890--",
+                b"",
             ]))
         data = json_decode(response.body)
         self.assertEqual(u("\u00e9"), data["header"])
@@ -546,7 +546,6 @@ class UnixSocketTest(AsyncTestCase):
             self.stream.read_until_close(self.stop)
             response = self.wait()
         self.assertEqual(response, b"")
-
 
 
 class KeepAliveTest(AsyncHTTPTestCase):

@@ -7,6 +7,7 @@ import sys
 import time
 
 from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip
+from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import unittest
 
@@ -31,6 +32,15 @@ else:
 
 
 class _ResolverTestMixin(object):
+    def skipOnCares(self):
+        # Some DNS-hijacking ISPs (e.g. Time Warner) return non-empty results
+        # with an NXDOMAIN status code.  Most resolvers treat this as an error;
+        # C-ares returns the results, making the "bad_host" tests unreliable.
+        # C-ares will try to resolve even malformed names, such as the
+        # name with spaces used in this test.
+        if self.resolver.__class__.__name__ == 'CaresResolver':
+            self.skipTest("CaresResolver doesn't recognize fake NXDOMAIN")
+
     def test_localhost(self):
         self.resolver.resolve('localhost', 80, callback=self.stop)
         result = self.wait()
@@ -42,6 +52,25 @@ class _ResolverTestMixin(object):
                                                socket.AF_UNSPEC)
         self.assertIn((socket.AF_INET, ('127.0.0.1', 80)),
                       addrinfo)
+
+    def test_bad_host(self):
+        self.skipOnCares()
+        def handler(exc_typ, exc_val, exc_tb):
+            self.stop(exc_val)
+            return True  # Halt propagation.
+
+        with ExceptionStackContext(handler):
+            self.resolver.resolve('an invalid domain', 80, callback=self.stop)
+
+        result = self.wait()
+        self.assertIsInstance(result, Exception)
+
+    @gen_test
+    def test_future_interface_bad_host(self):
+        self.skipOnCares()
+        with self.assertRaises(Exception):
+            yield self.resolver.resolve('an invalid domain', 80,
+                                        socket.AF_UNSPEC)
 
 
 class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):

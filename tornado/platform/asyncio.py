@@ -16,6 +16,7 @@ import os
 from tornado.ioloop import IOLoop
 from tornado import stack_context
 
+
 class BaseAsyncIOLoop(IOLoop):
     def initialize(self, asyncio_loop, close_loop=False):
         self.asyncio_loop = asyncio_loop
@@ -104,7 +105,7 @@ class BaseAsyncIOLoop(IOLoop):
         else:
             raise TypeError("Unsupported deadline %r", deadline)
         return self.asyncio_loop.call_later(delay, self._run_callback,
-                                          stack_context.wrap(callback))
+                                            stack_context.wrap(callback))
 
     def remove_timeout(self, timeout):
         timeout.cancel()
@@ -114,8 +115,8 @@ class BaseAsyncIOLoop(IOLoop):
             raise RuntimeError("IOLoop is closing")
         if kwargs:
             self.asyncio_loop.call_soon_threadsafe(functools.partial(
-                    self._run_callback, stack_context.wrap(callback),
-                    *args, **kwargs))
+                self._run_callback, stack_context.wrap(callback),
+                *args, **kwargs))
         else:
             self.asyncio_loop.call_soon_threadsafe(
                 self._run_callback, stack_context.wrap(callback), *args)
@@ -127,6 +128,7 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
     def initialize(self):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
                                                 close_loop=False)
+
 
 class AsyncIOLoop(BaseAsyncIOLoop):
     def initialize(self):

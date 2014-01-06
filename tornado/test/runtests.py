@@ -91,7 +91,8 @@ if __name__ == '__main__':
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
     define('httpclient', type=str, default=None,
-           callback=AsyncHTTPClient.configure)
+           callback=lambda s: AsyncHTTPClient.configure(
+               s, defaults=dict(allow_ipv6=False)))
     define('ioloop', type=str, default=None)
     define('ioloop_time_monotonic', default=False)
     define('resolver', type=str, default=None,

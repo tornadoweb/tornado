@@ -310,7 +310,7 @@ Transfer-Encoding: chunked
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 
     def test_configure_defaults(self):
-        defaults = dict(user_agent='TestDefaultUserAgent')
+        defaults = dict(user_agent='TestDefaultUserAgent', allow_ipv6=False)
         # Construct a new instance of the configured client class
         client = self.http_client.__class__(self.io_loop, force_instance=True,
                                             defaults=defaults)
