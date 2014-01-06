@@ -108,7 +108,20 @@ def _auth_return_future(f):
     return wrapper
 
 
-class OpenIdMixin(object):
+class AuthHTTPClientMixin(object):
+    """Base object that has a method used by all auth mixins"""
+
+    @staticmethod
+    def _get_auth_http_client():
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+
+        May be overridden by subclasses to use an HTTP client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
+
+
+class OpenIdMixin(AuthHTTPClientMixin):
     """Abstract implementation of OpenID and Attribute Exchange.
 
     See `GoogleMixin` below for a customized example (which also
@@ -160,7 +173,7 @@ class OpenIdMixin(object):
         args["openid.mode"] = u("check_authentication")
         url = self._OPENID_ENDPOINT
         if http_client is None:
-            http_client = self.get_auth_http_client()
+            http_client = self._get_auth_http_client()
         http_client.fetch(url, self.async_callback(
             self._on_authentication_verified, callback),
             method="POST", body=urllib_parse.urlencode(args))
@@ -273,16 +286,8 @@ class OpenIdMixin(object):
             user["claimed_id"] = claimed_id
         future.set_result(user)
 
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
-
-
-class OAuthMixin(object):
+class OAuthMixin(AuthHTTPClientMixin):
     """Abstract implementation of OAuth 1.0 and 1.0a.
 
     See `TwitterMixin` and `FriendFeedMixin` below for example implementations,
@@ -526,16 +531,8 @@ class OAuthMixin(object):
         base_args["oauth_signature"] = escape.to_basestring(signature)
         return base_args
 
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
-
-
-class OAuth2Mixin(object):
+class OAuth2Mixin(AuthHTTPClientMixin):
     """Abstract implementation of OAuth 2.0.
 
     See `FacebookGraphMixin` below for an example implementation.
@@ -638,7 +635,7 @@ class TwitterMixin(OAuthMixin):
            Now returns a `.Future` and takes an optional callback, for
            compatibility with `.gen.coroutine`.
         """
-        http = self.get_auth_http_client()
+        http = self._get_auth_http_client()
         http.fetch(self._oauth_request_token_url(callback_uri=callback_uri),
                    self.async_callback(
                        self._on_request_token, self._OAUTH_AUTHENTICATE_URL,
@@ -697,7 +694,7 @@ class TwitterMixin(OAuthMixin):
             args.update(oauth)
         if args:
             url += "?" + urllib_parse.urlencode(args)
-        http = self.get_auth_http_client()
+        http = self._get_auth_http_client()
         http_callback = self.async_callback(self._on_twitter_request, callback)
         if post_args is not None:
             http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
@@ -764,7 +761,6 @@ class FriendFeedMixin(OAuthMixin):
     _OAUTH_ACCESS_TOKEN_URL = "https://friendfeed.com/account/oauth/access_token"
     _OAUTH_AUTHORIZE_URL = "https://friendfeed.com/account/oauth/authorize"
     _OAUTH_NO_CALLBACKS = True
-    _OAUTH_VERSION = "1.0"
 
     @_auth_return_future
     def friendfeed_request(self, path, callback, access_token=None,
@@ -816,7 +812,7 @@ class FriendFeedMixin(OAuthMixin):
         if args:
             url += "?" + urllib_parse.urlencode(args)
         callback = self.async_callback(self._on_friendfeed_request, callback)
-        http = self.get_auth_http_client()
+        http = self._get_auth_http_client()
         if post_args is not None:
             http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
                        callback=callback)
@@ -923,7 +919,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
                 break
         token = self.get_argument("openid." + oauth_ns + ".request_token", "")
         if token:
-            http = self.get_auth_http_client()
+            http = self._get_auth_http_client()
             token = dict(key=token, secret="")
             http.fetch(self._oauth_access_token_url(token),
                        self.async_callback(self._on_access_token, callback))
@@ -958,23 +954,24 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
         Example usage::
 
-            class GoogleOAuth2LoginHandler(LoginHandler, tornado.auth.GoogleOAuth2Mixin):
+            class GoogleOAuth2LoginHandler(LoginHandler,
+                                           tornado.auth.GoogleOAuth2Mixin):
                 @tornado.gen.coroutine
                 def get(self):
-                    if self.get_argument("code", False):
+                    if self.get_argument('code', False):
                         user = yield self.get_authenticated_user(
                             redirect_uri='http://your.site.com/auth/google',
-                            code=self.get_argument("code"))
+                            code=self.get_argument('code'))
                         # Save the user with e.g. set_secure_cookie
                     else:
                         yield self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
-                            client_id=self.settings["google_consumer_key"],
-                            scope=['openid', 'email'],
+                            client_id=self.settings['google_oauth']['key'],
+                            scope=['profile', 'email'],
                             response_type='code',
-                            extra_params={"approval_prompt": "auto"})
+                            extra_params={'approval_prompt': 'auto'})
         """
-        http = self.get_auth_http_client()
+        http = self._get_auth_http_client()
         body = urllib_parse.urlencode({
             "redirect_uri": redirect_uri,
             "code": code,
@@ -996,16 +993,8 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         args = escape.json_decode(response.body)
         future.set_result(args)
 
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
 
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
-
-
-class FacebookMixin(object):
+class FacebookMixin(AuthHTTPClientMixin):
     """Facebook Connect authentication.
 
     *Deprecated:* New applications should use `FacebookGraphMixin`
@@ -1160,7 +1149,7 @@ class FacebookMixin(object):
         args["sig"] = self._signature(args)
         url = "http://api.facebook.com/restserver.php?" + \
             urllib_parse.urlencode(args)
-        http = self.get_auth_http_client()
+        http = self._get_auth_http_client()
         http.fetch(url, callback=self.async_callback(
             self._parse_response, callback))
 
@@ -1205,14 +1194,6 @@ class FacebookMixin(object):
         if isinstance(body, unicode_type):
             body = body.encode("utf-8")
         return hashlib.md5(body).hexdigest()
-
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
-
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
 
 
 class FacebookGraphMixin(OAuth2Mixin):
@@ -1344,7 +1325,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         if all_args:
             url += "?" + urllib_parse.urlencode(all_args)
         callback = self.async_callback(self._on_facebook_request, callback)
-        http = self.get_auth_http_client()
+        http = self._get_auth_http_client()
         if post_args is not None:
             http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
                        callback=callback)
@@ -1358,14 +1339,6 @@ class FacebookGraphMixin(OAuth2Mixin):
             return
 
         future.set_result(escape.json_decode(response.body))
-
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
-
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
 
 
 def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
