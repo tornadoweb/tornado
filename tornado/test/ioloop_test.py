@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import contextlib
 import datetime
 import functools
+import logging
 import socket
 import sys
 import threading
@@ -20,6 +21,14 @@ try:
     from concurrent import futures
 except ImportError:
     futures = None
+
+try:
+    from unittest import mock  # python 3.3+
+except ImportError:
+    try:
+        import mock  # third-party mock package
+    except ImportError:
+        mock = None
 
 
 class TestIOLoop(AsyncTestCase):
@@ -328,6 +337,45 @@ class TestIOLoopRunSync(unittest.TestCase):
         def f():
             yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)
         self.assertRaises(TimeoutError, self.io_loop.run_sync, f, timeout=0.01)
+
+
+class TestIOLoopLogging(AsyncTestCase):
+
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_basic_config_invoked(self):
+        """If no loggers have been defined, logging.basicConfig should be called
+        test for the presence of a root logger, start IOloop and then test
+        to see if one has been added
+
+        """
+        with mock.patch('logging.basicConfig') as basicConfig:
+            self.io_loop.add_timeout(datetime.timedelta(microseconds=1),
+                                     self.stop)
+            self.wait()
+            basicConfig.assert_called_once()
+
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_basic_config_not_invoked(self):
+        """The setup_logging method will check for getLogger().handlers,
+        getLogger('tornado').handlers and
+        getLogger('tornado.application').handlers. If all are empty, it will
+        invoke basicConfig. Test to make sure all three are called, all three
+        are checked and basicConfig is not invoked because there is a handler
+        returned (for each).
+
+        """
+        with mock.patch('logging.getLogger') as getLogger:
+            with mock.patch('logging.basicConfig') as basicConfig:
+                getLogger.handlers = [True]
+                self.io_loop.add_timeout(datetime.timedelta(microseconds=1),
+                                         self.stop)
+                self.wait()
+                basicConfig.assert_not_called()
+                getLogger.assert_has_calls([mock.call(),
+                                            mock.call('tornado'),
+                                            mock.call('tornado.application')])
+                self.assertEqual(getLogger.call_count, 3)
+
 
 if __name__ == "__main__":
     unittest.main()
