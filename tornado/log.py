@@ -80,7 +80,7 @@ class LogFormatter(logging.Formatter):
     `tornado.options.parse_command_line` (unless ``--logging=none`` is
     used).
     """
-    DEFAULT_FORMAT = '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(normal)s %(message)s'
+    DEFAULT_FORMAT = '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s'
     DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'
     DEFAULT_COLORS = {
         logging.DEBUG:      4,  # Blue
@@ -95,7 +95,7 @@ class LogFormatter(logging.Formatter):
         :arg bool color: Enables color support.
         :arg string fmt: Log message format.
           It will be applied to the attributes dict of log records. The
-          text between ``%(color)s`` and ``%(normal)s`` will be colored
+          text between ``%(color)s`` and ``%(end_color)s`` will be colored
           depending on the level if color support is on.
         :arg dict colors: color mappings from logging level to terminal color
           code
@@ -104,7 +104,7 @@ class LogFormatter(logging.Formatter):
 
         .. versionchanged:: 3.2
 
-           Added ``prefix_fmt`` and ``datefmt`` arguments.
+           Added ``fmt`` and ``datefmt`` arguments.
         """
         logging.Formatter.__init__(self, datefmt=datefmt)
         self._fmt = fmt
@@ -155,8 +155,11 @@ class LogFormatter(logging.Formatter):
 
         record.asctime = self.formatTime(record, self.datefmt)
 
-        record.color = self._colors.get(record.levelno, self._normal)
-        record.normal = self._normal
+        if record.levelno in self._colors:
+            record.color = self._colors.get(record.levelno, '')
+            record.end_color = self._normal
+        else:
+            record.color = record.end_color = ''
 
         formatted = self._fmt % record.__dict__
 

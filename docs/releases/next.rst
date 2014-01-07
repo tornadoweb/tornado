@@ -108,7 +108,7 @@ New modules
 
 * Fix an error from `tornado.log.enable_pretty_logging` when
   `sys.stderr` does not have an ``isatty`` method.
-* `tornado.log.LogFormatter` now accepts keyword arguments ``prefix_fmt``
+* `tornado.log.LogFormatter` now accepts keyword arguments ``fmt``
   and ``datefmt``.
 
 `tornado.netutil`
