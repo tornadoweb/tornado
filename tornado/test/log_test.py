@@ -52,7 +52,6 @@ class LogFormatterTest(unittest.TestCase):
             logging.ERROR: u("\u0001"),
         }
         self.formatter._normal = u("\u0002")
-        self.formatter._color = True
         # construct a Logger directly to bypass getLogger's caching
         self.logger = logging.Logger('LogFormatterTest')
         self.logger.propagate = False
