@@ -83,6 +83,9 @@ New modules
   error logging.
 * `.IOLoop` now frees callback objects earlier, reducing memory usage
   while idle.
+* `.IOLoop` will no longer call `logging.basicConfig` if there is a handler
+  defined for the root logger or for the ``tornado`` or ``tornado.application``
+  loggers (previously it only looked at the root logger).
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
