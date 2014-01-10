@@ -156,7 +156,7 @@ class LogFormatter(logging.Formatter):
         record.asctime = self.formatTime(record, self.datefmt)
 
         if record.levelno in self._colors:
-            record.color = self._colors.get(record.levelno, '')
+            record.color = self._colors[record.levelno]
             record.end_color = self._normal
         else:
             record.color = record.end_color = ''
