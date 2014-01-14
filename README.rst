@@ -10,12 +10,21 @@ can scale to tens of thousands of open connections, making it ideal for
 applications that require a long-lived connection to each user.
 
 
+Upgrade notes
+-------------
+
+As of Tornado 3.2, the `backports.ssl_match_hostname
+<https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ package
+must be installed when running Tornado on Python 2.  This will be
+installed automatically when using ``pip`` or ``easy_install``.
+
 Quick links
 -----------
 
 * `Documentation <http://www.tornadoweb.org/en/stable/>`_
 * `Source (github) <https://github.com/facebook/tornado>`_
 * `Mailing list <http://groups.google.com/group/python-tornado>`_
+* `Stack Overflow <http://stackoverflow.com/questions/tagged/tornado>`_
 * `Wiki <https://github.com/facebook/tornado/wiki/Links>`_
 
 Hello, world
@@ -68,9 +77,13 @@ copy of the source tarball as well.
 The Tornado source code is `hosted on GitHub
 <https://github.com/facebook/tornado>`_.
 
-**Prerequisites**: Tornado runs on Python 2.6, 2.7, 3.2, and 3.3.  It has
-no strict dependencies outside the Python standard library, although some
-features may require one of the following libraries:
+**Prerequisites**: Tornado runs on Python 2.6, 2.7, 3.2, and 3.3.  On
+Python 2, the `backports.ssl_match_hostname
+<https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ package
+must be installed (This will be installed automatically when using
+``pip`` or ``easy_install``); on Python 3 there are no strict
+dependencies outside the standard library.  Some Tornado features may
+require one of the following optional libraries:
 
 * `unittest2 <https://pypi.python.org/pypi/unittest2>`_ is needed to run
   Tornado's test suite on Python 2.6 (it is unnecessary on more recent
@@ -93,9 +106,12 @@ features may require one of the following libraries:
 
 **Platforms**: Tornado should run on any Unix-like platform, although
 for the best performance and scalability only Linux (with ``epoll``)
-and BSD (with ``kqueue``) are recommended (even though Mac OS X is
-derived from BSD and supports kqueue, its networking performance is
-generally poor so it is recommended only for development use).
+and BSD (with ``kqueue``) are recommended for production deployment
+(even though Mac OS X is derived from BSD and supports kqueue, its
+networking performance is generally poor so it is recommended only for
+development use).  Tornado will also run on Windows, although this
+configuration is not officially supported and is recommended only for
+development use.
 
 Discussion and support
 ----------------------
