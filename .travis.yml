@@ -25,6 +25,10 @@ install:
     - pip install --use-mirrors coveralls
 
 script:
+    # Get out of the source directory before running tests to avoid PYTHONPATH
+    # confusion.  This is necessary to ensure that the speedups module can
+    # be found in the installation directory.
+    - cd maint
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' ]]; then export TORNADO_EXTENSION=1; fi
     - export TARGET="-m tornado.test.runtests"
     # We use "python -m coverage" instead of the "bin/coverage" script
@@ -44,7 +48,7 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION != pypy && $DEPS == true ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.3' ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then cd docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
 
 after_success:
     coveralls
