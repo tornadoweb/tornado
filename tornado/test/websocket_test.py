@@ -1,10 +1,24 @@
 from __future__ import absolute_import, division, print_function, with_statement
+
+import traceback
+
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipOnTravis
 from tornado.web import Application, RequestHandler
+
+try:
+    import tornado.websocket
+except ImportError:
+    # The unittest module presents misleading errors on ImportError
+    # (it acts as if websocket_test could not be found, hiding the underlying
+    # error).  If we get an ImportError here (which could happen due to
+    # TORNADO_EXTENSION=1), print some extra information before failing.
+    traceback.print_exc()
+    raise
+
 from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError, _websocket_mask_python
 
 try:
