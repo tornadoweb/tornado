@@ -913,12 +913,15 @@ def _websocket_mask_python(mask, data):
     else:
         return unmasked.tostring()
 
-if os.environ.get('TORNADO_NO_EXTENSION'):
-    # This environment variable exists to make it easier to do performance comparisons;
-    # it's not guaranteed to remain supported in the future.
+if (os.environ.get('TORNADO_NO_EXTENSION') or
+    os.environ.get('TORNADO_EXTENSION') == '0'):
+    # These environment variables exist to make it easier to do performance
+    # comparisons; they are not guaranteed to remain supported in the future.
     _websocket_mask = _websocket_mask_python
 else:
     try:
         from tornado.speedups import websocket_mask as _websocket_mask
     except ImportError:
+        if os.environ.get('TORNADO_EXTENSION') == '1':
+            raise
         _websocket_mask = _websocket_mask_python
