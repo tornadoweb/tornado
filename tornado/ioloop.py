@@ -490,6 +490,43 @@ class IOLoop(Configurable):
         """
         app_log.error("Exception in callback %r", callback, exc_info=True)
 
+    def split_fd(self, fd):
+        """Returns an (fd, obj) pair from an ``fd`` parameter.
+
+        We accept both raw file descriptors and file-like objects as
+        input to `add_handler` and related methods.  When a file-like
+        object is passed, we must retain the object itself so we can
+        close it correctly when the `IOLoop` shuts down, but the
+        poller interfaces favor file descriptors (they will accept
+        file-like objects and call ``fileno()`` for you, but they
+        always return the descriptor itself).
+
+        This method is provided for use by `IOLoop` subclasses and should
+        not generally be used by application code.
+        """
+        try:
+            return fd.fileno(), fd
+        except AttributeError:
+            return fd, fd
+
+    def close_fd(self, fd):
+        """Utility method to close an ``fd``.
+
+        If ``fd`` is a file-like object, we close it directly; otherwise
+        we use `os.close()`.
+
+        This method is provided for use by `IOLoop` subclasses (in
+        implementations of ``IOLoop.close(all_fds=True)`` and should
+        not generally be used by application code.
+        """
+        try:
+            try:
+                fd.close()
+            except AttributeError:
+                os.close(fd)
+        except OSError:
+            pass
+
 
 class PollIOLoop(IOLoop):
     """Base class for IOLoops built around a select-like function.
@@ -528,26 +565,22 @@ class PollIOLoop(IOLoop):
             self._closing = True
         self.remove_handler(self._waker.fileno())
         if all_fds:
-            for fd in self._handlers.keys():
-                try:
-                    close_method = getattr(fd, 'close', None)
-                    if close_method is not None:
-                        close_method()
-                    else:
-                        os.close(fd)
-                except Exception:
-                    gen_log.debug("error closing fd %s", fd, exc_info=True)
+            for fd, handler in self._handlers.values():
+                self.close_fd(fd)
         self._waker.close()
         self._impl.close()
 
     def add_handler(self, fd, handler, events):
-        self._handlers[fd] = stack_context.wrap(handler)
+        fd, obj = self.split_fd(fd)
+        self._handlers[fd] = (obj, stack_context.wrap(handler))
         self._impl.register(fd, events | self.ERROR)
 
     def update_handler(self, fd, events):
+        fd, obj = self.split_fd(fd)
         self._impl.modify(fd, events | self.ERROR)
 
     def remove_handler(self, fd):
+        fd, obj = self.split_fd(fd)
         self._handlers.pop(fd, None)
         self._events.pop(fd, None)
         try:
@@ -685,7 +718,7 @@ class PollIOLoop(IOLoop):
                 while self._events:
                     fd, events = self._events.popitem()
                     try:
-                        self._handlers[fd](fd, events)
+                        self._handlers[fd][1](fd, events)
                     except (OSError, IOError) as e:
                         if e.args[0] == errno.EPIPE:
                             # Happens when the client closes the connection

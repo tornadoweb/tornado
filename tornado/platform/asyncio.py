@@ -36,16 +36,13 @@ class BaseAsyncIOLoop(IOLoop):
         for fd in list(self.handlers):
             self.remove_handler(fd)
             if all_fds:
-                try:
-                    os.close(fd)
-                except OSError:
-                    pass
+                self.close_fd(fd)
         if self.close_loop:
             self.asyncio_loop.close()
 
     def add_handler(self, fd, handler, events):
         if fd in self.handlers:
-            raise ValueError("fd %d added twice" % fd)
+            raise ValueError("fd %s added twice" % fd)
         self.handlers[fd] = stack_context.wrap(handler)
         if events & IOLoop.READ:
             self.asyncio_loop.add_reader(

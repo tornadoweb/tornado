@@ -309,7 +309,7 @@ class BaseIOStream(object):
 
     def _handle_events(self, fd, events):
         if self.closed():
-            gen_log.warning("Got events for closed stream %d", fd)
+            gen_log.warning("Got events for closed stream %s", fd)
             return
         try:
             if events & self.io_loop.READ:
@@ -572,7 +572,7 @@ class BaseIOStream(object):
                         # Broken pipe errors are usually caused by connection
                         # reset, and its better to not log EPIPE errors to
                         # minimize log spam
-                        gen_log.warning("Write error on %d: %s",
+                        gen_log.warning("Write error on %s: %s",
                                         self.fileno(), e)
                     self.close(exc_info=True)
                     return
@@ -680,7 +680,7 @@ class IOStream(BaseIOStream):
         super(IOStream, self).__init__(*args, **kwargs)
 
     def fileno(self):
-        return self.socket.fileno()
+        return self.socket
 
     def close_fd(self):
         self.socket.close()
@@ -740,7 +740,7 @@ class IOStream(BaseIOStream):
             # reported later in _handle_connect.
             if (e.args[0] != errno.EINPROGRESS and
                     e.args[0] not in _ERRNO_WOULDBLOCK):
-                gen_log.warning("Connect error on fd %d: %s",
+                gen_log.warning("Connect error on fd %s: %s",
                                 self.socket.fileno(), e)
                 self.close(exc_info=True)
                 return
@@ -755,7 +755,7 @@ class IOStream(BaseIOStream):
             # an error state before the socket becomes writable, so
             # in that case a connection failure would be handled by the
             # error path in _handle_events instead of here.
-            gen_log.warning("Connect error on fd %d: %s",
+            gen_log.warning("Connect error on fd %s: %s",
                             self.socket.fileno(), errno.errorcode[err])
             self.close()
             return
@@ -841,7 +841,7 @@ class SSLIOStream(IOStream):
                     peer = self.socket.getpeername()
                 except Exception:
                     peer = '(not connected)'
-                gen_log.warning("SSL Error on %d %s: %s",
+                gen_log.warning("SSL Error on %s %s: %s",
                                 self.socket.fileno(), peer, err)
                 return self.close(exc_info=True)
             raise
@@ -916,9 +916,17 @@ class SSLIOStream(IOStream):
         # user callbacks are enqueued asynchronously on the IOLoop,
         # but since _handle_events calls _handle_connect immediately
         # followed by _handle_write we need this to be synchronous.
+        #
+        # The IOLoop will get confused if we swap out self.socket while the
+        # fd is registered, so remove it now and re-register after
+        # wrap_socket().
+        self.io_loop.remove_handler(self.socket)
+        old_state = self._state
+        self._state = None
         self.socket = ssl_wrap_socket(self.socket, self._ssl_options,
                                       server_hostname=self._server_hostname,
                                       do_handshake_on_connect=False)
+        self._add_io_state(old_state)
         super(SSLIOStream, self)._handle_connect()
 
     def read_from_fd(self):

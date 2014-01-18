@@ -5,14 +5,14 @@ from __future__ import absolute_import, division, print_function, with_statement
 import contextlib
 import datetime
 import functools
-import logging
+import os
 import socket
 import sys
 import threading
 import time
 
 from tornado import gen
-from tornado.ioloop import IOLoop, PollIOLoop, TimeoutError
+from tornado.ioloop import IOLoop, TimeoutError
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port
 from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis
@@ -171,6 +171,33 @@ class TestIOLoop(AsyncTestCase):
         # HACK: wait two IOLoop iterations for the GC to happen.
         self.io_loop.add_callback(lambda: self.io_loop.add_callback(self.stop))
         self.wait()
+
+    def test_close_file_object(self):
+        """When a file object is used instead of a numeric file descriptor,
+        the object should be closed (by IOLoop.close(all_fds=True),
+        not just the fd.
+        """
+        # Use a socket since they are supported by IOLoop on all platforms.
+        # Unfortunately, sockets don't support the .closed attribute for
+        # inspecting their close status, so we must use a wrapper.
+        class SocketWrapper(object):
+            def __init__(self, sockobj):
+                self.sockobj = sockobj
+                self.closed = False
+
+            def fileno(self):
+                return self.sockobj.fileno()
+
+            def close(self):
+                self.closed = True
+                self.sockobj.close()
+        sockobj, port = bind_unused_port()
+        socket_wrapper = SocketWrapper(sockobj)
+        io_loop = IOLoop()
+        io_loop.add_handler(socket_wrapper, lambda fd, events: None,
+                            IOLoop.READ)
+        io_loop.close(all_fds=True)
+        self.assertTrue(socket_wrapper.closed)
 
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't

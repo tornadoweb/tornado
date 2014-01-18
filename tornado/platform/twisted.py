@@ -365,8 +365,9 @@ def install(io_loop=None):
 
 @implementer(IReadDescriptor, IWriteDescriptor)
 class _FD(object):
-    def __init__(self, fd, handler):
+    def __init__(self, fd, fileobj, handler):
         self.fd = fd
+        self.fileobj = fileobj
         self.handler = handler
         self.reading = False
         self.writing = False
@@ -412,14 +413,19 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         self.reactor.callWhenRunning(self.make_current)
 
     def close(self, all_fds=False):
+        fds = self.fds
         self.reactor.removeAll()
         for c in self.reactor.getDelayedCalls():
             c.cancel()
+        if all_fds:
+            for fd in fds.values():
+                self.close_fd(fd.fileobj)
 
     def add_handler(self, fd, handler, events):
         if fd in self.fds:
-            raise ValueError('fd %d added twice' % fd)
-        self.fds[fd] = _FD(fd, wrap(handler))
+            raise ValueError('fd %s added twice' % fd)
+        fd, fileobj = self.split_fd(fd)
+        self.fds[fd] = _FD(fd, fileobj, wrap(handler))
         if events & tornado.ioloop.IOLoop.READ:
             self.fds[fd].reading = True
             self.reactor.addReader(self.fds[fd])
@@ -428,6 +434,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
             self.reactor.addWriter(self.fds[fd])
 
     def update_handler(self, fd, events):
+        fd, fileobj = self.split_fd(fd)
         if events & tornado.ioloop.IOLoop.READ:
             if not self.fds[fd].reading:
                 self.fds[fd].reading = True
@@ -446,6 +453,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
                 self.reactor.removeWriter(self.fds[fd])
 
     def remove_handler(self, fd):
+        fd, fileobj = self.split_fd(fd)
         if fd not in self.fds:
             return
         self.fds[fd].lost = True
