@@ -14,7 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""xAutomatically restart the server when a source file is modified.
+"""Automatically restart the server when a source file is modified.
 
 Most applications should not access this module directly.  Instead,
 pass the keyword argument ``autoreload=True`` to the
