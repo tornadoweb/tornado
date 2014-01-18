@@ -741,7 +741,8 @@ class PollIOLoop(IOLoop):
                 while self._events:
                     fd, events = self._events.popitem()
                     try:
-                        self._handlers[fd][1](fd, events)
+                        fd_obj, handler_func = self._handlers[fd]
+                        handler_func(fd_obj, events)
                     except (OSError, IOError) as e:
                         if e.args[0] == errno.EPIPE:
                             # Happens when the client closes the connection
@@ -750,6 +751,7 @@ class PollIOLoop(IOLoop):
                             self.handle_callback_exception(self._handlers.get(fd))
                     except Exception:
                         self.handle_callback_exception(self._handlers.get(fd))
+                fd_obj = handler_func = None
 
         finally:
             # reset the stopped flag so another start/stop pair can be issued

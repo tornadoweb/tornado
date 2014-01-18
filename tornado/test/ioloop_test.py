@@ -199,6 +199,31 @@ class TestIOLoop(AsyncTestCase):
         io_loop.close(all_fds=True)
         self.assertTrue(socket_wrapper.closed)
 
+    def test_handler_callback_file_object(self):
+        """The handler callback receives the same fd object it passed in."""
+        server_sock, port = bind_unused_port()
+        fds = []
+        def handle_connection(fd, events):
+            fds.append(fd)
+            conn, addr = server_sock.accept()
+            conn.close()
+            self.stop()
+        self.io_loop.add_handler(server_sock, handle_connection, IOLoop.READ)
+        with contextlib.closing(socket.socket()) as client_sock:
+            client_sock.connect(('127.0.0.1', port))
+            self.wait()
+        self.io_loop.remove_handler(server_sock)
+        self.io_loop.add_handler(server_sock.fileno(), handle_connection,
+                                 IOLoop.READ)
+        with contextlib.closing(socket.socket()) as client_sock:
+            client_sock.connect(('127.0.0.1', port))
+            self.wait()
+        self.assertIs(fds[0], server_sock)
+        self.assertIs(fds[1], server_sock.fileno())
+        self.io_loop.remove_handler(server_sock.fileno())
+        server_sock.close()
+
+
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
 # automatically set as current.

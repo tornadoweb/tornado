@@ -378,15 +378,15 @@ class _FD(object):
 
     def doRead(self):
         if not self.lost:
-            self.handler(self.fd, tornado.ioloop.IOLoop.READ)
+            self.handler(self.fileobj, tornado.ioloop.IOLoop.READ)
 
     def doWrite(self):
         if not self.lost:
-            self.handler(self.fd, tornado.ioloop.IOLoop.WRITE)
+            self.handler(self.fileobj, tornado.ioloop.IOLoop.WRITE)
 
     def connectionLost(self, reason):
         if not self.lost:
-            self.handler(self.fd, tornado.ioloop.IOLoop.ERROR)
+            self.handler(self.fileobj, tornado.ioloop.IOLoop.ERROR)
             self.lost = True
 
     def logPrefix(self):
