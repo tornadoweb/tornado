@@ -165,7 +165,7 @@ def add_accept_handler(sock, callback, io_loop=None):
                     continue
                 raise
             callback(connection, address)
-    io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
+    io_loop.add_handler(sock, accept_handler, IOLoop.READ)
 
 
 def is_valid_ip(ip):

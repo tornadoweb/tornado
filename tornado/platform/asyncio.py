@@ -24,7 +24,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.asyncio_loop = asyncio_loop
         self.close_loop = close_loop
         self.asyncio_loop.call_soon(self.make_current)
-        # Maps fd to handler function (as in IOLoop.add_handler)
+        # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
         self.handlers = {}
         # Set of fds listening for reads/writes
         self.readers = set()
@@ -34,16 +34,18 @@ class BaseAsyncIOLoop(IOLoop):
     def close(self, all_fds=False):
         self.closing = True
         for fd in list(self.handlers):
+            fileobj, handler_func = self.handlers[fd]
             self.remove_handler(fd)
             if all_fds:
-                self.close_fd(fd)
+                self.close_fd(fileobj)
         if self.close_loop:
             self.asyncio_loop.close()
 
     def add_handler(self, fd, handler, events):
+        fd, fileobj = self.split_fd(fd)
         if fd in self.handlers:
             raise ValueError("fd %s added twice" % fd)
-        self.handlers[fd] = stack_context.wrap(handler)
+        self.handlers[fd] = (fileobj, stack_context.wrap(handler))
         if events & IOLoop.READ:
             self.asyncio_loop.add_reader(
                 fd, self._handle_events, fd, IOLoop.READ)
@@ -54,6 +56,7 @@ class BaseAsyncIOLoop(IOLoop):
             self.writers.add(fd)
 
     def update_handler(self, fd, events):
+        fd, fileobj = self.split_fd(fd)
         if events & IOLoop.READ:
             if fd not in self.readers:
                 self.asyncio_loop.add_reader(
@@ -74,6 +77,7 @@ class BaseAsyncIOLoop(IOLoop):
                 self.writers.remove(fd)
 
     def remove_handler(self, fd):
+        fd, fileobj = self.split_fd(fd)
         if fd not in self.handlers:
             return
         if fd in self.readers:
@@ -85,7 +89,8 @@ class BaseAsyncIOLoop(IOLoop):
         del self.handlers[fd]
 
     def _handle_events(self, fd, events):
-        self.handlers[fd](fd, events)
+        fileobj, handler_func = self.handlers[fd]
+        handler_func(fileobj, events)
 
     def start(self):
         self._setup_logging()

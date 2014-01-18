@@ -223,6 +223,18 @@ class TestIOLoop(AsyncTestCase):
         self.io_loop.remove_handler(server_sock.fileno())
         server_sock.close()
 
+    def test_mixed_fd_fileobj(self):
+        server_sock, port = bind_unused_port()
+        def f(fd, events):
+            pass
+        self.io_loop.add_handler(server_sock, f, IOLoop.READ)
+        with self.assertRaises(Exception):
+            # The exact error is unspecified - some implementations use
+            # IOError, others use ValueError.
+            self.io_loop.add_handler(server_sock.fileno(), f, IOLoop.READ)
+        self.io_loop.remove_handler(server_sock.fileno())
+        server_sock.close()
+
 
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
