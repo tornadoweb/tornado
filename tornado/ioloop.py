@@ -244,21 +244,40 @@ class IOLoop(Configurable):
         raise NotImplementedError()
 
     def add_handler(self, fd, handler, events):
-        """Registers the given handler to receive the given events for fd.
+        """Registers the given handler to receive the given events for ``fd``.
+
+        The ``fd`` argument may either be an integer file descriptor or
+        a file-like object with a ``fileno()`` method (and optionally a
+        ``close()`` method, which may be called when the `IOLoop` is shut
+        down).
 
         The ``events`` argument is a bitwise or of the constants
         ``IOLoop.READ``, ``IOLoop.WRITE``, and ``IOLoop.ERROR``.
 
         When an event occurs, ``handler(fd, events)`` will be run.
+
+        .. versionchanged:: 3.3
+           Added the ability to pass file-like objects in addition to
+           raw file descriptors.
         """
         raise NotImplementedError()
 
     def update_handler(self, fd, events):
-        """Changes the events we listen for fd."""
+        """Changes the events we listen for ``fd``.
+
+        .. versionchanged:: 3.3
+           Added the ability to pass file-like objects in addition to
+           raw file descriptors.
+        """
         raise NotImplementedError()
 
     def remove_handler(self, fd):
-        """Stop listening for events on fd."""
+        """Stop listening for events on ``fd``.
+
+        .. versionchanged:: 3.3
+           Added the ability to pass file-like objects in addition to
+           raw file descriptors.
+        """
         raise NotImplementedError()
 
     def set_blocking_signal_threshold(self, seconds, action):
@@ -503,6 +522,8 @@ class IOLoop(Configurable):
 
         This method is provided for use by `IOLoop` subclasses and should
         not generally be used by application code.
+
+        .. versionadded:: 3.3
         """
         try:
             return fd.fileno(), fd
@@ -513,11 +534,13 @@ class IOLoop(Configurable):
         """Utility method to close an ``fd``.
 
         If ``fd`` is a file-like object, we close it directly; otherwise
-        we use `os.close()`.
+        we use `os.close`.
 
         This method is provided for use by `IOLoop` subclasses (in
         implementations of ``IOLoop.close(all_fds=True)`` and should
         not generally be used by application code.
+
+        .. versionadded:: 3.3
         """
         try:
             try:
