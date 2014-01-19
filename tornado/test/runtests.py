@@ -65,7 +65,7 @@ class TornadoTextTestRunner(unittest.TextTestRunner):
             self.stream.write("\n")
         return result
 
-if __name__ == '__main__':
+def main():
     # The -W command-line option does not work in a virtualenv with
     # python 3 (as of virtualenv 1.7), so configure warnings
     # programmatically instead.
@@ -127,3 +127,6 @@ if __name__ == '__main__':
         kwargs['warnings'] = False
     kwargs['testRunner'] = TornadoTextTestRunner
     tornado.testing.main(**kwargs)
+
+if __name__ == '__main__':
+    main()
