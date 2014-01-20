@@ -13,7 +13,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 import asyncio
 import datetime
 import functools
-import os
 
 from tornado.ioloop import IOLoop
 from tornado import stack_context

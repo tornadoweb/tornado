@@ -8,7 +8,6 @@ from contextlib import closing
 import functools
 import sys
 import threading
-import time
 
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient

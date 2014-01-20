@@ -5,7 +5,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 import contextlib
 import datetime
 import functools
-import os
 import socket
 import sys
 import threading
