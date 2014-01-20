@@ -219,11 +219,8 @@ class BaseIOStream(object):
             # write buffer, so we don't have to recopy the entire thing
             # as we slice off pieces to send to the socket.
             WRITE_BUFFER_CHUNK_SIZE = 128 * 1024
-            if len(data) > WRITE_BUFFER_CHUNK_SIZE:
-                for i in range(0, len(data), WRITE_BUFFER_CHUNK_SIZE):
-                    self._write_buffer.append(data[i:i + WRITE_BUFFER_CHUNK_SIZE])
-            else:
-                self._write_buffer.append(data)
+            for i in range(0, len(data), WRITE_BUFFER_CHUNK_SIZE):
+                self._write_buffer.append(data[i:i + WRITE_BUFFER_CHUNK_SIZE])
         self._write_callback = stack_context.wrap(callback)
         if not self._connecting:
             self._handle_write()
