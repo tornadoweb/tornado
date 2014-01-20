@@ -15,7 +15,7 @@ install:
     # always install unittest2 on py26 even if $DEPS is unset
     - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install --use-mirrors unittest2; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then pip install --use-mirrors futures mock pycares 'pycurl<7.19.3' twisted Monotime==1.0; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then pip install --use-mirrors sphinx; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then pip install --use-mirrors sphinx==1.2; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' && $DEPS == true ]]; then pip install --use-mirrors futures mock; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then pip install --use-mirrors pycares mock; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.3' && $DEPS == true ]]; then pip install --use-mirrors pycares; fi
