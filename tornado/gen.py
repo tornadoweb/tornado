@@ -87,7 +87,7 @@ import itertools
 import sys
 import types
 
-from tornado.concurrent import TracebackFuture, is_future
+from tornado.concurrent import Future, TracebackFuture, is_future
 from tornado.ioloop import IOLoop
 from tornado.stack_context import ExceptionStackContext, wrap
 
@@ -450,18 +450,8 @@ class Multi(YieldPoint):
             return list(result)
 
 
-class _NullYieldPoint(YieldPoint):
-    def start(self, runner):
-        pass
-
-    def is_ready(self):
-        return True
-
-    def get_result(self):
-        return None
-
-
-_null_yield_point = _NullYieldPoint()
+_null_future = Future()
+_null_future.set_result(None)
 
 
 class Runner(object):
@@ -474,13 +464,15 @@ class Runner(object):
     def __init__(self, gen, final_callback):
         self.gen = gen
         self.final_callback = final_callback
-        self.yield_point = _null_yield_point
+        self.future = _null_future
+        self.yield_point = None
         self.pending_callbacks = set()
         self.results = {}
         self.running = False
         self.finished = False
         self.exc_info = None
         self.had_exception = False
+        self.io_loop = IOLoop.current()
 
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
@@ -497,7 +489,13 @@ class Runner(object):
     def set_result(self, key, result):
         """Sets the result for ``key`` and attempts to resume the generator."""
         self.results[key] = result
-        self.run()
+        if self.yield_point is not None and self.yield_point.is_ready():
+            try:
+                self.future.set_result(self.yield_point.get_result())
+            except:
+                self.future.set_exc_info(sys.exc_info())
+            self.yield_point = None
+            self.run()
 
     def pop_result(self, key):
         """Returns the result for ``key`` and unregisters it."""
@@ -515,10 +513,10 @@ class Runner(object):
             while True:
                 if self.exc_info is None:
                     try:
-                        if not self.yield_point.is_ready():
+                        if not self.future.done():
                             return
-                        next = self.yield_point.get_result()
-                        self.yield_point = None
+                        next = self.future.result()
+                        self.future = None
                     except Exception:
                         self.exc_info = sys.exc_info()
                 try:
@@ -531,7 +529,7 @@ class Runner(object):
                         yielded = self.gen.send(next)
                 except (StopIteration, Return) as e:
                     self.finished = True
-                    self.yield_point = _null_yield_point
+                    self.future = _null_future
                     if self.pending_callbacks and not self.had_exception:
                         # If we ran cleanly without waiting on all callbacks
                         # raise an error (really more of a warning).  If we
@@ -545,18 +543,26 @@ class Runner(object):
                     return
                 except Exception:
                     self.finished = True
-                    self.yield_point = _null_yield_point
+                    self.future = _null_future
                     raise
                 if isinstance(yielded, (list, dict)):
                     yielded = Multi(yielded)
-                elif is_future(yielded):
-                    yielded = YieldFuture(yielded)
                 if isinstance(yielded, YieldPoint):
-                    self.yield_point = yielded
+                    self.future = TracebackFuture()
                     try:
-                        self.yield_point.start(self)
+                        yielded.start(self)
+                        if yielded.is_ready():
+                            self.future.set_result(
+                                yielded.get_result())
+                        else:
+                            self.yield_point = yielded
                     except Exception:
                         self.exc_info = sys.exc_info()
+                elif is_future(yielded):
+                    self.future = yielded
+                    if not self.future.done():
+                        self.io_loop.add_future(
+                            self.future, lambda f: self.run())
                 else:
                     self.exc_info = (BadYieldError(
                         "yielded unknown object %r" % (yielded,)),)
