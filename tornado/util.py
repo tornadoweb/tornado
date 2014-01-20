@@ -243,6 +243,16 @@ class ArgReplacer(object):
             # Not a positional parameter
             self.arg_pos = None
 
+    def get_old_value(self, args, kwargs, default=None):
+        """Returns the old value of the named argument without replacing it.
+
+        Returns ``default`` if the argument is not present.
+        """
+        if self.arg_pos is not None and len(args) > self.arg_pos:
+            return args[self.arg_pos]
+        else:
+            return kwargs.get(self.name, default)
+
     def replace(self, new_value, args, kwargs):
         """Replace the named argument in ``args, kwargs`` with ``new_value``.
 

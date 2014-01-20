@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from tornado import netutil
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream, SSLIOStream, PipeIOStream
+from tornado.iostream import IOStream, SSLIOStream, PipeIOStream, StreamClosedError
+from tornado.httputil import HTTPHeaders
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket
 from tornado.stack_context import NullContext
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix
 from tornado.web import RequestHandler, Application
 import errno
@@ -105,6 +106,46 @@ class TestIOStreamWebMixin(object):
         self.assertTrue(data.endswith(b"Hello"))
 
         stream.close()
+
+    @gen_test
+    def test_future_interface(self):
+        """Basic test of IOStream's ability to return Futures."""
+        stream = self._make_client_iostream()
+        yield stream.connect(("localhost", self.get_http_port()))
+        yield stream.write(b"GET / HTTP/1.0\r\n\r\n")
+        first_line = yield stream.read_until(b"\r\n")
+        self.assertEqual(first_line, b"HTTP/1.0 200 OK\r\n")
+        # callback=None is equivalent to no callback.
+        header_data = yield stream.read_until(b"\r\n\r\n", callback=None)
+        headers = HTTPHeaders.parse(header_data.decode('latin1'))
+        content_length = int(headers['Content-Length'])
+        body = yield stream.read_bytes(content_length)
+        self.assertEqual(body, b'Hello')
+        stream.close()
+
+    @gen_test
+    def test_future_close_while_reading(self):
+        stream = self._make_client_iostream()
+        yield stream.connect(("localhost", self.get_http_port()))
+        yield stream.write(b"GET / HTTP/1.0\r\n\r\n")
+        with self.assertRaises(StreamClosedError):
+            yield stream.read_bytes(1024 * 1024)
+        stream.close()
+
+    @gen_test
+    def test_future_read_until_close(self):
+        # Ensure that the data comes through before the StreamClosedError.
+        stream = self._make_client_iostream()
+        yield stream.connect(("localhost", self.get_http_port()))
+        yield stream.write(b"GET / HTTP/1.0\r\nConnection: close\r\n\r\n")
+        yield stream.read_until(b"\r\n\r\n")
+        body = yield stream.read_until_close()
+        self.assertEqual(body, b"Hello")
+
+        # Nothing else to read; the error comes immediately without waiting
+        # for yield.
+        with self.assertRaises(StreamClosedError):
+            stream.read_bytes(1)
 
 
 class TestIOStreamMixin(object):
@@ -294,6 +335,25 @@ class TestIOStreamMixin(object):
             client.read_bytes(1, callback1)
             self.wait()  # stopped by close_callback
             self.assertEqual(chunks, [b"1", b"2"])
+        finally:
+            server.close()
+            client.close()
+
+    def test_future_delayed_close_callback(self):
+        # Same as test_delayed_close_callback, but with the future interface.
+        server, client = self.make_iostream_pair()
+        # We can't call make_iostream_pair inside a gen_test function
+        # because the ioloop is not reentrant.
+        @gen_test
+        def f(self):
+            server.write(b"12")
+            chunks = []
+            chunks.append((yield client.read_bytes(1)))
+            server.close()
+            chunks.append((yield client.read_bytes(1)))
+            self.assertEqual(chunks, [b"1", b"2"])
+        try:
+            f(self)
         finally:
             server.close()
             client.close()

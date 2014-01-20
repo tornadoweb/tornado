@@ -28,6 +28,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import collections
 import errno
+import functools
 import numbers
 import os
 import socket
@@ -35,11 +36,12 @@ import ssl
 import sys
 import re
 
+from tornado.concurrent import TracebackFuture
 from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError
 from tornado import stack_context
-from tornado.util import bytes_type
+from tornado.util import bytes_type, ArgReplacer
 
 try:
     from tornado.platform.posix import _set_nonblocking
@@ -64,6 +66,37 @@ class StreamClosedError(IOError):
     so you may see this error before you see the close callback.
     """
     pass
+
+
+def _iostream_return_future(f):
+    """Similar to tornado.concurrent.return_future, but the Future will
+    also raise a StreamClosedError if the stream is closed before
+    it resolves.
+
+    Unlike return_future (and _auth_return_future), no Future will be
+    returned if a callback is given.
+    """
+    replacer = ArgReplacer(f, 'callback')
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        if replacer.get_old_value(args, kwargs) is not None:
+            # If a callaback is present, just call in to the decorated
+            # function.  This is a slight optimization (by not creating a
+            # Future that is unlikely to be used), but mainly avoids the
+            # complexity of running the callback in the expected way.
+            return f(*args, **kwargs)
+        future = TracebackFuture()
+        callback, args, kwargs = replacer.replace(
+            lambda value=None: future.set_result(value),
+            args, kwargs)
+        f(*args, **kwargs)
+        stream = args[0]
+        stream._pending_futures.add(future)
+        future.add_done_callback(
+            lambda fut: stream._pending_futures.discard(fut))
+        return future
+    return wrapper
 
 
 class BaseIOStream(object):
@@ -102,6 +135,7 @@ class BaseIOStream(object):
         self._state = None
         self._pending_callbacks = 0
         self._closed = False
+        self._pending_futures = set()
 
     def fileno(self):
         """Returns the file descriptor for this stream."""
@@ -142,6 +176,7 @@ class BaseIOStream(object):
         """
         return None
 
+    @_iostream_return_future
     def read_until_regex(self, regex, callback):
         """Run ``callback`` when we read the given regex pattern.
 
@@ -152,6 +187,7 @@ class BaseIOStream(object):
         self._read_regex = re.compile(regex)
         self._try_inline_read()
 
+    @_iostream_return_future
     def read_until(self, delimiter, callback):
         """Run ``callback`` when we read the given delimiter.
 
@@ -162,6 +198,7 @@ class BaseIOStream(object):
         self._read_delimiter = delimiter
         self._try_inline_read()
 
+    @_iostream_return_future
     def read_bytes(self, num_bytes, callback, streaming_callback=None):
         """Run callback when we read the given number of bytes.
 
@@ -176,6 +213,7 @@ class BaseIOStream(object):
         self._streaming_callback = stack_context.wrap(streaming_callback)
         self._try_inline_read()
 
+    @_iostream_return_future
     def read_until_close(self, callback, streaming_callback=None):
         """Reads all data from the socket until it is closed.
 
@@ -202,6 +240,7 @@ class BaseIOStream(object):
         self._streaming_callback = stack_context.wrap(streaming_callback)
         self._try_inline_read()
 
+    @_iostream_return_future
     def write(self, data, callback=None):
         """Write the given data to this stream.
 
@@ -266,6 +305,10 @@ class BaseIOStream(object):
         # If there are pending callbacks, don't run the close callback
         # until they're done (see _maybe_add_error_handler)
         if self.closed() and self._pending_callbacks == 0:
+            # Copy the _pending_futures set because each will remove itself
+            # from the set as it is closed.
+            for fut in list(self._pending_futures):
+                fut.set_exception(StreamClosedError())
             if self._close_callback is not None:
                 cb = self._close_callback
                 self._close_callback = None
@@ -704,6 +747,7 @@ class IOStream(BaseIOStream):
     def write_to_fd(self, data):
         return self.socket.send(data)
 
+    @_iostream_return_future
     def connect(self, address, callback=None, server_hostname=None):
         """Connects the socket to a remote address without blocking.
 
@@ -904,7 +948,10 @@ class SSLIOStream(IOStream):
         # has completed.
         self._ssl_connect_callback = stack_context.wrap(callback)
         self._server_hostname = server_hostname
-        super(SSLIOStream, self).connect(address, callback=None)
+        # Note: Since we don't pass our callback argument along to
+        # super.connect(), this will always return a Future.
+        # This is harmless, but a bit less efficient than it could be.
+        return super(SSLIOStream, self).connect(address, callback=None)
 
     def _handle_connect(self):
         # When the connection is complete, wrap the socket for SSL

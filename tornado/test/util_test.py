@@ -151,14 +151,22 @@ class ArgReplacerTest(unittest.TestCase):
         self.replacer = ArgReplacer(function, 'callback')
 
     def test_omitted(self):
-        self.assertEqual(self.replacer.replace('new', (1, 2), dict()),
+        args = (1, 2)
+        kwargs = dict()
+        self.assertIs(self.replacer.get_old_value(args, kwargs), None)
+        self.assertEqual(self.replacer.replace('new', args, kwargs),
                          (None, (1, 2), dict(callback='new')))
 
     def test_position(self):
-        self.assertEqual(self.replacer.replace('new', (1, 2, 'old', 3), dict()),
+        args = (1, 2, 'old', 3)
+        kwargs = dict()
+        self.assertEqual(self.replacer.get_old_value(args, kwargs), 'old')
+        self.assertEqual(self.replacer.replace('new', args, kwargs),
                          ('old', [1, 2, 'new', 3], dict()))
 
     def test_keyword(self):
-        self.assertEqual(self.replacer.replace('new', (1,),
-                                               dict(y=2, callback='old', z=3)),
+        args = (1,)
+        kwargs = dict(y=2, callback='old', z=3)
+        self.assertEqual(self.replacer.get_old_value(args, kwargs), 'old')
+        self.assertEqual(self.replacer.replace('new', args, kwargs),
                          ('old', (1,), dict(y=2, callback='new', z=3)))
