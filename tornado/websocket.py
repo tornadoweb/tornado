@@ -270,8 +270,11 @@ class WebSocketHandler(tornado.web.RequestHandler):
         By default, this checks to see that requests that provide both a host
         origin have the same origin and host This is a security protection
         against cross site scripting attacks on browsers,
-        since WebSockets don't have CORS headers."""
-
+        since WebSockets don't have CORS headers.
+        
+        >>> self.check_origins(allowed_origins=['localhost'])
+        
+        """
         # Handle WebSocket Origin naming convention differences
         # The difference between version 8 and 13 is that in 8 the
         # client sends a "Sec-Websocket-Origin" header and in 13 it's
@@ -290,7 +293,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         parsed_origin = urlparse(origin_header)
         origin = parsed_origin.netloc
 
-        if origin in allowed_origins:
+        if allowed_origins and origin in allowed_origins:
             return True
 
         # Check to see that origin matches host directly, including ports

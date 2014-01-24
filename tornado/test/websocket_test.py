@@ -173,6 +173,39 @@ class WebSocketTest(AsyncHTTPTestCase):
         self.assertEqual(code, 1001)
         self.assertEqual(reason, 'goodbye')
 
+    @gen_test
+    def test_check_origin_valid(self):
+        port = self.get_http_port()
+
+        url = 'ws://localhost:%d/echo' % port
+        headers = {'Origin': 'http://localhost:%d' % port}
+
+        ws = yield websocket_connect(HTTPRequest(url, headers=headers),
+            io_loop=self.io_loop)
+        ws.write_message('hello')
+        response = yield ws.read_message()
+        self.assertEqual(response, 'hello')
+        ws.close()
+        yield self.close_future
+
+    @gen_test
+    def test_check_origin_invalid(self):
+        '''Currently a failing test'''
+        port = self.get_http_port()
+
+        url = 'ws://localhost:%d/echo' % port
+        headers = {'Origin': 'http://somewhereelse.com'}
+
+        ws = yield websocket_connect(HTTPRequest(url, headers=headers),
+            io_loop=self.io_loop)
+        ws.write_message('hello')
+
+        response = yield ws.read_message()
+
+        self.assertEqual(response, 'hello')
+        ws.close()
+        yield self.close_future
+
 
 class MaskFunctionMixin(object):
     # Subclasses should define self.mask(mask, data)
