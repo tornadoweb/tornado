@@ -42,6 +42,11 @@ from tornado import simple_httpclient
 from tornado.util import bytes_type, unicode_type
 
 try:
+    from urllib.parse import urlparse # py2
+except ImportError:
+    from urlparse import urlparse # py3
+
+try:
     xrange  # py2
 except NameError:
     xrange = range  # py3
@@ -155,6 +160,32 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 "HTTP/1.1 426 Upgrade Required\r\n"
                 "Sec-WebSocket-Version: 8\r\n\r\n"))
             self.stream.close()
+
+        # Assume cross origin is disallowed by default, while allowing users to
+        # choose
+        if kwargs.get('allow_cross_origin', False):
+            pass
+        # Check that the host and origin match
+        elif not self.same_origin():
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 403 Cross Origin Websockets Disabled\r\n\r\n"
+            ))
+            self.stream.close()
+
+    def same_origin(self):
+        """Check to see that origin and host match in the headers."""
+        origin_header = self.request.headers.get("Origin")
+        host = self.request.headers.get("Host")
+
+        # If no header is provided, assume we can't verify origin
+        if(origin_header is None or host is None):
+            return False
+
+        parsed_origin = urlparse(origin_header)
+        origin = parsed_origin.netloc
+
+        # Check to see that origin matches host directly, including ports
+        return origin == host
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket.
