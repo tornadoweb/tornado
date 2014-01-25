@@ -202,7 +202,7 @@ class WebSocketTest(AsyncHTTPTestCase):
 
         response = yield ws.read_message()
 
-        self.assertEqual(response, 'hello')
+        self.assertEqual(response, None)
         ws.close()
         yield self.close_future
 
