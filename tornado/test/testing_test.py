@@ -8,6 +8,7 @@ from tornado.test.util import unittest
 
 import contextlib
 import os
+import traceback
 
 
 @contextlib.contextmanager
@@ -148,8 +149,17 @@ class GenTest(AsyncTestCase):
         def test(self):
             yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)
 
-        with self.assertRaises(ioloop.TimeoutError):
+        # This can't use assertRaises because we need to inspect the
+        # exc_info triple (and not just the exception object)
+        try:
             test(self)
+            self.fail("did not get expected exception")
+        except ioloop.TimeoutError:
+            # The stack trace should blame the add_timeout line, not just
+            # unrelated IOLoop/testing internals.
+            self.assertIn(
+                "gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)",
+                traceback.format_exc())
 
         self.finished = True
 

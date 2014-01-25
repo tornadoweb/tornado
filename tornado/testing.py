@@ -17,7 +17,7 @@ try:
     from tornado.httpclient import AsyncHTTPClient
     from tornado.httpserver import HTTPServer
     from tornado.simple_httpclient import SimpleAsyncHTTPClient
-    from tornado.ioloop import IOLoop
+    from tornado.ioloop import IOLoop, TimeoutError
     from tornado import netutil
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
@@ -455,13 +455,40 @@ def gen_test(func=None, timeout=None):
         timeout = get_async_test_timeout()
 
     def wrap(f):
-        f = gen.coroutine(f)
-
+        # Stack up several decorators to allow us to access the generator
+        # object itself.  In the innermost wrapper, we capture the generator
+        # and save it in an attribute of self.  Next, we run the wrapped
+        # function through @gen.coroutine.  Finally, the coroutine is
+        # wrapped again to make it synchronous with run_sync.
+        #
+        # This is a good case study arguing for either some sort of
+        # extensibility in the gen decorators or cancellation support.
         @functools.wraps(f)
-        def wrapper(self):
-            return self.io_loop.run_sync(
-                functools.partial(f, self), timeout=timeout)
-        return wrapper
+        def pre_coroutine(self):
+            result = f(self)
+            if isinstance(result, types.GeneratorType):
+                self._test_generator = result
+            else:
+                self._test_generator = None
+            return result
+
+        coro = gen.coroutine(pre_coroutine)
+
+        @functools.wraps(coro)
+        def post_coroutine(self):
+            try:
+                return self.io_loop.run_sync(
+                    functools.partial(coro, self), timeout=timeout)
+            except TimeoutError as e:
+                # run_sync raises an error with an unhelpful traceback.
+                # If we throw it back into the generator the stack trace
+                # will be replaced by the point where the test is stopped.
+                self._test_generator.throw(e)
+                # In case the test contains an overly broad except clause,
+                # we may get back here.  In this case re-raise the original
+                # exception, which is better than nothing.
+                raise
+        return post_coroutine
 
     if func is not None:
         # Used like:
