@@ -622,6 +622,8 @@ class PollIOLoop(IOLoop):
                           action if action is not None else signal.SIG_DFL)
 
     def start(self):
+        if self._running:
+            raise RuntimeError("IOLoop is already running")
         self._setup_logging()
         if self._stopped:
             self._stopped = False

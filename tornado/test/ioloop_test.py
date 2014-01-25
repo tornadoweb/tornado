@@ -234,6 +234,21 @@ class TestIOLoop(AsyncTestCase):
         self.io_loop.remove_handler(server_sock.fileno())
         server_sock.close()
 
+    def test_reentrant(self):
+        """Calling start() twice should raise an error, not deadlock."""
+        returned_from_start = [False]
+        got_exception = [False]
+        def callback():
+            try:
+                self.io_loop.start()
+                returned_from_start[0] = True
+            except Exception:
+                got_exception[0] = True
+            self.stop()
+        self.io_loop.add_callback(callback)
+        self.wait()
+        self.assertTrue(got_exception[0])
+        self.assertFalse(returned_from_start[0])
 
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
