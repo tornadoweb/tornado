@@ -62,6 +62,39 @@ class AsyncTestCaseTest(AsyncTestCase):
         self.wait(timeout=0.15)
 
 
+class AsyncTestCaseWrapperTest(unittest.TestCase):
+    def test_undecorated_generator(self):
+        class Test(AsyncTestCase):
+            def test_gen(self):
+                yield
+        test = Test('test_gen')
+        result = unittest.TestResult()
+        test.run(result)
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("should be decorated", result.errors[0][1])
+
+    def test_undecorated_generator_with_skip(self):
+        class Test(AsyncTestCase):
+            @unittest.skip("don't run this")
+            def test_gen(self):
+                yield
+        test = Test('test_gen')
+        result = unittest.TestResult()
+        test.run(result)
+        self.assertEqual(len(result.errors), 0)
+        self.assertEqual(len(result.skipped), 1)
+
+    def test_other_return(self):
+        class Test(AsyncTestCase):
+            def test_other_return(self):
+                return 42
+        test = Test('test_other_return')
+        result = unittest.TestResult()
+        test.run(result)
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("Return value from test method ignored", result.errors[0][1])
+
+
 class SetUpTearDownTest(unittest.TestCase):
     def test_set_up_tear_down(self):
         """

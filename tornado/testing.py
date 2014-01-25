@@ -38,6 +38,7 @@ import re
 import signal
 import socket
 import sys
+import types
 
 try:
     from cStringIO import StringIO  # py2
@@ -94,6 +95,35 @@ def get_async_test_timeout():
     except (ValueError, TypeError):
         return 5
 
+
+class _TestMethodWrapper(object):
+    """Wraps a test method to raise an error if it returns a value.
+
+    This is mainly used to detect undecorated generators (if a test
+    method yields it must use a decorator to consume the generator),
+    but will also detect other kinds of return values (these are not
+    necessarily errors, but we alert anyway since there is no good
+    reason to return a value from a test.
+    """
+    def __init__(self, orig_method):
+        self.orig_method = orig_method
+
+    def __call__(self):
+        result = self.orig_method()
+        if isinstance(result, types.GeneratorType):
+            raise TypeError("Generator test methods should be decorated with "
+                            "tornado.testing.gen_test")
+        elif result is not None:
+            raise ValueError("Return value from test method ignored: %r" %
+                             result)
+
+    def __getattr__(self, name):
+        """Proxy all unknown attributes to the original method.
+
+        This is important for some of the decorators in the `unittest`
+        module, such as `unittest.skipIf`.
+        """
+        return getattr(self.orig_method, name)
 
 class AsyncTestCase(unittest.TestCase):
     """`~unittest.TestCase` subclass for testing `.IOLoop`-based
@@ -157,13 +187,19 @@ class AsyncTestCase(unittest.TestCase):
                 self.assertIn("FriendFeed", response.body)
                 self.stop()
     """
-    def __init__(self, *args, **kwargs):
-        super(AsyncTestCase, self).__init__(*args, **kwargs)
+    def __init__(self, methodName='runTest', **kwargs):
+        super(AsyncTestCase, self).__init__(methodName, **kwargs)
         self.__stopped = False
         self.__running = False
         self.__failure = None
         self.__stop_args = None
         self.__timeout = None
+
+        # It's easy to forget the @gen_test decorator, but if you do
+        # the test will silently be ignored because nothing will consume
+        # the generator.  Replace the test method with a wrapper that will
+        # make sure it's not an undecorated generator.
+        setattr(self, methodName, _TestMethodWrapper(getattr(self, methodName)))
 
     def setUp(self):
         super(AsyncTestCase, self).setUp()

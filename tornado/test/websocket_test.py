@@ -83,8 +83,9 @@ class WebSocketTest(AsyncHTTPTestCase):
         ws.read_message(self.stop)
         response = self.wait().result()
         self.assertEqual(response, 'hello')
+        self.close_future.add_done_callback(lambda f: self.stop())
         ws.close()
-        yield self.close_future
+        self.wait()
 
     @gen_test
     def test_websocket_http_fail(self):
