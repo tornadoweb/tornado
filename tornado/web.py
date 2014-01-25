@@ -604,6 +604,8 @@ class RequestHandler(object):
             raise RuntimeError("Cannot write() after finish().  May be caused "
                                "by using async operations without the "
                                "@asynchronous decorator.")
+        if not isinstance(chunk, (bytes_type, unicode_type, dict)):
+            raise TypeError("write() only accepts bytes, unicode, and dict objects")
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
