@@ -195,23 +195,19 @@ def _make_coroutine_wrapper(func, replace_callback):
             future.set_exc_info((typ, value, tb))
             return True
         with ExceptionStackContext(handle_exception) as deactivate:
+            future.add_done_callback(lambda f: deactivate())
             try:
                 result = func(*args, **kwargs)
             except (Return, StopIteration) as e:
                 result = getattr(e, 'value', None)
             except Exception:
-                deactivate()
                 future.set_exc_info(sys.exc_info())
                 return future
             else:
                 if isinstance(result, types.GeneratorType):
-                    def final_callback(value):
-                        deactivate()
-                        future.set_result(value)
-                    runner = Runner(result, final_callback)
+                    runner = Runner(result, future)
                     runner.run()
                     return future
-            deactivate()
             future.set_result(result)
         return future
     return wrapper
@@ -444,11 +440,12 @@ class Runner(object):
 
     Maintains information about pending callbacks and their results.
 
-    ``final_callback`` is run after the generator exits.
+    The results of the generator are stored in ``result_future`` (a
+    `.TracebackFuture`)
     """
-    def __init__(self, gen, final_callback):
+    def __init__(self, gen, result_future):
         self.gen = gen
-        self.final_callback = final_callback
+        self.result_future = result_future
         self.future = _null_future
         self.yield_point = None
         self.pending_callbacks = set()
@@ -523,13 +520,15 @@ class Runner(object):
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
-                    self.final_callback(getattr(e, 'value', None))
-                    self.final_callback = None
+                    self.result_future.set_result(getattr(e, 'value', None))
+                    self.result_future = None
                     return
                 except Exception:
                     self.finished = True
                     self.future = _null_future
-                    raise
+                    self.result_future.set_exc_info(sys.exc_info())
+                    self.result_future = None
+                    return
                 if isinstance(yielded, (list, dict)):
                     yielded = Multi(yielded)
                 if isinstance(yielded, YieldPoint):
