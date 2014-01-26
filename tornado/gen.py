@@ -129,45 +129,20 @@ def engine(func):
     `~tornado.web.RequestHandler` :ref:`HTTP verb methods <verbs>`,
     which use ``self.finish()`` in place of a callback argument.
     """
+    func = _make_coroutine_wrapper(func, replace_callback=False)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        runner = None
-
-        def handle_exception(typ, value, tb):
-            # if the function throws an exception before its first "yield"
-            # (or is not a generator at all), the Runner won't exist yet.
-            # However, in that case we haven't reached anything asynchronous
-            # yet, so we can just let the exception propagate.
-            if runner is not None:
-                return runner.handle_exception(typ, value, tb)
-            return False
-        with ExceptionStackContext(handle_exception) as deactivate:
-            try:
-                result = func(*args, **kwargs)
-            except (Return, StopIteration) as e:
-                result = getattr(e, 'value', None)
-            else:
-                if isinstance(result, types.GeneratorType):
-                    def final_callback(value):
-                        if value is not None:
-                            raise ReturnValueIgnoredError(
-                                "@gen.engine functions cannot return values: "
-                                "%r" % (value,))
-                        assert value is None
-                        deactivate()
-                    runner = Runner(result, final_callback)
-                    runner.run()
-                    return
-            if result is not None:
+        future = func(*args, **kwargs)
+        def final_callback(future):
+            if future.result() is not None:
                 raise ReturnValueIgnoredError(
                     "@gen.engine functions cannot return values: %r" %
-                    (result,))
-            deactivate()
-            # no yield, so we're done
+                    (future.result(),))
+        future.add_done_callback(final_callback)
     return wrapper
 
 
-def coroutine(func):
+def coroutine(func, replace_callback=True):
     """Decorator for asynchronous generators.
 
     Any generator that yields objects from this module must be wrapped
@@ -191,12 +166,22 @@ def coroutine(func):
     From the caller's perspective, ``@gen.coroutine`` is similar to
     the combination of ``@return_future`` and ``@gen.engine``.
     """
+    return _make_coroutine_wrapper(func, replace_callback=True)
+
+
+def _make_coroutine_wrapper(func, replace_callback):
+    """The inner workings of ``@gen.coroutine`` and ``@gen.engine``.
+
+    The two decorators differ in their treatment of the ``callback``
+    argument, so we cannot simply implement ``@engine`` in terms of
+    ``@coroutine``.
+    """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         runner = None
         future = TracebackFuture()
 
-        if 'callback' in kwargs:
+        if replace_callback and 'callback' in kwargs:
             callback = kwargs.pop('callback')
             IOLoop.current().add_future(
                 future, lambda future: callback(future.result()))
