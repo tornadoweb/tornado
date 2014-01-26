@@ -145,9 +145,34 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.stream.close()
             return
 
+        # Handle WebSocket Origin naming convention differences
         # The difference between version 8 and 13 is that in 8 the
         # client sends a "Sec-Websocket-Origin" header and in 13 it's
         # simply "Origin".
+        if "Origin" in self.request.headers:
+            origin = self.request.headers.get("Origin")
+        else:
+            origin = self.request.headers.get("Sec-Websocket-Origin", None)
+
+        # If we have an origin, normalize
+        if(origin):
+            # Due to how stdlib's urlparse is implemented, urls without a //
+            # are interpreted to be paths (resulting in netloc being None)
+            if("//" not in origin):
+                origin = "//" + origin
+            parsed_origin = urlparse(origin)
+            origin = parsed_origin.netloc
+            origin = origin.lower()
+
+        # If there was an origin header, check to make sure it matches
+        # according to check_origin
+        if not self.check_origin(origin):
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 403 Cross Origin Websockets Disabled\r\n\r\n"
+            ))
+            self.stream.close()
+            return
+
         if self.request.headers.get("Sec-WebSocket-Version") in ("7", "8", "13"):
             self.ws_connection = WebSocketProtocol13(self)
             self.ws_connection.accept_connection()
@@ -160,13 +185,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 "HTTP/1.1 426 Upgrade Required\r\n"
                 "Sec-WebSocket-Version: 8\r\n\r\n"))
             self.stream.close()
-
-        if not self.check_origin():
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 403 Cross Origin Websockets Disabled\r\n\r\n"
-            ))
-            self.stream.close()
-
 
 
     def write_message(self, message, binary=False):
@@ -264,37 +282,25 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.ws_connection.close(code, reason)
             self.ws_connection = None
 
-    def check_origin(self, allowed_origins=None):
+    def check_origin(self, origin):
         """Override to enable support for allowing alternate origins.
         
-        By default, this checks to see that requests that provide both a host
-        origin have the same origin and host This is a security protection
-        against cross site scripting attacks on browsers,
-        since WebSockets don't have CORS headers.
+        By default, this checks to see that the host matches the origin
+        provided.
+
+        This is a security protection against cross site scripting attacks on
+        browsers, since WebSockets don't have CORS headers.
         
-        >>> self.check_origins(allowed_origins=['localhost'])
+        >>> self.check_origin(origin='localhost')
+        True
         
         """
-        # Handle WebSocket Origin naming convention differences
-        # The difference between version 8 and 13 is that in 8 the
-        # client sends a "Sec-Websocket-Origin" header and in 13 it's
-        # simply "Origin".
-        if self.request.headers.get("Sec-WebSocket-Version") in ("7", "8"):
-            origin_header = self.request.headers.get("Sec-Websocket-Origin")
-        else:
-            origin_header = self.request.headers.get("Origin")
+        # When origin is None, assume it didn't come from a browser and we can
+        # pass it on
+        if origin is None:
+            return True
 
         host = self.request.headers.get("Host")
-
-        # If no header is provided, assume request is not coming from a browser
-        if(origin_header is None or host is None):
-            return True
-
-        parsed_origin = urlparse(origin_header)
-        origin = parsed_origin.netloc
-
-        if allowed_origins and origin in allowed_origins:
-            return True
 
         # Check to see that origin matches host directly, including ports
         return origin == host

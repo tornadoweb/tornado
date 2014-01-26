@@ -189,22 +189,49 @@ class WebSocketTest(AsyncHTTPTestCase):
         yield self.close_future
 
     @gen_test
-    def test_check_origin_invalid(self):
-        '''Currently a failing test'''
+    def test_check_origin_valid2(self):
         port = self.get_http_port()
 
         url = 'ws://localhost:%d/echo' % port
-        headers = {'Origin': 'http://somewhereelse.com'}
+        headers = {'Origin': 'localhost:%d' % port}
 
         ws = yield websocket_connect(HTTPRequest(url, headers=headers),
             io_loop=self.io_loop)
         ws.write_message('hello')
-
         response = yield ws.read_message()
-
-        self.assertEqual(response, None)
+        self.assertEqual(response, 'hello')
         ws.close()
         yield self.close_future
+
+    @gen_test
+    def test_check_origin_invalid(self):
+        port = self.get_http_port()
+
+        url = 'ws://localhost:%d/echo' % port
+        # Host is localhost, which should not be accessible from some other
+        # domain
+        headers = {'Origin': 'http://somewhereelse.com'}
+
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(HTTPRequest(url, headers=headers),
+                                    io_loop=self.io_loop)
+
+        self.assertEqual(cm.exception.code, 403)
+
+    @gen_test
+    def test_check_origin_invalid2(self):
+        port = self.get_http_port()
+
+        url = 'ws://localhost:%d/echo' % port
+        # subdomains should be invalid by default
+        headers = {'Origin': 'http://subtenant.somewhereelse.com',
+                   'Host': 'subtenant2.somewhereelse.com'}
+
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(HTTPRequest(url, headers=headers),
+                                    io_loop=self.io_loop)
+
+        self.assertEqual(cm.exception.code, 403)
 
 
 class MaskFunctionMixin(object):
