@@ -733,8 +733,13 @@ class GenCoroutineTest(AsyncTestCase):
     def test_replace_context_exception(self):
         # Test exception handling: exceptions thrown into the stack context
         # can be caught and replaced.
+        # Note that this test and the following are for behavior that is
+        # not really supported any more:  coroutines no longer create a
+        # stack context automatically; but one is created after the first
+        # yield point.
         @gen.coroutine
         def f2():
+            yield gen.Task(self.io_loop.add_callback)
             self.io_loop.add_callback(lambda: 1 / 0)
             try:
                 yield gen.Task(self.io_loop.add_timeout,
@@ -753,6 +758,7 @@ class GenCoroutineTest(AsyncTestCase):
         # can be caught and ignored.
         @gen.coroutine
         def f2():
+            yield gen.Task(self.io_loop.add_callback)
             self.io_loop.add_callback(lambda: 1 / 0)
             try:
                 yield gen.Task(self.io_loop.add_timeout,

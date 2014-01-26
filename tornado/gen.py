@@ -186,29 +186,19 @@ def _make_coroutine_wrapper(func, replace_callback):
             IOLoop.current().add_future(
                 future, lambda future: callback(future.result()))
 
-        def handle_exception(typ, value, tb):
-            try:
-                if runner is not None and runner.handle_exception(typ, value, tb):
-                    return True
-            except Exception:
-                typ, value, tb = sys.exc_info()
-            future.set_exc_info((typ, value, tb))
-            return True
-        with stack_context.ExceptionStackContext(handle_exception) as deactivate:
-            future.add_done_callback(lambda f: deactivate())
-            try:
-                result = func(*args, **kwargs)
-            except (Return, StopIteration) as e:
-                result = getattr(e, 'value', None)
-            except Exception:
-                future.set_exc_info(sys.exc_info())
+        try:
+            result = func(*args, **kwargs)
+        except (Return, StopIteration) as e:
+            result = getattr(e, 'value', None)
+        except Exception:
+            future.set_exc_info(sys.exc_info())
+            return future
+        else:
+            if isinstance(result, types.GeneratorType):
+                runner = Runner(result, future)
+                runner.run()
                 return future
-            else:
-                if isinstance(result, types.GeneratorType):
-                    runner = Runner(result, future)
-                    runner.run()
-                    return future
-            future.set_result(result)
+        future.set_result(result)
         return future
     return wrapper
 
@@ -455,6 +445,12 @@ class Runner(object):
         self.exc_info = None
         self.had_exception = False
         self.io_loop = IOLoop.current()
+        # For efficiency, we do not create a stack context until we
+        # reach a YieldPoint (stack contexts are required for the historical
+        # semantics of YieldPoints, but not for Futures).  When we have
+        # done so, this field will be set and must be called at the end
+        # of the coroutine.
+        self.stack_context_deactivate = None
 
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
@@ -528,26 +524,42 @@ class Runner(object):
                             self.pending_callbacks)
                     self.result_future.set_result(getattr(e, 'value', None))
                     self.result_future = None
+                    self._deactivate_stack_context()
                     return
                 except Exception:
                     self.finished = True
                     self.future = _null_future
                     self.result_future.set_exc_info(sys.exc_info())
                     self.result_future = None
+                    self._deactivate_stack_context()
                     return
                 if isinstance(yielded, (list, dict)):
                     yielded = Multi(yielded)
                 if isinstance(yielded, YieldPoint):
                     self.future = TracebackFuture()
-                    try:
-                        yielded.start(self)
-                        if yielded.is_ready():
-                            self.future.set_result(
-                                yielded.get_result())
-                        else:
-                            self.yield_point = yielded
-                    except Exception:
-                        self.exc_info = sys.exc_info()
+                    def start_yield_point():
+                        try:
+                            yielded.start(self)
+                            if yielded.is_ready():
+                                self.future.set_result(
+                                    yielded.get_result())
+                            else:
+                                self.yield_point = yielded
+                        except Exception:
+                            self.exc_info = sys.exc_info()
+                    if self.stack_context_deactivate is None:
+                        # Start a stack context if this is the first
+                        # YieldPoint we've seen.
+                        with stack_context.ExceptionStackContext(
+                                self.handle_exception) as deactivate:
+                            self.stack_context_deactivate = deactivate
+                            def cb():
+                                start_yield_point()
+                                self.run()
+                            self.io_loop.add_callback(cb)
+                            return
+                    else:
+                        start_yield_point()
                 elif is_future(yielded):
                     self.future = yielded
                     if not self.future.done():
@@ -577,5 +589,10 @@ class Runner(object):
             return True
         else:
             return False
+
+    def _deactivate_stack_context(self):
+        if self.stack_context_deactivate is not None:
+            self.stack_context_deactivate()
+            self.stack_context_deactivate = None
 
 Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
