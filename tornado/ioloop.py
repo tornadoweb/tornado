@@ -41,7 +41,7 @@ import threading
 import time
 import traceback
 
-from tornado.concurrent import Future, TracebackFuture
+from tornado.concurrent import TracebackFuture, is_future
 from tornado.log import app_log, gen_log
 from tornado import stack_context
 from tornado.util import Configurable
@@ -391,7 +391,7 @@ class IOLoop(Configurable):
                 future_cell[0] = TracebackFuture()
                 future_cell[0].set_exc_info(sys.exc_info())
             else:
-                if isinstance(result, Future):
+                if is_future(result):
                     future_cell[0] = result
                 else:
                     future_cell[0] = TracebackFuture()
@@ -482,7 +482,7 @@ class IOLoop(Configurable):
         The callback is invoked with one argument, the
         `.Future`.
         """
-        assert isinstance(future, Future)
+        assert is_future(future)
         callback = stack_context.wrap(callback)
         future.add_done_callback(
             lambda future: self.add_callback(callback, future))

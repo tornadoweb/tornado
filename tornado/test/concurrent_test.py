@@ -28,7 +28,6 @@ from tornado.iostream import IOStream
 from tornado import stack_context
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, LogTrapTestCase, bind_unused_port, gen_test
-from tornado.test.util import unittest
 
 
 try:
@@ -112,13 +111,6 @@ class ReturnFutureTest(AsyncTestCase):
         future2 = self.wait()
         self.assertIs(future, future2)
         self.assertEqual(future.result(), 42)
-
-    @unittest.skipIf(futures is None, "futures module not present")
-    def test_timeout_future(self):
-        with self.assertRaises(futures.TimeoutError):
-            future = self.async_future()
-            # Do not call self.wait()
-            future.result(timeout=.1)
 
     @gen_test
     def test_async_future_gen(self):

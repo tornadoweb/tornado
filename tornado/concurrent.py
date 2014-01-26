@@ -40,7 +40,7 @@ class ReturnValueIgnoredError(Exception):
     pass
 
 
-class _DummyFuture(object):
+class Future(object):
     def __init__(self):
         self._done = False
         self._result = None
@@ -97,11 +97,14 @@ class _DummyFuture(object):
             cb(self)
         self._callbacks = None
 
-if futures is None:
-    Future = _DummyFuture
-else:
-    Future = futures.Future
 
+if futures is None:
+    FUTURES = Future
+else:
+    FUTURES = (futures.Future, Future)
+
+def is_future(x):
+    return isinstance(x, FUTURES)
 
 class TracebackFuture(Future):
     """Subclass of `Future` which can store a traceback with
