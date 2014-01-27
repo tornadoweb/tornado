@@ -89,7 +89,7 @@ import types
 
 from tornado.concurrent import Future, TracebackFuture, is_future
 from tornado.ioloop import IOLoop
-from tornado.stack_context import ExceptionStackContext, wrap
+from tornado import stack_context
 
 
 class KeyReuseError(Exception):
@@ -194,7 +194,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                 typ, value, tb = sys.exc_info()
             future.set_exc_info((typ, value, tb))
             return True
-        with ExceptionStackContext(handle_exception) as deactivate:
+        with stack_context.ExceptionStackContext(handle_exception) as deactivate:
             future.add_done_callback(lambda f: deactivate())
             try:
                 result = func(*args, **kwargs)
@@ -502,6 +502,7 @@ class Runner(object):
                     except Exception:
                         self.exc_info = sys.exc_info()
                 try:
+                    orig_stack_contexts = stack_context._state.contexts
                     if self.exc_info is not None:
                         self.had_exception = True
                         exc_info = self.exc_info
@@ -509,6 +510,11 @@ class Runner(object):
                         yielded = self.gen.throw(*exc_info)
                     else:
                         yielded = self.gen.send(next)
+                    if stack_context._state.contexts is not orig_stack_contexts:
+                        self.gen.throw(
+                            stack_context.StackContextInconsistentError(
+                                'stack_context inconsistency (probably caused '
+                                'by yield within a "with StackContext" block)'))
                 except (StopIteration, Return) as e:
                     self.finished = True
                     self.future = _null_future
@@ -562,7 +568,7 @@ class Runner(object):
             else:
                 result = None
             self.set_result(key, result)
-        return wrap(inner)
+        return stack_context.wrap(inner)
 
     def handle_exception(self, typ, value, tb):
         if not self.running and not self.finished:

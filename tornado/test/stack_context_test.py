@@ -219,22 +219,13 @@ class StackContextTest(AsyncTestCase):
     def test_yield_in_with(self):
         @gen.engine
         def f():
-            try:
-                self.callback = yield gen.Callback('a')
-                with StackContext(functools.partial(self.context, 'c1')):
-                    # This yield is a problem: the generator will be suspended
-                    # and the StackContext's __exit__ is not called yet, so
-                    # the context will be left on _state.contexts for anything
-                    # that runs before the yield resolves.
-                    yield gen.Wait('a')
-            except StackContextInconsistentError:
-                # In python <= 3.3, this suspended generator is never garbage
-                # collected, so it remains suspended in the 'yield' forever.
-                # Starting in 3.4, it is made collectable by raising
-                # a GeneratorExit exception from the yield, which gets
-                # converted into a StackContextInconsistentError by the
-                # exit of the 'with' block.
-                pass
+            self.callback = yield gen.Callback('a')
+            with StackContext(functools.partial(self.context, 'c1')):
+                # This yield is a problem: the generator will be suspended
+                # and the StackContext's __exit__ is not called yet, so
+                # the context will be left on _state.contexts for anything
+                # that runs before the yield resolves.
+                yield gen.Wait('a')
 
         with self.assertRaises(StackContextInconsistentError):
             f()
@@ -257,11 +248,8 @@ class StackContextTest(AsyncTestCase):
         # As above, but with ExceptionStackContext instead of StackContext.
         @gen.engine
         def f():
-            try:
-                with ExceptionStackContext(lambda t, v, tb: False):
-                    yield gen.Task(self.io_loop.add_callback)
-            except StackContextInconsistentError:
-                pass
+            with ExceptionStackContext(lambda t, v, tb: False):
+                yield gen.Task(self.io_loop.add_callback)
 
         with self.assertRaises(StackContextInconsistentError):
             f()
