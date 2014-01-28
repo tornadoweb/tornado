@@ -164,9 +164,13 @@ class WebSocketHandler(tornado.web.RequestHandler):
             origin = parsed_origin.netloc
             origin = origin.lower()
 
+        # When origin is None, assume it didn't come from a browser and we can
+        # pass it on
+        if origin is None:
+            pass
         # If there was an origin header, check to make sure it matches
         # according to check_origin
-        if not self.check_origin(origin):
+        elif origin and not self.check_origin(origin):
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 403 Cross Origin Websockets Disabled\r\n\r\n"
             ))
@@ -290,15 +294,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         This is a security protection against cross site scripting attacks on
         browsers, since WebSockets don't have CORS headers.
-        
-        >>> self.check_origin(origin='localhost')
-        True
-        
         """
-        # When origin is None, assume it didn't come from a browser and we can
-        # pass it on
-        if origin is None:
-            return True
 
         host = self.request.headers.get("Host")
 
