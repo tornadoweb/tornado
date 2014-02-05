@@ -150,14 +150,18 @@ class OptionParser(object):
         return dict(
             (name, opt.value()) for name, opt in self._options.items())
 
-    def define(self, name, default=None, type=None, help=None, metavar=None,
-               multiple=False, group=None, callback=None):
+    def define(self, name, default=None, type=None, choices=None, help=None,
+               metavar=None, multiple=False, group=None, callback=None):
         """Defines a new command line option.
 
         If ``type`` is given (one of str, float, int, datetime, or timedelta)
         or can be inferred from the ``default``, we parse the command line
         arguments based on the given type. If ``multiple`` is True, we accept
         comma-separated values, and the option value is always a list.
+
+        ``choices`` is used to validate the option with a restricted set of
+        values, we validate their types in order to match with the passed or
+        inferred ``type``.
 
         For multi-value integers, we also accept the syntax ``x:y``, which
         turns into ``range(x, y)`` - very useful for long integer ranges.
@@ -204,8 +208,16 @@ class OptionParser(object):
             group_name = group
         else:
             group_name = file_name
+        if choices is not None:
+            if len(choices):
+                if not all([isinstance(i, type) for i in choices]):
+                    raise Error("The choices type for option %r must be "
+                                "instances of %s" % (name, type))
+            else:
+                raise Error("Choices can't be empty")
         self._options[name] = _Option(name, file_name=file_name,
-                                      default=default, type=type, help=help,
+                                      default=default, type=type,
+                                      choices=choices, help=help,
                                       metavar=metavar, multiple=multiple,
                                       group_name=group_name,
                                       callback=callback)
@@ -291,6 +303,9 @@ class OptionParser(object):
                 description = option.help or ""
                 if option.default is not None and option.default != '':
                     description += " (default %s)" % option.default
+                if option.choices is not None and len(option.choices):
+                    _choices = ", ".join(map(repr, option.choices))
+                    description += " (choices %s)" % _choices
                 lines = textwrap.wrap(description, 79 - 35)
                 if len(prefix) > 30 or len(lines) == 0:
                     lines.insert(0, '')
@@ -360,13 +375,14 @@ class _Mockable(object):
 
 
 class _Option(object):
-    def __init__(self, name, default=None, type=basestring_type, help=None,
-                 metavar=None, multiple=False, file_name=None, group_name=None,
-                 callback=None):
+    def __init__(self, name, default=None, type=basestring_type, choices=None,
+                 help=None, metavar=None, multiple=False, file_name=None,
+                 group_name=None, callback=None):
         if default is None and multiple:
             default = []
         self.name = name
         self.type = type
+        self.choices = choices
         self.help = help
         self.metavar = metavar
         self.multiple = multiple
@@ -416,6 +432,10 @@ class _Option(object):
             if value is not None and not isinstance(value, self.type):
                 raise Error("Option %r is required to be a %s (%s given)" %
                             (self.name, self.type.__name__, type(value)))
+            if self.choices is not None and value not in self.choices:
+                _choices = ", ".join(map(repr, self.choices))
+                raise Error("%r is an invalid choice for option %r: "
+                            "(choose from %s)" % (value, self.name, _choices))
         self._value = value
         if self.callback is not None:
             self.callback(self._value)
@@ -492,15 +512,15 @@ All defined options are available as attributes on this object.
 """
 
 
-def define(name, default=None, type=None, help=None, metavar=None,
-           multiple=False, group=None, callback=None):
+def define(name, default=None, type=None, choices=None, help=None,
+           metavar=None, multiple=False, group=None, callback=None):
     """Defines an option in the global namespace.
 
     See `OptionParser.define`.
     """
-    return options.define(name, default=default, type=type, help=help,
-                          metavar=metavar, multiple=multiple, group=group,
-                          callback=callback)
+    return options.define(name, default=default, type=type, choices=choices,
+                          help=help, metavar=metavar, multiple=multiple,
+                          group=group, callback=callback)
 
 
 def parse_command_line(args=None, final=True):
