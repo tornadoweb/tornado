@@ -487,12 +487,11 @@ class HTTPRequest(object):
         """A dictionary of Cookie.Morsel objects."""
         if not hasattr(self, "_cookies"):
             self._cookies = Cookie.SimpleCookie()
-            if "Cookie" in self.headers:
-                try:
-                    self._cookies.load(
-                        native_str(self.headers["Cookie"]))
-                except Exception:
-                    self._cookies = {}
+            try:
+                for cookie in self.headers.get_list('Cookie'):
+                    self._cookies.load(native_str(cookie))
+            except Exception:
+                self._cookies = {}
         return self._cookies
 
     def write(self, chunk, callback=None):
