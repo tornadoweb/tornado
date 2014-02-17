@@ -32,7 +32,7 @@ import tornado.escape
 import tornado.web
 
 from tornado.concurrent import TracebackFuture
-from tornado.escape import utf8, native_str
+from tornado.escape import utf8, native_str, to_unicode
 from tornado import httpclient, httputil
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
@@ -110,6 +110,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
                                             **kwargs)
         self.stream = request.connection.stream
         self.ws_connection = None
+        self.close_code = None
+        self.close_reason = None
 
     def _execute(self, transforms, *args, **kwargs):
         self.open_args = args
@@ -220,16 +222,39 @@ class WebSocketHandler(tornado.web.RequestHandler):
         pass
 
     def on_close(self):
-        """Invoked when the WebSocket is closed."""
+        """Invoked when the WebSocket is closed.
+
+        If the connection was closed cleanly and a status code or reason
+        phrase was supplied, these values will be available as the attributes
+        ``self.close_code`` and ``self.close_reason``.
+
+        .. versionchanged:: 3.3
+
+           Added ``close_code`` and ``close_reason`` attributes.
+        """
         pass
 
-    def close(self):
+    def close(self, code=None, reason=None):
         """Closes this Web Socket.
 
         Once the close handshake is successful the socket will be closed.
+
+        ``code`` may be a numeric status code, taken from the values
+        defined in `RFC 6455 section 7.4.1
+        <https://tools.ietf.org/html/rfc6455#section-7.4.1>`_.
+        ``reason`` may be a textual message about why the connection is
+        closing.  These values are made available to the client, but are
+        not otherwise interpreted by the websocket protocol.
+
+        The ``code`` and ``reason`` arguments are ignored in the "draft76"
+        protocol version.
+
+        .. versionchanged:: 3.3
+
+           Added the ``code`` and ``reason`` arguments.
         """
         if self.ws_connection:
-            self.ws_connection.close()
+            self.ws_connection.close(code, reason)
             self.ws_connection = None
 
     def allow_draft76(self):
@@ -489,7 +514,7 @@ class WebSocketProtocol76(WebSocketProtocol):
         """Send ping frame."""
         raise ValueError("Ping messages not supported by this version of websockets")
 
-    def close(self):
+    def close(self, code=None, reason=None):
         """Closes the WebSocket connection."""
         if not self.server_terminated:
             if not self.stream.closed():
@@ -739,6 +764,10 @@ class WebSocketProtocol13(WebSocketProtocol):
         elif opcode == 0x8:
             # Close
             self.client_terminated = True
+            if len(data) >= 2:
+                self.handler.close_code = struct.unpack('>H', data[:2])[0]
+            if len(data) > 2:
+                self.handler.close_reason = to_unicode(data[2:])
             self.close()
         elif opcode == 0x9:
             # Ping
@@ -749,11 +778,19 @@ class WebSocketProtocol13(WebSocketProtocol):
         else:
             self._abort()
 
-    def close(self):
+    def close(self, code=None, reason=None):
         """Closes the WebSocket connection."""
         if not self.server_terminated:
             if not self.stream.closed():
-                self._write_frame(True, 0x8, b"")
+                if code is None and reason is not None:
+                    code = 1000  # "normal closure" status code
+                if code is None:
+                    close_data = b''
+                else:
+                    close_data = struct.pack('>H', code)
+                if reason is not None:
+                    close_data += utf8(reason)
+                self._write_frame(True, 0x8, close_data)
             self.server_terminated = True
         if self.client_terminated:
             if self._waiting is not None:
@@ -794,13 +831,20 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             io_loop, None, request, lambda: None, self._on_http_response,
             104857600, self.resolver)
 
-    def close(self):
+    def close(self, code=None, reason=None):
         """Closes the websocket connection.
 
+        ``code`` and ``reason`` are documented under
+        `WebSocketHandler.close`.
+
         .. versionadded:: 3.2
+
+        .. versionchanged:: 3.3
+
+           Added the ``code`` and ``reason`` arguments.
         """
         if self.protocol is not None:
-            self.protocol.close()
+            self.protocol.close(code, reason)
             self.protocol = None
 
     def _on_close(self):

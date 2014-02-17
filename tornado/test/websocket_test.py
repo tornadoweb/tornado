@@ -36,7 +36,7 @@ class TestWebSocketHandler(WebSocketHandler):
         self.close_future = close_future
 
     def on_close(self):
-        self.close_future.set_result(None)
+        self.close_future.set_result((self.close_code, self.close_reason))
 
 
 class EchoHandler(TestWebSocketHandler):
@@ -54,6 +54,11 @@ class NonWebSocketHandler(RequestHandler):
         self.write('ok')
 
 
+class CloseReasonHandler(TestWebSocketHandler):
+    def open(self):
+        self.close(1001, "goodbye")
+
+
 class WebSocketTest(AsyncHTTPTestCase):
     def get_app(self):
         self.close_future = Future()
@@ -61,6 +66,8 @@ class WebSocketTest(AsyncHTTPTestCase):
             ('/echo', EchoHandler, dict(close_future=self.close_future)),
             ('/non_ws', NonWebSocketHandler),
             ('/header', HeaderHandler, dict(close_future=self.close_future)),
+            ('/close_reason', CloseReasonHandler,
+             dict(close_future=self.close_future)),
         ])
 
     @gen_test
@@ -146,6 +153,25 @@ class WebSocketTest(AsyncHTTPTestCase):
         self.assertEqual(response, 'hello')
         ws.close()
         yield self.close_future
+
+    @gen_test
+    def test_server_close_reason(self):
+        ws = yield websocket_connect(
+            'ws://localhost:%d/close_reason' % self.get_http_port())
+        msg = yield ws.read_message()
+        # A message of None means the other side closed the connection.
+        self.assertIs(msg, None)
+        self.assertEqual(ws.close_code, 1001)
+        self.assertEqual(ws.close_reason, "goodbye")
+
+    @gen_test
+    def test_client_close_reason(self):
+        ws = yield websocket_connect(
+            'ws://localhost:%d/echo' % self.get_http_port())
+        ws.close(1001, 'goodbye')
+        code, reason = yield self.close_future
+        self.assertEqual(code, 1001)
+        self.assertEqual(reason, 'goodbye')
 
 
 class MaskFunctionMixin(object):
