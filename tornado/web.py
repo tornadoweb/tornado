@@ -54,7 +54,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 
 import base64
-import binascii
 import datetime
 import email.utils
 import functools
@@ -1023,7 +1022,7 @@ class RequestHandler(object):
         if not hasattr(self, "_xsrf_token"):
             token = self.get_cookie("_xsrf")
             if not token:
-                token = binascii.b2a_hex(uuid.uuid4().bytes)
+                token = uuid.uuid4().hex
                 expires_days = 30 if self.current_user else None
                 self.set_cookie("_xsrf", token, expires_days=expires_days)
             self._xsrf_token = token
