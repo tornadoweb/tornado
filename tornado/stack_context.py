@@ -266,6 +266,18 @@ def wrap(fn):
     # TODO: Any other better way to store contexts and update them in wrapped function?
     cap_contexts = [_state.contexts]
 
+    if not cap_contexts[0][0] and not cap_contexts[0][1]:
+        # Fast path when there are no active contexts.
+        def null_wrapper(*args, **kwargs):
+            try:
+                current_state = _state.contexts
+                _state.contexts = cap_contexts[0]
+                return fn(*args, **kwargs)
+            finally:
+                _state.contexts = current_state
+        null_wrapper._wrapped = True
+        return null_wrapper
+
     def wrapped(*args, **kwargs):
         ret = None
         try:
