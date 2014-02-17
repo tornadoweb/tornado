@@ -14,7 +14,8 @@ import asyncio
 import datetime
 import functools
 
-from tornado.ioloop import IOLoop
+# _Timeout is used for its timedelta_to_seconds method for py26 compatibility.
+from tornado.ioloop import IOLoop, _Timeout
 from tornado import stack_context
 
 
@@ -108,7 +109,7 @@ class BaseAsyncIOLoop(IOLoop):
         if isinstance(deadline, (int, float)):
             delay = max(deadline - self.time(), 0)
         elif isinstance(deadline, datetime.timedelta):
-            delay = deadline.total_seconds()
+            delay = _Timeout.timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r", deadline)
         return self.asyncio_loop.call_later(delay, self._run_callback,
