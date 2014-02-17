@@ -2299,15 +2299,19 @@ class GZipContentEncoding(OutputTransform):
 
     See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11
     """
-    CONTENT_TYPES = set([
-        "text/plain", "text/html", "text/css", "text/xml", "application/javascript",
-        "application/x-javascript", "application/xml", "application/atom+xml",
-        "text/javascript", "application/json", "application/xhtml+xml"])
+    # Whitelist of compressible mime types (in addition to any types
+    # beginning with "text/").
+    CONTENT_TYPES = set(["application/javascript", "application/x-javascript",
+                         "application/xml", "application/atom+xml",
+                         "application/json", "application/xhtml+xml"])
     MIN_LENGTH = 5
 
     def __init__(self, request):
         self._gzipping = request.supports_http_1_1() and \
             "gzip" in request.headers.get("Accept-Encoding", "")
+
+    def _compressible_type(self, ctype):
+        return ctype.startswith('text/') or ctype in self.CONTENT_TYPES
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
         if 'Vary' in headers:
@@ -2316,7 +2320,7 @@ class GZipContentEncoding(OutputTransform):
             headers['Vary'] = b'Accept-Encoding'
         if self._gzipping:
             ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
-            self._gzipping = (ctype in self.CONTENT_TYPES) and \
+            self._gzipping = self._compressible_type(ctype) and \
                 (not finishing or len(chunk) >= self.MIN_LENGTH) and \
                 (finishing or "Content-Length" not in headers) and \
                 ("Content-Encoding" not in headers)
