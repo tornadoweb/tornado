@@ -438,11 +438,10 @@ class Runner(object):
         self.result_future = result_future
         self.future = _null_future
         self.yield_point = None
-        self.pending_callbacks = set()
-        self.results = {}
+        self.pending_callbacks = None
+        self.results = None
         self.running = False
         self.finished = False
-        self.exc_info = None
         self.had_exception = False
         self.io_loop = IOLoop.current()
         # For efficiency, we do not create a stack context until we
@@ -454,13 +453,17 @@ class Runner(object):
 
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
+        if self.pending_callbacks is None:
+            # Lazily initialize the old-style YieldPoint data structures.
+            self.pending_callbacks = set()
+            self.results = {}
         if key in self.pending_callbacks:
             raise KeyReuseError("key %r is already pending" % (key,))
         self.pending_callbacks.add(key)
 
     def is_ready(self, key):
         """Returns true if a result is available for ``key``."""
-        if key not in self.pending_callbacks:
+        if self.pending_callbacks is None or key not in self.pending_callbacks:
             raise UnknownKeyError("key %r is not pending" % (key,))
         return key in self.results
 
@@ -489,23 +492,19 @@ class Runner(object):
         try:
             self.running = True
             while True:
-                if self.exc_info is None:
-                    try:
-                        if not self.future.done():
-                            return
-                        next = self.future.result()
-                        self.future = None
-                    except Exception:
-                        self.exc_info = sys.exc_info()
+                future = self.future
+                if not future.done():
+                    return
+                self.future = None
                 try:
                     orig_stack_contexts = stack_context._state.contexts
-                    if self.exc_info is not None:
+                    try:
+                        value = future.result()
+                    except Exception:
                         self.had_exception = True
-                        exc_info = self.exc_info
-                        self.exc_info = None
-                        yielded = self.gen.throw(*exc_info)
+                        yielded = self.gen.throw(*sys.exc_info())
                     else:
-                        yielded = self.gen.send(next)
+                        yielded = self.gen.send(value)
                     if stack_context._state.contexts is not orig_stack_contexts:
                         self.gen.throw(
                             stack_context.StackContextInconsistentError(
@@ -546,7 +545,8 @@ class Runner(object):
                             else:
                                 self.yield_point = yielded
                         except Exception:
-                            self.exc_info = sys.exc_info()
+                            self.future = TracebackFuture()
+                            self.future.set_exc_info(sys.exc_info())
                     if self.stack_context_deactivate is None:
                         # Start a stack context if this is the first
                         # YieldPoint we've seen.
@@ -565,9 +565,11 @@ class Runner(object):
                     if not self.future.done():
                         self.io_loop.add_future(
                             self.future, lambda f: self.run())
+                        return
                 else:
-                    self.exc_info = (BadYieldError(
-                        "yielded unknown object %r" % (yielded,)),)
+                    self.future = TracebackFuture()
+                    self.future.set_exception(BadYieldError(
+                        "yielded unknown object %r" % (yielded,)))
         finally:
             self.running = False
 
@@ -584,7 +586,8 @@ class Runner(object):
 
     def handle_exception(self, typ, value, tb):
         if not self.running and not self.finished:
-            self.exc_info = (typ, value, tb)
+            self.future = TracebackFuture()
+            self.future.set_exc_info((typ, value, tb))
             self.run()
             return True
         else:
