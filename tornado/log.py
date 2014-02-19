@@ -184,7 +184,7 @@ def enable_pretty_logging(options=None, logger=None):
     """
     if options is None:
         from tornado.options import options
-    if options.logging == 'none':
+    if options.logging is None or options.logging.lower() == 'none':
         return
     if logger is None:
         logger = logging.getLogger()

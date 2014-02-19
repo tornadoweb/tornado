@@ -56,6 +56,18 @@ We support `datetimes <datetime.datetime>`, `timedeltas
 the top-level functions in this module (`define`, `parse_command_line`, etc)
 simply call methods on it.  You may create additional `OptionParser`
 instances to define isolated sets of options, such as for subcommands.
+
+.. note::
+
+   By default, several options are defined that will configure the
+   standard `logging` module when `parse_command_line` or `parse_config_file`
+   are called.  If you want Tornado to leave the logging configuration
+   alone so you can manage it yourself, either pass ``--logging=none``
+   on the command line or do the following to disable it in code::
+
+       from tornado.options import options, parse_command_line
+       options.logging = None
+       parse_command_line()
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -360,6 +372,8 @@ class _Mockable(object):
 
 
 class _Option(object):
+    UNSET = object()
+
     def __init__(self, name, default=None, type=basestring_type, help=None,
                  metavar=None, multiple=False, file_name=None, group_name=None,
                  callback=None):
@@ -374,10 +388,10 @@ class _Option(object):
         self.group_name = group_name
         self.callback = callback
         self.default = default
-        self._value = None
+        self._value = _Option.UNSET
 
     def value(self):
-        return self.default if self._value is None else self._value
+        return self.default if self._value is _Option.UNSET else self._value
 
     def parse(self, value):
         _parse = {
