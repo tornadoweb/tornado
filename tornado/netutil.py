@@ -77,6 +77,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
         family = socket.AF_INET
     if flags is None:
         flags = socket.AI_PASSIVE
+    bound_port = None
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                       0, flags)):
         af, socktype, proto, canonname, sockaddr = res
@@ -100,8 +101,16 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
             # Python 2.x on windows doesn't have IPPROTO_IPV6.
             if hasattr(socket, "IPPROTO_IPV6"):
                 sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+
+        # automatic port allocation with port=None
+        # should bind on the same port on IPv4 and IPv6
+        host, requested_port = sockaddr[:2]
+        if requested_port == 0 and bound_port is not None:
+            sockaddr = tuple([host, bound_port] + list(sockaddr[2:]))
+
         sock.setblocking(0)
         sock.bind(sockaddr)
+        bound_port = sock.getsockname()[1]
         sock.listen(backlog)
         sockets.append(sock)
     return sockets

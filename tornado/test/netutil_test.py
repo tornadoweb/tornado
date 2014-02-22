@@ -6,7 +6,7 @@ from subprocess import Popen
 import sys
 import time
 
-from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip
+from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip, bind_sockets
 from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import unittest
@@ -144,3 +144,10 @@ class IsValidIPTest(unittest.TestCase):
         self.assertTrue(not is_valid_ip(' '))
         self.assertTrue(not is_valid_ip('\n'))
         self.assertTrue(not is_valid_ip('\x00'))
+
+
+class TestPortAllocation(unittest.TestCase):
+    def test_same_port_allocation(self):
+        sockets = bind_sockets(None, 'localhost')
+        port = sockets[0].getsockname()[1]
+        self.assertTrue(all(s.getsockname()[1] == port for s in sockets[1:]))
