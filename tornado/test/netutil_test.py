@@ -146,6 +146,10 @@ class IsValidIPTest(unittest.TestCase):
         self.assertTrue(not is_valid_ip('\n'))
         self.assertTrue(not is_valid_ip('\x00'))
 
+mac_v = None
+if platform.system() == 'Darwin':
+    mac_v = tuple([int(s) for s in platform.mac_ver()[0].split('.')])
+
 
 # The mac firewall prompts when listening on "localhost" instead of
 # "127.0.0.1" like the other tests use (maybe due to the ipv6
@@ -153,7 +157,8 @@ class IsValidIPTest(unittest.TestCase):
 # you've previously allowed or denied access.  It's better to skip this
 # test on the mac than to have the prompts come up for every configuration
 # in tox.ini.
-@unittest.skipIf(platform.system() == 'Darwin', 'avoid firewall prompts on Mac')
+@unittest.skipIf(mac_v is not None and mac_v[:2] < (10, 9),
+                 'avoid firewall prompts on Mac before Mavericks')
 class TestPortAllocation(unittest.TestCase):
     def test_same_port_allocation(self):
         sockets = bind_sockets(None, 'localhost')
