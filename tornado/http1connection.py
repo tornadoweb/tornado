@@ -22,6 +22,7 @@ from tornado.escape import native_str
 from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log
+from tornado import netutil
 from tornado import stack_context
 
 
@@ -47,7 +48,12 @@ class HTTP1Connection(object):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
-        self.protocol = protocol
+        if protocol:
+            self.protocol = protocol
+        elif isinstance(stream, iostream.SSLIOStream):
+            self.protocol = "https"
+        else:
+            self.protocol = "http"
         self._clear_request_state()
         # Save stack context here, outside of any request.  This keeps
         # contexts from one request from leaking into the next.
@@ -178,9 +184,25 @@ class HTTP1Connection(object):
                 # Unix (or other) socket; fake the remote address
                 remote_ip = '0.0.0.0'
 
+            protocol = self.protocol
+
+            # xheaders can override the defaults
+            if self.xheaders:
+                # Squid uses X-Forwarded-For, others use X-Real-Ip
+                ip = headers.get("X-Forwarded-For", remote_ip)
+                ip = ip.split(',')[-1].strip()
+                ip = headers.get("X-Real-Ip", ip)
+                if netutil.is_valid_ip(ip):
+                    remote_ip = ip
+                # AWS uses X-Forwarded-Proto
+                proto_header = headers.get(
+                    "X-Scheme", headers.get("X-Forwarded-Proto", self.protocol))
+                if proto_header in ("http", "https"):
+                    protocol = proto_header
+
             self._request = httputil.HTTPServerRequest(
                 connection=self, method=method, uri=uri, version=version,
-                headers=headers, remote_ip=remote_ip, protocol=self.protocol)
+                headers=headers, remote_ip=remote_ip, protocol=protocol)
 
             content_length = headers.get("Content-Length")
             if content_length:

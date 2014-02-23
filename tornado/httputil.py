@@ -24,13 +24,10 @@ import copy
 import datetime
 import email.utils
 import numbers
-import ssl
 import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
-from tornado import iostream
 from tornado.log import gen_log
-from tornado import netutil
 from tornado.util import ObjectDict, bytes_type
 
 try:
@@ -52,6 +49,11 @@ try:
 except ImportError:
     from urllib.parse import urlencode  # py3
 
+try:
+    from ssl import SSLError
+except ImportError:
+    # ssl is unavailable on app engine.
+    class SSLError(Exception): pass
 
 class _NormalizedHeaderCache(dict):
     """Dynamic cached mapping of header names to Http-Header-Case.
@@ -321,27 +323,7 @@ class HTTPServerRequest(object):
 
         # set remote IP and protocol
         self.remote_ip = remote_ip
-        if protocol:
-            self.protocol = protocol
-        elif connection and isinstance(connection.stream, iostream.SSLIOStream):
-            self.protocol = "https"
-        else:
-            self.protocol = "http"
-
-        # xheaders can override the defaults
-        if connection and connection.xheaders:
-            # Squid uses X-Forwarded-For, others use X-Real-Ip
-            ip = self.headers.get("X-Forwarded-For", self.remote_ip)
-            ip = ip.split(',')[-1].strip()
-            ip = self.headers.get(
-                "X-Real-Ip", ip)
-            if netutil.is_valid_ip(ip):
-                self.remote_ip = ip
-            # AWS uses X-Forwarded-Proto
-            proto = self.headers.get(
-                "X-Scheme", self.headers.get("X-Forwarded-Proto", self.protocol))
-            if proto in ("http", "https"):
-                self.protocol = proto
+        self.protocol = protocol or "http"
 
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}
@@ -415,7 +397,7 @@ class HTTPServerRequest(object):
         try:
             return self.connection.stream.socket.getpeercert(
                 binary_form=binary_form)
-        except ssl.SSLError:
+        except SSLError:
             return None
 
     def __repr__(self):
