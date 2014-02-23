@@ -215,6 +215,16 @@ class HTTPRequest(object):
 class WSGIContainer(object):
     r"""Makes a WSGI-compatible function runnable on Tornado's HTTP server.
 
+    .. warning::
+
+       WSGI is a *synchronous* interface, while Tornado's concurrency model
+       is based on single-threaded asynchronous execution.  This means that
+       running a WSGI app with Tornado's `WSGIContainer` is *less scalable*
+       than running the same app in a multi-threaded WSGI server like
+       ``gunicorn`` or ``uwsgi``.  Use `WSGIContainer` only when there are
+       benefits to combining Tornado and WSGI in the same process that
+       outweigh the reduced scalability.
+
     Wrap a WSGI function in a `WSGIContainer` and pass it to `.HTTPServer` to
     run it. For example::
 
