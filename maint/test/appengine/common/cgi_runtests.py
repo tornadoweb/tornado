@@ -62,7 +62,7 @@ def main():
     import_everything()
 
     try:
-        unittest.main(defaultTest="all", argv=sys.argv)
+        unittest.main(defaultTest='all', argv=sys.argv[:1])
     except SystemExit, e:
         if e.code == 0:
             print "PASS"
