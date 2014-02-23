@@ -67,7 +67,7 @@ New modules
 * To facilitate some advanced multi-process scenarios, ``HTTPServer``
   has a new method ``add_sockets``, and socket-opening code is
   available separately as `tornado.netutil.bind_sockets`.
-* The ``cookies`` property is now available on `tornado.httpserver.HTTPRequest`
+* The ``cookies`` property is now available on ``tornado.httpserver.HTTPRequest``
   (it is also available in its old location as a property of
   `~tornado.web.RequestHandler`)
 * ``tornado.httpserver.HTTPServer.bind`` now takes a backlog argument with the

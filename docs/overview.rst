@@ -115,7 +115,7 @@ number of useful attributes, including:
 -  ``path`` - the request path (everything before the ``?``)
 -  ``headers`` - the request headers
 
-See the class definition for `tornado.httpserver.HTTPRequest` for a
+See the class definition for `tornado.httputil.HTTPServerRequest` for a
 complete list of attributes.
 
 Overriding RequestHandler methods

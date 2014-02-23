@@ -14,7 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""HTTP utility code shared by clients and servers."""
+"""HTTP utility code shared by clients and servers.
+
+This module also defines the `HTTPServerRequest` class which is exposed
+via `tornado.web.RequestHandler.request`.
+"""
 
 from __future__ import absolute_import, division, print_function, with_statement
 

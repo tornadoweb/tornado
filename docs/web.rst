@@ -40,7 +40,7 @@
    .. automethod:: RequestHandler.decode_argument
    .. attribute:: RequestHandler.request
 
-      The `tornado.httpserver.HTTPRequest` object containing additional
+      The `tornado.httputil.HTTPServerRequest` object containing additional
       request parameters including e.g. headers and body data.
 
    .. attribute:: RequestHandler.path_args

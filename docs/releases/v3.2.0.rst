@@ -156,7 +156,7 @@ New modules
   individual aspects of debug mode.
 * New methods `.RequestHandler.get_query_argument` and
   `.RequestHandler.get_body_argument` and new attributes
-  `.HTTPRequest.query_arguments` and `.HTTPRequest.body_arguments` allow access
+  ``HTTPRequest.query_arguments`` and ``HTTPRequest.body_arguments`` allow access
   to arguments without intermingling those from the query string with those
   from the request body.
 * `.RequestHandler.decode_argument` and related methods now raise

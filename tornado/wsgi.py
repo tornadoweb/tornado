@@ -135,7 +135,7 @@ class WSGIApplication(web.Application):
 
 
 class HTTPRequest(object):
-    """Mimics `tornado.httpserver.HTTPRequest` for WSGI applications."""
+    """Mimics `tornado.httputil.HTTPServerRequest` for WSGI applications."""
     def __init__(self, environ):
         """Parses the given WSGI environment to construct the request."""
         self.method = environ["REQUEST_METHOD"]
@@ -291,7 +291,7 @@ class WSGIContainer(object):
 
     @staticmethod
     def environ(request):
-        """Converts a `tornado.httpserver.HTTPRequest` to a WSGI environment.
+        """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
         """
         hostport = request.host.split(":")
         if len(hostport) == 2:

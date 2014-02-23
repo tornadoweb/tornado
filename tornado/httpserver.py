@@ -20,8 +20,10 @@ Typical applications have little direct interaction with the `HTTPServer`
 class except to start a server at the beginning of the process
 (and even that is often done indirectly via `tornado.web.Application.listen`).
 
-This module also defines the `HTTPRequest` class which is exposed via
-`tornado.web.RequestHandler.request`.
+.. versionchanged:: 3.3
+
+   The ``HTTPRequest`` class that used to live in this module has been moved
+   to `tornado.httputil.HTTPServerRequest`.  The old name remains as an alias.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -36,7 +38,7 @@ class HTTPServer(TCPServer):
 
     A server is defined by a request callback that takes an HTTPRequest
     instance as an argument and writes a valid HTTP response with
-    `HTTPRequest.write`. `HTTPRequest.finish` finishes the request (but does
+    `.HTTPServerRequest.write`. `.HTTPServerRequest.finish` finishes the request (but does
     not necessarily close the connection in the case of HTTP/1.1 keep-alive
     requests). A simple example server that echoes back the URI you
     requested::

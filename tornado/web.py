@@ -455,7 +455,7 @@ class RequestHandler(object):
 
     @property
     def cookies(self):
-        """An alias for `self.request.cookies <.httpserver.HTTPRequest.cookies>`."""
+        """An alias for `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
         return self.request.cookies
 
     def get_cookie(self, name, default=None):
@@ -2257,7 +2257,7 @@ class FallbackHandler(RequestHandler):
     """A `RequestHandler` that wraps another HTTP server callback.
 
     The fallback is a callable object that accepts an
-    `~.httpserver.HTTPRequest`, such as an `Application` or
+    `~.httputil.HTTPServerRequest`, such as an `Application` or
     `tornado.wsgi.WSGIContainer`.  This is most useful to use both
     Tornado ``RequestHandlers`` and WSGI in the same server.  Typical
     usage::

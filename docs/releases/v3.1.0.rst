@@ -78,7 +78,7 @@ Multiple modules
   HTTP 1.0 connections that explicitly pass ``Connection: keep-alive``.
 * The ``Connection: keep-alive`` check for HTTP 1.0 connections is now
   case-insensitive.
-* The `str` and `repr` of `tornado.httpserver.HTTPRequest` no longer
+* The `str` and `repr` of ``tornado.httpserver.HTTPRequest`` no longer
   include the request body, reducing log spam on errors (and potential
   exposure/retention of private data).
 
