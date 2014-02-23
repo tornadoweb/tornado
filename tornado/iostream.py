@@ -449,6 +449,10 @@ class BaseIOStream(object):
             callback = self._read_callback
             self._read_callback = None
             self._run_callback(callback, data)
+        else:
+            # If we scheduled a callback, we will add the error listener
+            # afterwards.  If we didn't, we have to do it now.
+            self._maybe_add_error_listener()
 
     def _try_inline_read(self):
         """Attempt to complete the current read operation from buffered data.
