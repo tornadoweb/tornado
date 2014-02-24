@@ -411,6 +411,27 @@ class HTTPServerRequest(object):
             self.__class__.__name__, args, dict(self.headers))
 
 
+class BadRequestException(Exception):
+    """Exception class for malformed HTTP requests."""
+    pass
+
+
+class HTTPConnectionDelegate(object):
+    def start_request(self, connection):
+        raise NotImplementedError()
+
+
+class HTTPStreamDelegate(object):
+    def headers_received(self, start_line, headers):
+        pass
+
+    def data_received(self, chunk):
+        pass
+
+    def finish(self):
+        pass
+
+
 def url_concat(url, args):
     """Concatenate url and argument dictionary regardless of whether
     url has existing query parameters.

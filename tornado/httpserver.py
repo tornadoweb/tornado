@@ -28,12 +28,14 @@ class except to start a server at the beginning of the process
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import socket
 
 from tornado import http1connection, httputil
+from tornado import netutil
 from tornado.tcpserver import TCPServer
 
 
-class HTTPServer(TCPServer):
+class HTTPServer(TCPServer, httputil.HTTPConnectionDelegate):
     r"""A non-blocking, single-threaded HTTP server.
 
     A server is defined by a request callback that takes an HTTPRequest
@@ -141,8 +143,66 @@ class HTTPServer(TCPServer):
                            **kwargs)
 
     def handle_stream(self, stream, address):
-        HTTPConnection(stream, address, self.request_callback,
-                       self.no_keep_alive, self.xheaders, self.protocol)
+        HTTPConnection(stream, address, self, self.no_keep_alive, self.protocol)
+
+    def start_request(self, connection):
+        return _ServerRequestProcessor(self, connection)
+
+class _ServerRequestProcessor(httputil.HTTPStreamDelegate):
+    def __init__(self, server, connection):
+        self.server = server
+        self.connection = connection
+
+    def headers_received(self, start_line, headers):
+        pass
+        try:
+            method, uri, version = start_line.split(" ")
+        except ValueError:
+            raise httputil.BadRequestException("Malformed HTTP request line")
+        if not version.startswith("HTTP/"):
+            raise httputil.BadRequestException("Malformed HTTP version in HTTP Request-Line")
+        # HTTPRequest wants an IP, not a full socket address
+        if self.connection.address_family in (socket.AF_INET, socket.AF_INET6):
+            remote_ip = self.connection.address[0]
+        else:
+            # Unix (or other) socket; fake the remote address
+            remote_ip = '0.0.0.0'
+
+        protocol = self.connection.protocol
+
+        # xheaders can override the defaults
+        if self.server.xheaders:
+            # Squid uses X-Forwarded-For, others use X-Real-Ip
+            ip = headers.get("X-Forwarded-For", remote_ip)
+            ip = ip.split(',')[-1].strip()
+            ip = headers.get("X-Real-Ip", ip)
+            if netutil.is_valid_ip(ip):
+                remote_ip = ip
+            # AWS uses X-Forwarded-Proto
+            proto_header = headers.get(
+                "X-Scheme", headers.get("X-Forwarded-Proto", protocol))
+            if proto_header in ("http", "https"):
+                protocol = proto_header
+
+        self.request = httputil.HTTPServerRequest(
+            connection=self.connection, method=method, uri=uri, version=version,
+            headers=headers, remote_ip=remote_ip, protocol=protocol)
+
+    def data_received(self, chunk):
+        assert not self.request.body
+        self.request.body = chunk
+
+    def finish(self):
+        if self.request.method in ("POST", "PATCH", "PUT"):
+            httputil.parse_body_arguments(
+                self.request.headers.get("Content-Type", ""), self.request.body,
+                self.request.body_arguments, self.request.files)
+
+            for k, v in self.request.body_arguments.items():
+                self.request.arguments.setdefault(k, []).extend(v)
+
+        self.server.request_callback(self.request)
+
 
 
 HTTPRequest = httputil.HTTPServerRequest
