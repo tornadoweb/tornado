@@ -154,16 +154,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         else:
             origin = self.request.headers.get("Sec-Websocket-Origin", None)
 
-        # If we have an origin, normalize
-        if(origin):
-            # Due to how stdlib's urlparse is implemented, urls without a //
-            # are interpreted to be paths (resulting in netloc being None)
-            if("//" not in origin):
-                origin = "//" + origin
-            parsed_origin = urlparse(origin)
-            origin = parsed_origin.netloc
-            origin = origin.lower()
-
         # When origin is None, assume it didn't come from a browser and we can
         # pass it on
         if origin is None:
@@ -295,6 +285,14 @@ class WebSocketHandler(tornado.web.RequestHandler):
         This is a security protection against cross site scripting attacks on
         browsers, since WebSockets don't have CORS headers.
         """
+
+        # Due to how stdlib's urlparse is implemented, urls without a //
+        # are interpreted to be paths (resulting in netloc being None)
+        if("//" not in origin):
+            origin = "//" + origin
+        parsed_origin = urlparse(origin)
+        origin = parsed_origin.netloc
+        origin = origin.lower()
 
         host = self.request.headers.get("Host")
 
