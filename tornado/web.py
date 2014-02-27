@@ -590,8 +590,8 @@ class RequestHandler(object):
 
         To write the output to the network, use the flush() method below.
 
-        If the given chunk is a dictionary, we write it as JSON and set
-        the Content-Type of the response to be ``application/json``.
+        If the given chunk is a dictionary or list, we write it as JSON
+        and set the Content-Type of the response to be ``application/json``.
         (if you want to send JSON as a different ``Content-Type``, call
         set_header *after* calling write()).
 
@@ -606,7 +606,7 @@ class RequestHandler(object):
                                "@asynchronous decorator.")
         if not isinstance(chunk, (bytes_type, unicode_type, dict)):
             raise TypeError("write() only accepts bytes, unicode, and dict objects")
-        if isinstance(chunk, dict):
+        if isinstance(chunk, dict) or isinstance(chunk, list):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
         chunk = utf8(chunk)
