@@ -2,7 +2,7 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
-from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp
+from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp, parse_body_arguments
 from tornado.escape import utf8
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
@@ -253,3 +253,48 @@ class FormatTimestampTest(unittest.TestCase):
 
     def test_datetime(self):
         self.check(datetime.datetime.utcfromtimestamp(self.TIMESTAMP))
+
+
+class ParseBodyArgumentsTest(unittest.TestCase):
+
+    FORM_BODY = b'foo=bar&baz=qux&baz=corgie'
+    FORM_EXPECTED = {b"foo": [b"bar"], b"baz": [b"qux", b"corgie"]}
+
+    JSON_BODY = b'{"foo": "bar", "baz": ["qux", "corgie"]}'
+    JSON_EXPECTED = {b"foo": [b"bar"], b"baz": [b"qux", b"corgie"]}
+
+    MULTIPART_BODY = b"""\
+--AaB03x
+Content-Disposition: form-data; name="foo"
+
+bar
+--AaB03x
+Content-Disposition: form-data; name="baz"
+
+qux
+--AaB03x
+Content-Disposition: form-data; name="baz"
+
+corgie
+--AaB03x--
+""".replace(b"\n", b"\r\n")
+    MULTIPART_EXPECTED = {b"foo": [b"bar"], b"baz": [b"qux", b"corgie"]}
+
+    def test_form_body(self):
+        arguments = {}
+        parse_body_arguments('application/x-www-form-urlencoded',
+                             self.FORM_BODY,
+                             arguments, [])
+        self.assertDictEqual(arguments, self.FORM_EXPECTED)
+
+    def test_json_body(self):
+        arguments = {}
+        parse_body_arguments('application/json', self.JSON_BODY,
+                             arguments, [])
+        self.assertDictEqual(arguments, self.JSON_EXPECTED)
+
+    def test_multipart_body(self):
+        arguments = {}
+        parse_body_arguments('multipart/form-data; boundary=AaB03x',
+                             self.MULTIPART_BODY, arguments, [])
+        self.assertDictEqual(arguments, self.MULTIPART_EXPECTED)
