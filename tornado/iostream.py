@@ -40,7 +40,7 @@ from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError
 from tornado import stack_context
-from tornado.util import bytes_type
+from tornado.util import bytes_type, errno_from_exception
 
 try:
     from tornado.platform.posix import _set_nonblocking
@@ -766,8 +766,8 @@ class IOStream(BaseIOStream):
             # returned immediately when attempting to connect to
             # localhost, so handle them the same way as an error
             # reported later in _handle_connect.
-            if (e.args[0] != errno.EINPROGRESS and
-                    e.args[0] not in _ERRNO_WOULDBLOCK):
+            if (errno_from_exception(e) != errno.EINPROGRESS and
+                    errno_from_exception(e) not in _ERRNO_WOULDBLOCK):
                 gen_log.warning("Connect error on fd %s: %s",
                                 self.socket.fileno(), e)
                 self.close(exc_info=True)
@@ -1026,9 +1026,9 @@ class PipeIOStream(BaseIOStream):
         try:
             chunk = os.read(self.fd, self.read_chunk_size)
         except (IOError, OSError) as e:
-            if e.args[0] in _ERRNO_WOULDBLOCK:
+            if errno_from_exception(e) in _ERRNO_WOULDBLOCK:
                 return None
-            elif e.args[0] == errno.EBADF:
+            elif errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will
                 # report it as readable but reads will fail with EBADF.
                 self.close(exc_info=True)
