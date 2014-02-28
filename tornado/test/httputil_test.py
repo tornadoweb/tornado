@@ -258,10 +258,10 @@ class FormatTimestampTest(unittest.TestCase):
 class ParseBodyArgumentsTest(unittest.TestCase):
 
     FORM_BODY = b'foo=bar&baz=qux&baz=corgie'
-    FORM_EXPECTED = {b"foo": [b"bar"], b"baz": [b"qux", b"corgie"]}
+    FORM_EXPECTED = {"foo": [b"bar"], "baz": [b"qux", b"corgie"]}
 
     JSON_BODY = b'{"foo": "bar", "baz": ["qux", "corgie"]}'
-    JSON_EXPECTED = {b"foo": [b"bar"], b"baz": [b"qux", b"corgie"]}
+    JSON_EXPECTED = {"foo": ["bar"], "baz": ["qux", "corgie"]}
 
     MULTIPART_BODY = b"""\
 --AaB03x
@@ -278,7 +278,7 @@ Content-Disposition: form-data; name="baz"
 corgie
 --AaB03x--
 """.replace(b"\n", b"\r\n")
-    MULTIPART_EXPECTED = {b"foo": [b"bar"], b"baz": [b"qux", b"corgie"]}
+    MULTIPART_EXPECTED = {"foo": [b"bar"], "baz": [b"qux", b"corgie"]}
 
     def test_form_body(self):
         arguments = {}
