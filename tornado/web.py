@@ -2388,6 +2388,10 @@ def authenticated(method):
         if not self.current_user:
             if self.request.method in ("GET", "HEAD"):
                 url = self.get_login_url()
+                # you configure a login url with a query parameter, Tornado 
+                # will assume you know what you're doing and use it as-is.  
+                # If not, it will add a `next` parameter so the login page 
+                # knows where to send you once you're logged in.  
                 if "?" not in url:
                     if urlparse.urlsplit(url).scheme:
                         # if login url is absolute, make next absolute too
