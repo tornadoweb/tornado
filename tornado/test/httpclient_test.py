@@ -18,7 +18,7 @@ from tornado.log import gen_log
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipOnTravis
 from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, url
 
@@ -110,6 +110,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/all_methods", AllMethodsHandler),
         ], gzip=True)
 
+    @skipOnTravis
     def test_hello_world(self):
         response = self.fetch("/hello")
         self.assertEqual(response.code, 200)
