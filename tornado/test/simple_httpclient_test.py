@@ -10,6 +10,7 @@ import re
 import socket
 import sys
 
+from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
@@ -94,6 +95,18 @@ class HostEchoHandler(RequestHandler):
         self.write(self.request.headers["Host"])
 
 
+class NoContentLengthHandler(RequestHandler):
+    @gen.coroutine
+    def get(self):
+        # Emulate the old HTTP/1.0 behavior of returning a body with no
+        # content-length.  Tornado handles content-length at the framework
+        # level so we have to go around it.
+        stream = self.request.connection.stream
+        yield stream.write(b"HTTP/1.0 200 OK\r\n\r\n"
+                           b"hello")
+        stream.close()
+
+
 class SimpleHTTPClientTestMixin(object):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -112,6 +125,7 @@ class SimpleHTTPClientTestMixin(object):
             url("/see_other_post", SeeOtherPostHandler),
             url("/see_other_get", SeeOtherGetHandler),
             url("/host_echo", HostEchoHandler),
+            url("/no_content_length", NoContentLengthHandler),
         ], gzip=True)
 
     def test_singleton(self):
@@ -312,6 +326,10 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual(str(response.error), "HTTP 599: Timeout")
             self.triggers.popleft()()
             self.wait()
+
+    def test_no_content_length(self):
+        response = self.fetch("/no_content_length")
+        self.assertEquals(b"hello", response.body)
 
 
 class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):

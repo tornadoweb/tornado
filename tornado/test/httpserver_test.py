@@ -4,8 +4,9 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from tornado import httpclient, simple_httpclient, netutil
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
+from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
-from tornado.httputil import HTTPHeaders
+from tornado.httputil import HTTPHeaders, HTTPStreamDelegate
 from tornado.iostream import IOStream
 from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context, Resolver
@@ -163,18 +164,7 @@ class MultipartTestHandler(RequestHandler):
                      })
 
 
-class RawRequestHTTPConnection(simple_httpclient._HTTPConnection):
-    def set_request(self, request):
-        self.__next_request = request
-
-    def _on_connect(self):
-        self.stream.write(self.__next_request)
-        self.__next_request = None
-        self.stream.read_until(b"\r\n\r\n", self._on_headers)
-
 # This test is also called from wsgi_test
-
-
 class HTTPConnectionTest(AsyncHTTPTestCase):
     def get_handlers(self):
         return [("/multipart", MultipartTestHandler),
@@ -184,23 +174,25 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         return Application(self.get_handlers())
 
     def raw_fetch(self, headers, body):
-        with closing(Resolver(io_loop=self.io_loop)) as resolver:
-            with closing(SimpleAsyncHTTPClient(self.io_loop,
-                                               resolver=resolver)) as client:
-                conn = RawRequestHTTPConnection(
-                    self.io_loop, client,
-                    httpclient._RequestProxy(
-                        httpclient.HTTPRequest(self.get_url("/")),
-                        dict(httpclient.HTTPRequest._DEFAULTS)),
-                    None, self.stop,
-                    1024 * 1024, resolver)
-                conn.set_request(
-                    b"\r\n".join(headers +
-                                 [utf8("Content-Length: %d\r\n" % len(body))]) +
-                    b"\r\n" + body)
-                response = self.wait()
-                response.rethrow()
-                return response
+        with closing(IOStream(socket.socket())) as stream:
+            stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
+            self.wait()
+            stream.write(
+                b"\r\n".join(headers +
+                             [utf8("Content-Length: %d\r\n" % len(body))]) +
+                b"\r\n" + body)
+            chunks = []
+            test = self
+            class Delegate(HTTPStreamDelegate):
+                def data_received(self, chunk):
+                    chunks.append(chunk)
+
+                def finish(self):
+                    test.stop()
+            conn = HTTP1Connection(stream, None)
+            conn.process_response(Delegate(), method='GET')
+            self.wait()
+            return b''.join(chunks)
 
     def test_multipart_form(self):
         # Encodings here are tricky:  Headers are latin1, bodies can be
@@ -221,7 +213,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 b"--1234567890--",
                 b"",
             ]))
-        data = json_decode(response.body)
+        data = json_decode(response)
         self.assertEqual(u("\u00e9"), data["header"])
         self.assertEqual(u("\u00e1"), data["argument"])
         self.assertEqual(u("\u00f3"), data["filename"])

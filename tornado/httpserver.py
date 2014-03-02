@@ -143,7 +143,9 @@ class HTTPServer(TCPServer, httputil.HTTPConnectionDelegate):
                            **kwargs)
 
     def handle_stream(self, stream, address):
-        HTTPConnection(stream, address, self, self.no_keep_alive, self.protocol)
+        conn = HTTPConnection(stream, address, self.no_keep_alive,
+                              self.protocol)
+        conn.start_serving(self)
 
     def start_request(self, connection):
         return _ServerRequestProcessor(self, connection)

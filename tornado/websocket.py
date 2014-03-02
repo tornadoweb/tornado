@@ -860,8 +860,14 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                 self.connect_future.set_exception(WebSocketError(
                     "Non-websocket response"))
 
-    def _handle_1xx(self, code):
-        assert code == 101
+    def headers_received(self, start_line, headers):
+        code = httputil.parse_response_start_line(start_line).code
+
+        if code != 101:
+            return super(WebSocketClientConnection, self).headers_received(
+                start_line, headers)
+
+        self.headers = headers
         assert self.headers['Upgrade'].lower() == 'websocket'
         assert self.headers['Connection'].lower() == 'upgrade'
         accept = WebSocketProtocol13.compute_accept_value(self.key)
@@ -874,7 +880,10 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
+        self.stream.set_close_callback(self._on_close)
+
         self.connect_future.set_result(self)
+        return 'detach'
 
     def write_message(self, message, binary=False):
         """Sends a message to the WebSocket server."""

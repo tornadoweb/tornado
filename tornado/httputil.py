@@ -28,6 +28,7 @@ import copy
 import datetime
 import email.utils
 import numbers
+import re
 import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
@@ -624,6 +625,24 @@ def format_timestamp(ts):
     else:
         raise TypeError("unknown timestamp type: %r" % ts)
     return email.utils.formatdate(ts, usegmt=True)
+
+
+ResponseStartLine = collections.namedtuple(
+    'ResponseStartLine', ['version', 'code', 'reason'])
+
+def parse_response_start_line(line):
+    """Returns a (version, code, reason) tuple for an HTTP 1.x response line.
+
+    The response is a `collections.namedtuple`.
+
+    >>> parse_response_start_line("HTTP/1.1 200 OK")
+    ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')
+    """
+    line = native_str(line)
+    match = re.match("(HTTP/1.[01]) ([0-9]+) ([^\r]*)", line)
+    assert match
+    return ResponseStartLine(match.group(1), int(match.group(2)),
+                             match.group(3))
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some

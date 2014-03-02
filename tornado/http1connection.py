@@ -31,15 +31,13 @@ class HTTP1Connection(object):
     We parse HTTP headers and bodies, and execute the request callback
     until the HTTP conection is closed.
     """
-    def __init__(self, stream, address, delegate, no_keep_alive=False,
-                 protocol=None):
+    def __init__(self, stream, address, no_keep_alive=False, protocol=None):
         self.stream = stream
         self.address = address
         # Save the socket's address family now so we know how to
         # interpret self.address even after the stream is closed
         # and its socket attribute replaced with None.
         self.address_family = stream.socket.family
-        self.delegate = delegate
         self.no_keep_alive = no_keep_alive
         if protocol:
             self.protocol = protocol
@@ -51,34 +49,65 @@ class HTTP1Connection(object):
         self._clear_request_state()
         self.stream.set_close_callback(self._on_connection_close)
         self._finish_future = None
+
+    def start_serving(self, delegate):
+        assert isinstance(delegate, httputil.HTTPConnectionDelegate)
         # Register the future on the IOLoop so its errors get logged.
-        stream.io_loop.add_future(self._process_requests(),
-                                  lambda f: f.result())
+        self.stream.io_loop.add_future(self._process_requests(delegate),
+                                       lambda f: f.result())
 
     @gen.coroutine
-    def _process_requests(self):
+    def _process_requests(self, delegate):
         while True:
+            request_delegate = delegate.start_request(self)
             try:
-                header_data = yield self.stream.read_until(b"\r\n\r\n")
-                request_delegate = self.delegate.start_request(self)
-                self._finish_future = Future()
-                start_line, headers = self._parse_headers(header_data)
-                self._disconnect_on_finish = not self._can_keep_alive(
-                    start_line, headers)
-                request_delegate.headers_received(start_line, headers)
-                body_future = self._read_body(headers)
-                if body_future is not None:
-                    request_delegate.data_received((yield body_future))
-                request_delegate.finish()
-                yield self._finish_future
-            except httputil.BadRequestException as e:
-                gen_log.info("Malformed HTTP request from %r: %s",
-                             self.address, e)
-                self.close()
-                return
+                ret = yield self._process_message(request_delegate, False)
             except iostream.StreamClosedError:
                 self.close()
                 return
+            if not ret:
+                return
+
+    def process_response(self, delegate, method):
+        return self._process_message(delegate, True, method=method)
+
+    @gen.coroutine
+    def _process_message(self, delegate, is_client, method=None):
+        assert isinstance(delegate, httputil.HTTPStreamDelegate)
+        try:
+            header_data = yield self.stream.read_until_regex(b"\r?\n\r?\n")
+            self._finish_future = Future()
+            start_line, headers = self._parse_headers(header_data)
+            self._disconnect_on_finish = not self._can_keep_alive(
+                start_line, headers)
+            ret = delegate.headers_received(start_line, headers)
+            # TODO: finalize the 'detach' interface.
+            if ret == 'detach':
+                return
+            skip_body = False
+            if is_client:
+                if method == 'HEAD':
+                    skip_body = True
+                code = httputil.parse_response_start_line(start_line).code
+                if code == 304:
+                    skip_body = True
+                if code >= 100 and code < 200:
+                    yield self._process_message(delegate, is_client, method=method)
+            else:
+                if headers.get("Expect") == "100-continue":
+                    self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
+            if not skip_body:
+                body_future = self._read_body(is_client, headers, delegate)
+                if body_future is not None:
+                    yield body_future
+            delegate.finish()
+            yield self._finish_future
+        except httputil.BadRequestException as e:
+            gen_log.info("Malformed HTTP request from %r: %s",
+                         self.address, e)
+            self.close()
+            raise gen.Return(False)
+        raise gen.Return(True)
 
 
     def _clear_request_state(self):
@@ -183,13 +212,38 @@ class HTTP1Connection(object):
             raise httputil.BadRequestException("Malformed HTTP headers")
         return start_line, headers
 
-    def _read_body(self, headers):
+    def _read_body(self, is_client, headers, delegate):
         content_length = headers.get("Content-Length")
         if content_length:
             content_length = int(content_length)
             if content_length > self.stream.max_buffer_size:
                 raise httputil.BadRequestException("Content-Length too long")
-            if headers.get("Expect") == "100-continue":
-                self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
-            return self.stream.read_bytes(content_length)
+            return self._read_fixed_body(content_length, delegate)
+        if headers.get("Transfer-Encoding") == "chunked":
+            return self._read_chunked_body(delegate)
+        if is_client:
+            return self._read_body_until_close(delegate)
         return None
+
+    @gen.coroutine
+    def _read_fixed_body(self, content_length, delegate):
+        body = yield self.stream.read_bytes(content_length)
+        delegate.data_received(body)
+
+    @gen.coroutine
+    def _read_chunked_body(self, delegate):
+        # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
+        while True:
+            chunk_len = yield self.stream.read_until(b"\r\n")
+            chunk_len = int(chunk_len.strip(), 16)
+            if chunk_len == 0:
+                return
+            # chunk ends with \r\n
+            chunk = yield self.stream.read_bytes(chunk_len + 2)
+            assert chunk[-2:] == b"\r\n"
+            delegate.data_received(chunk[:-2])
+
+    @gen.coroutine
+    def _read_body_until_close(self, delegate):
+        body = yield self.stream.read_until_close()
+        delegate.data_received(body)
