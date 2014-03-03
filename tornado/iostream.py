@@ -89,6 +89,7 @@ class BaseIOStream(object):
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
         self._read_buffer_size = 0
+        self._write_buffer_size = 0
         self._write_buffer_frozen = False
         self._read_delimiter = None
         self._read_regex = None
@@ -226,6 +227,7 @@ class BaseIOStream(object):
             WRITE_BUFFER_CHUNK_SIZE = 128 * 1024
             for i in range(0, len(data), WRITE_BUFFER_CHUNK_SIZE):
                 self._write_buffer.append(data[i:i + WRITE_BUFFER_CHUNK_SIZE])
+            self._write_buffer_size += len(data)
         if callback is not None:
             self._write_callback = stack_context.wrap(callback)
             future = None
@@ -303,6 +305,11 @@ class BaseIOStream(object):
     def writing(self):
         """Returns true if we are currently writing to the stream."""
         return bool(self._write_buffer)
+
+    @property
+    def write_buffer_size(self):
+        """Returns how many bytes in write buffer."""
+        return self._write_buffer_size
 
     def closed(self):
         """Returns true if the stream has been closed."""
@@ -586,6 +593,7 @@ class BaseIOStream(object):
                 self._write_buffer_frozen = False
                 _merge_prefix(self._write_buffer, num_bytes)
                 self._write_buffer.popleft()
+                self._write_buffer_size -= num_bytes
             except (socket.error, IOError, OSError) as e:
                 if e.args[0] in _ERRNO_WOULDBLOCK:
                     self._write_buffer_frozen = True
