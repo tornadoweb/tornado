@@ -27,7 +27,7 @@ import stat
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.util import u, Configurable
+from tornado.util import u, Configurable, errno_from_exception
 
 if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
     ssl_match_hostname = ssl.match_hostname
@@ -84,7 +84,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
         try:
             sock = socket.socket(af, socktype, proto)
         except socket.error as e:
-            if e.args[0] == errno.EAFNOSUPPORT:
+            if errno_from_exception(e) == errno.EAFNOSUPPORT:
                 continue
             raise
         set_close_exec(sock.fileno())
@@ -133,7 +133,7 @@ if hasattr(socket, 'AF_UNIX'):
         try:
             st = os.stat(file)
         except OSError as err:
-            if err.errno != errno.ENOENT:
+            if errno_from_exception(err) != errno.ENOENT:
                 raise
         else:
             if stat.S_ISSOCK(st.st_mode):
@@ -165,12 +165,12 @@ def add_accept_handler(sock, callback, io_loop=None):
             except socket.error as e:
                 # EWOULDBLOCK and EAGAIN indicate we have accepted every
                 # connection that is available.
-                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                if errno_from_exception(e) in (errno.EWOULDBLOCK, errno.EAGAIN):
                     return
                 # ECONNABORTED indicates that there was a connection
                 # but it was closed while still in the accept queue.
                 # (observed on FreeBSD).
-                if e.args[0] == errno.ECONNABORTED:
+                if errno_from_exception(e) == errno.ECONNABORTED:
                     continue
                 raise
             callback(connection, address)

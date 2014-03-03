@@ -45,6 +45,7 @@ from tornado.concurrent import TracebackFuture, is_future
 from tornado.log import app_log, gen_log
 from tornado import stack_context
 from tornado.util import Configurable
+from tornado.util import errno_from_exception
 
 try:
     import signal
@@ -724,9 +725,7 @@ class PollIOLoop(IOLoop):
                     # two ways EINTR might be signaled:
                     # * e.errno == errno.EINTR
                     # * e.args is like (errno.EINTR, 'Interrupted system call')
-                    if (getattr(e, 'errno', None) == errno.EINTR or
-                        (isinstance(getattr(e, 'args', None), tuple) and
-                         len(e.args) == 2 and e.args[0] == errno.EINTR)):
+                    if errno_from_exception(e) == errno.EINTR:
                         continue
                     else:
                         raise
@@ -746,7 +745,7 @@ class PollIOLoop(IOLoop):
                         fd_obj, handler_func = self._handlers[fd]
                         handler_func(fd_obj, events)
                     except (OSError, IOError) as e:
-                        if e.args[0] == errno.EPIPE:
+                        if errno_from_exception(e) == errno.EPIPE:
                             # Happens when the client closes the connection
                             pass
                         else:

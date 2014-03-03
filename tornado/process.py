@@ -35,6 +35,7 @@ from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
 from tornado import stack_context
+from tornado.util import errno_from_exception
 
 try:
     long  # py2
@@ -136,7 +137,7 @@ def fork_processes(num_processes, max_restarts=100):
         try:
             pid, status = os.wait()
         except OSError as e:
-            if e.errno == errno.EINTR:
+            if errno_from_exception(e) == errno.EINTR:
                 continue
             raise
         if pid not in children:
@@ -283,7 +284,7 @@ class Subprocess(object):
         try:
             ret_pid, status = os.waitpid(pid, os.WNOHANG)
         except OSError as e:
-            if e.args[0] == errno.ECHILD:
+            if errno_from_exception(e) == errno.ECHILD:
                 return
         if ret_pid == 0:
             return
