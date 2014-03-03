@@ -8,7 +8,7 @@ from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate
 from tornado.iostream import IOStream
-from tornado.log import app_log, gen_log
+from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
@@ -28,6 +28,19 @@ try:
     from io import BytesIO  # python 3
 except ImportError:
     from cStringIO import StringIO as BytesIO  # python 2
+
+
+def read_stream_body(stream, callback):
+    """Reads an HTTP response from `stream` and runs callback with its body."""
+    chunks = []
+    class Delegate(HTTPMessageDelegate):
+        def data_received(self, chunk):
+            chunks.append(chunk)
+
+        def finish(self):
+            callback(b''.join(chunks))
+    conn = HTTP1Connection(stream, None)
+    conn.read_response(Delegate(), method='GET')
 
 
 class HandlerBaseTestCase(AsyncHTTPTestCase):
@@ -186,18 +199,8 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 b"\r\n".join(headers +
                              [utf8("Content-Length: %d\r\n" % len(body))]) +
                 b"\r\n" + body)
-            chunks = []
-            test = self
-            class Delegate(HTTPMessageDelegate):
-                def data_received(self, chunk):
-                    chunks.append(chunk)
-
-                def finish(self):
-                    test.stop()
-            conn = HTTP1Connection(stream, None)
-            conn.read_response(Delegate(), method='GET')
-            self.wait()
-            return b''.join(chunks)
+            read_stream_body(stream, self.stop)
+            return self.wait()
 
     def test_multipart_form(self):
         # Encodings here are tricky:  Headers are latin1, bodies can be
@@ -393,6 +396,23 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
                                      self.stop)
             self.wait()
+
+    def test_chunked_request_body(self):
+        # Chunked requests are not widely supported and we don't have a way
+        # to generate them in AsyncHTTPClient, but HTTPServer will read them.
+        self.stream.write(b"""\
+POST /echo HTTP/1.1
+Transfer-Encoding: chunked
+Content-Type: application/x-www-form-urlencoded
+
+7
+foo=bar
+0
+
+""".replace(b"\n", b"\r\n"))
+        read_stream_body(self.stream, self.stop)
+        response = self.wait()
+        self.assertEqual(json_decode(response), {u('foo'): [u('bar')]})
 
 
 class XHeaderTest(HandlerBaseTestCase):
