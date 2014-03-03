@@ -67,6 +67,11 @@ class StreamClosedError(IOError):
     pass
 
 
+class StreamBufferFullError(IOError):
+    """Exception raised by `IOStream.write` method when write buffer is full.
+    """
+
+
 class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
 
@@ -81,9 +86,10 @@ class BaseIOStream(object):
     `read_from_fd`, and optionally `get_fd_error`.
     """
     def __init__(self, io_loop=None, max_buffer_size=None,
-                 read_chunk_size=4096):
+                 read_chunk_size=4096, max_write_buffer_size=None):
         self.io_loop = io_loop or ioloop.IOLoop.current()
         self.max_buffer_size = max_buffer_size or 104857600
+        self.max_write_buffer_size = max_write_buffer_size
         self.read_chunk_size = read_chunk_size
         self.error = None
         self._read_buffer = collections.deque()
@@ -221,6 +227,9 @@ class BaseIOStream(object):
         # We use bool(_write_buffer) as a proxy for write_buffer_size>0,
         # so never put empty strings in the buffer.
         if data:
+            if (self.max_write_buffer_size is not None and
+                    self._write_buffer_size + len(data) > self.max_write_buffer_size):
+                raise StreamBufferFullError
             # Break up large contiguous strings before inserting them in the
             # write buffer, so we don't have to recopy the entire thing
             # as we slice off pieces to send to the socket.
