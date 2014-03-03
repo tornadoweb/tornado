@@ -51,29 +51,29 @@ class HTTP1Connection(object):
         self._finish_future = None
 
     def start_serving(self, delegate):
-        assert isinstance(delegate, httputil.HTTPConnectionDelegate)
+        assert isinstance(delegate, httputil.HTTPServerConnectionDelegate)
         # Register the future on the IOLoop so its errors get logged.
-        self.stream.io_loop.add_future(self._process_requests(delegate),
+        self.stream.io_loop.add_future(self._server_request_loop(delegate),
                                        lambda f: f.result())
 
     @gen.coroutine
-    def _process_requests(self, delegate):
+    def _server_request_loop(self, delegate):
         while True:
             request_delegate = delegate.start_request(self)
             try:
-                ret = yield self._process_message(request_delegate, False)
+                ret = yield self._read_message(request_delegate, False)
             except iostream.StreamClosedError:
                 self.close()
                 return
             if not ret:
                 return
 
-    def process_response(self, delegate, method):
-        return self._process_message(delegate, True, method=method)
+    def read_response(self, delegate, method):
+        return self._read_message(delegate, True, method=method)
 
     @gen.coroutine
-    def _process_message(self, delegate, is_client, method=None):
-        assert isinstance(delegate, httputil.HTTPStreamDelegate)
+    def _read_message(self, delegate, is_client, method=None):
+        assert isinstance(delegate, httputil.HTTPMessageDelegate)
         try:
             header_data = yield self.stream.read_until_regex(b"\r?\n\r?\n")
             self._finish_future = Future()
@@ -92,7 +92,7 @@ class HTTP1Connection(object):
                 if code == 304:
                     skip_body = True
                 if code >= 100 and code < 200:
-                    yield self._process_message(delegate, is_client, method=method)
+                    yield self._read_message(delegate, is_client, method=method)
             else:
                 if headers.get("Expect") == "100-continue":
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
@@ -102,8 +102,8 @@ class HTTP1Connection(object):
                     yield body_future
             delegate.finish()
             yield self._finish_future
-        except httputil.BadRequestException as e:
-            gen_log.info("Malformed HTTP request from %r: %s",
+        except httputil.HTTPMessageException as e:
+            gen_log.info("Malformed HTTP message from %r: %s",
                          self.address, e)
             self.close()
             raise gen.Return(False)
@@ -209,7 +209,7 @@ class HTTP1Connection(object):
             headers = httputil.HTTPHeaders.parse(data[eol:])
         except ValueError:
             # probably form split() if there was no ':' in the line
-            raise httputil.BadRequestException("Malformed HTTP headers")
+            raise httputil.HTTPMessageException("Malformed HTTP headers")
         return start_line, headers
 
     def _read_body(self, is_client, headers, delegate):
@@ -217,7 +217,7 @@ class HTTP1Connection(object):
         if content_length:
             content_length = int(content_length)
             if content_length > self.stream.max_buffer_size:
-                raise httputil.BadRequestException("Content-Length too long")
+                raise httputil.HTTPMessageException("Content-Length too long")
             return self._read_fixed_body(content_length, delegate)
         if headers.get("Transfer-Encoding") == "chunked":
             return self._read_chunked_body(delegate)

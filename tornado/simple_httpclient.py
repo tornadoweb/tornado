@@ -143,7 +143,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         del self.waiting[key]
 
 
-class _HTTPConnection(httputil.HTTPStreamDelegate):
+class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
     def __init__(self, io_loop, client, request, release_callback,
@@ -338,10 +338,10 @@ class _HTTPConnection(httputil.HTTPStreamDelegate):
         self.connection = HTTP1Connection(
             self.stream, self._sockaddr,
             no_keep_alive=True, protocol=self.parsed.scheme)
-        # Ensure that any exception raised in process_response ends up in our
+        # Ensure that any exception raised in read_response ends up in our
         # stack context.
         self.io_loop.add_future(
-            self.connection.process_response(self, method=self.request.method),
+            self.connection.read_response(self, method=self.request.method),
             lambda f: f.result())
 
     def _release(self):

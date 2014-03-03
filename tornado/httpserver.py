@@ -30,12 +30,13 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import socket
 
-from tornado import http1connection, httputil
+from tornado.http1connection import HTTP1Connection
+from tornado import httputil
 from tornado import netutil
 from tornado.tcpserver import TCPServer
 
 
-class HTTPServer(TCPServer, httputil.HTTPConnectionDelegate):
+class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     r"""A non-blocking, single-threaded HTTP server.
 
     A server is defined by a request callback that takes an HTTPRequest
@@ -143,26 +144,30 @@ class HTTPServer(TCPServer, httputil.HTTPConnectionDelegate):
                            **kwargs)
 
     def handle_stream(self, stream, address):
-        conn = HTTPConnection(stream, address, self.no_keep_alive,
-                              self.protocol)
+        conn = HTTP1Connection(stream, address=address,
+                               no_keep_alive=self.no_keep_alive,
+                               protocol=self.protocol)
         conn.start_serving(self)
 
     def start_request(self, connection):
-        return _ServerRequestProcessor(self, connection)
+        return _ServerRequestAdapter(self, connection)
 
-class _ServerRequestProcessor(httputil.HTTPStreamDelegate):
+class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
+    """Adapts the `HTTPMessageDelegate` interface to the `HTTPServerRequest`
+    interface expected by our clients.
+    """
     def __init__(self, server, connection):
         self.server = server
         self.connection = connection
 
     def headers_received(self, start_line, headers):
-        pass
         try:
             method, uri, version = start_line.split(" ")
         except ValueError:
-            raise httputil.BadRequestException("Malformed HTTP request line")
+            raise httputil.HTTPMessageException("Malformed HTTP request line")
         if not version.startswith("HTTP/"):
-            raise httputil.BadRequestException("Malformed HTTP version in HTTP Request-Line")
+            raise httputil.HTTPMessageException(
+                "Malformed HTTP version in HTTP Request-Line")
         # HTTPRequest wants an IP, not a full socket address
         if self.connection.address_family in (socket.AF_INET, socket.AF_INET6):
             remote_ip = self.connection.address[0]
@@ -206,6 +211,4 @@ class _ServerRequestProcessor(httputil.HTTPStreamDelegate):
         self.server.request_callback(self.request)
 
 
-
 HTTPRequest = httputil.HTTPServerRequest
-HTTPConnection = http1connection.HTTP1Connection

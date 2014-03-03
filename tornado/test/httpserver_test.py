@@ -2,15 +2,14 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
-from tornado import httpclient, simple_httpclient, netutil
+from tornado import netutil
 from tornado.escape import json_decode, utf8, _unicode, recursive_unicode, native_str
 from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
-from tornado.httputil import HTTPHeaders, HTTPStreamDelegate
+from tornado.httputil import HTTPHeaders, HTTPMessageDelegate
 from tornado.iostream import IOStream
 from tornado.log import gen_log
-from tornado.netutil import ssl_options_to_context, Resolver
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.netutil import ssl_options_to_context
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type
@@ -183,14 +182,14 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 b"\r\n" + body)
             chunks = []
             test = self
-            class Delegate(HTTPStreamDelegate):
+            class Delegate(HTTPMessageDelegate):
                 def data_received(self, chunk):
                     chunks.append(chunk)
 
                 def finish(self):
                     test.stop()
             conn = HTTP1Connection(stream, None)
-            conn.process_response(Delegate(), method='GET')
+            conn.read_response(Delegate(), method='GET')
             self.wait()
             return b''.join(chunks)
 
@@ -533,7 +532,7 @@ class UnixSocketTest(AsyncTestCase):
     def test_unix_socket_bad_request(self):
         # Unix sockets don't have remote addresses so they just return an
         # empty string.
-        with ExpectLog(gen_log, "Malformed HTTP request from"):
+        with ExpectLog(gen_log, "Malformed HTTP message from"):
             self.stream.write(b"garbage\r\n\r\n")
             self.stream.read_until_close(self.stop)
             response = self.wait()

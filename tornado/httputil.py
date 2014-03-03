@@ -412,17 +412,17 @@ class HTTPServerRequest(object):
             self.__class__.__name__, args, dict(self.headers))
 
 
-class BadRequestException(Exception):
-    """Exception class for malformed HTTP requests."""
+class HTTPMessageException(Exception):
+    """Exception class for malformed HTTP requests or responses."""
     pass
 
 
-class HTTPConnectionDelegate(object):
+class HTTPServerConnectionDelegate(object):
     def start_request(self, connection):
         raise NotImplementedError()
 
 
-class HTTPStreamDelegate(object):
+class HTTPMessageDelegate(object):
     def headers_received(self, start_line, headers):
         pass
 
