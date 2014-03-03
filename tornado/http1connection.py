@@ -23,6 +23,7 @@ from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log
 from tornado import stack_context
+from tornado.util import GzipDecompressor
 
 
 class HTTP1Connection(object):
@@ -68,7 +69,9 @@ class HTTP1Connection(object):
             if not ret:
                 return
 
-    def read_response(self, delegate, method):
+    def read_response(self, delegate, method, use_gzip=False):
+        if use_gzip:
+            delegate = _GzipMessageDelegate(delegate)
         return self._read_message(delegate, True, method=method)
 
     @gen.coroutine
@@ -247,3 +250,33 @@ class HTTP1Connection(object):
     def _read_body_until_close(self, delegate):
         body = yield self.stream.read_until_close()
         delegate.data_received(body)
+
+
+class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
+    """Wraps an `HTTPMessageDelegate` to decode ``Content-Encoding: gzip``.
+    """
+    def __init__(self, delegate):
+        self._delegate = delegate
+        self._decompressor = None
+
+    def headers_received(self, start_line, headers):
+        if headers.get("Content-Encoding") == "gzip":
+            self._decompressor = GzipDecompressor()
+        return self._delegate.headers_received(start_line, headers)
+
+    def data_received(self, chunk):
+        if self._decompressor:
+            chunk = self._decompressor.decompress(chunk)
+        return self._delegate.data_received(chunk)
+
+    def finish(self):
+        if self._decompressor is not None:
+            tail = self._decompressor.flush()
+            if tail:
+                # I believe the tail will always be empty (i.e.
+                # decompress will return all it can).  The purpose
+                # of the flush call is to detect errors such
+                # as truncated input.  But in case it ever returns
+                # anything, treat it as an extra chunk
+                self._delegate.data_received(tail)
+        return self._delegate.finish()

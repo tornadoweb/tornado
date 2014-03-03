@@ -9,7 +9,6 @@ from tornado.iostream import IOStream, SSLIOStream, StreamClosedError
 from tornado.netutil import Resolver, OverrideResolver
 from tornado.log import gen_log
 from tornado import stack_context
-from tornado.util import GzipDecompressor
 
 import base64
 import collections
@@ -341,7 +340,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         # Ensure that any exception raised in read_response ends up in our
         # stack context.
         self.io_loop.add_future(
-            self.connection.read_response(self, method=self.request.method),
+            self.connection.read_response(self, method=self.request.method,
+                                          use_gzip=self.request.use_gzip),
             lambda f: f.result())
 
     def _release(self):
@@ -421,23 +421,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 raise ValueError("Response with code %d should not have body" %
                                  self.code)
 
-        if (self.request.use_gzip and
-                self.headers.get("Content-Encoding") == "gzip"):
-            self._decompressor = GzipDecompressor()
-
     def finish(self):
-        if self._decompressor is not None:
-            tail = self._decompressor.flush()
-            if tail:
-                # I believe the tail will always be empty (i.e.
-                # decompress will return all it can).  The purpose
-                # of the flush call is to detect errors such
-                # as truncated input.  But in case it ever returns
-                # anything, treat it as an extra chunk
-                if self.request.streaming_callback is not None:
-                    self.request.streaming_callback(tail)
-                else:
-                    self.chunks.append(tail)
         data = b''.join(self.chunks)
         self._remove_timeout()
         original_request = getattr(self.request, "original_request",
@@ -491,8 +475,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.stream.close()
 
     def data_received(self, chunk):
-        if self._decompressor:
-            chunk = self._decompressor.decompress(chunk)
         if self.request.streaming_callback is not None:
             self.request.streaming_callback(chunk)
         else:
