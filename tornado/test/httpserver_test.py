@@ -8,7 +8,7 @@ from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate
 from tornado.iostream import IOStream
-from tornado.log import gen_log
+from tornado.log import app_log, gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import unittest
@@ -16,12 +16,18 @@ from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, asynchronous
 from contextlib import closing
 import datetime
+import gzip
 import os
 import shutil
 import socket
 import ssl
 import sys
 import tempfile
+
+try:
+    from io import BytesIO  # python 3
+except ImportError:
+    from cStringIO import StringIO as BytesIO  # python 2
 
 
 class HandlerBaseTestCase(AsyncHTTPTestCase):
@@ -674,3 +680,38 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.stream.write(b'GET /finish_on_close HTTP/1.1\r\n\r\n')
         self.read_headers()
         self.close()
+
+
+class GzipBaseTest(object):
+    def get_app(self):
+        return Application([('/', EchoHandler)])
+
+    def post_gzip(self, body):
+        bytesio = BytesIO()
+        gzip_file = gzip.GzipFile(mode='w', fileobj=bytesio)
+        gzip_file.write(utf8(body))
+        gzip_file.close()
+        compressed_body = bytesio.getvalue()
+        return self.fetch('/', method='POST', body=compressed_body,
+                          headers={'Content-Encoding': 'gzip'})
+
+    def test_uncompressed(self):
+        response = self.fetch('/', method='POST', body='foo=bar')
+        self.assertEquals(json_decode(response.body), {u('foo'): [u('bar')]})
+
+class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
+    def get_httpserver_options(self):
+        return dict(gzip=True)
+
+    def test_gzip(self):
+        response = self.post_gzip('foo=bar')
+        self.assertEquals(json_decode(response.body), {u('foo'): [u('bar')]})
+
+class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
+    def test_gzip_unsupported(self):
+        # Gzip support is opt-in; without it the server fails to parse
+        # the body (but parsing form bodies is currently just a log message,
+        # not a fatal error).
+        with ExpectLog(gen_log, "Unsupported Content-Encoding"):
+            response = self.post_gzip('foo=bar')
+        self.assertEquals(json_decode(response.body), {})

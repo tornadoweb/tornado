@@ -1343,7 +1343,13 @@ class GzipTestCase(SimpleHandlerTestCase):
 
     def test_gzip(self):
         response = self.fetch('/')
-        self.assertEqual(response.headers['Content-Encoding'], 'gzip')
+        # simple_httpclient renames the content-encoding header;
+        # curl_httpclient doesn't.
+        self.assertEqual(
+            response.headers.get(
+                'Content-Encoding',
+                response.headers.get('X-Consumed-Content-Encoding')),
+            'gzip')
         self.assertEqual(response.headers['Vary'], 'Accept-Encoding')
 
     def test_gzip_not_requested(self):

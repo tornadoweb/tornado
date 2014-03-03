@@ -531,7 +531,7 @@ def _int_or_none(val):
     return int(val)
 
 
-def parse_body_arguments(content_type, body, arguments, files):
+def parse_body_arguments(content_type, body, arguments, files, headers=None):
     """Parses a form request body.
 
     Supports ``application/x-www-form-urlencoded`` and
@@ -540,6 +540,10 @@ def parse_body_arguments(content_type, body, arguments, files):
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
     """
+    if headers and 'Content-Encoding' in headers:
+        gen_log.warning("Unsupported Content-Encoding: %s",
+                        headers['Content-Encoding'])
+        return
     if content_type.startswith("application/x-www-form-urlencoded"):
         try:
             uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)

@@ -51,16 +51,19 @@ class HTTP1Connection(object):
         self.stream.set_close_callback(self._on_connection_close)
         self._finish_future = None
 
-    def start_serving(self, delegate):
+    def start_serving(self, delegate, gzip=False):
         assert isinstance(delegate, httputil.HTTPServerConnectionDelegate)
         # Register the future on the IOLoop so its errors get logged.
-        self.stream.io_loop.add_future(self._server_request_loop(delegate),
-                                       lambda f: f.result())
+        self.stream.io_loop.add_future(
+            self._server_request_loop(delegate, gzip=gzip),
+            lambda f: f.result())
 
     @gen.coroutine
-    def _server_request_loop(self, delegate):
+    def _server_request_loop(self, delegate, gzip=False):
         while True:
             request_delegate = delegate.start_request(self)
+            if gzip:
+                request_delegate = _GzipMessageDelegate(request_delegate)
             try:
                 ret = yield self._read_message(request_delegate, False)
             except iostream.StreamClosedError:
@@ -262,6 +265,12 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
     def headers_received(self, start_line, headers):
         if headers.get("Content-Encoding") == "gzip":
             self._decompressor = GzipDecompressor()
+            # Downstream delegates will only see uncompressed data,
+            # so rename the content-encoding header.
+            # (but note that curl_httpclient doesn't do this).
+            headers.add("X-Consumed-Content-Encoding",
+                        headers["Content-Encoding"])
+            del headers["Content-Encoding"]
         return self._delegate.headers_received(start_line, headers)
 
     def data_received(self, chunk):

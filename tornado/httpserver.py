@@ -135,11 +135,13 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
 
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, protocol=None, **kwargs):
+                 xheaders=False, ssl_options=None, protocol=None, gzip=False,
+                 **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
         self.protocol = protocol
+        self.gzip = gzip
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
@@ -147,7 +149,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         conn = HTTP1Connection(stream, address=address,
                                no_keep_alive=self.no_keep_alive,
                                protocol=self.protocol)
-        conn.start_serving(self)
+        conn.start_serving(self, gzip=self.gzip)
 
     def start_request(self, connection):
         return _ServerRequestAdapter(self, connection)
@@ -203,7 +205,8 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
         if self.request.method in ("POST", "PATCH", "PUT"):
             httputil.parse_body_arguments(
                 self.request.headers.get("Content-Type", ""), self.request.body,
-                self.request.body_arguments, self.request.files)
+                self.request.body_arguments, self.request.files,
+                self.request.headers)
 
             for k, v in self.request.body_arguments.items():
                 self.request.arguments.setdefault(k, []).extend(v)
