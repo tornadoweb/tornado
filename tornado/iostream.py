@@ -315,11 +315,6 @@ class BaseIOStream(object):
         """Returns true if we are currently writing to the stream."""
         return bool(self._write_buffer)
 
-    @property
-    def write_buffer_size(self):
-        """Returns how many bytes in write buffer."""
-        return self._write_buffer_size
-
     def closed(self):
         """Returns true if the stream has been closed."""
         return self._closed
