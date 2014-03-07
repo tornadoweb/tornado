@@ -3,6 +3,10 @@ from __future__ import absolute_import, division, print_function, with_statement
 import os
 import sys
 
+# Tornado's own test suite requires the updated unittest module
+# (either py27+ or unittest2) so tornado.test.util enforces
+# this requirement, but for other users of tornado.testing we want
+# to allow the older version if unitest2 is not available.
 # Encapsulate the choice of unittest or unittest2 here.
 # To be used as 'from tornado.test.util import unittest'.
 if sys.version_info >= (2, 7):
