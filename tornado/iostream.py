@@ -1020,7 +1020,16 @@ class PipeIOStream(BaseIOStream):
         os.close(self.fd)
 
     def write_to_fd(self, data):
-        return os.write(self.fd, data)
+        try:
+            return os.write(self.fd, data)
+        except (IOError, OSError) as e:
+            if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                return 0
+            elif e.args[0] == errno.EBADF:
+                self.close(exc_info=True)
+                return 0
+            else:
+                raise
 
     def read_from_fd(self):
         try:
