@@ -203,7 +203,6 @@ class BaseIOStream(object):
             self._run_read_callback(self._consume(self._read_buffer_size))
             return future
         self._read_until_close = True
-        self._streaming_callback = stack_context.wrap(streaming_callback)
         self._try_inline_read()
         return future
 
