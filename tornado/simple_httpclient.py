@@ -236,7 +236,9 @@ class _HTTPConnection(object):
             # but nearly all servers support both SSLv3 and TLSv1:
             # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
             if sys.version_info >= (2, 7):
-                ssl_options["ciphers"] = "DEFAULT:!SSLv2"
+                # In addition to disabling SSLv2, we also exclude certain
+                # classes of insecure ciphers.
+                ssl_options["ciphers"] = "DEFAULT:!SSLv2:!EXPORT:!DES"
             else:
                 # This is really only necessary for pre-1.0 versions
                 # of openssl, but python 2.6 doesn't expose version

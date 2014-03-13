@@ -390,6 +390,10 @@ def ssl_options_to_context(ssl_options):
         context.load_verify_locations(ssl_options['ca_certs'])
     if 'ciphers' in ssl_options:
         context.set_ciphers(ssl_options['ciphers'])
+    if hasattr(ssl, 'OP_NO_COMPRESSION'):
+        # Disable TLS compression to avoid CRIME and related attacks.
+        # This constant wasn't added until python 3.3.
+        context.options |= ssl.OP_NO_COMPRESSION
     return context
 
 
