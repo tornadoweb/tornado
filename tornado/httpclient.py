@@ -34,7 +34,7 @@ import time
 import weakref
 
 from tornado.concurrent import TracebackFuture
-from tornado.escape import utf8
+from tornado.escape import utf8, native_str
 from tornado import httputil, stack_context
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
@@ -556,7 +556,7 @@ def main():
         if options.print_headers:
             print(response.headers)
         if options.print_body:
-            print(response.body)
+            print(native_str(response.body))
     client.close()
 
 if __name__ == "__main__":
