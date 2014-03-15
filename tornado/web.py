@@ -598,7 +598,8 @@ class RequestHandler(object):
         Note that lists are not converted to JSON because of a potential
         cross-site security vulnerability.  All JSON output should be
         wrapped in a dictionary.  More details at
-        http://haacked.com/archive/2008/11/20/anatomy-of-a-subtle-json-vulnerability.aspx
+        http://haacked.com/archive/2009/06/25/json-hijacking.aspx/ and
+        https://github.com/facebook/tornado/issues/1009
         """
         if self._finished:
             raise RuntimeError("Cannot write() after finish().  May be caused "
