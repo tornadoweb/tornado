@@ -154,51 +154,78 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     def start_request(self, connection):
         return _ServerRequestAdapter(self, connection)
 
+
 class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
-    """Adapts the `HTTPMessageDelegate` interface to the `HTTPServerRequest`
-    interface expected by our clients.
+    """Adapts the `HTTPMessageDelegate` interface to the interface expected
+    by our clients.
     """
     def __init__(self, server, connection):
         self.server = server
         self.connection = connection
-        self._chunks = []
+        self.request = None
+        if isinstance(server.request_callback,
+                      httputil.HTTPServerConnectionDelegate):
+            self.delegate = server.request_callback.start_request(connection)
+            self._chunks = None
+        else:
+            self.delegate = None
+            self._chunks = []
+
+    def _apply_xheaders(self, headers):
+        """Rewrite the connection.remote_ip and connection.protocol fields.
+
+        This is hacky, but the movement of logic between `HTTPServer`
+        and `.Application` leaves us without a clean place to do this.
+        """
+        self._orig_remote_ip = self.connection.remote_ip
+        self._orig_protocol = self.connection.protocol
+        # Squid uses X-Forwarded-For, others use X-Real-Ip
+        ip = headers.get("X-Forwarded-For", self.connection.remote_ip)
+        ip = ip.split(',')[-1].strip()
+        ip = headers.get("X-Real-Ip", ip)
+        if netutil.is_valid_ip(ip):
+            self.connection.remote_ip = ip
+        # AWS uses X-Forwarded-Proto
+        proto_header = headers.get(
+            "X-Scheme", headers.get("X-Forwarded-Proto",
+                                    self.connection.protocol))
+        if proto_header in ("http", "https"):
+            self.connection.protocol = proto_header
+
+    def _unapply_xheaders(self):
+        """Undo changes from `_apply_xheaders`.
+
+        Xheaders are per-request so they should not leak to the next
+        request on the same connection.
+        """
+        self.connection.remote_ip = self._orig_remote_ip
+        self.connection.protocol = self._orig_protocol
 
     def headers_received(self, start_line, headers):
-        # HTTPRequest wants an IP, not a full socket address
-        if self.connection.address_family in (socket.AF_INET, socket.AF_INET6):
-            remote_ip = self.connection.address[0]
-        else:
-            # Unix (or other) socket; fake the remote address
-            remote_ip = '0.0.0.0'
-
-        protocol = self.connection.protocol
-
-        # xheaders can override the defaults
         if self.server.xheaders:
-            # Squid uses X-Forwarded-For, others use X-Real-Ip
-            ip = headers.get("X-Forwarded-For", remote_ip)
-            ip = ip.split(',')[-1].strip()
-            ip = headers.get("X-Real-Ip", ip)
-            if netutil.is_valid_ip(ip):
-                remote_ip = ip
-            # AWS uses X-Forwarded-Proto
-            proto_header = headers.get(
-                "X-Scheme", headers.get("X-Forwarded-Proto", protocol))
-            if proto_header in ("http", "https"):
-                protocol = proto_header
-
-        self.request = httputil.HTTPServerRequest(
-            connection=self.connection, method=start_line.method,
-            uri=start_line.path, version=start_line.version,
-            headers=headers, remote_ip=remote_ip, protocol=protocol)
+            self._apply_xheaders(headers)
+        if self.delegate is None:
+            self.request = httputil.HTTPServerRequest(
+                connection=self.connection, start_line=start_line,
+                headers=headers)
+        else:
+            self.delegate.headers_received(start_line, headers)
 
     def data_received(self, chunk):
-        self._chunks.append(chunk)
+        if self.delegate is None:
+            self._chunks.append(chunk)
+        else:
+            self.delegate.data_received(chunk)
 
     def finish(self):
-        self.request.body = b''.join(self._chunks)
-        self.request._parse_body()
-        self.server.request_callback(self.request)
+        if self.delegate is None:
+            self.request.body = b''.join(self._chunks)
+            self.request._parse_body()
+            self.server.request_callback(self.request)
+        else:
+            self.delegate.finish()
+        if self.server.xheaders:
+            self._unapply_xheaders()
 
 
 HTTPRequest = httputil.HTTPServerRequest

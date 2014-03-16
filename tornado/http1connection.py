@@ -16,6 +16,8 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import socket
+
 from tornado.concurrent import Future
 from tornado.escape import native_str, utf8
 from tornado import gen
@@ -40,6 +42,13 @@ class HTTP1Connection(object):
         # and its socket attribute replaced with None.
         self.address_family = stream.socket.family
         self.no_keep_alive = no_keep_alive
+        # In HTTPServerRequest we want an IP, not a full socket address.
+        if (self.address_family in (socket.AF_INET, socket.AF_INET6) and
+            address is not None):
+            self.remote_ip = address[0]
+        else:
+            # Unix (or other) socket; fake the remote address.
+            self.remote_ip = '0.0.0.0'
         if protocol:
             self.protocol = protocol
         elif isinstance(stream, iostream.SSLIOStream):

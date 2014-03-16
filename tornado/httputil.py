@@ -317,9 +317,11 @@ class HTTPServerRequest(object):
        are typically kept open in HTTP/1.1, multiple requests can be handled
        sequentially on a single connection.
     """
-    def __init__(self, method, uri, version="HTTP/1.0", headers=None,
+    def __init__(self, method=None, uri=None, version="HTTP/1.0", headers=None,
                  body=None, remote_ip=None, protocol=None, host=None,
-                 files=None, connection=None):
+                 files=None, connection=None, start_line=None):
+        if start_line is not None:
+            method, uri, version = start_line
         self.method = method
         self.uri = uri
         self.version = version
@@ -327,8 +329,8 @@ class HTTPServerRequest(object):
         self.body = body or ""
 
         # set remote IP and protocol
-        self.remote_ip = remote_ip
-        self.protocol = protocol or "http"
+        self.remote_ip = remote_ip or getattr(connection, 'remote_ip')
+        self.protocol = protocol or getattr(connection, 'protocol', "http")
 
         self.host = host or self.headers.get("Host") or "127.0.0.1"
         self.files = files or {}

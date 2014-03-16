@@ -1423,7 +1423,7 @@ def addslash(method):
     return wrapper
 
 
-class Application(object):
+class Application(httputil.HTTPServerConnectionDelegate):
     """A collection of request handlers that make up a web application.
 
     Instances of this class are callable and can be passed directly to
@@ -1616,64 +1616,15 @@ class Application(object):
                 except TypeError:
                     pass
 
+    def start_request(self, connection):
+        # Modern HTTPServer interface
+        return _RequestDispatcher(self, connection)
+
     def __call__(self, request):
-        """Called by HTTPServer to execute the request."""
-        transforms = [t(request) for t in self.transforms]
-        handler = None
-        args = []
-        kwargs = {}
-        handlers = self._get_host_handlers(request)
-        if not handlers:
-            handler = RedirectHandler(
-                self, request, url="http://" + self.default_host + "/")
-        else:
-            for spec in handlers:
-                match = spec.regex.match(request.path)
-                if match:
-                    handler = spec.handler_class(self, request, **spec.kwargs)
-                    if spec.regex.groups:
-                        # None-safe wrapper around url_unescape to handle
-                        # unmatched optional groups correctly
-                        def unquote(s):
-                            if s is None:
-                                return s
-                            return escape.url_unescape(s, encoding=None,
-                                                       plus=False)
-                        # Pass matched groups to the handler.  Since
-                        # match.groups() includes both named and unnamed groups,
-                        # we want to use either groups or groupdict but not both.
-                        # Note that args are passed as bytes so the handler can
-                        # decide what encoding to use.
-
-                        if spec.regex.groupindex:
-                            kwargs = dict(
-                                (str(k), unquote(v))
-                                for (k, v) in match.groupdict().items())
-                        else:
-                            args = [unquote(s) for s in match.groups()]
-                    break
-            if not handler:
-                if self.settings.get('default_handler_class'):
-                    handler_class = self.settings['default_handler_class']
-                    handler_args = self.settings.get(
-                        'default_handler_args', {})
-                else:
-                    handler_class = ErrorHandler
-                    handler_args = dict(status_code=404)
-                handler = handler_class(self, request, **handler_args)
-
-        # If template cache is disabled (usually in the debug mode),
-        # re-compile templates and reload static files on every
-        # request so you don't need to restart to see changes
-        if not self.settings.get("compiled_template_cache", True):
-            with RequestHandler._template_loader_lock:
-                for loader in RequestHandler._template_loaders.values():
-                    loader.reset()
-        if not self.settings.get('static_hash_cache', True):
-            StaticFileHandler.reset()
-
-        handler._execute(transforms, *args, **kwargs)
-        return handler
+        # Legacy HTTPServer interface
+        dispatcher = _RequestDispatcher(self, None)
+        dispatcher.set_request(request)
+        return dispatcher.execute()
 
     def reverse_url(self, name, *args):
         """Returns a URL path for handler named ``name``
@@ -1708,6 +1659,87 @@ class Application(object):
         request_time = 1000.0 * handler.request.request_time()
         log_method("%d %s %.2fms", handler.get_status(),
                    handler._request_summary(), request_time)
+
+
+class _RequestDispatcher(httputil.HTTPMessageDelegate):
+    def __init__(self, application, connection):
+        self.application = application
+        self.connection = connection
+        self.request = None
+        self.chunks = []
+        self.handler_class = None
+        self.handler_kwargs = None
+        self.path_args = []
+        self.path_kwargs = {}
+
+    def headers_received(self, start_line, headers):
+        self.set_request(httputil.HTTPServerRequest(
+            connection=self.connection, start_line=start_line, headers=headers))
+
+    def set_request(self, request):
+        self.request = request
+        self._find_handler()
+
+    def _find_handler(self):
+        # Identify the handler to use as soon as we have the request.
+        # Save url path arguments for later.
+        app = self.application
+        handlers = app._get_host_handlers(self.request)
+        if not handlers:
+            self.handler_class = RedirectHandler
+            self.handler_kwargs = dict(url="http://" + app.default_host + "/")
+            return
+        for spec in handlers:
+            match = spec.regex.match(self.request.path)
+            if match:
+                self.handler_class = spec.handler_class
+                self.handler_kwargs = spec.kwargs
+                if spec.regex.groups:
+                    # Pass matched groups to the handler.  Since
+                    # match.groups() includes both named and
+                    # unnamed groups, we want to use either groups
+                    # or groupdict but not both.
+                    if spec.regex.groupindex:
+                        self.path_kwargs = dict(
+                            (str(k), _unquote_or_none(v))
+                            for (k, v) in match.groupdict().items())
+                    else:
+                        self.path_args = [_unquote_or_none(s)
+                                          for s in match.groups()]
+                return
+        if app.settings.get('default_handler_class'):
+            self.handler_class = app.settings['default_handler_class']
+            self.handler_kwargs = app.settings.get(
+                'default_handler_args', {})
+        else:
+            self.handler_class = ErrorHandler
+            self.handler_kwargs = dict(status_code=404)
+
+    def data_received(self, data):
+        self.chunks.append(data)
+
+    def finish(self):
+        self.request.body = b''.join(self.chunks)
+        self.request._parse_body()
+        self.execute()
+
+    def execute(self):
+        # If template cache is disabled (usually in the debug mode),
+        # re-compile templates and reload static files on every
+        # request so you don't need to restart to see changes
+        if not self.application.settings.get("compiled_template_cache", True):
+            with RequestHandler._template_loader_lock:
+                for loader in RequestHandler._template_loaders.values():
+                    loader.reset()
+        if not self.application.settings.get('static_hash_cache', True):
+            StaticFileHandler.reset()
+
+        handler = self.handler_class(self.application, self.request,
+                                     **self.handler_kwargs)
+        transforms = [t(self.request) for t in self.application.transforms]
+        handler._execute(transforms, *self.path_args, **self.path_kwargs)
+        return handler
+
 
 
 class HTTPError(Exception):
@@ -2639,3 +2671,14 @@ def _create_signature(secret, *parts):
     for part in parts:
         hash.update(utf8(part))
     return utf8(hash.hexdigest())
+
+def _unquote_or_none(s):
+    """None-safe wrapper around url_unescape to handle unamteched optional
+    groups correctly.
+
+    Note that args are passed as bytes so the handler can decide what
+    encoding to use.
+    """
+    if s is None:
+        return s
+    return escape.url_unescape(s, encoding=None, plus=False)
