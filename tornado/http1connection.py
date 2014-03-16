@@ -173,7 +173,7 @@ class HTTP1Connection(object):
         # cycle and delay garbage collection of this connection.
         self._clear_request_state()
 
-    def write_headers(self, start_line, headers):
+    def write_headers(self, start_line, headers, chunk=None, callback=None):
         self._chunking = (
             # TODO: should this use self._version or start_line.version?
             self._version == 'HTTP/1.1' and
@@ -194,17 +194,26 @@ class HTTP1Connection(object):
             if b'\n' in line:
                 raise ValueError('Newline in header: ' + repr(line))
         if not self.stream.closed():
-            self.stream.write(b"\r\n".join(lines) + b"\r\n\r\n")
+            self._write_callback = stack_context.wrap(callback)
+            data = b"\r\n".join(lines) + b"\r\n\r\n"
+            if chunk:
+                data += self._format_chunk(chunk)
+            self.stream.write(data, self._on_write_complete)
 
-    def write(self, chunk, callback=None):
-        """Writes a chunk of output to the stream."""
+    def _format_chunk(self, chunk):
         if self._chunking and chunk:
             # Don't write out empty chunks because that means END-OF-STREAM
             # with chunked encoding
-            chunk = utf8("%x" % len(chunk)) + b"\r\n" + chunk + b"\r\n"
+            return utf8("%x" % len(chunk)) + b"\r\n" + chunk + b"\r\n"
+        else:
+            return chunk
+
+    def write(self, chunk, callback=None):
+        """Writes a chunk of output to the stream."""
         if not self.stream.closed():
             self._write_callback = stack_context.wrap(callback)
-            self.stream.write(chunk, self._on_write_complete)
+            self.stream.write(self._format_chunk(chunk),
+                              self._on_write_complete)
 
     def finish(self):
         """Finishes the request."""

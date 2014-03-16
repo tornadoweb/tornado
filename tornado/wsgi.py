@@ -95,10 +95,14 @@ class _WSGIConnection(object):
         # so we can simply ignore the callback.
         pass
 
-    def write_headers(self, start_line, headers):
+    def write_headers(self, start_line, headers, chunk=None, callback=None):
         self.start_response(
             '%s %s' % (start_line.code, start_line.reason),
             [(native_str(k), native_str(v)) for (k, v) in headers.get_all()])
+        if chunk is not None:
+            self.write(chunk, callback)
+        elif callback is not None:
+            callback()
 
     def write(self, chunk, callback=None):
         self._write_buffer.append(chunk)
