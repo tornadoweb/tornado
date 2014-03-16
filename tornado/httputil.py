@@ -645,6 +645,24 @@ RequestStartLine = collections.namedtuple(
     'RequestStartLine', ['method', 'path', 'version'])
 
 
+def parse_request_start_line(line):
+    """Returns a (method, path, version) tuple for an HTTP 1.x request line.
+
+    The response is a `collections.namedtuple`.
+
+    >>> parse_request_start_line("GET /foo HTTP/1.1")
+    RequestStartLine(method='GET', path='/foo', version='HTTP/1.1')
+    """
+    try:
+        method, path, version = line.split(" ")
+    except ValueError:
+        raise HTTPMessageException("Malformed HTTP request line")
+    if not version.startswith("HTTP/"):
+        raise HTTPMessageException(
+            "Malformed HTTP version in HTTP Request-Line: %r" % version)
+    return RequestStartLine(method, path, version)
+
+
 ResponseStartLine = collections.namedtuple(
     'ResponseStartLine', ['version', 'code', 'reason'])
 

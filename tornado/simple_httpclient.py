@@ -382,9 +382,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def headers_received(self, first_line, headers):
         self.headers = headers
-        version, code, reason = httputil.parse_response_start_line(first_line)
-        self.code = code
-        self.reason = reason
+        self.code = first_line.code
+        self.reason = first_line.reason
 
         if "Content-Length" in self.headers:
             if "," in self.headers["Content-Length"]:
@@ -401,8 +400,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             content_length = None
 
         if self.request.header_callback is not None:
-            # re-attach the newline we split on earlier
-            self.request.header_callback(first_line + '\r\n')
+            # Reassemble the start line.
+            self.request.header_callback('%s %s %s\r\n' % first_line)
             for k, v in self.headers.get_all():
                 self.request.header_callback("%s: %s\r\n" % (k, v))
             self.request.header_callback('\r\n')

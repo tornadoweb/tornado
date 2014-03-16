@@ -861,9 +861,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                     "Non-websocket response"))
 
     def headers_received(self, start_line, headers):
-        code = httputil.parse_response_start_line(start_line).code
-
-        if code != 101:
+        if start_line.code != 101:
             return super(WebSocketClientConnection, self).headers_received(
                 start_line, headers)
 

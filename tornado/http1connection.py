@@ -84,6 +84,10 @@ class HTTP1Connection(object):
             header_data = yield self.stream.read_until_regex(b"\r?\n\r?\n")
             self._finish_future = Future()
             start_line, headers = self._parse_headers(header_data)
+            if is_client:
+                start_line = httputil.parse_response_start_line(start_line)
+            else:
+                start_line = httputil.parse_request_start_line(start_line)
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
             ret = delegate.headers_received(start_line, headers)
@@ -94,7 +98,7 @@ class HTTP1Connection(object):
             if is_client:
                 if method == 'HEAD':
                     skip_body = True
-                code = httputil.parse_response_start_line(start_line).code
+                code = start_line.code
                 if code == 304:
                     skip_body = True
                 if code >= 100 and code < 200:
@@ -198,10 +202,10 @@ class HTTP1Connection(object):
         connection_header = headers.get("Connection")
         if connection_header is not None:
             connection_header = connection_header.lower()
-        if start_line.endswith("HTTP/1.1"):
+        if start_line.version == "HTTP/1.1":
             return connection_header != "close"
         elif ("Content-Length" in headers
-              or start_line.startswith(("HEAD ", "GET "))):
+              or start_line.method in ("HEAD", "GET")):
             return connection_header == "keep-alive"
         return False
 

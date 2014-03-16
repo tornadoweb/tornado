@@ -163,13 +163,6 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
         self.connection = connection
 
     def headers_received(self, start_line, headers):
-        try:
-            method, uri, version = start_line.split(" ")
-        except ValueError:
-            raise httputil.HTTPMessageException("Malformed HTTP request line")
-        if not version.startswith("HTTP/"):
-            raise httputil.HTTPMessageException(
-                "Malformed HTTP version in HTTP Request-Line")
         # HTTPRequest wants an IP, not a full socket address
         if self.connection.address_family in (socket.AF_INET, socket.AF_INET6):
             remote_ip = self.connection.address[0]
@@ -194,7 +187,8 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
                 protocol = proto_header
 
         self.request = httputil.HTTPServerRequest(
-            connection=self.connection, method=method, uri=uri, version=version,
+            connection=self.connection, method=start_line.method,
+            uri=start_line.path, version=start_line.version,
             headers=headers, remote_ip=remote_ip, protocol=protocol)
 
     def data_received(self, chunk):
