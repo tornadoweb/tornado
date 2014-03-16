@@ -50,6 +50,8 @@ class HTTP1Connection(object):
         self._clear_request_state()
         self.stream.set_close_callback(self._on_connection_close)
         self._finish_future = None
+        self._version = None
+        self._chunking = None
 
     def start_serving(self, delegate, gzip=False):
         assert isinstance(delegate, httputil.HTTPServerConnectionDelegate)
@@ -88,6 +90,10 @@ class HTTP1Connection(object):
                 start_line = httputil.parse_response_start_line(start_line)
             else:
                 start_line = httputil.parse_request_start_line(start_line)
+            # It's kind of ugly to set this here, but we need it in
+            # write_header() so we know whether we can chunk the response.
+            self._version = start_line.version
+
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
             ret = delegate.headers_received(start_line, headers)
@@ -159,21 +165,44 @@ class HTTP1Connection(object):
         self._clear_request_state()
 
     def write_headers(self, start_line, headers):
+        self._chunking = (
+            # TODO: should this use self._version or start_line.version?
+            self._version == 'HTTP/1.1' and
+            # 304 responses have no body (not even a zero-length body), and so
+            # should not have either Content-Length or Transfer-Encoding.
+            # headers.
+            start_line.code != 304 and
+            # No need to chunk the output if a Content-Length is specified.
+            'Content-Length' not in headers and
+            # Applications are discouraged from touching Transfer-Encoding,
+            # but if they do, leave it alone.
+            'Transfer-Encoding' not in headers)
+        if self._chunking:
+            headers['Transfer-Encoding'] = 'chunked'
         lines = [utf8("%s %s %s" % start_line)]
         lines.extend([utf8(n) + b": " + utf8(v) for n, v in headers.get_all()])
         for line in lines:
             if b'\n' in line:
                 raise ValueError('Newline in header: ' + repr(line))
-        self.write(b"\r\n".join(lines) + b"\r\n\r\n")
+        if not self.stream.closed():
+            self.stream.write(b"\r\n".join(lines) + b"\r\n\r\n")
 
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
+        if self._chunking and chunk:
+            # Don't write out empty chunks because that means END-OF-STREAM
+            # with chunked encoding
+            chunk = utf8("%x" % len(chunk)) + b"\r\n" + chunk + b"\r\n"
         if not self.stream.closed():
             self._write_callback = stack_context.wrap(callback)
             self.stream.write(chunk, self._on_write_complete)
 
     def finish(self):
         """Finishes the request."""
+        if self._chunking:
+            if not self.stream.closed():
+                self.stream.write(b"0\r\n\r\n", self._on_write_complete)
+            self._chunking = False
         self._request_finished = True
         # No more data is coming, so instruct TCP to send any remaining
         # data immediately instead of waiting for a full packet or ack.
@@ -227,7 +256,8 @@ class HTTP1Connection(object):
             headers = httputil.HTTPHeaders.parse(data[eol:])
         except ValueError:
             # probably form split() if there was no ':' in the line
-            raise httputil.HTTPMessageException("Malformed HTTP headers")
+            raise httputil.HTTPMessageException("Malformed HTTP headers: %r" %
+                                                data[eol:100])
         return start_line, headers
 
     def _read_body(self, is_client, headers, delegate):

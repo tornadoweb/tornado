@@ -1480,7 +1480,6 @@ class Application(object):
             self.transforms = []
             if settings.get("gzip"):
                 self.transforms.append(GZipContentEncoding)
-            self.transforms.append(ChunkedTransferEncoding)
         else:
             self.transforms = transforms
         self.handlers = []
@@ -2262,7 +2261,7 @@ class OutputTransform(object):
     """A transform modifies the result of an HTTP request (e.g., GZip encoding)
 
     A new transform instance is created for every request. See the
-    ChunkedTransferEncoding example below if you want to implement a
+    GZipContentEncoding example below if you want to implement a
     new Transform.
     """
     def __init__(self, request):
@@ -2325,37 +2324,6 @@ class GZipContentEncoding(OutputTransform):
             self._gzip_value.truncate(0)
             self._gzip_value.seek(0)
         return chunk
-
-
-class ChunkedTransferEncoding(OutputTransform):
-    """Applies the chunked transfer encoding to the response.
-
-    See http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1
-    """
-    def __init__(self, request):
-        self._chunking = request.supports_http_1_1()
-
-    def transform_first_chunk(self, status_code, headers, chunk, finishing):
-        # 304 responses have no body (not even a zero-length body), and so
-        # should not have either Content-Length or Transfer-Encoding headers.
-        if self._chunking and status_code != 304:
-            # No need to chunk the output if a Content-Length is specified
-            if "Content-Length" in headers or "Transfer-Encoding" in headers:
-                self._chunking = False
-            else:
-                headers["Transfer-Encoding"] = "chunked"
-                chunk = self.transform_chunk(chunk, finishing)
-        return status_code, headers, chunk
-
-    def transform_chunk(self, block, finishing):
-        if self._chunking:
-            # Don't write out empty chunks because that means END-OF-STREAM
-            # with chunked encoding
-            if block:
-                block = utf8("%x" % len(block)) + b"\r\n" + block + b"\r\n"
-            if finishing:
-                block += b"0\r\n\r\n"
-        return block
 
 
 def authenticated(method):
