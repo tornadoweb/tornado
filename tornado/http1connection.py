@@ -17,7 +17,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 from tornado.concurrent import Future
-from tornado.escape import native_str
+from tornado.escape import native_str, utf8
 from tornado import gen
 from tornado import httputil
 from tornado import iostream
@@ -153,6 +153,14 @@ class HTTP1Connection(object):
         # Remove this reference to self, which would otherwise cause a
         # cycle and delay garbage collection of this connection.
         self._clear_request_state()
+
+    def write_headers(self, start_line, headers):
+        lines = [utf8("%s %s %s" % start_line)]
+        lines.extend([utf8(n) + b": " + utf8(v) for n, v in headers.get_all()])
+        for line in lines:
+            if b'\n' in line:
+                raise ValueError('Newline in header: ' + repr(line))
+        self.write(b"\r\n".join(lines) + b"\r\n\r\n")
 
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""

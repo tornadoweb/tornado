@@ -322,21 +322,15 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
                    (('?' + self.parsed.query) if self.parsed.query else ''))
-        request_lines = [utf8("%s %s HTTP/1.1" % (self.request.method,
-                                                  req_path))]
-        for k, v in self.request.headers.get_all():
-            line = utf8(k) + b": " + utf8(v)
-            if b'\n' in line:
-                raise ValueError('Newline in header: ' + repr(line))
-            request_lines.append(line)
-        request_str = b"\r\n".join(request_lines) + b"\r\n\r\n"
-        if self.request.body is not None:
-            request_str += self.request.body
         self.stream.set_nodelay(True)
-        self.stream.write(request_str)
         self.connection = HTTP1Connection(
             self.stream, self._sockaddr,
             no_keep_alive=True, protocol=self.parsed.scheme)
+        start_line = httputil.RequestStartLine(self.request.method,
+                                               req_path, 'HTTP/1.1')
+        self.connection.write_headers(start_line, self.request.headers)
+        if self.request.body is not None:
+            self.connection.write(self.request.body)
         # Ensure that any exception raised in read_response ends up in our
         # stack context.
         self.io_loop.add_future(

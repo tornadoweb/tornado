@@ -787,19 +787,26 @@ class RequestHandler(object):
                 self._status_code, self._headers, chunk = \
                     transform.transform_first_chunk(
                         self._status_code, self._headers, chunk, include_footers)
-            headers = self._generate_headers()
+            # Finalize the cookie headers (which have been stored in a side
+            # object so an outgoing cookie could be overwritten before it
+            # is sent).
+            if hasattr(self, "_new_cookie"):
+                for cookie in self._new_cookie.values():
+                    self.add_header("Set-Cookie", cookie.OutputString(None))
+
+            start_line = httputil.ResponseStartLine(self.request.version,
+                                                    self._status_code,
+                                                    self._reason)
+            self.request.connection.write_headers(start_line, self._headers)
         else:
             for transform in self._transforms:
                 chunk = transform.transform_chunk(chunk, include_footers)
-            headers = b""
 
         # Ignore the chunk and only write the headers for HEAD requests
         if self.request.method == "HEAD":
-            if headers:
-                self.request.write(headers, callback=callback)
             return
 
-        self.request.write(headers + chunk, callback=callback)
+        self.request.write(chunk, callback=callback)
 
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
@@ -1244,18 +1251,6 @@ class RequestHandler(object):
     def _execute_finish(self):
         if self._auto_finish and not self._finished:
             self.finish()
-
-    def _generate_headers(self):
-        reason = self._reason
-        lines = [utf8(self.request.version + " " +
-                      str(self._status_code) +
-                      " " + reason)]
-        lines.extend([utf8(n) + b": " + utf8(v) for n, v in self._headers.get_all()])
-
-        if hasattr(self, "_new_cookie"):
-            for cookie in self._new_cookie.values():
-                lines.append(utf8("Set-Cookie: " + cookie.OutputString(None)))
-        return b"\r\n".join(lines) + b"\r\n\r\n"
 
     def _log(self):
         """Logs the current request.

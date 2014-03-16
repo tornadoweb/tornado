@@ -631,8 +631,13 @@ def format_timestamp(ts):
     return email.utils.formatdate(ts, usegmt=True)
 
 
+RequestStartLine = collections.namedtuple(
+    'RequestStartLine', ['method', 'path', 'version'])
+
+
 ResponseStartLine = collections.namedtuple(
     'ResponseStartLine', ['version', 'code', 'reason'])
+
 
 def parse_response_start_line(line):
     """Returns a (version, code, reason) tuple for an HTTP 1.x response line.
