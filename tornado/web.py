@@ -141,10 +141,7 @@ class RequestHandler(object):
                                                     application.ui_modules)
         self.ui["modules"] = self.ui["_tt_modules"]
         self.clear()
-        # Check since connection is not available in WSGI
-        if getattr(self.request, "connection", None):
-            self.request.connection.set_close_callback(
-                self.on_connection_close)
+        self.request.connection.set_close_callback(self.on_connection_close)
         self.initialize(**kwargs)
 
     def initialize(self):
@@ -772,13 +769,6 @@ class RequestHandler(object):
         if another flush occurs before the previous flush's callback
         has been run, the previous callback will be discarded.
         """
-        if self.application._wsgi:
-            # WSGI applications cannot usefully support flush, so just make
-            # it a no-op (and run the callback immediately).
-            if callback is not None:
-                callback()
-            return
-
         chunk = b"".join(self._write_buffer)
         self._write_buffer = []
         if not self._headers_written:
@@ -842,10 +832,9 @@ class RequestHandler(object):
             # are keepalive connections)
             self.request.connection.set_close_callback(None)
 
-        if not self.application._wsgi:
-            self.flush(include_footers=True)
-            self.request.finish()
-            self._log()
+        self.flush(include_footers=True)
+        self.request.finish()
+        self._log()
         self._finished = True
         self.on_finish()
         # Break up a reference cycle between this handler and the
@@ -1364,8 +1353,6 @@ def asynchronous(method):
     from tornado.ioloop import IOLoop
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
-        if self.application._wsgi:
-            raise Exception("@asynchronous is not supported for WSGI apps")
         self._auto_finish = False
         with stack_context.ExceptionStackContext(
                 self._stack_context_handle_exception):
@@ -1488,7 +1475,7 @@ class Application(object):
 
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
-                 wsgi=False, **settings):
+                 **settings):
         if transforms is None:
             self.transforms = []
             if settings.get("gzip"):
@@ -1505,7 +1492,6 @@ class Application(object):
                            'Template': TemplateModule,
                            }
         self.ui_methods = {}
-        self._wsgi = wsgi
         self._load_ui_modules(settings.get("ui_modules", {}))
         self._load_ui_methods(settings.get("ui_methods", {}))
         if self.settings.get("static_path"):
@@ -1531,7 +1517,7 @@ class Application(object):
             self.settings.setdefault('serve_traceback', True)
 
         # Automatically reload modified modules
-        if self.settings.get('autoreload') and not wsgi:
+        if self.settings.get('autoreload'):
             from tornado import autoreload
             autoreload.start()
 

@@ -202,15 +202,7 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
         self.request.body = chunk
 
     def finish(self):
-        if self.request.method in ("POST", "PATCH", "PUT"):
-            httputil.parse_body_arguments(
-                self.request.headers.get("Content-Type", ""), self.request.body,
-                self.request.body_arguments, self.request.files,
-                self.request.headers)
-
-            for k, v in self.request.body_arguments.items():
-                self.request.arguments.setdefault(k, []).extend(v)
-
+        self.request._parse_body()
         self.server.request_callback(self.request)
 
 
