@@ -80,13 +80,8 @@ class WSGIApplication(web.Application):
 
        Use a regular `.Application` and wrap it in `WSGIAdapter` instead.
     """
-    def __init__(self, handlers=None, default_host="", **settings):
-        web.Application.__init__(self, handlers, default_host, transforms=[],
-                                 **settings)
-        self._adapter = WSGIAdapter(self)
-
     def __call__(self, environ, start_response):
-        return self._adapter.__call__(environ, start_response)
+        return WSGIAdapter(self)(environ, start_response)
 
 
 class _WSGIConnection(object):

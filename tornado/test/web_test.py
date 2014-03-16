@@ -1331,6 +1331,7 @@ class ErrorHandlerXSRFTest(WebTestCase):
         self.assertEqual(response.code, 404)
 
 
+@wsgi_safe
 class GzipTestCase(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
