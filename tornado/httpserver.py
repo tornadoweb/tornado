@@ -161,6 +161,7 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
     def __init__(self, server, connection):
         self.server = server
         self.connection = connection
+        self._chunks = []
 
     def headers_received(self, start_line, headers):
         # HTTPRequest wants an IP, not a full socket address
@@ -192,10 +193,10 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
             headers=headers, remote_ip=remote_ip, protocol=protocol)
 
     def data_received(self, chunk):
-        assert not self.request.body
-        self.request.body = chunk
+        self._chunks.append(chunk)
 
     def finish(self):
+        self.request.body = b''.join(self._chunks)
         self.request._parse_body()
         self.server.request_callback(self.request)
 

@@ -405,8 +405,10 @@ POST /echo HTTP/1.1
 Transfer-Encoding: chunked
 Content-Type: application/x-www-form-urlencoded
 
-7
-foo=bar
+4
+foo=
+3
+bar
 0
 
 """.replace(b"\n", b"\r\n"))
