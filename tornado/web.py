@@ -76,6 +76,7 @@ import uuid
 
 from tornado.concurrent import Future
 from tornado import escape
+from tornado import gen
 from tornado import httputil
 from tornado import locale
 from tornado.log import access_log, app_log, gen_log
@@ -1194,6 +1195,7 @@ class RequestHandler(object):
             self._handle_request_exception(value)
         return True
 
+    @gen.coroutine
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
         self._transforms = transforms
@@ -1208,40 +1210,22 @@ class RequestHandler(object):
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
                     self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
-            self._when_complete(self.prepare(), self._execute_method)
-        except Exception as e:
-            self._handle_request_exception(e)
 
-    def _when_complete(self, result, callback):
-        try:
-            if result is None:
-                callback()
-            elif isinstance(result, Future):
-                if result.done():
-                    if result.result() is not None:
-                        raise ValueError('Expected None, got %r' % result.result())
-                    callback()
-                else:
-                    # Delayed import of IOLoop because it's not available
-                    # on app engine
-                    from tornado.ioloop import IOLoop
-                    IOLoop.current().add_future(
-                        result, functools.partial(self._when_complete,
-                                                  callback=callback))
-            else:
-                raise ValueError("Expected Future or None, got %r" % result)
-        except Exception as e:
-            self._handle_request_exception(e)
+            result = yield gen.maybe_future(self.prepare())
+            if result is not None:
+                raise TypeError("Expected None, got %r" % result)
+            if self._finished:
+                return
 
-    def _execute_method(self):
-        if not self._finished:
             method = getattr(self, self.request.method.lower())
-            self._when_complete(method(*self.path_args, **self.path_kwargs),
-                                self._execute_finish)
-
-    def _execute_finish(self):
-        if self._auto_finish and not self._finished:
-            self.finish()
+            result = yield gen.maybe_future(
+                method(*self.path_args, **self.path_kwargs))
+            if result is not None:
+                raise TypeError("Expected None, got %r" % result)
+            if self._auto_finish and not self._finished:
+                self.finish()
+        except Exception as e:
+            self._handle_request_exception(e)
 
     def _log(self):
         """Logs the current request.
@@ -1739,6 +1723,11 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         handler = self.handler_class(self.application, self.request,
                                      **self.handler_kwargs)
         transforms = [t(self.request) for t in self.application.transforms]
+        # Note that if an exception escapes handler._execute it will be
+        # trapped in the Future it returns (which we are ignoring here).
+        # However, that shouldn't happen because _execute has a blanket
+        # except handler, and we cannot easily access the IOLoop here to
+        # call add_future.
         handler._execute(transforms, *self.path_args, **self.path_kwargs)
         return handler
 

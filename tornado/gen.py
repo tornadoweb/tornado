@@ -421,6 +421,22 @@ class Multi(YieldPoint):
             return list(result)
 
 
+def maybe_future(x):
+    """Converts ``x`` into a `.Future`.
+
+    If ``x`` is already a `.Future`, it is simply returned; otherwise
+    it is wrapped in a new `.Future`.  This is suitable for use as
+    ``result = yield gen.maybe_future(f())`` when you don't know whether
+    ``f()`` returns a `.Future` or not.
+    """
+    if is_future(x):
+        return x
+    else:
+        fut = Future()
+        fut.set_result(x)
+        return fut
+
+
 _null_future = Future()
 _null_future.set_result(None)
 
