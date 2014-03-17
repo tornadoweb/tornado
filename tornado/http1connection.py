@@ -105,10 +105,11 @@ class HTTP1Connection(object):
 
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
-            ret = delegate.headers_received(start_line, headers)
-            # TODO: finalize the 'detach' interface.
-            if ret == 'detach':
-                return
+            delegate.headers_received(start_line, headers)
+            if self.stream is None:
+                # We've been detached.
+                # TODO: where else do we need to check for detach?
+                raise gen.Return(False)
             skip_body = False
             if is_client:
                 if method == 'HEAD':
@@ -127,6 +128,8 @@ class HTTP1Connection(object):
                     yield body_future
             delegate.finish()
             yield self._finish_future
+            if self.stream is None:
+                raise gen.Return(False)
         except httputil.HTTPMessageException as e:
             gen_log.info("Malformed HTTP message from %r: %s",
                          self.address, e)
@@ -172,6 +175,11 @@ class HTTP1Connection(object):
         # Remove this reference to self, which would otherwise cause a
         # cycle and delay garbage collection of this connection.
         self._clear_request_state()
+
+    def detach(self):
+        stream = self.stream
+        self.stream = None
+        return stream
 
     def write_headers(self, start_line, headers, chunk=None, callback=None):
         self._chunking = (

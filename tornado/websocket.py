@@ -108,22 +108,16 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def __init__(self, application, request, **kwargs):
         tornado.web.RequestHandler.__init__(self, application, request,
                                             **kwargs)
-        self.stream = request.connection.stream
         self.ws_connection = None
         self.close_code = None
         self.close_reason = None
 
-    def _execute(self, transforms, *args, **kwargs):
+    @tornado.web.asynchronous
+    def get(self, *args, **kwargs):
         self.open_args = args
         self.open_kwargs = kwargs
 
-        # Websocket only supports GET method
-        if self.request.method != 'GET':
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
-            ))
-            self.stream.close()
-            return
+        self.stream = self.request.connection.detach()
 
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':
@@ -878,10 +872,10 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
+        self.stream = self.connection.detach()
         self.stream.set_close_callback(self._on_close)
 
         self.connect_future.set_result(self)
-        return 'detach'
 
     def write_message(self, message, binary=False):
         """Sends a message to the WebSocket server."""
