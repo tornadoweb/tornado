@@ -158,6 +158,12 @@ class IOLoop(Configurable):
         IOLoop._instance = self
 
     @staticmethod
+    def clear_instance():
+        """Clear the global `IOLoop` instance."""
+        if hasattr(IOLoop, "_instance"):
+            del IOLoop._instance
+
+    @staticmethod
     def current():
         """Returns the current thread's `IOLoop`.
 
