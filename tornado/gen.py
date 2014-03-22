@@ -178,7 +178,6 @@ def _make_coroutine_wrapper(func, replace_callback):
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        runner = None
         future = TracebackFuture()
 
         if replace_callback and 'callback' in kwargs:
@@ -195,8 +194,26 @@ def _make_coroutine_wrapper(func, replace_callback):
             return future
         else:
             if isinstance(result, types.GeneratorType):
-                runner = Runner(result, future)
-                runner.run()
+                # Inline the first iteration of Runner.run.  This lets us
+                # avoid the cost of creating a Runner when the coroutine
+                # never actually yields, which in turn allows us to
+                # use "optional" coroutines in critical path code without
+                # performance penalty for the synchronous case.
+                try:
+                    orig_stack_contexts = stack_context._state.contexts
+                    yielded = next(result)
+                    if stack_context._state.contexts is not orig_stack_contexts:
+                        yielded = TracebackFuture()
+                        yielded.set_exception(
+                            stack_context.StackContextInconsistentError(
+                                'stack_context inconsistency (probably caused '
+                                'by yield within a "with StackContext" block)'))
+                except (StopIteration, Return) as e:
+                    future.set_result(getattr(e, 'value', None))
+                except Exception:
+                    future.set_exc_info(sys.exc_info())
+                else:
+                    Runner(result, future, yielded)
                 return future
         future.set_result(result)
         return future
@@ -449,7 +466,7 @@ class Runner(object):
     The results of the generator are stored in ``result_future`` (a
     `.TracebackFuture`)
     """
-    def __init__(self, gen, result_future):
+    def __init__(self, gen, result_future, first_yielded):
         self.gen = gen
         self.result_future = result_future
         self.future = _null_future
@@ -466,6 +483,8 @@ class Runner(object):
         # done so, this field will be set and must be called at the end
         # of the coroutine.
         self.stack_context_deactivate = None
+        if self.handle_yield(first_yielded):
+            self.run()
 
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
@@ -548,46 +567,52 @@ class Runner(object):
                     self.result_future = None
                     self._deactivate_stack_context()
                     return
-                if isinstance(yielded, (list, dict)):
-                    yielded = Multi(yielded)
-                if isinstance(yielded, YieldPoint):
-                    self.future = TracebackFuture()
-                    def start_yield_point():
-                        try:
-                            yielded.start(self)
-                            if yielded.is_ready():
-                                self.future.set_result(
-                                    yielded.get_result())
-                            else:
-                                self.yield_point = yielded
-                        except Exception:
-                            self.future = TracebackFuture()
-                            self.future.set_exc_info(sys.exc_info())
-                    if self.stack_context_deactivate is None:
-                        # Start a stack context if this is the first
-                        # YieldPoint we've seen.
-                        with stack_context.ExceptionStackContext(
-                                self.handle_exception) as deactivate:
-                            self.stack_context_deactivate = deactivate
-                            def cb():
-                                start_yield_point()
-                                self.run()
-                            self.io_loop.add_callback(cb)
-                            return
-                    else:
-                        start_yield_point()
-                elif is_future(yielded):
-                    self.future = yielded
-                    if not self.future.done():
-                        self.io_loop.add_future(
-                            self.future, lambda f: self.run())
-                        return
-                else:
-                    self.future = TracebackFuture()
-                    self.future.set_exception(BadYieldError(
-                        "yielded unknown object %r" % (yielded,)))
+                if not self.handle_yield(yielded):
+                    return
         finally:
             self.running = False
+
+    def handle_yield(self, yielded):
+        if isinstance(yielded, (list, dict)):
+            yielded = Multi(yielded)
+        if isinstance(yielded, YieldPoint):
+            self.future = TracebackFuture()
+            def start_yield_point():
+                try:
+                    yielded.start(self)
+                    if yielded.is_ready():
+                        self.future.set_result(
+                            yielded.get_result())
+                    else:
+                        self.yield_point = yielded
+                except Exception:
+                    self.future = TracebackFuture()
+                    self.future.set_exc_info(sys.exc_info())
+            if self.stack_context_deactivate is None:
+                # Start a stack context if this is the first
+                # YieldPoint we've seen.
+                with stack_context.ExceptionStackContext(
+                        self.handle_exception) as deactivate:
+                    self.stack_context_deactivate = deactivate
+                    def cb():
+                        start_yield_point()
+                        self.run()
+                    self.io_loop.add_callback(cb)
+                    return False
+            else:
+                start_yield_point()
+        elif is_future(yielded):
+            self.future = yielded
+            if not self.future.done():
+                self.io_loop.add_future(
+                    self.future, lambda f: self.run())
+                return False
+        else:
+            self.future = TracebackFuture()
+            self.future.set_exception(BadYieldError(
+                "yielded unknown object %r" % (yielded,)))
+        return True
+
 
     def result_callback(self, key):
         def inner(*args, **kwargs):

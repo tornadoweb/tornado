@@ -74,7 +74,7 @@ import traceback
 import types
 import uuid
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, is_future
 from tornado import escape
 from tornado import gen
 from tornado import httputil
@@ -1211,15 +1211,18 @@ class RequestHandler(object):
                     self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
 
-            result = yield gen.maybe_future(self.prepare())
+            result = self.prepare()
+            if is_future(result):
+                result = yield result
             if result is not None:
                 raise TypeError("Expected None, got %r" % result)
             if self._finished:
                 return
 
             method = getattr(self, self.request.method.lower())
-            result = yield gen.maybe_future(
-                method(*self.path_args, **self.path_kwargs))
+            result = method(*self.path_args, **self.path_kwargs)
+            if is_future(result):
+                result = yield result
             if result is not None:
                 raise TypeError("Expected None, got %r" % result)
             if self._auto_finish and not self._finished:
