@@ -180,7 +180,7 @@ with ``{# ... #}``.
 ``{% set *x* = *y* %}``
     Sets a local variable.
 
-``{% try %}...{% except %}...{% finally %}...{% else %}...{% end %}``
+``{% try %}...{% except %}...{% else %}...{% finally %}...{% end %}``
     Same as the python ``try`` statement.
 
 ``{% while *condition* %}... {% end %}``
