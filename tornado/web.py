@@ -1219,6 +1219,13 @@ class RequestHandler(object):
             if self._finished:
                 return
 
+            if _has_stream_request_body(self.__class__):
+                # In streaming mode request.body is a Future that signals
+                # the body has been completely received.  The Future has no
+                # result; the data has been passed to self.data_received
+                # instead.
+                yield self.request.body
+
             method = getattr(self, self.request.method.lower())
             result = method(*self.path_args, **self.path_kwargs)
             if is_future(result):
@@ -1366,6 +1373,36 @@ def asynchronous(method):
                 return None
             return result
     return wrapper
+
+
+def stream_request_body(cls):
+    """Apply to `RequestHandler` subclasses to enable streaming body support.
+
+    This decorator implies the following changes:
+    * `.HTTPServerRequest.body` is undefined, and body arguments will not
+      be included in `RequestHandler.get_argument`.
+    * `RequestHandler.prepare` is called when the request headers have been
+      read instead of after the entire body has been read.
+    * The subclass must define a method ``data_received(self, data):``, which
+      will be called zero or more times as data is available.  Note that
+      if the request has an empty body, ``data_received`` may not be called.
+    * The regular HTTP method (``post``, ``put``, etc) will be called after
+      the entire body has been read.
+
+    There is a subtle interaction between ``data_received`` and asynchronous
+    ``prepare``: The first call to ``data_recieved`` may occur at any point
+    after the call to ``prepare`` has returned *or yielded*.
+    """
+    if not issubclass(cls, RequestHandler):
+        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+    cls._stream_request_body = True
+    return cls
+
+
+def _has_stream_request_body(cls):
+    if not issubclass(cls, RequestHandler):
+        raise TypeError("expected subclass of RequestHandler, got %r", cls)
+    return getattr(cls, '_stream_request_body', False)
 
 
 def removeslash(method):
@@ -1664,10 +1701,14 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
     def headers_received(self, start_line, headers):
         self.set_request(httputil.HTTPServerRequest(
             connection=self.connection, start_line=start_line, headers=headers))
+        if self.stream_request_body:
+            self.request.body = Future()
+            self.execute()
 
     def set_request(self, request):
         self.request = request
         self._find_handler()
+        self.stream_request_body = _has_stream_request_body(self.handler_class)
 
     def _find_handler(self):
         # Identify the handler to use as soon as we have the request.
@@ -1705,12 +1746,18 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
             self.handler_kwargs = dict(status_code=404)
 
     def data_received(self, data):
-        self.chunks.append(data)
+        if self.stream_request_body:
+            self.handler.data_received(data)
+        else:
+            self.chunks.append(data)
 
     def finish(self):
-        self.request.body = b''.join(self.chunks)
-        self.request._parse_body()
-        self.execute()
+        if self.stream_request_body:
+            self.request.body.set_result(None)
+        else:
+            self.request.body = b''.join(self.chunks)
+            self.request._parse_body()
+            self.execute()
 
     def execute(self):
         # If template cache is disabled (usually in the debug mode),
@@ -1723,7 +1770,7 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         if not self.application.settings.get('static_hash_cache', True):
             StaticFileHandler.reset()
 
-        handler = self.handler_class(self.application, self.request,
+        self.handler = self.handler_class(self.application, self.request,
                                      **self.handler_kwargs)
         transforms = [t(self.request) for t in self.application.transforms]
         # Note that if an exception escapes handler._execute it will be
@@ -1731,9 +1778,7 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         # However, that shouldn't happen because _execute has a blanket
         # except handler, and we cannot easily access the IOLoop here to
         # call add_future.
-        handler._execute(transforms, *self.path_args, **self.path_kwargs)
-        return handler
-
+        self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
 
 
 class HTTPError(Exception):

@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function, with_statement
+from tornado.concurrent import Future
 from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
 from tornado.httputil import format_timestamp
@@ -6,10 +7,10 @@ from tornado.iostream import IOStream
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.testing import AsyncHTTPTestCase, ExpectLog
+from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule, MissingArgumentError
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body
 
 import binascii
 import datetime
@@ -1800,3 +1801,52 @@ class HandlerByNameTest(WebTestCase):
         self.assertEqual(resp.body, b'hello')
         resp = self.fetch('/hello3')
         self.assertEqual(resp.body, b'hello')
+
+
+class StreamingRequestBodyTest(WebTestCase):
+    def get_handlers(self):
+        @stream_request_body
+        class StreamingBodyHandler(RequestHandler):
+            def initialize(self, test):
+                self.test = test
+
+            def prepare(self):
+                self.test.prepared.set_result(None)
+
+            def data_received(self, data):
+                self.test.data.set_result(data)
+
+            def get(self):
+                self.test.finished.set_result(None)
+                self.write({})
+
+        return [('/', StreamingBodyHandler, dict(test=self))]
+
+    @gen_test
+    def test_streaming_body(self):
+        self.prepared = Future()
+        self.data = Future()
+        self.finished = Future()
+
+        # Use a raw connection so we can control the sending of data.
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        s.connect(("localhost", self.get_http_port()))
+        stream = IOStream(s, io_loop=self.io_loop)
+        stream.write(b"GET / HTTP/1.1\r\n")
+        stream.write(b"Connection: close\r\n")
+        stream.write(b"Transfer-Encoding: chunked\r\n\r\n")
+        yield self.prepared
+        stream.write(b"4\r\nasdf\r\n")
+        # Ensure the first chunk is received before we send the second.
+        data = yield self.data
+        self.assertEqual(data, b"asdf")
+        self.data = Future()
+        stream.write(b"4\r\nqwer\r\n")
+        data = yield self.data
+        self.assertEquals(data, b"qwer")
+        stream.write(b"0\r\n")
+        yield self.finished
+        data = yield gen.Task(stream.read_until_close)
+        # This would ideally use an HTTP1Connection to read the response.
+        self.assertTrue(data.endswith(b"{}"))
+        stream.close()
