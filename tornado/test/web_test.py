@@ -1820,7 +1820,26 @@ class StreamingRequestBodyTest(WebTestCase):
                 self.test.finished.set_result(None)
                 self.write({})
 
-        return [('/', StreamingBodyHandler, dict(test=self))]
+        @stream_request_body
+        class EarlyReturnHandler(RequestHandler):
+            def prepare(self):
+                # If we finish the response in prepare, it won't continue to
+                # the (non-existent) data_received.
+                raise HTTPError(401)
+
+        return [('/stream_body', StreamingBodyHandler, dict(test=self)),
+                ('/early_return', EarlyReturnHandler)]
+
+    def connect(self, url, connection_close):
+        # Use a raw connection so we can control the sending of data.
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        s.connect(("localhost", self.get_http_port()))
+        stream = IOStream(s, io_loop=self.io_loop)
+        stream.write(b"GET " + url + b" HTTP/1.1\r\n")
+        if connection_close:
+            stream.write(b"Connection: close\r\n")
+        stream.write(b"Transfer-Encoding: chunked\r\n\r\n")
+        return stream
 
     @gen_test
     def test_streaming_body(self):
@@ -1828,13 +1847,7 @@ class StreamingRequestBodyTest(WebTestCase):
         self.data = Future()
         self.finished = Future()
 
-        # Use a raw connection so we can control the sending of data.
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
-        stream = IOStream(s, io_loop=self.io_loop)
-        stream.write(b"GET / HTTP/1.1\r\n")
-        stream.write(b"Connection: close\r\n")
-        stream.write(b"Transfer-Encoding: chunked\r\n\r\n")
+        stream = self.connect(b"/stream_body", connection_close=True)
         yield self.prepared
         stream.write(b"4\r\nasdf\r\n")
         # Ensure the first chunk is received before we send the second.
@@ -1850,3 +1863,16 @@ class StreamingRequestBodyTest(WebTestCase):
         # This would ideally use an HTTP1Connection to read the response.
         self.assertTrue(data.endswith(b"{}"))
         stream.close()
+
+    @gen_test
+    def test_early_return(self):
+        stream = self.connect(b"/early_return", connection_close=False)
+        data = yield gen.Task(stream.read_until_close)
+        self.assertTrue(data.startswith(b"HTTP/1.1 401"))
+
+    @gen_test
+    def test_early_return_with_data(self):
+        stream = self.connect(b"/early_return", connection_close=False)
+        stream.write(b"4\r\nasdf\r\n")
+        data = yield gen.Task(stream.read_until_close)
+        self.assertTrue(data.startswith(b"HTTP/1.1 401"))
