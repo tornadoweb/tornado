@@ -51,10 +51,10 @@ var updater = {
 
     start: function() {
         var url = "ws://" + location.host + "/chatsocket";
-	updater.socket = new WebSocket(url);
-	updater.socket.onmessage = function(event) {
-	    updater.showMessage(JSON.parse(event.data));
-	}
+        updater.socket = new WebSocket(url);
+        updater.socket.onmessage = function(event) {
+            updater.showMessage(JSON.parse(event.data));
+        }
     },
 
     showMessage: function(message) {
