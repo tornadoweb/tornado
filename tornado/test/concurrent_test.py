@@ -163,11 +163,9 @@ class ReturnFutureTest(AsyncTestCase):
                 self.expected_frame = traceback.extract_tb(
                     sys.exc_info()[2], limit=1)[0]
                 raise
-        try:
+        with self.assertRaises(ZeroDivisionError):
             yield f()
-            self.fail("didn't get expected exception")
-        except ZeroDivisionError:
-            tb = traceback.extract_tb(sys.exc_info()[2])
+        tb = traceback.extract_tb(sys.exc_info()[2])
         self.assertIn(self.expected_frame, tb)
 
 # The following series of classes demonstrate and test various styles

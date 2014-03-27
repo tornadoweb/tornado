@@ -26,12 +26,9 @@ class RaiseExcInfoTest(unittest.TestCase):
             raise TwoArgException(1, 2)
         except TwoArgException:
             exc_info = sys.exc_info()
-        try:
+        with self.assertRaises(TwoArgException) as context:
             raise_exc_info(exc_info)
-            self.fail("didn't get expected exception")
-        except TwoArgException as e:
-            got_exception = e
-        self.assertIs(got_exception, exc_info[1])
+        self.assertIs(context.exception, exc_info[1])
 
 
 class TestConfigurable(Configurable):

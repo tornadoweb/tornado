@@ -149,20 +149,14 @@ try{% set y = 1/x %}
         self.assertEqual(result, b"013456")
 
     def test_break_outside_loop(self):
-        try:
+        with self.assertRaises(ParseError):
             Template(utf8("{% break %}"))
-            raise Exception("Did not get expected exception")
-        except ParseError:
-            pass
 
     def test_break_in_apply(self):
         # This test verifies current behavior, although of course it would
         # be nice if apply didn't cause seemingly unrelated breakage
-        try:
+        with self.assertRaises(ParseError):
             Template(utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}"))
-            raise Exception("Did not get expected exception")
-        except ParseError:
-            pass
 
     @unittest.skipIf(sys.version_info >= division.getMandatoryRelease(),
                      'no testable future imports')
@@ -180,10 +174,9 @@ class StackTraceTest(unittest.TestCase):
 two{{1/0}}
 three
         """})
-        try:
+        with self.assertRaises(ZeroDivisionError):
             loader.load("test.html").generate()
-        except ZeroDivisionError:
-            exc_stack = traceback.format_exc()
+        exc_stack = traceback.format_exc()
         self.assertTrue("# test.html:2" in exc_stack)
 
     def test_error_line_number_directive(self):
@@ -191,10 +184,9 @@ three
 two{%if 1/0%}
 three{%end%}
         """})
-        try:
+        with self.assertRaises(ZeroDivisionError):
             loader.load("test.html").generate()
-        except ZeroDivisionError:
-            exc_stack = traceback.format_exc()
+        exc_stack = traceback.format_exc()
         self.assertTrue("# test.html:2" in exc_stack)
 
     def test_error_line_number_module(self):
@@ -202,10 +194,9 @@ three{%end%}
             "base.html": "{% module Template('sub.html') %}",
             "sub.html": "{{1/0}}",
         }, namespace={"_tt_modules": ObjectDict({"Template": lambda path, **kwargs: loader.load(path).generate(**kwargs)})})
-        try:
+        with self.assertRaises(ZeroDivisionError):
             loader.load("base.html").generate()
-        except ZeroDivisionError:
-            exc_stack = traceback.format_exc()
+        exc_stack = traceback.format_exc()
         self.assertTrue('# base.html:1' in exc_stack)
         self.assertTrue('# sub.html:1' in exc_stack)
 
@@ -214,10 +205,9 @@ three{%end%}
             "base.html": "{% include 'sub.html' %}",
             "sub.html": "{{1/0}}",
         })
-        try:
+        with self.assertRaises(ZeroDivisionError):
             loader.load("base.html").generate()
-        except ZeroDivisionError:
-            exc_stack = traceback.format_exc()
+        exc_stack = traceback.format_exc()
         self.assertTrue("# sub.html:1 (via base.html:1)" in exc_stack)
 
     def test_error_line_number_extends_base_error(self):
@@ -225,10 +215,9 @@ three{%end%}
             "base.html": "{{1/0}}",
             "sub.html": "{% extends 'base.html' %}",
         })
-        try:
+        with self.assertRaises(ZeroDivisionError):
             loader.load("sub.html").generate()
-        except ZeroDivisionError:
-            exc_stack = traceback.format_exc()
+        exc_stack = traceback.format_exc()
         self.assertTrue("# base.html:1" in exc_stack)
 
     def test_error_line_number_extends_sub_error(self):
@@ -240,10 +229,9 @@ three{%end%}
 {{1/0}}
 {% end %}
             """})
-        try:
+        with self.assertRaises(ZeroDivisionError):
             loader.load("sub.html").generate()
-        except ZeroDivisionError:
-            exc_stack = traceback.format_exc()
+        exc_stack = traceback.format_exc()
         self.assertTrue("# sub.html:4 (via base.html:1)" in exc_stack)
 
     def test_multi_includes(self):
@@ -252,10 +240,9 @@ three{%end%}
             "b.html": "{% include 'c.html' %}",
             "c.html": "{{1/0}}",
         })
-        try:
+        with self.assertRaises(ZeroDivisionError):
             loader.load("a.html").generate()
-        except ZeroDivisionError:
-            exc_stack = traceback.format_exc()
+        exc_stack = traceback.format_exc()
         self.assertTrue("# c.html:1 (via b.html:1, a.html:1)" in exc_stack)
 
 

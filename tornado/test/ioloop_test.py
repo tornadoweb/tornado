@@ -112,13 +112,9 @@ class TestIOLoop(AsyncTestCase):
         thread = threading.Thread(target=target)
         thread.start()
         closing.wait()
-        for i in range(1000):
-            try:
+        with self.assertRaisesRegexp(RuntimeError, "\AIOLoop is closing\Z"):
+            for i in range(1000):
                 other_ioloop.add_callback(lambda: None)
-            except RuntimeError as e:
-                got_exception = e
-                break
-        self.assertEqual("IOLoop is closing", str(got_exception))
 
     def test_handle_callback_exception(self):
         # IOLoop.handle_callback_exception can be overridden to catch

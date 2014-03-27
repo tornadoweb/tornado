@@ -28,11 +28,8 @@ def set_environ(name, value):
 class AsyncTestCaseTest(AsyncTestCase):
     def test_exception_in_callback(self):
         self.io_loop.add_callback(lambda: 1 / 0)
-        try:
+        with self.assertRaises(ZeroDivisionError):
             self.wait()
-            self.fail("did not get expected exception")
-        except ZeroDivisionError:
-            pass
 
     def test_wait_timeout(self):
         time = self.io_loop.time
@@ -151,11 +148,9 @@ class GenTest(AsyncTestCase):
 
         # This can't use assertRaises because we need to inspect the
         # exc_info triple (and not just the exception object)
-        try:
+        with self.assertRaises(ioloop.TimeoutError):
             test(self)
-            self.fail("did not get expected exception")
-        except ioloop.TimeoutError:
-            exc_stack = traceback.format_exc()
+        exc_stack = traceback.format_exc()
         # The stack trace should blame the add_timeout line, not just
         # unrelated IOLoop/testing internals.
         self.assertIn(
