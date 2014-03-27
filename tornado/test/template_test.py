@@ -183,7 +183,8 @@ three
         try:
             loader.load("test.html").generate()
         except ZeroDivisionError:
-            self.assertTrue("# test.html:2" in traceback.format_exc())
+            exc_stack = traceback.format_exc()
+        self.assertTrue("# test.html:2" in exc_stack)
 
     def test_error_line_number_directive(self):
         loader = DictLoader({"test.html": """one
@@ -193,7 +194,8 @@ three{%end%}
         try:
             loader.load("test.html").generate()
         except ZeroDivisionError:
-            self.assertTrue("# test.html:2" in traceback.format_exc())
+            exc_stack = traceback.format_exc()
+        self.assertTrue("# test.html:2" in exc_stack)
 
     def test_error_line_number_module(self):
         loader = DictLoader({
@@ -204,8 +206,8 @@ three{%end%}
             loader.load("base.html").generate()
         except ZeroDivisionError:
             exc_stack = traceback.format_exc()
-            self.assertTrue('# base.html:1' in exc_stack)
-            self.assertTrue('# sub.html:1' in exc_stack)
+        self.assertTrue('# base.html:1' in exc_stack)
+        self.assertTrue('# sub.html:1' in exc_stack)
 
     def test_error_line_number_include(self):
         loader = DictLoader({
@@ -215,8 +217,8 @@ three{%end%}
         try:
             loader.load("base.html").generate()
         except ZeroDivisionError:
-            self.assertTrue("# sub.html:1 (via base.html:1)" in
-                            traceback.format_exc())
+            exc_stack = traceback.format_exc()
+        self.assertTrue("# sub.html:1 (via base.html:1)" in exc_stack)
 
     def test_error_line_number_extends_base_error(self):
         loader = DictLoader({
@@ -241,8 +243,8 @@ three{%end%}
         try:
             loader.load("sub.html").generate()
         except ZeroDivisionError:
-            self.assertTrue("# sub.html:4 (via base.html:1)" in
-                            traceback.format_exc())
+            exc_stack = traceback.format_exc()
+        self.assertTrue("# sub.html:4 (via base.html:1)" in exc_stack)
 
     def test_multi_includes(self):
         loader = DictLoader({
@@ -253,8 +255,8 @@ three{%end%}
         try:
             loader.load("a.html").generate()
         except ZeroDivisionError:
-            self.assertTrue("# c.html:1 (via b.html:1, a.html:1)" in
-                            traceback.format_exc())
+            exc_stack = traceback.format_exc()
+        self.assertTrue("# c.html:1 (via b.html:1, a.html:1)" in exc_stack)
 
 
 class AutoEscapeTest(unittest.TestCase):

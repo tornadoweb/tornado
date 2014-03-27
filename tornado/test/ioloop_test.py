@@ -116,8 +116,9 @@ class TestIOLoop(AsyncTestCase):
             try:
                 other_ioloop.add_callback(lambda: None)
             except RuntimeError as e:
-                self.assertEqual("IOLoop is closing", str(e))
+                got_exception = e
                 break
+        self.assertEqual("IOLoop is closing", str(got_exception))
 
     def test_handle_callback_exception(self):
         # IOLoop.handle_callback_exception can be overridden to catch

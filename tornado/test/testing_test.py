@@ -155,11 +155,12 @@ class GenTest(AsyncTestCase):
             test(self)
             self.fail("did not get expected exception")
         except ioloop.TimeoutError:
-            # The stack trace should blame the add_timeout line, not just
-            # unrelated IOLoop/testing internals.
-            self.assertIn(
-                "gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)",
-                traceback.format_exc())
+            exc_stack = traceback.format_exc()
+        # The stack trace should blame the add_timeout line, not just
+        # unrelated IOLoop/testing internals.
+        self.assertIn(
+            "gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)",
+            exc_stack)
 
         self.finished = True
 

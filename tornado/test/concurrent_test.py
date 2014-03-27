@@ -168,7 +168,7 @@ class ReturnFutureTest(AsyncTestCase):
             self.fail("didn't get expected exception")
         except ZeroDivisionError:
             tb = traceback.extract_tb(sys.exc_info()[2])
-            self.assertIn(self.expected_frame, tb)
+        self.assertIn(self.expected_frame, tb)
 
 # The following series of classes demonstrate and test various styles
 # of use, with and without generators and futures.

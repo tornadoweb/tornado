@@ -359,8 +359,9 @@ Transfer-Encoding: chunked
         try:
             yield self.http_client.fetch(self.get_url('/notfound'))
         except HTTPError as e:
-            self.assertEqual(e.code, 404)
-            self.assertEqual(e.response.code, 404)
+            got_exception = e
+        self.assertEqual(got_exception.code, 404)
+        self.assertEqual(got_exception.response.code, 404)
 
     @gen_test
     def test_reuse_request_from_response(self):
