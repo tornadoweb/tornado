@@ -82,6 +82,7 @@ from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
+from tornado.options import define, options
 from tornado.util import bytes_type, import_object, ObjectDict, raise_exc_info, unicode_type
 
 try:
@@ -103,6 +104,10 @@ try:
     from urllib import urlencode  # py2
 except ImportError:
     from urllib.parse import urlencode  # py3
+
+
+define("maximum_header_size", type=int, default=4000,
+       help="The maximum size considered safe for response headers")
 
 
 class RequestHandler(object):
@@ -330,7 +335,7 @@ class RequestHandler(object):
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request. Also cap length to
         # prevent obviously erroneous values.
-        if (len(value) > 4000 or
+        if (len(value) > options.maximum_header_size or
                 RequestHandler._INVALID_HEADER_CHAR_RE.search(value)):
             raise ValueError("Unsafe header value %r", value)
         return value
