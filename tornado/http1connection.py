@@ -35,7 +35,7 @@ class HTTP1Connection(object):
     until the HTTP conection is closed.
     """
     def __init__(self, stream, address, is_client,
-                 no_keep_alive=False, protocol=None):
+                 no_keep_alive=False, protocol=None, chunk_size=None):
         self.is_client = is_client
         self.stream = stream
         self.address = address
@@ -57,6 +57,7 @@ class HTTP1Connection(object):
             self.protocol = "https"
         else:
             self.protocol = "http"
+        self._chunk_size = chunk_size or 65536
         self._disconnect_on_finish = False
         self._clear_request_state()
         self.stream.set_close_callback(self._on_connection_close)
@@ -83,7 +84,8 @@ class HTTP1Connection(object):
         while True:
             request_delegate = delegate.start_request(self)
             if gzip:
-                request_delegate = _GzipMessageDelegate(request_delegate)
+                request_delegate = _GzipMessageDelegate(request_delegate,
+                                                        self._chunk_size)
             try:
                 ret = yield self._read_message(request_delegate)
             except iostream.StreamClosedError:
@@ -94,7 +96,7 @@ class HTTP1Connection(object):
 
     def read_response(self, delegate, method, use_gzip=False):
         if use_gzip:
-            delegate = _GzipMessageDelegate(delegate)
+            delegate = _GzipMessageDelegate(delegate, self._chunk_size)
         return self._read_message(delegate, method=method)
 
     @gen.coroutine
@@ -335,8 +337,11 @@ class HTTP1Connection(object):
 
     @gen.coroutine
     def _read_fixed_body(self, content_length):
-        body = yield self.stream.read_bytes(content_length)
-        self.message_delegate.data_received(body)
+        while content_length > 0:
+            body = yield self.stream.read_bytes(
+                min(self._chunk_size, content_length), partial=True)
+            content_length -= len(body)
+            yield gen.maybe_future(self.message_delegate.data_received(body))
 
     @gen.coroutine
     def _read_chunked_body(self):
@@ -346,10 +351,16 @@ class HTTP1Connection(object):
             chunk_len = int(chunk_len.strip(), 16)
             if chunk_len == 0:
                 return
+            bytes_to_read = chunk_len
+            while bytes_to_read:
+                chunk = yield self.stream.read_bytes(
+                    min(bytes_to_read, self._chunk_size), partial=True)
+                bytes_to_read -= len(chunk)
+                yield gen.maybe_future(
+                    self.message_delegate.data_received(chunk))
             # chunk ends with \r\n
-            chunk = yield self.stream.read_bytes(chunk_len + 2)
-            assert chunk[-2:] == b"\r\n"
-            self.message_delegate.data_received(chunk[:-2])
+            crlf = yield self.stream.read_bytes(2)
+            assert crlf == b"\r\n"
 
     @gen.coroutine
     def _read_body_until_close(self):
@@ -360,8 +371,9 @@ class HTTP1Connection(object):
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
     """Wraps an `HTTPMessageDelegate` to decode ``Content-Encoding: gzip``.
     """
-    def __init__(self, delegate):
+    def __init__(self, delegate, chunk_size):
         self._delegate = delegate
+        self._chunk_size = chunk_size
         self._decompressor = None
 
     def headers_received(self, start_line, headers):
@@ -375,10 +387,19 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
             del headers["Content-Encoding"]
         return self._delegate.headers_received(start_line, headers)
 
+    @gen.coroutine
     def data_received(self, chunk):
         if self._decompressor:
-            chunk = self._decompressor.decompress(chunk)
-        return self._delegate.data_received(chunk)
+            compressed_data = chunk
+            while compressed_data:
+                decompressed = self._decompressor.decompress(
+                    compressed_data, self._chunk_size)
+                if decompressed:
+                    yield gen.maybe_future(
+                        self._delegate.data_received(decompressed))
+                compressed_data = self._decompressor.unconsumed_tail
+        else:
+            yield gen.maybe_future(self._delegate.data_received(chunk))
 
     def finish(self):
         if self._decompressor is not None:

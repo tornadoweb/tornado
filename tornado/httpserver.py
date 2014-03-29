@@ -136,19 +136,21 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
                  xheaders=False, ssl_options=None, protocol=None, gzip=False,
-                 **kwargs):
+                 chunk_size=None, **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
         self.protocol = protocol
         self.gzip = gzip
+        self.chunk_size = chunk_size
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
     def handle_stream(self, stream, address):
         conn = HTTP1Connection(stream, address=address, is_client=False,
                                no_keep_alive=self.no_keep_alive,
-                               protocol=self.protocol)
+                               protocol=self.protocol,
+                               chunk_size=self.chunk_size)
         conn.start_serving(self, gzip=self.gzip)
 
     def start_request(self, connection):
