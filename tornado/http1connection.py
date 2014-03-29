@@ -118,7 +118,10 @@ class HTTP1Connection(object):
 
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
-            self.message_delegate.headers_received(start_line, headers)
+            header_future = self.message_delegate.headers_received(
+                start_line, headers)
+            if header_future is not None:
+                yield header_future
             if self.stream is None:
                 # We've been detached.
                 # TODO: where else do we need to check for detach?

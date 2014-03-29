@@ -211,13 +211,13 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
                 connection=self.connection, start_line=start_line,
                 headers=headers)
         else:
-            self.delegate.headers_received(start_line, headers)
+            return self.delegate.headers_received(start_line, headers)
 
     def data_received(self, chunk):
         if self.delegate is None:
             self._chunks.append(chunk)
         else:
-            self.delegate.data_received(chunk)
+            return self.delegate.data_received(chunk)
 
     def finish(self):
         if self.delegate is None:

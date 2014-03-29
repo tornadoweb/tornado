@@ -129,6 +129,7 @@ class RequestHandler(object):
         self._finished = False
         self._auto_finish = True
         self._transforms = None  # will be set in _execute
+        self._prepared_future = None
         self.path_args = None
         self.path_kwargs = None
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
@@ -1216,6 +1217,10 @@ class RequestHandler(object):
                 result = yield result
             if result is not None:
                 raise TypeError("Expected None, got %r" % result)
+            if self._prepared_future is not None:
+                # Tell the Application we've finished with prepare()
+                # and are ready for the body to arrive.
+                self._prepared_future.set_result(None)
             if self._finished:
                 return
 
@@ -1236,6 +1241,12 @@ class RequestHandler(object):
                 self.finish()
         except Exception as e:
             self._handle_request_exception(e)
+            if (self._prepared_future is not None and
+                not self._prepared_future.done()):
+                # In case we failed before setting _prepared_future, do it
+                # now (to unblock the HTTP server).  Note that this is not
+                # in a finally block to avoid GC issues prior to Python 3.4.
+                self._prepared_future.set_result(None)
 
     def _log(self):
         """Logs the current request.
@@ -1386,6 +1397,9 @@ def stream_request_body(cls):
     * The subclass must define a method ``data_received(self, data):``, which
       will be called zero or more times as data is available.  Note that
       if the request has an empty body, ``data_received`` may not be called.
+    * ``prepare`` and ``data_received`` may return Futures (such as via
+      ``@gen.coroutine``, in which case the next method will not be called
+      until those futures have completed.
     * The regular HTTP method (``post``, ``put``, etc) will be called after
       the entire body has been read.
 
@@ -1703,7 +1717,7 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
             connection=self.connection, start_line=start_line, headers=headers))
         if self.stream_request_body:
             self.request.body = Future()
-            self.execute()
+            return self.execute()
 
     def set_request(self, request):
         self.request = request
@@ -1747,7 +1761,7 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
 
     def data_received(self, data):
         if self.stream_request_body:
-            self.handler.data_received(data)
+            return self.handler.data_received(data)
         else:
             self.chunks.append(data)
 
@@ -1773,12 +1787,20 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         self.handler = self.handler_class(self.application, self.request,
                                      **self.handler_kwargs)
         transforms = [t(self.request) for t in self.application.transforms]
+
+        if self.stream_request_body:
+            self.handler._prepared_future = Future()
         # Note that if an exception escapes handler._execute it will be
         # trapped in the Future it returns (which we are ignoring here).
         # However, that shouldn't happen because _execute has a blanket
         # except handler, and we cannot easily access the IOLoop here to
         # call add_future.
         self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
+        # If we are streaming the request body, then execute() is finished
+        # when the handler has prepared to receive the body.  If not,
+        # it doesn't matter when execute() finishes (so we return None)
+        return self.handler._prepared_future
+
 
 
 class HTTPError(Exception):

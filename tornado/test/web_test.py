@@ -13,6 +13,7 @@ from tornado.util import u, bytes_type, ObjectDict, unicode_type
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body
 
 import binascii
+import contextlib
 import datetime
 import email.utils
 import logging
@@ -1876,3 +1877,63 @@ class StreamingRequestBodyTest(WebTestCase):
         stream.write(b"4\r\nasdf\r\n")
         data = yield gen.Task(stream.read_until_close)
         self.assertTrue(data.startswith(b"HTTP/1.1 401"))
+
+
+class StreamingRequestFlowControlTest(WebTestCase):
+    def get_handlers(self):
+        from tornado.ioloop import IOLoop
+
+        # Each method in this handler returns a Future and yields to the
+        # IOLoop so the future is not immediately ready.  Ensure that the
+        # Futures are respected and no method is called before the previous
+        # one has completed.
+        @stream_request_body
+        class FlowControlHandler(RequestHandler):
+            def initialize(self, test):
+                self.test = test
+                self.method = None
+                self.methods = []
+
+            @contextlib.contextmanager
+            def in_method(self, method):
+                if self.method is not None:
+                    self.test.fail("entered method %s while in %s" %
+                                   (method, self.method))
+                self.method = method
+                self.methods.append(method)
+                try:
+                    yield
+                finally:
+                    self.method = None
+
+            @gen.coroutine
+            def prepare(self):
+                with self.in_method('prepare'):
+                    yield gen.Task(IOLoop.current().add_callback)
+
+            @gen.coroutine
+            def data_received(self, data):
+                with self.in_method('data_received'):
+                    yield gen.Task(IOLoop.current().add_callback)
+
+            @gen.coroutine
+            def post(self):
+                with self.in_method('post'):
+                    yield gen.Task(IOLoop.current().add_callback)
+                self.write(dict(methods=self.methods))
+
+        return [('/', FlowControlHandler, dict(test=self))]
+
+    def get_httpserver_options(self):
+        # Use a small chunk size so flow control is relevant even though
+        # all the data arrives at once.
+        return dict(chunk_size=10)
+
+    def test_flow_control(self):
+        response = self.fetch('/', body='abcdefghijklmnopqrstuvwxyz',
+                              method='POST')
+        response.rethrow()
+        self.assertEqual(json_decode(response.body),
+                         dict(methods=['prepare', 'data_received',
+                                       'data_received', 'data_received',
+                                       'post']))
