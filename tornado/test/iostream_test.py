@@ -533,6 +533,31 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    def test_read_bytes_partial(self):
+        server, client = self.make_iostream_pair()
+        try:
+            # Ask for more than is available with partial=True
+            client.read_bytes(50, self.stop, partial=True)
+            server.write(b"hello")
+            data = self.wait()
+            self.assertEqual(data, b"hello")
+
+            # Ask for less than what is available; num_bytes is still
+            # respected.
+            client.read_bytes(3, self.stop, partial=True)
+            server.write(b"world")
+            data = self.wait()
+            self.assertEqual(data, b"wor")
+
+            # Partial reads won't return an empty string, but read_bytes(0)
+            # will.
+            client.read_bytes(0, self.stop, partial=True)
+            data = self.wait()
+            self.assertEqual(data, b'')
+        finally:
+            server.close()
+            client.close()
+
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):

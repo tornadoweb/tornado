@@ -93,6 +93,7 @@ class BaseIOStream(object):
         self._read_delimiter = None
         self._read_regex = None
         self._read_bytes = None
+        self._read_partial = False
         self._read_until_close = False
         self._read_callback = None
         self._read_future = None
@@ -168,17 +169,22 @@ class BaseIOStream(object):
         self._try_inline_read()
         return future
 
-    def read_bytes(self, num_bytes, callback=None, streaming_callback=None):
+    def read_bytes(self, num_bytes, callback=None, streaming_callback=None,
+                   partial=False):
         """Run callback when we read the given number of bytes.
 
         If a ``streaming_callback`` is given, it will be called with chunks
         of data as they become available, and the argument to the final
         ``callback`` will be empty.  Otherwise, the ``callback`` gets
         the data as an argument.
+
+        If ``partial`` is true, the callback is run as soon as we have
+        any bytes to return (but never more than ``num_bytes``)
         """
         future = self._set_read_callback(callback)
         assert isinstance(num_bytes, numbers.Integral)
         self._read_bytes = num_bytes
+        self._read_partial = partial
         self._streaming_callback = stack_context.wrap(streaming_callback)
         self._try_inline_read()
         return future
@@ -526,9 +532,12 @@ class BaseIOStream(object):
                 self._read_bytes -= bytes_to_consume
             self._run_callback(self._streaming_callback,
                                self._consume(bytes_to_consume))
-        if self._read_bytes is not None and self._read_buffer_size >= self._read_bytes:
-            num_bytes = self._read_bytes
+        if (self._read_bytes is not None and
+            (self._read_buffer_size >= self._read_bytes or
+             (self._read_partial and self._read_buffer_size > 0))):
+            num_bytes = min(self._read_bytes, self._read_buffer_size)
             self._read_bytes = None
+            self._read_partial = False
             self._run_read_callback(self._consume(num_bytes))
             return True
         elif self._read_delimiter is not None:
