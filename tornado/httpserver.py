@@ -146,7 +146,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
                            **kwargs)
 
     def handle_stream(self, stream, address):
-        conn = HTTP1Connection(stream, address=address,
+        conn = HTTP1Connection(stream, address=address, is_client=False,
                                no_keep_alive=self.no_keep_alive,
                                protocol=self.protocol)
         conn.start_serving(self, gzip=self.gzip)

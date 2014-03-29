@@ -107,6 +107,11 @@ class NoContentLengthHandler(RequestHandler):
         stream.close()
 
 
+class EchoPostHandler(RequestHandler):
+    def post(self):
+        self.write(self.request.body)
+
+
 class SimpleHTTPClientTestMixin(object):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -126,6 +131,7 @@ class SimpleHTTPClientTestMixin(object):
             url("/see_other_get", SeeOtherGetHandler),
             url("/host_echo", HostEchoHandler),
             url("/no_content_length", NoContentLengthHandler),
+            url("/echo_post", EchoPostHandler),
         ], gzip=True)
 
     def test_singleton(self):
@@ -330,6 +336,44 @@ class SimpleHTTPClientTestMixin(object):
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
         self.assertEquals(b"hello", response.body)
+
+    def sync_body_producer(self, write):
+        write(b'1234')
+        write(b'5678')
+
+    @gen.coroutine
+    def async_body_producer(self, write):
+        # TODO: write should return a Future.
+        # wrap it in simple_httpclient or change http1connection?
+        yield gen.Task(write, b'1234')
+        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.Task(write, b'5678')
+
+    def test_sync_body_producer_chunked(self):
+        response = self.fetch("/echo_post", method="POST",
+                              body_producer=self.sync_body_producer)
+        response.rethrow()
+        self.assertEqual(response.body, b"12345678")
+
+    def test_sync_body_producer_content_length(self):
+        response = self.fetch("/echo_post", method="POST",
+                              body_producer=self.sync_body_producer,
+                              headers={'Content-Length': '8'})
+        response.rethrow()
+        self.assertEqual(response.body, b"12345678")
+
+    def test_async_body_producer_chunked(self):
+        response = self.fetch("/echo_post", method="POST",
+                              body_producer=self.async_body_producer)
+        response.rethrow()
+        self.assertEqual(response.body, b"12345678")
+
+    def test_async_body_producer_content_length(self):
+        response = self.fetch("/echo_post", method="POST",
+                              body_producer=self.async_body_producer,
+                              headers={'Content-Length': '8'})
+        response.rethrow()
+        self.assertEqual(response.body, b"12345678")
 
 
 class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):

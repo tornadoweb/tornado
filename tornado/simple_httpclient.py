@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, print_function, with_statement
 
+from tornado.concurrent import is_future
 from tornado.escape import utf8, _unicode
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 from tornado import httputil
@@ -303,16 +304,20 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
             if self.request.method in ("POST", "PATCH", "PUT"):
-                if self.request.body is None:
+                if (self.request.body is None and
+                    self.request.body_producer is None):
                     raise AssertionError(
                         'Body must not be empty for "%s" request'
                         % self.request.method)
             else:
-                if self.request.body is not None:
+                if (self.request.body is not None or
+                    self.request.body_producer is not None):
                     raise AssertionError(
                         'Body must be empty for "%s" request'
                         % self.request.method)
         if self.request.body is not None:
+            # When body_producer is used the caller is responsible for
+            # setting Content-Length (or else chunked encoding will be used).
             self.request.headers["Content-Length"] = str(len(
                 self.request.body))
         if (self.request.method == "POST" and
@@ -324,13 +329,30 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                    (('?' + self.parsed.query) if self.parsed.query else ''))
         self.stream.set_nodelay(True)
         self.connection = HTTP1Connection(
-            self.stream, self._sockaddr,
+            self.stream, self._sockaddr, is_client=True,
             no_keep_alive=True, protocol=self.parsed.scheme)
         start_line = httputil.RequestStartLine(self.request.method,
                                                req_path, 'HTTP/1.1')
-        self.connection.write_headers(start_line, self.request.headers)
+        self.connection.write_headers(
+            start_line, self.request.headers,
+            has_body=(self.request.body is not None or
+                      self.request.body_producer is not None))
         if self.request.body is not None:
             self.connection.write(self.request.body)
+            self.connection.finish()
+        elif self.request.body_producer is not None:
+            fut = self.request.body_producer(self.connection.write)
+            if is_future(fut):
+                def on_body_written(fut):
+                    fut.result()
+                    self.connection.finish()
+                    self._read_response()
+                self.io_loop.add_future(fut, on_body_written)
+                return
+            self.connection.finish()
+        self._read_response()
+
+    def _read_response(self):
         # Ensure that any exception raised in read_response ends up in our
         # stack context.
         self.io_loop.add_future(

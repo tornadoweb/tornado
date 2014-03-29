@@ -259,14 +259,23 @@ class HTTPRequest(object):
                  proxy_password=None, allow_nonstandard_methods=None,
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
-                 client_key=None, client_cert=None):
+                 client_key=None, client_cert=None, body_producer=None):
         r"""All parameters except ``url`` are optional.
 
         :arg string url: URL to fetch
         :arg string method: HTTP method, e.g. "GET" or "POST"
         :arg headers: Additional HTTP headers to pass on the request
-        :arg body: HTTP body to pass on the request
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
+        :arg body: HTTP request body as a string (byte or unicode; if unicode
+           the utf-8 encoding will be used)
+        :arg body_producer: Callable used for lazy/asynchronous request bodies.
+           TODO: document the interface.
+           Only one of ``body`` and ``body_producer`` may
+           be specified.  ``body_producer`` is not supported on
+           ``curl_httpclient``.  When using ``body_producer`` it is recommended
+           to pass a ``Content-Length`` in the headers as otherwise chunked
+           encoding will be used, and many servers do not support chunked
+           encoding on requests.
         :arg string auth_username: Username for HTTP authentication
         :arg string auth_password: Password for HTTP authentication
         :arg string auth_mode: Authentication mode; default is "basic".
@@ -348,6 +357,7 @@ class HTTPRequest(object):
         self.url = url
         self.method = method
         self.body = body
+        self.body_producer = body_producer
         self.auth_username = auth_username
         self.auth_password = auth_password
         self.auth_mode = auth_mode
@@ -387,6 +397,14 @@ class HTTPRequest(object):
     @body.setter
     def body(self, value):
         self._body = utf8(value)
+
+    @property
+    def body_producer(self):
+        return self._body_producer
+
+    @body_producer.setter
+    def body_producer(self, value):
+        self._body_producer = stack_context.wrap(value)
 
     @property
     def streaming_callback(self):

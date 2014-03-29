@@ -34,7 +34,9 @@ class HTTP1Connection(object):
     We parse HTTP headers and bodies, and execute the request callback
     until the HTTP conection is closed.
     """
-    def __init__(self, stream, address, no_keep_alive=False, protocol=None):
+    def __init__(self, stream, address, is_client,
+                 no_keep_alive=False, protocol=None):
+        self.is_client = is_client
         self.stream = stream
         self.address = address
         # Save the socket's address family now so we know how to
@@ -83,7 +85,7 @@ class HTTP1Connection(object):
             if gzip:
                 request_delegate = _GzipMessageDelegate(request_delegate)
             try:
-                ret = yield self._read_message(request_delegate, False)
+                ret = yield self._read_message(request_delegate)
             except iostream.StreamClosedError:
                 self.close()
                 return
@@ -93,10 +95,10 @@ class HTTP1Connection(object):
     def read_response(self, delegate, method, use_gzip=False):
         if use_gzip:
             delegate = _GzipMessageDelegate(delegate)
-        return self._read_message(delegate, True, method=method)
+        return self._read_message(delegate, method=method)
 
     @gen.coroutine
-    def _read_message(self, delegate, is_client, method=None):
+    def _read_message(self, delegate, method=None):
         assert isinstance(delegate, httputil.HTTPMessageDelegate)
         self.message_delegate = delegate
         try:
@@ -104,7 +106,7 @@ class HTTP1Connection(object):
             self._reading = True
             self._finish_future = Future()
             start_line, headers = self._parse_headers(header_data)
-            if is_client:
+            if self.is_client:
                 start_line = httputil.parse_response_start_line(start_line)
             else:
                 start_line = httputil.parse_request_start_line(start_line)
@@ -120,7 +122,7 @@ class HTTP1Connection(object):
                 # TODO: where else do we need to check for detach?
                 raise gen.Return(False)
             skip_body = False
-            if is_client:
+            if self.is_client:
                 if method == 'HEAD':
                     skip_body = True
                 code = start_line.code
@@ -130,12 +132,12 @@ class HTTP1Connection(object):
                     # TODO: client delegates will get headers_received twice
                     # in the case of a 100-continue.  Document or change?
                     yield self._read_message(self.message_delegate,
-                                             is_client, method=method)
+                                             method=method)
             else:
                 if headers.get("Expect") == "100-continue":
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
             if not skip_body:
-                body_future = self._read_body(is_client, headers)
+                body_future = self._read_body(headers)
                 if body_future is not None:
                     yield body_future
             self._reading = False
@@ -194,19 +196,29 @@ class HTTP1Connection(object):
         self.stream = None
         return stream
 
-    def write_headers(self, start_line, headers, chunk=None, callback=None):
-        self._chunking = (
-            # TODO: should this use self._version or start_line.version?
-            self._version == 'HTTP/1.1' and
-            # 304 responses have no body (not even a zero-length body), and so
-            # should not have either Content-Length or Transfer-Encoding.
-            # headers.
-            start_line.code != 304 and
-            # No need to chunk the output if a Content-Length is specified.
-            'Content-Length' not in headers and
-            # Applications are discouraged from touching Transfer-Encoding,
-            # but if they do, leave it alone.
-            'Transfer-Encoding' not in headers)
+    def write_headers(self, start_line, headers, chunk=None, callback=None,
+                      has_body=True):
+        if self.is_client:
+            # Client requests with a non-empty body must have either a
+            # Content-Length or a Transfer-Encoding.
+            self._chunking = (
+                has_body and
+                'Content-Length' not in headers and
+                'Transfer-Encoding' not in headers)
+        else:
+            self._chunking = (
+                has_body and
+                # TODO: should this use self._version or start_line.version?
+                self._version == 'HTTP/1.1' and
+                # 304 responses have no body (not even a zero-length body), and so
+                # should not have either Content-Length or Transfer-Encoding.
+                # headers.
+                start_line.code != 304 and
+                # No need to chunk the output if a Content-Length is specified.
+                'Content-Length' not in headers and
+                # Applications are discouraged from touching Transfer-Encoding,
+                # but if they do, leave it alone.
+                'Transfer-Encoding' not in headers)
         if self._chunking:
             headers['Transfer-Encoding'] = 'chunked'
         lines = [utf8("%s %s %s" % start_line)]
@@ -293,7 +305,8 @@ class HTTP1Connection(object):
         # Turn Nagle's algorithm back on, leaving the stream in its
         # default state for the next request.
         self.stream.set_nodelay(False)
-        self._finish_future.set_result(None)
+        if self._finish_future is not None:
+            self._finish_future.set_result(None)
 
     def _parse_headers(self, data):
         data = native_str(data.decode('latin1'))
@@ -307,7 +320,7 @@ class HTTP1Connection(object):
                                                 data[eol:100])
         return start_line, headers
 
-    def _read_body(self, is_client, headers):
+    def _read_body(self, headers):
         content_length = headers.get("Content-Length")
         if content_length:
             content_length = int(content_length)
@@ -316,7 +329,7 @@ class HTTP1Connection(object):
             return self._read_fixed_body(content_length)
         if headers.get("Transfer-Encoding") == "chunked":
             return self._read_chunked_body()
-        if is_client:
+        if self.is_client:
             return self._read_body_until_close()
         return None
 
