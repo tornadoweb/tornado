@@ -17,3 +17,8 @@ skipIfNonUnix = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
 # timing-related tests unreliable.
 skipOnTravis = unittest.skipIf('TRAVIS' in os.environ,
                                'timing tests unreliable on travis')
+
+# Set the environment variable NO_NETWORK=1 to disable any tests that
+# depend on an external network.
+skipIfNoNetwork = unittest.skipIf('NO_NETWORK' in os.environ,
+                                  'network access disabled')

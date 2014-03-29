@@ -10,7 +10,7 @@ import time
 from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip, bind_sockets
 from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncTestCase, gen_test
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipIfNoNetwork
 
 try:
     from concurrent import futures
@@ -74,12 +74,14 @@ class _ResolverTestMixin(object):
                                         socket.AF_UNSPEC)
 
 
+@skipIfNoNetwork
 class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(BlockingResolverTest, self).setUp()
         self.resolver = BlockingResolver(io_loop=self.io_loop)
 
 
+@skipIfNoNetwork
 @unittest.skipIf(futures is None, "futures module not present")
 class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
@@ -91,6 +93,7 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
         super(ThreadedResolverTest, self).tearDown()
 
 
+@skipIfNoNetwork
 @unittest.skipIf(futures is None, "futures module not present")
 class ThreadedResolverImportTest(unittest.TestCase):
     def test_import(self):
@@ -116,6 +119,7 @@ class ThreadedResolverImportTest(unittest.TestCase):
         self.fail("import timed out")
 
 
+@skipIfNoNetwork
 @unittest.skipIf(pycares is None, "pycares module not present")
 class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
@@ -123,6 +127,7 @@ class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
         self.resolver = CaresResolver(io_loop=self.io_loop)
 
 
+@skipIfNoNetwork
 @unittest.skipIf(twisted is None, "twisted module not present")
 @unittest.skipIf(getattr(twisted, '__version__', '0.0') < "12.1", "old version of twisted")
 class TwistedResolverTest(AsyncTestCase, _ResolverTestMixin):
