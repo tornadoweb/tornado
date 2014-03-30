@@ -149,14 +149,20 @@ try{% set y = 1/x %}
         self.assertEqual(result, b"013456")
 
     def test_break_outside_loop(self):
-        with self.assertRaises(ParseError):
+        try:
             Template(utf8("{% break %}"))
+            raise Exception("Did not get expected exception")
+        except ParseError:
+            pass
 
     def test_break_in_apply(self):
         # This test verifies current behavior, although of course it would
         # be nice if apply didn't cause seemingly unrelated breakage
-        with self.assertRaises(ParseError):
+        try:
             Template(utf8("{% for i in [] %}{% apply foo %}{% break %}{% end %}{% end %}"))
+            raise Exception("Did not get expected exception")
+        except ParseError:
+            pass
 
     @unittest.skipIf(sys.version_info >= division.getMandatoryRelease(),
                      'no testable future imports')
@@ -174,50 +180,58 @@ class StackTraceTest(unittest.TestCase):
 two{{1/0}}
 three
         """})
-        with self.assertRaises(ZeroDivisionError):
+        try:
             loader.load("test.html").generate()
-        exc_stack = traceback.format_exc()
-        self.assertTrue("# test.html:2" in exc_stack)
+            self.fail("did not get expected exception")
+        except ZeroDivisionError:
+            self.assertTrue("# test.html:2" in traceback.format_exc())
 
     def test_error_line_number_directive(self):
         loader = DictLoader({"test.html": """one
 two{%if 1/0%}
 three{%end%}
         """})
-        with self.assertRaises(ZeroDivisionError):
+        try:
             loader.load("test.html").generate()
-        exc_stack = traceback.format_exc()
-        self.assertTrue("# test.html:2" in exc_stack)
+            self.fail("did not get expected exception")
+        except ZeroDivisionError:
+            self.assertTrue("# test.html:2" in traceback.format_exc())
 
     def test_error_line_number_module(self):
         loader = DictLoader({
             "base.html": "{% module Template('sub.html') %}",
             "sub.html": "{{1/0}}",
         }, namespace={"_tt_modules": ObjectDict({"Template": lambda path, **kwargs: loader.load(path).generate(**kwargs)})})
-        with self.assertRaises(ZeroDivisionError):
+        try:
             loader.load("base.html").generate()
-        exc_stack = traceback.format_exc()
-        self.assertTrue('# base.html:1' in exc_stack)
-        self.assertTrue('# sub.html:1' in exc_stack)
+            self.fail("did not get expected exception")
+        except ZeroDivisionError:
+            exc_stack = traceback.format_exc()
+            self.assertTrue('# base.html:1' in exc_stack)
+            self.assertTrue('# sub.html:1' in exc_stack)
 
     def test_error_line_number_include(self):
         loader = DictLoader({
             "base.html": "{% include 'sub.html' %}",
             "sub.html": "{{1/0}}",
         })
-        with self.assertRaises(ZeroDivisionError):
+        try:
             loader.load("base.html").generate()
-        exc_stack = traceback.format_exc()
-        self.assertTrue("# sub.html:1 (via base.html:1)" in exc_stack)
+            self.fail("did not get expected exception")
+        except ZeroDivisionError:
+            self.assertTrue("# sub.html:1 (via base.html:1)" in
+                            traceback.format_exc())
 
     def test_error_line_number_extends_base_error(self):
         loader = DictLoader({
             "base.html": "{{1/0}}",
             "sub.html": "{% extends 'base.html' %}",
         })
-        with self.assertRaises(ZeroDivisionError):
+        try:
             loader.load("sub.html").generate()
-        exc_stack = traceback.format_exc()
+            self.fail("did not get expected exception")
+        except ZeroDivisionError:
+            exc_stack = traceback.format_exc()
         self.assertTrue("# base.html:1" in exc_stack)
 
     def test_error_line_number_extends_sub_error(self):
@@ -229,10 +243,12 @@ three{%end%}
 {{1/0}}
 {% end %}
             """})
-        with self.assertRaises(ZeroDivisionError):
+        try:
             loader.load("sub.html").generate()
-        exc_stack = traceback.format_exc()
-        self.assertTrue("# sub.html:4 (via base.html:1)" in exc_stack)
+            self.fail("did not get expected exception")
+        except ZeroDivisionError:
+            self.assertTrue("# sub.html:4 (via base.html:1)" in
+                            traceback.format_exc())
 
     def test_multi_includes(self):
         loader = DictLoader({
@@ -240,10 +256,12 @@ three{%end%}
             "b.html": "{% include 'c.html' %}",
             "c.html": "{{1/0}}",
         })
-        with self.assertRaises(ZeroDivisionError):
+        try:
             loader.load("a.html").generate()
-        exc_stack = traceback.format_exc()
-        self.assertTrue("# c.html:1 (via b.html:1, a.html:1)" in exc_stack)
+            self.fail("did not get expected exception")
+        except ZeroDivisionError:
+            self.assertTrue("# c.html:1 (via b.html:1, a.html:1)" in
+                            traceback.format_exc())
 
 
 class AutoEscapeTest(unittest.TestCase):
