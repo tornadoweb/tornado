@@ -356,11 +356,10 @@ Transfer-Encoding: chunked
 
     @gen_test
     def test_future_http_error(self):
-        try:
+        with self.assertRaises(HTTPError) as context:
             yield self.http_client.fetch(self.get_url('/notfound'))
-        except HTTPError as e:
-            self.assertEqual(e.code, 404)
-            self.assertEqual(e.response.code, 404)
+        self.assertEqual(context.exception.code, 404)
+        self.assertEqual(context.exception.response.code, 404)
 
     @gen_test
     def test_reuse_request_from_response(self):
