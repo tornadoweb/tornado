@@ -826,3 +826,21 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
             write(compressed[20:])
         self.fetch_chunk_sizes(body_producer=body_producer,
                                headers={'Content-Encoding': 'gzip'})
+
+
+class MaxHeaderSizeTest(AsyncHTTPTestCase):
+    def get_app(self):
+        return Application([('/', HelloWorldRequestHandler)])
+
+    def get_httpserver_options(self):
+        return dict(max_header_size=1024)
+
+    def test_small_headers(self):
+        response = self.fetch("/", headers={'X-Filler': 'a' * 100})
+        response.rethrow()
+        self.assertEqual(response.body, b"Hello world")
+
+    def test_large_headers(self):
+        with ExpectLog(gen_log, "Unsatisfiable read"):
+            response = self.fetch("/", headers={'X-Filler': 'a' * 1000})
+        self.assertEqual(response.code, 599)

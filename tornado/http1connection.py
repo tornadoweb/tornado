@@ -35,7 +35,8 @@ class HTTP1Connection(object):
     until the HTTP conection is closed.
     """
     def __init__(self, stream, address, is_client,
-                 no_keep_alive=False, protocol=None, chunk_size=None):
+                 no_keep_alive=False, protocol=None, chunk_size=None,
+                 max_header_size=None):
         self.is_client = is_client
         self.stream = stream
         self.address = address
@@ -58,6 +59,7 @@ class HTTP1Connection(object):
         else:
             self.protocol = "http"
         self._chunk_size = chunk_size or 65536
+        self._max_header_size = max_header_size or 65536
         self._disconnect_on_finish = False
         self._clear_request_state()
         self.stream.set_close_callback(self._on_connection_close)
@@ -112,7 +114,9 @@ class HTTP1Connection(object):
         assert isinstance(delegate, httputil.HTTPMessageDelegate)
         self.message_delegate = delegate
         try:
-            header_data = yield self.stream.read_until_regex(b"\r?\n\r?\n")
+            header_data = yield self.stream.read_until_regex(
+                b"\r?\n\r?\n",
+                max_bytes=self._max_header_size)
             self._reading = True
             self._finish_future = Future()
             start_line, headers = self._parse_headers(header_data)

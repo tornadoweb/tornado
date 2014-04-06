@@ -48,7 +48,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """
     def initialize(self, io_loop, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
-                   resolver=None, defaults=None):
+                   resolver=None, defaults=None, max_header_size=None):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -75,6 +75,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.active = {}
         self.waiting = {}
         self.max_buffer_size = max_buffer_size
+        self.max_header_size = max_header_size
         if resolver:
             self.resolver = resolver
             self.own_resolver = False
@@ -120,7 +121,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     def _handle_request(self, request, release_callback, final_callback):
         _HTTPConnection(self.io_loop, self, request, release_callback,
-                        final_callback, self.max_buffer_size, self.resolver)
+                        final_callback, self.max_buffer_size, self.resolver,
+                        self.max_header_size)
 
     def _release_fetch(self, key):
         del self.active[key]
@@ -147,7 +149,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
     def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size, resolver):
+                 final_callback, max_buffer_size, resolver,
+                 max_header_size):
         self.start_time = io_loop.time()
         self.io_loop = io_loop
         self.client = client
@@ -156,6 +159,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.final_callback = final_callback
         self.max_buffer_size = max_buffer_size
         self.resolver = resolver
+        self.max_header_size = max_header_size
         self.code = None
         self.headers = None
         self.chunks = []
@@ -330,7 +334,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.stream.set_nodelay(True)
         self.connection = HTTP1Connection(
             self.stream, self._sockaddr, is_client=True,
-            no_keep_alive=True, protocol=self.parsed.scheme)
+            no_keep_alive=True, protocol=self.parsed.scheme,
+            max_header_size=self.max_header_size)
         start_line = httputil.RequestStartLine(self.request.method,
                                                req_path, 'HTTP/1.1')
         self.connection.write_headers(

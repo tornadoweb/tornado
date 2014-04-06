@@ -823,7 +823,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.resolver = Resolver(io_loop=io_loop)
         super(WebSocketClientConnection, self).__init__(
             io_loop, None, request, lambda: None, self._on_http_response,
-            104857600, self.resolver)
+            104857600, self.resolver, 65536)
 
     def close(self, code=None, reason=None):
         """Closes the websocket connection.

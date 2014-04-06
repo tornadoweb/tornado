@@ -496,3 +496,32 @@ class ResolveTimeoutTestCase(AsyncHTTPTestCase):
     def test_resolve_timeout(self):
         response = self.fetch('/hello', connect_timeout=0.1)
         self.assertEqual(response.code, 599)
+
+
+class MaxHeaderSizeTest(AsyncHTTPTestCase):
+    def get_app(self):
+        class SmallHeaders(RequestHandler):
+            def get(self):
+                self.set_header("X-Filler", "a" * 100)
+                self.write("ok")
+
+        class LargeHeaders(RequestHandler):
+            def get(self):
+                self.set_header("X-Filler", "a" * 1000)
+                self.write("ok")
+
+        return Application([('/small', SmallHeaders),
+                            ('/large', LargeHeaders)])
+
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_header_size=1024)
+
+    def test_small_headers(self):
+        response = self.fetch('/small')
+        response.rethrow()
+        self.assertEqual(response.body, b'ok')
+
+    def test_large_headers(self):
+        with ExpectLog(gen_log, "Unsatisfiable read"):
+            response = self.fetch('/large')
+        self.assertEqual(response.code, 599)
