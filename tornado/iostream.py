@@ -67,6 +67,15 @@ class StreamClosedError(IOError):
     pass
 
 
+class UnsatisfiableReadError(Exception):
+    """Exception raised when a read cannot be satisfied.
+
+    Raised by ``read_until`` and ``read_until_regex`` with a ``max_bytes``
+    argument.
+    """
+    pass
+
+
 class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
 
@@ -92,6 +101,7 @@ class BaseIOStream(object):
         self._write_buffer_frozen = False
         self._read_delimiter = None
         self._read_regex = None
+        self._read_max_bytes = None
         self._read_bytes = None
         self._read_partial = False
         self._read_until_close = False
@@ -147,26 +157,48 @@ class BaseIOStream(object):
         """
         return None
 
-    def read_until_regex(self, regex, callback=None):
+    def read_until_regex(self, regex, callback=None, max_bytes=None):
         """Run ``callback`` when we read the given regex pattern.
 
         The callback will get the data read (including the data that
         matched the regex and anything that came before it) as an argument.
+
+        If ``max_bytes`` is not None, the connection will be closed
+        if more than ``max_bytes`` bytes have been read and the regex is
+        not satisfied.
         """
         future = self._set_read_callback(callback)
         self._read_regex = re.compile(regex)
-        self._try_inline_read()
+        self._read_max_bytes = max_bytes
+        try:
+            self._try_inline_read()
+        except UnsatisfiableReadError as e:
+            # Handle this the same way as in _handle_events.
+            gen_log.info("Unsatisfiable read, closing connection: %s" % e)
+            self.close(exc_info=True)
+            return future
         return future
 
-    def read_until(self, delimiter, callback=None):
+    def read_until(self, delimiter, callback=None, max_bytes=None):
         """Run ``callback`` when we read the given delimiter.
 
         The callback will get the data read (including the delimiter)
         as an argument.
+
+        If ``max_bytes`` is not None, the connection will be closed
+        if more than ``max_bytes`` bytes have been read and the delimiter
+        is not found.
         """
         future = self._set_read_callback(callback)
         self._read_delimiter = delimiter
-        self._try_inline_read()
+        self._read_max_bytes = max_bytes
+        try:
+            self._try_inline_read()
+        except UnsatisfiableReadError as e:
+            # Handle this the same way as in _handle_events.
+            gen_log.info("Unsatisfiable read, closing connection: %s" % e)
+            self.close(exc_info=True)
+            return future
         return future
 
     def read_bytes(self, num_bytes, callback=None, streaming_callback=None,
@@ -363,6 +395,9 @@ class BaseIOStream(object):
                     "shouldn't happen: _handle_events without self._state"
                 self._state = state
                 self.io_loop.update_handler(self.fileno(), self._state)
+        except UnsatisfiableReadError as e:
+            gen_log.info("Unsatisfiable read, closing connection: %s" % e)
+            self.close(exc_info=True)
         except Exception:
             gen_log.error("Uncaught exception, closing connection.",
                           exc_info=True)
@@ -554,6 +589,8 @@ class BaseIOStream(object):
                     loc = self._read_buffer[0].find(self._read_delimiter)
                     if loc != -1:
                         delimiter_len = len(self._read_delimiter)
+                        self._check_max_bytes(self._read_delimiter,
+                                              loc + delimiter_len)
                         self._read_delimiter = None
                         self._run_read_callback(
                             self._consume(loc + delimiter_len))
@@ -561,18 +598,30 @@ class BaseIOStream(object):
                     if len(self._read_buffer) == 1:
                         break
                     _double_prefix(self._read_buffer)
+                self._check_max_bytes(self._read_delimiter,
+                                      len(self._read_buffer[0]))
         elif self._read_regex is not None:
             if self._read_buffer:
                 while True:
                     m = self._read_regex.search(self._read_buffer[0])
                     if m is not None:
+                        self._check_max_bytes(self._read_regex, m.end())
                         self._read_regex = None
                         self._run_read_callback(self._consume(m.end()))
                         return True
                     if len(self._read_buffer) == 1:
                         break
                     _double_prefix(self._read_buffer)
+                self._check_max_bytes(self._read_regex,
+                                      len(self._read_buffer[0]))
         return False
+
+    def _check_max_bytes(self, delimiter, size):
+        if (self._read_max_bytes is not None and
+            size > self._read_max_bytes):
+            raise UnsatisfiableReadError(
+                "delimiter %r not found within %d bytes" % (
+                    delimiter, self._read_max_bytes))
 
     def _handle_write(self):
         while self._write_buffer:
