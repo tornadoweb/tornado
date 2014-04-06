@@ -85,10 +85,13 @@ class WSGIApplication(web.Application):
 
 
 class _WSGIConnection(object):
-    def __init__(self, start_response):
+    def __init__(self, method, start_response):
+        self.method = method
         self.start_response = start_response
         self._write_buffer = []
         self._finished = False
+        self._expected_content_remaining = None
+        self._error = None
 
     def set_close_callback(self, callback):
         # WSGI has no facility for detecting a closed connection mid-request,
@@ -96,6 +99,12 @@ class _WSGIConnection(object):
         pass
 
     def write_headers(self, start_line, headers, chunk=None, callback=None):
+        if self.method == 'HEAD':
+            self._expected_content_remaining = 0
+        elif 'Content-Length' in headers:
+            self._expected_content_remaining = int(headers['Content-Length'])
+        else:
+            self._expected_content_remaining = None
         self.start_response(
             '%s %s' % (start_line.code, start_line.reason),
             [(native_str(k), native_str(v)) for (k, v) in headers.get_all()])
@@ -105,11 +114,23 @@ class _WSGIConnection(object):
             callback()
 
     def write(self, chunk, callback=None):
+        if self._expected_content_remaining is not None:
+            self._expected_content_remaining -= len(chunk)
+            if self._expected_content_remaining < 0:
+                self._error = httputil.HTTPOutputException(
+                    "Tried to write more data than Content-Length")
+                raise self._error
         self._write_buffer.append(chunk)
         if callback is not None:
             callback()
 
     def finish(self):
+        if (self._expected_content_remaining is not None and
+            self._expected_content_remaining != 0):
+            self._error = httputil.HTTPOutputException(
+                "Tried to write %d bytes less than Content-Length" %
+                self._expected_content_remaining)
+            raise self._error
         self._finished = True
 
 
@@ -176,13 +197,15 @@ class WSGIAdapter(object):
             host = environ["HTTP_HOST"]
         else:
             host = environ["SERVER_NAME"]
-        connection = _WSGIConnection(start_response)
+        connection = _WSGIConnection(method, start_response)
         request = httputil.HTTPServerRequest(
             method, uri, "HTTP/1.1",
             headers=headers, body=body, remote_ip=remote_ip, protocol=protocol,
             host=host, connection=connection)
         request._parse_body()
         self.application(request)
+        if connection._error:
+            raise connection._error
         if not connection._finished:
             raise Exception("request did not finish synchronously")
         return connection._write_buffer

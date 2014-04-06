@@ -23,7 +23,7 @@ from tornado.escape import native_str, utf8
 from tornado import gen
 from tornado import httputil
 from tornado import iostream
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado import stack_context
 from tornado.util import GzipDecompressor
 
@@ -62,8 +62,9 @@ class HTTP1Connection(object):
         self._clear_request_state()
         self.stream.set_close_callback(self._on_connection_close)
         self._finish_future = None
-        self._version = None
+        self._request_start_line = None
         self._chunking = None
+        self._expected_content_remaining = None
         # True if we have read HTTP headers but have not yet read the
         # corresponding body.
         self._reading = False
@@ -91,6 +92,13 @@ class HTTP1Connection(object):
             except iostream.StreamClosedError:
                 self.close()
                 return
+            except Exception:
+                # TODO: this is probably too broad; it would be better to
+                # wrap all delegate calls in something that writes to app_log,
+                # and then errors that reach this point can be gen_log.
+                app_log.error("Uncaught exception", exc_info=True)
+                self.close()
+                return
             if not ret:
                 return
 
@@ -113,8 +121,8 @@ class HTTP1Connection(object):
             else:
                 start_line = httputil.parse_request_start_line(start_line)
             # It's kind of ugly to set this here, but we need it in
-            # write_header() so we know whether we can chunk the response.
-            self._version = start_line.version
+            # write_header().
+            self._request_start_line = start_line
 
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
@@ -150,7 +158,7 @@ class HTTP1Connection(object):
             yield self._finish_future
             if self.stream is None:
                 raise gen.Return(False)
-        except httputil.HTTPMessageException as e:
+        except httputil.HTTPInputException as e:
             gen_log.info("Malformed HTTP message from %r: %s",
                          self.address, e)
             self.close()
@@ -213,8 +221,10 @@ class HTTP1Connection(object):
         else:
             self._chunking = (
                 has_body and
-                # TODO: should this use self._version or start_line.version?
-                self._version == 'HTTP/1.1' and
+                # TODO: should this use
+                # self._request_start_line.version or
+                # start_line.version?
+                self._request_start_line.version == 'HTTP/1.1' and
                 # 304 responses have no body (not even a zero-length body), and so
                 # should not have either Content-Length or Transfer-Encoding.
                 # headers.
@@ -226,6 +236,14 @@ class HTTP1Connection(object):
                 'Transfer-Encoding' not in headers)
         if self._chunking:
             headers['Transfer-Encoding'] = 'chunked'
+        if (not self.is_client and
+            (self._request_start_line.method == 'HEAD' or
+             start_line.code == 304)):
+            self._expected_content_remaining = 0
+        elif 'Content-Length' in headers:
+            self._expected_content_remaining = int(headers['Content-Length'])
+        else:
+            self._expected_content_remaining = None
         lines = [utf8("%s %s %s" % start_line)]
         lines.extend([utf8(n) + b": " + utf8(v) for n, v in headers.get_all()])
         for line in lines:
@@ -239,6 +257,13 @@ class HTTP1Connection(object):
             self.stream.write(data, self._on_write_complete)
 
     def _format_chunk(self, chunk):
+        if self._expected_content_remaining is not None:
+            self._expected_content_remaining -= len(chunk)
+            if self._expected_content_remaining < 0:
+                # Close the stream now to stop further framing errors.
+                self.stream.close()
+                raise httputil.HTTPOutputException(
+                    "Tried to write more data than Content-Length")
         if self._chunking and chunk:
             # Don't write out empty chunks because that means END-OF-STREAM
             # with chunked encoding
@@ -255,6 +280,12 @@ class HTTP1Connection(object):
 
     def finish(self):
         """Finishes the request."""
+        if (self._expected_content_remaining is not None and
+            self._expected_content_remaining != 0):
+            self.stream.close()
+            raise httputil.HTTPOutputException(
+                "Tried to write %d bytes less than Content-Length" %
+                self._expected_content_remaining)
         if self._chunking:
             if not self.stream.closed():
                 self.stream.write(b"0\r\n\r\n", self._on_write_complete)
@@ -321,8 +352,8 @@ class HTTP1Connection(object):
             headers = httputil.HTTPHeaders.parse(data[eol:])
         except ValueError:
             # probably form split() if there was no ':' in the line
-            raise httputil.HTTPMessageException("Malformed HTTP headers: %r" %
-                                                data[eol:100])
+            raise httputil.HTTPInputException("Malformed HTTP headers: %r" %
+                                              data[eol:100])
         return start_line, headers
 
     def _read_body(self, headers):
@@ -330,7 +361,7 @@ class HTTP1Connection(object):
         if content_length:
             content_length = int(content_length)
             if content_length > self.stream.max_buffer_size:
-                raise httputil.HTTPMessageException("Content-Length too long")
+                raise httputil.HTTPInputException("Content-Length too long")
             return self._read_fixed_body(content_length)
         if headers.get("Transfer-Encoding") == "chunked":
             return self._read_chunked_body()

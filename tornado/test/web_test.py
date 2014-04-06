@@ -1937,3 +1937,55 @@ class StreamingRequestFlowControlTest(WebTestCase):
                          dict(methods=['prepare', 'data_received',
                                        'data_received', 'data_received',
                                        'post']))
+
+
+@wsgi_safe
+class IncorrectContentLengthTest(SimpleHandlerTestCase):
+    def get_handlers(self):
+        test = self
+        self.server_error = None
+
+        # Manually set a content-length that doesn't match the actual content.
+        class TooHigh(RequestHandler):
+            def get(self):
+                self.set_header("Content-Length", "42")
+                try:
+                    self.finish("ok")
+                except Exception as e:
+                    test.server_error = e
+                    raise
+
+        class TooLow(RequestHandler):
+            def get(self):
+                self.set_header("Content-Length", "2")
+                try:
+                    self.finish("hello")
+                except Exception as e:
+                    test.server_error = e
+
+        return [('/high', TooHigh),
+                ('/low', TooLow)]
+
+    def test_content_length_too_high(self):
+        # When the content-length is too high, the connection is simply
+        # closed without completing the response.  An error is logged on
+        # the server.
+        with ExpectLog(app_log, "Uncaught exception"):
+            with ExpectLog(gen_log,
+                           "Cannot send error response after headers written"):
+                response = self.fetch("/high")
+        self.assertEqual(response.code, 599)
+        self.assertEqual(str(self.server_error),
+                         "Tried to write 40 bytes less than Content-Length")
+
+    def test_content_length_too_low(self):
+        # When the content-length is too low, the connection is closed
+        # without writing the last chunk, so the client never sees the request
+        # complete (which would be a framing error).
+        with ExpectLog(app_log, "Uncaught exception"):
+            with ExpectLog(gen_log,
+                           "Cannot send error response after headers written"):
+                response = self.fetch("/low")
+        self.assertEqual(response.code, 599)
+        self.assertEqual(str(self.server_error),
+                         "Tried to write more data than Content-Length")
