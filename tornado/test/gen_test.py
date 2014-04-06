@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import contextlib
+import datetime
 import functools
 import sys
 import textwrap
@@ -8,7 +9,7 @@ import time
 import platform
 import weakref
 
-from tornado.concurrent import return_future
+from tornado.concurrent import return_future, Future
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
@@ -948,6 +949,41 @@ class GenWebTest(AsyncHTTPTestCase):
     def test_async_prepare_error_handler(self):
         response = self.fetch('/async_prepare_error')
         self.assertEqual(response.code, 403)
+
+
+class WithTimeoutTest(AsyncTestCase):
+    @gen_test
+    def test_timeout(self):
+        with self.assertRaises(gen.TimeoutError):
+            yield gen.with_timeout(datetime.timedelta(seconds=0.1),
+                                   Future())
+
+    @gen_test
+    def test_completes_before_timeout(self):
+        future = Future()
+        self.io_loop.add_timeout(datetime.timedelta(seconds=0.1),
+                                 lambda: future.set_result('asdf'))
+        result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
+                                         future)
+        self.assertEqual(result, 'asdf')
+
+    @gen_test
+    def test_fails_before_timeout(self):
+        future = Future()
+        self.io_loop.add_timeout(
+            datetime.timedelta(seconds=0.1),
+            lambda: future.set_exception(ZeroDivisionError))
+        with self.assertRaises(ZeroDivisionError):
+            yield gen.with_timeout(datetime.timedelta(seconds=3600), future)
+
+    @gen_test
+    def test_already_resolved(self):
+        future = Future()
+        future.set_result('asdf')
+        result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
+                                        future)
+        self.assertEqual(result, 'asdf')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -12,7 +12,7 @@ from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipOnTravis
 from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, asynchronous
 from contextlib import closing
@@ -844,3 +844,50 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
         with ExpectLog(gen_log, "Unsatisfiable read"):
             response = self.fetch("/", headers={'X-Filler': 'a' * 1000})
         self.assertEqual(response.code, 599)
+
+
+@skipOnTravis
+class IdleTimeoutTest(AsyncHTTPTestCase):
+    def get_app(self):
+        return Application([('/', HelloWorldRequestHandler)])
+
+    def get_httpserver_options(self):
+        return dict(idle_connection_timeout=0.1)
+
+    def setUp(self):
+        super(IdleTimeoutTest, self).setUp()
+        self.streams = []
+
+    def tearDown(self):
+        super(IdleTimeoutTest, self).tearDown()
+        for stream in self.streams:
+            stream.close()
+
+    def connect(self):
+        stream = IOStream(socket.socket())
+        stream.connect(('localhost', self.get_http_port()), self.stop)
+        self.wait()
+        self.streams.append(stream)
+        return stream
+
+    def test_unused_connection(self):
+        stream = self.connect()
+        stream.set_close_callback(self.stop)
+        self.wait()
+
+    def test_idle_after_use(self):
+        stream = self.connect()
+        stream.set_close_callback(lambda: self.stop("closed"))
+
+        # Use the connection twice to make sure keep-alives are working
+        for i in range(2):
+            stream.write(b"GET / HTTP/1.1\r\n\r\n")
+            stream.read_until(b"\r\n\r\n", self.stop)
+            self.wait()
+            stream.read_bytes(11, self.stop)
+            data = self.wait()
+            self.assertEqual(data, b"Hello world")
+
+        # Now let the timeout trigger and close the connection.
+        data = self.wait()
+        self.assertEqual(data, "closed")

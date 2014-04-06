@@ -16,6 +16,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import datetime
 import socket
 
 from tornado.concurrent import Future
@@ -36,7 +37,7 @@ class HTTP1Connection(object):
     """
     def __init__(self, stream, address, is_client,
                  no_keep_alive=False, protocol=None, chunk_size=None,
-                 max_header_size=None):
+                 max_header_size=None, header_timeout=None):
         self.is_client = is_client
         self.stream = stream
         self.address = address
@@ -60,6 +61,7 @@ class HTTP1Connection(object):
             self.protocol = "http"
         self._chunk_size = chunk_size or 65536
         self._max_header_size = max_header_size or 65536
+        self._header_timeout = header_timeout
         self._disconnect_on_finish = False
         self._clear_request_state()
         self.stream.set_close_callback(self._on_connection_close)
@@ -114,9 +116,20 @@ class HTTP1Connection(object):
         assert isinstance(delegate, httputil.HTTPMessageDelegate)
         self.message_delegate = delegate
         try:
-            header_data = yield self.stream.read_until_regex(
-                b"\r?\n\r?\n",
-                max_bytes=self._max_header_size)
+            header_future = self.stream.read_until_regex(
+                        b"\r?\n\r?\n",
+                        max_bytes=self._max_header_size)
+            if self._header_timeout is None:
+                header_data = yield header_future
+            else:
+                try:
+                    header_data = yield gen.with_timeout(
+                        datetime.timedelta(seconds=self._header_timeout),
+                        header_future,
+                        io_loop=self.stream.io_loop)
+                except gen.TimeoutError:
+                    self.close()
+                    raise gen.Return(False)
             self._reading = True
             self._finish_future = Future()
             start_line, headers = self._parse_headers(header_data)

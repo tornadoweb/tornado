@@ -136,7 +136,8 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
                  xheaders=False, ssl_options=None, protocol=None, gzip=False,
-                 chunk_size=None, max_header_size=None, **kwargs):
+                 chunk_size=None, max_header_size=None,
+                 idle_connection_timeout=None, **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
@@ -144,15 +145,18 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         self.gzip = gzip
         self.chunk_size = chunk_size
         self.max_header_size = max_header_size
+        self.idle_connection_timeout = idle_connection_timeout or 3600
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
     def handle_stream(self, stream, address):
-        conn = HTTP1Connection(stream, address=address, is_client=False,
-                               no_keep_alive=self.no_keep_alive,
-                               protocol=self.protocol,
-                               chunk_size=self.chunk_size,
-                               max_header_size=self.max_header_size)
+        conn = HTTP1Connection(
+            stream, address=address, is_client=False,
+            no_keep_alive=self.no_keep_alive,
+            protocol=self.protocol,
+            chunk_size=self.chunk_size,
+            max_header_size=self.max_header_size,
+            header_timeout=self.idle_connection_timeout)
         conn.start_serving(self, gzip=self.gzip)
 
     def start_request(self, connection):

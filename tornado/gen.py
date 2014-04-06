@@ -87,7 +87,7 @@ import itertools
 import sys
 import types
 
-from tornado.concurrent import Future, TracebackFuture, is_future
+from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
 from tornado import stack_context
 
@@ -110,6 +110,10 @@ class BadYieldError(Exception):
 
 class ReturnValueIgnoredError(Exception):
     pass
+
+
+class TimeoutError(Exception):
+    """Exception raised by ``with_timeout``."""
 
 
 def engine(func):
@@ -452,6 +456,34 @@ def maybe_future(x):
         fut = Future()
         fut.set_result(x)
         return fut
+
+
+def with_timeout(timeout, future, io_loop=None):
+    """Wraps a `.Future` in a timeout.
+
+    Raises `TimeoutError` if the input future does not complete before
+    ``timeout``, which may be specified in any form allowed by
+    `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
+    relative to `.IOLoop.time`)
+
+    Currently only supports Futures, not other `YieldPoint` classes.
+    """
+    # TODO: allow yield points in addition to futures?
+    # Tricky to do with stack_context semantics.
+    #
+    # It would be more efficient to cancel the input future on timeout instead
+    # of creating a new one, but we can't know if we are the only one waiting
+    # on the input future, so cancelling it might disrupt other callers.
+    result = Future()
+    chain_future(future, result)
+    if io_loop is None:
+        io_loop = IOLoop.current()
+    timeout_handle = io_loop.add_timeout(
+        timeout,
+        lambda: result.set_exception(TimeoutError("Timeout")))
+    io_loop.add_future(future,
+                        lambda future: io_loop.remove_timeout(timeout_handle))
+    return result
 
 
 _null_future = Future()
