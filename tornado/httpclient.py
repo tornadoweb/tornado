@@ -166,7 +166,7 @@ class AsyncHTTPClient(Configurable):
         kwargs: ``HTTPRequest(request, **kwargs)``
 
         This method returns a `.Future` whose result is an
-        `HTTPResponse`.  The ``Future`` wil raise an `HTTPError` if
+        `HTTPResponse`.  The ``Future`` will raise an `HTTPError` if
         the request returned a non-200 response code.
 
         If a ``callback`` is given, it will be invoked with the `HTTPResponse`.
