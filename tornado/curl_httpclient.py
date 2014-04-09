@@ -269,6 +269,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 request=info["request"], code=code, headers=info["headers"],
                 buffer=buffer, effective_url=effective_url, error=error,
                 request_time=time.time() - info["curl_start_time"],
+                start_time=info["curl_start_time"],
                 time_info=time_info))
         except Exception:
             self.handle_callback_exception(info["callback"])
