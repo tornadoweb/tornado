@@ -336,7 +336,7 @@ class BaseIOStream(object):
 
     def reading(self):
         """Returns true if we are currently reading from the stream."""
-        return self._read_callback is not None
+        return self._read_callback is not None or self._read_future is not None
 
     def writing(self):
         """Returns true if we are currently writing to the stream."""
@@ -438,30 +438,34 @@ class BaseIOStream(object):
             self._pending_callbacks += 1
             self.io_loop.add_callback(wrapper)
 
+    def _read_to_buffer_loop(self):
+        # This method is called from _handle_read and _try_inline_read.
+        try:
+            # Pretend to have a pending callback so that an EOF in
+            # _read_to_buffer doesn't trigger an immediate close
+            # callback.  At the end of this method we'll either
+            # estabilsh a real pending callback via
+            # _read_from_buffer or run the close callback.
+            #
+            # We need two try statements here so that
+            # pending_callbacks is decremented before the `except`
+            # clause below (which calls `close` and does need to
+            # trigger the callback)
+            self._pending_callbacks += 1
+            while not self.closed():
+                # Read from the socket until we get EWOULDBLOCK or equivalent.
+                # SSL sockets do some internal buffering, and if the data is
+                # sitting in the SSL object's buffer select() and friends
+                # can't see it; the only way to find out if it's there is to
+                # try to read it.
+                if self._read_to_buffer() == 0:
+                    break
+        finally:
+            self._pending_callbacks -= 1
+
     def _handle_read(self):
         try:
-            try:
-                # Pretend to have a pending callback so that an EOF in
-                # _read_to_buffer doesn't trigger an immediate close
-                # callback.  At the end of this method we'll either
-                # estabilsh a real pending callback via
-                # _read_from_buffer or run the close callback.
-                #
-                # We need two try statements here so that
-                # pending_callbacks is decremented before the `except`
-                # clause below (which calls `close` and does need to
-                # trigger the callback)
-                self._pending_callbacks += 1
-                while not self.closed():
-                    # Read from the socket until we get EWOULDBLOCK or equivalent.
-                    # SSL sockets do some internal buffering, and if the data is
-                    # sitting in the SSL object's buffer select() and friends
-                    # can't see it; the only way to find out if it's there is to
-                    # try to read it.
-                    if self._read_to_buffer() == 0:
-                        break
-            finally:
-                self._pending_callbacks -= 1
+            self._read_to_buffer_loop()
         except Exception:
             gen_log.warning("error on read", exc_info=True)
             self.close(exc_info=True)
@@ -507,14 +511,7 @@ class BaseIOStream(object):
             return
         self._check_closed()
         try:
-            try:
-                # See comments in _handle_read about incrementing _pending_callbacks
-                self._pending_callbacks += 1
-                while not self.closed():
-                    if self._read_to_buffer() == 0:
-                        break
-            finally:
-                self._pending_callbacks -= 1
+            self._read_to_buffer_loop()
         except Exception:
             # If there was an in _read_to_buffer, we called close() already,
             # but couldn't run the close callback because of _pending_callbacks.
