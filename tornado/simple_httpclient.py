@@ -372,7 +372,10 @@ class _HTTPConnection(object):
             message = "Connection closed"
             if self.stream.error:
                 message = str(self.stream.error)
-            raise HTTPError(599, message)
+                if isinstance(self.stream.error, HTTPError):
+                    raise HTTPError(599, message)
+                else:
+                    raise getattr(self.stream.error, "__class__")(message)
 
     def _handle_1xx(self, code):
         self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
