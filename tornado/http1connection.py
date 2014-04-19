@@ -298,7 +298,8 @@ class HTTP1Connection(object):
     def finish(self):
         """Finishes the request."""
         if (self._expected_content_remaining is not None and
-            self._expected_content_remaining != 0):
+            self._expected_content_remaining != 0 and
+            not self.stream.closed()):
             self.stream.close()
             raise httputil.HTTPOutputException(
                 "Tried to write %d bytes less than Content-Length" %

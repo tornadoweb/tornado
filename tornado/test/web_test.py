@@ -1962,6 +1962,7 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
                     self.finish("hello")
                 except Exception as e:
                     test.server_error = e
+                    raise
 
         return [('/high', TooHigh),
                 ('/low', TooLow)]
@@ -1989,3 +1990,19 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         self.assertEqual(response.code, 599)
         self.assertEqual(str(self.server_error),
                          "Tried to write more data than Content-Length")
+
+
+class ClientCloseTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            # Simulate a connection closed by the client during
+            # request processing.  The client will see an error, but the
+            # server should respond gracefully (without logging errors
+            # because we were unable to write out as many bytes as
+            # Content-Length said we would)
+            self.request.connection.stream.close()
+            self.write('hello')
+
+    def test_client_close(self):
+        response = self.fetch('/')
+        self.assertEqual(response.code, 599)
