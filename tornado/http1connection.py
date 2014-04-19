@@ -398,7 +398,7 @@ class HTTP1Connection(object):
     def _read_chunked_body(self):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
         while True:
-            chunk_len = yield self.stream.read_until(b"\r\n")
+            chunk_len = yield self.stream.read_until(b"\r\n", max_bytes=64)
             chunk_len = int(chunk_len.strip(), 16)
             if chunk_len == 0:
                 return
