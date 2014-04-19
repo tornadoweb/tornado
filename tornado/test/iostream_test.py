@@ -390,14 +390,18 @@ class TestIOStreamMixin(object):
         # Similar to test_delayed_close_callback, but read_until_close takes
         # a separate code path so test it separately.
         server, client = self.make_iostream_pair()
-        client.set_close_callback(self.stop)
         try:
             server.write(b"1234")
             server.close()
-            self.wait()
+            # Read one byte to make sure the client has received the data.
+            # It won't run the close callback as long as there is more buffered
+            # data that could satisfy a later read.
+            client.read_bytes(1, self.stop)
+            data = self.wait()
+            self.assertEqual(data, b"1")
             client.read_until_close(self.stop)
             data = self.wait()
-            self.assertEqual(data, b"1234")
+            self.assertEqual(data, b"234")
         finally:
             server.close()
             client.close()
@@ -407,17 +411,18 @@ class TestIOStreamMixin(object):
         # All data should go through the streaming callback,
         # and the final read callback just gets an empty string.
         server, client = self.make_iostream_pair()
-        client.set_close_callback(self.stop)
         try:
             server.write(b"1234")
             server.close()
-            self.wait()
+            client.read_bytes(1, self.stop)
+            data = self.wait()
+            self.assertEqual(data, b"1")
             streaming_data = []
             client.read_until_close(self.stop,
                                     streaming_callback=streaming_data.append)
             data = self.wait()
             self.assertEqual(b'', data)
-            self.assertEqual(b''.join(streaming_data), b"1234")
+            self.assertEqual(b''.join(streaming_data), b"234")
         finally:
             server.close()
             client.close()
@@ -674,6 +679,36 @@ class TestIOStreamMixin(object):
                 client.read_until_regex(b"def", self.stop, max_bytes=5)
                 data = self.wait()
             self.assertEqual(data, "closed")
+        finally:
+            server.close()
+            client.close()
+
+    def test_small_reads_from_large_buffer(self):
+        # 10KB buffer size, 100KB available to read.
+        # Read 1KB at a time and make sure that the buffer is not eagerly
+        # filled.
+        server, client = self.make_iostream_pair(max_buffer_size=10 * 1024)
+        try:
+            server.write(b"a" * 1024 * 100)
+            for i in range(100):
+                client.read_bytes(1024, self.stop)
+                data = self.wait()
+                self.assertEqual(data, b"a" * 1024)
+        finally:
+            server.close()
+            client.close()
+
+    def test_small_read_untils_from_large_buffer(self):
+        # 10KB buffer size, 100KB available to read.
+        # Read 1KB at a time and make sure that the buffer is not eagerly
+        # filled.
+        server, client = self.make_iostream_pair(max_buffer_size=10 * 1024)
+        try:
+            server.write((b"a" * 1023 + b"\n") * 100)
+            for i in range(100):
+                client.read_until(b"\n", self.stop, max_bytes=4096)
+                data = self.wait()
+                self.assertEqual(data, b"a" * 1023 + b"\n")
         finally:
             server.close()
             client.close()
