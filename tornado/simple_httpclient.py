@@ -333,12 +333,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                    (('?' + self.parsed.query) if self.parsed.query else ''))
         self.stream.set_nodelay(True)
         self.connection = HTTP1Connection(
-            self.stream, self._sockaddr, is_client=True,
-            params=HTTP1ConnectionParameters(
+            self.stream, self._sockaddr, True,
+            HTTP1ConnectionParameters(
                 no_keep_alive=True, protocol=self.parsed.scheme,
                 max_header_size=self.max_header_size,
-                use_gzip=self.request.use_gzip),
-            method=self.request.method)
+                use_gzip=self.request.use_gzip))
         start_line = httputil.RequestStartLine(self.request.method,
                                                req_path, 'HTTP/1.1')
         self.connection.write_headers(
