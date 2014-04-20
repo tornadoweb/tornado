@@ -42,7 +42,7 @@ def read_stream_body(stream, callback):
         def finish(self):
             callback(b''.join(chunks))
     conn = HTTP1Connection(stream, None, is_client=True)
-    conn.read_response(Delegate(), method='GET')
+    conn.read_response(Delegate())
 
 
 class HandlerBaseTestCase(AsyncHTTPTestCase):

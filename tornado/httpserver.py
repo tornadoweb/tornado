@@ -28,7 +28,7 @@ class except to start a server at the beginning of the process
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-from tornado.http1connection import HTTP1Connection
+from tornado.http1connection import HTTP1ServerConnection, HTTP1ConnectionParameters
 from tornado import httputil
 from tornado import netutil
 from tornado.tcpserver import TCPServer
@@ -140,28 +140,23 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
-        self.protocol = protocol
-        self.gzip = gzip
-        self.chunk_size = chunk_size
-        self.max_header_size = max_header_size
-        self.idle_connection_timeout = idle_connection_timeout or 3600
-        self.body_timeout = body_timeout
-        self.max_body_size = max_body_size
+        self.conn_params = HTTP1ConnectionParameters(
+            protocol=protocol,
+            use_gzip=gzip,
+            chunk_size=chunk_size,
+            max_header_size=max_header_size,
+            header_timeout=idle_connection_timeout or 3600,
+            max_body_size=max_body_size,
+            body_timeout=body_timeout)
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            max_buffer_size=max_buffer_size,
                            read_chunk_size=chunk_size)
 
     def handle_stream(self, stream, address):
-        conn = HTTP1Connection(
-            stream, address=address, is_client=False,
-            no_keep_alive=self.no_keep_alive,
-            protocol=self.protocol,
-            chunk_size=self.chunk_size,
-            max_header_size=self.max_header_size,
-            header_timeout=self.idle_connection_timeout,
-            max_body_size=self.max_body_size,
-            body_timeout=self.body_timeout)
-        conn.start_serving(self, gzip=self.gzip)
+        conn = HTTP1ServerConnection(
+            stream, address=address,
+            params=self.conn_params)
+        conn.start_serving(self)
 
     def start_request(self, connection):
         return _ServerRequestAdapter(self, connection)
