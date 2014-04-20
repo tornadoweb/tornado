@@ -124,7 +124,7 @@ class HTTP1Connection(object):
             else:
                 try:
                     header_data = yield gen.with_timeout(
-                        datetime.timedelta(seconds=self._header_timeout),
+                        self.stream.io_loop.time() + self._header_timeout,
                         header_future,
                         io_loop=self.stream.io_loop)
                 except gen.TimeoutError:

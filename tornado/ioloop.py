@@ -831,7 +831,11 @@ class _Timeout(object):
         if isinstance(deadline, numbers.Real):
             self.deadline = deadline
         elif isinstance(deadline, datetime.timedelta):
-            self.deadline = io_loop.time() + _Timeout.timedelta_to_seconds(deadline)
+            now = io_loop.time()
+            try:
+                self.deadline = now + deadline.total_seconds()
+            except AttributeError:  # py2.6
+                self.deadline = now + _Timeout.timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r" % deadline)
         self.callback = callback
