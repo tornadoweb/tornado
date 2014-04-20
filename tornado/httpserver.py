@@ -28,8 +28,6 @@ class except to start a server at the beginning of the process
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import socket
-
 from tornado.http1connection import HTTP1Connection
 from tornado import httputil
 from tornado import netutil
@@ -138,7 +136,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
                  xheaders=False, ssl_options=None, protocol=None, gzip=False,
                  chunk_size=None, max_header_size=None,
                  idle_connection_timeout=None, body_timeout=None,
-                 max_body_size=None, **kwargs):
+                 max_body_size=None, max_buffer_size=None):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
@@ -150,7 +148,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         self.body_timeout = body_timeout
         self.max_body_size = max_body_size
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
-                           **kwargs)
+                           max_buffer_size=max_buffer_size)
 
     def handle_stream(self, stream, address):
         conn = HTTP1Connection(

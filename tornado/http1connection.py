@@ -16,7 +16,6 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import datetime
 import socket
 
 from tornado.concurrent import Future
