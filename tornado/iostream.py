@@ -90,10 +90,13 @@ class BaseIOStream(object):
     `read_from_fd`, and optionally `get_fd_error`.
     """
     def __init__(self, io_loop=None, max_buffer_size=None,
-                 read_chunk_size=4096):
+                 read_chunk_size=None):
         self.io_loop = io_loop or ioloop.IOLoop.current()
         self.max_buffer_size = max_buffer_size or 104857600
-        self.read_chunk_size = read_chunk_size
+        # A chunk size that is too close to max_buffer_size can cause
+        # spurious failures.
+        self.read_chunk_size = min(read_chunk_size or 65536,
+                                   self.max_buffer_size//2)
         self.error = None
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
@@ -583,7 +586,7 @@ class BaseIOStream(object):
             return 0
         self._read_buffer.append(chunk)
         self._read_buffer_size += len(chunk)
-        if self._read_buffer_size >= self.max_buffer_size:
+        if self._read_buffer_size > self.max_buffer_size:
             gen_log.error("Reached maximum read buffer size")
             self.close()
             raise IOError("Reached maximum read buffer size")

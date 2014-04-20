@@ -148,7 +148,8 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         self.body_timeout = body_timeout
         self.max_body_size = max_body_size
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
-                           max_buffer_size=max_buffer_size)
+                           max_buffer_size=max_buffer_size,
+                           read_chunk_size=chunk_size)
 
     def handle_stream(self, stream, address):
         conn = HTTP1Connection(
