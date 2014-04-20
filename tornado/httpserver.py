@@ -28,8 +28,11 @@ class except to start a server at the beginning of the process
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import socket
+
 from tornado.http1connection import HTTP1ServerConnection, HTTP1ConnectionParameters
 from tornado import httputil
+from tornado import iostream
 from tornado import netutil
 from tornado.tcpserver import TCPServer
 
@@ -153,13 +156,73 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
                            read_chunk_size=chunk_size)
 
     def handle_stream(self, stream, address):
+        context = _HTTPRequestContext(stream, address,
+                                      self.conn_params.protocol)
         conn = HTTP1ServerConnection(
-            stream, address=address,
-            params=self.conn_params)
+            stream, self.conn_params, context)
         conn.start_serving(self)
 
     def start_request(self, connection):
         return _ServerRequestAdapter(self, connection)
+
+
+class _HTTPRequestContext(object):
+    def __init__(self, stream, address, protocol):
+        self.address = address
+        self.protocol = protocol
+        # Save the socket's address family now so we know how to
+        # interpret self.address even after the stream is closed
+        # and its socket attribute replaced with None.
+        if stream.socket is not None:
+            self.address_family = stream.socket.family
+        else:
+            self.address_family = None
+        # In HTTPServerRequest we want an IP, not a full socket address.
+        if (self.address_family in (socket.AF_INET, socket.AF_INET6) and
+            address is not None):
+            self.remote_ip = address[0]
+        else:
+            # Unix (or other) socket; fake the remote address.
+            self.remote_ip = '0.0.0.0'
+        if protocol:
+            self.protocol = protocol
+        elif isinstance(stream, iostream.SSLIOStream):
+            self.protocol = "https"
+        else:
+            self.protocol = "http"
+        self._orig_remote_ip = self.remote_ip
+        self._orig_protocol = self.protocol
+
+
+    def __str__(self):
+        if self.address_family in (socket.AF_INET, socket.AF_INET6):
+            return self.remote_ip
+        else:
+            return str(self.address)
+
+    def _apply_xheaders(self, headers):
+        """Rewrite the ``remote_ip`` and ``protocol`` fields."""
+        # Squid uses X-Forwarded-For, others use X-Real-Ip
+        ip = headers.get("X-Forwarded-For", self.remote_ip)
+        ip = ip.split(',')[-1].strip()
+        ip = headers.get("X-Real-Ip", ip)
+        if netutil.is_valid_ip(ip):
+            self.remote_ip = ip
+        # AWS uses X-Forwarded-Proto
+        proto_header = headers.get(
+            "X-Scheme", headers.get("X-Forwarded-Proto",
+                                    self.protocol))
+        if proto_header in ("http", "https"):
+            self.protocol = proto_header
+
+    def _unapply_xheaders(self):
+        """Undo changes from `_apply_xheaders`.
+
+        Xheaders are per-request so they should not leak to the next
+        request on the same connection.
+        """
+        self.remote_ip = self._orig_remote_ip
+        self.protocol = self._orig_protocol
 
 
 class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
@@ -178,39 +241,9 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
             self.delegate = None
             self._chunks = []
 
-    def _apply_xheaders(self, headers):
-        """Rewrite the connection.remote_ip and connection.protocol fields.
-
-        This is hacky, but the movement of logic between `HTTPServer`
-        and `.Application` leaves us without a clean place to do this.
-        """
-        self._orig_remote_ip = self.connection.remote_ip
-        self._orig_protocol = self.connection.protocol
-        # Squid uses X-Forwarded-For, others use X-Real-Ip
-        ip = headers.get("X-Forwarded-For", self.connection.remote_ip)
-        ip = ip.split(',')[-1].strip()
-        ip = headers.get("X-Real-Ip", ip)
-        if netutil.is_valid_ip(ip):
-            self.connection.remote_ip = ip
-        # AWS uses X-Forwarded-Proto
-        proto_header = headers.get(
-            "X-Scheme", headers.get("X-Forwarded-Proto",
-                                    self.connection.protocol))
-        if proto_header in ("http", "https"):
-            self.connection.protocol = proto_header
-
-    def _unapply_xheaders(self):
-        """Undo changes from `_apply_xheaders`.
-
-        Xheaders are per-request so they should not leak to the next
-        request on the same connection.
-        """
-        self.connection.remote_ip = self._orig_remote_ip
-        self.connection.protocol = self._orig_protocol
-
     def headers_received(self, start_line, headers):
         if self.server.xheaders:
-            self._apply_xheaders(headers)
+            self.connection.context._apply_xheaders(headers)
         if self.delegate is None:
             self.request = httputil.HTTPServerRequest(
                 connection=self.connection, start_line=start_line,
@@ -232,7 +265,7 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
         else:
             self.delegate.finish()
         if self.server.xheaders:
-            self._unapply_xheaders()
+            self.connection.context._unapply_xheaders()
 
 
 HTTPRequest = httputil.HTTPServerRequest

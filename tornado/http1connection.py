@@ -16,8 +16,6 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import socket
-
 from tornado.concurrent import Future
 from tornado.escape import native_str, utf8
 from tornado import gen
@@ -46,34 +44,14 @@ class HTTP1Connection(object):
     We parse HTTP headers and bodies, and execute the request callback
     until the HTTP conection is closed.
     """
-    def __init__(self, stream, address, is_client, params=None):
+    def __init__(self, stream, is_client, params=None, context=None):
         self.is_client = is_client
         self.stream = stream
-        self.address = address
         if params is None:
             params = HTTP1ConnectionParameters()
         self.params = params
+        self.context = context
         self.no_keep_alive = params.no_keep_alive
-        # Save the socket's address family now so we know how to
-        # interpret self.address even after the stream is closed
-        # and its socket attribute replaced with None.
-        if stream.socket is not None:
-            self.address_family = stream.socket.family
-        else:
-            self.address_family = None
-        # In HTTPServerRequest we want an IP, not a full socket address.
-        if (self.address_family in (socket.AF_INET, socket.AF_INET6) and
-            address is not None):
-            self.remote_ip = address[0]
-        else:
-            # Unix (or other) socket; fake the remote address.
-            self.remote_ip = '0.0.0.0'
-        if self.params.protocol:
-            self.protocol = self.params.protocol
-        elif isinstance(stream, iostream.SSLIOStream):
-            self.protocol = "https"
-        else:
-            self.protocol = "http"
         # The body limits can be altered by the delegate, so save them
         # here instead of just referencing self.params later.
         self._max_body_size = (self.params.max_body_size or
@@ -169,8 +147,8 @@ class HTTP1Connection(object):
                                 self.stream.io_loop.time() + self._body_timeout,
                                 body_future, self.stream.io_loop)
                         except gen.TimeoutError:
-                            gen_log.info("Timeout reading body from %r",
-                                         self.address)
+                            gen_log.info("Timeout reading body from %s",
+                                         self.context)
                             self.stream.close()
                             raise gen.Return(False)
             self._read_finished = True
@@ -182,8 +160,8 @@ class HTTP1Connection(object):
             if self.stream is None:
                 raise gen.Return(False)
         except httputil.HTTPInputException as e:
-            gen_log.info("Malformed HTTP message from %r: %s",
-                         self.address, e)
+            gen_log.info("Malformed HTTP message from %s: %s",
+                         self.context, e)
             self.close()
             raise gen.Return(False)
         finally:
@@ -481,12 +459,12 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
 
 
 class HTTP1ServerConnection(object):
-    def __init__(self, stream, address, params=None):
+    def __init__(self, stream, params=None, context=None):
         self.stream = stream
-        self.address = address
         if params is None:
             params = HTTP1ConnectionParameters()
         self.params = params
+        self.context = context
 
     def start_serving(self, delegate):
         assert isinstance(delegate, httputil.HTTPServerConnectionDelegate)
@@ -498,8 +476,8 @@ class HTTP1ServerConnection(object):
     @gen.coroutine
     def _server_request_loop(self, delegate):
         while True:
-            conn = HTTP1Connection(self.stream, self.address, False,
-                                   self.params)
+            conn = HTTP1Connection(self.stream, False,
+                                   self.params, self.context)
             request_delegate = delegate.start_request(conn)
             try:
                 ret = yield conn.read_response(request_delegate)

@@ -85,9 +85,10 @@ class WSGIApplication(web.Application):
 
 
 class _WSGIConnection(object):
-    def __init__(self, method, start_response):
+    def __init__(self, method, start_response, context):
         self.method = method
         self.start_response = start_response
+        self.context = context
         self._write_buffer = []
         self._finished = False
         self._expected_content_remaining = None
@@ -132,6 +133,15 @@ class _WSGIConnection(object):
                 self._expected_content_remaining)
             raise self._error
         self._finished = True
+
+
+class _WSGIRequestContext(object):
+    def __init__(self, remote_ip, protocol):
+        self.remote_ip = remote_ip
+        self.protocol = protocol
+
+    def __str__(self):
+        return self.remote_ip
 
 
 class WSGIAdapter(object):
@@ -197,10 +207,10 @@ class WSGIAdapter(object):
             host = environ["HTTP_HOST"]
         else:
             host = environ["SERVER_NAME"]
-        connection = _WSGIConnection(method, start_response)
+        connection = _WSGIConnection(method, start_response,
+                                     _WSGIRequestContext(remote_ip, protocol))
         request = httputil.HTTPServerRequest(
-            method, uri, "HTTP/1.1",
-            headers=headers, body=body, remote_ip=remote_ip, protocol=protocol,
+            method, uri, "HTTP/1.1", headers=headers, body=body,
             host=host, connection=connection)
         request._parse_body()
         self.application(request)
