@@ -137,7 +137,8 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
                  xheaders=False, ssl_options=None, protocol=None, gzip=False,
                  chunk_size=None, max_header_size=None,
-                 idle_connection_timeout=None, **kwargs):
+                 idle_connection_timeout=None, body_timeout=None,
+                 max_body_size=None, **kwargs):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
@@ -146,6 +147,8 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         self.chunk_size = chunk_size
         self.max_header_size = max_header_size
         self.idle_connection_timeout = idle_connection_timeout or 3600
+        self.body_timeout = body_timeout
+        self.max_body_size = max_body_size
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            **kwargs)
 
@@ -156,7 +159,9 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
             protocol=self.protocol,
             chunk_size=self.chunk_size,
             max_header_size=self.max_header_size,
-            header_timeout=self.idle_connection_timeout)
+            header_timeout=self.idle_connection_timeout,
+            max_body_size=self.max_body_size,
+            body_timeout=self.body_timeout)
         conn.start_serving(self, gzip=self.gzip)
 
     def start_request(self, connection):

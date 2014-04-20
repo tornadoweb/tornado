@@ -37,7 +37,8 @@ class HTTP1Connection(object):
     """
     def __init__(self, stream, address, is_client,
                  no_keep_alive=False, protocol=None, chunk_size=None,
-                 max_header_size=None, header_timeout=None):
+                 max_header_size=None, header_timeout=None,
+                 max_body_size=None, body_timeout=None):
         self.is_client = is_client
         self.stream = stream
         self.address = address
@@ -62,6 +63,9 @@ class HTTP1Connection(object):
         self._chunk_size = chunk_size or 65536
         self._max_header_size = max_header_size or 65536
         self._header_timeout = header_timeout
+        self._default_max_body_size = (max_body_size or
+                                       self.stream.max_buffer_size)
+        self._default_body_timeout = body_timeout
         self._disconnect_on_finish = False
         self._clear_request_state()
         self.stream.set_close_callback(self._on_connection_close)
@@ -115,6 +119,8 @@ class HTTP1Connection(object):
     def _read_message(self, delegate, method=None):
         assert isinstance(delegate, httputil.HTTPMessageDelegate)
         self.message_delegate = delegate
+        self._max_body_size = self._default_max_body_size
+        self._body_timeout = self._default_body_timeout
         try:
             header_future = self.stream.read_until_regex(
                         b"\r?\n\r?\n",
@@ -169,7 +175,18 @@ class HTTP1Connection(object):
             if not skip_body:
                 body_future = self._read_body(headers)
                 if body_future is not None:
-                    yield body_future
+                    if self._body_timeout is None:
+                        yield body_future
+                    else:
+                        try:
+                            yield gen.with_timeout(
+                                self.stream.io_loop.time() + self._body_timeout,
+                                body_future, self.stream.io_loop)
+                        except gen.TimeoutError:
+                            gen_log.info("Timeout reading body from %r",
+                                         self.address)
+                            self.stream.close()
+                            raise gen.Return(False)
             self._reading = False
             self.message_delegate.finish()
             yield self._finish_future
@@ -225,6 +242,12 @@ class HTTP1Connection(object):
         stream = self.stream
         self.stream = None
         return stream
+
+    def set_body_timeout(self, timeout):
+        self._body_timeout = timeout
+
+    def set_max_body_size(self, max_body_size):
+        self._max_body_size = max_body_size
 
     def write_headers(self, start_line, headers, chunk=None, callback=None,
                       has_body=True):
@@ -378,7 +401,7 @@ class HTTP1Connection(object):
         content_length = headers.get("Content-Length")
         if content_length:
             content_length = int(content_length)
-            if content_length > self.stream.max_buffer_size:
+            if content_length > self._max_body_size:
                 raise httputil.HTTPInputException("Content-Length too long")
             return self._read_fixed_body(content_length)
         if headers.get("Transfer-Encoding") == "chunked":
@@ -398,11 +421,15 @@ class HTTP1Connection(object):
     @gen.coroutine
     def _read_chunked_body(self):
         # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
+        total_size = 0
         while True:
             chunk_len = yield self.stream.read_until(b"\r\n", max_bytes=64)
             chunk_len = int(chunk_len.strip(), 16)
             if chunk_len == 0:
                 return
+            total_size += chunk_len
+            if total_size > self._max_body_size:
+                raise httputil.HTTPInputException("chunked body too large")
             bytes_to_read = chunk_len
             while bytes_to_read:
                 chunk = yield self.stream.read_bytes(

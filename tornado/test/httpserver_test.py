@@ -4,6 +4,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from tornado import netutil
 from tornado.escape import json_decode, json_encode, utf8, _unicode, recursive_unicode, native_str
+from tornado import gen
 from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
@@ -11,10 +12,10 @@ from tornado.iostream import IOStream
 from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipOnTravis
 from tornado.util import u, bytes_type
-from tornado.web import Application, RequestHandler, asynchronous
+from tornado.web import Application, RequestHandler, asynchronous, stream_request_body
 from contextlib import closing
 import datetime
 import gzip
@@ -891,3 +892,114 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
         # Now let the timeout trigger and close the connection.
         data = self.wait()
         self.assertEqual(data, "closed")
+
+
+class BodyLimitsTest(AsyncHTTPTestCase):
+    def get_app(self):
+        class BufferedHandler(RequestHandler):
+            def put(self):
+                self.write(str(len(self.request.body)))
+
+        @stream_request_body
+        class StreamingHandler(RequestHandler):
+            def initialize(self):
+                self.bytes_read = 0
+
+            def prepare(self):
+                if 'expected_size' in self.request.arguments:
+                    self.request.connection.set_max_body_size(
+                        int(self.get_argument('expected_size')))
+                if 'body_timeout' in self.request.arguments:
+                    self.request.connection.set_body_timeout(
+                        float(self.get_argument('body_timeout')))
+
+            def data_received(self, data):
+                self.bytes_read += len(data)
+
+            def put(self):
+                self.write(str(self.bytes_read))
+
+        return Application([('/buffered', BufferedHandler),
+                            ('/streaming', StreamingHandler)])
+
+    def get_httpserver_options(self):
+        return dict(body_timeout=3600, max_body_size=4096)
+
+    def get_http_client(self):
+        # body_producer doesn't work on curl_httpclient, so override the
+        # configured AsyncHTTPClient implementation.
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+
+    def test_small_body(self):
+        response = self.fetch('/buffered', method='PUT', body=b'a'*4096)
+        self.assertEqual(response.body, b'4096')
+        response = self.fetch('/streaming', method='PUT', body=b'a'*4096)
+        self.assertEqual(response.body, b'4096')
+
+    def test_large_body_buffered(self):
+        with ExpectLog(gen_log, '.*Content-Length too long'):
+            response = self.fetch('/buffered', method='PUT', body=b'a'*10240)
+        self.assertEqual(response.code, 599)
+
+    def test_large_body_buffered_chunked(self):
+        with ExpectLog(gen_log, '.*chunked body too large'):
+            response = self.fetch('/buffered', method='PUT',
+                                  body_producer=lambda write: write(b'a'*10240))
+        self.assertEqual(response.code, 599)
+
+    def test_large_body_streaming(self):
+        with ExpectLog(gen_log, '.*Content-Length too long'):
+            response = self.fetch('/streaming', method='PUT', body=b'a'*10240)
+        self.assertEqual(response.code, 599)
+
+    def test_large_body_streaming_chunked(self):
+        with ExpectLog(gen_log, '.*chunked body too large'):
+            response = self.fetch('/streaming', method='PUT',
+                                  body_producer=lambda write: write(b'a'*10240))
+        self.assertEqual(response.code, 599)
+
+    def test_large_body_streaming_override(self):
+        response = self.fetch('/streaming?expected_size=10240', method='PUT',
+                              body=b'a'*10240)
+        self.assertEqual(response.body, b'10240')
+
+    def test_large_body_streaming_chunked_override(self):
+        response = self.fetch('/streaming?expected_size=10240', method='PUT',
+                              body_producer=lambda write: write(b'a'*10240))
+        self.assertEqual(response.body, b'10240')
+
+    @gen_test
+    def test_timeout(self):
+        stream = IOStream(socket.socket())
+        try:
+            yield stream.connect(('127.0.0.1', self.get_http_port()))
+            # Use a raw stream because AsyncHTTPClient won't let us read a
+            # response without finishing a body.
+            stream.write(b'PUT /streaming?body_timeout=0.1 HTTP/1.0\r\n'
+                         b'Content-Length: 42\r\n\r\n')
+            with ExpectLog(gen_log, 'Timeout reading body'):
+                response = yield stream.read_until_close()
+            self.assertEqual(response, b'')
+        finally:
+            stream.close()
+
+    @gen_test
+    def test_body_size_override_reset(self):
+        # The max_body_size override is reset between requests.
+        stream = IOStream(socket.socket())
+        try:
+            yield stream.connect(('127.0.0.1', self.get_http_port()))
+            # Use a raw stream so we can make sure it's all on one connection.
+            stream.write(b'PUT /streaming?expected_size=10240 HTTP/1.1\r\n'
+                         b'Content-Length: 10240\r\n\r\n')
+            stream.write(b'a'*10240)
+            response = yield gen.Task(read_stream_body, stream)
+            self.assertEqual(response, b'10240')
+            # Without the ?expected_size parameter, we get the old default value
+            stream.write(b'PUT /streaming HTTP/1.1\r\n'
+                         b'Content-Length: 10240\r\n\r\n')
+            with ExpectLog(gen_log, '.*Content-Length too long'):
+                data = yield stream.read_until_close()
+            self.assertEqual(data, b'')
+        finally:
+            stream.close()
