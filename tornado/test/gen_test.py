@@ -21,6 +21,10 @@ from tornado.web import Application, RequestHandler, asynchronous, HTTPError
 
 from tornado import gen
 
+try:
+    from concurrent import futures
+except ImportError:
+    futures = None
 
 skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 not available')
 skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
@@ -983,6 +987,21 @@ class WithTimeoutTest(AsyncTestCase):
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
                                         future)
         self.assertEqual(result, 'asdf')
+
+    @unittest.skipIf(futures is None, 'futures module not present')
+    @gen_test
+    def test_timeout_concurrent_future(self):
+        with futures.ThreadPoolExecutor(1) as executor:
+            with self.assertRaises(gen.TimeoutError):
+                yield gen.with_timeout(self.io_loop.time(),
+                                       executor.submit(time.sleep, 0.1))
+
+    @unittest.skipIf(futures is None, 'futures module not present')
+    @gen_test
+    def test_completed_concurrent_future(self):
+        with futures.ThreadPoolExecutor(1) as executor:
+            yield gen.with_timeout(datetime.timedelta(seconds=3600),
+                                   executor.submit(lambda: None))
 
 
 if __name__ == '__main__':

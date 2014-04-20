@@ -471,9 +471,11 @@ def with_timeout(timeout, future, io_loop=None):
     # TODO: allow yield points in addition to futures?
     # Tricky to do with stack_context semantics.
     #
-    # It would be more efficient to cancel the input future on timeout instead
-    # of creating a new one, but we can't know if we are the only one waiting
-    # on the input future, so cancelling it might disrupt other callers.
+    # It's tempting to optimize this by cancelling the input future on timeout
+    # instead of creating a new one, but A) we can't know if we are the only
+    # one waiting on the input future, so cancelling it might disrupt other
+    # callers and B) concurrent futures can only be cancelled while they are
+    # in the queue, so cancellation cannot reliably bound our waiting time.
     result = Future()
     chain_future(future, result)
     if io_loop is None:
@@ -481,8 +483,17 @@ def with_timeout(timeout, future, io_loop=None):
     timeout_handle = io_loop.add_timeout(
         timeout,
         lambda: result.set_exception(TimeoutError("Timeout")))
-    io_loop.add_future(future,
-                        lambda future: io_loop.remove_timeout(timeout_handle))
+    if isinstance(future, Future):
+        # We know this future will resolve on the IOLoop, so we don't
+        # need the extra thread-safety of IOLoop.add_future (and we also
+        # don't care about StackContext here.
+        future.add_done_callback(
+            lambda future: io_loop.remove_timeout(timeout_handle))
+    else:
+        # concurrent.futures.Futures may resolve on any thread, so we
+        # need to route them back to the IOLoop.
+        io_loop.add_future(
+            future, lambda future: io_loop.remove_timeout(timeout_handle))
     return result
 
 
