@@ -592,6 +592,8 @@ class PollIOLoop(IOLoop):
                 self.close_fd(fd)
         self._waker.close()
         self._impl.close()
+        self._callbacks = None
+        self._timeouts = None
 
     def add_handler(self, fd, handler, events):
         fd, obj = self.split_fd(fd)
