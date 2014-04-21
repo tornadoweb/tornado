@@ -244,12 +244,6 @@ class RequestHandler(object):
             "Date": httputil.format_timestamp(time.time()),
         })
         self.set_default_headers()
-        if (not self.request.supports_http_1_1() and
-            getattr(self.request, 'connection', None) and
-                not self.request.connection.no_keep_alive):
-            conn_header = self.request.headers.get("Connection")
-            if conn_header and (conn_header.lower() == "keep-alive"):
-                self._headers["Connection"] = "Keep-Alive"
         self._write_buffer = []
         self._status_code = 200
         self._reason = httputil.responses[200]
@@ -2380,8 +2374,7 @@ class GZipContentEncoding(OutputTransform):
     MIN_LENGTH = 5
 
     def __init__(self, request):
-        self._gzipping = request.supports_http_1_1() and \
-            "gzip" in request.headers.get("Accept-Encoding", "")
+        self._gzipping = "gzip" in request.headers.get("Accept-Encoding", "")
 
     def _compressible_type(self, ctype):
         return ctype.startswith('text/') or ctype in self.CONTENT_TYPES

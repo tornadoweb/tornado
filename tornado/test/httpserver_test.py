@@ -33,14 +33,18 @@ except ImportError:
 
 
 def read_stream_body(stream, callback):
-    """Reads an HTTP response from `stream` and runs callback with its body."""
+    """Reads an HTTP response from `stream` and runs callback with its
+    headers and body."""
     chunks = []
     class Delegate(HTTPMessageDelegate):
+        def headers_received(self, start_line, headers):
+            self.headers = headers
+
         def data_received(self, chunk):
             chunks.append(chunk)
 
         def finish(self):
-            callback(b''.join(chunks))
+            callback((self.headers, b''.join(chunks)))
     conn = HTTP1Connection(stream, True)
     conn.read_response(Delegate())
 
@@ -202,7 +206,8 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                              [utf8("Content-Length: %d\r\n" % len(body))]) +
                 b"\r\n" + body)
             read_stream_body(stream, self.stop)
-            return self.wait()
+            headers, body = self.wait()
+            return body
 
     def test_multipart_form(self):
         # Encodings here are tricky:  Headers are latin1, bodies can be
@@ -415,7 +420,7 @@ bar
 
 """.replace(b"\n", b"\r\n"))
         read_stream_body(self.stream, self.stop)
-        response = self.wait()
+        headers, response = self.wait()
         self.assertEqual(json_decode(response), {u('foo'): [u('bar')]})
 
 
@@ -631,8 +636,8 @@ class KeepAliveTest(AsyncHTTPTestCase):
         return headers
 
     def read_response(self):
-        headers = self.read_headers()
-        self.stream.read_bytes(int(headers['Content-Length']), self.stop)
+        self.headers = self.read_headers()
+        self.stream.read_bytes(int(self.headers['Content-Length']), self.stop)
         body = self.wait()
         self.assertEqual(b'Hello world', body)
 
@@ -666,6 +671,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.stream.read_until_close(callback=self.stop)
         data = self.wait()
         self.assertTrue(not data)
+        self.assertTrue('Connection' not in self.headers)
         self.close()
 
     def test_http10_keepalive(self):
@@ -673,8 +679,10 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.connect()
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
         self.read_response()
+        self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
         self.read_response()
+        self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.close()
 
     def test_pipelined_requests(self):
@@ -993,7 +1001,7 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             stream.write(b'PUT /streaming?expected_size=10240 HTTP/1.1\r\n'
                          b'Content-Length: 10240\r\n\r\n')
             stream.write(b'a'*10240)
-            response = yield gen.Task(read_stream_body, stream)
+            headers, response = yield gen.Task(read_stream_body, stream)
             self.assertEqual(response, b'10240')
             # Without the ?expected_size parameter, we get the old default value
             stream.write(b'PUT /streaming HTTP/1.1\r\n'

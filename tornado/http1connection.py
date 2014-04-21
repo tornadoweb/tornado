@@ -77,6 +77,7 @@ class HTTP1Connection(object):
         # have content-length but no bodies)
         self._request_start_line = None
         self._response_start_line = None
+        self._request_headers = None
         # True if we are writing output with chunked encoding.
         self._chunking_output = None
         # While reading a body with a content-length, this is the
@@ -112,6 +113,7 @@ class HTTP1Connection(object):
             else:
                 start_line = httputil.parse_request_start_line(start_line)
                 self._request_start_line = start_line
+                self._request_headers = headers
 
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
@@ -238,6 +240,11 @@ class HTTP1Connection(object):
                 # Applications are discouraged from touching Transfer-Encoding,
                 # but if they do, leave it alone.
                 'Transfer-Encoding' not in headers)
+            # If a 1.0 client asked for keep-alive, add the header.
+            if (self._request_start_line.version == 'HTTP/1.0' and
+                (self._request_headers.get('Connection', '').lower()
+                 == 'keep-alive')):
+                headers['Connection'] = 'Keep-Alive'
         if self._chunking_output:
             headers['Transfer-Encoding'] = 'chunked'
         if (not self.is_client and
