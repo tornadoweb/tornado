@@ -790,14 +790,18 @@ class RequestHandler(object):
             start_line = httputil.ResponseStartLine(self.request.version,
                                                     self._status_code,
                                                     self._reason)
-            self.request.connection.write_headers(start_line, self._headers,
-                                                  chunk, callback=callback)
+            return self.request.connection.write_headers(
+                start_line, self._headers, chunk, callback=callback)
         else:
             for transform in self._transforms:
                 chunk = transform.transform_chunk(chunk, include_footers)
             # Ignore the chunk and only write the headers for HEAD requests
             if self.request.method != "HEAD":
-                self.request.connection.write(chunk, callback=callback)
+                return self.request.connection.write(chunk, callback=callback)
+            else:
+                future = Future()
+                future.set_result(None)
+                return future
 
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""

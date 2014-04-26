@@ -469,12 +469,13 @@ class EmptyFlushCallbackHandler(RequestHandler):
     @asynchronous
     def get(self):
         # Ensure that the flush callback is run whether or not there
-        # was any output.
+        # was any output.  The gen.Task and direct yield forms are
+        # equivalent.
         yield gen.Task(self.flush)  # "empty" flush, but writes headers
         yield gen.Task(self.flush)  # empty flush
         self.write("o")
-        yield gen.Task(self.flush)  # flushes the "o"
-        yield gen.Task(self.flush)  # empty flush
+        yield self.flush()  # flushes the "o"
+        yield self.flush()  # empty flush
         self.finish("k")
 
 

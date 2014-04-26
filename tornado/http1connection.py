@@ -184,6 +184,7 @@ class HTTP1Connection(object):
         quickly in CPython by breaking up reference cycles.
         """
         self._write_callback = None
+        self._write_future = None
         self._close_callback = None
 
     def set_close_callback(self, callback):
@@ -267,12 +268,19 @@ class HTTP1Connection(object):
         for line in lines:
             if b'\n' in line:
                 raise ValueError('Newline in header: ' + repr(line))
-        if not self.stream.closed():
-            self._write_callback = stack_context.wrap(callback)
+        if self.stream.closed():
+            self._write_future = Future()
+            self._write_future.set_exception(iostream.StreamClosedError())
+        else:
+            if callback is not None:
+                self._write_callback = stack_context.wrap(callback)
+            else:
+                self._write_future = Future()
             data = b"\r\n".join(lines) + b"\r\n\r\n"
             if chunk:
                 data += self._format_chunk(chunk)
             self.stream.write(data, self._on_write_complete)
+        return self._write_future
 
     def _format_chunk(self, chunk):
         if self._expected_content_remaining is not None:
@@ -291,10 +299,17 @@ class HTTP1Connection(object):
 
     def write(self, chunk, callback=None):
         """Writes a chunk of output to the stream."""
-        if not self.stream.closed():
-            self._write_callback = stack_context.wrap(callback)
+        if self.stream.closed():
+            self._write_future = Future()
+            self._write_future.set_exception(iostream.StreamClosedError())
+        else:
+            if callback is not None:
+                self._write_callback = stack_context.wrap(callback)
+            else:
+                self._write_future = Future()
             self.stream.write(self._format_chunk(chunk),
                               self._on_write_complete)
+        return self._write_future
 
     def finish(self):
         """Finishes the request."""
@@ -327,6 +342,10 @@ class HTTP1Connection(object):
             callback = self._write_callback
             self._write_callback = None
             callback()
+        if self._write_future is not None:
+            future = self._write_future
+            self._write_future = None
+            future.set_result(None)
         # _on_write_complete is enqueued on the IOLoop whenever the
         # IOStream's write buffer becomes empty, but it's possible for
         # another callback that runs on the IOLoop before it to

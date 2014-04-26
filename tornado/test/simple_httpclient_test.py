@@ -352,11 +352,9 @@ class SimpleHTTPClientTestMixin(object):
 
     @gen.coroutine
     def async_body_producer(self, write):
-        # TODO: write should return a Future.
-        # wrap it in simple_httpclient or change http1connection?
-        yield gen.Task(write, b'1234')
+        yield write(b'1234')
         yield gen.Task(IOLoop.current().add_callback)
-        yield gen.Task(write, b'5678')
+        yield write(b'5678')
 
     def test_sync_body_producer_chunked(self):
         response = self.fetch("/echo_post", method="POST",
