@@ -1834,6 +1834,7 @@ class StreamingRequestBodyTest(WebTestCase):
                 self.test = test
 
             def on_connection_close(self):
+                super(CloseDetectionHandler, self).on_connection_close()
                 self.test.close_future.set_result(None)
 
         return [('/stream_body', StreamingBodyHandler, dict(test=self)),
