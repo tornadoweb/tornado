@@ -259,7 +259,8 @@ class HTTPRequest(object):
                  proxy_password=None, allow_nonstandard_methods=None,
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
-                 client_key=None, client_cert=None, body_producer=None):
+                 client_key=None, client_cert=None, body_producer=None,
+                 expect_100_continue=False):
         r"""All parameters except ``url`` are optional.
 
         :arg string url: URL to fetch
@@ -328,6 +329,11 @@ class HTTPRequest(object):
            note below when used with ``curl_httpclient``.
         :arg string client_cert: Filename for client SSL certificate, if any.
            See note below when used with ``curl_httpclient``.
+        :arg bool expect_100_continue: If true, send the
+           ``Expect: 100-continue`` header and wait for a continue response
+           before sending the request body.  Only supported with
+           simple_httpclient.
+
 
         .. note::
 
@@ -377,6 +383,7 @@ class HTTPRequest(object):
         self.allow_ipv6 = allow_ipv6
         self.client_key = client_key
         self.client_cert = client_cert
+        self.expect_100_continue = expect_100_continue
         self.start_time = time.time()
 
     @property

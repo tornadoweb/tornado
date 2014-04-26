@@ -319,6 +319,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     raise AssertionError(
                         'Body must be empty for "%s" request'
                         % self.request.method)
+        if self.request.expect_100_continue:
+            self.request.headers["Expect"] = "100-continue"
         if self.request.body is not None:
             # When body_producer is used the caller is responsible for
             # setting Content-Length (or else chunked encoding will be used).
@@ -345,6 +347,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             start_line, self.request.headers,
             has_body=(self.request.body is not None or
                       self.request.body_producer is not None))
+        if self.request.expect_100_continue:
+            self._read_response()
+        else:
+            self._write_body(True)
+
+    def _write_body(self, start_read):
         if self.request.body is not None:
             self.connection.write(self.request.body)
             self.connection.finish()
@@ -354,11 +362,14 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 def on_body_written(fut):
                     fut.result()
                     self.connection.finish()
-                    self._read_response()
+                    if start_read:
+                        self._read_response()
                 self.io_loop.add_future(fut, on_body_written)
                 return
             self.connection.finish()
-        self._read_response()
+        if start_read:
+            self._read_response()
+
 
     def _read_response(self):
         # Ensure that any exception raised in read_response ends up in our
@@ -410,6 +421,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             raise HTTPError(599, message)
 
     def headers_received(self, first_line, headers):
+        if self.request.expect_100_continue and first_line.code == 100:
+            self._write_body(False)
+            return
         self.headers = headers
         self.code = first_line.code
         self.reason = first_line.reason

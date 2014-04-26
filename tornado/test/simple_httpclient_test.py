@@ -21,7 +21,7 @@ from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWo
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipOnTravis
-from tornado.web import RequestHandler, Application, asynchronous, url
+from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
 class SimpleHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
@@ -113,6 +113,13 @@ class EchoPostHandler(RequestHandler):
         self.write(self.request.body)
 
 
+@stream_request_body
+class RespondInPrepareHandler(RequestHandler):
+    def prepare(self):
+        self.set_status(403)
+        self.finish("forbidden")
+
+
 class SimpleHTTPClientTestMixin(object):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -133,6 +140,7 @@ class SimpleHTTPClientTestMixin(object):
             url("/host_echo", HostEchoHandler),
             url("/no_content_length", NoContentLengthHandler),
             url("/echo_post", EchoPostHandler),
+            url("/respond_in_prepare", RespondInPrepareHandler),
         ], gzip=True)
 
     def test_singleton(self):
@@ -375,6 +383,20 @@ class SimpleHTTPClientTestMixin(object):
                               headers={'Content-Length': '8'})
         response.rethrow()
         self.assertEqual(response.body, b"12345678")
+
+    def test_100_continue(self):
+        response = self.fetch("/echo_post", method="POST",
+                              body=b"1234",
+                              expect_100_continue=True)
+        self.assertEqual(response.body, b"1234")
+
+    def test_100_continue_early_response(self):
+        def body_producer(write):
+            raise Exception("should not be called")
+        response = self.fetch("/respond_in_prepare", method="POST",
+                              body_producer=body_producer,
+                              expect_100_continue=True)
+        self.assertEqual(response.code, 403)
 
 
 class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):

@@ -139,7 +139,8 @@ class HTTP1Connection(object):
                     # in the case of a 100-continue.  Document or change?
                     yield self._read_message(delegate)
             else:
-                if headers.get("Expect") == "100-continue":
+                if (headers.get("Expect") == "100-continue" and
+                    not self._write_finished):
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
             if not skip_body:
                 body_future = self._read_body(headers, delegate)
