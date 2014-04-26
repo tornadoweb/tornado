@@ -91,6 +91,7 @@ class HTTP1Connection(object):
 
     @gen.coroutine
     def _read_message(self, delegate):
+        need_delegate_close = False
         try:
             header_future = self.stream.read_until_regex(
                         b"\r?\n\r?\n",
@@ -117,11 +118,13 @@ class HTTP1Connection(object):
 
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
+            need_delegate_close = True
             header_future = delegate.headers_received(start_line, headers)
             if header_future is not None:
                 yield header_future
             if self.stream is None:
                 # We've been detached.
+                need_delegate_close = False
                 raise gen.Return(False)
             skip_body = False
             if self.is_client:
@@ -155,6 +158,7 @@ class HTTP1Connection(object):
                             raise gen.Return(False)
             self._read_finished = True
             if not self._write_finished or self.is_client:
+                need_delegate_close = False
                 delegate.finish()
             yield self._finish_future
             if self.is_client and self._disconnect_on_finish:
@@ -167,6 +171,8 @@ class HTTP1Connection(object):
             self.close()
             raise gen.Return(False)
         finally:
+            if need_delegate_close:
+                delegate.on_connection_close()
             self._clear_callbacks()
         raise gen.Return(True)
 

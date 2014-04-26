@@ -264,6 +264,16 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
             self.server.request_callback(self.request)
         else:
             self.delegate.finish()
+        self._cleanup()
+
+    def on_connection_close(self):
+        if self.delegate is None:
+            self._chunks = None
+        else:
+            self.delegate.on_connection_close()
+        self._cleanup()
+
+    def _cleanup(self):
         if self.server.xheaders:
             self.connection.context._unapply_xheaders()
 

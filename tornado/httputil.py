@@ -452,6 +452,9 @@ class HTTPMessageDelegate(object):
     def finish(self):
         pass
 
+    def on_connection_close(self):
+        pass
+
 
 def url_concat(url, args):
     """Concatenate url and argument dictionary regardless of whether

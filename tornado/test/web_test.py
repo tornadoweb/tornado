@@ -1828,8 +1828,17 @@ class StreamingRequestBodyTest(WebTestCase):
                 # the (non-existent) data_received.
                 raise HTTPError(401)
 
+        @stream_request_body
+        class CloseDetectionHandler(RequestHandler):
+            def initialize(self, test):
+                self.test = test
+
+            def on_connection_close(self):
+                self.test.close_future.set_result(None)
+
         return [('/stream_body', StreamingBodyHandler, dict(test=self)),
-                ('/early_return', EarlyReturnHandler)]
+                ('/early_return', EarlyReturnHandler),
+                ('/close_detection', CloseDetectionHandler, dict(test=self))]
 
     def connect(self, url, connection_close):
         # Use a raw connection so we can control the sending of data.
@@ -1877,6 +1886,13 @@ class StreamingRequestBodyTest(WebTestCase):
         stream.write(b"4\r\nasdf\r\n")
         data = yield gen.Task(stream.read_until_close)
         self.assertTrue(data.startswith(b"HTTP/1.1 401"))
+
+    @gen_test
+    def test_close_during_upload(self):
+        self.close_future = Future()
+        stream = self.connect(b"/close_detection", connection_close=False)
+        stream.close()
+        yield self.close_future
 
 
 class StreamingRequestFlowControlTest(WebTestCase):

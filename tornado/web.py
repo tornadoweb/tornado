@@ -78,6 +78,7 @@ from tornado.concurrent import Future, is_future
 from tornado import escape
 from tornado import gen
 from tornado import httputil
+from tornado import iostream
 from tornado import locale
 from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
@@ -234,7 +235,9 @@ class RequestHandler(object):
         may not be called promptly after the end user closes their
         connection.
         """
-        pass
+        if _has_stream_request_body(self.__class__):
+            if not self.request.body.done():
+                self.request.body.set_exception(iostream.StreamClosedError())
 
     def clear(self):
         """Resets all headers and content for this response."""
@@ -1223,7 +1226,10 @@ class RequestHandler(object):
                 # the body has been completely received.  The Future has no
                 # result; the data has been passed to self.data_received
                 # instead.
-                yield self.request.body
+                try:
+                    yield self.request.body
+                except iostream.StreamClosedError:
+                    return
 
             method = getattr(self, self.request.method.lower())
             result = method(*self.path_args, **self.path_kwargs)
@@ -1766,6 +1772,12 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
             self.request.body = b''.join(self.chunks)
             self.request._parse_body()
             self.execute()
+
+    def on_connection_close(self):
+        if self.stream_request_body:
+            self.handler.on_connection_close()
+        else:
+            self.chunks = None
 
     def execute(self):
         # If template cache is disabled (usually in the debug mode),
