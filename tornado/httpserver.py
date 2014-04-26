@@ -31,6 +31,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import socket
 
 from tornado.http1connection import HTTP1ServerConnection, HTTP1ConnectionParameters
+from tornado import gen
 from tornado import httputil
 from tornado import iostream
 from tornado import netutil
@@ -154,16 +155,28 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
                            max_buffer_size=max_buffer_size,
                            read_chunk_size=chunk_size)
+        self._connections = set()
+
+    @gen.coroutine
+    def close_all_connections(self):
+        while self._connections:
+            # Peek at an arbitrary element of the set
+            conn = next(iter(self._connections))
+            yield conn.close()
 
     def handle_stream(self, stream, address):
         context = _HTTPRequestContext(stream, address,
                                       self.conn_params.protocol)
         conn = HTTP1ServerConnection(
             stream, self.conn_params, context)
+        self._connections.add(conn)
         conn.start_serving(self)
 
-    def start_request(self, connection):
-        return _ServerRequestAdapter(self, connection)
+    def start_request(self, server_conn, request_conn):
+        return _ServerRequestAdapter(self, request_conn)
+
+    def on_close(self, server_conn):
+        self._connections.remove(server_conn)
 
 
 class _HTTPRequestContext(object):

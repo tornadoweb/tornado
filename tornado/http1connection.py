@@ -478,30 +478,44 @@ class HTTP1ServerConnection(object):
             params = HTTP1ConnectionParameters()
         self.params = params
         self.context = context
+        self._serving_future = None
+
+    @gen.coroutine
+    def close(self):
+        self.stream.close()
+        # Block until the serving loop is done, but ignore any exceptions
+        # (start_serving is already responsible for logging them).
+        try:
+            yield self._serving_future
+        except Exception:
+            pass
 
     def start_serving(self, delegate):
         assert isinstance(delegate, httputil.HTTPServerConnectionDelegate)
+        self._serving_future = self._server_request_loop(delegate)
         # Register the future on the IOLoop so its errors get logged.
-        self.stream.io_loop.add_future(
-            self._server_request_loop(delegate),
-            lambda f: f.result())
+        self.stream.io_loop.add_future(self._serving_future,
+                                       lambda f: f.result())
 
     @gen.coroutine
     def _server_request_loop(self, delegate):
-        while True:
-            conn = HTTP1Connection(self.stream, False,
-                                   self.params, self.context)
-            request_delegate = delegate.start_request(conn)
-            try:
-                ret = yield conn.read_response(request_delegate)
-            except iostream.StreamClosedError:
-                return
-            except Exception:
-                # TODO: this is probably too broad; it would be better to
-                # wrap all delegate calls in something that writes to app_log,
-                # and then errors that reach this point can be gen_log.
-                app_log.error("Uncaught exception", exc_info=True)
-                conn.close()
-                return
-            if not ret:
-                return
+        try:
+            while True:
+                conn = HTTP1Connection(self.stream, False,
+                                       self.params, self.context)
+                request_delegate = delegate.start_request(self, conn)
+                try:
+                    ret = yield conn.read_response(request_delegate)
+                except iostream.StreamClosedError:
+                    return
+                except Exception:
+                    # TODO: this is probably too broad; it would be better to
+                    # wrap all delegate calls in something that writes to app_log,
+                    # and then errors that reach this point can be gen_log.
+                    app_log.error("Uncaught exception", exc_info=True)
+                    conn.close()
+                    return
+                if not ret:
+                    return
+        finally:
+            delegate.on_close(self)

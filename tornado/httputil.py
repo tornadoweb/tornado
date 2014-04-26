@@ -438,8 +438,11 @@ class HTTPOutputException(Exception):
 
 
 class HTTPServerConnectionDelegate(object):
-    def start_request(self, connection):
+    def start_request(self, server_conn, request_conn):
         raise NotImplementedError()
+
+    def on_close(self, server_conn):
+        pass
 
 
 class HTTPMessageDelegate(object):
