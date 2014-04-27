@@ -334,7 +334,7 @@ class HTTPConnection(object):
 
     def _on_request_body(self, data):
         self._request.body = data
-        if self._request.method in ("POST", "PATCH", "PUT"):
+        if self._request.method in ("POST", "PATCH", "PUT", "DELETE", "OPTIONS"):
             httputil.parse_body_arguments(
                 self._request.headers.get("Content-Type", ""), data,
                 self._request.body_arguments, self._request.files)
