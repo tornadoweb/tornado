@@ -34,7 +34,7 @@ import time
 import weakref
 
 from tornado.concurrent import TracebackFuture
-from tornado.escape import utf8
+from tornado.escape import utf8, native_str
 from tornado import httputil, stack_context
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
@@ -166,7 +166,7 @@ class AsyncHTTPClient(Configurable):
         kwargs: ``HTTPRequest(request, **kwargs)``
 
         This method returns a `.Future` whose result is an
-        `HTTPResponse`.  The ``Future`` wil raise an `HTTPError` if
+        `HTTPResponse`.  The ``Future`` will raise an `HTTPError` if
         the request returned a non-200 response code.
 
         If a ``callback`` is given, it will be invoked with the `HTTPResponse`.
@@ -581,7 +581,7 @@ def main():
         if options.print_headers:
             print(response.headers)
         if options.print_body:
-            print(response.body)
+            print(native_str(response.body))
     client.close()
 
 if __name__ == "__main__":

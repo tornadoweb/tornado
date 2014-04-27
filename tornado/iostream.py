@@ -40,7 +40,7 @@ from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError
 from tornado import stack_context
-from tornado.util import bytes_type
+from tornado.util import bytes_type, errno_from_exception
 
 try:
     from tornado.platform.posix import _set_nonblocking
@@ -80,8 +80,13 @@ class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
 
     We support a non-blocking ``write()`` and a family of ``read_*()`` methods.
-    All of the methods take callbacks (since writing and reading are
-    non-blocking and asynchronous).
+    All of the methods take an optional ``callback`` argument and return a
+    `.Future` only if no callback is given.  When the operation completes,
+    the callback will be run or the `.Future` will resolve with the data
+    read (or ``None`` for ``write()``).  All outstanding ``Futures`` will
+    resolve with a `StreamClosedError` when the stream is closed; users
+    of the callback interface will be notified via
+    `.BaseIOStream.set_close_callback` instead.
 
     When a stream is closed due to an error, the IOStream's ``error``
     attribute contains the exception object.
@@ -161,14 +166,20 @@ class BaseIOStream(object):
         return None
 
     def read_until_regex(self, regex, callback=None, max_bytes=None):
-        """Run ``callback`` when we read the given regex pattern.
+        """Asynchronously read until we have matched the given regex.
 
-        The callback will get the data read (including the data that
-        matched the regex and anything that came before it) as an argument.
+        The result includes the data that matches the regex and anything
+        that came before it.  If a callback is given, it will be run
+        with the data as an argument; if not, this method returns a
+        `.Future`.
 
         If ``max_bytes`` is not None, the connection will be closed
         if more than ``max_bytes`` bytes have been read and the regex is
         not satisfied.
+
+        .. versionchanged:: 3.3
+            Added the ``max_bytes`` argument.  The ``callback`` argument is
+            now optional and a `.Future` will be returned if it is omitted.
         """
         future = self._set_read_callback(callback)
         self._read_regex = re.compile(regex)
@@ -183,14 +194,19 @@ class BaseIOStream(object):
         return future
 
     def read_until(self, delimiter, callback=None, max_bytes=None):
-        """Run ``callback`` when we read the given delimiter.
+        """Asynchronously read until we have found the given delimiter.
 
-        The callback will get the data read (including the delimiter)
-        as an argument.
+        The result includes all the data read including the delimiter.
+        If a callback is given, it will be run with the data as an argument;
+        if not, this method returns a `.Future`.
 
         If ``max_bytes`` is not None, the connection will be closed
         if more than ``max_bytes`` bytes have been read and the delimiter
         is not found.
+
+        .. versionchanged:: 3.3
+            Added the ``max_bytes`` argument.  The ``callback`` argument is
+            now optional and a `.Future` will be returned if it is omitted.
         """
         future = self._set_read_callback(callback)
         self._read_delimiter = delimiter
@@ -206,15 +222,20 @@ class BaseIOStream(object):
 
     def read_bytes(self, num_bytes, callback=None, streaming_callback=None,
                    partial=False):
-        """Run callback when we read the given number of bytes.
+        """Asynchronously read a number of bytes.
 
         If a ``streaming_callback`` is given, it will be called with chunks
-        of data as they become available, and the argument to the final
-        ``callback`` will be empty.  Otherwise, the ``callback`` gets
-        the data as an argument.
+        of data as they become available, and the final result will be empty.
+        Otherwise, the result is all the data that was read.
+        If a callback is given, it will be run with the data as an argument;
+        if not, this method returns a `.Future`.
 
         If ``partial`` is true, the callback is run as soon as we have
         any bytes to return (but never more than ``num_bytes``)
+
+        .. versionchanged:: 3.3
+            Added the ``partial`` argument.  The callback argument is now
+            optional and a `.Future` will be returned if it is omitted.
         """
         future = self._set_read_callback(callback)
         assert isinstance(num_bytes, numbers.Integral)
@@ -225,15 +246,17 @@ class BaseIOStream(object):
         return future
 
     def read_until_close(self, callback=None, streaming_callback=None):
-        """Reads all data from the socket until it is closed.
+        """Asynchronously reads all data from the socket until it is closed.
 
         If a ``streaming_callback`` is given, it will be called with chunks
-        of data as they become available, and the argument to the final
-        ``callback`` will be empty.  Otherwise, the ``callback`` gets the
-        data as an argument.
+        of data as they become available, and the final result will be empty.
+        Otherwise, the result is all the data that was read.
+        If a callback is given, it will be run with the data as an argument;
+        if not, this method returns a `.Future`.
 
-        Subject to ``max_buffer_size`` limit from `IOStream` constructor if
-        a ``streaming_callback`` is not used.
+        .. versionchanged:: 3.3
+            The callback argument is now optional and a `.Future` will
+            be returned if it is omitted.
         """
         future = self._set_read_callback(callback)
         self._streaming_callback = stack_context.wrap(streaming_callback)
@@ -243,17 +266,24 @@ class BaseIOStream(object):
             self._run_read_callback(self._read_buffer_size, False)
             return future
         self._read_until_close = True
-        self._streaming_callback = stack_context.wrap(streaming_callback)
         self._try_inline_read()
         return future
 
     def write(self, data, callback=None):
-        """Write the given data to this stream.
+        """Asynchronously write the given data to this stream.
 
         If ``callback`` is given, we call it when all of the buffered write
         data has been successfully written to the stream. If there was
         previously buffered write data and an old write callback, that
         callback is simply overwritten with this new callback.
+
+        If no ``callback`` is given, this method returns a `.Future` that
+        resolves (with a result of ``None``) when the write has been
+        completed.  If `write` is called again before that `.Future` has
+        resolved, the previous future will be orphaned and will never resolve.
+
+        .. versionchanged:: 3.3
+            Now returns a `.Future` if no callback is given.
         """
         assert isinstance(data, bytes_type)
         self._check_closed()
@@ -279,7 +309,12 @@ class BaseIOStream(object):
         return future
 
     def set_close_callback(self, callback):
-        """Call the given callback when the stream is closed."""
+        """Call the given callback when the stream is closed.
+
+        This is not necessary for applications that use the `.Future`
+        interface; all outstanding ``Futures`` will resolve with a
+        `StreamClosedError` when the stream is closed.
+        """
         self._close_callback = stack_context.wrap(callback)
 
     def close(self, exc_info=False):
@@ -847,7 +882,8 @@ class IOStream(BaseIOStream):
         not previously connected.  The address parameter is in the
         same format as for `socket.connect <socket.socket.connect>`,
         i.e. a ``(host, port)`` tuple.  If ``callback`` is specified,
-        it will be called when the connection is completed.
+        it will be called when the connection is completed; if not
+        this method returns a `.Future`.
 
         If specified, the ``server_hostname`` parameter will be used
         in SSL connections for certificate validation (if requested in
@@ -859,6 +895,9 @@ class IOStream(BaseIOStream):
         which case the data will be written as soon as the connection
         is ready.  Calling `IOStream` read methods before the socket is
         connected works on some platforms but is non-portable.
+
+        .. versionchanged:: 3.3
+            If no callback is given, returns a `.Future`.
         """
         self._connecting = True
         try:
@@ -871,8 +910,8 @@ class IOStream(BaseIOStream):
             # returned immediately when attempting to connect to
             # localhost, so handle them the same way as an error
             # reported later in _handle_connect.
-            if (e.args[0] != errno.EINPROGRESS and
-                    e.args[0] not in _ERRNO_WOULDBLOCK):
+            if (errno_from_exception(e) != errno.EINPROGRESS and
+                    errno_from_exception(e) not in _ERRNO_WOULDBLOCK):
                 gen_log.warning("Connect error on fd %s: %s",
                                 self.socket.fileno(), e)
                 self.close(exc_info=True)
@@ -1131,9 +1170,9 @@ class PipeIOStream(BaseIOStream):
         try:
             chunk = os.read(self.fd, self.read_chunk_size)
         except (IOError, OSError) as e:
-            if e.args[0] in _ERRNO_WOULDBLOCK:
+            if errno_from_exception(e) in _ERRNO_WOULDBLOCK:
                 return None
-            elif e.args[0] == errno.EBADF:
+            elif errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will
                 # report it as readable but reads will fail with EBADF.
                 self.close(exc_info=True)

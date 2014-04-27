@@ -42,7 +42,8 @@ if sys.platform == 'win32' and sys.version_info > (2, 6):
     build_errors = (CCompilerError, DistutilsExecError,
                     DistutilsPlatformError, IOError)
 else:
-    build_errors = (CCompilerError, DistutilsExecError, DistutilsPlatformError)
+    build_errors = (CCompilerError, DistutilsExecError, DistutilsPlatformError,
+                    SystemError)
 
 class custom_build_ext(build_ext):
     """Allow C extension building to fail.

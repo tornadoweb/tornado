@@ -26,6 +26,7 @@ else:
 
 try:
     import twisted
+    import twisted.names
 except ImportError:
     twisted = None
 else:

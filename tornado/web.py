@@ -594,7 +594,8 @@ class RequestHandler(object):
         Note that lists are not converted to JSON because of a potential
         cross-site security vulnerability.  All JSON output should be
         wrapped in a dictionary.  More details at
-        http://haacked.com/archive/2008/11/20/anatomy-of-a-subtle-json-vulnerability.aspx
+        http://haacked.com/archive/2009/06/25/json-hijacking.aspx/ and
+        https://github.com/facebook/tornado/issues/1009
         """
         if self._finished:
             raise RuntimeError("Cannot write() after finish().  May be caused "
@@ -2381,6 +2382,11 @@ class GZipContentEncoding(OutputTransform):
     """Applies the gzip content encoding to the response.
 
     See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11
+
+    .. versionchanged:: 3.3
+        Now compresses all mime types beginning with ``text/``, instead
+        of just a whitelist. (the whitelist is still used for certain
+        non-text mime types).
     """
     # Whitelist of compressible mime types (in addition to any types
     # beginning with "text/").

@@ -182,6 +182,7 @@ three
         """})
         try:
             loader.load("test.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
@@ -192,6 +193,7 @@ three{%end%}
         """})
         try:
             loader.load("test.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
@@ -202,6 +204,7 @@ three{%end%}
         }, namespace={"_tt_modules": ObjectDict({"Template": lambda path, **kwargs: loader.load(path).generate(**kwargs)})})
         try:
             loader.load("base.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             exc_stack = traceback.format_exc()
             self.assertTrue('# base.html:1' in exc_stack)
@@ -214,6 +217,7 @@ three{%end%}
         })
         try:
             loader.load("base.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# sub.html:1 (via base.html:1)" in
                             traceback.format_exc())
@@ -225,6 +229,7 @@ three{%end%}
         })
         try:
             loader.load("sub.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             exc_stack = traceback.format_exc()
         self.assertTrue("# base.html:1" in exc_stack)
@@ -240,6 +245,7 @@ three{%end%}
             """})
         try:
             loader.load("sub.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# sub.html:4 (via base.html:1)" in
                             traceback.format_exc())
@@ -252,6 +258,7 @@ three{%end%}
         })
         try:
             loader.load("a.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# c.html:1 (via b.html:1, a.html:1)" in
                             traceback.format_exc())

@@ -49,10 +49,16 @@ except ImportError:
 # (either py27+ or unittest2) so tornado.test.util enforces
 # this requirement, but for other users of tornado.testing we want
 # to allow the older version if unitest2 is not available.
-try:
-    import unittest2 as unittest
-except ImportError:
+if sys.version_info >= (3,):
+    # On python 3, mixing unittest2 and unittest (including doctest)
+    # doesn't seem to work, so always use unittest.
     import unittest
+else:
+    # On python 2, prefer unittest2 when available.
+    try:
+        import unittest2 as unittest
+    except ImportError:
+        import unittest
 
 _next_port = 10000
 

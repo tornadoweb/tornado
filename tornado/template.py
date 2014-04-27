@@ -180,7 +180,7 @@ with ``{# ... #}``.
 ``{% set *x* = *y* %}``
     Sets a local variable.
 
-``{% try %}...{% except %}...{% finally %}...{% else %}...{% end %}``
+``{% try %}...{% except %}...{% else %}...{% finally %}...{% end %}``
     Same as the python ``try`` statement.
 
 ``{% while *condition* %}... {% end %}``
@@ -367,10 +367,9 @@ class Loader(BaseLoader):
 
     def _create_template(self, name):
         path = os.path.join(self.root, name)
-        f = open(path, "rb")
-        template = Template(f.read(), name=name, loader=self)
-        f.close()
-        return template
+        with open(path, "rb") as f:
+            template = Template(f.read(), name=name, loader=self)
+            return template
 
 
 class DictLoader(BaseLoader):

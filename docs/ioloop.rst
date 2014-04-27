@@ -16,6 +16,7 @@
    .. automethod:: IOLoop.instance
    .. automethod:: IOLoop.initialized
    .. automethod:: IOLoop.install
+   .. automethod:: IOLoop.clear_instance
    .. automethod:: IOLoop.start
    .. automethod:: IOLoop.stop
    .. automethod:: IOLoop.run_sync

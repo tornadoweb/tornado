@@ -24,6 +24,12 @@ Backwards-compatibility notes
   of the old ``TracebackFuture`` class.  ``TracebackFuture`` is now
   simply an alias for ``Future``.
 
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+* The command-line HTTP client (``python -m tornado.httpclient $URL``)
+  now works on Python 3.
+
 `tornado.gen`
 ~~~~~~~~~~~~~
 
@@ -40,6 +46,8 @@ Backwards-compatibility notes
 * `.IOLoop.add_handler` and related methods now accept file-like objects
   in addition to raw file descriptors.  Passing the objects is recommended
   (when possible) to avoid a garbage-collection-related problem in unit tests.
+* New method `.IOLoop.clear_instance` makes it possible to uninstall the
+  singleton instance.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -47,6 +55,16 @@ Backwards-compatibility notes
 * The ``callback`` argument to most `.IOStream` methods is now optional.
   When called without a callback the method will return a `.Future`
   for use with coroutines.
+* No longer gets confused when an ``IOError`` or ``OSError`` without
+  an ``errno`` attribute is raised.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+* When `.bind_sockets` chooses a port automatically, it will now use
+  the same port for IPv4 and IPv6.
+* TLS compression is now disabled by default on Python 3.3 and higher
+  (it is not possible to change this option in older versions.
 
 `tornado.options`
 ~~~~~~~~~~~~~~~~~
@@ -58,6 +76,12 @@ Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Now works on Python 2.6.
+
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Improved default cipher suite selection (Python 2.7+).
+
 
 `tornado.stack_context`
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -72,6 +96,7 @@ Backwards-compatibility notes
   but were not run with ``@gen_test`` or any similar decorator (this would
   previously result in the test silently being skipped).
 * Better stack traces are now displayed when a test times out.
+* Fixed the test suite when ``unittest2`` is installed on Python 3.
 
 `tornado.web`
 ~~~~~~~~~~~~~
@@ -89,3 +114,5 @@ Backwards-compatibility notes
   values when the other side closes.
 * The C speedup module now builds correctly with MSVC, and can support
   messages larger than 2GB on 64-bit systems.
+* The fallback mechanism for detecting a missing C compiler now
+  works correctly on Mac OS X.
