@@ -141,8 +141,8 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
+        self.protocol = protocol
         self.conn_params = HTTP1ConnectionParameters(
-            protocol=protocol,
             use_gzip=gzip,
             chunk_size=chunk_size,
             max_header_size=max_header_size,
@@ -163,7 +163,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
 
     def handle_stream(self, stream, address):
         context = _HTTPRequestContext(stream, address,
-                                      self.conn_params.protocol)
+                                      self.protocol)
         conn = HTTP1ServerConnection(
             stream, self.conn_params, context)
         self._connections.add(conn)

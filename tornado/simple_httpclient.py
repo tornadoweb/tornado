@@ -339,7 +339,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.connection = HTTP1Connection(
             self.stream, True,
             HTTP1ConnectionParameters(
-                no_keep_alive=True, protocol=self.parsed.scheme,
+                no_keep_alive=True,
                 max_header_size=self.max_header_size,
                 use_gzip=self.request.use_gzip),
             self._sockaddr)

@@ -33,13 +33,12 @@ from tornado.util import GzipDecompressor
 class HTTP1ConnectionParameters(object):
     """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`.
     """
-    def __init__(self, no_keep_alive=False, protocol=None, chunk_size=None,
+    def __init__(self, no_keep_alive=False, chunk_size=None,
                  max_header_size=None, header_timeout=None, max_body_size=None,
                  body_timeout=None, use_gzip=False):
         """
         :arg bool no_keep_alive: If true, always close the connection after
             one request.
-        :arg str protocol: "http" or "https"
         :arg int chunk_size: how much data to read into memory at once
         :arg int max_header_size:  maximum amount of data for HTTP headers
         :arg float header_timeout: how long to wait for all headers (seconds)
@@ -48,7 +47,6 @@ class HTTP1ConnectionParameters(object):
         :arg bool use_gzip: if true, decode incoming ``Content-Encoding: gzip``
         """
         self.no_keep_alive = no_keep_alive
-        self.protocol = protocol
         self.chunk_size = chunk_size or 65536
         self.max_header_size = max_header_size or 65536
         self.header_timeout = header_timeout
