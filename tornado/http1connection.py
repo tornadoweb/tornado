@@ -267,21 +267,19 @@ class HTTP1Connection(httputil.HTTPConnection):
         """
         self._max_body_size = max_body_size
 
-    def write_headers(self, start_line, headers, chunk=None, callback=None,
-                      has_body=True):
+    def write_headers(self, start_line, headers, chunk=None, callback=None):
         """Implements `.HTTPConnection.write_headers`."""
         if self.is_client:
             self._request_start_line = start_line
             # Client requests with a non-empty body must have either a
             # Content-Length or a Transfer-Encoding.
             self._chunking_output = (
-                has_body and
+                start_line.method in ('POST', 'PUT', 'PATCH') and
                 'Content-Length' not in headers and
                 'Transfer-Encoding' not in headers)
         else:
             self._response_start_line = start_line
             self._chunking_output = (
-                has_body and
                 # TODO: should this use
                 # self._request_start_line.version or
                 # start_line.version?

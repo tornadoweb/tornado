@@ -99,8 +99,7 @@ class _WSGIConnection(httputil.HTTPConnection):
         # so we can simply ignore the callback.
         pass
 
-    def write_headers(self, start_line, headers, chunk=None, callback=None,
-                      has_body=True):
+    def write_headers(self, start_line, headers, chunk=None, callback=None):
         if self.method == 'HEAD':
             self._expected_content_remaining = 0
         elif 'Content-Length' in headers:

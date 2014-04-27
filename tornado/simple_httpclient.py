@@ -345,10 +345,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._sockaddr)
         start_line = httputil.RequestStartLine(self.request.method,
                                                req_path, 'HTTP/1.1')
-        self.connection.write_headers(
-            start_line, self.request.headers,
-            has_body=(self.request.body is not None or
-                      self.request.body_producer is not None))
+        self.connection.write_headers(start_line, self.request.headers)
         if self.request.expect_100_continue:
             self._read_response()
         else:

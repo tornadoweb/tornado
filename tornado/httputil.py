@@ -532,8 +532,7 @@ class HTTPConnection(object):
 
     .. versionadded:: 3.3
     """
-    def write_headers(self, start_line, headers, chunk=None, callback=None,
-                      has_body=True):
+    def write_headers(self, start_line, headers, chunk=None, callback=None):
         """Write an HTTP header block.
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
@@ -542,9 +541,6 @@ class HTTPConnection(object):
             so that small responses can be written in the same call as their
             headers.
         :arg callback: a callback to be run when the write is complete.
-        :arg bool has_body: may be false to indicate that this message
-            has no body (and so does not need either a Content-Length
-            or Transfer-Encoding)
 
         Returns a `.Future` if no callback is given.
         """
