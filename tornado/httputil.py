@@ -542,8 +542,9 @@ class HTTPConnection(object):
             so that small responses can be written in the same call as their
             headers.
         :arg callback: a callback to be run when the write is complete.
-        :arg has_body: as an optimization, may be ``False`` to indicate
-            that no further writes will be coming.
+        :arg bool has_body: may be false to indicate that this message
+            has no body (and so does not need either a Content-Length
+            or Transfer-Encoding)
 
         Returns a `.Future` if no callback is given.
         """

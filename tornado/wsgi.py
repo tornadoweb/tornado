@@ -84,7 +84,7 @@ class WSGIApplication(web.Application):
         return WSGIAdapter(self)(environ, start_response)
 
 
-class _WSGIConnection(object):
+class _WSGIConnection(httputil.HTTPConnection):
     def __init__(self, method, start_response, context):
         self.method = method
         self.start_response = start_response
@@ -99,7 +99,8 @@ class _WSGIConnection(object):
         # so we can simply ignore the callback.
         pass
 
-    def write_headers(self, start_line, headers, chunk=None, callback=None):
+    def write_headers(self, start_line, headers, chunk=None, callback=None,
+                      has_body=True):
         if self.method == 'HEAD':
             self._expected_content_remaining = 0
         elif 'Content-Length' in headers:

@@ -54,7 +54,7 @@ class HTTP1ConnectionParameters(object):
         self.body_timeout = body_timeout
         self.use_gzip = use_gzip
 
-class HTTP1Connection(object):
+class HTTP1Connection(httputil.HTTPConnection):
     """Implements the HTTP/1.x protocol.
 
     This class can be on its own for clients, or via `HTTP1ServerConnection`
