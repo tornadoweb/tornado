@@ -43,8 +43,15 @@ class ReturnValueIgnoredError(Exception):
 class Future(object):
     """Placeholder for an asynchronous result.
 
-    Similar to `concurrent.futures.Future`, but not thread-safe (and
-    therefore faster for use with single-threaded event loops.
+    A ``Future`` encapsulates the result of an asynchronous
+    operation.  In synchronous applications ``Futures`` are used
+    to wait for the result from a thread or process pool; in
+    Tornado they are normally used with `.IOLoop.add_future` or by
+    yielding them in a `.gen.coroutine`.
+
+    `tornado.concurrent.Future` is similar to
+    `concurrent.futures.Future`, but not thread-safe (and therefore
+    faster for use with single-threaded event loops).
 
     In addition to ``exception`` and ``set_exception``, methods ``exc_info``
     and ``set_exc_info`` are supported to capture tracebacks in Python 2.
@@ -52,6 +59,14 @@ class Future(object):
     Python 2 futures backport this information is discarded.
     This functionality was previously available in a separate class
     ``TracebackFuture``, which is now a deprecated alias for this class.
+
+    .. versionchanged:: 3.3
+       `tornado.concurrent.Future` is always a thread-unsafe ``Future``
+       with support for the ``exc_info`` methods.  Previously it would
+       be an alias for the thread-safe `concurrent.futures.Future`
+       if that package was available and fall back to the thread-unsafe
+       implementation if it was not.
+
     """
     def __init__(self):
         self._done = False
@@ -61,18 +76,33 @@ class Future(object):
         self._callbacks = []
 
     def cancel(self):
+        """Cancel the operation, if possible.
+
+        Tornado ``Futures`` do not support cancellation, so this method always
+        returns False.
+        """
         return False
 
     def cancelled(self):
+        """Returns True if the operation has been cancelled.
+
+        Tornado ``Futures`` do not support cancellation, so this method
+        always returns False.
+        """
         return False
 
     def running(self):
+        """Returns True if this operation is currently running."""
         return not self._done
 
     def done(self):
+        """Returns True if the future has finished running."""
         return self._done
 
     def result(self, timeout=None):
+        """If the operation succeeded, return its result.  If it failed,
+        re-raise its exception.
+        """
         if self._result is not None:
             return self._result
         if self._exc_info is not None:
@@ -83,6 +113,9 @@ class Future(object):
         return self._result
 
     def exception(self, timeout=None):
+        """If the operation raised an exception, return the `Exception`
+        object.  Otherwise returns None.
+        """
         if self._exception is not None:
             return self._exception
         else:
@@ -90,25 +123,45 @@ class Future(object):
             return None
 
     def add_done_callback(self, fn):
+        """Attaches the given callback to the `Future`.
+
+        It will be invoked with the `Future` as its argument when the Future
+        has finished running and its result is available.  In Tornado
+        consider using `.IOLoop.add_future` instead of calling
+        `add_done_callback` directly.
+        """
         if self._done:
             fn(self)
         else:
             self._callbacks.append(fn)
 
     def set_result(self, result):
+        """Sets the result of a ``Future``.
+
+        It is undefined to call any of the ``set`` methods more than once
+        on the same object.
+        """
         self._result = result
         self._set_done()
 
     def set_exception(self, exception):
+        """Sets the exception of a ``Future.``"""
         self._exception = exception
         self._set_done()
 
     def exc_info(self):
+        """Returns a tuple in the same format as `sys.exc_info` or None.
+
+        .. versionadded:: 3.3
+        """
         return self._exc_info
 
     def set_exc_info(self, exc_info):
-        """Traceback-aware replacement for
-        `~concurrent.futures.Future.set_exception`.
+        """Sets the exception information of a ``Future.``
+
+        Preserves tracebacks on Python 2.
+
+        .. versionadded:: 3.3
         """
         self._exc_info = exc_info
         self.set_exception(exc_info[1])

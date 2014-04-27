@@ -77,17 +77,11 @@ Backwards-compatibility notes
 
 * Now works on Python 2.6.
 
-`tornado.simple_httpclient`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Improved default cipher suite selection (Python 2.7+).
 
-`tornado.speedups`
-~~~~~~~~~~~~~~~~~~
-
-* The C extension now builds on windows in both 32 and 64-bit modes.
-* The fallback mechanism for detecting a missing C compiler now
-  works correctly on Mac OS X.
 
 `tornado.stack_context`
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -120,3 +114,5 @@ Backwards-compatibility notes
   values when the other side closes.
 * The C speedup module now builds correctly with MSVC, and can support
   messages larger than 2GB on 64-bit systems.
+* The fallback mechanism for detecting a missing C compiler now
+  works correctly on Mac OS X.

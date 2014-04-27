@@ -2299,6 +2299,11 @@ class GZipContentEncoding(OutputTransform):
     """Applies the gzip content encoding to the response.
 
     See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11
+
+    .. versionchanged:: 3.3
+        Now compresses all mime types beginning with ``text/``, instead
+        of just a whitelist. (the whitelist is still used for certain
+        non-text mime types).
     """
     # Whitelist of compressible mime types (in addition to any types
     # beginning with "text/").

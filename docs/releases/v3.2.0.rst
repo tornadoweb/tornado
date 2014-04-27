@@ -32,7 +32,7 @@ New modules
 `tornado.concurrent`
 ~~~~~~~~~~~~~~~~~~~~
 
-* `.TracebackFuture` now accepts a ``timeout`` keyword argument (although
+* ``TracebackFuture`` now accepts a ``timeout`` keyword argument (although
   it is still incorrect to use a non-zero timeout in non-blocking code).
 
 ``tornado.curl_httpclient``
