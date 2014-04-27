@@ -1011,3 +1011,21 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             self.assertEqual(data, b'')
         finally:
             stream.close()
+
+
+class LegacyInterfaceTest(AsyncHTTPTestCase):
+    def get_app(self):
+        # The old request_callback interface does not implement the
+        # delegate interface, and writes its response via request.write
+        # instead of request.connection.write_headers.
+        def handle_request(request):
+            message = b"Hello world"
+            request.write(utf8("HTTP/1.1 200 OK\r\n"
+                               "Content-Length: %d\r\n\r\n" % len(message)))
+            request.write(message)
+            request.finish()
+        return handle_request
+
+    def test_legacy_interface(self):
+        response = self.fetch('/')
+        self.assertEqual(response.body, b"Hello world")

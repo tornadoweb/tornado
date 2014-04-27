@@ -345,7 +345,12 @@ class HTTP1Connection(httputil.HTTPConnection):
             return chunk
 
     def write(self, chunk, callback=None):
-        """Implements `.HTTPConnection.write`."""
+        """Implements `.HTTPConnection.write`.
+
+        For backwards compatibility is is allowed but deprecated to
+        skip `write_headers` and instead call `write()` with a
+        pre-encoded header block.
+        """
         if self.stream.closed():
             self._write_future = Future()
             self._write_future.set_exception(iostream.StreamClosedError())
