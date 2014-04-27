@@ -394,6 +394,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def tearDown(self):
         self.http_server.stop()
+        self.io_loop.run_sync(self.http_server.close_all_connections)
         if (not IOLoop.initialized() or
                 self.http_client.io_loop is not IOLoop.instance()):
             self.http_client.close()

@@ -30,7 +30,7 @@ HTTP Server
 * `.HTTPServer` now works correctly with paths starting with ``//``
 * ``HTTPHeaders.copy`` (inherited from `dict.copy`) now works correctly.
 * ``HTTPConnection.address`` is now always the socket address, even for non-IP
-  sockets.  `.HTTPRequest.remote_ip` is still always an IP-style address
+  sockets.  ``HTTPRequest.remote_ip`` is still always an IP-style address
   (fake data is used for non-IP sockets)
 * Extra data at the end of multipart form bodies is now ignored, which fixes
   a compatibility problem with an iOS HTTP client library.

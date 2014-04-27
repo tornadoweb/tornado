@@ -153,10 +153,12 @@ settings = {
     "ui_modules": {"Entry": EntryModule},
     "xsrf_cookies": True,
 }
-application = tornado.wsgi.WSGIApplication([
+application = tornado.web.Application([
     (r"/", HomeHandler),
     (r"/archive", ArchiveHandler),
     (r"/feed", FeedHandler),
     (r"/entry/([^/]+)", EntryHandler),
     (r"/compose", ComposeHandler),
 ], **settings)
+
+application = tornado.wsgi.WSGIAdapter(application)

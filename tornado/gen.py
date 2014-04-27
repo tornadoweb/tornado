@@ -87,7 +87,7 @@ import itertools
 import sys
 import types
 
-from tornado.concurrent import Future, TracebackFuture, is_future
+from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
 from tornado import stack_context
 
@@ -110,6 +110,10 @@ class BadYieldError(Exception):
 
 class ReturnValueIgnoredError(Exception):
     pass
+
+
+class TimeoutError(Exception):
+    """Exception raised by ``with_timeout``."""
 
 
 def engine(func):
@@ -178,7 +182,6 @@ def _make_coroutine_wrapper(func, replace_callback):
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        runner = None
         future = TracebackFuture()
 
         if replace_callback and 'callback' in kwargs:
@@ -195,8 +198,26 @@ def _make_coroutine_wrapper(func, replace_callback):
             return future
         else:
             if isinstance(result, types.GeneratorType):
-                runner = Runner(result, future)
-                runner.run()
+                # Inline the first iteration of Runner.run.  This lets us
+                # avoid the cost of creating a Runner when the coroutine
+                # never actually yields, which in turn allows us to
+                # use "optional" coroutines in critical path code without
+                # performance penalty for the synchronous case.
+                try:
+                    orig_stack_contexts = stack_context._state.contexts
+                    yielded = next(result)
+                    if stack_context._state.contexts is not orig_stack_contexts:
+                        yielded = TracebackFuture()
+                        yielded.set_exception(
+                            stack_context.StackContextInconsistentError(
+                                'stack_context inconsistency (probably caused '
+                                'by yield within a "with StackContext" block)'))
+                except (StopIteration, Return) as e:
+                    future.set_result(getattr(e, 'value', None))
+                except Exception:
+                    future.set_exc_info(sys.exc_info())
+                else:
+                    Runner(result, future, yielded)
                 return future
         future.set_result(result)
         return future
@@ -421,6 +442,63 @@ class Multi(YieldPoint):
             return list(result)
 
 
+def maybe_future(x):
+    """Converts ``x`` into a `.Future`.
+
+    If ``x`` is already a `.Future`, it is simply returned; otherwise
+    it is wrapped in a new `.Future`.  This is suitable for use as
+    ``result = yield gen.maybe_future(f())`` when you don't know whether
+    ``f()`` returns a `.Future` or not.
+    """
+    if is_future(x):
+        return x
+    else:
+        fut = Future()
+        fut.set_result(x)
+        return fut
+
+
+def with_timeout(timeout, future, io_loop=None):
+    """Wraps a `.Future` in a timeout.
+
+    Raises `TimeoutError` if the input future does not complete before
+    ``timeout``, which may be specified in any form allowed by
+    `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
+    relative to `.IOLoop.time`)
+
+    Currently only supports Futures, not other `YieldPoint` classes.
+
+    .. versionadded:: 3.3
+    """
+    # TODO: allow yield points in addition to futures?
+    # Tricky to do with stack_context semantics.
+    #
+    # It's tempting to optimize this by cancelling the input future on timeout
+    # instead of creating a new one, but A) we can't know if we are the only
+    # one waiting on the input future, so cancelling it might disrupt other
+    # callers and B) concurrent futures can only be cancelled while they are
+    # in the queue, so cancellation cannot reliably bound our waiting time.
+    result = Future()
+    chain_future(future, result)
+    if io_loop is None:
+        io_loop = IOLoop.current()
+    timeout_handle = io_loop.add_timeout(
+        timeout,
+        lambda: result.set_exception(TimeoutError("Timeout")))
+    if isinstance(future, Future):
+        # We know this future will resolve on the IOLoop, so we don't
+        # need the extra thread-safety of IOLoop.add_future (and we also
+        # don't care about StackContext here.
+        future.add_done_callback(
+            lambda future: io_loop.remove_timeout(timeout_handle))
+    else:
+        # concurrent.futures.Futures may resolve on any thread, so we
+        # need to route them back to the IOLoop.
+        io_loop.add_future(
+            future, lambda future: io_loop.remove_timeout(timeout_handle))
+    return result
+
+
 _null_future = Future()
 _null_future.set_result(None)
 
@@ -433,7 +511,7 @@ class Runner(object):
     The results of the generator are stored in ``result_future`` (a
     `.TracebackFuture`)
     """
-    def __init__(self, gen, result_future):
+    def __init__(self, gen, result_future, first_yielded):
         self.gen = gen
         self.result_future = result_future
         self.future = _null_future
@@ -450,6 +528,8 @@ class Runner(object):
         # done so, this field will be set and must be called at the end
         # of the coroutine.
         self.stack_context_deactivate = None
+        if self.handle_yield(first_yielded):
+            self.run()
 
     def register_callback(self, key):
         """Adds ``key`` to the list of callbacks."""
@@ -532,46 +612,52 @@ class Runner(object):
                     self.result_future = None
                     self._deactivate_stack_context()
                     return
-                if isinstance(yielded, (list, dict)):
-                    yielded = Multi(yielded)
-                if isinstance(yielded, YieldPoint):
-                    self.future = TracebackFuture()
-                    def start_yield_point():
-                        try:
-                            yielded.start(self)
-                            if yielded.is_ready():
-                                self.future.set_result(
-                                    yielded.get_result())
-                            else:
-                                self.yield_point = yielded
-                        except Exception:
-                            self.future = TracebackFuture()
-                            self.future.set_exc_info(sys.exc_info())
-                    if self.stack_context_deactivate is None:
-                        # Start a stack context if this is the first
-                        # YieldPoint we've seen.
-                        with stack_context.ExceptionStackContext(
-                                self.handle_exception) as deactivate:
-                            self.stack_context_deactivate = deactivate
-                            def cb():
-                                start_yield_point()
-                                self.run()
-                            self.io_loop.add_callback(cb)
-                            return
-                    else:
-                        start_yield_point()
-                elif is_future(yielded):
-                    self.future = yielded
-                    if not self.future.done():
-                        self.io_loop.add_future(
-                            self.future, lambda f: self.run())
-                        return
-                else:
-                    self.future = TracebackFuture()
-                    self.future.set_exception(BadYieldError(
-                        "yielded unknown object %r" % (yielded,)))
+                if not self.handle_yield(yielded):
+                    return
         finally:
             self.running = False
+
+    def handle_yield(self, yielded):
+        if isinstance(yielded, (list, dict)):
+            yielded = Multi(yielded)
+        if isinstance(yielded, YieldPoint):
+            self.future = TracebackFuture()
+            def start_yield_point():
+                try:
+                    yielded.start(self)
+                    if yielded.is_ready():
+                        self.future.set_result(
+                            yielded.get_result())
+                    else:
+                        self.yield_point = yielded
+                except Exception:
+                    self.future = TracebackFuture()
+                    self.future.set_exc_info(sys.exc_info())
+            if self.stack_context_deactivate is None:
+                # Start a stack context if this is the first
+                # YieldPoint we've seen.
+                with stack_context.ExceptionStackContext(
+                        self.handle_exception) as deactivate:
+                    self.stack_context_deactivate = deactivate
+                    def cb():
+                        start_yield_point()
+                        self.run()
+                    self.io_loop.add_callback(cb)
+                    return False
+            else:
+                start_yield_point()
+        elif is_future(yielded):
+            self.future = yielded
+            if not self.future.done():
+                self.io_loop.add_future(
+                    self.future, lambda f: self.run())
+                return False
+        else:
+            self.future = TracebackFuture()
+            self.future.set_exception(BadYieldError(
+                "yielded unknown object %r" % (yielded,)))
+        return True
+
 
     def result_callback(self, key):
         def inner(*args, **kwargs):

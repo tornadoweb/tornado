@@ -40,7 +40,7 @@
    .. automethod:: RequestHandler.decode_argument
    .. attribute:: RequestHandler.request
 
-      The `tornado.httpserver.HTTPRequest` object containing additional
+      The `tornado.httputil.HTTPServerRequest` object containing additional
       request parameters including e.g. headers and body data.
 
    .. attribute:: RequestHandler.path_args
@@ -70,6 +70,7 @@
    .. automethod:: RequestHandler.send_error
    .. automethod:: RequestHandler.write_error
    .. automethod:: RequestHandler.clear
+   .. automethod:: RequestHandler.data_received
 
 
    Cookies
@@ -219,6 +220,7 @@
    .. autofunction:: authenticated
    .. autofunction:: addslash
    .. autofunction:: removeslash
+   .. autofunction:: stream_request_body
 
    Everything else
    ---------------

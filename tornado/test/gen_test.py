@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import contextlib
+import datetime
 import functools
 import sys
 import textwrap
@@ -8,7 +9,7 @@ import time
 import platform
 import weakref
 
-from tornado.concurrent import return_future
+from tornado.concurrent import return_future, Future
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
@@ -20,6 +21,10 @@ from tornado.web import Application, RequestHandler, asynchronous, HTTPError
 
 from tornado import gen
 
+try:
+    from concurrent import futures
+except ImportError:
+    futures = None
 
 skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 not available')
 skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
@@ -948,6 +953,56 @@ class GenWebTest(AsyncHTTPTestCase):
     def test_async_prepare_error_handler(self):
         response = self.fetch('/async_prepare_error')
         self.assertEqual(response.code, 403)
+
+
+class WithTimeoutTest(AsyncTestCase):
+    @gen_test
+    def test_timeout(self):
+        with self.assertRaises(gen.TimeoutError):
+            yield gen.with_timeout(datetime.timedelta(seconds=0.1),
+                                   Future())
+
+    @gen_test
+    def test_completes_before_timeout(self):
+        future = Future()
+        self.io_loop.add_timeout(datetime.timedelta(seconds=0.1),
+                                 lambda: future.set_result('asdf'))
+        result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
+                                         future)
+        self.assertEqual(result, 'asdf')
+
+    @gen_test
+    def test_fails_before_timeout(self):
+        future = Future()
+        self.io_loop.add_timeout(
+            datetime.timedelta(seconds=0.1),
+            lambda: future.set_exception(ZeroDivisionError))
+        with self.assertRaises(ZeroDivisionError):
+            yield gen.with_timeout(datetime.timedelta(seconds=3600), future)
+
+    @gen_test
+    def test_already_resolved(self):
+        future = Future()
+        future.set_result('asdf')
+        result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
+                                        future)
+        self.assertEqual(result, 'asdf')
+
+    @unittest.skipIf(futures is None, 'futures module not present')
+    @gen_test
+    def test_timeout_concurrent_future(self):
+        with futures.ThreadPoolExecutor(1) as executor:
+            with self.assertRaises(gen.TimeoutError):
+                yield gen.with_timeout(self.io_loop.time(),
+                                       executor.submit(time.sleep, 0.1))
+
+    @unittest.skipIf(futures is None, 'futures module not present')
+    @gen_test
+    def test_completed_concurrent_future(self):
+        with futures.ThreadPoolExecutor(1) as executor:
+            yield gen.with_timeout(datetime.timedelta(seconds=3600),
+                                   executor.submit(lambda: None))
+
 
 if __name__ == '__main__':
     unittest.main()

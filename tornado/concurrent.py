@@ -311,10 +311,13 @@ def return_future(f):
 def chain_future(a, b):
     """Chain two futures together so that when one completes, so does the other.
 
-    The result (success or failure) of ``a`` will be copied to ``b``.
+    The result (success or failure) of ``a`` will be copied to ``b``, unless
+    ``b`` has already been completed or cancelled by the time ``a`` finishes.
     """
     def copy(future):
         assert future is a
+        if b.done():
+            return
         if (isinstance(a, TracebackFuture) and isinstance(b, TracebackFuture)
                 and a.exc_info() is not None):
             b.set_exc_info(a.exc_info())

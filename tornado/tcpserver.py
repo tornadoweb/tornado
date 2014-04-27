@@ -82,13 +82,15 @@ class TCPServer(object):
     .. versionadded:: 3.1
        The ``max_buffer_size`` argument.
     """
-    def __init__(self, io_loop=None, ssl_options=None, max_buffer_size=None):
+    def __init__(self, io_loop=None, ssl_options=None, max_buffer_size=None,
+                 read_chunk_size=None):
         self.io_loop = io_loop
         self.ssl_options = ssl_options
         self._sockets = {}  # fd -> socket object
         self._pending_sockets = []
         self._started = False
         self.max_buffer_size = max_buffer_size
+        self.read_chunk_size = None
 
         # Verify the SSL options. Otherwise we don't get errors until clients
         # connect. This doesn't verify that the keys are legitimate, but
@@ -238,9 +240,13 @@ class TCPServer(object):
                     raise
         try:
             if self.ssl_options is not None:
-                stream = SSLIOStream(connection, io_loop=self.io_loop, max_buffer_size=self.max_buffer_size)
+                stream = SSLIOStream(connection, io_loop=self.io_loop,
+                                     max_buffer_size=self.max_buffer_size,
+                                     read_chunk_size=self.read_chunk_size)
             else:
-                stream = IOStream(connection, io_loop=self.io_loop, max_buffer_size=self.max_buffer_size)
+                stream = IOStream(connection, io_loop=self.io_loop,
+                                  max_buffer_size=self.max_buffer_size,
+                                  read_chunk_size=self.read_chunk_size)
             self.handle_stream(stream, address)
         except Exception:
             app_log.error("Error in connection callback", exc_info=True)

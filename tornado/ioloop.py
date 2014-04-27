@@ -159,7 +159,10 @@ class IOLoop(Configurable):
 
     @staticmethod
     def clear_instance():
-        """Clear the global `IOLoop` instance."""
+        """Clear the global `IOLoop` instance.
+
+        .. versionadded:: 3.3
+        """
         if hasattr(IOLoop, "_instance"):
             del IOLoop._instance
 
@@ -599,6 +602,8 @@ class PollIOLoop(IOLoop):
                 self.close_fd(fd)
         self._waker.close()
         self._impl.close()
+        self._callbacks = None
+        self._timeouts = None
 
     def add_handler(self, fd, handler, events):
         fd, obj = self.split_fd(fd)
@@ -836,7 +841,11 @@ class _Timeout(object):
         if isinstance(deadline, numbers.Real):
             self.deadline = deadline
         elif isinstance(deadline, datetime.timedelta):
-            self.deadline = io_loop.time() + _Timeout.timedelta_to_seconds(deadline)
+            now = io_loop.time()
+            try:
+                self.deadline = now + deadline.total_seconds()
+            except AttributeError:  # py2.6
+                self.deadline = now + _Timeout.timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r" % deadline)
         self.callback = callback

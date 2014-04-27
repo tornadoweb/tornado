@@ -108,22 +108,16 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def __init__(self, application, request, **kwargs):
         tornado.web.RequestHandler.__init__(self, application, request,
                                             **kwargs)
-        self.stream = request.connection.stream
         self.ws_connection = None
         self.close_code = None
         self.close_reason = None
 
-    def _execute(self, transforms, *args, **kwargs):
+    @tornado.web.asynchronous
+    def get(self, *args, **kwargs):
         self.open_args = args
         self.open_kwargs = kwargs
 
-        # Websocket only supports GET method
-        if self.request.method != 'GET':
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
-            ))
-            self.stream.close()
-            return
+        self.stream = self.request.connection.detach()
 
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':
@@ -829,7 +823,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.resolver = Resolver(io_loop=io_loop)
         super(WebSocketClientConnection, self).__init__(
             io_loop, None, request, lambda: None, self._on_http_response,
-            104857600, self.resolver)
+            104857600, self.resolver, 65536)
 
     def close(self, code=None, reason=None):
         """Closes the websocket connection.
@@ -860,8 +854,12 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                 self.connect_future.set_exception(WebSocketError(
                     "Non-websocket response"))
 
-    def _handle_1xx(self, code):
-        assert code == 101
+    def headers_received(self, start_line, headers):
+        if start_line.code != 101:
+            return super(WebSocketClientConnection, self).headers_received(
+                start_line, headers)
+
+        self.headers = headers
         assert self.headers['Upgrade'].lower() == 'websocket'
         assert self.headers['Connection'].lower() == 'upgrade'
         accept = WebSocketProtocol13.compute_accept_value(self.key)
@@ -873,6 +871,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
+
+        self.stream = self.connection.detach()
+        self.stream.set_close_callback(self._on_close)
 
         self.connect_future.set_result(self)
 

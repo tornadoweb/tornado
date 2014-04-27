@@ -177,7 +177,7 @@ Multiple modules
 * `.HTTPServer` now takes a ``protocol`` keyword argument which can be set
   to ``https`` if the server is behind an SSL-decoding proxy that does not
   set any supported X-headers.
-* `tornado.httpserver.HTTPConnection` now has a ``set_close_callback``
+* ``tornado.httpserver.HTTPConnection`` now has a ``set_close_callback``
   method that should be used instead of reaching into its ``stream``
   attribute.
 * Empty HTTP request arguments are no longer ignored.  This applies to

@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, print_function, with_statement
 
-from tornado.escape import utf8, _unicode, native_str
+from tornado.concurrent import is_future
+from tornado.escape import utf8, _unicode
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
-from tornado.httputil import HTTPHeaders
-from tornado.iostream import IOStream, SSLIOStream
+from tornado import httputil
+from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
+from tornado.iostream import IOStream, SSLIOStream, StreamClosedError
 from tornado.netutil import Resolver, OverrideResolver
 from tornado.log import gen_log
 from tornado import stack_context
-from tornado.util import GzipDecompressor
 
 import base64
 import collections
@@ -47,7 +48,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """
     def initialize(self, io_loop, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
-                   resolver=None, defaults=None):
+                   resolver=None, defaults=None, max_header_size=None):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -74,6 +75,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.active = {}
         self.waiting = {}
         self.max_buffer_size = max_buffer_size
+        self.max_header_size = max_header_size
         if resolver:
             self.resolver = resolver
             self.own_resolver = False
@@ -119,7 +121,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     def _handle_request(self, request, release_callback, final_callback):
         _HTTPConnection(self.io_loop, self, request, release_callback,
-                        final_callback, self.max_buffer_size, self.resolver)
+                        final_callback, self.max_buffer_size, self.resolver,
+                        self.max_header_size)
 
     def _release_fetch(self, key):
         del self.active[key]
@@ -142,11 +145,12 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         del self.waiting[key]
 
 
-class _HTTPConnection(object):
+class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
     def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size, resolver):
+                 final_callback, max_buffer_size, resolver,
+                 max_header_size):
         self.start_time = io_loop.time()
         self.io_loop = io_loop
         self.client = client
@@ -155,12 +159,14 @@ class _HTTPConnection(object):
         self.final_callback = final_callback
         self.max_buffer_size = max_buffer_size
         self.resolver = resolver
+        self.max_header_size = max_header_size
         self.code = None
         self.headers = None
-        self.chunks = None
+        self.chunks = []
         self._decompressor = None
         # Timeout handle returned by IOLoop.add_timeout
         self._timeout = None
+        self._sockaddr = None
         with stack_context.ExceptionStackContext(self._handle_exception):
             self.parsed = urlparse.urlsplit(_unicode(self.request.url))
             if self.parsed.scheme not in ("http", "https"):
@@ -205,8 +211,8 @@ class _HTTPConnection(object):
         self.stream.set_close_callback(self._on_close)
         # ipv6 addresses are broken (in self.parsed.hostname) until
         # 2.7, here is correctly parsed value calculated in __init__
-        sockaddr = addrinfo[0][1]
-        self.stream.connect(sockaddr, self._on_connect,
+        self._sockaddr = addrinfo[0][1]
+        self.stream.connect(self._sockaddr, self._on_connect,
                             server_hostname=self.parsed_hostname)
 
     def _create_stream(self, addrinfo):
@@ -304,16 +310,22 @@ class _HTTPConnection(object):
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
             if self.request.method in ("POST", "PATCH", "PUT"):
-                if self.request.body is None:
+                if (self.request.body is None and
+                    self.request.body_producer is None):
                     raise AssertionError(
                         'Body must not be empty for "%s" request'
                         % self.request.method)
             else:
-                if self.request.body is not None:
+                if (self.request.body is not None or
+                    self.request.body_producer is not None):
                     raise AssertionError(
                         'Body must be empty for "%s" request'
                         % self.request.method)
+        if self.request.expect_100_continue:
+            self.request.headers["Expect"] = "100-continue"
         if self.request.body is not None:
+            # When body_producer is used the caller is responsible for
+            # setting Content-Length (or else chunked encoding will be used).
             self.request.headers["Content-Length"] = str(len(
                 self.request.body))
         if (self.request.method == "POST" and
@@ -323,19 +335,47 @@ class _HTTPConnection(object):
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
                    (('?' + self.parsed.query) if self.parsed.query else ''))
-        request_lines = [utf8("%s %s HTTP/1.1" % (self.request.method,
-                                                  req_path))]
-        for k, v in self.request.headers.get_all():
-            line = utf8(k) + b": " + utf8(v)
-            if b'\n' in line:
-                raise ValueError('Newline in header: ' + repr(line))
-            request_lines.append(line)
-        request_str = b"\r\n".join(request_lines) + b"\r\n\r\n"
-        if self.request.body is not None:
-            request_str += self.request.body
         self.stream.set_nodelay(True)
-        self.stream.write(request_str)
-        self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
+        self.connection = HTTP1Connection(
+            self.stream, True,
+            HTTP1ConnectionParameters(
+                no_keep_alive=True,
+                max_header_size=self.max_header_size,
+                use_gzip=self.request.use_gzip),
+            self._sockaddr)
+        start_line = httputil.RequestStartLine(self.request.method,
+                                               req_path, 'HTTP/1.1')
+        self.connection.write_headers(start_line, self.request.headers)
+        if self.request.expect_100_continue:
+            self._read_response()
+        else:
+            self._write_body(True)
+
+    def _write_body(self, start_read):
+        if self.request.body is not None:
+            self.connection.write(self.request.body)
+            self.connection.finish()
+        elif self.request.body_producer is not None:
+            fut = self.request.body_producer(self.connection.write)
+            if is_future(fut):
+                def on_body_written(fut):
+                    fut.result()
+                    self.connection.finish()
+                    if start_read:
+                        self._read_response()
+                self.io_loop.add_future(fut, on_body_written)
+                return
+            self.connection.finish()
+        if start_read:
+            self._read_response()
+
+
+    def _read_response(self):
+        # Ensure that any exception raised in read_response ends up in our
+        # stack context.
+        self.io_loop.add_future(
+            self.connection.read_response(self),
+            lambda f: f.result())
 
     def _release(self):
         if self.release_callback is not None:
@@ -353,19 +393,24 @@ class _HTTPConnection(object):
     def _handle_exception(self, typ, value, tb):
         if self.final_callback:
             self._remove_timeout()
+            if isinstance(value, StreamClosedError):
+                value = HTTPError(599, "Stream closed")
             self._run_callback(HTTPResponse(self.request, 599, error=value,
                                             request_time=self.io_loop.time() - self.start_time,
                                             ))
 
             if hasattr(self, "stream"):
+                # TODO: this may cause a StreamClosedError to be raised
+                # by the connection's Future.  Should we cancel the
+                # connection more gracefully?
                 self.stream.close()
             return True
         else:
             # If our callback has already been called, we are probably
             # catching an exception that is not caused by us but rather
             # some child of our callback. Rather than drop it on the floor,
-            # pass it along.
-            return False
+            # pass it along, unless it's just the stream being closed.
+            return isinstance(value, StreamClosedError)
 
     def _on_close(self):
         if self.final_callback is not None:
@@ -374,22 +419,13 @@ class _HTTPConnection(object):
                 message = str(self.stream.error)
             raise HTTPError(599, message)
 
-    def _handle_1xx(self, code):
-        self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
-
-    def _on_headers(self, data):
-        data = native_str(data.decode("latin1"))
-        first_line, _, header_data = data.partition("\n")
-        match = re.match("HTTP/1.[01] ([0-9]+) ([^\r]*)", first_line)
-        assert match
-        code = int(match.group(1))
-        self.headers = HTTPHeaders.parse(header_data)
-        if 100 <= code < 200:
-            self._handle_1xx(code)
+    def headers_received(self, first_line, headers):
+        if self.request.expect_100_continue and first_line.code == 100:
+            self._write_body(False)
             return
-        else:
-            self.code = code
-            self.reason = match.group(2)
+        self.headers = headers
+        self.code = first_line.code
+        self.reason = first_line.reason
 
         if "Content-Length" in self.headers:
             if "," in self.headers["Content-Length"]:
@@ -406,17 +442,12 @@ class _HTTPConnection(object):
             content_length = None
 
         if self.request.header_callback is not None:
-            # re-attach the newline we split on earlier
-            self.request.header_callback(first_line + _)
+            # Reassemble the start line.
+            self.request.header_callback('%s %s %s\r\n' % first_line)
             for k, v in self.headers.get_all():
                 self.request.header_callback("%s: %s\r\n" % (k, v))
             self.request.header_callback('\r\n')
 
-        if self.request.method == "HEAD" or self.code == 304:
-            # HEAD requests and 304 responses never have content, even
-            # though they may have content-length headers
-            self._on_body(b"")
-            return
         if 100 <= self.code < 200 or self.code == 204:
             # These response codes never have bodies
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
@@ -424,21 +455,9 @@ class _HTTPConnection(object):
                     content_length not in (None, 0)):
                 raise ValueError("Response with code %d should not have body" %
                                  self.code)
-            self._on_body(b"")
-            return
 
-        if (self.request.use_gzip and
-                self.headers.get("Content-Encoding") == "gzip"):
-            self._decompressor = GzipDecompressor()
-        if self.headers.get("Transfer-Encoding") == "chunked":
-            self.chunks = []
-            self.stream.read_until(b"\r\n", self._on_chunk_length)
-        elif content_length is not None:
-            self.stream.read_bytes(content_length, self._on_body)
-        else:
-            self.stream.read_until_close(self._on_body)
-
-    def _on_body(self, data):
+    def finish(self):
+        data = b''.join(self.chunks)
         self._remove_timeout()
         original_request = getattr(self.request, "original_request",
                                    self.request)
@@ -474,19 +493,12 @@ class _HTTPConnection(object):
             self.client.fetch(new_request, final_callback)
             self._on_end_request()
             return
-        if self._decompressor:
-            data = (self._decompressor.decompress(data) +
-                    self._decompressor.flush())
         if self.request.streaming_callback:
-            if self.chunks is None:
-                # if chunks is not None, we already called streaming_callback
-                # in _on_chunk_data
-                self.request.streaming_callback(data)
             buffer = BytesIO()
         else:
             buffer = BytesIO(data)  # TODO: don't require one big string?
         response = HTTPResponse(original_request,
-                                self.code, reason=self.reason,
+                                self.code, reason=getattr(self, 'reason', None),
                                 headers=self.headers,
                                 request_time=self.io_loop.time() - self.start_time,
                                 buffer=buffer,
@@ -497,40 +509,11 @@ class _HTTPConnection(object):
     def _on_end_request(self):
         self.stream.close()
 
-    def _on_chunk_length(self, data):
-        # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
-        length = int(data.strip(), 16)
-        if length == 0:
-            if self._decompressor is not None:
-                tail = self._decompressor.flush()
-                if tail:
-                    # I believe the tail will always be empty (i.e.
-                    # decompress will return all it can).  The purpose
-                    # of the flush call is to detect errors such
-                    # as truncated input.  But in case it ever returns
-                    # anything, treat it as an extra chunk
-                    if self.request.streaming_callback is not None:
-                        self.request.streaming_callback(tail)
-                    else:
-                        self.chunks.append(tail)
-                # all the data has been decompressed, so we don't need to
-                # decompress again in _on_body
-                self._decompressor = None
-            self._on_body(b''.join(self.chunks))
-        else:
-            self.stream.read_bytes(length + 2,  # chunk ends with \r\n
-                                   self._on_chunk_data)
-
-    def _on_chunk_data(self, data):
-        assert data[-2:] == b"\r\n"
-        chunk = data[:-2]
-        if self._decompressor:
-            chunk = self._decompressor.decompress(chunk)
+    def data_received(self, chunk):
         if self.request.streaming_callback is not None:
             self.request.streaming_callback(chunk)
         else:
             self.chunks.append(chunk)
-        self.stream.read_until(b"\r\n", self._on_chunk_length)
 
 
 if __name__ == "__main__":

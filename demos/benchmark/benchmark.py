@@ -49,7 +49,7 @@ class RootHandler(RequestHandler):
         pass
 
 def handle_sigchld(sig, frame):
-    IOLoop.instance().add_callback(IOLoop.instance().stop)
+    IOLoop.instance().add_callback_from_signal(IOLoop.instance().stop)
 
 def main():
     parse_command_line()

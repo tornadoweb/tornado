@@ -390,14 +390,18 @@ class TestIOStreamMixin(object):
         # Similar to test_delayed_close_callback, but read_until_close takes
         # a separate code path so test it separately.
         server, client = self.make_iostream_pair()
-        client.set_close_callback(self.stop)
         try:
             server.write(b"1234")
             server.close()
-            self.wait()
+            # Read one byte to make sure the client has received the data.
+            # It won't run the close callback as long as there is more buffered
+            # data that could satisfy a later read.
+            client.read_bytes(1, self.stop)
+            data = self.wait()
+            self.assertEqual(data, b"1")
             client.read_until_close(self.stop)
             data = self.wait()
-            self.assertEqual(data, b"1234")
+            self.assertEqual(data, b"234")
         finally:
             server.close()
             client.close()
@@ -407,17 +411,18 @@ class TestIOStreamMixin(object):
         # All data should go through the streaming callback,
         # and the final read callback just gets an empty string.
         server, client = self.make_iostream_pair()
-        client.set_close_callback(self.stop)
         try:
             server.write(b"1234")
             server.close()
-            self.wait()
+            client.read_bytes(1, self.stop)
+            data = self.wait()
+            self.assertEqual(data, b"1")
             streaming_data = []
             client.read_until_close(self.stop,
                                     streaming_callback=streaming_data.append)
             data = self.wait()
             self.assertEqual(b'', data)
-            self.assertEqual(b''.join(streaming_data), b"1234")
+            self.assertEqual(b''.join(streaming_data), b"234")
         finally:
             server.close()
             client.close()
@@ -511,6 +516,202 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    def test_future_close_callback(self):
+        # Regression test for interaction between the Future read interfaces
+        # and IOStream._maybe_add_error_listener.
+        server, client = self.make_iostream_pair()
+        closed = [False]
+        def close_callback():
+            closed[0] = True
+            self.stop()
+        server.set_close_callback(close_callback)
+        try:
+            client.write(b'a')
+            future = server.read_bytes(1)
+            self.io_loop.add_future(future, self.stop)
+            self.assertEqual(self.wait().result(), b'a')
+            self.assertFalse(closed[0])
+            client.close()
+            self.wait()
+            self.assertTrue(closed[0])
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_bytes_partial(self):
+        server, client = self.make_iostream_pair()
+        try:
+            # Ask for more than is available with partial=True
+            client.read_bytes(50, self.stop, partial=True)
+            server.write(b"hello")
+            data = self.wait()
+            self.assertEqual(data, b"hello")
+
+            # Ask for less than what is available; num_bytes is still
+            # respected.
+            client.read_bytes(3, self.stop, partial=True)
+            server.write(b"world")
+            data = self.wait()
+            self.assertEqual(data, b"wor")
+
+            # Partial reads won't return an empty string, but read_bytes(0)
+            # will.
+            client.read_bytes(0, self.stop, partial=True)
+            data = self.wait()
+            self.assertEqual(data, b'')
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_until_max_bytes(self):
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(lambda: self.stop("closed"))
+        try:
+            # Extra room under the limit
+            client.read_until(b"def", self.stop, max_bytes=50)
+            server.write(b"abcdef")
+            data = self.wait()
+            self.assertEqual(data, b"abcdef")
+
+            # Just enough space
+            client.read_until(b"def", self.stop, max_bytes=6)
+            server.write(b"abcdef")
+            data = self.wait()
+            self.assertEqual(data, b"abcdef")
+
+            # Not enough space, but we don't know it until all we can do is
+            # log a warning and close the connection.
+            with ExpectLog(gen_log, "Unsatisfiable read"):
+                client.read_until(b"def", self.stop, max_bytes=5)
+                server.write(b"123456")
+                data = self.wait()
+            self.assertEqual(data, "closed")
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_until_max_bytes_inline(self):
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(lambda: self.stop("closed"))
+        try:
+            # Similar to the error case in the previous test, but the
+            # server writes first so client reads are satisfied
+            # inline.  For consistency with the out-of-line case, we
+            # do not raise the error synchronously.
+            server.write(b"123456")
+            with ExpectLog(gen_log, "Unsatisfiable read"):
+                client.read_until(b"def", self.stop, max_bytes=5)
+                data = self.wait()
+            self.assertEqual(data, "closed")
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_until_max_bytes_ignores_extra(self):
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(lambda: self.stop("closed"))
+        try:
+            # Even though data that matches arrives the same packet that
+            # puts us over the limit, we fail the request because it was not
+            # found within the limit.
+            server.write(b"abcdef")
+            with ExpectLog(gen_log, "Unsatisfiable read"):
+                client.read_until(b"def", self.stop, max_bytes=5)
+                data = self.wait()
+            self.assertEqual(data, "closed")
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_until_regex_max_bytes(self):
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(lambda: self.stop("closed"))
+        try:
+            # Extra room under the limit
+            client.read_until_regex(b"def", self.stop, max_bytes=50)
+            server.write(b"abcdef")
+            data = self.wait()
+            self.assertEqual(data, b"abcdef")
+
+            # Just enough space
+            client.read_until_regex(b"def", self.stop, max_bytes=6)
+            server.write(b"abcdef")
+            data = self.wait()
+            self.assertEqual(data, b"abcdef")
+
+            # Not enough space, but we don't know it until all we can do is
+            # log a warning and close the connection.
+            with ExpectLog(gen_log, "Unsatisfiable read"):
+                client.read_until_regex(b"def", self.stop, max_bytes=5)
+                server.write(b"123456")
+                data = self.wait()
+            self.assertEqual(data, "closed")
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_until_regex_max_bytes_inline(self):
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(lambda: self.stop("closed"))
+        try:
+            # Similar to the error case in the previous test, but the
+            # server writes first so client reads are satisfied
+            # inline.  For consistency with the out-of-line case, we
+            # do not raise the error synchronously.
+            server.write(b"123456")
+            with ExpectLog(gen_log, "Unsatisfiable read"):
+                client.read_until_regex(b"def", self.stop, max_bytes=5)
+                data = self.wait()
+            self.assertEqual(data, "closed")
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_until_regex_max_bytes_ignores_extra(self):
+        server, client = self.make_iostream_pair()
+        client.set_close_callback(lambda: self.stop("closed"))
+        try:
+            # Even though data that matches arrives the same packet that
+            # puts us over the limit, we fail the request because it was not
+            # found within the limit.
+            server.write(b"abcdef")
+            with ExpectLog(gen_log, "Unsatisfiable read"):
+                client.read_until_regex(b"def", self.stop, max_bytes=5)
+                data = self.wait()
+            self.assertEqual(data, "closed")
+        finally:
+            server.close()
+            client.close()
+
+    def test_small_reads_from_large_buffer(self):
+        # 10KB buffer size, 100KB available to read.
+        # Read 1KB at a time and make sure that the buffer is not eagerly
+        # filled.
+        server, client = self.make_iostream_pair(max_buffer_size=10 * 1024)
+        try:
+            server.write(b"a" * 1024 * 100)
+            for i in range(100):
+                client.read_bytes(1024, self.stop)
+                data = self.wait()
+                self.assertEqual(data, b"a" * 1024)
+        finally:
+            server.close()
+            client.close()
+
+    def test_small_read_untils_from_large_buffer(self):
+        # 10KB buffer size, 100KB available to read.
+        # Read 1KB at a time and make sure that the buffer is not eagerly
+        # filled.
+        server, client = self.make_iostream_pair(max_buffer_size=10 * 1024)
+        try:
+            server.write((b"a" * 1023 + b"\n") * 100)
+            for i in range(100):
+                client.read_until(b"\n", self.stop, max_bytes=4096)
+                data = self.wait()
+                self.assertEqual(data, b"a" * 1023 + b"\n")
+        finally:
+            server.close()
+            client.close()
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):

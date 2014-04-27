@@ -14,20 +14,31 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""HTTP utility code shared by clients and servers."""
+"""HTTP utility code shared by clients and servers.
+
+This module also defines the `HTTPServerRequest` class which is exposed
+via `tornado.web.RequestHandler.request`.
+"""
 
 from __future__ import absolute_import, division, print_function, with_statement
 
 import calendar
 import collections
+import copy
 import datetime
 import email.utils
 import numbers
+import re
 import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import ObjectDict
+from tornado.util import ObjectDict, bytes_type
+
+try:
+    import Cookie  # py2
+except ImportError:
+    import http.cookies as Cookie  # py3
 
 try:
     from httplib import responses  # py2
@@ -43,6 +54,11 @@ try:
 except ImportError:
     from urllib.parse import urlencode  # py3
 
+try:
+    from ssl import SSLError
+except ImportError:
+    # ssl is unavailable on app engine.
+    class SSLError(Exception): pass
 
 class _NormalizedHeaderCache(dict):
     """Dynamic cached mapping of header names to Http-Header-Case.
@@ -212,6 +228,338 @@ class HTTPHeaders(dict):
         return HTTPHeaders(self)
 
 
+class HTTPServerRequest(object):
+    """A single HTTP request.
+
+    All attributes are type `str` unless otherwise noted.
+
+    .. attribute:: method
+
+       HTTP request method, e.g. "GET" or "POST"
+
+    .. attribute:: uri
+
+       The requested uri.
+
+    .. attribute:: path
+
+       The path portion of `uri`
+
+    .. attribute:: query
+
+       The query portion of `uri`
+
+    .. attribute:: version
+
+       HTTP version specified in request, e.g. "HTTP/1.1"
+
+    .. attribute:: headers
+
+       `.HTTPHeaders` dictionary-like object for request headers.  Acts like
+       a case-insensitive dictionary with additional methods for repeated
+       headers.
+
+    .. attribute:: body
+
+       Request body, if present, as a byte string.
+
+    .. attribute:: remote_ip
+
+       Client's IP address as a string.  If ``HTTPServer.xheaders`` is set,
+       will pass along the real IP address provided by a load balancer
+       in the ``X-Real-Ip`` or ``X-Forwarded-For`` header.
+
+    .. versionchanged:: 3.1
+       The list format of ``X-Forwarded-For`` is now supported.
+
+    .. attribute:: protocol
+
+       The protocol used, either "http" or "https".  If ``HTTPServer.xheaders``
+       is set, will pass along the protocol used by a load balancer if
+       reported via an ``X-Scheme`` header.
+
+    .. attribute:: host
+
+       The requested hostname, usually taken from the ``Host`` header.
+
+    .. attribute:: arguments
+
+       GET/POST arguments are available in the arguments property, which
+       maps arguments names to lists of values (to support multiple values
+       for individual names). Names are of type `str`, while arguments
+       are byte strings.  Note that this is different from
+       `.RequestHandler.get_argument`, which returns argument values as
+       unicode strings.
+
+    .. attribute:: query_arguments
+
+       Same format as ``arguments``, but contains only arguments extracted
+       from the query string.
+
+       .. versionadded:: 3.2
+
+    .. attribute:: body_arguments
+
+       Same format as ``arguments``, but contains only arguments extracted
+       from the request body.
+
+       .. versionadded:: 3.2
+
+    .. attribute:: files
+
+       File uploads are available in the files property, which maps file
+       names to lists of `.HTTPFile`.
+
+    .. attribute:: connection
+
+       An HTTP request is attached to a single HTTP connection, which can
+       be accessed through the "connection" attribute. Since connections
+       are typically kept open in HTTP/1.1, multiple requests can be handled
+       sequentially on a single connection.
+
+    .. versionchanged:: 3.3
+       Moved from ``tornado.httpserver.HTTPRequest``.
+    """
+    def __init__(self, method=None, uri=None, version="HTTP/1.0", headers=None,
+                 body=None, host=None, files=None, connection=None,
+                 start_line=None):
+        if start_line is not None:
+            method, uri, version = start_line
+        self.method = method
+        self.uri = uri
+        self.version = version
+        self.headers = headers or HTTPHeaders()
+        self.body = body or ""
+
+        # set remote IP and protocol
+        context = getattr(connection, 'context', None)
+        self.remote_ip = getattr(context, 'remote_ip')
+        self.protocol = getattr(context, 'protocol', "http")
+
+        self.host = host or self.headers.get("Host") or "127.0.0.1"
+        self.files = files or {}
+        self.connection = connection
+        self._start_time = time.time()
+        self._finish_time = None
+
+        self.path, sep, self.query = uri.partition('?')
+        self.arguments = parse_qs_bytes(self.query, keep_blank_values=True)
+        self.query_arguments = copy.deepcopy(self.arguments)
+        self.body_arguments = {}
+
+    def supports_http_1_1(self):
+        """Returns True if this request supports HTTP/1.1 semantics.
+
+        .. deprecated:: 3.3
+           Applications are less likely to need this information with the
+           introduction of `.HTTPConnection`.  If you still need it, access
+           the ``version`` attribute directly.
+        """
+        return self.version == "HTTP/1.1"
+
+    @property
+    def cookies(self):
+        """A dictionary of Cookie.Morsel objects."""
+        if not hasattr(self, "_cookies"):
+            self._cookies = Cookie.SimpleCookie()
+            if "Cookie" in self.headers:
+                try:
+                    self._cookies.load(
+                        native_str(self.headers["Cookie"]))
+                except Exception:
+                    self._cookies = {}
+        return self._cookies
+
+    def write(self, chunk, callback=None):
+        """Writes the given chunk to the response stream.
+
+        .. deprecated:: 3.3
+           Use ``request.connection`` and the `.HTTPConnection` methods
+           to write the response.
+        """
+        assert isinstance(chunk, bytes_type)
+        self.connection.write(chunk, callback=callback)
+
+    def finish(self):
+        """Finishes this HTTP request on the open connection.
+
+        .. deprecated:: 3.3
+           Use ``request.connection`` and the `.HTTPConnection` methods
+           to write the response.
+        """
+        self.connection.finish()
+        self._finish_time = time.time()
+
+    def full_url(self):
+        """Reconstructs the full URL for this request."""
+        return self.protocol + "://" + self.host + self.uri
+
+    def request_time(self):
+        """Returns the amount of time it took for this request to execute."""
+        if self._finish_time is None:
+            return time.time() - self._start_time
+        else:
+            return self._finish_time - self._start_time
+
+    def get_ssl_certificate(self, binary_form=False):
+        """Returns the client's SSL certificate, if any.
+
+        To use client certificates, the HTTPServer must have been constructed
+        with cert_reqs set in ssl_options, e.g.::
+
+            server = HTTPServer(app,
+                ssl_options=dict(
+                    certfile="foo.crt",
+                    keyfile="foo.key",
+                    cert_reqs=ssl.CERT_REQUIRED,
+                    ca_certs="cacert.crt"))
+
+        By default, the return value is a dictionary (or None, if no
+        client certificate is present).  If ``binary_form`` is true, a
+        DER-encoded form of the certificate is returned instead.  See
+        SSLSocket.getpeercert() in the standard library for more
+        details.
+        http://docs.python.org/library/ssl.html#sslsocket-objects
+        """
+        try:
+            return self.connection.stream.socket.getpeercert(
+                binary_form=binary_form)
+        except SSLError:
+            return None
+
+    def _parse_body(self):
+        if self.method in ("POST", "PATCH", "PUT"):
+            parse_body_arguments(
+                self.headers.get("Content-Type", ""), self.body,
+                self.body_arguments, self.files,
+                self.headers)
+
+            for k, v in self.body_arguments.items():
+                self.arguments.setdefault(k, []).extend(v)
+
+    def __repr__(self):
+        attrs = ("protocol", "host", "method", "uri", "version", "remote_ip")
+        args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
+        return "%s(%s, headers=%s)" % (
+            self.__class__.__name__, args, dict(self.headers))
+
+
+class HTTPInputException(Exception):
+    """Exception class for malformed HTTP requests or responses
+    from remote sources.
+
+    .. versionadded:: 3.3
+    """
+    pass
+
+
+class HTTPOutputException(Exception):
+    """Exception class for errors in HTTP output.
+
+    .. versionadded:: 3.3
+    """
+    pass
+
+
+class HTTPServerConnectionDelegate(object):
+    """Implement this interface to handle requests from `.HTTPServer`.
+
+    .. versionadded:: 3.3
+    """
+    def start_request(self, server_conn, request_conn):
+        """This method is called by the server when a new request has started.
+
+        :arg server_conn: is an opaque object representing the long-lived
+            (e.g. tcp-level) connection.
+        :arg request_conn: is a `.HTTPConnection` object for a single
+            request/response exchange.
+
+        This method should return a `.HTTPMessageDelegate`.
+        """
+        raise NotImplementedError()
+
+    def on_close(self, server_conn):
+        """This method is called when a connection has been closed.
+
+        :arg server_conn: is a server connection that has previously been
+            passed to ``start_request``.
+        """
+        pass
+
+
+class HTTPMessageDelegate(object):
+    """Implement this interface to handle an HTTP request or response.
+
+    .. versionadded:: 3.3
+    """
+    def headers_received(self, start_line, headers):
+        """Called when the HTTP headers have been received and parsed.
+
+        :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`
+            depending on whether this is a client or server message.
+        :arg headers: a `.HTTPHeaders` instance.
+
+        Some `.HTTPConnection` methods can only be called during
+        ``headers_received``.
+
+        May return a `.Future`; if it does the body will not be read
+        until it is done.
+        """
+        pass
+
+    def data_received(self, chunk):
+        """Called when a chunk of data has been received.
+
+        May return a `.Future` for flow control.
+        """
+        pass
+
+    def finish(self):
+        """Called after the last chunk of data has been received."""
+        pass
+
+    def on_connection_close(self):
+        """Called if the connection is closed without finishing the request.
+
+        If ``headers_received`` is called, either ``finish`` or
+        ``on_connection_close`` will be called, but not both.
+        """
+        pass
+
+
+class HTTPConnection(object):
+    """Applications use this interface to write their responses.
+
+    .. versionadded:: 3.3
+    """
+    def write_headers(self, start_line, headers, chunk=None, callback=None):
+        """Write an HTTP header block.
+
+        :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
+        :arg headers: a `.HTTPHeaders` instance.
+        :arg chunk: the first (optional) chunk of data.  This is an optimization
+            so that small responses can be written in the same call as their
+            headers.
+        :arg callback: a callback to be run when the write is complete.
+
+        Returns a `.Future` if no callback is given.
+        """
+        raise NotImplementedError()
+
+    def write(self, chunk, callback=None):
+        """Writes a chunk of body data.
+
+        The callback will be run when the write is complete.  If no callback
+        is given, returns a Future.
+        """
+        raise NotImplementedError()
+
+    def finish(self):
+        """Indicates that the last body data has been written.
+        """
+        raise NotImplementedError()
+
+
 def url_concat(url, args):
     """Concatenate url and argument dictionary regardless of whether
     url has existing query parameters.
@@ -310,7 +658,7 @@ def _int_or_none(val):
     return int(val)
 
 
-def parse_body_arguments(content_type, body, arguments, files):
+def parse_body_arguments(content_type, body, arguments, files, headers=None):
     """Parses a form request body.
 
     Supports ``application/x-www-form-urlencoded`` and
@@ -319,6 +667,10 @@ def parse_body_arguments(content_type, body, arguments, files):
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
     """
+    if headers and 'Content-Encoding' in headers:
+        gen_log.warning("Unsupported Content-Encoding: %s",
+                        headers['Content-Encoding'])
+        return
     if content_type.startswith("application/x-www-form-urlencoded"):
         try:
             uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
@@ -404,6 +756,47 @@ def format_timestamp(ts):
     else:
         raise TypeError("unknown timestamp type: %r" % ts)
     return email.utils.formatdate(ts, usegmt=True)
+
+
+RequestStartLine = collections.namedtuple(
+    'RequestStartLine', ['method', 'path', 'version'])
+
+
+def parse_request_start_line(line):
+    """Returns a (method, path, version) tuple for an HTTP 1.x request line.
+
+    The response is a `collections.namedtuple`.
+
+    >>> parse_request_start_line("GET /foo HTTP/1.1")
+    RequestStartLine(method='GET', path='/foo', version='HTTP/1.1')
+    """
+    try:
+        method, path, version = line.split(" ")
+    except ValueError:
+        raise HTTPInputException("Malformed HTTP request line")
+    if not version.startswith("HTTP/"):
+        raise HTTPInputException(
+            "Malformed HTTP version in HTTP Request-Line: %r" % version)
+    return RequestStartLine(method, path, version)
+
+
+ResponseStartLine = collections.namedtuple(
+    'ResponseStartLine', ['version', 'code', 'reason'])
+
+
+def parse_response_start_line(line):
+    """Returns a (version, code, reason) tuple for an HTTP 1.x response line.
+
+    The response is a `collections.namedtuple`.
+
+    >>> parse_response_start_line("HTTP/1.1 200 OK")
+    ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')
+    """
+    line = native_str(line)
+    match = re.match("(HTTP/1.[01]) ([0-9]+) ([^\r]*)", line)
+    assert match
+    return ResponseStartLine(match.group(1), int(match.group(2)),
+                             match.group(3))
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some

@@ -48,3 +48,4 @@
    ----------
 
    .. autoexception:: StreamClosedError
+   .. autoexception:: UnsatisfiableReadError
