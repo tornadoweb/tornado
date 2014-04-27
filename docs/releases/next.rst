@@ -24,12 +24,6 @@ Backwards-compatibility notes
   of the old ``TracebackFuture`` class.  ``TracebackFuture`` is now
   simply an alias for ``Future``.
 
-`tornado.httpclient`
-~~~~~~~~~~~~~~~~~~~~
-
-* The command-line HTTP client (``python -m tornado.httpclient $URL``)
-  now works on Python 3.
-
 `tornado.gen`
 ~~~~~~~~~~~~~
 
@@ -39,6 +33,57 @@ Backwards-compatibility notes
 * Performance of coroutines has been improved.
 * Coroutines no longer generate ``StackContexts`` by default, but they
   will be created on demand when needed.
+* New function `.with_timeout` wraps a `.Future` and raises an exception
+  if it doesn't complete in a given amount of time.
+
+`tornado.http1connection`
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* New module contains the HTTP implementation shared by `tornado.httpserver`
+  and ``tornado.simple_httpclient``.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+* The command-line HTTP client (``python -m tornado.httpclient $URL``)
+  now works on Python 3.
+
+`tornado.httpserver`
+~~~~~~~~~~~~~~~~~~~~
+
+* ``tornado.httpserver.HTTPRequest`` has moved to
+  `tornado.httputil.HTTPServerRequest`.
+* HTTP implementation has been unified with ``tornado.simple_httpclient``
+  in `tornado.http1connection`.
+* Now supports ``Transfer-Encoding: chunked`` for request bodies.
+* Now supports ``Content-Encoding: gzip`` for request bodies if ``gzip=True``
+  is passed to the `.HTTPServer` constructor.
+* The ``connection`` attribute of `.HTTPServerRequest` is now documented
+  for public use; applications are expected to write their responses
+  via the `.HTTPConnection` interface.
+* The `.HTTPServerRequest.write` and `.HTTPServerRequest.finish` methods
+  are now deprecated.
+* `.HTTPServer` now supports `.HTTPServerConnectionDelegate` in addition to
+  the old ``request_callback`` interface.  The delegate interface supports
+  streaming of request bodies.
+* `.HTTPServer` now detects the error of an application sending a
+  ``Content-Length`` error that is inconsistent with the actual content.
+* New constructor arguments ``max_header_size`` and ``max_body_size``
+  allow separate limits to be set for different parts of the request.
+  ``max_body_size`` is applied even in streaming mode.
+* New constructor argument ``chunk_size`` can be used to limit the amount
+  of data read into memory at one time per request.
+* New constructor arguments ``idle_connection_timeout`` and ``body_timeout``
+  allow time limits to be placed on the reading of requests.
+
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+* `.HTTPServerRequest` was moved to this module from `tornado.httpserver`.
+* New base classes `.HTTPConnection`, `.HTTPServerConnectionDelegate`,
+  and `.HTTPMessageDelegate` define the interaction between applications
+  and the HTTP implementation.
+
 
 `tornado.ioloop`
 ~~~~~~~~~~~~~~~~
@@ -48,6 +93,7 @@ Backwards-compatibility notes
   (when possible) to avoid a garbage-collection-related problem in unit tests.
 * New method `.IOLoop.clear_instance` makes it possible to uninstall the
   singleton instance.
+* `.IOLoop.add_timeout` is now a bit more efficient.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -57,6 +103,17 @@ Backwards-compatibility notes
   for use with coroutines.
 * No longer gets confused when an ``IOError`` or ``OSError`` without
   an ``errno`` attribute is raised.
+* `.BaseIOStream.read_bytes` now accepts a ``partial`` keyword argument,
+  which can be used to return before the full amount has been read.
+  This is a more coroutine-friendly alternative to ``streaming_callback``.
+* `.BaseIOStream.read_until` and ``read_until_regex`` now acept a
+  ``max_bytes`` keyword argument which will cause the request to fail if
+  it cannot be satisfied from the given number of bytes.
+* `.IOStream` no longer reads from the socket into memory if it does not
+  need data to satisfy a pending read.  As a side effect, the close callback
+  will not be run immediately if the other side closes the connection
+  while there is unconsumed data in the buffer.
+* The default ``chunk_size`` has been increased to 64KB (from 4KB)
 
 `tornado.netutil`
 ~~~~~~~~~~~~~~~~~
@@ -81,7 +138,13 @@ Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Improved default cipher suite selection (Python 2.7+).
-
+* HTTP implementation has been unified with ``tornado.httpserver``
+  in `tornado.http1connection`
+* Streaming request bodies are now supported via the ``body_producer``
+  keyword argument to `tornado.httpclient.HTTPRequest`.
+* The ``expect_100_continue`` keyword argument to
+  `tornado.httpclient.HTTPRequest` allows the use of the HTTP ``Expect:
+  100-continue`` feature.
 
 `tornado.stack_context`
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -103,6 +166,11 @@ Backwards-compatibility notes
 
 * When gzip support is enabled, all ``text/*`` mime types will be compressed,
   not just those on a whitelist.
+* `.Application` now implements the `.HTTPMessageDelegate` interface.
+* It is now possible to support streaming request bodies with the
+  `.stream_request_body` decorator and the new `.RequestHandler.data_received`
+  method.
+* `.RequestHandler.flush` now returns a `.Future` if no callback is given.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
@@ -116,3 +184,14 @@ Backwards-compatibility notes
   messages larger than 2GB on 64-bit systems.
 * The fallback mechanism for detecting a missing C compiler now
   works correctly on Mac OS X.
+* Arguments to `.WebSocketHandler.open` are now decoded in the same way
+  as arguments to `.RequestHandler.get` and similar methods.
+
+`tornado.wsgi`
+~~~~~~~~~~~~~~
+
+* New class `.WSGIAdapter` supports running a Tornado `.Application` on
+  a WSGI server in a way that is more compatible with Tornado's non-WSGI
+  `.HTTPServer`.  `.WSGIApplication` is deprecated in favor of using
+  `.WSGIAdapter` with a regular `.Application`.
+* `.WSGIAdapter` now supports gzipped output.

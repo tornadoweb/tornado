@@ -270,13 +270,16 @@ class HTTPRequest(object):
         :arg body: HTTP request body as a string (byte or unicode; if unicode
            the utf-8 encoding will be used)
         :arg body_producer: Callable used for lazy/asynchronous request bodies.
-           TODO: document the interface.
+           It is called with one argument, a ``write`` function, and should
+           return a `.Future`.  It should call the write function with new
+           data as it becomes available.  The write function returns a
+           `.Future` which can be used for flow control.
            Only one of ``body`` and ``body_producer`` may
            be specified.  ``body_producer`` is not supported on
            ``curl_httpclient``.  When using ``body_producer`` it is recommended
            to pass a ``Content-Length`` in the headers as otherwise chunked
            encoding will be used, and many servers do not support chunked
-           encoding on requests.
+           encoding on requests.  New in Tornado 3.3
         :arg string auth_username: Username for HTTP authentication
         :arg string auth_password: Password for HTTP authentication
         :arg string auth_mode: Authentication mode; default is "basic".
@@ -349,6 +352,9 @@ class HTTPRequest(object):
 
         .. versionadded:: 3.1
            The ``auth_mode`` argument.
+
+        .. versionadded:: 3.3
+           The ``body_producer`` and ``expect_100_continue`` arguments.
         """
         # Note that some of these attributes go through property setters
         # defined below.

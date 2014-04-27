@@ -6,6 +6,7 @@ Asynchronous networking
    gen
    ioloop
    iostream
+   http1connection
    httpclient
    netutil
    tcpserver

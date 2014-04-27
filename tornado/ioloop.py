@@ -159,7 +159,10 @@ class IOLoop(Configurable):
 
     @staticmethod
     def clear_instance():
-        """Clear the global `IOLoop` instance."""
+        """Clear the global `IOLoop` instance.
+
+        .. versionadded:: 3.3
+        """
         if hasattr(IOLoop, "_instance"):
             del IOLoop._instance
 

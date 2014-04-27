@@ -14,6 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+"""Client and server implementations of HTTP/1.x.
+
+.. versionadded:: 3.3
+"""
+
 from __future__ import absolute_import, division, print_function, with_statement
 
 from tornado.concurrent import Future
@@ -26,9 +31,22 @@ from tornado import stack_context
 from tornado.util import GzipDecompressor
 
 class HTTP1ConnectionParameters(object):
+    """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`.
+    """
     def __init__(self, no_keep_alive=False, protocol=None, chunk_size=None,
                  max_header_size=None, header_timeout=None, max_body_size=None,
                  body_timeout=None, use_gzip=False):
+        """
+        :arg bool no_keep_alive: If true, always close the connection after
+            one request.
+        :arg str protocol: "http" or "https"
+        :arg int chunk_size: how much data to read into memory at once
+        :arg int max_header_size:  maximum amount of data for HTTP headers
+        :arg float header_timeout: how long to wait for all headers (seconds)
+        :arg int max_body_size: maximum amount of data for body
+        :arg float body_timeout: how long to wait while reading body (seconds)
+        :arg bool use_gzip: if true, decode incoming ``Content-Encoding: gzip``
+        """
         self.no_keep_alive = no_keep_alive
         self.protocol = protocol
         self.chunk_size = chunk_size or 65536
@@ -39,12 +57,19 @@ class HTTP1ConnectionParameters(object):
         self.use_gzip = use_gzip
 
 class HTTP1Connection(object):
-    """Handles a connection to an HTTP client, executing HTTP requests.
+    """Implements the HTTP/1.x protocol.
 
-    We parse HTTP headers and bodies, and execute the request callback
-    until the HTTP conection is closed.
+    This class can be on its own for clients, or via `HTTP1ServerConnection`
+    for servers.
     """
     def __init__(self, stream, is_client, params=None, context=None):
+        """
+        :arg stream: an `.IOStream`
+        :arg bool is_client: client or server
+        :arg params: a `.HTTP1ConnectionParameters` instance or ``None``
+        :arg context: an opaque application-defined object that can be accessed
+            as ``connection.context``.
+        """
         self.is_client = is_client
         self.stream = stream
         if params is None:
@@ -85,6 +110,16 @@ class HTTP1Connection(object):
         self._expected_content_remaining = None
 
     def read_response(self, delegate):
+        """Read a single HTTP response.
+
+        Typical client-mode usage is to write a request using `write_headers`,
+        `write`, and `finish`, and then call ``read_response``.
+
+        :arg delegate: a `.HTTPMessageDelegate`
+
+        Returns a `.Future` that resolves to None after the full response has
+        been read.
+        """
         if self.params.use_gzip:
             delegate = _GzipMessageDelegate(delegate, self.params.chunk_size)
         return self._read_message(delegate)
@@ -190,10 +225,8 @@ class HTTP1Connection(object):
     def set_close_callback(self, callback):
         """Sets a callback that will be run when the connection is closed.
 
-        Use this instead of accessing
-        `HTTPConnection.stream.set_close_callback
-        <.BaseIOStream.set_close_callback>` directly (which was the
-        recommended approach prior to Tornado 3.0).
+        .. deprecated:: 3.3
+            Use `.HTTPMessageDelegate.on_connection_close` instead.
         """
         self._close_callback = stack_context.wrap(callback)
 
@@ -211,18 +244,34 @@ class HTTP1Connection(object):
         self._clear_callbacks()
 
     def detach(self):
+        """Take control of the underlying stream.
+
+        Returns the underlying `.IOStream` object and stops all further
+        HTTP processing.  May only be called during
+        `.HTTPMessageDelegate.headers_received`.  Intended for implementing
+        protocols like websockets that tunnel over an HTTP handshake.
+        """
         stream = self.stream
         self.stream = None
         return stream
 
     def set_body_timeout(self, timeout):
+        """Sets the body timeout for a single request.
+
+        Overrides the value from `.HTTP1ConnectionParameters`.
+        """
         self._body_timeout = timeout
 
     def set_max_body_size(self, max_body_size):
+        """Sets the body size limit for a single request.
+
+        Overrides the value from `.HTTP1ConnectionParameters`.
+        """
         self._max_body_size = max_body_size
 
     def write_headers(self, start_line, headers, chunk=None, callback=None,
                       has_body=True):
+        """Implements `.HTTPConnection.write_headers`."""
         if self.is_client:
             self._request_start_line = start_line
             # Client requests with a non-empty body must have either a
@@ -298,7 +347,7 @@ class HTTP1Connection(object):
             return chunk
 
     def write(self, chunk, callback=None):
-        """Writes a chunk of output to the stream."""
+        """Implements `.HTTPConnection.write`."""
         if self.stream.closed():
             self._write_future = Future()
             self._write_future.set_exception(iostream.StreamClosedError())
@@ -312,7 +361,7 @@ class HTTP1Connection(object):
         return self._write_future
 
     def finish(self):
-        """Finishes the request."""
+        """Implements `.HTTPConnection.finish`."""
         if (self._expected_content_remaining is not None and
             self._expected_content_remaining != 0 and
             not self.stream.closed()):
@@ -492,7 +541,14 @@ class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
 
 
 class HTTP1ServerConnection(object):
+    """An HTTP/1.x server."""
     def __init__(self, stream, params=None, context=None):
+        """
+        :arg stream: an `.IOStream`
+        :arg params: a `.HTTP1ConnectionParameters` or None
+        :arg context: an opaque application-defined object that is accessible
+            as ``connection.context``
+        """
         self.stream = stream
         if params is None:
             params = HTTP1ConnectionParameters()
@@ -502,6 +558,10 @@ class HTTP1ServerConnection(object):
 
     @gen.coroutine
     def close(self):
+        """Closes the connection.
+
+        Returns a `.Future` that resolves after the serving loop has exited.
+        """
         self.stream.close()
         # Block until the serving loop is done, but ignore any exceptions
         # (start_serving is already responsible for logging them).
@@ -511,6 +571,10 @@ class HTTP1ServerConnection(object):
             pass
 
     def start_serving(self, delegate):
+        """Starts serving requests on this connection.
+
+        :arg delegate: a `.HTTPServerConnectionDelegate`
+        """
         assert isinstance(delegate, httputil.HTTPServerConnectionDelegate)
         self._serving_future = self._server_request_loop(delegate)
         # Register the future on the IOLoop so its errors get logged.

@@ -32,6 +32,11 @@
    .. autoclass:: YieldPoint
       :members:
 
+   .. autofunction:: with_timeout
+   .. autoexception:: TimeoutError
+
+   .. autofunction:: maybe_future
+
    Other classes
    -------------
 

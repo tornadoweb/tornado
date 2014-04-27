@@ -467,6 +467,8 @@ def with_timeout(timeout, future, io_loop=None):
     relative to `.IOLoop.time`)
 
     Currently only supports Futures, not other `YieldPoint` classes.
+
+    .. versionadded:: 3.3
     """
     # TODO: allow yield points in addition to futures?
     # Tricky to do with stack_context semantics.

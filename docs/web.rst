@@ -70,6 +70,7 @@
    .. automethod:: RequestHandler.send_error
    .. automethod:: RequestHandler.write_error
    .. automethod:: RequestHandler.clear
+   .. automethod:: RequestHandler.data_received
 
 
    Cookies
@@ -219,6 +220,7 @@
    .. autofunction:: authenticated
    .. autofunction:: addslash
    .. autofunction:: removeslash
+   .. autofunction:: stream_request_body
 
    Everything else
    ---------------

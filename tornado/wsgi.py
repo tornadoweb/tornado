@@ -174,6 +174,7 @@ class WSGIAdapter(object):
     that it is not possible to use `.AsyncHTTPClient`, or the
     `tornado.auth` or `tornado.websocket` modules.
 
+    .. versionadded:: 3.3
     """
     def __init__(self, application):
         if isinstance(application, WSGIApplication):

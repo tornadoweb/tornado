@@ -37,6 +37,9 @@ coverage_ignore_modules = [
     ]
 # I wish this could go in a per-module file...
 coverage_ignore_classes = [
+    # tornado.concurrent
+    "TracebackFuture",
+
     # tornado.gen
     "Multi",
     "Runner",

@@ -768,6 +768,9 @@ class RequestHandler(object):
         Note that only one flush callback can be outstanding at a time;
         if another flush occurs before the previous flush's callback
         has been run, the previous callback will be discarded.
+
+        .. versionchanged:: 3.3
+           Now returns a `.Future` if no callback is given.
         """
         chunk = b"".join(self._write_buffer)
         self._write_buffer = []
@@ -1253,6 +1256,13 @@ class RequestHandler(object):
                 # in a finally block to avoid GC issues prior to Python 3.4.
                 self._prepared_future.set_result(None)
 
+    def data_received(self, chunk):
+        """Implement this method to handle streamed request data.
+
+        Requires the `.stream_request_body` decorator.
+        """
+        raise NotImplementedError()
+
     def _log(self):
         """Logs the current request.
 
@@ -1395,6 +1405,7 @@ def stream_request_body(cls):
     """Apply to `RequestHandler` subclasses to enable streaming body support.
 
     This decorator implies the following changes:
+
     * `.HTTPServerRequest.body` is undefined, and body arguments will not
       be included in `RequestHandler.get_argument`.
     * `RequestHandler.prepare` is called when the request headers have been

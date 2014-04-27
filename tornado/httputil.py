@@ -316,6 +316,9 @@ class HTTPServerRequest(object):
        be accessed through the "connection" attribute. Since connections
        are typically kept open in HTTP/1.1, multiple requests can be handled
        sequentially on a single connection.
+
+    .. versionchanged:: 3.3
+       Moved from ``tornado.httpserver.HTTPRequest``.
     """
     def __init__(self, method=None, uri=None, version="HTTP/1.0", headers=None,
                  body=None, host=None, files=None, connection=None,
@@ -345,7 +348,13 @@ class HTTPServerRequest(object):
         self.body_arguments = {}
 
     def supports_http_1_1(self):
-        """Returns True if this request supports HTTP/1.1 semantics"""
+        """Returns True if this request supports HTTP/1.1 semantics.
+
+        .. deprecated:: 3.3
+           Applications are less likely to need this information with the
+           introduction of `.HTTPConnection`.  If you still need it, access
+           the ``version`` attribute directly.
+        """
         return self.version == "HTTP/1.1"
 
     @property
@@ -362,12 +371,22 @@ class HTTPServerRequest(object):
         return self._cookies
 
     def write(self, chunk, callback=None):
-        """Writes the given chunk to the response stream."""
+        """Writes the given chunk to the response stream.
+
+        .. deprecated:: 3.3
+           Use ``request.connection`` and the `.HTTPConnection` methods
+           to write the response.
+        """
         assert isinstance(chunk, bytes_type)
         self.connection.write(chunk, callback=callback)
 
     def finish(self):
-        """Finishes this HTTP request on the open connection."""
+        """Finishes this HTTP request on the open connection.
+
+        .. deprecated:: 3.3
+           Use ``request.connection`` and the `.HTTPConnection` methods
+           to write the response.
+        """
         self.connection.finish()
         self._finish_time = time.time()
 
@@ -428,35 +447,120 @@ class HTTPServerRequest(object):
 class HTTPInputException(Exception):
     """Exception class for malformed HTTP requests or responses
     from remote sources.
+
+    .. versionadded:: 3.3
     """
     pass
 
 
 class HTTPOutputException(Exception):
-    """Exception class for errors in HTTP output."""
+    """Exception class for errors in HTTP output.
+
+    .. versionadded:: 3.3
+    """
     pass
 
 
 class HTTPServerConnectionDelegate(object):
+    """Implement this interface to handle requests from `.HTTPServer`.
+
+    .. versionadded:: 3.3
+    """
     def start_request(self, server_conn, request_conn):
+        """This method is called by the server when a new request has started.
+
+        :arg server_conn: is an opaque object representing the long-lived
+            (e.g. tcp-level) connection.
+        :arg request_conn: is a `.HTTPConnection` object for a single
+            request/response exchange.
+
+        This method should return a `.HTTPMessageDelegate`.
+        """
         raise NotImplementedError()
 
     def on_close(self, server_conn):
+        """This method is called when a connection has been closed.
+
+        :arg server_conn: is a server connection that has previously been
+            passed to ``start_request``.
+        """
         pass
 
 
 class HTTPMessageDelegate(object):
+    """Implement this interface to handle an HTTP request or response.
+
+    .. versionadded:: 3.3
+    """
     def headers_received(self, start_line, headers):
+        """Called when the HTTP headers have been received and parsed.
+
+        :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`
+            depending on whether this is a client or server message.
+        :arg headers: a `.HTTPHeaders` instance.
+
+        Some `.HTTPConnection` methods can only be called during
+        ``headers_received``.
+
+        May return a `.Future`; if it does the body will not be read
+        until it is done.
+        """
         pass
 
     def data_received(self, chunk):
+        """Called when a chunk of data has been received.
+
+        May return a `.Future` for flow control.
+        """
         pass
 
     def finish(self):
+        """Called after the last chunk of data has been received."""
         pass
 
     def on_connection_close(self):
+        """Called if the connection is closed without finishing the request.
+
+        If ``headers_received`` is called, either ``finish`` or
+        ``on_connection_close`` will be called, but not both.
+        """
         pass
+
+
+class HTTPConnection(object):
+    """Applications use this interface to write their responses.
+
+    .. versionadded:: 3.3
+    """
+    def write_headers(self, start_line, headers, chunk=None, callback=None,
+                      has_body=True):
+        """Write an HTTP header block.
+
+        :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
+        :arg headers: a `.HTTPHeaders` instance.
+        :arg chunk: the first (optional) chunk of data.  This is an optimization
+            so that small responses can be written in the same call as their
+            headers.
+        :arg callback: a callback to be run when the write is complete.
+        :arg has_body: as an optimization, may be ``False`` to indicate
+            that no further writes will be coming.
+
+        Returns a `.Future` if no callback is given.
+        """
+        raise NotImplementedError()
+
+    def write(self, chunk, callback=None):
+        """Writes a chunk of body data.
+
+        The callback will be run when the write is complete.  If no callback
+        is given, returns a Future.
+        """
+        raise NotImplementedError()
+
+    def finish(self):
+        """Indicates that the last body data has been written.
+        """
+        raise NotImplementedError()
 
 
 def url_concat(url, args):

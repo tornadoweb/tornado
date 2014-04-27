@@ -41,41 +41,33 @@ from tornado.tcpserver import TCPServer
 class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     r"""A non-blocking, single-threaded HTTP server.
 
-    A server is defined by a request callback that takes an HTTPRequest
-    instance as an argument and writes a valid HTTP response with
-    `.HTTPServerRequest.write`. `.HTTPServerRequest.finish` finishes the request (but does
-    not necessarily close the connection in the case of HTTP/1.1 keep-alive
-    requests). A simple example server that echoes back the URI you
-    requested::
+    A server is defined by either a request callback that takes a
+    `.HTTPServerRequest` as an argument or a `.HTTPServerConnectionDelegate`
+    instance.
+
+    A simple example server that echoes back the URI you requested::
 
         import tornado.httpserver
         import tornado.ioloop
 
         def handle_request(request):
            message = "You requested %s\n" % request.uri
-           request.write("HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s" % (
-                         len(message), message))
-           request.finish()
+           request.connection.write_headers(
+               httputil.ResponseStartLine('HTTP/1.1', 200, 'OK'),
+               {"Content-Length": str(len(message))})
+           request.connection.write(message)
+           request.connection.finish()
 
         http_server = tornado.httpserver.HTTPServer(handle_request)
         http_server.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
 
-    `HTTPServer` is a very basic connection handler.  It parses the request
-    headers and body, but the request callback is responsible for producing
-    the response exactly as it will appear on the wire.  This affords
-    maximum flexibility for applications to implement whatever parts
-    of HTTP responses are required.
+    Applications should use the methods of `.HTTPConnection` to write
+    their response.
 
     `HTTPServer` supports keep-alive connections by default
     (automatically for HTTP/1.1, or for HTTP/1.0 when the client
-    requests ``Connection: keep-alive``).  This means that the request
-    callback must generate a properly-framed response, using either
-    the ``Content-Length`` header or ``Transfer-Encoding: chunked``.
-    Applications that are unable to frame their responses properly
-    should instead return a ``Connection: close`` header in each
-    response and pass ``no_keep_alive=True`` to the `HTTPServer`
-    constructor.
+    requests ``Connection: keep-alive``).
 
     If ``xheaders`` is ``True``, we support the
     ``X-Real-Ip``/``X-Forwarded-For`` and
@@ -135,6 +127,11 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
        servers if you want to create your listening sockets in some
        way other than `tornado.netutil.bind_sockets`.
 
+    .. versionchanged:: 3.3
+       Added ``gzip``, ``chunk_size``, ``max_header_size``,
+       ``idle_connection_timeout``, ``body_timeout``, ``max_body_size``
+       arguments.  Added support for `.HTTPServerConnectionDelegate`
+       instances as ``request_callback``.
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
                  xheaders=False, ssl_options=None, protocol=None, gzip=False,
