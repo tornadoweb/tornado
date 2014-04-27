@@ -30,6 +30,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import socket
 
+from tornado.escape import native_str
 from tornado.http1connection import HTTP1ServerConnection, HTTP1ConnectionParameters
 from tornado import gen
 from tornado import httputil
@@ -207,6 +208,11 @@ class _HTTPRequestContext(object):
     def __str__(self):
         if self.address_family in (socket.AF_INET, socket.AF_INET6):
             return self.remote_ip
+        elif isinstance(self.address, bytes):
+            # Python 3 with the -bb option warns about str(bytes),
+            # so convert it explicitly.
+            # Unix socket addresses are str on mac but bytes on linux.
+            return native_str(self.address)
         else:
             return str(self.address)
 
