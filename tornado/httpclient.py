@@ -25,6 +25,11 @@ to switch to ``curl_httpclient`` for reasons such as the following:
 Note that if you are using ``curl_httpclient``, it is highly recommended that
 you use a recent version of ``libcurl`` and ``pycurl``.  Currently the minimum
 supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
+It is highly recommended that your ``libcurl`` installation is built with
+asynchronous DNS resolver (threaded or c-ares), otherwise you may encounter
+various problems with request timeouts (for more information, see
+http://curl.haxx.se/libcurl/c/curl_easy_setopt.html#CURLOPTCONNECTTIMEOUTMS
+and comments in curl_httpclient.py).
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
