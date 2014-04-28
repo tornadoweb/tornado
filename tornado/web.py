@@ -2450,6 +2450,11 @@ def authenticated(method):
 
     If the user is not logged in, they will be redirected to the configured
     `login url <RequestHandler.get_login_url>`.
+
+    If you configure a login url with a query parameter, Tornado will
+    assume you know what you're doing and use it as-is.  If not, it
+    will add a `next` parameter so the login page knows where to send
+    you once you're logged in.
     """
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
