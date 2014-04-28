@@ -1,6 +1,5 @@
 recursive-include demos *.py *.yaml *.html *.css *.js *.xml *.sql README
 include tornado/speedups.c
-include tornado/ca-certificates.crt
 include tornado/test/README
 include tornado/test/csv_translations/fr_FR.csv
 include tornado/test/gettext_translations/fr_FR/LC_MESSAGES/tornado_test.mo

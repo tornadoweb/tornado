@@ -15,7 +15,6 @@ import base64
 import collections
 import copy
 import functools
-import os.path
 import re
 import socket
 import ssl
@@ -31,8 +30,16 @@ try:
 except ImportError:
     import urllib.parse as urlparse  # py3
 
-_DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
+try:
+    import certifi
+except ImportError:
+    certifi = None
 
+def _default_ca_certs():
+    if certifi is None:
+        raise Exception("The 'certifi' package is required to use https "
+                        "in simple_httpclient")
+    return certifi.where()
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -224,7 +231,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if self.request.ca_certs is not None:
                 ssl_options["ca_certs"] = self.request.ca_certs
             else:
-                ssl_options["ca_certs"] = _DEFAULT_CA_CERTS
+                ssl_options["ca_certs"] = _default_ca_certs()
             if self.request.client_key is not None:
                 ssl_options["keyfile"] = self.request.client_key
             if self.request.client_cert is not None:

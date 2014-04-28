@@ -11,6 +11,10 @@ Backwards-compatibility notes
   to `.IOLoop.add_handler` in this release.
 * `tornado.concurrent.Future` is no longer thread-safe; use
   `concurrent.futures.Future` when thread-safety is needed.
+* Tornado now depends on the `certifi <https://pypi.python.org/pypi/certifi>`_
+  package instead of bundling its own copy of the Mozilla CA list. This will
+  be installed automatically when using ``pip`` or ``easy_install``.
+
 
 `tornado.concurrent`
 ~~~~~~~~~~~~~~~~~~~~

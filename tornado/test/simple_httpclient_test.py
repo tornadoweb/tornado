@@ -16,7 +16,7 @@ from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
 from tornado.netutil import Resolver
-from tornado.simple_httpclient import SimpleAsyncHTTPClient, _DEFAULT_CA_CERTS
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
@@ -192,7 +192,7 @@ class SimpleHTTPClientTestMixin(object):
             response.rethrow()
 
     def test_default_certificates_exist(self):
-        open(_DEFAULT_CA_CERTS).close()
+        open(_default_ca_certs()).close()
 
     def test_gzip(self):
         # All the tests in this file should be using gzip, but this test

@@ -2,6 +2,7 @@
 
 # Tornado's required dependencies
 backports.ssl-match-hostname==3.4.0.2
+certifi==1.0.1
 
 # Tornado's optional dependencies
 Twisted==13.2.0

@@ -134,17 +134,19 @@ if (platform.python_implementation() == 'CPython' and
         # fall back to the pure-python implementation on any build failure.
         kwargs['cmdclass'] = {'build_ext': custom_build_ext}
 
+
 if setuptools is not None:
     # If setuptools is not available, you're on your own for dependencies.
+    install_requires = ['certifi']
     if sys.version_info < (3, 2):
-        kwargs['install_requires'] = ['backports.ssl_match_hostname']
+        install_requires.append('backports.ssl_match_hostname')
+    kwargs['install_requires'] = install_requires
 
 setup(
     name="tornado",
     version=version,
     packages = ["tornado", "tornado.test", "tornado.platform"],
     package_data = {
-        "tornado": ["ca-certificates.crt"],
         # data files need to be listed both here (which determines what gets
         # installed) and in MANIFEST.in (which determines what gets included
         # in the sdist tarball)
