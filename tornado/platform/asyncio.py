@@ -1,13 +1,21 @@
-"""Bridges between the `asyncio` module and Tornado IOLoop.
+"""This module integrates Tornado with the ``asyncio`` module introduced
+in Python 3.4 (and available `as a separate download
+<https://pypi.python.org/pypi/asyncio>`_ for Python 3.3).  This makes
+it possible to combine the two libraries on the same event loop.
+
+Most applications should use `AsyncIOMainLoop` to run Tornado on the
+default ``asyncio`` event loop.  Applications that need to run event
+loops on multiple threads may use `AsyncIOLoop` to create multiple
+loops.
 
 This is a work in progress and interfaces are subject to change.
-
-To test:
-python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOLoop
-python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOMainLoop
-(the tests log a few warnings with AsyncIOMainLoop because they leave some
-unfinished callbacks on the event loop that fail when it resumes)
 """
+
+#To test:
+#python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOLoop
+#python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOMainLoop
+#(the tests log a few warnings with AsyncIOMainLoop because they leave some
+#unfinished callbacks on the event loop that fail when it resumes)
 
 from __future__ import absolute_import, division, print_function, with_statement
 import asyncio
@@ -20,6 +28,7 @@ from tornado import stack_context, concurrent
 
 
 class BaseAsyncIOLoop(IOLoop):
+    """Serves as a base for `.AsyncIOMainLoop` and `.AsyncIOLoop`."""
     def initialize(self, asyncio_loop, close_loop=False):
         self.asyncio_loop = asyncio_loop
         self.close_loop = close_loop
@@ -137,12 +146,33 @@ class BaseAsyncIOLoop(IOLoop):
 
 
 class AsyncIOMainLoop(BaseAsyncIOLoop):
+    """``AsyncIOMainLoop`` creates an `.IOLoop` that corresponds to the
+    current ``asyncio`` event loop (i.e. the one returned by
+    ``asyncio.get_event_loop()``).
+
+    Recommended usage::
+
+        from tornado.platform.asyncio import AsyncIOMainLoop
+        import asyncio
+        AsyncIOMainLoop().install()
+        asyncio.get_event_loop().run_forever()
+    """
     def initialize(self):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
                                                 close_loop=False)
 
 
 class AsyncIOLoop(BaseAsyncIOLoop):
+    """``AsyncIOLoop`` is an `.IOLoop` that runs on an ``asyncio`` event loop.
+
+    This class follows the usual Tornado semantics for creating new
+    ``IOLoops``; these loops are not necessarily related to the
+    ``asyncio`` default event loop.  Recommended usage::
+
+        from tornado.ioloop import IOLoop
+        IOLoop.configure('tornado.platform.asyncio.AsyncIOLoop')
+        IOLoop.instance().start()
+    """
     def initialize(self):
         super(AsyncIOLoop, self).initialize(asyncio.new_event_loop(),
                                             close_loop=True)
