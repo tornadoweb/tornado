@@ -131,6 +131,10 @@ class BaseAsyncIOLoop(IOLoop):
 
     add_callback_from_signal = add_callback
 
+    def get_asyncio_loop(self):
+        """Returns the ``asyncio`` event loop used for this `.BaseAsyncIOLoop` object."""
+        return self.asyncio_loop
+
 
 class AsyncIOMainLoop(BaseAsyncIOLoop):
     def initialize(self):
