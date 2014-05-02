@@ -16,7 +16,7 @@ import functools
 
 # _Timeout is used for its timedelta_to_seconds method for py26 compatibility.
 from tornado.ioloop import IOLoop, _Timeout
-from tornado import stack_context
+from tornado import stack_context, concurrent
 
 
 class BaseAsyncIOLoop(IOLoop):
@@ -142,3 +142,63 @@ class AsyncIOLoop(BaseAsyncIOLoop):
     def initialize(self):
         super(AsyncIOLoop, self).initialize(asyncio.new_event_loop(),
                                             close_loop=True)
+
+
+def _copy_future_state(finished_future, other_future):
+    assert finished_future.done()
+    if other_future.cancelled():
+        return # disregard callback after setting exception in _check_cancelled
+
+    try:
+        other_future.set_result(finished_future.result())
+    except Exception as e:
+        other_future.set_exception(e)
+
+def wrap_asyncio_future(future):
+    """Wraps an ``asyncio.Future`` in a `.tornado.concurrent.Future`."""
+    new_future = concurrent.Future()
+    future.add_done_callback(lambda _: _copy_future_state(future, new_future))
+    return new_future
+
+def wrap_tornado_future(future, *, loop=None):
+    """Wraps a `.tornado.concurrent.Future` in an ``asyncio.Future``.
+
+    If ``loop`` is not supplied, an event loop will be retrieved
+    using ``asyncio.get_event_loop()`` for use with the returned Future.
+    """
+    new_future = asyncio.Future(loop=(loop or asyncio.get_event_loop()))
+    future.add_done_callback(lambda _: _copy_future_state(future, new_future))
+
+    # attempt to intercept cancellation, similar to what asyncio.futures.wrap_future does.
+    # probably won't work as expected; best to avoid trying to cancel futures.
+    def _check_cancelled(_):
+        if new_future.cancelled():
+            future.set_exception(asyncio.CancelledError())
+
+    new_future.add_done_callback(_check_cancelled)
+    return new_future
+
+def task(func):
+    """Decorator for wrapping an ``asyncio`` coroutine object in a `.tornado.concurrent.Future`.
+
+    When a function decorated by ``@platform.asyncio.task`` is called, an ``asyncio.Task``
+    object running on the event loop returned by ``asyncio.get_event_loop()`` will be
+    constructed and subsequently wrapped in a `.tornado.concurrent.Future` and returned.
+
+    A function decorated with ``@platform.asyncio.task`` does not need to be explicitly
+    decorated with ``@asyncio.coroutine``.
+
+    Example usage::
+
+        class AsyncIORequestHandler(RequestHandler):
+            @platform.asyncio.task
+            def get(self):
+                proc = yield from asyncio.create_subprocess_exec(
+                    'ls', '-l', stdout=asyncio.subprocess.PIPE)
+                stdout, _ = yield from proc.communicate()
+                self.write(stdout.replace('\\n', '<br>'))
+    """
+    func = asyncio.coroutine(func)
+    def wrapper(*args, **kwargs):
+        return wrap_asyncio_future(asyncio.Task(func(*args, **kwargs)))
+    return wrapper
