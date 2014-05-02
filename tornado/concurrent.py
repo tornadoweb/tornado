@@ -177,6 +177,11 @@ class Future(object):
             cb(self)
         self._callbacks = None
 
+    def __iter__(self):
+        import tornado.platform.asyncio # raises an error if not on py3k/asyncio not available
+        return iter(tornado.platform.asyncio.wrap_tornado_future(self))
+
+
 TracebackFuture = Future
 
 if futures is None:
