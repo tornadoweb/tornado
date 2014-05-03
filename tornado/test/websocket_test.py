@@ -145,7 +145,6 @@ class WebSocketTest(AsyncHTTPTestCase):
                     'ws://locatehost:%d/' % port,
                     io_loop=self.io_loop,
                     connect_timeout=3600)
-        self.assertEqual(cm.exception.errno, -5)
 
     @gen_test
     def test_websocket_close_buffered_data(self):
