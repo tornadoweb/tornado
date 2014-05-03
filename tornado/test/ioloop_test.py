@@ -51,7 +51,8 @@ class TestIOLoop(AsyncTestCase):
         thread = threading.Thread(target=target)
         self.io_loop.add_callback(thread.start)
         self.wait()
-        self.assertAlmostEqual(time.time(), self.stop_time, places=2)
+        delta = time.time() - self.stop_time
+        self.assertLess(delta, 0.1)
         thread.join()
 
     def test_add_timeout_timedelta(self):
