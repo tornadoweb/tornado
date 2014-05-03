@@ -371,11 +371,11 @@ class _HTTPConnection(object):
         if self.final_callback is not None:
             message = "Connection closed"
             if self.stream.error:
-                message = str(self.stream.error)
                 if isinstance(self.stream.error, HTTPError):
-                    raise HTTPError(599, message)
+                    message = str(self.stream.error)
                 else:
-                    raise getattr(self.stream.error, "__class__")(message)
+                    raise self.stream.error
+            raise HTTPError(599, message)
 
     def _handle_1xx(self, code):
         self.stream.read_until_regex(b"\r?\n\r?\n", self._on_headers)
