@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import traceback
+import socket
 
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
