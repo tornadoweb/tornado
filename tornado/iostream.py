@@ -72,6 +72,7 @@ class StreamClosedError(IOError):
     pass
 
 
+
 class UnsatisfiableReadError(Exception):
     """Exception raised when a read cannot be satisfied.
 
@@ -364,7 +365,7 @@ class BaseIOStream(object):
                 futures.append(self._connect_future)
                 self._connect_future = None
             for future in futures:
-                future.set_exception(StreamClosedError())
+                future.set_exception(self.error or StreamClosedError())
             if self._close_callback is not None:
                 cb = self._close_callback
                 self._close_callback = None
@@ -408,13 +409,19 @@ class BaseIOStream(object):
             gen_log.warning("Got events for closed stream %s", fd)
             return
         try:
+            if self._connecting:
+                # Most IOLoops will report a write failed connect
+                # with the WRITE event, but SelectIOLoop reports a
+                # READ as well so we must check for connecting before
+                # either.
+                self._handle_connect()
+            if self.closed():
+                return
             if events & self.io_loop.READ:
                 self._handle_read()
             if self.closed():
                 return
             if events & self.io_loop.WRITE:
-                if self._connecting:
-                    self._handle_connect()
                 self._handle_write()
             if self.closed():
                 return

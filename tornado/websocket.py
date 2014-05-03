@@ -37,8 +37,8 @@ from tornado import httpclient, httputil
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
-from tornado.netutil import Resolver
 from tornado import simple_httpclient
+from tornado.tcpclient import TCPClient
 from tornado.util import bytes_type, unicode_type
 
 try:
@@ -821,10 +821,10 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             'Sec-WebSocket-Version': '13',
         })
 
-        self.resolver = Resolver(io_loop=io_loop)
+        self.tcp_client = TCPClient(io_loop=io_loop)
         super(WebSocketClientConnection, self).__init__(
             io_loop, None, request, lambda: None, self._on_http_response,
-            104857600, self.resolver, 65536)
+            104857600, self.tcp_client, 65536)
 
     def close(self, code=None, reason=None):
         """Closes the websocket connection.

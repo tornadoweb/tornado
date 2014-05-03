@@ -604,7 +604,8 @@ class HTTP1ServerConnection(object):
                 request_delegate = delegate.start_request(self, conn)
                 try:
                     ret = yield conn.read_response(request_delegate)
-                except iostream.StreamClosedError:
+                except (iostream.StreamClosedError,
+                        iostream.UnsatisfiableReadError):
                     return
                 except Exception:
                     # TODO: this is probably too broad; it would be better to

@@ -10,6 +10,7 @@ from tornado.iostream import IOStream, SSLIOStream, StreamClosedError
 from tornado.netutil import Resolver, OverrideResolver
 from tornado.log import gen_log
 from tornado import stack_context
+from tornado.tcpclient import TCPClient
 
 import base64
 import collections
@@ -88,6 +89,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.waiting = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
+        # TCPClient could create a Resolver for us, but we have to do it
+        # ourselves to support hostname_mapping.
         if resolver:
             self.resolver = resolver
             self.own_resolver = False
@@ -97,11 +100,13 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         if hostname_mapping is not None:
             self.resolver = OverrideResolver(resolver=self.resolver,
                                              mapping=hostname_mapping)
+        self.tcp_client = TCPClient(resolver=self.resolver, io_loop=io_loop)
 
     def close(self):
         super(SimpleAsyncHTTPClient, self).close()
         if self.own_resolver:
             self.resolver.close()
+        self.tcp_client.close()
 
     def fetch_impl(self, request, callback):
         key = object()
@@ -133,7 +138,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     def _handle_request(self, request, release_callback, final_callback):
         _HTTPConnection(self.io_loop, self, request, release_callback,
-                        final_callback, self.max_buffer_size, self.resolver,
+                        final_callback, self.max_buffer_size, self.tcp_client,
                         self.max_header_size)
 
     def _release_fetch(self, key):
@@ -161,7 +166,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
     def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size, resolver,
+                 final_callback, max_buffer_size, tcp_client,
                  max_header_size):
         self.start_time = io_loop.time()
         self.io_loop = io_loop
@@ -170,7 +175,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.release_callback = release_callback
         self.final_callback = final_callback
         self.max_buffer_size = max_buffer_size
-        self.resolver = resolver
+        self.tcp_client = tcp_client
         self.max_header_size = max_header_size
         self.code = None
         self.headers = None
@@ -208,28 +213,19 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 # so restrict to ipv4 by default.
                 af = socket.AF_INET
 
+            ssl_options = self._get_ssl_options(self.parsed.scheme)
+
             timeout = min(self.request.connect_timeout, self.request.request_timeout)
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
                     stack_context.wrap(self._on_timeout))
-            self.resolver.resolve(host, port, af, callback=self._on_resolve)
+            self.tcp_client.connect(host, port, af=af,
+                                    ssl_options=ssl_options,
+                                    callback=self._on_connect)
 
-    def _on_resolve(self, addrinfo):
-        if self.final_callback is None:
-            # final_callback is cleared if we've hit our timeout
-            return
-        self.stream = self._create_stream(addrinfo)
-        self.stream.set_close_callback(self._on_close)
-        # ipv6 addresses are broken (in self.parsed.hostname) until
-        # 2.7, here is correctly parsed value calculated in __init__
-        self._sockaddr = addrinfo[0][1]
-        self.stream.connect(self._sockaddr, self._on_connect,
-                            server_hostname=self.parsed_hostname)
-
-    def _create_stream(self, addrinfo):
-        af = addrinfo[0][0]
-        if self.parsed.scheme == "https":
+    def _get_ssl_options(self, scheme):
+        if scheme == "https":
             ssl_options = {}
             if self.request.validate_cert:
                 ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
@@ -262,15 +258,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 # of openssl, but python 2.6 doesn't expose version
                 # information.
                 ssl_options["ssl_version"] = ssl.PROTOCOL_TLSv1
-
-            return SSLIOStream(socket.socket(af),
-                               io_loop=self.io_loop,
-                               ssl_options=ssl_options,
-                               max_buffer_size=self.max_buffer_size)
-        else:
-            return IOStream(socket.socket(af),
-                            io_loop=self.io_loop,
-                            max_buffer_size=self.max_buffer_size)
+            return ssl_options
+        return None
 
     def _on_timeout(self):
         self._timeout = None
@@ -282,7 +271,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
-    def _on_connect(self):
+    def _on_connect(self, stream):
+        if self.final_callback is None:
+            # final_callback is cleared if we've hit our timeout.
+            stream.close()
+            return
+        self.stream = stream
+        self.stream.set_close_callback(self._on_close)
         self._remove_timeout()
         if self.final_callback is None:
             return

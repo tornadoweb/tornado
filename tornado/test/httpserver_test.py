@@ -9,7 +9,7 @@ from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
 from tornado.iostream import IOStream
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test
@@ -111,11 +111,15 @@ class SSLTestMixin(object):
         # connection, rather than waiting for a timeout or otherwise
         # misbehaving.
         with ExpectLog(gen_log, '(SSL Error|uncaught exception)'):
-            self.http_client.fetch(self.get_url("/").replace('https:', 'http:'),
-                                   self.stop,
-                                   request_timeout=3600,
-                                   connect_timeout=3600)
-            response = self.wait()
+            # TODO: this should go to gen_log, not app_log.  See TODO
+            # in http1connection.py (_server_request_loop)
+            with ExpectLog(app_log, 'Uncaught exception', required=False):
+                self.http_client.fetch(
+                    self.get_url("/").replace('https:', 'http:'),
+                    self.stop,
+                    request_timeout=3600,
+                    connect_timeout=3600)
+                response = self.wait()
         self.assertEqual(response.code, 599)
 
 # Python's SSL implementation differs significantly between versions.
