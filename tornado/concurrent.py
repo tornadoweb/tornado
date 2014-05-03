@@ -31,9 +31,13 @@ from tornado.stack_context import ExceptionStackContext, wrap
 from tornado.util import raise_exc_info, ArgReplacer
 
 try:
-    from concurrent import futures
+    from concurrent import futures as concurrent_futures
 except ImportError:
-    futures = None
+    concurrent_futures = None
+try:
+    from asyncio import futures as asyncio_futures
+except ImportError:
+    asyncio_futures = None
 
 
 class ReturnValueIgnoredError(Exception):
@@ -184,10 +188,11 @@ class Future(object):
 
 TracebackFuture = Future
 
-if futures is None:
-    FUTURES = Future
-else:
-    FUTURES = (futures.Future, Future)
+FUTURES = (Future,)
+if concurrent_futures is not None:
+    FUTURES += (concurrent_futures.Future,)
+if asyncio_futures is not None:
+    FUTURES += (asyncio_futures.Future,)
 
 def is_future(x):
     return isinstance(x, FUTURES)

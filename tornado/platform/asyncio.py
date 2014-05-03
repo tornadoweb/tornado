@@ -188,12 +188,6 @@ def _copy_future_state(finished_future, other_future):
     except Exception as e:
         other_future.set_exception(e)
 
-def wrap_asyncio_future(future):
-    """Wraps an ``asyncio.Future`` in a `.tornado.concurrent.Future`."""
-    new_future = concurrent.Future()
-    future.add_done_callback(lambda _: _copy_future_state(future, new_future))
-    return new_future
-
 def wrap_tornado_future(future, *, loop=None):
     """Wraps a `.tornado.concurrent.Future` in an ``asyncio.Future``.
 
@@ -213,11 +207,11 @@ def wrap_tornado_future(future, *, loop=None):
     return new_future
 
 def task(func):
-    """Decorator for wrapping an ``asyncio`` coroutine object in a `.tornado.concurrent.Future`.
+    """Decorator for wrapping an ``asyncio`` coroutine object in an ``asyncio.Task``.
 
     When a function decorated by ``@platform.asyncio.task`` is called, an ``asyncio.Task``
     object running on the event loop returned by ``asyncio.get_event_loop()`` will be
-    constructed and subsequently wrapped in a `.tornado.concurrent.Future` and returned.
+    constructed and returned.
 
     A function decorated with ``@platform.asyncio.task`` does not need to be explicitly
     decorated with ``@asyncio.coroutine``.
@@ -239,6 +233,7 @@ def task(func):
                 self.write(stdout.replace(b'\\n', b'<br>'))
     """
     func = asyncio.coroutine(func)
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        return wrap_asyncio_future(asyncio.Task(func(*args, **kwargs)))
+        return asyncio.Task(func(*args, **kwargs))
     return wrapper

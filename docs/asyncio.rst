@@ -56,10 +56,6 @@ IOLoops
 Future-related convenience functions
 ------------------------------------
 
-.. py:function:: wrap_asyncio_future(future)
-
-    Wraps an ``asyncio.Future`` in a `.tornado.concurrent.Future`.
-
 .. py:function:: wrap_tornado_future(future, *, loop=None)
 
     Wraps a `.tornado.concurrent.Future` in an ``asyncio.Future``.
@@ -69,11 +65,11 @@ Future-related convenience functions
 
 .. py:function:: task(func)
 
-    Decorator for wrapping an ``asyncio`` coroutine object in a `.tornado.concurrent.Future`.
+    Decorator for wrapping an ``asyncio`` coroutine object in an ``asyncio.Task``.
 
     When a function decorated by ``@platform.asyncio.task`` is called, an ``asyncio.Task``
     object running on the event loop returned by ``asyncio.get_event_loop()`` will be
-    constructed and subsequently wrapped in a `.tornado.concurrent.Future` and returned.
+    constructed and returned.
 
     A function decorated with ``@platform.asyncio.task`` does not need to be explicitly
     decorated with ``@asyncio.coroutine``.
