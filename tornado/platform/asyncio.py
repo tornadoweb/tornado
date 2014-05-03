@@ -178,16 +178,6 @@ class AsyncIOLoop(BaseAsyncIOLoop):
                                             close_loop=True)
 
 
-def _copy_future_state(finished_future, other_future):
-    assert finished_future.done()
-    if other_future.cancelled():
-        return # disregard callback after setting exception in _check_cancelled
-
-    try:
-        other_future.set_result(finished_future.result())
-    except Exception as e:
-        other_future.set_exception(e)
-
 def wrap_tornado_future(future, *, loop=None):
     """Wraps a `.tornado.concurrent.Future` in an ``asyncio.Future``.
 
@@ -195,7 +185,7 @@ def wrap_tornado_future(future, *, loop=None):
     using ``asyncio.get_event_loop()`` for use with the returned Future.
     """
     new_future = asyncio.Future(loop=(loop or asyncio.get_event_loop()))
-    future.add_done_callback(lambda _: _copy_future_state(future, new_future))
+    concurrent.chain_future(future, new_future)
 
     # attempt to intercept cancellation, similar to what asyncio.futures.wrap_future does.
     # probably won't work as expected; best to avoid trying to cancel futures.
