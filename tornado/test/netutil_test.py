@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
-import platform
 import signal
 import socket
 from subprocess import Popen
@@ -154,15 +153,13 @@ class IsValidIPTest(unittest.TestCase):
         self.assertTrue(not is_valid_ip('\x00'))
 
 
-# The mac firewall prompts when listening on "localhost" instead of
-# "127.0.0.1" like the other tests use (maybe due to the ipv6
-# link-local address fe80::1%lo0?), and it doesn't remember whether
-# you've previously allowed or denied access.  It's better to skip this
-# test on the mac than to have the prompts come up for every configuration
-# in tox.ini.
-@unittest.skipIf(platform.system() == 'Darwin', 'avoid firewall prompts on Mac')
 class TestPortAllocation(unittest.TestCase):
     def test_same_port_allocation(self):
         sockets = bind_sockets(None, 'localhost')
-        port = sockets[0].getsockname()[1]
-        self.assertTrue(all(s.getsockname()[1] == port for s in sockets[1:]))
+        try:
+            port = sockets[0].getsockname()[1]
+            self.assertTrue(all(s.getsockname()[1] == port
+                                for s in sockets[1:]))
+        finally:
+            for sock in sockets:
+                sock.close()
