@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import traceback
+import socket
 
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
@@ -114,25 +115,25 @@ class WebSocketTest(AsyncHTTPTestCase):
     def test_websocket_network_timeout(self):
         sock, port = bind_unused_port()
         sock.close()
-        with self.assertRaises(HTTPError) as cm:
+        with self.assertRaises(socket.error) as cm:
             with ExpectLog(gen_log, ".*"):
                 yield websocket_connect(
                     'ws://localhost:%d/' % port,
                     io_loop=self.io_loop,
                     connect_timeout=0.01)
-        self.assertEqual(cm.exception.code, 599)
+        self.assertEqual(cm.exception.errno, 111)
 
     @gen_test
     def test_websocket_network_fail(self):
         sock, port = bind_unused_port()
         sock.close()
-        with self.assertRaises(HTTPError) as cm:
+        with self.assertRaises(socket.error) as cm:
             with ExpectLog(gen_log, ".*"):
                 yield websocket_connect(
                     'ws://localhost:%d/' % port,
                     io_loop=self.io_loop,
                     connect_timeout=3600)
-        self.assertEqual(cm.exception.code, 599)
+        self.assertEqual(cm.exception.errno, 111)
 
     @gen_test
     def test_websocket_close_buffered_data(self):
