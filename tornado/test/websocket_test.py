@@ -114,25 +114,37 @@ class WebSocketTest(AsyncHTTPTestCase):
     def test_websocket_network_timeout(self):
         sock, port = bind_unused_port()
         sock.close()
-        with self.assertRaises(HTTPError) as cm:
+        with self.assertRaises(socket.error) as cm:
             with ExpectLog(gen_log, ".*"):
                 yield websocket_connect(
                     'ws://localhost:%d/' % port,
                     io_loop=self.io_loop,
                     connect_timeout=0.01)
-        self.assertEqual(cm.exception.code, 599)
+        self.assertEqual(cm.exception.errno, 111)
 
     @gen_test
     def test_websocket_network_fail(self):
         sock, port = bind_unused_port()
         sock.close()
-        with self.assertRaises(HTTPError) as cm:
+        with self.assertRaises(socket.error) as cm:
             with ExpectLog(gen_log, ".*"):
                 yield websocket_connect(
                     'ws://localhost:%d/' % port,
                     io_loop=self.io_loop,
                     connect_timeout=3600)
-        self.assertEqual(cm.exception.code, 599)
+        self.assertEqual(cm.exception.errno, 111)
+
+    @gen_test
+    def test_websocket_invalid_url(self):
+        sock, port = bind_unused_port()
+        sock.close()
+        with self.assertRaises(socket.gaierror) as cm:
+            with ExpectLog(gen_log, ".*"):
+                yield websocket_connect(
+                    'ws://locatehost:%d/' % port,
+                    io_loop=self.io_loop,
+                    connect_timeout=3600)
+        self.assertEqual(cm.exception.errno, -5)
 
     @gen_test
     def test_websocket_close_buffered_data(self):
