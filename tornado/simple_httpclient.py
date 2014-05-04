@@ -206,12 +206,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 host = host[1:-1]
             self.parsed_hostname = host  # save final host for _on_connect
 
-            if request.allow_ipv6:
-                af = socket.AF_UNSPEC
-            else:
-                # We only try the first IP we get from getaddrinfo,
-                # so restrict to ipv4 by default.
+            if request.allow_ipv6 is False:
                 af = socket.AF_INET
+            else:
+                af = socket.AF_UNSPEC
 
             ssl_options = self._get_ssl_options(self.parsed.scheme)
 

@@ -20,11 +20,10 @@ from contextlib import closing
 import socket
 
 from tornado.concurrent import Future
-from tornado.log import gen_log
 from tornado.netutil import bind_sockets, Resolver
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, bind_unused_port, gen_test, ExpectLog
+from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
 from tornado.test.util import skipIfNoIPv6, unittest
 
 # Fake address families for testing.  Used in place of AF_INET
@@ -80,8 +79,7 @@ class TCPClientTest(AsyncTestCase):
         self.do_test_connect(socket.AF_INET, '127.0.0.1')
 
     def test_connect_ipv4_dual(self):
-        with ExpectLog(gen_log, 'Connect error', required=False):
-            self.do_test_connect(socket.AF_INET, 'localhost')
+        self.do_test_connect(socket.AF_INET, 'localhost')
 
     @skipIfNoIPv6
     def test_connect_ipv6_ipv6(self):
@@ -91,8 +89,7 @@ class TCPClientTest(AsyncTestCase):
     def test_connect_ipv6_dual(self):
         if Resolver.configured_class().__name__.endswith('TwistedResolver'):
             self.skipTest('TwistedResolver does not support multiple addresses')
-        with ExpectLog(gen_log, 'Connect error', required=False):
-            self.do_test_connect(socket.AF_INET6, 'localhost')
+        self.do_test_connect(socket.AF_INET6, 'localhost')
 
     def test_connect_unspec_ipv4(self):
         self.do_test_connect(socket.AF_UNSPEC, '127.0.0.1')
@@ -108,9 +105,8 @@ class TCPClientTest(AsyncTestCase):
     def test_refused_ipv4(self):
         sock, port = bind_unused_port()
         sock.close()
-        with ExpectLog(gen_log, 'Connect error'):
-            with self.assertRaises(IOError):
-                yield self.client.connect('127.0.0.1', port)
+        with self.assertRaises(IOError):
+            yield self.client.connect('127.0.0.1', port)
 
 
 class TestConnectorSplit(unittest.TestCase):

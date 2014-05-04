@@ -254,12 +254,12 @@ class SimpleHTTPClientTestMixin(object):
             raise
         url = self.get_url("/hello").replace("localhost", "[::1]")
 
-        # ipv6 is currently disabled by default and must be explicitly requested
-        self.http_client.fetch(url, self.stop)
+        # ipv6 is currently enabled by default but can be disabled
+        self.http_client.fetch(url, self.stop, allow_ipv6=False)
         response = self.wait()
         self.assertEqual(response.code, 599)
 
-        self.http_client.fetch(url, self.stop, allow_ipv6=True)
+        self.http_client.fetch(url, self.stop)
         response = self.wait()
         self.assertEqual(response.body, b"Hello world!")
 

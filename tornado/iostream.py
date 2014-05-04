@@ -970,8 +970,9 @@ class IOStream(BaseIOStream):
             # an error state before the socket becomes writable, so
             # in that case a connection failure would be handled by the
             # error path in _handle_events instead of here.
-            gen_log.warning("Connect error on fd %s: %s",
-                            self.socket.fileno(), errno.errorcode[err])
+            if self._connect_future is None:
+                gen_log.warning("Connect error on fd %s: %s",
+                                self.socket.fileno(), errno.errorcode[err])
             self.close()
             return
         if self._connect_callback is not None:
@@ -1132,6 +1133,10 @@ class SSLIOStream(IOStream):
         return super(SSLIOStream, self).connect(address, callback=None)
 
     def _handle_connect(self):
+        # Call the superclass method to check for errors.
+        super(SSLIOStream, self)._handle_connect()
+        if self.closed():
+            return
         # When the connection is complete, wrap the socket for SSL
         # traffic.  Note that we do this by overriding _handle_connect
         # instead of by passing a callback to super().connect because
@@ -1149,7 +1154,6 @@ class SSLIOStream(IOStream):
                                       server_hostname=self._server_hostname,
                                       do_handshake_on_connect=False)
         self._add_io_state(old_state)
-        super(SSLIOStream, self)._handle_connect()
 
     def read_from_fd(self):
         if self._ssl_accepting:
