@@ -111,7 +111,9 @@ class TestIOStreamWebMixin(object):
     def test_future_interface(self):
         """Basic test of IOStream's ability to return Futures."""
         stream = self._make_client_iostream()
-        yield stream.connect(("localhost", self.get_http_port()))
+        connect_result = yield stream.connect(
+            ("localhost", self.get_http_port()))
+        self.assertIs(connect_result, stream)
         yield stream.write(b"GET / HTTP/1.0\r\n\r\n")
         first_line = yield stream.read_until(b"\r\n")
         self.assertEqual(first_line, b"HTTP/1.0 200 OK\r\n")

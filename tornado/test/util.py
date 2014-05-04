@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import os
+import socket
 import sys
 
 # Encapsulate the choice of unittest or unittest2 here.
@@ -25,3 +26,5 @@ skipOnTravis = unittest.skipIf('TRAVIS' in os.environ,
 # depend on an external network.
 skipIfNoNetwork = unittest.skipIf('NO_NETWORK' in os.environ,
                                   'network access disabled')
+
+skipIfNoIPv6 = unittest.skipIf(not socket.has_ipv6, 'ipv6 support not present')

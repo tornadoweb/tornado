@@ -919,8 +919,9 @@ class IOStream(BaseIOStream):
         not previously connected.  The address parameter is in the
         same format as for `socket.connect <socket.socket.connect>`,
         i.e. a ``(host, port)`` tuple.  If ``callback`` is specified,
-        it will be called when the connection is completed; if not
-        this method returns a `.Future`.
+        it will be called with no arguments when the connection is
+        completed; if not this method returns a `.Future` (whose result
+        after a successful connection will be the stream itself).
 
         If specified, the ``server_hostname`` parameter will be used
         in SSL connections for certificate validation (if requested in
@@ -980,7 +981,7 @@ class IOStream(BaseIOStream):
         if self._connect_future is not None:
             future = self._connect_future
             self._connect_future = None
-            future.set_result(None)
+            future.set_result(self)
         self._connecting = False
 
     def set_nodelay(self, value):

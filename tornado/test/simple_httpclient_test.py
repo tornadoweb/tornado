@@ -20,7 +20,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
-from tornado.test.util import unittest, skipOnTravis
+from tornado.test.util import skipOnTravis, skipIfNoIPv6
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -242,7 +242,7 @@ class SimpleHTTPClientTestMixin(object):
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
-    @unittest.skipIf(not socket.has_ipv6, 'ipv6 support not present')
+    @skipIfNoIPv6
     def test_ipv6(self):
         try:
             self.http_server.listen(self.get_http_port(), address='::1')
