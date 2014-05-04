@@ -371,7 +371,7 @@ class _HTTPConnection(object):
         if self.final_callback is not None:
             message = "Connection closed"
             if self.stream.error:
-                message = str(self.stream.error)
+                raise self.stream.error
             raise HTTPError(599, message)
 
     def _handle_1xx(self, code):
