@@ -524,7 +524,8 @@ class RequestHandler(object):
         for name in self.request.cookies:
             self.clear_cookie(name, path=path, domain=domain)
 
-    def set_secure_cookie(self, name, value, expires_days=30, **kwargs):
+    def set_secure_cookie(self, name, value, expires_days=30, version=None,
+                          **kwargs):
         """Signs and timestamps a cookie so it cannot be forged.
 
         You must specify the ``cookie_secret`` setting in your Application
@@ -540,10 +541,11 @@ class RequestHandler(object):
         Secure cookies may contain arbitrary byte values, not just unicode
         strings (unlike regular cookies)
         """
-        self.set_cookie(name, self.create_signed_value(name, value),
+        self.set_cookie(name, self.create_signed_value(name, value,
+                                                       version=version),
                         expires_days=expires_days, **kwargs)
 
-    def create_signed_value(self, name, value):
+    def create_signed_value(self, name, value, version=None):
         """Signs and timestamps a string so it cannot be forged.
 
         Normally used via set_secure_cookie, but provided as a separate
@@ -552,9 +554,10 @@ class RequestHandler(object):
         """
         self.require_setting("cookie_secret", "secure cookies")
         return create_signed_value(self.application.settings["cookie_secret"],
-                                   name, value)
+                                   name, value, version=version)
 
-    def get_secure_cookie(self, name, value=None, max_age_days=31):
+    def get_secure_cookie(self, name, value=None, max_age_days=31,
+                          min_version=None):
         """Returns the given signed cookie if it validates, or None.
 
         The decoded cookie value is returned as a byte string (unlike
@@ -564,7 +567,8 @@ class RequestHandler(object):
         if value is None:
             value = self.get_cookie(name)
         return decode_signed_value(self.application.settings["cookie_secret"],
-                                   name, value, max_age_days=max_age_days)
+                                   name, value, max_age_days=max_age_days,
+                                   min_version=min_version)
 
     def redirect(self, url, permanent=False, status=None):
         """Sends a redirect to the given (optionally relative) URL.
@@ -2640,17 +2644,58 @@ else:
         return result == 0
 
 
-def create_signed_value(secret, name, value):
-    timestamp = utf8(str(int(time.time())))
-    value = base64.b64encode(utf8(value))
-    signature = _create_signature(secret, name, value, timestamp)
-    value = b"|".join([value, timestamp, signature])
-    return value
+def create_signed_value(secret, name, value, version=None):
+    if version is None:
+        version = 1
+    if version == 1:
+        timestamp = utf8(str(int(time.time())))
+        value = base64.b64encode(utf8(value))
+        signature = _create_signature(secret, name, value, timestamp)
+        value = b"|".join([value, timestamp, signature])
+        return value
+    else:
+        raise ValueError("Unsupported version %d" % version)
 
+# A leading version number in decimal with no leading zeros, followed by a pipe.
+_signed_value_version_re = re.compile(r"^([1-9][0-9]*)\|(.*)$")
 
-def decode_signed_value(secret, name, value, max_age_days=31):
+def decode_signed_value(secret, name, value, max_age_days=31, min_version=None):
+    if min_version is None:
+        min_version = 1
+    if min_version > 1:
+        raise ValueError("Unsupported min_version %d" % min_version)
     if not value:
         return None
+
+    # Figure out what version this is.  Version 1 did not include an
+    # explicit version field and started with arbitrary base64 data,
+    # which makes this tricky.
+    m = _signed_value_version_re.match(value)
+    if m is None:
+        version = 1
+    else:
+        try:
+            version = int(m.group(1))
+            if version > 999:
+                # Certain payloads from the version-less v1 format may
+                # be parsed as valid integers.  Due to base64 padding
+                # restrictions, this can only happen for numbers whose
+                # length is a multiple of 4, so we can treat all
+                # numbers up to 999 as versions, and for the rest we
+                # fall back to v1 format.
+                version = 1
+        except ValueError:
+            version = 1
+
+    if version < min_version:
+        raise ValueError("Signed value version is too old (%d < %d)" %
+                         (version, min_version))
+    if version == 1:
+        return _decode_signed_value_v1(secret, name, value, max_age_days)
+    else:
+        raise ValueError("Unsupported signed value version %r" % value)
+
+def _decode_signed_value_v1(secret, name, value, max_age_days):
     parts = utf8(value).split(b"|")
     if len(parts) != 3:
         return None
