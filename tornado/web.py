@@ -2644,25 +2644,54 @@ else:
         return result == 0
 
 
-def create_signed_value(secret, name, value, version=None):
+def create_signed_value(secret, name, value, version=None, clock=None):
     if version is None:
-        version = 1
+        version = 2
+    if clock is None:
+        clock = time.time
+    timestamp = utf8(str(int(clock())))
+    value = base64.b64encode(utf8(value))
     if version == 1:
-        timestamp = utf8(str(int(time.time())))
-        value = base64.b64encode(utf8(value))
-        signature = _create_signature(secret, name, value, timestamp)
+        signature = _create_signature_v1(secret, name, value, timestamp)
         value = b"|".join([value, timestamp, signature])
         return value
+    elif version == 2:
+        # The v2 format consists of a version number and a series of
+        # length-prefixed fields "%d:%s", the last of which is a
+        # signature, all separated by pipes.  All numbers are in
+        # decimal format with no leading zeros.  The signature is an
+        # HMAC-SHA256 of the whole string up to that point, including
+        # the final pipe.
+        #
+        # The fields are:
+        # - format version (i.e. 2; no length prefix)
+        # - key version (currently 0; reserved for future key rotation features)
+        # - timestamp (integer seconds since epoch)
+        # - name (not encoded; assumed to be ~alphanumeric)
+        # - value (base64-encoded)
+        # - signature (hex-encoded; no length prefix)
+        def format_field(s):
+            return utf8("%d:" % len(s)) + utf8(s)
+        to_sign = b"|".join([
+            b"2|1:0",
+            format_field(timestamp),
+            format_field(name),
+            format_field(value),
+            b''])
+        signature = _create_signature_v2(secret, to_sign)
+        return to_sign + signature
     else:
         raise ValueError("Unsupported version %d" % version)
 
 # A leading version number in decimal with no leading zeros, followed by a pipe.
-_signed_value_version_re = re.compile(r"^([1-9][0-9]*)\|(.*)$")
+_signed_value_version_re = re.compile(br"^([1-9][0-9]*)\|(.*)$")
 
-def decode_signed_value(secret, name, value, max_age_days=31, min_version=None):
+def decode_signed_value(secret, name, value, max_age_days=31, clock=None,min_version=None):
+    if clock is None:
+        clock = time.time
     if min_version is None:
         min_version = 1
-    if min_version > 1:
+    if min_version > 2:
         raise ValueError("Unsupported min_version %d" % min_version)
     if not value:
         return None
@@ -2670,6 +2699,7 @@ def decode_signed_value(secret, name, value, max_age_days=31, min_version=None):
     # Figure out what version this is.  Version 1 did not include an
     # explicit version field and started with arbitrary base64 data,
     # which makes this tricky.
+    value = utf8(value)
     m = _signed_value_version_re.match(value)
     if m is None:
         version = 1
@@ -2688,26 +2718,27 @@ def decode_signed_value(secret, name, value, max_age_days=31, min_version=None):
             version = 1
 
     if version < min_version:
-        raise ValueError("Signed value version is too old (%d < %d)" %
-                         (version, min_version))
+        return None
     if version == 1:
-        return _decode_signed_value_v1(secret, name, value, max_age_days)
+        return _decode_signed_value_v1(secret, name, value, max_age_days, clock)
+    elif version == 2:
+        return _decode_signed_value_v2(secret, name, value, max_age_days, clock)
     else:
-        raise ValueError("Unsupported signed value version %r" % value)
+        return None
 
-def _decode_signed_value_v1(secret, name, value, max_age_days):
+def _decode_signed_value_v1(secret, name, value, max_age_days, clock):
     parts = utf8(value).split(b"|")
     if len(parts) != 3:
         return None
-    signature = _create_signature(secret, name, parts[0], parts[1])
+    signature = _create_signature_v1(secret, name, parts[0], parts[1])
     if not _time_independent_equals(parts[2], signature):
         gen_log.warning("Invalid cookie signature %r", value)
         return None
     timestamp = int(parts[1])
-    if timestamp < time.time() - max_age_days * 86400:
+    if timestamp < clock() - max_age_days * 86400:
         gen_log.warning("Expired cookie %r", value)
         return None
-    if timestamp > time.time() + 31 * 86400:
+    if timestamp > clock() + 31 * 86400:
         # _cookie_signature does not hash a delimiter between the
         # parts of the cookie, so an attacker could transfer trailing
         # digits from the payload to the timestamp without altering the
@@ -2724,8 +2755,49 @@ def _decode_signed_value_v1(secret, name, value, max_age_days):
         return None
 
 
-def _create_signature(secret, *parts):
+def _decode_signed_value_v2(secret, name, value, max_age_days, clock):
+    def _consume_field(s):
+        length, _, rest = s.partition(b':')
+        n = int(length)
+        field_value = rest[:n]
+        # In python 3, indexing bytes returns small integers; we must
+        # use a slice to get a byte string as in python 2.
+        if rest[n:n+1] != b'|':
+            raise ValueError("malformed v2 signed value field")
+        rest = rest[n+1:]
+        return field_value, rest
+    rest = value[2:]  # remove version number
+    try:
+        key_version, rest = _consume_field(rest)
+        timestamp, rest = _consume_field(rest)
+        name_field, rest = _consume_field(rest)
+        value_field, rest = _consume_field(rest)
+    except ValueError:
+        return None
+    passed_sig = rest
+    signed_string = value[:-len(passed_sig)]
+    expected_sig = _create_signature_v2(secret, signed_string)
+    if not _time_independent_equals(passed_sig, expected_sig):
+        return None
+    if name_field != utf8(name):
+        return None
+    timestamp = int(timestamp)
+    if timestamp < clock() - max_age_days * 86400:
+        # The signature has expired.
+        return None
+    try:
+        return base64.b64decode(value_field)
+    except Exception:
+        return None
+
+
+def _create_signature_v1(secret, *parts):
     hash = hmac.new(utf8(secret), digestmod=hashlib.sha1)
     for part in parts:
         hash.update(utf8(part))
+    return utf8(hash.hexdigest())
+
+def _create_signature_v2(secret, s):
+    hash = hmac.new(utf8(secret), digestmod=hashlib.sha256)
+    hash.update(utf8(s))
     return utf8(hash.hexdigest())

@@ -9,7 +9,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule, MissingArgumentError
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError
 
 import binascii
 import datetime
@@ -80,30 +80,33 @@ class CookieTestRequestHandler(RequestHandler):
         self._cookies[name] = value
 
 
-class SecureCookieTest(unittest.TestCase):
+# See SignedValueTest below for more.
+class SecureCookieV1Test(unittest.TestCase):
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
-        handler.set_secure_cookie('foo', b'bar')
-        self.assertEqual(handler.get_secure_cookie('foo'), b'bar')
+        handler.set_secure_cookie('foo', b'bar', version=1)
+        self.assertEqual(handler.get_secure_cookie('foo', min_version=1),
+                         b'bar')
 
     def test_cookie_tampering_future_timestamp(self):
         handler = CookieTestRequestHandler()
         # this string base64-encodes to '12345678'
-        handler.set_secure_cookie('foo', binascii.a2b_hex(b'd76df8e7aefc'))
+        handler.set_secure_cookie('foo', binascii.a2b_hex(b'd76df8e7aefc'),
+                                  version=1)
         cookie = handler._cookies['foo']
         match = re.match(br'12345678\|([0-9]+)\|([0-9a-f]+)', cookie)
         self.assertTrue(match)
         timestamp = match.group(1)
         sig = match.group(2)
         self.assertEqual(
-            _create_signature(handler.application.settings["cookie_secret"],
+            _create_signature_v1(handler.application.settings["cookie_secret"],
                               'foo', '12345678', timestamp),
             sig)
         # shifting digits from payload to timestamp doesn't alter signature
         # (this is not desirable behavior, just confirming that that's how it
         # works)
         self.assertEqual(
-            _create_signature(handler.application.settings["cookie_secret"],
+            _create_signature_v1(handler.application.settings["cookie_secret"],
                               'foo', '1234', b'5678' + timestamp),
             sig)
         # tamper with the cookie
@@ -111,14 +114,15 @@ class SecureCookieTest(unittest.TestCase):
             to_basestring(timestamp), to_basestring(sig)))
         # it gets rejected
         with ExpectLog(gen_log, "Cookie timestamp in future"):
-            self.assertTrue(handler.get_secure_cookie('foo') is None)
+            self.assertTrue(
+                handler.get_secure_cookie('foo', min_version=1) is None)
 
     def test_arbitrary_bytes(self):
         # Secure cookies accept arbitrary data (which is base64 encoded).
         # Note that normal cookies accept only a subset of ascii.
         handler = CookieTestRequestHandler()
-        handler.set_secure_cookie('foo', b'\xe9')
-        self.assertEqual(handler.get_secure_cookie('foo'), b'\xe9')
+        handler.set_secure_cookie('foo', b'\xe9', version=1)
+        self.assertEqual(handler.get_secure_cookie('foo', min_version=1), b'\xe9')
 
 
 class CookieTest(WebTestCase):
@@ -1793,3 +1797,110 @@ class HandlerByNameTest(WebTestCase):
         self.assertEqual(resp.body, b'hello')
         resp = self.fetch('/hello3')
         self.assertEqual(resp.body, b'hello')
+
+
+class SignedValueTest(unittest.TestCase):
+    SECRET = "It's a secret to everybody"
+
+    def past(self):
+        return self.present() - 86400 * 32
+
+    def present(self):
+        return 1300000000
+
+    def test_known_values(self):
+        signed_v1 = create_signed_value(SignedValueTest.SECRET, "key", "value",
+                                        version=1, clock=self.present)
+        self.assertEqual(
+            signed_v1,
+            b"dmFsdWU=|1300000000|31c934969f53e48164c50768b40cbd7e2daaaa4f")
+
+        signed_v2 = create_signed_value(SignedValueTest.SECRET, "key", "value",
+                                        version=2, clock=self.present)
+        self.assertEqual(
+            signed_v2,
+            b"2|1:0|10:1300000000|3:key|8:dmFsdWU=|"
+            b"3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152")
+
+        signed_default = create_signed_value(SignedValueTest.SECRET,
+                                             "key", "value", clock=self.present)
+        self.assertEqual(signed_default, signed_v2)
+
+        decoded_v1 = decode_signed_value(SignedValueTest.SECRET, "key",
+                                         signed_v1, min_version=1,
+                                         clock=self.present)
+        self.assertEqual(decoded_v1, b"value")
+
+        decoded_v2 = decode_signed_value(SignedValueTest.SECRET, "key",
+                                         signed_v2, min_version=2,
+                                         clock=self.present)
+        self.assertEqual(decoded_v2, b"value")
+
+    def test_name_swap(self):
+        signed1 = create_signed_value(SignedValueTest.SECRET, "key1", "value",
+                                      clock=self.present)
+        signed2 = create_signed_value(SignedValueTest.SECRET, "key2", "value",
+                                      clock=self.present)
+        # Try decoding each string with the other's "name"
+        decoded1 = decode_signed_value(SignedValueTest.SECRET, "key2", signed1,
+                                       clock=self.present)
+        self.assertIs(decoded1, None)
+        decoded2 = decode_signed_value(SignedValueTest.SECRET, "key1", signed2,
+                                       clock=self.present)
+        self.assertIs(decoded2, None)
+
+    def test_expired(self):
+        signed = create_signed_value(SignedValueTest.SECRET, "key1", "value",
+                                     clock=self.past)
+        decoded_past = decode_signed_value(SignedValueTest.SECRET, "key1",
+                                           signed, clock=self.past)
+        self.assertEqual(decoded_past, b"value")
+        decoded_present = decode_signed_value(SignedValueTest.SECRET, "key1",
+                                              signed, clock=self.present)
+        self.assertIs(decoded_present, None)
+
+    def test_payload_tampering(self):
+        # These cookies are variants of the one in test_known_values.
+        sig = "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"
+        def validate(prefix):
+            return (b'value' ==
+                    decode_signed_value(SignedValueTest.SECRET, "key",
+                                        prefix + sig, clock=self.present))
+        self.assertTrue(validate("2|1:0|10:1300000000|3:key|8:dmFsdWU=|"))
+        # Change key version
+        self.assertFalse(validate("2|1:1|10:1300000000|3:key|8:dmFsdWU=|"))
+        # length mismatch (field too short)
+        self.assertFalse(validate("2|1:0|10:130000000|3:key|8:dmFsdWU=|"))
+        # length mismatch (field too long)
+        self.assertFalse(validate("2|1:0|10:1300000000|3:keey|8:dmFsdWU=|"))
+
+    def test_signature_tampering(self):
+        prefix = "2|1:0|10:1300000000|3:key|8:dmFsdWU=|"
+        def validate(sig):
+            return (b'value' ==
+                    decode_signed_value(SignedValueTest.SECRET, "key",
+                                        prefix + sig, clock=self.present))
+        self.assertTrue(validate(
+            "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"))
+        # All zeros
+        self.assertFalse(validate("0" * 32))
+        # Change one character
+        self.assertFalse(validate(
+            "4d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"))
+        # Change another character
+        self.assertFalse(validate(
+            "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e153"))
+        # Truncate
+        self.assertFalse(validate(
+            "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e15"))
+        # Lengthen
+        self.assertFalse(validate(
+            "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e1538"))
+
+    def test_non_ascii(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET, "key", value,
+                                     clock=self.present)
+        decoded = decode_signed_value(SignedValueTest.SECRET, "key", signed,
+                                      clock=self.present)
+        self.assertEqual(value, decoded)
