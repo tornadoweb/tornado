@@ -96,6 +96,7 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
 
 @skipIfNoNetwork
 @unittest.skipIf(futures is None, "futures module not present")
+@unittest.skipIf(sys.platform == 'win32', "preexec_fn not available on win32")
 class ThreadedResolverImportTest(unittest.TestCase):
     def test_import(self):
         TIMEOUT = 5
