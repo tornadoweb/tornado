@@ -219,7 +219,7 @@ class TestIOLoop(AsyncTestCase):
             client_sock.connect(('127.0.0.1', port))
             self.wait()
         self.assertIs(fds[0], server_sock)
-        self.assertIs(fds[1], server_sock.fileno())
+        self.assertEqual(fds[1], server_sock.fileno())
         self.io_loop.remove_handler(server_sock.fileno())
         server_sock.close()
 
