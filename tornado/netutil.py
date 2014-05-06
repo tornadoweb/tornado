@@ -44,6 +44,11 @@ else:
 # thread now.
 u('foo').encode('idna')
 
+# These errnos indicate that a non-blocking operation must be retried
+# at a later time.  On most platforms they're the same value, but on
+# some they differ.
+_ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
+
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
     """Creates listening sockets bound to the given port and address.
@@ -163,9 +168,9 @@ def add_accept_handler(sock, callback, io_loop=None):
             try:
                 connection, address = sock.accept()
             except socket.error as e:
-                # EWOULDBLOCK and EAGAIN indicate we have accepted every
+                # _ERRNO_WOULDBLOCK indicate we have accepted every
                 # connection that is available.
-                if errno_from_exception(e) in (errno.EWOULDBLOCK, errno.EAGAIN):
+                if errno_from_exception(e) in _ERRNO_WOULDBLOCK:
                     return
                 # ECONNABORTED indicates that there was a connection
                 # but it was closed while still in the accept queue.
