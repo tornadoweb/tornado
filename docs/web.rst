@@ -83,6 +83,10 @@
    .. automethod:: RequestHandler.get_secure_cookie
    .. automethod:: RequestHandler.set_secure_cookie
    .. automethod:: RequestHandler.create_signed_value
+   .. autodata:: MIN_SUPPORTED_SIGNED_VALUE_VERSION
+   .. autodata:: MAX_SUPPORTED_SIGNED_VALUE_VERSION
+   .. autodata:: DEFAULT_SIGNED_VALUE_VERSION
+   .. autodata:: DEFAULT_SIGNED_VALUE_MIN_VERSION
 
    Other
    ^^^^^

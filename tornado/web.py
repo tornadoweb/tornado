@@ -105,6 +105,39 @@ except ImportError:
     from urllib.parse import urlencode  # py3
 
 
+MIN_SUPPORTED_SIGNED_VALUE_VERSION = 1
+"""The oldest signed value version supported by this version of Tornado.
+
+Signed values older than this version cannot be decoded.
+
+.. versionadded:: 3.2.1
+"""
+
+MAX_SUPPORTED_SIGNED_VALUE_VERSION = 2
+"""The newest signed value version supported by this version of Tornado.
+
+Signed values newer than this version cannot be decoded.
+
+.. versionadded:: 3.2.1
+"""
+
+DEFAULT_SIGNED_VALUE_VERSION = 2
+"""The signed value version produced by `.RequestHandler.create_signed_value`.
+
+May be overridden by passing a ``version`` keyword argument.
+
+.. versionadded:: 3.2.1
+"""
+
+DEFAULT_SIGNED_VALUE_MIN_VERSION = 1
+"""The oldest signed value accepted by `.RequestHandler.get_secure_cookie`.
+
+May be overrided by passing a ``min_version`` keyword argument.
+
+.. versionadded:: 3.2.1
+"""
+
+
 class RequestHandler(object):
     """Subclass this class and define `get()` or `post()` to make a handler.
 
@@ -540,6 +573,11 @@ class RequestHandler(object):
 
         Secure cookies may contain arbitrary byte values, not just unicode
         strings (unlike regular cookies)
+
+        .. versionchanged:: 3.2.1
+
+           Added the ``version`` argument.  Introduced cookie version 2
+           and made it the default.
         """
         self.set_cookie(name, self.create_signed_value(name, value,
                                                        version=version),
@@ -551,6 +589,11 @@ class RequestHandler(object):
         Normally used via set_secure_cookie, but provided as a separate
         method for non-cookie uses.  To decode a value not stored
         as a cookie use the optional value argument to get_secure_cookie.
+
+        .. versionchanged:: 3.2.1
+
+           Added the ``version`` argument.  Introduced cookie version 2
+           and made it the default.
         """
         self.require_setting("cookie_secret", "secure cookies")
         return create_signed_value(self.application.settings["cookie_secret"],
@@ -562,6 +605,11 @@ class RequestHandler(object):
 
         The decoded cookie value is returned as a byte string (unlike
         `get_cookie`).
+
+        .. versionchanged:: 3.2.1
+
+           Added the ``min_version`` argument.  Introduced cookie version 2;
+           both versions 1 and 2 are accepted by default.
         """
         self.require_setting("cookie_secret", "secure cookies")
         if value is None:
@@ -2646,7 +2694,7 @@ else:
 
 def create_signed_value(secret, name, value, version=None, clock=None):
     if version is None:
-        version = 2
+        version = DEFAULT_SIGNED_VALUE_VERSION
     if clock is None:
         clock = time.time
     timestamp = utf8(str(int(clock())))
@@ -2690,7 +2738,7 @@ def decode_signed_value(secret, name, value, max_age_days=31, clock=None,min_ver
     if clock is None:
         clock = time.time
     if min_version is None:
-        min_version = 1
+        min_version = DEFAULT_SIGNED_VALUE_MIN_VERSION
     if min_version > 2:
         raise ValueError("Unsupported min_version %d" % min_version)
     if not value:
