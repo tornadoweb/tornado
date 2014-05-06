@@ -19,6 +19,8 @@ Security fixes
   by default until they expire.  Applications that may be vulnerable
   can reject all cookies in the older format by passing ``min_version=2``
   to `.RequestHandler.get_secure_cookie`.
+* Thanks to Joost Pol of `Certified Secure <https://www.certifiedsecure.com>`_
+  for reporting this issue.
 
 Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
