@@ -189,6 +189,21 @@ class WebSocketTest(AsyncHTTPTestCase):
         yield self.close_future
 
     @gen_test
+    def test_check_origin_with_path(self):
+        port = self.get_http_port()
+
+        url = 'ws://localhost:%d/echo' % port
+        headers = {'Origin': 'http://localhost:%d/something' % port}
+
+        ws = yield websocket_connect(HTTPRequest(url, headers=headers),
+            io_loop=self.io_loop)
+        ws.write_message('hello')
+        response = yield ws.read_message()
+        self.assertEqual(response, 'hello')
+        ws.close()
+        yield self.close_future
+
+    @gen_test
     def test_check_origin_valid2(self):
         port = self.get_http_port()
 
