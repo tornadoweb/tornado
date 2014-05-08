@@ -154,13 +154,11 @@ class WebSocketHandler(tornado.web.RequestHandler):
         else:
             origin = self.request.headers.get("Sec-Websocket-Origin", None)
 
-        # When origin is None, assume it didn't come from a browser and we can
-        # pass it on
-        if origin is None:
-            pass
+
         # If there was an origin header, check to make sure it matches
-        # according to check_origin
-        elif origin and not self.check_origin(origin):
+        # according to check_origin. When the origin is None, we assume it
+        # came from a browser and that it can be passed on.
+        if origin is not None and not self.check_origin(origin):
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 403 Cross Origin Websockets Disabled\r\n\r\n"
             ))
