@@ -423,7 +423,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.final_callback is not None:
             message = "Connection closed"
             if self.stream.error:
-                message = str(self.stream.error)
+                raise self.stream.error
             raise HTTPError(599, message)
 
     def headers_received(self, first_line, headers):
