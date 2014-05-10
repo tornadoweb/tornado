@@ -542,6 +542,10 @@ class HTTPRequest(object):
         except ssl.SSLError:
             return None
 
+    def get_claimed_ip(self):
+        """Returns the first public IP address from the X-Forwarded-For"""
+        return self.remote_ip
+        
     def __repr__(self):
         attrs = ("protocol", "host", "method", "uri", "version", "remote_ip")
         args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])

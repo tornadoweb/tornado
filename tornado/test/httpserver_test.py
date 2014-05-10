@@ -402,7 +402,8 @@ class XHeaderTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
         def get(self):
             self.write(dict(remote_ip=self.request.remote_ip,
-                            remote_protocol=self.request.protocol))
+                            remote_protocol=self.request.protocol,
+                            claimed_ip=self.request.get_claimed_ip()))
 
     def get_httpserver_options(self):
         return dict(xheaders=True)
@@ -462,8 +463,46 @@ class XHeaderTest(HandlerBaseTestCase):
         self.assertEqual(
             self.fetch_json("/", headers=bad_forwarded)["remote_protocol"],
             "http")
+    
+    def test_get_claimed_ip(self):
+        self.assertEqual(self.fetch_json("/")["remote_ip"], 
+                         self.fetch_json("/")["claimed_ip"])
 
+        valid_ipv4 = {"X-Real-IP": "4.4.4.4"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv4)["remote_ip"],
+            self.fetch_json("/", headers=valid_ipv4)["claimed_ip"])
 
+        valid_ipv4_list = {"X-Forwarded-For": "127.0.0.1, 4.4.4.4"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv4_list)["remote_ip"],
+            self.fetch_json("/", headers=valid_ipv4_list)["claimed_ip"])
+
+        valid_ipv6 = {"X-Real-IP": "2620:0:1cfe:face:b00c::3"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv6)["remote_ip"],
+            self.fetch_json("/", headers=valid_ipv6)["claimed_ip"])
+
+        valid_ipv6_list = {"X-Forwarded-For": "::1, 2620:0:1cfe:face:b00c::3"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv6_list)["remote_ip"],
+            self.fetch_json("/", headers=valid_ipv6_list)["claimed_ip"])
+
+        invalid_chars = {"X-Real-IP": "4.4.4.4<script>"}
+        self.assertEqual(
+            self.fetch_json("/", headers=invalid_chars)["remote_ip"],
+            "127.0.0.1")
+
+        invalid_chars_list = {"X-Forwarded-For": "4.4.4.4, 5.5.5.5<script>"}
+        self.assertEqual(
+            self.fetch_json("/", headers=invalid_chars_list)["remote_ip"],
+            self.fetch_json("/", headers=invalid_chars_list)["claimed_ip"])
+
+        invalid_host = {"X-Real-IP": "www.google.com"}
+        self.assertEqual(
+            self.fetch_json("/", headers=invalid_host)["remote_ip"],
+            self.fetch_json("/", headers=invalid_host)["claimed_ip"])
+        
 class SSLXHeaderTest(AsyncHTTPSTestCase, HandlerBaseTestCase):
     def get_app(self):
         return Application([('/', XHeaderTest.Handler)])
