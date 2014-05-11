@@ -71,6 +71,10 @@ class CustomReasonHandler(RequestHandler):
     def get(self):
         self.set_status(200, "Custom reason")
 
+class CustomFailReasonHandler(RequestHandler):
+    def get(self):
+        self.set_status(400, "Custom reason")
+
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
@@ -82,6 +86,7 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
         return Application([
             ('/digest', DigestAuthHandler),
             ('/custom_reason', CustomReasonHandler),
+            ('/custom_fail_reason', CustomFailReasonHandler),
         ])
 
     def test_prepare_curl_callback_stack_context(self):
@@ -108,3 +113,7 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def test_custom_reason(self):
         response = self.fetch('/custom_reason')
         self.assertEqual(response.reason, "Custom reason")
+
+    def test_fail_custom_reason(self):
+        response = self.fetch('/custom_fail_reason')
+        self.assertEqual(str(response.error), "HTTP 400: Custom reason")
