@@ -37,6 +37,9 @@
 
    .. autofunction:: maybe_future
 
+   .. autodata:: moment
+      :annotation:
+
    Other classes
    -------------
 

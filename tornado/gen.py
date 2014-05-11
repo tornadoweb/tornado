@@ -502,6 +502,19 @@ def with_timeout(timeout, future, io_loop=None):
 _null_future = Future()
 _null_future.set_result(None)
 
+moment = Future()
+moment.__doc__ = \
+"""A special object which may be yielded to allow the IOLoop to run for
+one iteration.
+
+This is not needed in normal use but it can be helpful in long-running
+coroutines that are likely to yield Futures that are ready instantly.
+
+Usage: ``yield gen.moment``
+
+.. versionadded:: 3.3
+"""
+moment.set_result(None)
 
 class Runner(object):
     """Internal implementation of `tornado.gen.engine`.
@@ -648,7 +661,7 @@ class Runner(object):
                 start_yield_point()
         elif is_future(yielded):
             self.future = yielded
-            if not self.future.done():
+            if not self.future.done() or self.future is moment:
                 self.io_loop.add_future(
                     self.future, lambda f: self.run())
                 return False

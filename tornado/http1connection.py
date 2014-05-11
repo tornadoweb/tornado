@@ -600,5 +600,6 @@ class HTTP1ServerConnection(object):
                     return
                 if not ret:
                     return
+                yield gen.moment
         finally:
             delegate.on_close(self)
