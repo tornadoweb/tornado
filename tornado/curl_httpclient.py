@@ -23,6 +23,7 @@ import logging
 import pycurl
 import threading
 import time
+import re
 
 from tornado import httputil
 from tornado import ioloop
@@ -268,6 +269,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             info["callback"](HTTPResponse(
                 request=info["request"], code=code, headers=info["headers"],
                 buffer=buffer, effective_url=effective_url, error=error,
+                reason=info['headers'].get("reason", None),
                 request_time=time.time() - info["curl_start_time"],
                 time_info=time_info))
         except Exception:
@@ -470,7 +472,9 @@ def _curl_header_callback(headers, header_line):
     header_line = header_line.strip()
     if header_line.startswith("HTTP/"):
         headers.clear()
-        return
+        m = re.search("HTTP\/\S*\s*\d+\s*(.*?)\s*$", header_line)
+        if m:
+            header_line = "Reason: %s" % m.group(1)
     if not header_line:
         return
     headers.parse_line(header_line)
