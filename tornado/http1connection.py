@@ -94,7 +94,6 @@ class HTTP1Connection(httputil.HTTPConnection):
         # and after it has been read in the client)
         self._disconnect_on_finish = False
         self._clear_callbacks()
-        self.stream.set_close_callback(self._on_connection_close)
         # Save the start lines after we read or write them; they
         # affect later processing (e.g. 304 responses and HEAD methods
         # have content-length but no bodies)
@@ -196,7 +195,14 @@ class HTTP1Connection(httputil.HTTPConnection):
             if not self._write_finished or self.is_client:
                 need_delegate_close = False
                 delegate.finish()
-            yield self._finish_future
+            # If we're waiting for the application to produce an asynchronous
+            # response, and we're not detached, register a close callback
+            # on the stream (we didn't need one while we were reading)
+            if (not self._finish_future.done() and
+                self.stream is not None and
+                not self.stream.closed()):
+                self.stream.set_close_callback(self._on_connection_close)
+                yield self._finish_future
             if self.is_client and self._disconnect_on_finish:
                 self.close()
             if self.stream is None:
@@ -221,6 +227,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._write_callback = None
         self._write_future = None
         self._close_callback = None
+        if self.stream is not None:
+            self.stream.set_close_callback(None)
 
     def set_close_callback(self, callback):
         """Sets a callback that will be run when the connection is closed.
@@ -231,6 +239,9 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._close_callback = stack_context.wrap(callback)
 
     def _on_connection_close(self):
+        # Note that this callback is only registered on the IOStream
+        # when we have finished reading the request and are waiting for
+        # the application to produce its response.
         if self._close_callback is not None:
             callback = self._close_callback
             self._close_callback = None
@@ -240,8 +251,11 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._clear_callbacks()
 
     def close(self):
-        self.stream.close()
+        if self.stream is not None:
+            self.stream.close()
         self._clear_callbacks()
+        if not self._finish_future.done():
+            self._finish_future.set_result(None)
 
     def detach(self):
         """Take control of the underlying stream.
@@ -251,6 +265,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         `.HTTPMessageDelegate.headers_received`.  Intended for implementing
         protocols like websockets that tunnel over an HTTP handshake.
         """
+        self._clear_callbacks()
         stream = self.stream
         self.stream = None
         return stream

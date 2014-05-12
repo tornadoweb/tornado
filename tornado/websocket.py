@@ -118,6 +118,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.open_kwargs = kwargs
 
         self.stream = self.request.connection.detach()
+        self.stream.set_close_callback(self.on_connection_close)
 
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':

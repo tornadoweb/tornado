@@ -316,6 +316,7 @@ class BaseIOStream(object):
         `StreamClosedError` when the stream is closed.
         """
         self._close_callback = stack_context.wrap(callback)
+        self._maybe_add_error_listener()
 
     def close(self, exc_info=False):
         """Close this stream.
@@ -764,7 +765,8 @@ class BaseIOStream(object):
         if self._state is None or self._state == ioloop.IOLoop.ERROR:
             if self.closed():
                 self._maybe_run_close_callback()
-            elif self._read_buffer_size == 0:
+            elif (self._read_buffer_size == 0 and
+                  self._close_callback is not None):
                 self._add_io_state(ioloop.IOLoop.READ)
 
     def _add_io_state(self, state):
