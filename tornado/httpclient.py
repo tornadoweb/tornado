@@ -459,8 +459,6 @@ class HTTPResponse(object):
     * code: numeric HTTP status code, e.g. 200 or 404
 
     * reason: human-readable reason phrase describing the status code
-      (with curl_httpclient, this is a default value rather than the
-      server's actual response)
 
     * headers: `tornado.httputil.HTTPHeaders` object
 
