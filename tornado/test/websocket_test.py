@@ -114,7 +114,7 @@ class WebSocketTest(AsyncHTTPTestCase):
     def test_websocket_network_timeout(self):
         sock, port = bind_unused_port()
         sock.close()
-        with self.assertRaises(IOError) as cm:
+        with self.assertRaises((HTTPError, IOError)) as cm:
             with ExpectLog(gen_log, ".*"):
                 yield websocket_connect(
                     'ws://localhost:%d/' % port,
