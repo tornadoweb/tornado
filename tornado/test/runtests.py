@@ -82,6 +82,9 @@ def main():
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("error", category=DeprecationWarning,
                             module=r"tornado\..*")
+    warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
+    warnings.filterwarnings("error", category=PendingDeprecationWarning,
+                            module=r"tornado\..*")
     # The unittest module is aggressive about deprecating redundant methods,
     # leaving some without non-deprecated spellings that work on both
     # 2.7 and 3.2
