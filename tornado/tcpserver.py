@@ -233,7 +233,7 @@ class TCPServer(object):
                 # catch another error later on (AttributeError in
                 # SSLIOStream._do_ssl_handshake).
                 # To test this behavior, try nmap with the -sT flag.
-                # https://github.com/facebook/tornado/pull/750
+                # https://github.com/tornadoweb/tornado/pull/750
                 if errno_from_exception(err) in (errno.ECONNABORTED, errno.EINVAL):
                     return connection.close()
                 else:

@@ -166,7 +166,7 @@ class WSGIAdapter(object):
             server.serve_forever()
 
     See the `appengine demo
-    <https://github.com/facebook/tornado/tree/master/demos/appengine>`_
+    <https://github.com/tornadoweb/tornado/tree/master/demos/appengine>`_
     for an example of using this module to run a Tornado app on Google
     App Engine.
 
