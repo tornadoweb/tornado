@@ -94,7 +94,6 @@ class HTTP1Connection(httputil.HTTPConnection):
         # and after it has been read in the client)
         self._disconnect_on_finish = False
         self._clear_callbacks()
-        self.stream.set_close_callback(self._on_connection_close)
         # Save the start lines after we read or write them; they
         # affect later processing (e.g. 304 responses and HEAD methods
         # have content-length but no bodies)
@@ -106,6 +105,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         # While reading a body with a content-length, this is the
         # amount left to read.
         self._expected_content_remaining = None
+        # A Future for our outgoing writes, returned by IOStream.write.
+        self._pending_write = None
 
     def read_response(self, delegate):
         """Read a single HTTP response.
@@ -194,7 +195,14 @@ class HTTP1Connection(httputil.HTTPConnection):
             if not self._write_finished or self.is_client:
                 need_delegate_close = False
                 delegate.finish()
-            yield self._finish_future
+            # If we're waiting for the application to produce an asynchronous
+            # response, and we're not detached, register a close callback
+            # on the stream (we didn't need one while we were reading)
+            if (not self._finish_future.done() and
+                self.stream is not None and
+                not self.stream.closed()):
+                self.stream.set_close_callback(self._on_connection_close)
+                yield self._finish_future
             if self.is_client and self._disconnect_on_finish:
                 self.close()
             if self.stream is None:
@@ -219,6 +227,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._write_callback = None
         self._write_future = None
         self._close_callback = None
+        if self.stream is not None:
+            self.stream.set_close_callback(None)
 
     def set_close_callback(self, callback):
         """Sets a callback that will be run when the connection is closed.
@@ -229,6 +239,9 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._close_callback = stack_context.wrap(callback)
 
     def _on_connection_close(self):
+        # Note that this callback is only registered on the IOStream
+        # when we have finished reading the request and are waiting for
+        # the application to produce its response.
         if self._close_callback is not None:
             callback = self._close_callback
             self._close_callback = None
@@ -238,8 +251,11 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._clear_callbacks()
 
     def close(self):
-        self.stream.close()
+        if self.stream is not None:
+            self.stream.close()
         self._clear_callbacks()
+        if not self._finish_future.done():
+            self._finish_future.set_result(None)
 
     def detach(self):
         """Take control of the underlying stream.
@@ -249,6 +265,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         `.HTTPMessageDelegate.headers_received`.  Intended for implementing
         protocols like websockets that tunnel over an HTTP handshake.
         """
+        self._clear_callbacks()
         stream = self.stream
         self.stream = None
         return stream
@@ -324,7 +341,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             data = b"\r\n".join(lines) + b"\r\n\r\n"
             if chunk:
                 data += self._format_chunk(chunk)
-            self.stream.write(data, self._on_write_complete)
+            self._pending_write = self.stream.write(data)
+            self._pending_write.add_done_callback(self._on_write_complete)
         return self._write_future
 
     def _format_chunk(self, chunk):
@@ -349,17 +367,18 @@ class HTTP1Connection(httputil.HTTPConnection):
         skip `write_headers` and instead call `write()` with a
         pre-encoded header block.
         """
+        future = None
         if self.stream.closed():
-            self._write_future = Future()
+            future = self._write_future = Future()
             self._write_future.set_exception(iostream.StreamClosedError())
         else:
             if callback is not None:
                 self._write_callback = stack_context.wrap(callback)
             else:
-                self._write_future = Future()
-            self.stream.write(self._format_chunk(chunk),
-                              self._on_write_complete)
-        return self._write_future
+                future = self._write_future = Future()
+            self._pending_write = self.stream.write(self._format_chunk(chunk))
+            self._pending_write.add_done_callback(self._on_write_complete)
+        return future
 
     def finish(self):
         """Implements `.HTTPConnection.finish`."""
@@ -372,7 +391,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                 self._expected_content_remaining)
         if self._chunking_output:
             if not self.stream.closed():
-                self.stream.write(b"0\r\n\r\n", self._on_write_complete)
+                self._pending_write = self.stream.write(b"0\r\n\r\n")
+                self._pending_write.add_done_callback(self._on_write_complete)
         self._write_finished = True
         # If the app finished the request while we're still reading,
         # divert any remaining data away from the delegate and
@@ -384,27 +404,20 @@ class HTTP1Connection(httputil.HTTPConnection):
         # No more data is coming, so instruct TCP to send any remaining
         # data immediately instead of waiting for a full packet or ack.
         self.stream.set_nodelay(True)
-        if not self.stream.writing():
-            self._finish_request()
+        if self._pending_write is None:
+            self._finish_request(None)
+        else:
+            self._pending_write.add_done_callback(self._finish_request)
 
-    def _on_write_complete(self):
+    def _on_write_complete(self, future):
         if self._write_callback is not None:
             callback = self._write_callback
             self._write_callback = None
-            callback()
+            self.stream.io_loop.add_callback(callback)
         if self._write_future is not None:
             future = self._write_future
             self._write_future = None
             future.set_result(None)
-        # _on_write_complete is enqueued on the IOLoop whenever the
-        # IOStream's write buffer becomes empty, but it's possible for
-        # another callback that runs on the IOLoop before it to
-        # simultaneously write more data and finish the request.  If
-        # there is still data in the IOStream, a future
-        # _on_write_complete will be responsible for calling
-        # _finish_request.
-        if self._write_finished and not self.stream.writing():
-            self._finish_request()
 
     def _can_keep_alive(self, start_line, headers):
         if self.params.no_keep_alive:
@@ -419,7 +432,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             return connection_header == "keep-alive"
         return False
 
-    def _finish_request(self):
+    def _finish_request(self, future):
         self._clear_callbacks()
         if not self.is_client and self._disconnect_on_finish:
             self.close()
@@ -602,5 +615,6 @@ class HTTP1ServerConnection(object):
                     return
                 if not ret:
                     return
+                yield gen.moment
         finally:
             delegate.on_close(self)

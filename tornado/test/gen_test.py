@@ -775,6 +775,31 @@ class GenCoroutineTest(AsyncTestCase):
         self.assertEqual(result, 42)
         self.finished = True
 
+    @gen_test
+    def test_moment(self):
+        calls = []
+        @gen.coroutine
+        def f(name, yieldable):
+            for i in range(5):
+                calls.append(name)
+                yield yieldable
+        # First, confirm the behavior without moment: each coroutine
+        # monopolizes the event loop until it finishes.
+        immediate = Future()
+        immediate.set_result(None)
+        yield [f('a', immediate), f('b', immediate)]
+        self.assertEqual(''.join(calls), 'aaaaabbbbb')
+
+        # With moment, they take turns.
+        calls = []
+        yield [f('a', gen.moment), f('b', gen.moment)]
+        self.assertEqual(''.join(calls), 'ababababab')
+        self.finished = True
+
+        calls = []
+        yield [f('a', gen.moment), f('b', immediate)]
+        self.assertEqual(''.join(calls), 'abbbbbaaaa')
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous

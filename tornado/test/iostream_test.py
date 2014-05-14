@@ -199,9 +199,6 @@ class TestIOStreamMixin(object):
         server, client = self.make_iostream_pair()
         server.write(b'', callback=self.stop)
         self.wait()
-        # As a side effect, the stream is now listening for connection
-        # close (if it wasn't already), but is not listening for writes
-        self.assertEqual(server._state, IOLoop.READ | IOLoop.ERROR)
         server.close()
         client.close()
 
