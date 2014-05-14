@@ -32,6 +32,8 @@ script:
     # confusion.  This is necessary to ensure that the speedups module can
     # be found in the installation directory.
     - cd maint
+    # Copy the coveragerc down so coveralls can find it.
+    - cp ../.coveragerc .
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' ]]; then export TORNADO_EXTENSION=1; fi
     - export TARGET="-m tornado.test.runtests"
     # We use "python -m coverage" instead of the "bin/coverage" script
