@@ -23,7 +23,6 @@ import logging
 import pycurl
 import threading
 import time
-import re
 
 from tornado import httputil
 from tornado import ioloop
@@ -472,9 +471,11 @@ def _curl_header_callback(headers, header_line):
     header_line = header_line.strip()
     if header_line.startswith("HTTP/"):
         headers.clear()
-        m = re.search("HTTP\/\S*\s*\d+\s*(.*?)\s*$", header_line)
-        if m:
-            header_line = "Reason: %s" % m.group(1)
+        try:
+            (__, __, reason) = httputil.parse_response_start_line(header_line)
+            header_line = "Reason: %s" % reason
+        except AssertionError:
+            pass
     if not header_line:
         return
     headers.parse_line(header_line)
