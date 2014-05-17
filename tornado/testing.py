@@ -457,6 +457,10 @@ def gen_test(func=None, timeout=None):
     .. versionadded:: 3.1
        The ``timeout`` argument and ``ASYNC_TEST_TIMEOUT`` environment
        variable.
+
+    .. versionchanged:: 3.3
+       The wrapper now passes along ``*args, **kwargs`` so it can be used
+       on functions with arguments.
     """
     if timeout is None:
         timeout = get_async_test_timeout()

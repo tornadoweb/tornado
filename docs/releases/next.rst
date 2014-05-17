@@ -164,6 +164,8 @@ Backwards-compatibility notes
   previously result in the test silently being skipped).
 * Better stack traces are now displayed when a test times out.
 * Fixed the test suite when ``unittest2`` is installed on Python 3.
+* The ``@gen_test`` decorator now passes along ``*args, **kwargs`` so it
+  can be used on functions with arguments.
 
 `tornado.web`
 ~~~~~~~~~~~~~
