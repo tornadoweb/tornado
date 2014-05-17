@@ -21,7 +21,6 @@ the server into multiple processes and managing subprocesses.
 from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
-import multiprocessing
 import os
 import signal
 import subprocess
@@ -38,6 +37,12 @@ from tornado import stack_context
 from tornado.util import errno_from_exception
 
 try:
+    import multiprocessing
+except ImportError:
+    # Multiprocessing is not availble on Google App Engine.
+    multiprocessing = None
+
+try:
     long  # py2
 except NameError:
     long = int  # py3
@@ -45,6 +50,8 @@ except NameError:
 
 def cpu_count():
     """Returns the number of processors on this machine."""
+    if multiprocessing is None:
+        return 1
     try:
         return multiprocessing.cpu_count()
     except NotImplementedError:

@@ -20,7 +20,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 import errno
 import os
 import socket
-import ssl
 
 from tornado.log import app_log
 from tornado.ioloop import IOLoop
@@ -29,6 +28,11 @@ from tornado.netutil import bind_sockets, add_accept_handler, ssl_wrap_socket
 from tornado import process
 from tornado.util import errno_from_exception
 
+try:
+    import ssl
+except ImportError:
+    # ssl is not available on Google App Engine.
+    ssl = None
 
 class TCPServer(object):
     r"""A non-blocking, single-threaded TCP server.

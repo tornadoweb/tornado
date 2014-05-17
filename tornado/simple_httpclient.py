@@ -17,7 +17,6 @@ import copy
 import functools
 import re
 import socket
-import ssl
 import sys
 
 try:
@@ -29,6 +28,12 @@ try:
     import urlparse  # py2
 except ImportError:
     import urllib.parse as urlparse  # py3
+
+try:
+    import ssl
+except ImportError:
+    # ssl is not available on Google App Engine.
+    ssl = None
 
 try:
     import certifi

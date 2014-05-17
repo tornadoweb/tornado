@@ -21,7 +21,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 import errno
 import os
 import socket
-import ssl
 import stat
 
 from tornado.concurrent import dummy_executor, run_on_executor
@@ -29,9 +28,17 @@ from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 from tornado.util import u, Configurable, errno_from_exception
 
+try:
+    import ssl
+except ImportError:
+    # ssl is not available on Google App Engine
+    ssl = None
+
 if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
     ssl_match_hostname = ssl.match_hostname
     SSLCertificateError = ssl.CertificateError
+elif ssl is None:
+    ssl_match_hostname = SSLCertificateError = None
 else:
     import backports.ssl_match_hostname
     ssl_match_hostname = backports.ssl_match_hostname.match_hostname

@@ -31,7 +31,6 @@ import errno
 import numbers
 import os
 import socket
-import ssl
 import sys
 import re
 
@@ -46,6 +45,12 @@ try:
     from tornado.platform.posix import _set_nonblocking
 except ImportError:
     _set_nonblocking = None
+
+try:
+    import ssl
+except ImportError:
+    # ssl is not available on Google App Engine
+    ssl = None
 
 # These errnos indicate that a non-blocking operation must be retried
 # at a later time.  On most platforms they're the same value, but on
