@@ -198,5 +198,23 @@ class GenTest(AsyncTestCase):
 
         self.finished = True
 
+    def test_with_method_args(self):
+        @gen_test
+        def test_with_args(self, *args):
+            self.assertEqual(args, ('test',))
+            yield gen.Task(self.io_loop.add_callback)
+
+        test_with_args(self, 'test')
+        self.finished = True
+
+    def test_with_method_kwargs(self):
+        @gen_test
+        def test_with_kwargs(self, **kwargs):
+            self.assertDictEqual(kwargs, {'test': 'test'})
+            yield gen.Task(self.io_loop.add_callback)
+
+        test_with_kwargs(self, test='test')
+        self.finished = True
+
 if __name__ == '__main__':
     unittest.main()

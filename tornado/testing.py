@@ -471,8 +471,8 @@ def gen_test(func=None, timeout=None):
         # This is a good case study arguing for either some sort of
         # extensibility in the gen decorators or cancellation support.
         @functools.wraps(f)
-        def pre_coroutine(self):
-            result = f(self)
+        def pre_coroutine(self, *args, **kwargs):
+            result = f(self, *args, **kwargs)
             if isinstance(result, types.GeneratorType):
                 self._test_generator = result
             else:
@@ -482,10 +482,11 @@ def gen_test(func=None, timeout=None):
         coro = gen.coroutine(pre_coroutine)
 
         @functools.wraps(coro)
-        def post_coroutine(self):
+        def post_coroutine(self, *args, **kwargs):
             try:
                 return self.io_loop.run_sync(
-                    functools.partial(coro, self), timeout=timeout)
+                    functools.partial(coro, self, *args, **kwargs),
+                    timeout=timeout)
             except TimeoutError as e:
                 # run_sync raises an error with an unhelpful traceback.
                 # If we throw it back into the generator the stack trace
