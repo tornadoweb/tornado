@@ -482,7 +482,7 @@ and the user is not logged in, the server will send a ``403`` response.
 
 Tornado comes with built-in support for third-party authentication
 schemes like Google OAuth. See the `tornado.auth`
-for more details. Check out the `Tornado Blog example application <https://github.com/tornadoweb/tornado/tree/master/demos/blog>`_ for a
+for more details. Check out the `Tornado Blog example application <https://github.com/tornadoweb/tornado/tree/stable/demos/blog>`_ for a
 complete example that uses authentication (and stores user data in a
 MySQL database).
 
@@ -904,7 +904,7 @@ and the response is finally flushed to the client with the call to
 
 For a more advanced asynchronous example, take a look at the `chat
 example application
-<https://github.com/tornadoweb/tornado/tree/master/demos/chat>`_, which
+<https://github.com/tornadoweb/tornado/tree/stable/demos/chat>`_, which
 implements an AJAX chat room using `long polling
 <http://en.wikipedia.org/wiki/Push_technology#Long_polling>`_.  Users
 of long polling may want to override ``on_connection_close()`` to
@@ -1137,5 +1137,5 @@ AppEngine <http://code.google.com/appengine/>`_ application:
         wsgiref.handlers.CGIHandler().run(application)
 
 See the `appengine example application
-<https://github.com/tornadoweb/tornado/tree/master/demos/appengine>`_ for a
+<https://github.com/tornadoweb/tornado/tree/stable/demos/appengine>`_ for a
 full-featured AppEngine app built on Tornado.

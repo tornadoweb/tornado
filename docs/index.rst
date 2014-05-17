@@ -59,7 +59,7 @@ Here is a simple "Hello, world" example web app for Tornado::
 
 This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room
-<https://github.com/tornadoweb/tornado/tree/master/demos/chat>`_.
+<https://github.com/tornadoweb/tornado/tree/stable/demos/chat>`_.
 
 Installation
 ------------
