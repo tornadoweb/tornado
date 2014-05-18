@@ -66,6 +66,13 @@ class TCPClientTest(AsyncTestCase):
         self.stop_server()
         super(TCPClientTest, self).tearDown()
 
+    def skipIfLocalhostV4(self):
+        families = set(sockaddr[0]
+                       for sockaddr in socket.getaddrinfo('localhost', 0))
+        if socket.AF_INET6 not in families:
+            self.skipTest("localhost does not resolve to ipv6")
+
+
     @gen_test
     def do_test_connect(self, family, host):
         port = self.start_server(family)
@@ -83,10 +90,12 @@ class TCPClientTest(AsyncTestCase):
 
     @skipIfNoIPv6
     def test_connect_ipv6_ipv6(self):
+        self.skipIfLocalhostV4()
         self.do_test_connect(socket.AF_INET6, '::1')
 
     @skipIfNoIPv6
     def test_connect_ipv6_dual(self):
+        self.skipIfLocalhostV4()
         if Resolver.configured_class().__name__.endswith('TwistedResolver'):
             self.skipTest('TwistedResolver does not support multiple addresses')
         self.do_test_connect(socket.AF_INET6, 'localhost')
@@ -96,6 +105,7 @@ class TCPClientTest(AsyncTestCase):
 
     @skipIfNoIPv6
     def test_connect_unspec_ipv6(self):
+        self.skipIfLocalhostV4()
         self.do_test_connect(socket.AF_UNSPEC, '::1')
 
     def test_connect_unspec_dual(self):
