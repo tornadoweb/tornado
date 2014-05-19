@@ -365,7 +365,14 @@ class BaseIOStream(object):
                 futures.append(self._connect_future)
                 self._connect_future = None
             for future in futures:
-                future.set_exception(self.error or StreamClosedError())
+                if (isinstance(self.error, (socket.error, IOError)) and
+                    errno_from_exception(self.error) in _ERRNO_CONNRESET):
+                    # Treat connection resets as closed connections so
+                    # clients only have to catch one kind of exception
+                    # to avoid logging.
+                    future.set_exception(StreamClosedError())
+                else:
+                    future.set_exception(self.error or StreamClosedError())
             if self._close_callback is not None:
                 cb = self._close_callback
                 self._close_callback = None
