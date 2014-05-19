@@ -195,35 +195,3 @@ def wrap_tornado_future(future, *, loop=None):
 
     new_future.add_done_callback(_check_cancelled)
     return new_future
-
-def task(func):
-    """Decorator for wrapping an ``asyncio`` coroutine object in an ``asyncio.Task``.
-
-    When a function decorated by ``@platform.asyncio.task`` is called, an ``asyncio.Task``
-    object running on the event loop returned by ``asyncio.get_event_loop()`` will be
-    constructed and returned.
-
-    A function decorated with ``@platform.asyncio.task`` does not need to be explicitly
-    decorated with ``@asyncio.coroutine``.
-
-    In ``asyncio`` coroutines, ``yield from`` can be used with Tornado's `.Future`, in which
-    case the `.Future` will be automatically wrapped in an ``asyncio.Future``.
-
-    Example usage::
-
-        class AsyncIORequestHandler(RequestHandler):
-            @platform.asyncio.task
-            def get(self):
-                response = yield from AsyncHTTPClient().fetch("http://google.com")
-                print("Got response:", response)
-
-                proc = yield from asyncio.create_subprocess_exec(
-                    'ls', '-l', stdout=asyncio.subprocess.PIPE)
-                stdout, _ = yield from proc.communicate()
-                self.write(stdout.replace(b'\\n', b'<br>'))
-    """
-    func = asyncio.coroutine(func)
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        return asyncio.Task(func(*args, **kwargs))
-    return wrapper

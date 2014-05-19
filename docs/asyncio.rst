@@ -62,30 +62,3 @@ Future-related convenience functions
 
     If ``loop`` is not supplied, an event loop will be retrieved
     using ``asyncio.get_event_loop()`` for use with the returned Future.
-
-.. py:function:: task(func)
-
-    Decorator for wrapping an ``asyncio`` coroutine object in an ``asyncio.Task``.
-
-    When a function decorated by ``@platform.asyncio.task`` is called, an ``asyncio.Task``
-    object running on the event loop returned by ``asyncio.get_event_loop()`` will be
-    constructed and returned.
-
-    A function decorated with ``@platform.asyncio.task`` does not need to be explicitly
-    decorated with ``@asyncio.coroutine``.
-
-    In ``asyncio`` coroutines, ``yield from`` can be used with Tornado's `.Future`, in which
-    case the `.Future` will be automatically wrapped in an ``asyncio.Future``.
-
-    Example usage::
-
-        class AsyncIORequestHandler(RequestHandler):
-            @platform.asyncio.task
-            def get(self):
-                response = yield from AsyncHTTPClient().fetch("http://google.com")
-                print("Got response:", response)
-
-                proc = yield from asyncio.create_subprocess_exec(
-                    'ls', '-l', stdout=asyncio.subprocess.PIPE)
-                stdout, _ = yield from proc.communicate()
-                self.write(stdout.replace(b'\n', b'<br>'))
