@@ -67,8 +67,9 @@ class TCPClientTest(AsyncTestCase):
         super(TCPClientTest, self).tearDown()
 
     def skipIfLocalhostV4(self):
-        families = set(sockaddr[0]
-                       for sockaddr in socket.getaddrinfo('localhost', 0))
+        Resolver().resolve('localhost', 0, callback=self.stop)
+        addrinfo = self.wait()
+        families = set(addr[0] for addr in addrinfo)
         if socket.AF_INET6 not in families:
             self.skipTest("localhost does not resolve to ipv6")
 
