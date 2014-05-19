@@ -268,7 +268,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             info["callback"](HTTPResponse(
                 request=info["request"], code=code, headers=info["headers"],
                 buffer=buffer, effective_url=effective_url, error=error,
-                reason=info['headers'].get("reason", None),
+                reason=info['headers'].get("x-http-reason", None),
                 request_time=time.time() - info["curl_start_time"],
                 time_info=time_info))
         except Exception:
@@ -473,9 +473,9 @@ def _curl_header_callback(headers, header_line):
         headers.clear()
         try:
             (__, __, reason) = httputil.parse_response_start_line(header_line)
-            header_line = "Reason: %s" % reason
+            header_line = "X-HTTP-Reason: %s" % reason
         except AssertionError:
-            pass
+            return
     if not header_line:
         return
     headers.parse_line(header_line)
