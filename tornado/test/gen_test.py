@@ -741,10 +741,11 @@ class GenCoroutineTest(AsyncTestCase):
         # Note that this test and the following are for behavior that is
         # not really supported any more:  coroutines no longer create a
         # stack context automatically; but one is created after the first
-        # yield point.
+        # YieldPoint (i.e. not a Future).
         @gen.coroutine
         def f2():
-            yield gen.Task(self.io_loop.add_callback)
+            (yield gen.Callback(1))()
+            yield gen.Wait(1)
             self.io_loop.add_callback(lambda: 1 / 0)
             try:
                 yield gen.Task(self.io_loop.add_timeout,
@@ -763,7 +764,8 @@ class GenCoroutineTest(AsyncTestCase):
         # can be caught and ignored.
         @gen.coroutine
         def f2():
-            yield gen.Task(self.io_loop.add_callback)
+            (yield gen.Callback(1))()
+            yield gen.Wait(1)
             self.io_loop.add_callback(lambda: 1 / 0)
             try:
                 yield gen.Task(self.io_loop.add_timeout,

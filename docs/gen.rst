@@ -21,7 +21,7 @@
    in the same order. Yielding dicts with these objects in values will
    return dict with results at the same keys.
 
-   .. autoclass:: Task
+   .. autofunction:: Task
 
    .. autoclass:: Callback
 

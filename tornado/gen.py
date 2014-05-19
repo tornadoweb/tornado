@@ -340,7 +340,7 @@ class WaitAll(YieldPoint):
         return [self.runner.pop_result(key) for key in self.keys]
 
 
-class Task(YieldPoint):
+def Task(func, *args, **kwargs):
     """Runs a single asynchronous operation.
 
     Takes a function (and optional additional arguments) and runs it with
@@ -354,25 +354,25 @@ class Task(YieldPoint):
 
         func(args, callback=(yield gen.Callback(key)))
         result = yield gen.Wait(key)
+
+    .. versionchanged:: 3.3
+       ``gen.Task`` is now a function that returns a `.Future`, instead of
+       a subclass of `YieldPoint`.  It still behaves the same way when
+       yielded.
     """
-    def __init__(self, func, *args, **kwargs):
-        assert "callback" not in kwargs
-        self.args = args
-        self.kwargs = kwargs
-        self.func = func
-
-    def start(self, runner):
-        self.runner = runner
-        self.key = object()
-        runner.register_callback(self.key)
-        self.kwargs["callback"] = runner.result_callback(self.key)
-        self.func(*self.args, **self.kwargs)
-
-    def is_ready(self):
-        return self.runner.is_ready(self.key)
-
-    def get_result(self):
-        return self.runner.pop_result(self.key)
+    future = Future()
+    def handle_exception(typ, value, tb):
+        if future.done():
+            return False
+        future.set_exc_info((typ, value, tb))
+        return True
+    def set_result(result):
+        if future.done():
+            return
+        future.set_result(result)
+    with stack_context.ExceptionStackContext(handle_exception):
+        func(*args, callback=_argument_adapter(set_result), **kwargs)
+    return future
 
 
 class YieldFuture(YieldPoint):
@@ -673,15 +673,8 @@ class Runner(object):
 
 
     def result_callback(self, key):
-        def inner(*args, **kwargs):
-            if kwargs or len(args) > 1:
-                result = Arguments(args, kwargs)
-            elif args:
-                result = args[0]
-            else:
-                result = None
-            self.set_result(key, result)
-        return stack_context.wrap(inner)
+        return stack_context.wrap(_argument_adapter(
+            functools.partial(self.set_result, key)))
 
     def handle_exception(self, typ, value, tb):
         if not self.running and not self.finished:
@@ -698,3 +691,19 @@ class Runner(object):
             self.stack_context_deactivate = None
 
 Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
+
+def _argument_adapter(callback):
+    """Returns a function that when invoked runs ``callback`` with one arg.
+
+    If the function returned by this function is called with exactly
+    one argument, that argument is passed to ``callback``.  Otherwise
+    the args tuple and kwargs dict are wrapped in an `Arguments` object.
+    """
+    def wrapper(*args, **kwargs):
+        if kwargs or len(args) > 1:
+            callback(Arguments(args, kwargs))
+        elif args:
+            callback(args[0])
+        else:
+            callback(None)
+    return wrapper
