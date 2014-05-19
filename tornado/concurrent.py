@@ -182,8 +182,7 @@ class Future(object):
         self._callbacks = None
 
     def __iter__(self):
-        import tornado.platform.asyncio # raises an error if not on py3k/asyncio not available
-        return iter(tornado.platform.asyncio.wrap_tornado_future(self))
+        raise StopIteration((yield self))
 
 
 TracebackFuture = Future
