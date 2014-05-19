@@ -7,6 +7,7 @@ import logging
 import operator
 import textwrap
 import sys
+from tornado.concurrent import Future
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop
 from tornado.netutil import Resolver
@@ -95,6 +96,7 @@ def main():
                s, defaults=dict(allow_ipv6=False)))
     define('ioloop', type=str, default=None)
     define('ioloop_time_monotonic', default=False)
+    define('future', type=str, default=None)
     define('resolver', type=str, default=None,
            callback=Resolver.configure)
     define('debug_gc', type=str, multiple=True,
@@ -114,6 +116,8 @@ def main():
             kwargs['time_func'] = monotonic_time
         if options.ioloop or kwargs:
             IOLoop.configure(options.ioloop, **kwargs)
+        if options.future:
+            Future.configure(options.future)
     add_parse_callback(configure_ioloop)
 
     import tornado.testing
