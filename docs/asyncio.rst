@@ -56,6 +56,22 @@ IOLoops
 Future-related convenience functions
 ------------------------------------
 
+.. py:class:: AsyncIOFuture
+
+    A Tornado-compatible ``asyncio.Future``.
+
+    Tornado can be instructed to use this class internally in place of the standard
+    `tornado.concurrent.Future`, making it possible to use ``Futures`` returned by
+    Tornado in coroutines running on an ``asyncio.Task`` without having to call
+    `wrap_tornado_future`. Recommended usage::
+
+        from tornado.concurrent import Future
+        from tornado.platform.asyncio import AsyncIOMainLoop
+        import asyncio
+        AsyncIOMainLoop().install()
+        Future.configure('tornado.platform.asyncio.AsyncIOFuture')
+        asyncio.get_event_loop().run_forever()
+
 .. py:function:: wrap_tornado_future(future, *, loop=None)
 
     Wraps a `.tornado.concurrent.Future` in an ``asyncio.Future``.

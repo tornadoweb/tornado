@@ -177,6 +177,38 @@ class AsyncIOLoop(BaseAsyncIOLoop):
         super(AsyncIOLoop, self).initialize(asyncio.new_event_loop(),
                                             close_loop=True)
 
+class AsyncIOFuture(asyncio.Future, concurrent.Future):
+    """A Tornado-compatible ``asyncio.Future``.
+
+    Tornado can be instructed to use this class internally in place of the standard
+    `tornado.concurrent.Future`, making it possible to use ``Futures`` returned by
+    Tornado in coroutines running on an ``asyncio.Task`` without having to call
+    `wrap_tornado_future`. Recommended usage::
+
+        from tornado.concurrent import Future
+        from tornado.platform.asyncio import AsyncIOMainLoop
+        import asyncio
+        AsyncIOMainLoop().install()
+        Future.configure('tornado.platform.asyncio.AsyncIOFuture')
+        asyncio.get_event_loop().run_forever()
+    """
+
+    def __init__(self, *, loop=None):
+        asyncio.Future.__init__(self, loop=loop)
+
+    def exc_info(self):
+        try:
+            exc = self.exception()
+            return type(exc), exc, exc.__traceback__
+        except (AttributeError, asyncio.InvalidStateError):
+            return None
+
+    def set_exc_info(self, exc_info):
+        self.set_exception(exc_info[1])
+
+    def add_done_callback(self, fn):
+        asyncio.Future.add_done_callback(self, stack_context.wrap(fn))
+
 
 def wrap_tornado_future(future, *, loop=None):
     """Wraps a `.tornado.concurrent.Future` in an ``asyncio.Future``.
