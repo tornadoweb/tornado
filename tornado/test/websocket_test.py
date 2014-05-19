@@ -6,7 +6,7 @@ from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-from tornado.test.util import unittest, skipOnTravis
+from tornado.test.util import unittest
 from tornado.web import Application, RequestHandler
 
 try:
@@ -109,23 +109,11 @@ class WebSocketTest(AsyncHTTPTestCase):
                 'ws://localhost:%d/non_ws' % self.get_http_port(),
                 io_loop=self.io_loop)
 
-    @skipOnTravis
-    @gen_test
-    def test_websocket_network_timeout(self):
-        sock, port = bind_unused_port()
-        sock.close()
-        with self.assertRaises(IOError) as cm:
-            with ExpectLog(gen_log, ".*"):
-                yield websocket_connect(
-                    'ws://localhost:%d/' % port,
-                    io_loop=self.io_loop,
-                    connect_timeout=0.01)
-
     @gen_test
     def test_websocket_network_fail(self):
         sock, port = bind_unused_port()
         sock.close()
-        with self.assertRaises(IOError) as cm:
+        with self.assertRaises(IOError):
             with ExpectLog(gen_log, ".*"):
                 yield websocket_connect(
                     'ws://localhost:%d/' % port,
