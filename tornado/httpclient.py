@@ -459,8 +459,6 @@ class HTTPResponse(object):
     * code: numeric HTTP status code, e.g. 200 or 404
 
     * reason: human-readable reason phrase describing the status code
-      (with curl_httpclient, this is a default value rather than the
-      server's actual response)
 
     * headers: `tornado.httputil.HTTPHeaders` object
 
@@ -502,7 +500,8 @@ class HTTPResponse(object):
             self.effective_url = effective_url
         if error is None:
             if self.code < 200 or self.code >= 300:
-                self.error = HTTPError(self.code, response=self)
+                self.error = HTTPError(self.code, message=self.reason, 
+                                       response=self)
             else:
                 self.error = None
         else:
