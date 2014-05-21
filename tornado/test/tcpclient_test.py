@@ -37,7 +37,7 @@ class TestTCPServer(TCPServer):
         try:
             sockets = bind_sockets(None, 'localhost', family)
         except:
-            print(socket.getaddrinfo('localhost', 0))
+            print(socket.getaddrinfo('localhost', 0, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_PASSIVE))
             raise
         self.add_sockets(sockets)
         self.port = sockets[0].getsockname()[1]
