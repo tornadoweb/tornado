@@ -159,24 +159,20 @@ class TCPClient(object):
         addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(
             addrinfo, self.io_loop,
-            functools.partial(self._create_stream,
-                              host, ssl_options, max_buffer_size))
+            functools.partial(self._create_stream, max_buffer_size))
         af, addr, stream = yield connector.start()
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on sbusequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
+        if ssl_options is not None:
+            stream = yield stream.start_tls(False, ssl_options=ssl_options,
+                                            server_hostname=host)
         raise gen.Return(stream)
 
-    def _create_stream(self, host, ssl_options, max_buffer_size, af, addr):
-        # TODO: we should connect in plaintext mode and start the
-        # ssl handshake only after stopping the _Connector.
-        if ssl_options is None:
-            stream = IOStream(socket.socket(af),
-                              io_loop=self.io_loop,
-                              max_buffer_size=max_buffer_size)
-        else:
-            stream = SSLIOStream(socket.socket(af),
-                                 io_loop=self.io_loop,
-                                 ssl_options=ssl_options,
-                                 max_buffer_size=max_buffer_size)
-        return stream.connect(addr, server_hostname=host)
+    def _create_stream(self, max_buffer_size, af, addr):
+        # Always connect in plaintext; we'll convert to ssl if necessary
+        # after one connection has completed.
+        stream = IOStream(socket.socket(af),
+                          io_loop=self.io_loop,
+                          max_buffer_size=max_buffer_size)
+        return stream.connect(addr)
