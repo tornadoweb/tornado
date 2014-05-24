@@ -296,26 +296,53 @@ class GenEngineTest(AsyncTestCase):
             self.stop()
         self.run_gen(f)
 
-    def test_multi_delayed(self):
+    # The following tests explicitly run with both gen.Multi
+    # and gen.multi_future (Task returns a Future, so it can be used
+    # with either).
+    def test_multi_yieldpoint_delayed(self):
         @gen.engine
         def f():
             # callbacks run at different times
-            responses = yield [
+            responses = yield gen.Multi([
                 gen.Task(self.delay_callback, 3, arg="v1"),
                 gen.Task(self.delay_callback, 1, arg="v2"),
-            ]
+            ])
             self.assertEqual(responses, ["v1", "v2"])
             self.stop()
         self.run_gen(f)
 
-    def test_multi_dict_delayed(self):
+    def test_multi_yieldpoint_dict_delayed(self):
         @gen.engine
         def f():
             # callbacks run at different times
-            responses = yield dict(
+            responses = yield gen.Multi(dict(
                 foo=gen.Task(self.delay_callback, 3, arg="v1"),
                 bar=gen.Task(self.delay_callback, 1, arg="v2"),
-            )
+            ))
+            self.assertEqual(responses, dict(foo="v1", bar="v2"))
+            self.stop()
+        self.run_gen(f)
+
+    def test_multi_future_delayed(self):
+        @gen.engine
+        def f():
+            # callbacks run at different times
+            responses = yield gen.multi_future([
+                gen.Task(self.delay_callback, 3, arg="v1"),
+                gen.Task(self.delay_callback, 1, arg="v2"),
+            ])
+            self.assertEqual(responses, ["v1", "v2"])
+            self.stop()
+        self.run_gen(f)
+
+    def test_multi_future_dict_delayed(self):
+        @gen.engine
+        def f():
+            # callbacks run at different times
+            responses = yield gen.multi_future(dict(
+                foo=gen.Task(self.delay_callback, 3, arg="v1"),
+                bar=gen.Task(self.delay_callback, 1, arg="v2"),
+            ))
             self.assertEqual(responses, dict(foo="v1", bar="v2"))
             self.stop()
         self.run_gen(f)
@@ -338,6 +365,15 @@ class GenEngineTest(AsyncTestCase):
         self.assertTrue(isinstance(x, list))
         y = yield {}
         self.assertTrue(isinstance(y, dict))
+
+    @gen_test
+    def test_multi_mixed_types(self):
+        # A YieldPoint (Wait) and Future (Task) can be combined
+        # (and use the YieldPoint codepath)
+        (yield gen.Callback("k1"))("v1")
+        responses = yield [gen.Wait("k1"),
+                           gen.Task(self.delay_callback, 3, arg="v2")]
+        self.assertEqual(responses, ["v1", "v2"])
 
     @gen_test
     def test_future(self):

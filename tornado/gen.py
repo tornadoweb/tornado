@@ -406,10 +406,14 @@ class YieldFuture(YieldPoint):
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
 
-    Takes a list of ``Tasks`` or other ``YieldPoints`` and returns a list of
+    Takes a list of ``YieldPoints`` or ``Futures`` and returns a list of
     their responses.  It is not necessary to call `Multi` explicitly,
     since the engine will do so automatically when the generator yields
-    a list of ``YieldPoints``.
+    a list of ``YieldPoints`` or a mixture of ``YieldPoints`` and ``Futures``.
+
+    Instead of a list, the argument may also be a dictionary whose values are
+    Futures, in which case a parallel dictionary is returned mapping the same
+    keys to their results.
     """
     def __init__(self, children):
         self.keys = None
@@ -440,6 +444,54 @@ class Multi(YieldPoint):
             return dict(zip(self.keys, result))
         else:
             return list(result)
+
+
+def multi_future(children):
+    """Wait for multiple asynchronous futures in parallel.
+
+    Takes a list of ``Futures`` (but *not* other ``YieldPoints``) and returns
+    a new Future that resolves when all the other Futures are done.
+    If all the ``Futures`` succeeded, the returned Future's result is a list
+    of their results.  If any failed, the returned Future raises the exception
+    of the first one to fail.
+
+    Instead of a list, the argument may also be a dictionary whose values are
+    Futures, in which case a parallel dictionary is returned mapping the same
+    keys to their results.
+
+    It is not necessary to call `multi_future` explcitly, since the engine will
+    do so automatically when the generator yields a list of `Futures`.
+    This function is faster than the `Multi` `YieldPoint` because it does not
+    require the creation of a stack context.
+
+    .. versionadded:: 3.3
+    """
+    if isinstance(children, dict):
+        keys = list(children.keys())
+        children = children.values()
+    else:
+        keys = None
+    assert all(is_future(i) for i in children)
+    unfinished_children = set(children)
+
+    future = Future()
+    if not children:
+        future.set_result({} if keys is not None else [])
+    def callback(f):
+        unfinished_children.remove(f)
+        if not unfinished_children:
+            try:
+                result_list = [i.result() for i in children]
+            except Exception:
+                future.set_exc_info(sys.exc_info())
+            else:
+                if keys is not None:
+                    future.set_result(dict(zip(keys, result_list)))
+                else:
+                    future.set_result(result_list)
+    for f in children:
+        f.add_done_callback(callback)
+    return future
 
 
 def maybe_future(x):
@@ -631,8 +683,17 @@ class Runner(object):
             self.running = False
 
     def handle_yield(self, yielded):
-        if isinstance(yielded, (list, dict)):
-            yielded = Multi(yielded)
+        if isinstance(yielded, list):
+            if all(is_future(f) for f in yielded):
+                yielded = multi_future(yielded)
+            else:
+                yielded = Multi(yielded)
+        elif isinstance(yielded, dict):
+            if all(is_future(f) for f in yielded.values()):
+                yielded = multi_future(yielded)
+            else:
+                yielded = Multi(yielded)
+
         if isinstance(yielded, YieldPoint):
             self.future = TracebackFuture()
             def start_yield_point():
