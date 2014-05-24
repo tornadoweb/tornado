@@ -969,6 +969,71 @@ class IOStream(BaseIOStream):
         self._add_io_state(self.io_loop.WRITE)
         return future
 
+    def start_tls(self, server_side, ssl_options=None, server_hostname=None):
+        """Convert this `IOStream` to an `SSLIOStream`.
+
+        This enables protocols that begin in clear-text mode and
+        switch to SSL after some initial negotiation (such as the
+        ``STARTTLS`` extension to SMTP and IMAP).
+
+        This method cannot be used if there are outstanding reads
+        or writes on the stream, or if there is any data in the
+        IOStream's buffer (data in the operating system's socket
+        buffer is allowed).  This means it must generally be used
+        immediately after reading or writing the last clear-text
+        data.  It can also be used immediately after connecting,
+        before any reads or writes.
+
+        The ``ssl_options`` argument may be either a dictionary
+        of options or an `ssl.SSLContext`.  If a ``server_hostname``
+        is given, it will be used for certificate verification
+        (as configured in the ``ssl_options``).
+
+        This method returns a `.Future` whose result is the new
+        `SSLIOStream`.  After this method has been called,
+        any other operation on the original stream is undefined.
+
+        If a close callback is defined on this stream, it will be
+        transferred to the new stream.
+
+        .. versionadded:: 3.3
+        """
+        if (self._read_callback or self._read_future or
+            self._write_callback or self._write_future or
+            self._connect_callback or self._connect_future or
+            self._pending_callbacks or self._closed or
+            self._read_buffer or self._write_buffer):
+            raise ValueError("IOStream is not idle; cannot convert to SSL")
+        if ssl_options is None:
+            ssl_options = {}
+
+        socket = self.socket
+        self.io_loop.remove_handler(socket)
+        self.socket = None
+        socket = ssl_wrap_socket(socket, ssl_options, server_side=server_side,
+                                 do_handshake_on_connect=False)
+        orig_close_callback = self._close_callback
+        self._close_callback = None
+
+        future = TracebackFuture()
+        ssl_stream = SSLIOStream(socket, ssl_options=ssl_options,
+                                 io_loop=self.io_loop)
+        # Wrap the original close callback so we can fail our Future as well.
+        # If we had an "unwrap" counterpart to this method we would need
+        # to restore the original callback after our Future resolves
+        # so that repeated wrap/unwrap calls don't build up layers.
+        def close_callback():
+            if not future.done():
+                future.set_exception(ssl_stream.error or StreamClosedError())
+            if orig_close_callback is not None:
+                orig_close_callback()
+        ssl_stream.set_close_callback(close_callback)
+        ssl_stream._ssl_connect_callback = lambda: future.set_result(ssl_stream)
+        ssl_stream.max_buffer_size = self.max_buffer_size
+        ssl_stream.read_chunk_size = self.read_chunk_size
+        return future
+
+
     def _handle_connect(self):
         err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
         if err != 0:

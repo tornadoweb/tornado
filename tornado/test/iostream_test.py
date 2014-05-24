@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
+from tornado.concurrent import Future
+from tornado import gen
 from tornado import netutil
-from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream, PipeIOStream, StreamClosedError
 from tornado.httputil import HTTPHeaders
 from tornado.log import gen_log, app_log
@@ -9,6 +10,7 @@ from tornado.stack_context import NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix
 from tornado.web import RequestHandler, Application
+import certifi
 import errno
 import logging
 import os
@@ -17,6 +19,11 @@ import socket
 import ssl
 import sys
 
+def _server_ssl_options():
+    return dict(
+        certfile=os.path.join(os.path.dirname(__file__), 'test.crt'),
+        keyfile=os.path.join(os.path.dirname(__file__), 'test.key'),
+    )
 
 class HelloHandler(RequestHandler):
     def get(self):
@@ -732,14 +739,10 @@ class TestIOStream(TestIOStreamMixin, AsyncTestCase):
 
 class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
-        ssl_options = dict(
-            certfile=os.path.join(os.path.dirname(__file__), 'test.crt'),
-            keyfile=os.path.join(os.path.dirname(__file__), 'test.key'),
-        )
         connection = ssl.wrap_socket(connection,
                                      server_side=True,
                                      do_handshake_on_connect=False,
-                                     **ssl_options)
+                                     **_server_ssl_options())
         return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
 
     def _make_client_iostream(self, connection, **kwargs):
@@ -765,6 +768,91 @@ class TestIOStreamSSLContext(TestIOStreamMixin, AsyncTestCase):
         context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
         return SSLIOStream(connection, io_loop=self.io_loop,
                            ssl_options=context, **kwargs)
+
+
+class TestIOStreamStartTLS(AsyncTestCase):
+    def setUp(self):
+        try:
+            super(TestIOStreamStartTLS, self).setUp()
+            self.listener, self.port = bind_unused_port()
+            self.server_stream = None
+            self.server_accepted = Future()
+            netutil.add_accept_handler(self.listener, self.accept)
+            self.client_stream = IOStream(socket.socket())
+            self.io_loop.add_future(self.client_stream.connect(
+                ('127.0.0.1', self.port)), self.stop)
+            self.wait()
+            self.io_loop.add_future(self.server_accepted, self.stop)
+            self.wait()
+        except Exception as e:
+            print(e)
+            raise
+
+    def tearDown(self):
+        if self.server_stream is not None:
+            self.server_stream.close()
+        if self.client_stream is not None:
+            self.client_stream.close()
+        self.listener.close()
+        super(TestIOStreamStartTLS, self).tearDown()
+
+    def accept(self, connection, address):
+        if self.server_stream is not None:
+            self.fail("should only get one connection")
+        self.server_stream = IOStream(connection)
+        self.server_accepted.set_result(None)
+
+    @gen.coroutine
+    def client_send_line(self, line):
+        self.client_stream.write(line)
+        recv_line = yield self.server_stream.read_until(b"\r\n")
+        self.assertEqual(line, recv_line)
+
+    @gen.coroutine
+    def server_send_line(self, line):
+        self.server_stream.write(line)
+        recv_line = yield self.client_stream.read_until(b"\r\n")
+        self.assertEqual(line, recv_line)
+
+    def client_start_tls(self, ssl_options=None):
+        client_stream = self.client_stream
+        self.client_stream = None
+        return client_stream.start_tls(False, ssl_options)
+
+    def server_start_tls(self, ssl_options=None):
+        server_stream = self.server_stream
+        self.server_stream = None
+        return server_stream.start_tls(True, ssl_options)
+
+    @gen_test
+    def test_start_tls_smtp(self):
+        # This flow is simplified from RFC 3207 section 5.
+        # We don't really need all of this, but it helps to make sure
+        # that after realistic back-and-forth traffic the buffers end up
+        # in a sane state.
+        yield self.server_send_line(b"220 mail.example.com ready\r\n")
+        yield self.client_send_line(b"EHLO mail.example.com\r\n")
+        yield self.server_send_line(b"250-mail.example.com welcome\r\n")
+        yield self.server_send_line(b"250 STARTTLS\r\n")
+        yield self.client_send_line(b"STARTTLS\r\n")
+        yield self.server_send_line(b"220 Go ahead\r\n")
+        client_future = self.client_start_tls()
+        server_future = self.server_start_tls(_server_ssl_options())
+        self.client_stream = yield client_future
+        self.server_stream = yield server_future
+        self.assertTrue(isinstance(self.client_stream, SSLIOStream))
+        self.assertTrue(isinstance(self.server_stream, SSLIOStream))
+        yield self.client_send_line(b"EHLO mail.example.com\r\n")
+        yield self.server_send_line(b"250 mail.example.com welcome\r\n")
+
+    @gen_test
+    def test_handshake_fail(self):
+        self.server_start_tls(_server_ssl_options())
+        client_future = self.client_start_tls(
+            dict(cert_reqs=ssl.CERT_REQUIRED, ca_certs=certifi.where()))
+        with ExpectLog(gen_log, "SSL Error"):
+            with self.assertRaises(ssl.SSLError):
+                yield client_future
 
 
 @skipIfNonUnix
