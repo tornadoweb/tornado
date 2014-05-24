@@ -17,6 +17,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 from contextlib import closing
+import os
 import socket
 
 from tornado.concurrent import Future
@@ -34,11 +35,7 @@ class TestTCPServer(TCPServer):
     def __init__(self, family):
         super(TestTCPServer, self).__init__()
         self.streams = []
-        try:
-            sockets = bind_sockets(None, 'localhost', family)
-        except:
-            print(socket.getaddrinfo('localhost', 0, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_PASSIVE))
-            raise
+        sockets = bind_sockets(None, 'localhost', family)
         self.add_sockets(sockets)
         self.port = sockets[0].getsockname()[1]
 
@@ -57,6 +54,8 @@ class TCPClientTest(AsyncTestCase):
         self.client = TCPClient()
 
     def start_server(self, family):
+        if family == socket.AF_UNSPEC and 'TRAVIS' in os.environ:
+            self.skipTest("dual-stack servers often have port conflicts on travis")
         self.server = TestTCPServer(family)
         return self.server.port
 
