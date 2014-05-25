@@ -81,8 +81,8 @@ class UnsatisfiableReadError(Exception):
     pass
 
 
-class StreamBufferFullError(IOError):
-    """Exception raised by `IOStream.write` method when write buffer is full.
+class StreamBufferFullError(Exception):
+    """Exception raised by `IOStream` methods when the buffer is full.
     """
 
 
@@ -106,6 +106,20 @@ class BaseIOStream(object):
     """
     def __init__(self, io_loop=None, max_buffer_size=None,
                  read_chunk_size=None, max_write_buffer_size=None):
+        """`BaseIOStream` constructor.
+
+        :arg io_loop: The `.IOLoop` to use; defaults to `.IOLoop.current`.
+        :arg max_buffer_size: Maximum amount of incoming data to buffer;
+            defaults to 100MB.
+        :arg read_chunk_size: Amount of data to read at one time from the
+            underlying transport; defaults to 64KB.
+        :arg max_write_buffer_size: Amount of outgoing data to buffer;
+            defaults to unlimited.
+
+        .. versionchanged:: 3.3
+           Add the ``max_write_buffer_size`` parameter.  Changed default
+           ``read_chunk_size`` to 64KB.
+        """
         self.io_loop = io_loop or ioloop.IOLoop.current()
         self.max_buffer_size = max_buffer_size or 104857600
         # A chunk size that is too close to max_buffer_size can cause
@@ -304,7 +318,7 @@ class BaseIOStream(object):
         if data:
             if (self.max_write_buffer_size is not None and
                     self._write_buffer_size + len(data) > self.max_write_buffer_size):
-                raise StreamBufferFullError
+                raise StreamBufferFullError("Reached maximum read buffer size")
             # Break up large contiguous strings before inserting them in the
             # write buffer, so we don't have to recopy the entire thing
             # as we slice off pieces to send to the socket.
@@ -670,7 +684,7 @@ class BaseIOStream(object):
         if self._read_buffer_size > self.max_buffer_size:
             gen_log.error("Reached maximum read buffer size")
             self.close()
-            raise IOError("Reached maximum read buffer size")
+            raise StreamBufferFullError("Reached maximum read buffer size")
         return len(chunk)
 
     def _run_streaming_callback(self):
