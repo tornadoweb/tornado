@@ -17,7 +17,7 @@ pycurl==7.19.3.1
 
 # Other useful tools
 Sphinx==1.2.2
-autopep8==0.9.7
+autopep8==1.0.2
 coverage==3.7.1
 pep8==1.5.6
 pyflakes==0.8.1
