@@ -73,6 +73,10 @@ try:
 except ImportError:
     import urllib as urllib_parse  # py2
 
+try:
+    long  # py2
+except NameError:
+    long = int  # py3
 
 class AuthError(Exception):
     pass

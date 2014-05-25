@@ -23,7 +23,7 @@ import socket
 
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream, SSLIOStream
+from tornado.iostream import IOStream
 from tornado import gen
 from tornado.netutil import Resolver
 

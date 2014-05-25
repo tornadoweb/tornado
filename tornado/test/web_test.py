@@ -578,8 +578,8 @@ class WSGISafeWebTest(WebTestCase):
                 "/decode_arg/%E9?foo=%E9&encoding=latin1",
                 "/decode_arg_kw/%E9?foo=%E9&encoding=latin1",
                 ]
-        for url in urls:
-            response = self.fetch(url)
+        for req_url in urls:
+            response = self.fetch(req_url)
             response.rethrow()
             data = json_decode(response.body)
             self.assertEqual(data, {u('path'): [u('unicode'), u('\u00e9')],
@@ -605,8 +605,8 @@ class WSGISafeWebTest(WebTestCase):
         # These urls are all equivalent.
         urls = ["/decode_arg/1%20%2B%201?foo=1%20%2B%201&encoding=utf-8",
                 "/decode_arg/1%20+%201?foo=1+%2B+1&encoding=utf-8"]
-        for url in urls:
-            response = self.fetch(url)
+        for req_url in urls:
+            response = self.fetch(req_url)
             response.rethrow()
             data = json_decode(response.body)
             self.assertEqual(data, {u('path'): [u('unicode'), u('1 + 1')],

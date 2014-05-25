@@ -91,6 +91,11 @@ from tornado.netutil import Resolver
 from tornado.stack_context import NullContext, wrap
 from tornado.ioloop import IOLoop
 
+try:
+    long  # py2
+except NameError:
+    long = int  # py3
+
 
 @implementer(IDelayedCall)
 class TornadoDelayedCall(object):
