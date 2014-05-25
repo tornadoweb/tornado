@@ -332,20 +332,21 @@ class HTTP1Connection(httputil.HTTPConnection):
         for line in lines:
             if b'\n' in line:
                 raise ValueError('Newline in header: ' + repr(line))
+        future = None
         if self.stream.closed():
-            self._write_future = Future()
-            self._write_future.set_exception(iostream.StreamClosedError())
+            future = self._write_future = Future()
+            future.set_exception(iostream.StreamClosedError())
         else:
             if callback is not None:
                 self._write_callback = stack_context.wrap(callback)
             else:
-                self._write_future = Future()
+                future = self._write_future = Future()
             data = b"\r\n".join(lines) + b"\r\n\r\n"
             if chunk:
                 data += self._format_chunk(chunk)
             self._pending_write = self.stream.write(data)
             self._pending_write.add_done_callback(self._on_write_complete)
-        return self._write_future
+        return future
 
     def _format_chunk(self, chunk):
         if self._expected_content_remaining is not None:

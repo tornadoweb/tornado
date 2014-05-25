@@ -2034,8 +2034,9 @@ class StaticFileHandler(RequestHandler):
             cls._static_hashes = {}
 
     def head(self, path):
-        self.get(path, include_body=False)
+        return self.get(path, include_body=False)
 
+    @gen.coroutine
     def get(self, path, include_body=True):
         # Set up our path instance variables.
         self.path = self.parse_url_path(path)
@@ -2060,9 +2061,9 @@ class StaticFileHandler(RequestHandler):
             # the request will be treated as if the header didn't exist.
             request_range = httputil._parse_request_range(range_header)
 
+        size = self.get_content_size()
         if request_range:
             start, end = request_range
-            size = self.get_content_size()
             if (start is not None and start >= size) or end == 0:
                 # As per RFC 2616 14.35.1, a range is not satisfiable only: if
                 # the first requested byte is equal to or greater than the
@@ -2086,7 +2087,17 @@ class StaticFileHandler(RequestHandler):
                 self.set_header("Content-Range",
                                 httputil._get_content_range(start, end, size))
         else:
-            start = end = size = None
+            start = end = None
+
+        if start is not None and end is not None:
+            content_length = end - start
+        elif end is not None:
+            content_length = end
+        elif start is not None:
+            content_length = size - start
+        else:
+            content_length = size
+        self.set_header("Content-Length", content_length)
 
         if include_body:
             content = self.get_content(self.absolute_path, start, end)
@@ -2094,20 +2105,9 @@ class StaticFileHandler(RequestHandler):
                 content = [content]
             for chunk in content:
                 self.write(chunk)
+                yield self.flush()
         else:
             assert self.request.method == "HEAD"
-            if start is not None and end is not None:
-                content_length = end - start
-            elif end is not None:
-                content_length = end
-            else:
-                if size is None:
-                    size = self.get_content_size()
-                if start is not None:
-                    content_length = size - start
-                else:
-                    content_length = size
-            self.set_header("Content-Length", content_length)
 
     def compute_etag(self):
         """Sets the ``Etag`` header based on static url version.
@@ -2287,11 +2287,13 @@ class StaticFileHandler(RequestHandler):
     def get_content_size(self):
         """Retrieve the total size of the resource at the given path.
 
-        This method may be overridden by subclasses. It will only
-        be called if a partial result is requested from `get_content`,
-        or on ``HEAD`` requests.
+        This method may be overridden by subclasses.
 
         .. versionadded:: 3.1
+
+        .. versionchanged:: 3.3
+           This method is now always called, instead of only when
+           partial results are requested.
         """
         stat_result = self._stat()
         return stat_result[stat.ST_SIZE]

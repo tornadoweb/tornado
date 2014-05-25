@@ -34,6 +34,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import sys
 import tornado
 
+from tornado.concurrent import Future
 from tornado import escape
 from tornado import httputil
 from tornado.log import access_log
@@ -84,6 +85,12 @@ class WSGIApplication(web.Application):
         return WSGIAdapter(self)(environ, start_response)
 
 
+# WSGI has no facilities for flow control, so just return an already-done
+# Future when the interface requires it.
+_dummy_future = Future()
+_dummy_future.set_result(None)
+
+
 class _WSGIConnection(httputil.HTTPConnection):
     def __init__(self, method, start_response, context):
         self.method = method
@@ -113,6 +120,7 @@ class _WSGIConnection(httputil.HTTPConnection):
             self.write(chunk, callback)
         elif callback is not None:
             callback()
+        return _dummy_future
 
     def write(self, chunk, callback=None):
         if self._expected_content_remaining is not None:
@@ -124,6 +132,7 @@ class _WSGIConnection(httputil.HTTPConnection):
         self._write_buffer.append(chunk)
         if callback is not None:
             callback()
+        return _dummy_future
 
     def finish(self):
         if (self._expected_content_remaining is not None and

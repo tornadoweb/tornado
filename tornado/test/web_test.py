@@ -1160,6 +1160,11 @@ class CustomStaticFileTest(WebTestCase):
                     return b'bar'
                 raise Exception("unexpected path %r" % path)
 
+            def get_content_size(self):
+                if self.absolute_path == 'CustomStaticFileTest:foo.txt':
+                    return 3
+                raise Exception("unexpected path %r" % self.absolute_path)
+
             def get_modified_time(self):
                 return None
 
