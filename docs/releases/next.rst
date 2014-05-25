@@ -14,7 +14,24 @@ Backwards-compatibility notes
 * Tornado now depends on the `certifi <https://pypi.python.org/pypi/certifi>`_
   package instead of bundling its own copy of the Mozilla CA list. This will
   be installed automatically when using ``pip`` or ``easy_install``.
+* This version includes the changes to the secure cookie format first
+  introduced in version 3.2.1.
 
+Other notes
+~~~~~~~~~~~
+
+* The git repository has moved to https://github.com/tornadoweb/tornado.
+  All old links should be redirected to the new location.
+* An `announcement mailing list
+  <http://groups.google.com/group/python-tornado-announce>`_ is now available.
+* All Tornado modules are now importable on Google App Engine (although
+  the App Engine environment does not allow the system calls used
+  by `.IOLoop` so many modules are still unusable).
+
+`tornado.auth`
+~~~~~~~~~~~~~~
+
+* Fixed a bug in `.FacebookMixin` on Python 3.
 
 `tornado.concurrent`
 ~~~~~~~~~~~~~~~~~~~~
@@ -28,6 +45,12 @@ Backwards-compatibility notes
   of the old ``TracebackFuture`` class.  ``TracebackFuture`` is now
   simply an alias for ``Future``.
 
+``tornado.curl_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``curl_httpclient`` now passes along the HTTP "reason" string
+  in ``response.reason``.
+
 `tornado.gen`
 ~~~~~~~~~~~~~
 
@@ -39,6 +62,12 @@ Backwards-compatibility notes
   will be created on demand when needed.
 * New function `.with_timeout` wraps a `.Future` and raises an exception
   if it doesn't complete in a given amount of time.
+* New object `.moment` can be yielded to allow the IOLoop to run for
+  one iteration before resuming.
+* `.Task` is now a function returning a `.Future` instead of a `.YieldPoint`
+  subclass.  This change should be transparent to application code, but
+  allows `.Task` to take advantage of the newly-optimized `.Future`
+  handling.
 
 `tornado.http1connection`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -105,6 +134,8 @@ Backwards-compatibility notes
 * The ``callback`` argument to most `.IOStream` methods is now optional.
   When called without a callback the method will return a `.Future`
   for use with coroutines.
+* New method `.IOStream.start_tls` converts an `.IOStream` to an
+  `.SSLIOStream`.
 * No longer gets confused when an ``IOError`` or ``OSError`` without
   an ``errno`` attribute is raised.
 * `.BaseIOStream.read_bytes` now accepts a ``partial`` keyword argument,
@@ -138,9 +169,16 @@ Backwards-compatibility notes
 
 * Now works on Python 2.6.
 
+`tornado.platform.twisted`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* `.TwistedIOLoop` now works on Python 3.3+ (with Twisted 14.0.0+).
+
 ``tornado.simple_httpclient``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+* ``simple_httpclient`` has better support for IPv6, which is now enabled
+  by default.
 * Improved default cipher suite selection (Python 2.7+).
 * HTTP implementation has been unified with ``tornado.httpserver``
   in `tornado.http1connection`
@@ -149,12 +187,20 @@ Backwards-compatibility notes
 * The ``expect_100_continue`` keyword argument to
   `tornado.httpclient.HTTPRequest` allows the use of the HTTP ``Expect:
   100-continue`` feature.
+* ``simple_httpclient`` now raises the original exception (e.g. an `IOError`)
+  in more cases, instead of converting everything to ``HTTPError``.
 
 `tornado.stack_context`
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 * The stack context system now has less performance overhead when no
   stack contexts are active.
+
+`tornado.tcpclient`
+~~~~~~~~~~~~~~~~~~~
+
+* New module which creates TCP connections and IOStreams, including
+  name resolution, connecting, and SSL handshakes.
 
 `tornado.testing`
 ~~~~~~~~~~~~~~~~~

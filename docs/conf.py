@@ -33,6 +33,7 @@ autodoc_docstring_signature = False
 coverage_skip_undoc_in_source = True
 coverage_ignore_modules = [
     "tornado.platform.asyncio",
+    "tornado.platform.caresresolver",
     "tornado.platform.twisted",
     ]
 # I wish this could go in a per-module file...
@@ -64,6 +65,14 @@ coverage_ignore_functions = [
     # various modules
     "doctests",
     "main",
+
+    # tornado.escape
+    # parse_qs_bytes should probably be documented but it's complicated by
+    # having different implementations between py2 and py3.
+    "parse_qs_bytes",
+
+    # tornado.gen
+    "multi_future",
 ]
 
 html_static_path = ['tornado.css']

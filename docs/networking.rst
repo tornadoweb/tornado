@@ -9,4 +9,5 @@ Asynchronous networking
    http1connection
    httpclient
    netutil
+   tcpclient
    tcpserver
