@@ -16,6 +16,7 @@ import binascii
 import contextlib
 import datetime
 import email.utils
+import itertools
 import logging
 import os
 import re
@@ -918,17 +919,37 @@ class StaticFileTest(WebTestCase):
         response = self.fetch(path % int(include_host))
         self.assertEqual(response.body, utf8(str(True)))
 
+    def get_and_head(self, *args, **kwargs):
+        """Performs a GET and HEAD request and returns the GET response.
+
+        Fails if any ``Content-*`` headers returned by the two requests
+        differ.
+        """
+        head_response = self.fetch(*args, method="HEAD", **kwargs)
+        get_response = self.fetch(*args, method="GET", **kwargs)
+        content_headers = set()
+        for h in itertools.chain(head_response.headers, get_response.headers):
+            if h.startswith('Content-'):
+                content_headers.add(h)
+        for h in content_headers:
+            self.assertEqual(head_response.headers.get(h),
+                             get_response.headers.get(h),
+                             "%s differs between GET (%s) and HEAD (%s)" %
+                             (h, head_response.headers.get(h),
+                              get_response.headers.get(h)))
+        return get_response
+
     def test_static_304_if_modified_since(self):
-        response1 = self.fetch("/static/robots.txt")
-        response2 = self.fetch("/static/robots.txt", headers={
+        response1 = self.get_and_head("/static/robots.txt")
+        response2 = self.get_and_head("/static/robots.txt", headers={
             'If-Modified-Since': response1.headers['Last-Modified']})
         self.assertEqual(response2.code, 304)
         self.assertTrue('Content-Length' not in response2.headers)
         self.assertTrue('Last-Modified' not in response2.headers)
 
     def test_static_304_if_none_match(self):
-        response1 = self.fetch("/static/robots.txt")
-        response2 = self.fetch("/static/robots.txt", headers={
+        response1 = self.get_and_head("/static/robots.txt")
+        response2 = self.get_and_head("/static/robots.txt", headers={
             'If-None-Match': response1.headers['Etag']})
         self.assertEqual(response2.code, 304)
 
@@ -936,7 +957,7 @@ class StaticFileTest(WebTestCase):
         # On windows, the functions that work with time_t do not accept
         # negative values, and at least one client (processing.js) seems
         # to use if-modified-since 1/1/1960 as a cache-busting technique.
-        response = self.fetch("/static/robots.txt", headers={
+        response = self.get_and_head("/static/robots.txt", headers={
             'If-Modified-Since': 'Fri, 01 Jan 1960 00:00:00 GMT'})
         self.assertEqual(response.code, 200)
 
@@ -947,20 +968,20 @@ class StaticFileTest(WebTestCase):
         # when parsing If-Modified-Since.
         stat = os.stat(relpath('static/robots.txt'))
 
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'If-Modified-Since': format_timestamp(stat.st_mtime - 1)})
         self.assertEqual(response.code, 200)
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'If-Modified-Since': format_timestamp(stat.st_mtime + 1)})
         self.assertEqual(response.code, 304)
 
     def test_static_etag(self):
-        response = self.fetch('/static/robots.txt')
+        response = self.get_and_head('/static/robots.txt')
         self.assertEqual(utf8(response.headers.get("Etag")),
                          b'"' + self.robots_txt_hash + b'"')
 
     def test_static_with_range(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=0-9'})
         self.assertEqual(response.code, 206)
         self.assertEqual(response.body, b"User-agent")
@@ -971,7 +992,7 @@ class StaticFileTest(WebTestCase):
                          "bytes 0-9/26")
 
     def test_static_with_range_full_file(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=0-'})
         # Note: Chrome refuses to play audio if it gets an HTTP 206 in response
         # to ``Range: bytes=0-`` :(
@@ -983,7 +1004,7 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"), None)
 
     def test_static_with_range_full_past_end(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=0-10000000'})
         self.assertEqual(response.code, 200)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
@@ -993,7 +1014,7 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"), None)
 
     def test_static_with_range_partial_past_end(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=1-10000000'})
         self.assertEqual(response.code, 206)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
@@ -1003,7 +1024,7 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"), "bytes 1-25/26")
 
     def test_static_with_range_end_edge(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=22-'})
         self.assertEqual(response.body, b": /\n")
         self.assertEqual(response.headers.get("Content-Length"), "4")
@@ -1011,7 +1032,7 @@ class StaticFileTest(WebTestCase):
                          "bytes 22-25/26")
 
     def test_static_with_range_neg_end(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=-4'})
         self.assertEqual(response.body, b": /\n")
         self.assertEqual(response.headers.get("Content-Length"), "4")
@@ -1019,19 +1040,19 @@ class StaticFileTest(WebTestCase):
                          "bytes 22-25/26")
 
     def test_static_invalid_range(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'asdf'})
         self.assertEqual(response.code, 200)
 
     def test_static_unsatisfiable_range_zero_suffix(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=-0'})
         self.assertEqual(response.headers.get("Content-Range"),
                          "bytes */26")
         self.assertEqual(response.code, 416)
 
     def test_static_unsatisfiable_range_invalid_start(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=26'})
         self.assertEqual(response.code, 416)
         self.assertEqual(response.headers.get("Content-Range"),
@@ -1056,7 +1077,7 @@ class StaticFileTest(WebTestCase):
                          b'"' + self.robots_txt_hash + b'"')
 
     def test_static_range_if_none_match(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=1-4',
             'If-None-Match': b'"' + self.robots_txt_hash + b'"'})
         self.assertEqual(response.code, 304)
@@ -1066,7 +1087,7 @@ class StaticFileTest(WebTestCase):
                          b'"' + self.robots_txt_hash + b'"')
 
     def test_static_404(self):
-        response = self.fetch('/static/blarg')
+        response = self.get_and_head('/static/blarg')
         self.assertEqual(response.code, 404)
 
 

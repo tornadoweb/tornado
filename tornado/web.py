@@ -2086,18 +2086,27 @@ class StaticFileHandler(RequestHandler):
                 self.set_header("Content-Range",
                                 httputil._get_content_range(start, end, size))
         else:
-            start = end = None
-        content = self.get_content(self.absolute_path, start, end)
-        if isinstance(content, bytes_type):
-            content = [content]
-        content_length = 0
-        for chunk in content:
-            if include_body:
+            start = end = size = None
+
+        if include_body:
+            content = self.get_content(self.absolute_path, start, end)
+            if isinstance(content, bytes_type):
+                content = [content]
+            for chunk in content:
                 self.write(chunk)
-            else:
-                content_length += len(chunk)
-        if not include_body:
+        else:
             assert self.request.method == "HEAD"
+            if start is not None and end is not None:
+                content_length = end - start
+            elif end is not None:
+                content_length = end
+            else:
+                if size is None:
+                    size = self.get_content_size()
+                if start is not None:
+                    content_length = size - start
+                else:
+                    content_length = size
             self.set_header("Content-Length", content_length)
 
     def compute_etag(self):
@@ -2279,7 +2288,8 @@ class StaticFileHandler(RequestHandler):
         """Retrieve the total size of the resource at the given path.
 
         This method may be overridden by subclasses. It will only
-        be called if a partial result is requested from `get_content`
+        be called if a partial result is requested from `get_content`,
+        or on ``HEAD`` requests.
 
         .. versionadded:: 3.1
         """
