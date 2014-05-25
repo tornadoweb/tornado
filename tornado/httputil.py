@@ -430,14 +430,13 @@ class HTTPServerRequest(object):
             return None
 
     def _parse_body(self):
-        if self.method in ("POST", "PATCH", "PUT"):
-            parse_body_arguments(
-                self.headers.get("Content-Type", ""), self.body,
-                self.body_arguments, self.files,
-                self.headers)
+        parse_body_arguments(
+            self.headers.get("Content-Type", ""), self.body,
+            self.body_arguments, self.files,
+            self.headers)
 
-            for k, v in self.body_arguments.items():
-                self.arguments.setdefault(k, []).extend(v)
+        for k, v in self.body_arguments.items():
+            self.arguments.setdefault(k, []).extend(v)
 
     def __repr__(self):
         attrs = ("protocol", "host", "method", "uri", "version", "remote_ip")
