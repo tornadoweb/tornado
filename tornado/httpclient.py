@@ -500,7 +500,7 @@ class HTTPResponse(object):
             self.effective_url = effective_url
         if error is None:
             if self.code < 200 or self.code >= 300:
-                self.error = HTTPError(self.code, message=self.reason, 
+                self.error = HTTPError(self.code, message=self.reason,
                                        response=self)
             else:
                 self.error = None

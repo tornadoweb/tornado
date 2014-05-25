@@ -58,7 +58,9 @@ try:
     from ssl import SSLError
 except ImportError:
     # ssl is unavailable on app engine.
-    class SSLError(Exception): pass
+    class SSLError(Exception):
+        pass
+
 
 class _NormalizedHeaderCache(dict):
     """Dynamic cached mapping of header names to Http-Header-Case.

@@ -1031,7 +1031,7 @@ class WithTimeoutTest(AsyncTestCase):
         self.io_loop.add_timeout(datetime.timedelta(seconds=0.1),
                                  lambda: future.set_result('asdf'))
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                         future)
+                                        future)
         self.assertEqual(result, 'asdf')
 
     @gen_test

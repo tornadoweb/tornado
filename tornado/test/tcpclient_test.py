@@ -31,6 +31,7 @@ from tornado.test.util import skipIfNoIPv6, unittest
 # and AF_INET6 because some installations do not have AF_INET6.
 AF1, AF2 = 1, 2
 
+
 class TestTCPServer(TCPServer):
     def __init__(self, family):
         super(TestTCPServer, self).__init__()
@@ -46,6 +47,7 @@ class TestTCPServer(TCPServer):
         super(TestTCPServer, self).stop()
         for stream in self.streams:
             stream.close()
+
 
 class TCPClientTest(AsyncTestCase):
     def setUp(self):
@@ -75,7 +77,6 @@ class TCPClientTest(AsyncTestCase):
         families = set(addr[0] for addr in addrinfo)
         if socket.AF_INET6 not in families:
             self.skipTest("localhost does not resolve to ipv6")
-
 
     @gen_test
     def do_test_connect(self, family, host):

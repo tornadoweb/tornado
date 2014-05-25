@@ -127,7 +127,7 @@ class _WSGIConnection(httputil.HTTPConnection):
 
     def finish(self):
         if (self._expected_content_remaining is not None and
-            self._expected_content_remaining != 0):
+                self._expected_content_remaining != 0):
             self._error = httputil.HTTPOutputException(
                 "Tried to write %d bytes less than Content-Length" %
                 self._expected_content_remaining)

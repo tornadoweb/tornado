@@ -67,13 +67,16 @@ class DigestAuthHandler(RequestHandler):
                             'Digest realm="%s", nonce="%s", opaque="%s"' %
                             (realm, nonce, opaque))
 
+
 class CustomReasonHandler(RequestHandler):
     def get(self):
         self.set_status(200, "Custom reason")
 
+
 class CustomFailReasonHandler(RequestHandler):
     def get(self):
         self.set_status(400, "Custom reason")
+
 
 @unittest.skipIf(pycurl is None, "pycurl module not present")
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):

@@ -30,6 +30,7 @@ from tornado.log import gen_log, app_log
 from tornado import stack_context
 from tornado.util import GzipDecompressor
 
+
 class HTTP1ConnectionParameters(object):
     """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`.
     """
@@ -53,6 +54,7 @@ class HTTP1ConnectionParameters(object):
         self.max_body_size = max_body_size
         self.body_timeout = body_timeout
         self.use_gzip = use_gzip
+
 
 class HTTP1Connection(httputil.HTTPConnection):
     """Implements the HTTP/1.x protocol.
@@ -128,8 +130,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         need_delegate_close = False
         try:
             header_future = self.stream.read_until_regex(
-                        b"\r?\n\r?\n",
-                        max_bytes=self.params.max_header_size)
+                b"\r?\n\r?\n",
+                max_bytes=self.params.max_header_size)
             if self.params.header_timeout is None:
                 header_data = yield header_future
             else:
@@ -163,7 +165,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             skip_body = False
             if self.is_client:
                 if (self._request_start_line is not None and
-                    self._request_start_line.method == 'HEAD'):
+                        self._request_start_line.method == 'HEAD'):
                     skip_body = True
                 code = start_line.code
                 if code == 304:
@@ -174,7 +176,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                     yield self._read_message(delegate)
             else:
                 if (headers.get("Expect") == "100-continue" and
-                    not self._write_finished):
+                        not self._write_finished):
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
             if not skip_body:
                 body_future = self._read_body(headers, delegate)
@@ -199,8 +201,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             # response, and we're not detached, register a close callback
             # on the stream (we didn't need one while we were reading)
             if (not self._finish_future.done() and
-                self.stream is not None and
-                not self.stream.closed()):
+                    self.stream is not None and
+                    not self.stream.closed()):
                 self.stream.set_close_callback(self._on_connection_close)
                 yield self._finish_future
             if self.is_client and self._disconnect_on_finish:
@@ -383,8 +385,8 @@ class HTTP1Connection(httputil.HTTPConnection):
     def finish(self):
         """Implements `.HTTPConnection.finish`."""
         if (self._expected_content_remaining is not None and
-            self._expected_content_remaining != 0 and
-            not self.stream.closed()):
+                self._expected_content_remaining != 0 and
+                not self.stream.closed()):
             self.stream.close()
             raise httputil.HTTPOutputException(
                 "Tried to write %d bytes less than Content-Length" %

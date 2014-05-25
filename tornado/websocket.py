@@ -960,7 +960,7 @@ def _websocket_mask_python(mask, data):
         return unmasked.tostring()
 
 if (os.environ.get('TORNADO_NO_EXTENSION') or
-    os.environ.get('TORNADO_EXTENSION') == '0'):
+        os.environ.get('TORNADO_EXTENSION') == '0'):
     # These environment variables exist to make it easier to do performance
     # comparisons; they are not guaranteed to remain supported in the future.
     _websocket_mask = _websocket_mask_python

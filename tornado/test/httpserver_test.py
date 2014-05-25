@@ -735,6 +735,7 @@ class GzipBaseTest(object):
         response = self.fetch('/', method='POST', body='foo=bar')
         self.assertEquals(json_decode(response.body), {u('foo'): [u('bar')]})
 
+
 class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
     def get_httpserver_options(self):
         return dict(gzip=True)
@@ -742,6 +743,7 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
     def test_gzip(self):
         response = self.post_gzip('foo=bar')
         self.assertEquals(json_decode(response.body), {u('foo'): [u('bar')]})
+
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):
     def test_gzip_unsupported(self):
@@ -818,10 +820,10 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
         self.assertEqual([16, 16, 16, 2], chunks)
 
     def test_compressed_body(self):
-         self.fetch_chunk_sizes(body=self.compress(self.BODY),
-                                headers={'Content-Encoding': 'gzip'})
-         # Compression creates irregular boundaries so the assertions
-         # in fetch_chunk_sizes are as specific as we can get.
+        self.fetch_chunk_sizes(body=self.compress(self.BODY),
+                               headers={'Content-Encoding': 'gzip'})
+        # Compression creates irregular boundaries so the assertions
+        # in fetch_chunk_sizes are as specific as we can get.
 
     def test_chunked_body(self):
         def body_producer(write):
@@ -943,41 +945,41 @@ class BodyLimitsTest(AsyncHTTPTestCase):
         return SimpleAsyncHTTPClient(io_loop=self.io_loop)
 
     def test_small_body(self):
-        response = self.fetch('/buffered', method='PUT', body=b'a'*4096)
+        response = self.fetch('/buffered', method='PUT', body=b'a' * 4096)
         self.assertEqual(response.body, b'4096')
-        response = self.fetch('/streaming', method='PUT', body=b'a'*4096)
+        response = self.fetch('/streaming', method='PUT', body=b'a' * 4096)
         self.assertEqual(response.body, b'4096')
 
     def test_large_body_buffered(self):
         with ExpectLog(gen_log, '.*Content-Length too long'):
-            response = self.fetch('/buffered', method='PUT', body=b'a'*10240)
+            response = self.fetch('/buffered', method='PUT', body=b'a' * 10240)
         self.assertEqual(response.code, 599)
 
     def test_large_body_buffered_chunked(self):
         with ExpectLog(gen_log, '.*chunked body too large'):
             response = self.fetch('/buffered', method='PUT',
-                                  body_producer=lambda write: write(b'a'*10240))
+                                  body_producer=lambda write: write(b'a' * 10240))
         self.assertEqual(response.code, 599)
 
     def test_large_body_streaming(self):
         with ExpectLog(gen_log, '.*Content-Length too long'):
-            response = self.fetch('/streaming', method='PUT', body=b'a'*10240)
+            response = self.fetch('/streaming', method='PUT', body=b'a' * 10240)
         self.assertEqual(response.code, 599)
 
     def test_large_body_streaming_chunked(self):
         with ExpectLog(gen_log, '.*chunked body too large'):
             response = self.fetch('/streaming', method='PUT',
-                                  body_producer=lambda write: write(b'a'*10240))
+                                  body_producer=lambda write: write(b'a' * 10240))
         self.assertEqual(response.code, 599)
 
     def test_large_body_streaming_override(self):
         response = self.fetch('/streaming?expected_size=10240', method='PUT',
-                              body=b'a'*10240)
+                              body=b'a' * 10240)
         self.assertEqual(response.body, b'10240')
 
     def test_large_body_streaming_chunked_override(self):
         response = self.fetch('/streaming?expected_size=10240', method='PUT',
-                              body_producer=lambda write: write(b'a'*10240))
+                              body_producer=lambda write: write(b'a' * 10240))
         self.assertEqual(response.body, b'10240')
 
     @gen_test
@@ -1004,7 +1006,7 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             # Use a raw stream so we can make sure it's all on one connection.
             stream.write(b'PUT /streaming?expected_size=10240 HTTP/1.1\r\n'
                          b'Content-Length: 10240\r\n\r\n')
-            stream.write(b'a'*10240)
+            stream.write(b'a' * 10240)
             headers, response = yield gen.Task(read_stream_body, stream)
             self.assertEqual(response, b'10240')
             # Without the ?expected_size parameter, we get the old default value

@@ -102,14 +102,14 @@ class SecureCookieV1Test(unittest.TestCase):
         sig = match.group(2)
         self.assertEqual(
             _create_signature_v1(handler.application.settings["cookie_secret"],
-                              'foo', '12345678', timestamp),
+                                 'foo', '12345678', timestamp),
             sig)
         # shifting digits from payload to timestamp doesn't alter signature
         # (this is not desirable behavior, just confirming that that's how it
         # works)
         self.assertEqual(
             _create_signature_v1(handler.application.settings["cookie_secret"],
-                              'foo', '1234', b'5678' + timestamp),
+                                 'foo', '1234', b'5678' + timestamp),
             sig)
         # tamper with the cookie
         handler._cookies['foo'] = utf8('1234|5678%s|%s' % (

@@ -29,6 +29,7 @@ from tornado.netutil import Resolver
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
+
 class _Connector(object):
     """A stateless implementation of the "Happy Eyeballs" algorithm.
 

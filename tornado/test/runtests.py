@@ -66,6 +66,7 @@ class TornadoTextTestRunner(unittest.TextTestRunner):
             self.stream.write("\n")
         return result
 
+
 def main():
     # The -W command-line option does not work in a virtualenv with
     # python 3 (as of virtualenv 1.7), so configure warnings

@@ -1302,7 +1302,7 @@ class RequestHandler(object):
         except Exception as e:
             self._handle_request_exception(e)
             if (self._prepared_future is not None and
-                not self._prepared_future.done()):
+                    not self._prepared_future.done()):
                 # In case we failed before setting _prepared_future, do it
                 # now (to unblock the HTTP server).  Note that this is not
                 # in a finally block to avoid GC issues prior to Python 3.4.
@@ -1859,7 +1859,7 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
             StaticFileHandler.reset()
 
         self.handler = self.handler_class(self.application, self.request,
-                                     **self.handler_kwargs)
+                                          **self.handler_kwargs)
         transforms = [t(self.request) for t in self.application.transforms]
 
         if self.stream_request_body:
@@ -1874,7 +1874,6 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)
         return self.handler._prepared_future
-
 
 
 class HTTPError(Exception):
@@ -2813,7 +2812,8 @@ def create_signed_value(secret, name, value, version=None, clock=None):
 # A leading version number in decimal with no leading zeros, followed by a pipe.
 _signed_value_version_re = re.compile(br"^([1-9][0-9]*)\|(.*)$")
 
-def decode_signed_value(secret, name, value, max_age_days=31, clock=None,min_version=None):
+
+def decode_signed_value(secret, name, value, max_age_days=31, clock=None, min_version=None):
     if clock is None:
         clock = time.time
     if min_version is None:
@@ -2853,6 +2853,7 @@ def decode_signed_value(secret, name, value, max_age_days=31, clock=None,min_ver
     else:
         return None
 
+
 def _decode_signed_value_v1(secret, name, value, max_age_days, clock):
     parts = utf8(value).split(b"|")
     if len(parts) != 3:
@@ -2889,9 +2890,9 @@ def _decode_signed_value_v2(secret, name, value, max_age_days, clock):
         field_value = rest[:n]
         # In python 3, indexing bytes returns small integers; we must
         # use a slice to get a byte string as in python 2.
-        if rest[n:n+1] != b'|':
+        if rest[n:n + 1] != b'|':
             raise ValueError("malformed v2 signed value field")
-        rest = rest[n+1:]
+        rest = rest[n + 1:]
         return field_value, rest
     rest = value[2:]  # remove version number
     try:
@@ -2924,10 +2925,12 @@ def _create_signature_v1(secret, *parts):
         hash.update(utf8(part))
     return utf8(hash.hexdigest())
 
+
 def _create_signature_v2(secret, s):
     hash = hmac.new(utf8(secret), digestmod=hashlib.sha256)
     hash.update(utf8(s))
     return utf8(hash.hexdigest())
+
 
 def _unquote_or_none(s):
     """None-safe wrapper around url_unescape to handle unamteched optional

@@ -32,7 +32,8 @@ if os.name == 'nt':
     from tornado.platform.windows import set_close_exec
 elif 'APPENGINE_RUNTIME' in os.environ:
     from tornado.platform.common import Waker
-    def set_close_exec(fd): pass
+    def set_close_exec(fd):
+        pass
 else:
     from tornado.platform.posix import set_close_exec, Waker
 

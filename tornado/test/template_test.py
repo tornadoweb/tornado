@@ -397,7 +397,7 @@ raw: {% raw name %}""",
   #}{{i
   }}{% end
 %}""",
-                         })
+                             })
         self.assertEqual(loader.load("foo.txt").generate(items=range(5)),
                          b"0, 1, 2, 3, 4")
 

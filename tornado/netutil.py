@@ -95,7 +95,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
                                       0, flags)):
         af, socktype, proto, canonname, sockaddr = res
         if (platform.system() == 'Darwin' and address == 'localhost' and
-            af == socket.AF_INET6 and sockaddr[3] != 0):
+                af == socket.AF_INET6 and sockaddr[3] != 0):
             # Mac OS X includes a link-local address fe80::1%lo0 in the
             # getaddrinfo results for 'localhost'.  However, the firewall
             # doesn't understand that this is a local address and will

@@ -19,11 +19,13 @@ import socket
 import ssl
 import sys
 
+
 def _server_ssl_options():
     return dict(
         certfile=os.path.join(os.path.dirname(__file__), 'test.crt'),
         keyfile=os.path.join(os.path.dirname(__file__), 'test.key'),
     )
+
 
 class HelloHandler(RequestHandler):
     def get(self):
@@ -718,6 +720,7 @@ class TestIOStreamMixin(object):
         finally:
             server.close()
             client.close()
+
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):

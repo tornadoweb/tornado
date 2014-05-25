@@ -72,7 +72,6 @@ class StreamClosedError(IOError):
     pass
 
 
-
 class UnsatisfiableReadError(Exception):
     """Exception raised when a read cannot be satisfied.
 
@@ -107,7 +106,7 @@ class BaseIOStream(object):
         # A chunk size that is too close to max_buffer_size can cause
         # spurious failures.
         self.read_chunk_size = min(read_chunk_size or 65536,
-                                   self.max_buffer_size//2)
+                                   self.max_buffer_size // 2)
         self.error = None
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
@@ -366,7 +365,7 @@ class BaseIOStream(object):
                 self._connect_future = None
             for future in futures:
                 if (isinstance(self.error, (socket.error, IOError)) and
-                    errno_from_exception(self.error) in _ERRNO_CONNRESET):
+                        errno_from_exception(self.error) in _ERRNO_CONNRESET):
                     # Treat connection resets as closed connections so
                     # clients only have to catch one kind of exception
                     # to avoid logging.
@@ -542,7 +541,7 @@ class BaseIOStream(object):
                 #
                 # If we've reached target_bytes, we know we're done.
                 if (target_bytes is not None and
-                    self._read_buffer_size >= target_bytes):
+                        self._read_buffer_size >= target_bytes):
                     break
 
                 # Otherwise, we need to call the more expensive find_read_pos.
@@ -731,7 +730,7 @@ class BaseIOStream(object):
 
     def _check_max_bytes(self, delimiter, size):
         if (self._read_max_bytes is not None and
-            size > self._read_max_bytes):
+                size > self._read_max_bytes):
             raise UnsatisfiableReadError(
                 "delimiter %r not found within %d bytes" % (
                     delimiter, self._read_max_bytes))
@@ -999,10 +998,10 @@ class IOStream(BaseIOStream):
         .. versionadded:: 3.3
         """
         if (self._read_callback or self._read_future or
-            self._write_callback or self._write_future or
-            self._connect_callback or self._connect_future or
-            self._pending_callbacks or self._closed or
-            self._read_buffer or self._write_buffer):
+                self._write_callback or self._write_future or
+                self._connect_callback or self._connect_future or
+                self._pending_callbacks or self._closed or
+                self._read_buffer or self._write_buffer):
             raise ValueError("IOStream is not idle; cannot convert to SSL")
         if ssl_options is None:
             ssl_options = {}
@@ -1032,7 +1031,6 @@ class IOStream(BaseIOStream):
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
         return future
-
 
     def _handle_connect(self):
         err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)

@@ -78,6 +78,7 @@ try:
 except NameError:
     long = int  # py3
 
+
 class AuthError(Exception):
     pass
 

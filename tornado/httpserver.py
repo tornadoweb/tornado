@@ -190,7 +190,7 @@ class _HTTPRequestContext(object):
             self.address_family = None
         # In HTTPServerRequest we want an IP, not a full socket address.
         if (self.address_family in (socket.AF_INET, socket.AF_INET6) and
-            address is not None):
+                address is not None):
             self.remote_ip = address[0]
         else:
             # Unix (or other) socket; fake the remote address.
@@ -203,7 +203,6 @@ class _HTTPRequestContext(object):
             self.protocol = "http"
         self._orig_remote_ip = self.remote_ip
         self._orig_protocol = self.protocol
-
 
     def __str__(self):
         if self.address_family in (socket.AF_INET, socket.AF_INET6):

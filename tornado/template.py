@@ -784,7 +784,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
         if allowed_parents is not None:
             if not in_block:
                 raise ParseError("%s outside %s block" %
-                                (operator, allowed_parents))
+                                 (operator, allowed_parents))
             if in_block not in allowed_parents:
                 raise ParseError("%s block cannot be attached to %s block" % (operator, in_block))
             body.chunks.append(_IntermediateControlBlock(contents, line))

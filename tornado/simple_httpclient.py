@@ -41,11 +41,13 @@ try:
 except ImportError:
     certifi = None
 
+
 def _default_ca_certs():
     if certifi is None:
         raise Exception("The 'certifi' package is required to use https "
                         "in simple_httpclient")
     return certifi.where()
+
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -316,13 +318,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if not self.request.allow_nonstandard_methods:
             if self.request.method in ("POST", "PATCH", "PUT"):
                 if (self.request.body is None and
-                    self.request.body_producer is None):
+                        self.request.body_producer is None):
                     raise AssertionError(
                         'Body must not be empty for "%s" request'
                         % self.request.method)
             else:
                 if (self.request.body is not None or
-                    self.request.body_producer is not None):
+                        self.request.body_producer is not None):
                     raise AssertionError(
                         'Body must be empty for "%s" request'
                         % self.request.method)
@@ -339,7 +341,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.request.use_gzip:
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
-                   (('?' + self.parsed.query) if self.parsed.query else ''))
+                    (('?' + self.parsed.query) if self.parsed.query else ''))
         self.stream.set_nodelay(True)
         self.connection = HTTP1Connection(
             self.stream, True,
@@ -373,7 +375,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.connection.finish()
         if start_read:
             self._read_response()
-
 
     def _read_response(self):
         # Ensure that any exception raised in read_response ends up in our

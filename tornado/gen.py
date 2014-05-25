@@ -556,7 +556,7 @@ _null_future.set_result(None)
 
 moment = Future()
 moment.__doc__ = \
-"""A special object which may be yielded to allow the IOLoop to run for
+    """A special object which may be yielded to allow the IOLoop to run for
 one iteration.
 
 This is not needed in normal use but it can be helpful in long-running
@@ -567,6 +567,7 @@ Usage: ``yield gen.moment``
 .. versionadded:: 3.3
 """
 moment.set_result(None)
+
 
 class Runner(object):
     """Internal implementation of `tornado.gen.engine`.
@@ -732,7 +733,6 @@ class Runner(object):
                 "yielded unknown object %r" % (yielded,)))
         return True
 
-
     def result_callback(self, key):
         return stack_context.wrap(_argument_adapter(
             functools.partial(self.set_result, key)))
@@ -752,6 +752,7 @@ class Runner(object):
             self.stack_context_deactivate = None
 
 Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
+
 
 def _argument_adapter(callback):
     """Returns a function that when invoked runs ``callback`` with one arg.

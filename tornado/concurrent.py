@@ -184,6 +184,7 @@ if futures is None:
 else:
     FUTURES = (futures.Future, Future)
 
+
 def is_future(x):
     return isinstance(x, FUTURES)
 
