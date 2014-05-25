@@ -31,7 +31,7 @@ import numbers
 import re
 import time
 
-from tornado.escape import native_str, parse_qs_bytes, utf8
+from tornado.escape import native_str, parse_qs_bytes, utf8, json_decode
 from tornado.log import gen_log
 from tornado.util import ObjectDict, bytes_type
 
@@ -663,8 +663,8 @@ def _int_or_none(val):
 def parse_body_arguments(content_type, body, arguments, files, headers=None):
     """Parses a form request body.
 
-    Supports ``application/x-www-form-urlencoded`` and
-    ``multipart/form-data``.  The ``content_type`` parameter should be
+    Supports ``application/x-www-form-urlencoded``, ``application/json``,
+    and ``multipart/form-data``.  The ``content_type`` parameter should be
     a string and ``body`` should be a byte string.  The ``arguments``
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
@@ -682,6 +682,17 @@ def parse_body_arguments(content_type, body, arguments, files, headers=None):
         for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
+    elif content_type.startswith("application/json"):
+        try:
+            json_arguments = json_decode(native_str(body))
+        except Exception as e:
+            gen_log.warning('Invalid application/json body: %s', e)
+            json_arguments = {}
+        for name, values in json_arguments.items():
+            if isinstance(values, list):
+                arguments.setdefault(name, values)
+            else:
+                arguments.setdefault(name, []).append(values)
     elif content_type.startswith("multipart/form-data"):
         fields = content_type.split(";")
         for field in fields:
