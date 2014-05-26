@@ -296,7 +296,7 @@ directory as your Python file, you could render this template with:
             self.render("template.html", title="My title", items=items)
 
 Tornado templates support *control statements* and *expressions*.
-Control statements are surronded by ``{%`` and ``%}``, e.g.,
+Control statements are surrounded by ``{%`` and ``%}``, e.g.,
 ``{% if len(items) > 2 %}``. Expressions are surrounded by ``{{`` and
 ``}}``, e.g., ``{{ items[0] }}``.
 

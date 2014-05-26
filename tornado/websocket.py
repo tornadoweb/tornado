@@ -42,6 +42,11 @@ from tornado.tcpclient import TCPClient
 from tornado.util import bytes_type, unicode_type
 
 try:
+    from urllib.parse import urlparse # py2
+except ImportError:
+    from urlparse import urlparse # py3
+
+try:
     xrange  # py2
 except NameError:
     xrange = range  # py3
@@ -141,9 +146,26 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.stream.close()
             return
 
+        # Handle WebSocket Origin naming convention differences
         # The difference between version 8 and 13 is that in 8 the
         # client sends a "Sec-Websocket-Origin" header and in 13 it's
         # simply "Origin".
+        if "Origin" in self.request.headers:
+            origin = self.request.headers.get("Origin")
+        else:
+            origin = self.request.headers.get("Sec-Websocket-Origin", None)
+
+
+        # If there was an origin header, check to make sure it matches
+        # according to check_origin. When the origin is None, we assume it
+        # came from a browser and that it can be passed on.
+        if origin is not None and not self.check_origin(origin):
+            self.stream.write(tornado.escape.utf8(
+                "HTTP/1.1 403 Cross Origin Websockets Disabled\r\n\r\n"
+            ))
+            self.stream.close()
+            return
+
         if self.request.headers.get("Sec-WebSocket-Version") in ("7", "8", "13"):
             self.ws_connection = WebSocketProtocol13(self)
             self.ws_connection.accept_connection()
@@ -156,6 +178,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 "HTTP/1.1 426 Upgrade Required\r\n"
                 "Sec-WebSocket-Version: 8\r\n\r\n"))
             self.stream.close()
+
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket.
@@ -251,6 +274,29 @@ class WebSocketHandler(tornado.web.RequestHandler):
         if self.ws_connection:
             self.ws_connection.close(code, reason)
             self.ws_connection = None
+
+    def check_origin(self, origin):
+        """Override to enable support for allowing alternate origins.
+        
+        By default, this checks to see that the host matches the origin
+        provided.
+
+        This is a security protection against cross site scripting attacks on
+        browsers, since WebSockets don't have CORS headers.
+        """
+
+        # Due to how stdlib's urlparse is implemented, urls without a //
+        # are interpreted to be paths (resulting in netloc being None)
+        if("//" not in origin):
+            origin = "//" + origin
+        parsed_origin = urlparse(origin)
+        origin = parsed_origin.netloc
+        origin = origin.lower()
+
+        host = self.request.headers.get("Host")
+
+        # Check to see that origin matches host directly, including ports
+        return origin == host
 
     def allow_draft76(self):
         """Override to enable support for the older "draft76" protocol.
