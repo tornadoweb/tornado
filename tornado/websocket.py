@@ -158,7 +158,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         # If there was an origin header, check to make sure it matches
         # according to check_origin. When the origin is None, we assume it
-        # came from a browser and that it can be passed on.
+        # did not come from a browser and that it can be passed on.
         if origin is not None and not self.check_origin(origin):
             self.stream.write(tornado.escape.utf8(
                 "HTTP/1.1 403 Cross Origin Websockets Disabled\r\n\r\n"
@@ -277,18 +277,24 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def check_origin(self, origin):
         """Override to enable support for allowing alternate origins.
-        
-        By default, this checks to see that the host matches the origin
-        provided.
+
+        The ``origin`` argument is the value of the ``Origin`` HTTP
+        header, the url responsible for initiating this request.  This
+        method is not called for clients that do not send this header;
+        such requests are always allowed (because all browsers that
+        implement WebSockets support this header, and non-browser
+        clients do not have the same cross-site security concerns).
+
+        Should return True to accept the request or False to reject it.
+        By default, rejects all requests with an origin on a host other
+        than this one.
 
         This is a security protection against cross site scripting attacks on
-        browsers, since WebSockets don't have CORS headers.
-        """
+        browsers, since WebSockets are allowed to bypass the usual same-origin
+        policies and don't use CORS headers.
 
-        # Due to how stdlib's urlparse is implemented, urls without a //
-        # are interpreted to be paths (resulting in netloc being None)
-        if("//" not in origin):
-            origin = "//" + origin
+        .. versionadded:: 3.3
+        """
         parsed_origin = urlparse(origin)
         origin = parsed_origin.netloc
         origin = origin.lower()

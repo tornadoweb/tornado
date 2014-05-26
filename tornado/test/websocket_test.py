@@ -160,7 +160,7 @@ class WebSocketTest(AsyncHTTPTestCase):
         self.assertEqual(reason, 'goodbye')
 
     @gen_test
-    def test_check_origin_valid(self):
+    def test_check_origin_valid_no_path(self):
         port = self.get_http_port()
 
         url = 'ws://localhost:%d/echo' % port
@@ -175,7 +175,7 @@ class WebSocketTest(AsyncHTTPTestCase):
         yield self.close_future
 
     @gen_test
-    def test_check_origin_with_path(self):
+    def test_check_origin_valid_with_path(self):
         port = self.get_http_port()
 
         url = 'ws://localhost:%d/echo' % port
@@ -190,19 +190,16 @@ class WebSocketTest(AsyncHTTPTestCase):
         yield self.close_future
 
     @gen_test
-    def test_check_origin_valid2(self):
+    def test_check_origin_invalid_partial_url(self):
         port = self.get_http_port()
 
         url = 'ws://localhost:%d/echo' % port
         headers = {'Origin': 'localhost:%d' % port}
 
-        ws = yield websocket_connect(HTTPRequest(url, headers=headers),
-            io_loop=self.io_loop)
-        ws.write_message('hello')
-        response = yield ws.read_message()
-        self.assertEqual(response, 'hello')
-        ws.close()
-        yield self.close_future
+        with self.assertRaises(HTTPError) as cm:
+            yield websocket_connect(HTTPRequest(url, headers=headers),
+                                    io_loop=self.io_loop)
+        self.assertEqual(cm.exception.code, 403)
 
     @gen_test
     def test_check_origin_invalid(self):
@@ -220,13 +217,13 @@ class WebSocketTest(AsyncHTTPTestCase):
         self.assertEqual(cm.exception.code, 403)
 
     @gen_test
-    def test_check_origin_invalid2(self):
+    def test_check_origin_invalid_subdomains(self):
         port = self.get_http_port()
 
         url = 'ws://localhost:%d/echo' % port
-        # subdomains should be invalid by default
-        headers = {'Origin': 'http://subtenant.somewhereelse.com',
-                   'Host': 'subtenant2.somewhereelse.com'}
+        # Subdomains should be disallowed by default.  If we could pass a
+        # resolver to websocket_connect we could test sibling domains as well.
+        headers = {'Origin': 'http://subtenant.localhost'}
 
         with self.assertRaises(HTTPError) as cm:
             yield websocket_connect(HTTPRequest(url, headers=headers),
