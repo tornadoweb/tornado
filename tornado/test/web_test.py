@@ -1904,3 +1904,116 @@ class SignedValueTest(unittest.TestCase):
         decoded = decode_signed_value(SignedValueTest.SECRET, "key", signed,
                                       clock=self.present)
         self.assertEqual(value, decoded)
+
+
+@wsgi_safe
+class XSRFTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write(self.xsrf_token)
+
+        def post(self):
+            self.write("ok")
+
+    def get_app_kwargs(self):
+        return dict(xsrf_cookies=True)
+
+    def setUp(self):
+        super(XSRFTest, self).setUp()
+        self.xsrf_token = self.get_token()
+
+    def get_token(self, old_token=None):
+        if old_token is not None:
+            headers = self.cookie_headers(old_token)
+        else:
+            headers = None
+        response = self.fetch("/", headers=headers)
+        response.rethrow()
+        return native_str(response.body)
+
+    def cookie_headers(self, token=None):
+        if token is None:
+            token = self.xsrf_token
+        return {"Cookie": "_xsrf=" + token}
+
+    def test_xsrf_fail_no_token(self):
+        with ExpectLog(gen_log, ".*'_xsrf' argument missing"):
+            response = self.fetch("/", method="POST", body=b"")
+        self.assertEqual(response.code, 403)
+
+    def test_xsrf_fail_body_no_cookie(self):
+        with ExpectLog(gen_log, ".*XSRF cookie does not match POST"):
+            response = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)))
+        self.assertEqual(response.code, 403)
+
+    def test_xsrf_fail_cookie_no_body(self):
+        with ExpectLog(gen_log, ".*'_xsrf' argument missing"):
+            response = self.fetch(
+                "/", method="POST", body=b"",
+                headers=self.cookie_headers())
+        self.assertEqual(response.code, 403)
+
+    def test_xsrf_success_post_body(self):
+        response = self.fetch(
+            "/", method="POST",
+            body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)),
+            headers=self.cookie_headers())
+        self.assertEqual(response.code, 200)
+
+    def test_xsrf_success_query_string(self):
+        response = self.fetch(
+            "/?" + urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)),
+            method="POST", body=b"",
+            headers=self.cookie_headers())
+        self.assertEqual(response.code, 200)
+
+    def test_xsrf_success_header(self):
+        response = self.fetch("/", method="POST", body=b"",
+                              headers=dict({"X-Xsrftoken": self.xsrf_token},
+                                           **self.cookie_headers()))
+        self.assertEqual(response.code, 200)
+
+    def test_distinct_tokens(self):
+        # Every request gets a distinct token.
+        NUM_TOKENS = 10
+        tokens = set()
+        for i in range(NUM_TOKENS):
+            tokens.add(self.get_token())
+        self.assertEqual(len(tokens), NUM_TOKENS)
+
+    def test_cross_user(self):
+        token2 = self.get_token()
+        # Each token can be used to authenticate its own request.
+        for token in (self.xsrf_token, token2):
+            response  = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf=token)),
+                headers=self.cookie_headers(token))
+            self.assertEqual(response.code, 200)
+        # Sending one in the cookie and the other in the body is not allowed.
+        for cookie_token, body_token in ((self.xsrf_token, token2),
+                                         (token2, self.xsrf_token)):
+            with ExpectLog(gen_log, '.*XSRF cookie does not match POST'):
+                response = self.fetch(
+                    "/", method="POST",
+                    body=urllib_parse.urlencode(dict(_xsrf=body_token)),
+                    headers=self.cookie_headers(cookie_token))
+            self.assertEqual(response.code, 403)
+
+    def test_refresh_token(self):
+        token = self.xsrf_token
+        # A user's token is stable over time.  Refreshing the page in one tab
+        # might update the cookie while an older tab still has the old cookie
+        # in its DOM.  Simulate this scenario by passing a constant token
+        # in the body and re-querying for the token.
+        for i in range(5):
+            token = self.get_token(token)
+            # Implementation detail: the same token is returned each time
+            self.assertEqual(token, self.xsrf_token)
+            response = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)),
+                headers=self.cookie_headers(token))
+            self.assertEqual(response.code, 200)

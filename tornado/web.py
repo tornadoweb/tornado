@@ -1073,7 +1073,7 @@ class RequestHandler(object):
         if not hasattr(self, "_xsrf_token"):
             token = self.get_cookie("_xsrf")
             if not token:
-                token = binascii.b2a_hex(uuid.uuid4().bytes)
+                token = binascii.b2a_hex(os.urandom(16))
                 expires_days = 30 if self.current_user else None
                 self.set_cookie("_xsrf", token, expires_days=expires_days)
             self._xsrf_token = token
@@ -1105,7 +1105,7 @@ class RequestHandler(object):
                  self.request.headers.get("X-Csrftoken"))
         if not token:
             raise HTTPError(403, "'_xsrf' argument missing from POST")
-        if self.xsrf_token != token:
+        if not _time_independent_equals(utf8(self.xsrf_token), utf8(token)):
             raise HTTPError(403, "XSRF cookie does not match POST argument")
 
     def xsrf_form_html(self):
