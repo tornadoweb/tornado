@@ -2004,16 +2004,18 @@ class XSRFTest(SimpleHandlerTestCase):
 
     def test_refresh_token(self):
         token = self.xsrf_token
+        tokens_seen = set([token])
         # A user's token is stable over time.  Refreshing the page in one tab
         # might update the cookie while an older tab still has the old cookie
         # in its DOM.  Simulate this scenario by passing a constant token
         # in the body and re-querying for the token.
         for i in range(5):
             token = self.get_token(token)
-            # Implementation detail: the same token is returned each time
-            self.assertEqual(token, self.xsrf_token)
+            # Tokens are encoded uniquely each time
+            tokens_seen.add(token)
             response = self.fetch(
                 "/", method="POST",
                 body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)),
                 headers=self.cookie_headers(token))
             self.assertEqual(response.code, 200)
+        self.assertEqual(len(tokens_seen), 6)
