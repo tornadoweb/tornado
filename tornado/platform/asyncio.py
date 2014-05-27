@@ -10,7 +10,6 @@ unfinished callbacks on the event loop that fail when it resumes)
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
-import asyncio
 import datetime
 import functools
 import os
@@ -18,6 +17,17 @@ import os
 from tornado.ioloop import IOLoop
 from tornado import stack_context
 
+try:
+    # Import the real asyncio module for py33+ first.  Older versions of the
+    # trollius backport also use this name.
+    import asyncio
+except ImportError as e:
+    # Asyncio itself isn't available; see if trollius is (backport to py26+).
+    try:
+        import trollius as asyncio
+    except ImportError:
+        # Re-raise the original asyncio error, not the trollius one.
+        raise e
 
 class BaseAsyncIOLoop(IOLoop):
     def initialize(self, asyncio_loop, close_loop=False):
