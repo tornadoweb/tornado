@@ -1071,13 +1071,20 @@ class RequestHandler(object):
         """
         if not hasattr(self, "_xsrf_token"):
             version, token, timestamp = self._get_raw_xsrf_token()
-            mask = os.urandom(4)
-            self._xsrf_token = b"|".join([
-                b"2",
-                binascii.b2a_hex(mask),
-                binascii.b2a_hex(_websocket_mask(mask, token)),
-                utf8(str(int(timestamp)))])
-            if version is None or version != 2:
+            output_version = self.settings.get("xsrf_cookie_version", 2)
+            if output_version == 1:
+                self._xsrf_token = binascii.b2a_hex(token)
+            elif output_version == 2:
+                mask = os.urandom(4)
+                self._xsrf_token = b"|".join([
+                    b"2",
+                    binascii.b2a_hex(mask),
+                    binascii.b2a_hex(_websocket_mask(mask, token)),
+                    utf8(str(int(timestamp)))])
+            else:
+                raise ValueError("unknown xsrf cookie version %d",
+                                 output_version)
+            if version is None:
                 expires_days = 30 if self.current_user else None
                 self.set_cookie("_xsrf", self._xsrf_token,
                                 expires_days=expires_days)
@@ -1113,7 +1120,7 @@ class RequestHandler(object):
                 return None, None, None
         elif len(cookie) == 32:
             version = 1
-            token = binascii.a2b_hex(cookie)
+            token = binascii.a2b_hex(utf8(cookie))
             # We don't have a usable timestamp in older versions.
             timestamp = int(time.time())
             return (version, token, timestamp)

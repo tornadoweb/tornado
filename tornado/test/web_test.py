@@ -1910,6 +1910,10 @@ class SignedValueTest(unittest.TestCase):
 class XSRFTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
+            version = int(self.get_argument("version", "2"))
+            # This would be a bad idea in a real app, but in this test
+            # it's fine.
+            self.settings["xsrf_cookie_version"] = version
             self.write(self.xsrf_token)
 
         def post(self):
@@ -1922,12 +1926,14 @@ class XSRFTest(SimpleHandlerTestCase):
         super(XSRFTest, self).setUp()
         self.xsrf_token = self.get_token()
 
-    def get_token(self, old_token=None):
+    def get_token(self, old_token=None, version=None):
         if old_token is not None:
             headers = self.cookie_headers(old_token)
         else:
             headers = None
-        response = self.fetch("/", headers=headers)
+        response = self.fetch(
+            "/" if version is None else ("/?version=%d" % version),
+            headers=headers)
         response.rethrow()
         return native_str(response.body)
 
@@ -2019,3 +2025,28 @@ class XSRFTest(SimpleHandlerTestCase):
                 headers=self.cookie_headers(token))
             self.assertEqual(response.code, 200)
         self.assertEqual(len(tokens_seen), 6)
+
+    def test_versioning(self):
+        # Version 1 still produces distinct tokens per request.
+        self.assertNotEqual(self.get_token(version=1),
+                            self.get_token(version=1))
+
+        # Refreshed v1 tokens are all identical.
+        v1_token = self.get_token(version=1)
+        for i in range(5):
+            self.assertEqual(self.get_token(v1_token, version=1), v1_token)
+
+        # Upgrade to a v2 version of the same token
+        v2_token = self.get_token(v1_token)
+        self.assertNotEqual(v1_token, v2_token)
+        # Each v1 token can map to many v2 tokens.
+        self.assertNotEqual(v2_token, self.get_token(v1_token))
+
+        # The tokens are cross-compatible.
+        for cookie_token, body_token in ((v1_token, v2_token),
+                                         (v2_token, v1_token)):
+            response = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf=body_token)),
+                headers=self.cookie_headers(cookie_token))
+            self.assertEqual(response.code, 200)
