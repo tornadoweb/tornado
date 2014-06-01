@@ -34,15 +34,22 @@ See the individual service classes below for complete documentation.
 
 Example usage for Google OpenID::
 
-    class GoogleLoginHandler(tornado.web.RequestHandler,
-                             tornado.auth.GoogleMixin):
+    class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
+                                   tornado.auth.GoogleOAuth2Mixin):
         @tornado.gen.coroutine
         def get(self):
-            if self.get_argument("openid.mode", None):
-                user = yield self.get_authenticated_user()
-                # Save the user with e.g. set_secure_cookie()
+            if self.get_argument('code', False):
+                user = yield self.get_authenticated_user(
+                    redirect_uri='http://your.site.com/auth/google',
+                    code=self.get_argument('code'))
+                # Save the user with e.g. set_secure_cookie
             else:
-                yield self.authenticate_redirect()
+                yield self.authorize_redirect(
+                    redirect_uri='http://your.site.com/auth/google',
+                    client_id=self.settings['google_oauth']['key'],
+                    scope=['profile', 'email'],
+                    response_type='code',
+                    extra_params={'approval_prompt': 'auto'})
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -861,6 +868,10 @@ class FriendFeedMixin(OAuthMixin):
 class GoogleMixin(OpenIdMixin, OAuthMixin):
     """Google Open ID / OAuth authentication.
 
+    *Deprecated:* New applications should use `GoogleOAuth2Mixin`
+    below instead of this class. As of May 19, 2014, Google has stopped
+    supporting registration-free authentication.
+
     No application registration is necessary to use Google for
     authentication or to access Google resources on behalf of a user.
 
@@ -950,6 +961,19 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
 class GoogleOAuth2Mixin(OAuth2Mixin):
     """Google authentication using OAuth2.
 
+    In order to use, register your application with Google and copy the
+    relevant parameters to your application settings.
+
+    * Go to the Google Dev Console at http://console.developers.google.com
+    * Select a project, or create a new one.
+    * In the sidebar on the left, select APIs & Auth.
+    * In the list of APIs, find the Google+ API service and set it to ON.
+    * In the sidebar on the left, select Credentials.
+    * In the OAuth section of the page, select Create New Client ID.
+    * Set the Redirect URI to point to your auth handler
+    * Copy the "Client secret" and "Client ID" to the application settings as
+      {"google_oauth": {"key": CLIENT_ID, "secret": CLIENT_SECRET}}
+
     .. versionadded:: 3.2
     """
     _OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
@@ -963,7 +987,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
         Example usage::
 
-            class GoogleOAuth2LoginHandler(LoginHandler,
+            class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                            tornado.auth.GoogleOAuth2Mixin):
                 @tornado.gen.coroutine
                 def get(self):
