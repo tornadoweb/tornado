@@ -15,7 +15,7 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log, app_log
-from tornado.netutil import Resolver
+from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
@@ -245,14 +245,16 @@ class SimpleHTTPClientTestMixin(object):
     @skipIfNoIPv6
     def test_ipv6(self):
         try:
-            self.http_server.listen(self.get_http_port(), address='::1')
+            [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
+            port = sock.getsockname()[1]
+            self.http_server.add_socket(sock)
         except socket.gaierror as e:
             if e.args[0] == socket.EAI_ADDRFAMILY:
                 # python supports ipv6, but it's not configured on the network
                 # interface, so skip this test.
                 return
             raise
-        url = self.get_url("/hello").replace("localhost", "[::1]")
+        url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
 
         # ipv6 is currently enabled by default but can be disabled
         self.http_client.fetch(url, self.stop, allow_ipv6=False)
