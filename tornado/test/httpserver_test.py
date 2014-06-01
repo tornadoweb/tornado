@@ -111,9 +111,7 @@ class SSLTestMixin(object):
         # connection, rather than waiting for a timeout or otherwise
         # misbehaving.
         with ExpectLog(gen_log, '(SSL Error|uncaught exception)'):
-            # TODO: this should go to gen_log, not app_log.  See TODO
-            # in http1connection.py (_server_request_loop)
-            with ExpectLog(app_log, 'Uncaught exception', required=False):
+            with ExpectLog(gen_log, 'Uncaught exception', required=False):
                 self.http_client.fetch(
                     self.get_url("/").replace('https:', 'http:'),
                     self.stop,

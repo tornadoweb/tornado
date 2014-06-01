@@ -31,6 +31,26 @@ from tornado import stack_context
 from tornado.util import GzipDecompressor
 
 
+class _QuietException(Exception):
+    def __init__(self):
+        pass
+
+class _ExceptionLoggingContext(object):
+    """Used with the ``with`` statement when calling delegate methods to
+    log any exceptions with the given logger.  Any exceptions caught are
+    converted to _QuietException
+    """
+    def __init__(self, logger):
+        self.logger = logger
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, typ, value, tb):
+        if value is not None:
+            self.logger.error("Uncaught exception", exc_info=(typ, value, tb))
+            raise _QuietException
+
 class HTTP1ConnectionParameters(object):
     """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`.
     """
@@ -155,9 +175,10 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
             need_delegate_close = True
-            header_future = delegate.headers_received(start_line, headers)
-            if header_future is not None:
-                yield header_future
+            with _ExceptionLoggingContext(app_log):
+                header_future = delegate.headers_received(start_line, headers)
+                if header_future is not None:
+                    yield header_future
             if self.stream is None:
                 # We've been detached.
                 need_delegate_close = False
@@ -196,7 +217,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._read_finished = True
             if not self._write_finished or self.is_client:
                 need_delegate_close = False
-                delegate.finish()
+                with _ExceptionLoggingContext(app_log):
+                    delegate.finish()
             # If we're waiting for the application to produce an asynchronous
             # response, and we're not detached, register a close callback
             # on the stream (we didn't need one while we were reading)
@@ -216,7 +238,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             raise gen.Return(False)
         finally:
             if need_delegate_close:
-                delegate.on_connection_close()
+                with _ExceptionLoggingContext(app_log):
+                    delegate.on_connection_close()
             self._clear_callbacks()
         raise gen.Return(True)
 
@@ -478,7 +501,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                 min(self.params.chunk_size, content_length), partial=True)
             content_length -= len(body)
             if not self._write_finished or self.is_client:
-                yield gen.maybe_future(delegate.data_received(body))
+                with _ExceptionLoggingContext(app_log):
+                    yield gen.maybe_future(delegate.data_received(body))
 
     @gen.coroutine
     def _read_chunked_body(self, delegate):
@@ -498,8 +522,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                     min(bytes_to_read, self.params.chunk_size), partial=True)
                 bytes_to_read -= len(chunk)
                 if not self._write_finished or self.is_client:
-                    yield gen.maybe_future(
-                        delegate.data_received(chunk))
+                    with _ExceptionLoggingContext(app_log):
+                        yield gen.maybe_future(delegate.data_received(chunk))
             # chunk ends with \r\n
             crlf = yield self.stream.read_bytes(2)
             assert crlf == b"\r\n"
@@ -508,7 +532,8 @@ class HTTP1Connection(httputil.HTTPConnection):
     def _read_body_until_close(self, delegate):
         body = yield self.stream.read_until_close()
         if not self._write_finished or self.is_client:
-            delegate.data_received(body)
+            with _ExceptionLoggingContext(app_log):
+                delegate.data_received(body)
 
 
 class _GzipMessageDelegate(httputil.HTTPMessageDelegate):
@@ -610,11 +635,12 @@ class HTTP1ServerConnection(object):
                 except (iostream.StreamClosedError,
                         iostream.UnsatisfiableReadError):
                     return
+                except _QuietException:
+                    # This exception was already logged.
+                    conn.close()
+                    return
                 except Exception:
-                    # TODO: this is probably too broad; it would be better to
-                    # wrap all delegate calls in something that writes to app_log,
-                    # and then errors that reach this point can be gen_log.
-                    app_log.error("Uncaught exception", exc_info=True)
+                    gen_log.error("Uncaught exception", exc_info=True)
                     conn.close()
                     return
                 if not ret:

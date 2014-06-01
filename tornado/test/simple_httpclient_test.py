@@ -14,7 +14,7 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado.netutil import Resolver
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
@@ -295,7 +295,8 @@ class SimpleHTTPClientTestMixin(object):
         self.assertEqual(response.headers["Content-length"], "0")
 
         # 204 status with non-zero content length is malformed
-        response = self.fetch("/no_content?error=1")
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/no_content?error=1")
         self.assertEqual(response.code, 599)
 
     def test_host_header(self):
