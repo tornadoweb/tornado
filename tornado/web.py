@@ -1068,6 +1068,15 @@ class RequestHandler(object):
         as a potential forgery.
 
         See http://en.wikipedia.org/wiki/Cross-site_request_forgery
+
+        .. versionchanged:: 3.2.2
+           The xsrf token will now be have a random mask applied in every
+           request, which makes it safe to include the token in pages
+           that are compressed.  See http://breachattack.com for more
+           information on the issue fixed by this change.  Old (version 1)
+           cookies will be converted to version 2 when this method is called
+           unless the ``xsrf_cookie_version`` `Application` setting is
+           set to 1.
         """
         if not hasattr(self, "_xsrf_token"):
             version, token, timestamp = self._get_raw_xsrf_token()
@@ -1091,6 +1100,16 @@ class RequestHandler(object):
         return self._xsrf_token
 
     def _get_raw_xsrf_token(self):
+        """Read or generate the xsrf token in its raw form.
+
+        The raw_xsrf_token is a tuple containing:
+
+        * version: the version of the cookie from which this token was read,
+          or None if we generated a new token in this request.
+        * token: the raw token data; random (non-ascii) bytes.
+        * timestamp: the time this token was generated (will not be accurate
+          for version 1 cookies)
+        """
         if not hasattr(self, '_raw_xsrf_token'):
             cookie = self.get_cookie("_xsrf")
             if cookie:
@@ -1105,6 +1124,9 @@ class RequestHandler(object):
         return self._raw_xsrf_token
 
     def _decode_xsrf_token(self, cookie):
+        """Convert a cookie string into a the tuple form returned by
+        _get_raw_xsrf_token.
+        """
         m = _signed_value_version_re.match(utf8(cookie))
         if m:
             version = int(m.group(1))
@@ -1147,6 +1169,10 @@ class RequestHandler(object):
         information please see
         http://www.djangoproject.com/weblog/2011/feb/08/security/
         http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
+
+        .. versionchanged:: 3.2.2
+           Added support for cookie version 2.  Both versions 1 and 2 are
+           supported.
         """
         token = (self.get_argument("_xsrf", None) or
                  self.request.headers.get("X-Xsrftoken") or
