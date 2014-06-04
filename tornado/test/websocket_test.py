@@ -11,6 +11,7 @@ from tornado.web import Application, RequestHandler
 
 try:
     import tornado.websocket
+    from tornado.util import _websocket_mask_python
 except ImportError:
     # The unittest module presents misleading errors on ImportError
     # (it acts as if websocket_test could not be found, hiding the underlying
@@ -19,7 +20,7 @@ except ImportError:
     traceback.print_exc()
     raise
 
-from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError, _websocket_mask_python
+from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError
 
 try:
     from tornado import speedups

@@ -115,6 +115,7 @@
    .. autoattribute:: RequestHandler.settings
    .. automethod:: RequestHandler.static_url
    .. automethod:: RequestHandler.xsrf_form_html
+   .. autoattribute:: RequestHandler.xsrf_token
 
 
 
@@ -173,6 +174,12 @@
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`
          * ``xsrf_cookies``: If true, :ref:`xsrf` will be enabled.
+         * ``xsrf_cookie_version``: Controls the version of new XSRF
+           cookies produced by this server.  Should generally be left
+           at the default (which will always be the highest supported
+           version), but may be set to a lower value temporarily
+           during version transitions.  New in Tornado 3.2.2, which
+           introduced XSRF cookie version 2.
          * ``twitter_consumer_key``, ``twitter_consumer_secret``,
            ``friendfeed_consumer_key``, ``friendfeed_consumer_secret``,
            ``google_consumer_key``, ``google_consumer_secret``,
