@@ -32,6 +32,7 @@ import datetime
 import errno
 import functools
 import heapq
+import itertools
 import logging
 import numbers
 import os
@@ -585,7 +586,8 @@ class PollIOLoop(IOLoop):
         self._closing = False
         self._thread_ident = None
         self._blocking_signal_threshold = None
-
+        self._timeout_counter = itertools.count()
+        
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
         self._waker = Waker()
@@ -835,7 +837,7 @@ class _Timeout(object):
     """An IOLoop timeout, a UNIX timestamp and a callback"""
 
     # Reduce memory overhead when there are lots of pending callbacks
-    __slots__ = ['deadline', 'callback']
+    __slots__ = ['deadline', 'callback', 'tiebreaker']
 
     def __init__(self, deadline, callback, io_loop):
         if isinstance(deadline, numbers.Real):
@@ -849,6 +851,7 @@ class _Timeout(object):
         else:
             raise TypeError("Unsupported deadline %r" % deadline)
         self.callback = callback
+        self.tiebreaker = next(io_loop._timeout_counter)
 
     @staticmethod
     def timedelta_to_seconds(td):
@@ -860,12 +863,12 @@ class _Timeout(object):
     # in python2.5, and __lt__ in 2.6+ (sort() and most other comparisons
     # use __lt__).
     def __lt__(self, other):
-        return ((self.deadline, id(self)) <
-                (other.deadline, id(other)))
+        return ((self.deadline, self.tiebreaker) <
+                (other.deadline, other.tiebreaker))
 
     def __le__(self, other):
-        return ((self.deadline, id(self)) <=
-                (other.deadline, id(other)))
+        return ((self.deadline, self.tiebreaker) <=
+                (other.deadline, other.tiebreaker))
 
 
 class PeriodicCallback(object):
