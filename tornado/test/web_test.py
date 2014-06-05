@@ -1304,6 +1304,18 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
 
 
 @wsgi_safe
+class RaiseWithHeadersTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            raise HTTPError(503, headers={"Cache-Control": "no-cache"})
+
+    def test_raise_with_headers(self):
+        response = self.fetch("/")
+        self.assertEqual(response.code, 503)
+        self.assertEqual(response.headers.get("Cache-Control"), "no-cache")
+
+
+@wsgi_safe
 class ErrorHandlerXSRFTest(WebTestCase):
     def get_handlers(self):
         # note that if the handlers list is empty we get the default_host

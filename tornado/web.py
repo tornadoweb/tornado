@@ -856,8 +856,11 @@ class RequestHandler(object):
         reason = None
         if 'exc_info' in kwargs:
             exception = kwargs['exc_info'][1]
-            if isinstance(exception, HTTPError) and exception.reason:
-                reason = exception.reason
+            if isinstance(exception, HTTPError):
+                if exception.reason:
+                    reason = exception.reason
+                for k, v in exception.headers.items():
+                    self.set_header(k, v)
         self.set_status(status_code, reason=reason)
         try:
             self.write_error(status_code, **kwargs)
@@ -1731,12 +1734,15 @@ class HTTPError(Exception):
         to pass in the status line along with ``status_code``.  Normally
         determined automatically from ``status_code``, but can be used
         to use a non-standard numeric code.
+    :arg dict headers: Keyword-only argument.  Custom HTTP headers
+        to pass along with the error response.
     """
     def __init__(self, status_code, log_message=None, *args, **kwargs):
         self.status_code = status_code
         self.log_message = log_message
         self.args = args
         self.reason = kwargs.get('reason', None)
+        self.headers = kwargs.get('headers', {})
 
     def __str__(self):
         message = "HTTP %d: %s" % (
