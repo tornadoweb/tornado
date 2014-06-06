@@ -268,7 +268,7 @@ class WSGIContainer(object):
     def __init__(self, wsgi_application):
         self.wsgi_application = wsgi_application
 
-    def __call__(self, request):
+    def _run_wsgi(self, application, environ):
         data = {}
         response = []
 
@@ -276,8 +276,8 @@ class WSGIContainer(object):
             data["status"] = status
             data["headers"] = response_headers
             return response.append
-        app_response = self.wsgi_application(
-            WSGIContainer.environ(request), start_response)
+
+        app_response = application(environ, start_response)
         try:
             response.extend(app_response)
             body = b"".join(response)
@@ -287,10 +287,12 @@ class WSGIContainer(object):
         if not data:
             raise Exception("WSGI app did not call start_response")
 
-        status_code = int(data["status"].split()[0])
-        headers = data["headers"]
+        return data["status"], data["headers"], escape.utf8(body)
+
+    def _write_response(self, request, status, headers, body):
+        # Set default headers
+        status_code = int(status.split()[0])
         header_set = set(k.lower() for (k, v) in headers)
-        body = escape.utf8(body)
         if status_code != 304:
             if "content-length" not in header_set:
                 headers.append(("Content-Length", str(len(body))))
@@ -299,14 +301,21 @@ class WSGIContainer(object):
         if "server" not in header_set:
             headers.append(("Server", "TornadoServer/%s" % tornado.version))
 
-        parts = [escape.utf8("HTTP/1.1 " + data["status"] + "\r\n")]
+        # Merge parts
+        parts = [escape.utf8("HTTP/1.1 " + status + "\r\n")]
         for key, value in headers:
             parts.append(escape.utf8(key) + b": " + escape.utf8(value) + b"\r\n")
         parts.append(b"\r\n")
         parts.append(body)
+
+        # Write to stream
         request.write(b"".join(parts))
         request.finish()
         self._log(status_code, request)
+
+    def __call__(self, request):
+        status, headers, body = self._run_wsgi(self.wsgi_application, WSGIContainer.environ(request))
+        self._write_response(request, status, headers, body)
 
     @staticmethod
     def environ(request):
