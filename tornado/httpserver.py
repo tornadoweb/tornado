@@ -20,7 +20,7 @@ Typical applications have little direct interaction with the `HTTPServer`
 class except to start a server at the beginning of the process
 (and even that is often done indirectly via `tornado.web.Application.listen`).
 
-.. versionchanged:: 3.3
+.. versionchanged:: 4.0
 
    The ``HTTPRequest`` class that used to live in this module has been moved
    to `tornado.httputil.HTTPServerRequest`.  The old name remains as an alias.
@@ -128,7 +128,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
        servers if you want to create your listening sockets in some
        way other than `tornado.netutil.bind_sockets`.
 
-    .. versionchanged:: 3.3
+    .. versionchanged:: 4.0
        Added ``gzip``, ``chunk_size``, ``max_header_size``,
        ``idle_connection_timeout``, ``body_timeout``, ``max_body_size``
        arguments.  Added support for `.HTTPServerConnectionDelegate`

@@ -284,7 +284,7 @@ class HTTPRequest(object):
            ``curl_httpclient``.  When using ``body_producer`` it is recommended
            to pass a ``Content-Length`` in the headers as otherwise chunked
            encoding will be used, and many servers do not support chunked
-           encoding on requests.  New in Tornado 3.3
+           encoding on requests.  New in Tornado 4.0
         :arg string auth_username: Username for HTTP authentication
         :arg string auth_password: Password for HTTP authentication
         :arg string auth_mode: Authentication mode; default is "basic".
@@ -358,7 +358,7 @@ class HTTPRequest(object):
         .. versionadded:: 3.1
            The ``auth_mode`` argument.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
            The ``body_producer`` and ``expect_100_continue`` arguments.
         """
         # Note that some of these attributes go through property setters

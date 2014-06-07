@@ -77,7 +77,7 @@ else:
 class WSGIApplication(web.Application):
     """A WSGI equivalent of `tornado.web.Application`.
 
-    .. deprecated: 3.3::
+    .. deprecated:: 4.0
 
        Use a regular `.Application` and wrap it in `WSGIAdapter` instead.
     """
@@ -183,7 +183,7 @@ class WSGIAdapter(object):
     that it is not possible to use `.AsyncHTTPClient`, or the
     `tornado.auth` or `tornado.websocket` modules.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     def __init__(self, application):
         if isinstance(application, WSGIApplication):

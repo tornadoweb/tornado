@@ -319,7 +319,7 @@ class HTTPServerRequest(object):
        are typically kept open in HTTP/1.1, multiple requests can be handled
        sequentially on a single connection.
 
-    .. versionchanged:: 3.3
+    .. versionchanged:: 4.0
        Moved from ``tornado.httpserver.HTTPRequest``.
     """
     def __init__(self, method=None, uri=None, version="HTTP/1.0", headers=None,
@@ -352,7 +352,7 @@ class HTTPServerRequest(object):
     def supports_http_1_1(self):
         """Returns True if this request supports HTTP/1.1 semantics.
 
-        .. deprecated:: 3.3
+        .. deprecated:: 4.0
            Applications are less likely to need this information with the
            introduction of `.HTTPConnection`.  If you still need it, access
            the ``version`` attribute directly.
@@ -375,7 +375,7 @@ class HTTPServerRequest(object):
     def write(self, chunk, callback=None):
         """Writes the given chunk to the response stream.
 
-        .. deprecated:: 3.3
+        .. deprecated:: 4.0
            Use ``request.connection`` and the `.HTTPConnection` methods
            to write the response.
         """
@@ -385,7 +385,7 @@ class HTTPServerRequest(object):
     def finish(self):
         """Finishes this HTTP request on the open connection.
 
-        .. deprecated:: 3.3
+        .. deprecated:: 4.0
            Use ``request.connection`` and the `.HTTPConnection` methods
            to write the response.
         """
@@ -449,7 +449,7 @@ class HTTPInputException(Exception):
     """Exception class for malformed HTTP requests or responses
     from remote sources.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     pass
 
@@ -457,7 +457,7 @@ class HTTPInputException(Exception):
 class HTTPOutputException(Exception):
     """Exception class for errors in HTTP output.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     pass
 
@@ -465,7 +465,7 @@ class HTTPOutputException(Exception):
 class HTTPServerConnectionDelegate(object):
     """Implement this interface to handle requests from `.HTTPServer`.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     def start_request(self, server_conn, request_conn):
         """This method is called by the server when a new request has started.
@@ -491,7 +491,7 @@ class HTTPServerConnectionDelegate(object):
 class HTTPMessageDelegate(object):
     """Implement this interface to handle an HTTP request or response.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     def headers_received(self, start_line, headers):
         """Called when the HTTP headers have been received and parsed.
@@ -531,7 +531,7 @@ class HTTPMessageDelegate(object):
 class HTTPConnection(object):
     """Applications use this interface to write their responses.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     def write_headers(self, start_line, headers, chunk=None, callback=None):
         """Write an HTTP header block.

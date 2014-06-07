@@ -245,7 +245,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         phrase was supplied, these values will be available as the attributes
         ``self.close_code`` and ``self.close_reason``.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
 
            Added ``close_code`` and ``close_reason`` attributes.
         """
@@ -266,7 +266,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         The ``code`` and ``reason`` arguments are ignored in the "draft76"
         protocol version.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
 
            Added the ``code`` and ``reason`` arguments.
         """
@@ -292,7 +292,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         browsers, since WebSockets are allowed to bypass the usual same-origin
         policies and don't use CORS headers.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
         """
         parsed_origin = urlparse(origin)
         origin = parsed_origin.netloc
@@ -885,7 +885,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
         .. versionadded:: 3.2
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
 
            Added the ``code`` and ``reason`` arguments.
         """

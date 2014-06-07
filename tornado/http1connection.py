@@ -16,7 +16,7 @@
 
 """Client and server implementations of HTTP/1.x.
 
-.. versionadded:: 3.3
+.. versionadded:: 4.0
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -258,7 +258,7 @@ class HTTP1Connection(httputil.HTTPConnection):
     def set_close_callback(self, callback):
         """Sets a callback that will be run when the connection is closed.
 
-        .. deprecated:: 3.3
+        .. deprecated:: 4.0
             Use `.HTTPMessageDelegate.on_connection_close` instead.
         """
         self._close_callback = stack_context.wrap(callback)

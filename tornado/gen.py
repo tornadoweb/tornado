@@ -355,7 +355,7 @@ def Task(func, *args, **kwargs):
         func(args, callback=(yield gen.Callback(key)))
         result = yield gen.Wait(key)
 
-    .. versionchanged:: 3.3
+    .. versionchanged:: 4.0
        ``gen.Task`` is now a function that returns a `.Future`, instead of
        a subclass of `YieldPoint`.  It still behaves the same way when
        yielded.
@@ -464,7 +464,7 @@ def multi_future(children):
     This function is faster than the `Multi` `YieldPoint` because it does not
     require the creation of a stack context.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     if isinstance(children, dict):
         keys = list(children.keys())
@@ -520,7 +520,7 @@ def with_timeout(timeout, future, io_loop=None):
 
     Currently only supports Futures, not other `YieldPoint` classes.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     # TODO: allow yield points in addition to futures?
     # Tricky to do with stack_context semantics.
@@ -564,7 +564,7 @@ coroutines that are likely to yield Futures that are ready instantly.
 
 Usage: ``yield gen.moment``
 
-.. versionadded:: 3.3
+.. versionadded:: 4.0
 """
 moment.set_result(None)
 

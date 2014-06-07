@@ -51,7 +51,7 @@ Example usage for Google OpenID::
                     response_type='code',
                     extra_params={'approval_prompt': 'auto'})
 
-.. versionchanged:: 3.3
+.. versionchanged:: 4.0
    All of the callback interfaces in this module are now guaranteed
    to run their callback with an argument of ``None`` on error.
    Previously some functions would do this while others would simply

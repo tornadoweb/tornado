@@ -116,7 +116,7 @@ class BaseIOStream(object):
         :arg max_write_buffer_size: Amount of outgoing data to buffer;
             defaults to unlimited.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
            Add the ``max_write_buffer_size`` parameter.  Changed default
            ``read_chunk_size`` to 64KB.
         """
@@ -203,7 +203,7 @@ class BaseIOStream(object):
         if more than ``max_bytes`` bytes have been read and the regex is
         not satisfied.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
             Added the ``max_bytes`` argument.  The ``callback`` argument is
             now optional and a `.Future` will be returned if it is omitted.
         """
@@ -230,7 +230,7 @@ class BaseIOStream(object):
         if more than ``max_bytes`` bytes have been read and the delimiter
         is not found.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
             Added the ``max_bytes`` argument.  The ``callback`` argument is
             now optional and a `.Future` will be returned if it is omitted.
         """
@@ -259,7 +259,7 @@ class BaseIOStream(object):
         If ``partial`` is true, the callback is run as soon as we have
         any bytes to return (but never more than ``num_bytes``)
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
             Added the ``partial`` argument.  The callback argument is now
             optional and a `.Future` will be returned if it is omitted.
         """
@@ -280,7 +280,7 @@ class BaseIOStream(object):
         If a callback is given, it will be run with the data as an argument;
         if not, this method returns a `.Future`.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
             The callback argument is now optional and a `.Future` will
             be returned if it is omitted.
         """
@@ -308,7 +308,7 @@ class BaseIOStream(object):
         completed.  If `write` is called again before that `.Future` has
         resolved, the previous future will be orphaned and will never resolve.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
             Now returns a `.Future` if no callback is given.
         """
         assert isinstance(data, bytes_type)
@@ -966,7 +966,7 @@ class IOStream(BaseIOStream):
         is ready.  Calling `IOStream` read methods before the socket is
         connected works on some platforms but is non-portable.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
             If no callback is given, returns a `.Future`.
         """
         self._connecting = True
@@ -1021,7 +1021,7 @@ class IOStream(BaseIOStream):
         If a close callback is defined on this stream, it will be
         transferred to the new stream.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
         """
         if (self._read_callback or self._read_future or
                 self._write_callback or self._write_future or

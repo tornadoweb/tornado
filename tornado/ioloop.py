@@ -162,7 +162,7 @@ class IOLoop(Configurable):
     def clear_instance():
         """Clear the global `IOLoop` instance.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
         """
         if hasattr(IOLoop, "_instance"):
             del IOLoop._instance
@@ -267,7 +267,7 @@ class IOLoop(Configurable):
 
         When an event occurs, ``handler(fd, events)`` will be run.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
            Added the ability to pass file-like objects in addition to
            raw file descriptors.
         """
@@ -276,7 +276,7 @@ class IOLoop(Configurable):
     def update_handler(self, fd, events):
         """Changes the events we listen for ``fd``.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
            Added the ability to pass file-like objects in addition to
            raw file descriptors.
         """
@@ -285,7 +285,7 @@ class IOLoop(Configurable):
     def remove_handler(self, fd):
         """Stop listening for events on ``fd``.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
            Added the ability to pass file-like objects in addition to
            raw file descriptors.
         """
@@ -534,7 +534,7 @@ class IOLoop(Configurable):
         This method is provided for use by `IOLoop` subclasses and should
         not generally be used by application code.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
         """
         try:
             return fd.fileno(), fd
@@ -551,7 +551,7 @@ class IOLoop(Configurable):
         implementations of ``IOLoop.close(all_fds=True)`` and should
         not generally be used by application code.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
         """
         try:
             try:

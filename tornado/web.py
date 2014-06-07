@@ -820,7 +820,7 @@ class RequestHandler(object):
         if another flush occurs before the previous flush's callback
         has been run, the previous callback will be discarded.
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
            Now returns a `.Future` if no callback is given.
         """
         chunk = b"".join(self._write_buffer)
@@ -2367,7 +2367,7 @@ class StaticFileHandler(RequestHandler):
 
         .. versionadded:: 3.1
 
-        .. versionchanged:: 3.3
+        .. versionchanged:: 4.0
            This method is now always called, instead of only when
            partial results are requested.
         """
@@ -2533,7 +2533,7 @@ class GZipContentEncoding(OutputTransform):
 
     See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11
 
-    .. versionchanged:: 3.3
+    .. versionchanged:: 4.0
         Now compresses all mime types beginning with ``text/``, instead
         of just a whitelist. (the whitelist is still used for certain
         non-text mime types).

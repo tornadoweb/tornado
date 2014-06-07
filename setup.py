@@ -108,7 +108,7 @@ http://api.mongodb.org/python/current/installation.html#osx
 
 kwargs = {}
 
-version = "3.3.dev1"
+version = "4.0.dev1"
 
 with open('README.rst') as f:
     kwargs['long_description'] = f.read()

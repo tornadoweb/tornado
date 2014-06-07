@@ -459,7 +459,7 @@ def gen_test(func=None, timeout=None):
        The ``timeout`` argument and ``ASYNC_TEST_TIMEOUT`` environment
        variable.
 
-    .. versionchanged:: 3.3
+    .. versionchanged:: 4.0
        The wrapper now passes along ``*args, **kwargs`` so it can be used
        on functions with arguments.
     """
