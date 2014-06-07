@@ -83,7 +83,7 @@ http://api.mongodb.org/python/current/installation.html#osx
     def run(self):
         try:
             build_ext.run(self)
-        except DistutilsPlatformError:
+        except build_errors:
             e = sys.exc_info()[1]
             sys.stdout.write('%s\n' % str(e))
             warnings.warn(self.warning_message % ("Extension modules",
@@ -93,24 +93,17 @@ http://api.mongodb.org/python/current/installation.html#osx
 
     def build_extension(self, ext):
         name = ext.name
-        if sys.version_info[:3] >= (2, 4, 0):
-            try:
-                build_ext.build_extension(self, ext)
-            except build_errors:
-                e = sys.exc_info()[1]
-                sys.stdout.write('%s\n' % str(e))
-                warnings.warn(self.warning_message % ("The %s extension "
-                                                      "module" % (name,),
-                                                      "The output above "
-                                                      "this warning shows how "
-                                                      "the compilation "
-                                                      "failed."))
-        else:
+        try:
+            build_ext.build_extension(self, ext)
+        except build_errors:
+            e = sys.exc_info()[1]
+            sys.stdout.write('%s\n' % str(e))
             warnings.warn(self.warning_message % ("The %s extension "
                                                   "module" % (name,),
-                                                  "Please use Python >= 2.4 "
-                                                  "to take advantage of the "
-                                                  "extension."))
+                                                  "The output above "
+                                                  "this warning shows how "
+                                                  "the compilation "
+                                                  "failed."))
 
 
 kwargs = {}
