@@ -41,6 +41,8 @@ from tornado.log import access_log
 from tornado import web
 from tornado.escape import native_str
 from tornado.util import bytes_type, unicode_type
+from tornado.concurrent import dummy_executor
+from tornado.ioloop import IOLoop
 
 try:
     from io import BytesIO  # python 3
@@ -365,6 +367,22 @@ class WSGIContainer(object):
         summary = request.method + " " + request.uri + " (" + \
             request.remote_ip + ")"
         log_method("%d %s %.2fms", status_code, summary, request_time)
+
+
+class ExecutorWSGIContainer(WSGIContainer):
+    def __init__(self, wsgi_application, io_loop=None, executor=None):
+        super(ExecutorWSGIContainer, self).__init__(wsgi_application=wsgi_application)
+
+        self.io_loop = io_loop or IOLoop.current()
+        if executor is not None:
+            self.executor = executor
+        else:
+            self.executor = dummy_executor
+
+    def __call__(self, request):
+        future = self.executor.submit(self._run_wsgi, self.wsgi_application, WSGIContainer.environ(request))
+        self.io_loop.add_future(future,
+                                lambda future: self._write_response(request, *future.result()))
 
 
 HTTPRequest = httputil.HTTPServerRequest
