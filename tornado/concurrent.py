@@ -73,23 +73,34 @@ class Future(object):
         self._result = None
         self._exception = None
         self._exc_info = None
+        self._cancel_callback = None
+        self._cancelled = False
         self._callbacks = []
 
     def cancel(self):
         """Cancel the operation, if possible.
 
-        Tornado ``Futures`` do not support cancellation, so this method always
-        returns False.
+        Most Tornado ``Futures`` do not support cancellation, so this method
+        returns False in most cases.  It can return True if it successfully
+        canceled an operation that provided a cancel callback.
         """
-        return False
+        # Support history, if we don't have a way to cancel this, it's not cancel-able.
+        if self._cancel_callback is None:
+            return False
+
+        # You can't cancel something that's complete.
+        if self._done:
+            return False
+
+        # Perform the cancellation via the callback.
+        self._cancelled = self._cancel_callback()
+        if self._cancelled:
+            self._done = True
+        return self.cancelled
 
     def cancelled(self):
-        """Returns True if the operation has been cancelled.
-
-        Tornado ``Futures`` do not support cancellation, so this method
-        always returns False.
-        """
-        return False
+        """Returns True if the operation has been canceled."""
+        return self._cancelled
 
     def running(self):
         """Returns True if this operation is currently running."""
@@ -134,6 +145,18 @@ class Future(object):
             fn(self)
         else:
             self._callbacks.append(fn)
+
+    def set_cancel_callback(self, fn):
+        """Attaches the given cancellation callback to the `Future`.
+
+        The worker generating this callback action can use this to enable
+        cancellation without subclassing this object. To cancel an action in
+        progress/queued, look at `Future.cancel`.
+
+        It is undefined to call any of the ``set`` methods more than once
+        on the same object.
+        """
+        self._cancel_callback = fn
 
     def set_result(self, result):
         """Sets the result of a ``Future``.
