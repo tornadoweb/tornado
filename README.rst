@@ -28,9 +28,11 @@ Quick links
 * `Wiki <https://github.com/tornadoweb/tornado/wiki/Links>`_
 
 Hello, world
+入门例子
 ------------
 
 Here is a simple "Hello, world" example web app for Tornado::
+用 Tornado的简单hello world 例子，很好入门
 
     import tornado.ioloop
     import tornado.web
@@ -52,9 +54,11 @@ that see this `simple chat room
 <https://github.com/tornadoweb/tornado/tree/stable/demos/chat>`_.
 
 Installation
+安装方法
 ------------
 
 **Automatic installation**::
+可用pip自动安装
 
     pip install tornado
 
