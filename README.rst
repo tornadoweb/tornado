@@ -27,10 +27,10 @@ Quick links
 * `Stack Overflow <http://stackoverflow.com/questions/tagged/tornado>`_
 * `Wiki <https://github.com/tornadoweb/tornado/wiki/Links>`_
 
-Hello, world
+Hello, world 入门例子
 ------------
 
-Here is a simple "Hello, world" example web app for Tornado::
+Here is a simple "Hello, world" example web app for Tornado::  用 Tornado的简单例子：hello world，很好入门
 
     import tornado.ioloop
     import tornado.web
@@ -51,10 +51,10 @@ This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room
 <https://github.com/tornadoweb/tornado/tree/stable/demos/chat>`_.
 
-Installation
+Installation  安装方法
 ------------
 
-**Automatic installation**::
+**Automatic installation**::  **可用pip自动安装**
 
     pip install tornado
 
