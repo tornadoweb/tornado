@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import base64
 import collections
 from contextlib import closing
 import errno
@@ -10,7 +11,7 @@ import re
 import socket
 import sys
 
-from tornado import gen
+from tornado import escape, gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
@@ -19,7 +20,8 @@ from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
+from tornado.testing import (AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, gen_test,
+    ExpectLog)
 from tornado.test.util import skipOnTravis, skipIfNoIPv6
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
@@ -120,6 +122,30 @@ class RespondInPrepareHandler(RequestHandler):
         self.finish("forbidden")
 
 
+class ProxyHandler(RequestHandler):
+    def get(self, url):
+        proxy_username = ""
+        proxy_password = ""
+        proxy_auth_header = self.request.headers.get("Proxy-Authorization", None)
+        if proxy_auth_header is not None:
+            proxy_auth_header_split = [escape.to_unicode(s) for s in proxy_auth_header.split(' ')]
+            if proxy_auth_header_split[0].upper() == "BASIC":
+                decoded = escape.to_unicode(base64.b64decode(escape.utf8(proxy_auth_header_split[1])))
+                decoded_and_split = decoded.split(':')
+                if len(decoded_and_split) == 2:
+                    proxy_username, proxy_password = decoded_and_split
+        
+        self.write("PROXY,{method},{url},{username},{password},{body}".format(
+            method=self.request.method,
+            url=url,
+            username=proxy_username,
+            password=proxy_password,
+            body=escape.to_unicode(self.request.body) if self.request.body else '',
+        ))
+
+    post = get
+
+
 class SimpleHTTPClientTestMixin(object):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -141,6 +167,7 @@ class SimpleHTTPClientTestMixin(object):
             url("/no_content_length", NoContentLengthHandler),
             url("/echo_post", EchoPostHandler),
             url("/respond_in_prepare", RespondInPrepareHandler),
+            url("((?:http|https)://.*)", ProxyHandler),
         ], gzip=True)
 
     def test_singleton(self):
@@ -413,6 +440,44 @@ class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
     def create_client(self, **kwargs):
         return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
                                      **kwargs)
+
+    @gen_test
+    def test_http_proxy(self):
+        def fetch_proxy(url, **kwargs):
+            return self.http_client.fetch(url,
+                                          proxy_host="localhost",
+                                          proxy_port=self.get_http_port(),
+                                          **kwargs)
+
+        response = yield fetch_proxy("http://example.com/")
+        self.assertEqual(response.body, b"PROXY,GET,http://example.com/,,,")
+
+        response = yield fetch_proxy("http://example.com/", method="POST", body=b'FOO')
+        self.assertEqual(response.body, b"PROXY,POST,http://example.com/,,,FOO")
+
+        response = yield fetch_proxy("http://example.com/", proxy_username="USER", proxy_password="PASS")
+        self.assertEqual(response.body, b"PROXY,GET,http://example.com/,USER,PASS,")
+
+        response = yield fetch_proxy("http://example.com/", method="POST", body=b'FOO',
+                                     proxy_username="USER", proxy_password="PASS")
+        self.assertEqual(response.body, b"PROXY,POST,http://example.com/,USER,PASS,FOO")
+
+    def test_invalid_proxy_settings(self):
+        with self.assertRaises(ValueError) as context:
+            response = self.fetch("/hello", proxy_host="localhost", proxy_port=None)
+            response.rethrow()
+        self.assertEqual("Both proxy_host and proxy_port must be set.", str(context.exception))
+
+        with self.assertRaises(ValueError) as context:
+            response = self.fetch("/hello", proxy_host=None, proxy_port=80)
+            response.rethrow()
+        self.assertEqual("Both proxy_host and proxy_port must be set.", str(context.exception))
+
+        with self.assertRaises(ValueError) as context:
+            response = self.fetch("/hello", proxy_username="USER", proxy_password="PASS")
+            response.rethrow()
+        self.assertEqual("proxy_username and proxy_password set without proxy_host and proxy_port both set",
+                         str(context.exception))
 
 
 class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
