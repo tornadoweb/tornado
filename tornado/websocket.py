@@ -346,14 +346,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         return "wss" if self.request.protocol == "https" else "ws"
 
-    def async_callback(self, callback, *args, **kwargs):
-        """Obsolete - catches exceptions from the wrapped function.
-
-        This function is normally unncecessary thanks to
-        `tornado.stack_context`.
-        """
-        return self.ws_connection.async_callback(callback, *args, **kwargs)
-
     def _not_supported(self, *args, **kwargs):
         raise Exception("Method not supported for Web Sockets")
 
@@ -379,23 +371,17 @@ class WebSocketProtocol(object):
         self.client_terminated = False
         self.server_terminated = False
 
-    def async_callback(self, callback, *args, **kwargs):
-        """Wrap callbacks with this if they are used on asynchronous requests.
+    def _run_callback(self, callback, *args, **kwargs):
+        """Runs the given callback with exception handling.
 
-        Catches exceptions properly and closes this WebSocket if an exception
-        is uncaught.
+        On error, aborts the websocket connection and returns False.
         """
-        if args or kwargs:
-            callback = functools.partial(callback, *args, **kwargs)
-
-        def wrapper(*args, **kwargs):
-            try:
-                return callback(*args, **kwargs)
-            except Exception:
-                app_log.error("Uncaught exception in %s",
-                              self.request.path, exc_info=True)
-                self._abort()
-        return wrapper
+        try:
+            callback(*args, **kwargs)
+        except Exception:
+            app_log.error("Uncaught exception in %s",
+                          self.request.path, exc_info=True)
+            self._abort()
 
     def on_connection_close(self):
         self._abort()
@@ -486,7 +472,8 @@ class WebSocketProtocol76(WebSocketProtocol):
 
     def _write_response(self, challenge):
         self.stream.write(challenge)
-        self.async_callback(self.handler.open)(*self.handler.open_args, **self.handler.open_kwargs)
+        self._run_callback(self.handler.open, *self.handler.open_args,
+                           **self.handler.open_kwargs)
         self._receive_message()
 
     def _handle_websocket_headers(self):
@@ -534,8 +521,8 @@ class WebSocketProtocol76(WebSocketProtocol):
 
     def _on_end_delimiter(self, frame):
         if not self.client_terminated:
-            self.async_callback(self.handler.on_message)(
-                frame[:-1].decode("utf-8", "replace"))
+            self._run_callback(self.handler.on_message,
+                               frame[:-1].decode("utf-8", "replace"))
         if not self.client_terminated:
             self._receive_message()
 
@@ -645,7 +632,8 @@ class WebSocketProtocol13(WebSocketProtocol):
             "%s"
             "\r\n" % (self._challenge_response(), subprotocol_header)))
 
-        self.async_callback(self.handler.open)(*self.handler.open_args, **self.handler.open_kwargs)
+        self._run_callback(self.handler.open, *self.handler.open_args,
+                           **self.handler.open_kwargs)
         self._receive_frame()
 
     def _write_frame(self, fin, opcode, data):
@@ -803,10 +791,10 @@ class WebSocketProtocol13(WebSocketProtocol):
             except UnicodeDecodeError:
                 self._abort()
                 return
-            self.async_callback(self.handler.on_message)(decoded)
+            self._run_callback(self.handler.on_message, decoded)
         elif opcode == 0x2:
             # Binary data
-            self.async_callback(self.handler.on_message)(data)
+            self._run_callback(self.handler.on_message, decoded)
         elif opcode == 0x8:
             # Close
             self.client_terminated = True
@@ -820,7 +808,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._write_frame(True, 0xA, data)
         elif opcode == 0xA:
             # Pong
-            self.async_callback(self.handler.on_pong)(data)
+            self._run_callback(self.handler.on_pong, data)
         else:
             self._abort()
 

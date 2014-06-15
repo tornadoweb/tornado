@@ -149,7 +149,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.GoogleMixin):
     @tornado.web.asynchronous
     def get(self):
         if self.get_argument("openid.mode", None):
-            self.get_authenticated_user(self.async_callback(self._on_auth))
+            self.get_authenticated_user(self._on_auth)
             return
         self.authenticate_redirect()
 

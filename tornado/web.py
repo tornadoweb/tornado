@@ -1242,27 +1242,6 @@ class RequestHandler(object):
 
         return base + get_url(self.settings, path, **kwargs)
 
-    def async_callback(self, callback, *args, **kwargs):
-        """Obsolete - catches exceptions from the wrapped function.
-
-        This function is unnecessary since Tornado 1.1.
-        """
-        if callback is None:
-            return None
-        if args or kwargs:
-            callback = functools.partial(callback, *args, **kwargs)
-
-        def wrapper(*args, **kwargs):
-            try:
-                return callback(*args, **kwargs)
-            except Exception as e:
-                if self._headers_written:
-                    app_log.error("Exception after headers written",
-                                  exc_info=True)
-                else:
-                    self._handle_request_exception(e)
-        return wrapper
-
     def require_setting(self, name, feature="this feature"):
         """Raises an exception if the given app setting is not defined."""
         if not self.application.settings.get(name):

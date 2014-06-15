@@ -96,7 +96,6 @@
 
       The `Application` object serving this request
 
-   .. automethod:: RequestHandler.async_callback
    .. automethod:: RequestHandler.check_etag_header
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
