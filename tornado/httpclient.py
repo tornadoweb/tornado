@@ -157,6 +157,7 @@ class AsyncHTTPClient(Configurable):
         self.defaults = dict(HTTPRequest._DEFAULTS)
         if defaults is not None:
             self.defaults.update(defaults)
+        self._closed = False
 
     def close(self):
         """Destroys this HTTP client, freeing any file descriptors used.
@@ -171,6 +172,7 @@ class AsyncHTTPClient(Configurable):
         ``close()``.
 
         """
+        self._closed = True
         if self._async_clients().get(self.io_loop) is self:
             del self._async_clients()[self.io_loop]
 
@@ -190,6 +192,8 @@ class AsyncHTTPClient(Configurable):
         Instead, you must check the response's ``error`` attribute or
         call its `~HTTPResponse.rethrow` method.
         """
+        if self._closed:
+            raise RuntimeError("fetch() called on closed AsyncHTTPClient")
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
         # We may modify this (to add Host, Accept-Encoding, etc),

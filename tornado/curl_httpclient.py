@@ -87,7 +87,6 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         for curl in self._curls:
             curl.close()
         self._multi.close()
-        self._closed = True
         super(CurlAsyncHTTPClient, self).close()
 
     def fetch_impl(self, request, callback):
