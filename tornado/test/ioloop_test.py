@@ -12,8 +12,9 @@ import time
 
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
+from tornado.log import app_log
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
-from tornado.testing import AsyncTestCase, bind_unused_port
+from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis
 
 try:
@@ -250,6 +251,27 @@ class TestIOLoop(AsyncTestCase):
         self.wait()
         self.assertTrue(got_exception[0])
         self.assertFalse(returned_from_start[0])
+
+    def test_exception_logging(self):
+        """Uncaught exceptions get logged by the IOLoop."""
+        # Use a NullContext to keep the exception from being caught by
+        # AsyncTestCase.
+        with NullContext():
+            self.io_loop.add_callback(lambda: 1/0)
+            self.io_loop.add_callback(self.stop)
+            with ExpectLog(app_log, "Exception in callback"):
+                self.wait()
+
+    def test_exception_logging_future(self):
+        """The IOLoop examines exceptions from Futures and logs them."""
+        with NullContext():
+            @gen.coroutine
+            def callback():
+                self.io_loop.add_callback(self.stop)
+                1/0
+            self.io_loop.add_callback(callback)
+            with ExpectLog(app_log, "Exception in callback"):
+                self.wait()
 
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't

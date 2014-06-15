@@ -109,12 +109,6 @@ class BaseAsyncIOLoop(IOLoop):
     def stop(self):
         self.asyncio_loop.stop()
 
-    def _run_callback(self, callback, *args, **kwargs):
-        try:
-            callback(*args, **kwargs)
-        except Exception:
-            self.handle_callback_exception(callback)
-
     def add_timeout(self, deadline, callback):
         if isinstance(deadline, (int, float)):
             delay = max(deadline - self.time(), 0)
@@ -131,13 +125,9 @@ class BaseAsyncIOLoop(IOLoop):
     def add_callback(self, callback, *args, **kwargs):
         if self.closing:
             raise RuntimeError("IOLoop is closing")
-        if kwargs:
-            self.asyncio_loop.call_soon_threadsafe(functools.partial(
-                self._run_callback, stack_context.wrap(callback),
-                *args, **kwargs))
-        else:
-            self.asyncio_loop.call_soon_threadsafe(
-                self._run_callback, stack_context.wrap(callback), *args)
+        self.asyncio_loop.call_soon_threadsafe(
+            self._run_callback,
+            functools.partial(stack_context.wrap(callback), *args, **kwargs))
 
     add_callback_from_signal = add_callback
 

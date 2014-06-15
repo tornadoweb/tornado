@@ -475,12 +475,6 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
     def stop(self):
         self.reactor.crash()
 
-    def _run_callback(self, callback, *args, **kwargs):
-        try:
-            callback(*args, **kwargs)
-        except Exception:
-            self.handle_callback_exception(callback)
-
     def add_timeout(self, deadline, callback):
         if isinstance(deadline, (int, long, float)):
             delay = max(deadline - self.time(), 0)
@@ -495,8 +489,9 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
             timeout.cancel()
 
     def add_callback(self, callback, *args, **kwargs):
-        self.reactor.callFromThread(self._run_callback,
-                                    wrap(callback), *args, **kwargs)
+        self.reactor.callFromThread(
+            self._run_callback,
+            functools.partial(wrap(callback), *args, **kwargs))
 
     def add_callback_from_signal(self, callback, *args, **kwargs):
         self.add_callback(callback, *args, **kwargs)
