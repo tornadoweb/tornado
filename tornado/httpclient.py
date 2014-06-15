@@ -110,10 +110,21 @@ class AsyncHTTPClient(Configurable):
     actually creates an instance of an implementation-specific
     subclass, and instances are reused as a kind of pseudo-singleton
     (one per `.IOLoop`).  The keyword argument ``force_instance=True``
-    can be used to suppress this singleton behavior.  Constructor
-    arguments other than ``io_loop`` and ``force_instance`` are
-    deprecated.  The implementation subclass as well as arguments to
-    its constructor can be set with the static method `configure()`
+    can be used to suppress this singleton behavior.  Unless
+    ``force_instance=True`` is used, no arguments other than
+    ``io_loop`` should be passed to the `AsyncHTTPClient` constructor.
+    The implementation subclass as well as arguments to its
+    constructor can be set with the static method `configure()`
+
+    All `AsyncHTTPClient` implementations support a ``defaults``
+    keyword argument, which can be used to set default values for
+    `HTTPRequest` attributes.  For example::
+
+        AsyncHTTPClient.configure(
+            None, defaults=dict(user_agent="MyUserAgent"))
+        # or with force_instance:
+        client = AsyncHTTPClient(force_instance=True,
+            defaults=dict(user_agent="MyUserAgent"))
     """
     @classmethod
     def configurable_base(cls):
