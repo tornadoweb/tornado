@@ -950,11 +950,19 @@ class IOStream(BaseIOStream):
 
         May only be called if the socket passed to the constructor was
         not previously connected.  The address parameter is in the
-        same format as for `socket.connect <socket.socket.connect>`,
-        i.e. a ``(host, port)`` tuple.  If ``callback`` is specified,
-        it will be called with no arguments when the connection is
-        completed; if not this method returns a `.Future` (whose result
-        after a successful connection will be the stream itself).
+        same format as for `socket.connect <socket.socket.connect>` for
+        the type of socket passed to the IOStream constructor,
+        e.g. an ``(ip, port)`` tuple.  Hostnames are accepted here,
+        but will be resolved synchronously and block the IOLoop.
+        If you have a hostname instead of an IP address, the `.TCPClient`
+        class is recommended instead of calling this method directly.
+        `.TCPClient` will do asynchronous DNS resolution and handle
+        both IPv4 and IPv6.
+
+        If ``callback`` is specified, it will be called with no
+        arguments when the connection is completed; if not this method
+        returns a `.Future` (whose result after a successful
+        connection will be the stream itself).
 
         If specified, the ``server_hostname`` parameter will be used
         in SSL connections for certificate validation (if requested in
@@ -969,6 +977,7 @@ class IOStream(BaseIOStream):
 
         .. versionchanged:: 4.0
             If no callback is given, returns a `.Future`.
+
         """
         self._connecting = True
         try:
