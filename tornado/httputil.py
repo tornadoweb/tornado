@@ -445,7 +445,7 @@ class HTTPServerRequest(object):
             self.__class__.__name__, args, dict(self.headers))
 
 
-class HTTPInputException(Exception):
+class HTTPInputError(Exception):
     """Exception class for malformed HTTP requests or responses
     from remote sources.
 
@@ -454,7 +454,7 @@ class HTTPInputException(Exception):
     pass
 
 
-class HTTPOutputException(Exception):
+class HTTPOutputError(Exception):
     """Exception class for errors in HTTP output.
 
     .. versionadded:: 4.0
@@ -774,9 +774,9 @@ def parse_request_start_line(line):
     try:
         method, path, version = line.split(" ")
     except ValueError:
-        raise HTTPInputException("Malformed HTTP request line")
+        raise HTTPInputError("Malformed HTTP request line")
     if not version.startswith("HTTP/"):
-        raise HTTPInputException(
+        raise HTTPInputError(
             "Malformed HTTP version in HTTP Request-Line: %r" % version)
     return RequestStartLine(method, path, version)
 
@@ -796,7 +796,7 @@ def parse_response_start_line(line):
     line = native_str(line)
     match = re.match("(HTTP/1.[01]) ([0-9]+) ([^\r]*)", line)
     if not match:
-        raise HTTPInputException("Error parsing response start line")
+        raise HTTPInputError("Error parsing response start line")
     return ResponseStartLine(match.group(1), int(match.group(2)),
                              match.group(3))
 

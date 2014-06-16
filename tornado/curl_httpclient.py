@@ -473,7 +473,7 @@ def _curl_header_callback(headers, header_line):
         try:
             (__, __, reason) = httputil.parse_response_start_line(header_line)
             header_line = "X-Http-Reason: %s" % reason
-        except httputil.HTTPInputException:
+        except httputil.HTTPInputError:
             return
     if not header_line:
         return

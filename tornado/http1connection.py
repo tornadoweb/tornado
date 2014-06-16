@@ -231,7 +231,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 self.close()
             if self.stream is None:
                 raise gen.Return(False)
-        except httputil.HTTPInputException as e:
+        except httputil.HTTPInputError as e:
             gen_log.info("Malformed HTTP message from %s: %s",
                          self.context, e)
             self.close()
@@ -377,7 +377,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             if self._expected_content_remaining < 0:
                 # Close the stream now to stop further framing errors.
                 self.stream.close()
-                raise httputil.HTTPOutputException(
+                raise httputil.HTTPOutputError(
                     "Tried to write more data than Content-Length")
         if self._chunking_output and chunk:
             # Don't write out empty chunks because that means END-OF-STREAM
@@ -412,7 +412,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 self._expected_content_remaining != 0 and
                 not self.stream.closed()):
             self.stream.close()
-            raise httputil.HTTPOutputException(
+            raise httputil.HTTPOutputError(
                 "Tried to write %d bytes less than Content-Length" %
                 self._expected_content_remaining)
         if self._chunking_output:
@@ -477,8 +477,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             headers = httputil.HTTPHeaders.parse(data[eol:])
         except ValueError:
             # probably form split() if there was no ':' in the line
-            raise httputil.HTTPInputException("Malformed HTTP headers: %r" %
-                                              data[eol:100])
+            raise httputil.HTTPInputError("Malformed HTTP headers: %r" %
+                                          data[eol:100])
         return start_line, headers
 
     def _read_body(self, headers, delegate):
@@ -486,7 +486,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if content_length:
             content_length = int(content_length)
             if content_length > self._max_body_size:
-                raise httputil.HTTPInputException("Content-Length too long")
+                raise httputil.HTTPInputError("Content-Length too long")
             return self._read_fixed_body(content_length, delegate)
         if headers.get("Transfer-Encoding") == "chunked":
             return self._read_chunked_body(delegate)
@@ -515,7 +515,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 return
             total_size += chunk_len
             if total_size > self._max_body_size:
-                raise httputil.HTTPInputException("chunked body too large")
+                raise httputil.HTTPInputError("chunked body too large")
             bytes_to_read = chunk_len
             while bytes_to_read:
                 chunk = yield self.stream.read_bytes(

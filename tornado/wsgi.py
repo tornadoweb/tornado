@@ -126,7 +126,7 @@ class _WSGIConnection(httputil.HTTPConnection):
         if self._expected_content_remaining is not None:
             self._expected_content_remaining -= len(chunk)
             if self._expected_content_remaining < 0:
-                self._error = httputil.HTTPOutputException(
+                self._error = httputil.HTTPOutputError(
                     "Tried to write more data than Content-Length")
                 raise self._error
         self._write_buffer.append(chunk)
@@ -137,7 +137,7 @@ class _WSGIConnection(httputil.HTTPConnection):
     def finish(self):
         if (self._expected_content_remaining is not None and
                 self._expected_content_remaining != 0):
-            self._error = httputil.HTTPOutputException(
+            self._error = httputil.HTTPOutputError(
                 "Tried to write %d bytes less than Content-Length" %
                 self._expected_content_remaining)
             raise self._error
