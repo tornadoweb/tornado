@@ -47,6 +47,13 @@ class EchoHandler(TestWebSocketHandler):
 
 class HeaderHandler(TestWebSocketHandler):
     def open(self):
+        try:
+            # In a websocket context, many RequestHandler methods
+            # raise RuntimeErrors.
+            self.set_status(503)
+            raise Exception("did not get expected exception")
+        except RuntimeError:
+            pass
         self.write_message(self.request.headers.get('X-Test', ''))
 
 
@@ -70,6 +77,11 @@ class WebSocketTest(AsyncHTTPTestCase):
             ('/close_reason', CloseReasonHandler,
              dict(close_future=self.close_future)),
         ])
+
+    def test_http_request(self):
+        # WS server, HTTP client.
+        response = self.fetch('/echo')
+        self.assertEqual(response.code, 400)
 
     @gen_test
     def test_websocket_gen(self):
