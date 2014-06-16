@@ -273,6 +273,19 @@ class TestIOLoop(AsyncTestCase):
             with ExpectLog(app_log, "Exception in callback"):
                 self.wait()
 
+    def test_spawn_callback(self):
+        # An added callback runs in the test's stack_context, so will be
+        # re-arised in wait().
+        self.io_loop.add_callback(lambda: 1/0)
+        with self.assertRaises(ZeroDivisionError):
+            self.wait()
+        # A spawned callback is run directly on the IOLoop, so it will be
+        # logged without stopping the test.
+        self.io_loop.spawn_callback(lambda: 1/0)
+        self.io_loop.add_callback(self.stop)
+        with ExpectLog(app_log, "Exception in callback"):
+            self.wait()
+
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
 # automatically set as current.

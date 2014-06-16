@@ -486,6 +486,19 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
+    def spawn_callback(self, callback, *args, **kwargs):
+        """Calls the given callback on the next IOLoop iteration.
+
+        Unlike all other callback-related methods on IOLoop,
+        ``spawn_callback`` does not associate the callback with its caller's
+        ``stack_context``, so it is suitable for fire-and-forget callbacks
+        that should not interfere with the caller.
+
+        .. versionadded:: 4.0
+        """
+        with stack_context.NullContext():
+            self.add_callback(callback, *args, **kwargs)
+
     def add_future(self, future, callback):
         """Schedules a callback on the ``IOLoop`` when the given
         `.Future` is finished.
