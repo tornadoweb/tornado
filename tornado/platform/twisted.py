@@ -68,6 +68,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import datetime
 import functools
+import numbers
 import socket
 
 import twisted.internet.abstract
@@ -90,11 +91,7 @@ from tornado.log import app_log
 from tornado.netutil import Resolver
 from tornado.stack_context import NullContext, wrap
 from tornado.ioloop import IOLoop
-
-try:
-    long  # py2
-except NameError:
-    long = int  # py3
+from tornado.util import timedelta_to_seconds
 
 
 @implementer(IDelayedCall)
@@ -475,14 +472,19 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
     def stop(self):
         self.reactor.crash()
 
-    def add_timeout(self, deadline, callback):
-        if isinstance(deadline, (int, long, float)):
+    def add_timeout(self, deadline, callback, *args, **kwargs):
+        # This method could be simplified (since tornado 4.0) by
+        # overriding call_at instead of add_timeout, but we leave it
+        # for now as a test of backwards-compatibility.
+        if isinstance(deadline, numbers.Real):
             delay = max(deadline - self.time(), 0)
         elif isinstance(deadline, datetime.timedelta):
-            delay = tornado.ioloop._Timeout.timedelta_to_seconds(deadline)
+            delay = timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r")
-        return self.reactor.callLater(delay, self._run_callback, wrap(callback))
+        return self.reactor.callLater(
+            delay, self._run_callback,
+            functools.partial(wrap(callback), *args, **kwargs))
 
     def remove_timeout(self, timeout):
         if timeout.active():

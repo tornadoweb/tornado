@@ -13,9 +13,9 @@ from __future__ import absolute_import, division, print_function, with_statement
 import datetime
 import functools
 
-# _Timeout is used for its timedelta_to_seconds method for py26 compatibility.
-from tornado.ioloop import IOLoop, _Timeout
+from tornado.ioloop import IOLoop
 from tornado import stack_context
+from tornado.util import timedelta_to_seconds
 
 try:
     # Import the real asyncio module for py33+ first.  Older versions of the
@@ -109,15 +109,13 @@ class BaseAsyncIOLoop(IOLoop):
     def stop(self):
         self.asyncio_loop.stop()
 
-    def add_timeout(self, deadline, callback):
-        if isinstance(deadline, (int, float)):
-            delay = max(deadline - self.time(), 0)
-        elif isinstance(deadline, datetime.timedelta):
-            delay = _Timeout.timedelta_to_seconds(deadline)
-        else:
-            raise TypeError("Unsupported deadline %r", deadline)
-        return self.asyncio_loop.call_later(delay, self._run_callback,
-                                            stack_context.wrap(callback))
+    def call_at(self, when, callback, *args, **kwargs):
+        # asyncio.call_at supports *args but not **kwargs, so bind them here.
+        # We do not synchronize self.time and asyncio_loop.time, so
+        # convert from absolute to relative.
+        return self.asyncio_loop.call_later(
+            max(0, when - self.time()), self._run_callback,
+            functools.partial(stack_context.wrap(callback), *args, **kwargs))
 
     def remove_timeout(self, timeout):
         timeout.cancel()

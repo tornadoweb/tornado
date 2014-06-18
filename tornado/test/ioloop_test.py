@@ -155,7 +155,7 @@ class TestIOLoop(AsyncTestCase):
 
     def test_remove_timeout_after_fire(self):
         # It is not an error to call remove_timeout after it has run.
-        handle = self.io_loop.add_timeout(self.io_loop.time(), self.stop())
+        handle = self.io_loop.add_timeout(self.io_loop.time(), self.stop)
         self.wait()
         self.io_loop.remove_timeout(handle)
 
@@ -172,6 +172,18 @@ class TestIOLoop(AsyncTestCase):
         # HACK: wait two IOLoop iterations for the GC to happen.
         self.io_loop.add_callback(lambda: self.io_loop.add_callback(self.stop))
         self.wait()
+
+    def test_timeout_with_arguments(self):
+        # This tests that all the timeout methods pass through *args correctly.
+        results = []
+        self.io_loop.add_timeout(self.io_loop.time(), results.append, 1)
+        self.io_loop.add_timeout(datetime.timedelta(seconds=0),
+                                 results.append, 2)
+        self.io_loop.call_at(self.io_loop.time(), results.append, 3)
+        self.io_loop.call_later(0, results.append, 4)
+        self.io_loop.call_later(0, self.stop)
+        self.wait()
+        self.assertEqual(results, [1, 2, 3, 4])
 
     def test_close_file_object(self):
         """When a file object is used instead of a numeric file descriptor,
