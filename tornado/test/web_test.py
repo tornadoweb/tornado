@@ -10,7 +10,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish
 
 import binascii
 import contextlib
@@ -2307,3 +2307,20 @@ class XSRFTest(SimpleHandlerTestCase):
                 body=urllib_parse.urlencode(dict(_xsrf=body_token)),
                 headers=self.cookie_headers(cookie_token))
             self.assertEqual(response.code, 200)
+
+
+@wsgi_safe
+class FinishExceptionTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.set_status(401)
+            self.set_header('WWW-Authenticate', 'Basic realm="something"')
+            self.write('authentication required')
+            raise Finish()
+
+    def test_finish_exception(self):
+        response = self.fetch('/')
+        self.assertEqual(response.code, 401)
+        self.assertEqual('Basic realm="something"',
+                         response.headers.get('WWW-Authenticate'))
+        self.assertEqual(b'authentication required', response.body)

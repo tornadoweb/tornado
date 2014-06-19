@@ -1384,6 +1384,11 @@ class RequestHandler(object):
             " (" + self.request.remote_ip + ")"
 
     def _handle_request_exception(self, e):
+        if isinstance(e, Finish):
+            # Not an error; just finish the request without logging.
+            if not self._finished:
+                self.finish()
+            return
         self.log_exception(*sys.exc_info())
         if self._finished:
             # Extra errors after the request has been finished should
@@ -1938,6 +1943,9 @@ class HTTPError(Exception):
     `RequestHandler.send_error` since it automatically ends the
     current function.
 
+    To customize the response sent with an `HTTPError`, override
+    `RequestHandler.write_error`.
+
     :arg int status_code: HTTP status code.  Must be listed in
         `httplib.responses <http.client.responses>` unless the ``reason``
         keyword argument is given.
@@ -1964,6 +1972,25 @@ class HTTPError(Exception):
             return message + " (" + (self.log_message % self.args) + ")"
         else:
             return message
+
+
+class Finish(Exception):
+    """An exception that ends the request without producing an error response.
+
+    When `Finish` is raised in a `RequestHandler`, the request will end
+    (calling `RequestHandler.finish` if it hasn't already been called),
+    but the outgoing response will not be modified and the error-handling
+    methods (including `RequestHandler.write_error`) will not be called.
+
+    This can be a more convenient way to implement custom error pages
+    than overriding ``write_error`` (especially in library code)::
+
+        if self.current_user is None:
+            self.set_status(401)
+            self.set_header('WWW-Authenticate', 'Basic realm="something"')
+            raise Finish()
+    """
+    pass
 
 
 class MissingArgumentError(HTTPError):

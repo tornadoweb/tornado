@@ -235,6 +235,7 @@
    Everything else
    ---------------
    .. autoexception:: HTTPError
+   .. autoexception:: Finish
    .. autoexception:: MissingArgumentError
    .. autoclass:: UIModule
       :members:
