@@ -23,6 +23,7 @@
    -------------
 
    .. automethod:: WebSocketHandler.allow_draft76
+   .. automethod:: WebSocketHandler.check_origin
    .. automethod:: WebSocketHandler.get_websocket_scheme
    .. automethod:: WebSocketHandler.set_nodelay
 

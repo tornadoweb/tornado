@@ -15,7 +15,16 @@ Backwards-compatibility notes
   package instead of bundling its own copy of the Mozilla CA list. This will
   be installed automatically when using ``pip`` or ``easy_install``.
 * This version includes the changes to the secure cookie format first
-  introduced in version 3.2.1.
+  introduced in version :doc:`3.2.1 <v3.2.1>`, and the xsrf token change
+  in version :doc:`3.2.2 <v3.2.2>`.  If you are upgrading from an earlier
+  version, see those versions' release notes.
+* WebSocket connections from other origin sites are now rejected by default.
+  To accept cross-origin websocket connections, override
+  the new method `.WebSocketHandler.check_origin`.
+* The ``RequestHandler.async_callback`` and ``WebSocketHandler.async_callback``
+  wrapper functions have been removed; they have been obsolete for a long
+  time due to stack contexts (and more recently coroutines).
+
 
 Other notes
 ~~~~~~~~~~~
@@ -32,6 +41,8 @@ Other notes
 ~~~~~~~~~~~~~~
 
 * Fixed a bug in `.FacebookMixin` on Python 3.
+* When using the `.Future` interface, exceptions are more reliably delivered
+  to the caller.
 
 `tornado.concurrent`
 ~~~~~~~~~~~~~~~~~~~~
@@ -80,6 +91,8 @@ Other notes
 
 * The command-line HTTP client (``python -m tornado.httpclient $URL``)
   now works on Python 3.
+* Fixed a memory leak in `.AsyncHTTPClient` shutdown that affected
+  applications that created many HTTP clients and IOLoops.
 
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
@@ -108,6 +121,8 @@ Other notes
   of data read into memory at one time per request.
 * New constructor arguments ``idle_connection_timeout`` and ``body_timeout``
   allow time limits to be placed on the reading of requests.
+* Form-encoded message bodies are now parsed for all HTTP methods, not just
+  ``POST``, ``PUT``, and ``PATCH``.
 
 `tornado.httputil`
 ~~~~~~~~~~~~~~~~~~
@@ -126,7 +141,15 @@ Other notes
   (when possible) to avoid a garbage-collection-related problem in unit tests.
 * New method `.IOLoop.clear_instance` makes it possible to uninstall the
   singleton instance.
+* Timeout scheduling is now more robust against slow callbacks.
 * `.IOLoop.add_timeout` is now a bit more efficient.
+* When a function run by the `.IOLoop` returns a `.Future` and that `.Future`
+  has an exception, the `.IOLoop` will log the exception.
+* New method `.IOLoop.spawn_callback` simplifies the process of launching
+  a fire-and-forget callback that is separated from the caller's stack context.
+* New methods `.IOLoop.call_later` and `.IOLoop.call_at` simplify the
+  specification of relative or absolute timeouts (as opposed to
+  `~.IOLoop.add_timeout`, which used the type of its argument).
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -149,6 +172,13 @@ Other notes
   will not be run immediately if the other side closes the connection
   while there is unconsumed data in the buffer.
 * The default ``chunk_size`` has been increased to 64KB (from 4KB)
+* The `.IOStream` constructor takes a new keyword argument
+  ``max_write_buffer_size`` (defaults to unlimited).  Calls to
+  `.BaseIOStream.write` will raise `.StreamBufferFullError` if the amount
+  of unsent buffered data exceeds this limit.
+* ``ETIMEDOUT`` errors are no longer logged.  If you need to distinguish
+  timeouts from other forms of closed connections, examine ``stream.error``
+  from a close callback.
 
 `tornado.netutil`
 ~~~~~~~~~~~~~~~~~
@@ -168,6 +198,7 @@ Other notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Now works on Python 2.6.
+* Now works with Trollius version 0.3.
 
 `tornado.platform.twisted`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -223,10 +254,18 @@ Other notes
   `.stream_request_body` decorator and the new `.RequestHandler.data_received`
   method.
 * `.RequestHandler.flush` now returns a `.Future` if no callback is given.
+* ``HEAD`` requests in `.StaticFileHandler` no longer read the entire file.
+* `.StaticFileHandler` now streams response bodies to the client.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
 
+* WebSocket connections from other origin sites are now rejected by default.
+  Browsers do not use the same-origin policy for WebSocket connections as they
+  do for most other browser-initiated communications.  This can be surprising
+  and a security risk, so we disallow these connections on the server side
+  by default.  To accept cross-origin websocket connections, override
+  the new method `.WebSocketHandler.check_origin`.
 * `.WebSocketHandler.close` and `.WebSocketClientConnection.close` now
   support ``code`` and ``reason`` arguments to send a status code and
   message to the other side of the connection when closing.  Both classes
@@ -238,6 +277,12 @@ Other notes
   works correctly on Mac OS X.
 * Arguments to `.WebSocketHandler.open` are now decoded in the same way
   as arguments to `.RequestHandler.get` and similar methods.
+* It is now allowed to override ``prepare`` in a `.WebSocketHandler`,
+  and this method may generate HTTP responses (error pages) in the usual
+  way.  The HTTP response methods are still not allowed once the
+  WebSocket handshake has completed.
+* New exception `.Finish` may be raised to finish a request without
+  triggering error handling.
 
 `tornado.wsgi`
 ~~~~~~~~~~~~~~
