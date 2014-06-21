@@ -35,11 +35,11 @@ class TestRequestHandler(RequestHandler):
         logging.debug('in part3()')
         raise Exception('test exception')
 
-    def get_error_html(self, status_code, **kwargs):
-        if 'exception' in kwargs and str(kwargs['exception']) == 'test exception':
-            return 'got expected exception'
+    def write_error(self, status_code, **kwargs):
+        if 'exc_info' in kwargs and str(kwargs['exc_info'][1]) == 'test exception':
+            self.write('got expected exception')
         else:
-            return 'unexpected failure'
+            self.write('unexpected failure')
 
 
 class HTTPStackContextTest(AsyncHTTPTestCase):

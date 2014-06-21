@@ -773,20 +773,6 @@ class ErrorResponseTest(WebTestCase):
                 else:
                     self.write("Status: %d" % status_code)
 
-        class GetErrorHtmlHandler(RequestHandler):
-            def get(self):
-                if self.get_argument("status", None):
-                    self.send_error(int(self.get_argument("status")))
-                else:
-                    1 / 0
-
-            def get_error_html(self, status_code, **kwargs):
-                self.set_header("Content-Type", "text/plain")
-                if "exception" in kwargs:
-                    self.write("Exception: %s" % sys.exc_info()[0].__name__)
-                else:
-                    self.write("Status: %d" % status_code)
-
         class FailedWriteErrorHandler(RequestHandler):
             def get(self):
                 1 / 0
@@ -796,7 +782,6 @@ class ErrorResponseTest(WebTestCase):
 
         return [url("/default", DefaultHandler),
                 url("/write_error", WriteErrorHandler),
-                url("/get_error_html", GetErrorHtmlHandler),
                 url("/failed_write_error", FailedWriteErrorHandler),
                 ]
 
@@ -817,16 +802,6 @@ class ErrorResponseTest(WebTestCase):
             self.assertEqual(b"Exception: ZeroDivisionError", response.body)
 
             response = self.fetch("/write_error?status=503")
-            self.assertEqual(response.code, 503)
-            self.assertEqual(b"Status: 503", response.body)
-
-    def test_get_error_html(self):
-        with ExpectLog(app_log, "Uncaught exception"):
-            response = self.fetch("/get_error_html")
-            self.assertEqual(response.code, 500)
-            self.assertEqual(b"Exception: ZeroDivisionError", response.body)
-
-            response = self.fetch("/get_error_html?status=503")
             self.assertEqual(response.code, 503)
             self.assertEqual(b"Status: 503", response.body)
 
