@@ -115,7 +115,9 @@ Other notes
   for public use; applications are expected to write their responses
   via the `.HTTPConnection` interface.
 * The `.HTTPServerRequest.write` and `.HTTPServerRequest.finish` methods
-  are now deprecated.
+  are now deprecated.  (`.RequestHandler.write` and `.RequestHandler.finish`
+  are *not* deprecated; this only applies to the methods on
+  `.HTTPServerRequest`)
 * `.HTTPServer` now supports `.HTTPServerConnectionDelegate` in addition to
   the old ``request_callback`` interface.  The delegate interface supports
   streaming of request bodies.

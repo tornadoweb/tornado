@@ -70,8 +70,8 @@ def get_unused_port():
     only that a series of get_unused_port calls in a single process return
     distinct ports.
 
-    **Deprecated**.  Use bind_unused_port instead, which is guaranteed
-    to find an unused port.
+    .. deprecated::
+       Use bind_unused_port instead, which is guaranteed to find an unused port.
     """
     global _next_port
     port = _next_port

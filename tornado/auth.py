@@ -883,9 +883,10 @@ class FriendFeedMixin(OAuthMixin):
 class GoogleMixin(OpenIdMixin, OAuthMixin):
     """Google Open ID / OAuth authentication.
 
-    *Deprecated:* New applications should use `GoogleOAuth2Mixin`
-    below instead of this class. As of May 19, 2014, Google has stopped
-    supporting registration-free authentication.
+    .. deprecated:: 4.0
+       New applications should use `GoogleOAuth2Mixin`
+       below instead of this class. As of May 19, 2014, Google has stopped
+       supporting registration-free authentication.
 
     No application registration is necessary to use Google for
     authentication or to access Google resources on behalf of a user.
@@ -1053,9 +1054,10 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 class FacebookMixin(object):
     """Facebook Connect authentication.
 
-    *Deprecated:* New applications should use `FacebookGraphMixin`
-    below instead of this class.  This class does not support the
-    Future-based interface seen on other classes in this module.
+    .. deprecated:: 1.1
+       New applications should use `FacebookGraphMixin`
+       below instead of this class.  This class does not support the
+       Future-based interface seen on other classes in this module.
 
     To authenticate with Facebook, register your application with
     Facebook at http://www.facebook.com/developers/apps.php. Then

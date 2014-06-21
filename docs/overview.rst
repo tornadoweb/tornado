@@ -199,13 +199,6 @@ argument (note that this exception is not guaranteed to be the current
 exception in ``sys.exc_info``, so ``write_error`` must use e.g.
 `traceback.format_exception` instead of `traceback.format_exc`).
 
-In Tornado 2.0 and earlier, custom error pages were implemented by overriding
-``RequestHandler.get_error_html``, which returned the error page as a string
-instead of calling the normal output methods (and had slightly different
-semantics for exceptions).  This method is still supported, but it is
-deprecated and applications are encouraged to switch to
-`RequestHandler.write_error`.
-
 Redirection
 ~~~~~~~~~~~
 
