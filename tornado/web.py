@@ -943,26 +943,7 @@ class RequestHandler(object):
         ``kwargs["exc_info"]``.  Note that this exception may not be
         the "current" exception for purposes of methods like
         ``sys.exc_info()`` or ``traceback.format_exc``.
-
-        For historical reasons, if a method ``get_error_html`` exists,
-        it will be used instead of the default ``write_error`` implementation.
-        ``get_error_html`` returned a string instead of producing output
-        normally, and had different semantics for exception handling.
-        Users of ``get_error_html`` are encouraged to convert their code
-        to override ``write_error`` instead.
         """
-        if hasattr(self, 'get_error_html'):
-            if 'exc_info' in kwargs:
-                exc_info = kwargs.pop('exc_info')
-                kwargs['exception'] = exc_info[1]
-                try:
-                    # Put the traceback into sys.exc_info()
-                    raise_exc_info(exc_info)
-                except Exception:
-                    self.finish(self.get_error_html(status_code, **kwargs))
-            else:
-                self.finish(self.get_error_html(status_code, **kwargs))
-            return
         if self.settings.get("serve_traceback") and "exc_info" in kwargs:
             # in debug mode, try to send a traceback
             self.set_header('Content-Type', 'text/plain')

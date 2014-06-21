@@ -26,6 +26,8 @@ Backwards-compatibility notes
   time due to stack contexts (and more recently coroutines).
 * ``curl_httpclient`` now requires a minimum of libcurl version 7.21.1 and
   pycurl 7.18.2.
+* Support for ``RequestHandler.get_error_html`` has been removed;
+  override `.RequestHandler.write_error` instead.
 
 
 Other notes
