@@ -31,7 +31,7 @@ Backwards-incompatible changes
   without also supporting the insecure SSLv2.
 * `tornado.websocket` no longer supports the older "draft 76" version
   of the websocket protocol by default, although this version can
-  be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
+  be enabled by overriding ``tornado.websocket.WebSocketHandler.allow_draft76``.
 
 ``tornado.httpclient``
 ~~~~~~~~~~~~~~~~~~~~~~

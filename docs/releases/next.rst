@@ -28,6 +28,9 @@ Backwards-compatibility notes
   pycurl 7.18.2.
 * Support for ``RequestHandler.get_error_html`` has been removed;
   override `.RequestHandler.write_error` instead.
+* `.WebSocketHandler` no longer supports the old ``draft 76`` protocol
+  (this mainly affects Safari 5.x browsers).  Applications should use
+  non-websocket workarounds for these browsers.
 
 
 Other notes
