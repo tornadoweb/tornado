@@ -24,6 +24,8 @@ Backwards-compatibility notes
 * The ``RequestHandler.async_callback`` and ``WebSocketHandler.async_callback``
   wrapper functions have been removed; they have been obsolete for a long
   time due to stack contexts (and more recently coroutines).
+* ``curl_httpclient`` now requires a minimum of libcurl version 7.21.1 and
+  pycurl 7.18.2.
 
 
 Other notes
