@@ -2501,9 +2501,9 @@ class FallbackHandler(RequestHandler):
 class OutputTransform(object):
     """A transform modifies the result of an HTTP request (e.g., GZip encoding)
 
-    A new transform instance is created for every request. See the
-    GZipContentEncoding example below if you want to implement a
-    new Transform.
+    Applications are not expected to create their own OutputTransforms
+    or interact with them directly; the framework chooses which transforms
+    (if any) to apply.
     """
     def __init__(self, request):
         pass
