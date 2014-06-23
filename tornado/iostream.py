@@ -57,12 +57,24 @@ except ImportError:
 # some they differ.
 _ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
 
+if hasattr(errno, "WSAEWOULDBLOCK"):
+    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)
+
 # These errnos indicate that a connection has been abruptly terminated.
 # They should be caught and handled less noisily than other errors.
 _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE,
                     errno.ETIMEDOUT)
 
+if hasattr(errno, "WSAECONNRESET"):
+    _ERRNO_CONNRESET += (errno.WSAECONNRESET, errno.WSAECONNABORTED, errno.WSAETIMEDOUT)
 
+# More non-portable errnos:
+_ERRNO_INPROGRESS = (errno.EINPROGRESS,)
+
+if hasattr(errno, "WSAEINPROGRESS"):
+    _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)
+
+#######################################################
 class StreamClosedError(IOError):
     """Exception raised by `IOStream` methods when the stream is closed.
 
@@ -990,7 +1002,7 @@ class IOStream(BaseIOStream):
             # returned immediately when attempting to connect to
             # localhost, so handle them the same way as an error
             # reported later in _handle_connect.
-            if (errno_from_exception(e) != errno.EINPROGRESS and
+            if (errno_from_exception(e) not in _ERRNO_INPROGRESS and
                     errno_from_exception(e) not in _ERRNO_WOULDBLOCK):
                 gen_log.warning("Connect error on fd %s: %s",
                                 self.socket.fileno(), e)

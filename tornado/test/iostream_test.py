@@ -232,8 +232,11 @@ class TestIOStreamMixin(object):
         self.assertFalse(self.connect_called)
         self.assertTrue(isinstance(stream.error, socket.error), stream.error)
         if sys.platform != 'cygwin':
+            _ERRNO_CONNREFUSED = (errno.ECONNREFUSED,)
+            if hasattr(errno, "WSAECONNREFUSED"):
+                _ERRNO_CONNREFUSED += (errno.WSAECONNREFUSED,)
             # cygwin's errnos don't match those used on native windows python
-            self.assertEqual(stream.error.args[0], errno.ECONNREFUSED)
+            self.assertTrue(stream.error.args[0] in _ERRNO_CONNREFUSED)
 
     def test_gaierror(self):
         # Test that IOStream sets its exc_info on getaddrinfo error
