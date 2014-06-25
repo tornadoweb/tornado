@@ -4,6 +4,7 @@ Tornado Documentation
 .. toctree::
    :titlesonly:
 
+   guide
    overview
    webframework
    networking
