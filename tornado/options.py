@@ -265,7 +265,7 @@ class OptionParser(object):
 
         return remaining
 
-    def parse_config_file(self, path, final=True, encoding=None):
+    def parse_config_file(self, path, final=True):
         """Parses and loads the Python config file at the given path.
 
         If ``final`` is ``False``, parse callbacks will not be run.
@@ -275,7 +275,7 @@ class OptionParser(object):
         config = {}
         try:
             # python 3
-            with open(path, encoding=encoding) as f:
+            with open(path, encoding="utf-8") as f:
                 exec_in(f.read(), config, config)
         except TypeError:
             # python 2

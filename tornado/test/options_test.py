@@ -34,9 +34,8 @@ class OptionsTest(unittest.TestCase):
         options = OptionParser()
         options.define("port", default=80)
         options.define("username", default='foo')
-        cfg_path = os.path.join(os.path.dirname(__file__), "options_test.cfg")
-        options.parse_config_file(cfg_path, encoding="utf-8")
-
+        options.parse_config_file(os.path.join(os.path.dirname(__file__),
+                                               "options_test.cfg"))
         self.assertEquals(options.port, 443)
         self.assertEqual(options.username, "李康")
 
