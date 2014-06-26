@@ -87,7 +87,8 @@ class HTTPClient(object):
         If it is a string, we construct an `HTTPRequest` using any additional
         kwargs: ``HTTPRequest(request, **kwargs)``
 
-        If an error occurs during the fetch, we raise an `HTTPError`.
+        If an error occurs during the fetch, we raise an `HTTPError` unless
+        the ``raise_error`` keyword argument is set to False.
         """
         response = self._io_loop.run_sync(functools.partial(
             self._async_client.fetch, request, **kwargs))
@@ -192,7 +193,7 @@ class AsyncHTTPClient(Configurable):
                 raise RuntimeError("inconsistent AsyncHTTPClient cache")
             del self._instance_cache[self.io_loop]
 
-    def fetch(self, request, callback=None, **kwargs):
+    def fetch(self, request, callback=None, raise_error=True, **kwargs):
         """Executes a request, asynchronously returning an `HTTPResponse`.
 
         The request may be either a string URL or an `HTTPRequest` object.
@@ -200,8 +201,10 @@ class AsyncHTTPClient(Configurable):
         kwargs: ``HTTPRequest(request, **kwargs)``
 
         This method returns a `.Future` whose result is an
-        `HTTPResponse`.  The ``Future`` will raise an `HTTPError` if
-        the request returned a non-200 response code.
+        `HTTPResponse`.  By default, the ``Future`` will raise an `HTTPError`
+        if the request returned a non-200 response code. Instead, if
+        ``raise_error`` is set to False, the response will always be
+        returned regardless of the response code.
 
         If a ``callback`` is given, it will be invoked with the `HTTPResponse`.
         In the callback interface, `HTTPError` is not automatically raised.
@@ -235,7 +238,7 @@ class AsyncHTTPClient(Configurable):
             future.add_done_callback(handle_future)
 
         def handle_response(response):
-            if response.error:
+            if raise_error and response.error:
                 future.set_exception(response.error)
             else:
                 future.set_result(response)
