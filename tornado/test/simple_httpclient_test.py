@@ -321,8 +321,10 @@ class SimpleHTTPClientTestMixin(object):
 
         if sys.platform != 'cygwin':
             # cygwin returns EPERM instead of ECONNREFUSED here
-            self.assertTrue(str(errno.ECONNREFUSED) in str(response.error),
-                            response.error)
+            contains_errno = str(errno.ECONNREFUSED) in str(response.error)
+            if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
+                contains_errno = str(errno.WSAECONNREFUSED) in str(response.error)
+            self.assertTrue(contains_errno, response.error)
             # This is usually "Connection refused".
             # On windows, strerror is broken and returns "Unknown error".
             expected_message = os.strerror(errno.ECONNREFUSED)
