@@ -68,6 +68,8 @@ import hashlib
 import hmac
 import time
 import uuid
+import json
+import unicodedata
 
 from tornado.concurrent import TracebackFuture, chain_future, return_future
 from tornado import gen
@@ -1011,6 +1013,8 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                         user = yield self.get_authenticated_user(
                             redirect_uri='http://your.site.com/auth/google',
                             code=self.get_argument('code'))
+                        # Parse user with self.parse_response(user) to get data
+                        # For more detail, see https://developers.google.com/accounts/docs/OAuth2Login#obtainuserinfo
                         # Save the user with e.g. set_secure_cookie
                     else:
                         yield self.authorize_redirect(
@@ -1050,6 +1054,24 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         """
         return httpclient.AsyncHTTPClient()
 
+    def _jwt_decode(self, val):
+        """Add padding `=` to decode Base64 string
+        """
+        val = unicodedata.normalize('NFKD', val).encode('ascii', 'ignore')
+        val += b'=' * (4 - (len(val) % 4))
+        decoded = base64.standard_b64decode(val).decode('utf-8', 'ignore')
+        try:
+            decoded = json.loads(decoded)
+        except ValueError:
+            decoded = None
+        return decoded(decoded)
+
+    def parse_response(self, response):
+        """Parse repsonse from get_authenticated_user()
+        The return data contains useful information in dict
+        """
+        (header, claims, signature) = response['id_token'].split('.')
+        return jwt_decode(claims)
 
 class FacebookMixin(object):
     """Facebook Connect authentication.
