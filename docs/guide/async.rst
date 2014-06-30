@@ -1,5 +1,5 @@
-Asynchronous and non-Blocking
------------------------------
+Asynchronous and non-Blocking I/O
+---------------------------------
 
 Real-time web features require a long-lived mostly-idle connection per
 user.  In a traditional synchronous web server, this implies devoting

@@ -3,234 +3,306 @@
 Structure of a Tornado web application
 ======================================
 
-Request handlers and request arguments
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A Tornado web application generally consists of one or more
+`.RequestHandler` subclasses, an `.Application` object which
+routes incoming requests to handlers, and a ``main()`` function
+to start the server.
 
-A Tornado web application maps URLs or URL patterns to subclasses of
-`tornado.web.RequestHandler`. Those classes define ``get()`` or
-``post()`` methods to handle HTTP ``GET`` or ``POST`` requests to that
-URL.
+A minimal "hello world" example looks something like this::
 
-This code maps the root URL ``/`` to ``MainHandler`` and the URL pattern
-``/story/([0-9]+)`` to ``StoryHandler``. Regular expression groups are
-passed as arguments to the ``RequestHandler`` methods:
+    from tornado.ioloop import IOLoop
+    from tornado.web import RequestHandler, Application, url
+
+    class HelloHandler(RequestHandler):
+        def get(self):
+            self.write("Hello, world")
+
+    def make_app():
+        return Application([
+            url(r"/", HelloHandler),
+            ])
+
+    def main():
+        app = make_app()
+        app.listen(8888)
+        IOLoop.current().start()
+
+The ``Application`` object
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The `.Application` object is responsible for global configuration, including
+the routing table that maps requests to handlers.
+
+The routing table is a list of `.URLSpec` objects (or tuples), each of
+which contains (at least) a regular expression and a handler class.
+Order matters; the first matching rule is used.  If the regular
+expression contains capturing groups, these groups are the *path
+arguments* and will be passed to the handler's HTTP method.  If a
+dictionary is passed as the third element of the `.URLSpec`, it
+supplies the *initialization arguments* which will be passed to
+`.RequestHandler.initialize`.  Finally, the `.URLSpec` may have a
+name, which will allow it to be used with
+`.RequestHandler.reverse_url`.
+
+For example, in this fragment the root URL ``/`` is mapped to
+``MainHandler`` and URLs of the form ``/story/`` followed by a number
+are mapped to ``StoryHandler``.  That number is passed (as a string) to
+``StoryHandler.get``.
 
 ::
 
-    class MainHandler(tornado.web.RequestHandler):
+    class MainHandler(RequestHandler):
         def get(self):
-            self.write("You requested the main page")
+            self.write('<a href="%s">link to story 1</a>' %
+                       self.reverse_url("story", "1"))
 
-    class StoryHandler(tornado.web.RequestHandler):
+    class StoryHandler(RequestHandler):
+        def initialize(self, db):
+            self.db = db
+
         def get(self, story_id):
-            self.write("You requested the story " + story_id)
+            self.write("this is story %s" % story_id)
 
-    application = tornado.web.Application([
-        (r"/", MainHandler),
-        (r"/story/([0-9]+)", StoryHandler),
-    ])
+    app = Application([
+        url(r"/", MainHandler),
+        url(r"/story/([0-9]+)", StoryHandler, dict(db=db), name="story")
+        ])
 
-You can get query string arguments and parse ``POST`` bodies with the
-``get_argument()`` method:
+The `.Application` constructor takes many keyword arguments that
+can be used to customize the behavior of the application and enable
+optional features; see `.Application.settings` for the complete list.
+
+Subclassing ``RequestHandler``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Most of the work of a Tornado web application is done in subclasses
+of `.RequestHandler`.  The main entry point for a handler subclass
+is a method named after the HTTP method being handled: ``get()``,
+``post()``, etc.  Each handler may define one or more of these methods
+to handle different HTTP actions.  As described above, these methods
+will be called with arguments corresponding to the capturing groups
+of the routing rule that matched.
+
+Within a handler, call methods such as `.RequestHandler.render` or
+`.RequestHandler.write` to produce a response.  ``render()`` loads a
+`.Template` by name and renders it with the given
+arguments. ``write()`` is used for non-template-based output; it
+accepts strings, bytes, and dictionaries (dicts will be encoded as
+JSON).
+
+Many methods in `.RequestHandler` are designed to be overridden in
+subclasses and be used throughout the application.  It is common
+to define a ``BaseHandler`` class that overrides methods such as
+`~.RequestHandler.write_error` and `~.RequestHandler.get_current_user`
+and then subclass your own ``BaseHandler`` instead of `.RequestHandler`
+for all your specific handlers.
+
+Handling request input
+~~~~~~~~~~~~~~~~~~~~~~
+
+The request handler can access the object representing the current
+request with ``self.request``.  See the class definition for
+`~tornado.httputil.HTTPServerRequest` for a complete list of
+attributes.
+
+Request data in the formats used by HTML forms will be parsed for you
+and is made available in methods like `~.RequestHandler.get_query_argument`
+and `~.RequestHandler.get_body_argument`.
 
 ::
 
-    class MyFormHandler(tornado.web.RequestHandler):
+    class MyFormHandler(RequestHandler):
         def get(self):
-            self.write('<html><body><form action="/myform" method="post">'
+            self.write('<html><body><form action="/myform" method="POST">'
                        '<input type="text" name="message">'
                        '<input type="submit" value="Submit">'
                        '</form></body></html>')
 
         def post(self):
             self.set_header("Content-Type", "text/plain")
-            self.write("You wrote " + self.get_argument("message"))
+            self.write("You wrote " + self.get_body_argument("message"))
 
-Uploaded files are available in ``self.request.files``, which maps names
-(the name of the HTML ``<input type="file">`` element) to a list of
-files. Each file is a dictionary of the form
-``{"filename":..., "content_type":..., "body":...}``.
+Since the HTML form encoding is ambiguous as to whether an argument is
+a single value or a list with one element, `.RequestHandler` has
+distinct methods to allow the application to indicate whether or not
+it expects a list.  For lists, use
+`~.RequestHandler.get_query_arguments` and
+`~.RequestHandler.get_body_arguments` instead of their singular
+counterparts.
 
-If you want to send an error response to the client, e.g., 403
-Unauthorized, you can just raise a ``tornado.web.HTTPError`` exception:
+Files uploaded via a form are available in ``self.request.files``,
+which maps names (the name of the HTML ``<input type="file">``
+element) to a list of files. Each file is a dictionary of the form
+``{"filename":..., "content_type":..., "body":...}``.  The ``files``
+object is only present if the files were uploaded with a form wrapper
+(i.e. a ``multipart/form-data`` Content-Type); if this format was not used
+the raw uploaded data is available in ``self.request.body``.
+By default uploaded files are fully buffered in memory; if you need to
+handle files that are too large to comfortable keep in memory see the
+`.stream_request_body` class decorator.
 
-::
+Due to the quirks of the HTML form encoding (e.g. the ambiguity around
+singular versus plural arguments), Tornado does not attempt to unify
+form arguments with other types of input.  In particular, we do not
+parse JSON request bodies.  Applications that wish to use JSON instead
+of form-encoding may override `~.RequestHandler.prepare` to parse their
+requests::
 
-    if not self.user_is_logged_in():
-        raise tornado.web.HTTPError(403)
-
-The request handler can access the object representing the current
-request with ``self.request``. The ``HTTPRequest`` object includes a
-number of useful attributes, including:
-
--  ``arguments`` - all of the ``GET`` and ``POST`` arguments
--  ``files`` - all of the uploaded files (via ``multipart/form-data``
-   POST requests)
--  ``path`` - the request path (everything before the ``?``)
--  ``headers`` - the request headers
-
-See the class definition for `tornado.httputil.HTTPServerRequest` for a
-complete list of attributes.
+    def prepare(self):
+        if self.request.headers["Content-Type"].startswith("application/json"):
+            self.json_args = json.loads(self.request.body)
+        else:
+            self.json_args = None
 
 Overriding RequestHandler methods
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In addition to ``get()``/``post()``/etc, certain other methods in
-``RequestHandler`` are designed to be overridden by subclasses when
+`.RequestHandler` are designed to be overridden by subclasses when
 necessary. On every request, the following sequence of calls takes
 place:
 
-1. A new RequestHandler object is created on each request
-2. ``initialize()`` is called with keyword arguments from the
-   ``Application`` configuration. (the ``initialize`` method is new in
-   Tornado 1.1; in older versions subclasses would override ``__init__``
-   instead). ``initialize`` should typically just save the arguments
-   passed into member variables; it may not produce any output or call
-   methods like ``send_error``.
-3. ``prepare()`` is called. This is most useful in a base class shared
-   by all of your handler subclasses, as ``prepare`` is called no matter
-   which HTTP method is used. ``prepare`` may produce output; if it
-   calls ``finish`` (or ``send_error``, etc), processing stops here.
+1. A new `.RequestHandler` object is created on each request
+2. `~.RequestHandler.initialize()` is called with the initalization
+   arguments from the `.Application` configuration. ``initialize``
+   should typically just save the arguments passed into member
+   variables; it may not produce any output or call methods like
+   `~.RequestHandler.send_error`.
+3. `~.RequestHandler.prepare()` is called. This is most useful in a
+   base class shared by all of your handler subclasses, as ``prepare``
+   is called no matter which HTTP method is used. ``prepare`` may
+   produce output; if it calls `~.RequestHandler.finish` (or
+   ``redirect``, etc), processing stops here.
 4. One of the HTTP methods is called: ``get()``, ``post()``, ``put()``,
    etc. If the URL regular expression contains capturing groups, they
    are passed as arguments to this method.
-5. When the request is finished, ``on_finish()`` is called.  For synchronous
-   handlers this is immediately after ``get()`` (etc) return; for
-   asynchronous handlers it is after the call to ``finish()``.
+5. When the request is finished, `~.RequestHandler.on_finish()` is
+   called.  For synchronous handlers this is immediately after
+   ``get()`` (etc) return; for asynchronous handlers it is after the
+   call to `~.RequestHandler.finish()`.
 
-Here is an example demonstrating the ``initialize()`` method:
+All methods designed to be overridden are noted as such in the
+`.RequestHandler` documentation.  Some of the most commonly
+overridden methods include:
 
-::
-
-    class ProfileHandler(RequestHandler):
-        def initialize(self, database):
-            self.database = database
-
-        def get(self, username):
-            ...
-
-    app = Application([
-        (r'/user/(.*)', ProfileHandler, dict(database=database)),
-        ])
-
-Other methods designed for overriding include:
-
--  ``write_error(self, status_code, exc_info=None, **kwargs)`` -
-   outputs HTML for use on error pages.
--  ``get_current_user(self)`` - see `User
-   Authentication <#user-authentication>`_ below
--  ``get_user_locale(self)`` - returns ``locale`` object to use for the
-   current user
--  ``get_login_url(self)`` - returns login url to be used by the
-   ``@authenticated`` decorator (default is in ``Application`` settings)
--  ``get_template_path(self)`` - returns location of template files
-   (default is in ``Application`` settings)
--  ``set_default_headers(self)`` - may be used to set additional headers
-   on the response (such as a custom ``Server`` header)
+- `~.RequestHandler.write_error` -
+  outputs HTML for use on error pages.
+- `~.RequestHandler.on_connection_close` - called when the client
+  disconnects; applications may choose to detect this case and halt
+  further processing.  Note that there is no guarantee that a closed
+  connection can be detected promptly.
+- `~.RequestHandler.get_current_user` - see :ref:`user-authentication`
+- `~.RequestHandler.get_user_locale` - returns `.Locale` object to use
+  for the current user
+- `~.RequestHandler.set_default_headers` - may be used to set
+  additional headers on the response (such as a custom ``Server``
+  header)
 
 Error Handling
 ~~~~~~~~~~~~~~
 
-There are three ways to return an error from a `RequestHandler`:
+If a handler raises an exception, Tornado will call
+`.RequestHandler.write_error` to generate an error page.
+`tornado.web.HTTPError` can be used to generate a specified status
+code; all other exceptions return a 500 status.
 
-1. Manually call `~tornado.web.RequestHandler.set_status` and output the
-   response body normally.
-2. Call `~RequestHandler.send_error`.  This discards
-   any pending unflushed output and calls `~RequestHandler.write_error` to
-   generate an error page.
-3. Raise an exception.  `tornado.web.HTTPError` can be used to generate
-   a specified status code; all other exceptions return a 500 status.
-   The exception handler uses `~RequestHandler.send_error` and
-   `~RequestHandler.write_error` to generate the error page.
+The default error page includes a stack trace in debug mode and a
+one-line description of the error (e.g. "500: Internal Server Error")
+otherwise.  To produce a custom error page, override
+`RequestHandler.write_error` (probably in a base class shared by all
+your handlers).  This method may produce output normally via
+methods such as `~RequestHandler.write` and `~RequestHandler.render`.
+If the error was caused by an exception, an ``exc_info`` triple will
+be passed as a keyword argument (note that this exception is not
+guaranteed to be the current exception in `sys.exc_info`, so
+``write_error`` must use e.g.  `traceback.format_exception` instead of
+`traceback.format_exc`).
 
-The default error page includes a stack trace in debug mode and a one-line
-description of the error (e.g. "500: Internal Server Error") otherwise.
-To produce a custom error page, override `RequestHandler.write_error`.
-This method may produce output normally via methods such as
-`~RequestHandler.write` and `~RequestHandler.render`.  If the error was
-caused by an exception, an ``exc_info`` triple will be passed as a keyword
-argument (note that this exception is not guaranteed to be the current
-exception in ``sys.exc_info``, so ``write_error`` must use e.g.
-`traceback.format_exception` instead of `traceback.format_exc`).
+It is also possible to generate an error page from regular handler
+methods instead of ``write_error`` by calling
+`~.RequestHandler.set_status`, writing a response, and returning.
+The special exception `tornado.web.Finish` may be raised to terminate
+the handler without calling ``write_error`` in situations where simply
+returning is not convenient.
+
+For 404 errors, use the ``default_handler_class`` `Application setting
+<.Application.settings>`.  This handler should override
+`~.RequestHandler.prepare` instead of a more specific method like
+``get()`` so it works with any HTTP method.  It should produce its
+error page as described above: either by raising a ``HTTPError(404)``
+and overriding ``write_error``, or calling ``self.set_status(404)``
+and producing the response directly in ``prepare()``.
 
 Redirection
 ~~~~~~~~~~~
 
 There are two main ways you can redirect requests in Tornado:
-``self.redirect`` and with the ``RedirectHandler``.
+`.RequestHandler.redirect` and with the `.RedirectHandler`.
 
-You can use ``self.redirect`` within a ``RequestHandler`` method (like
-``get``) to redirect users elsewhere. There is also an optional
-parameter ``permanent`` which you can use to indicate that the
-redirection is considered permanent.
-
-This triggers a ``301 Moved Permanently`` HTTP status, which is useful
-for e.g. redirecting to a canonical URL for a page in an SEO-friendly
+You can use ``self.redirect()`` within a `.RequestHandler` method to
+redirect users elsewhere. There is also an optional parameter
+``permanent`` which you can use to indicate that the redirection is
+considered permanent.  The default value of ``permanent`` is
+``False``, which generates a ``302 Found`` HTTP response code and is
+appropriate for things like redirecting users after successful
+``POST`` requests.  If ``permanent`` is true, the ``301 Moved
+Permanently`` HTTP response code is used, which is useful for
+e.g. redirecting to a canonical URL for a page in an SEO-friendly
 manner.
 
-The default value of ``permanent`` is ``False``, which is apt for things
-like redirecting users on successful POST requests.
+`.RedirectHandler` lets you configure redirects directly in your
+`.Application` routing table.  For example, to configure a single
+static redirect::
 
-::
+    app = tornado.web.Application([
+        url(r"/app", tornado.web.RedirectHandler,
+            dict(url="http://itunes.apple.com/my-app-id")),
+        ])
 
-    self.redirect('/some-canonical-page', permanent=True)
+`.RedirectHandler` also supports regular expression substitutions.
+The following rule redirects all requests beginning with ``/pictures/``
+to the prefix ``/photos/`` instead::
 
-``RedirectHandler`` is available for your use when you initialize
-``Application``.
+    app = tornado.web.Application([
+        url(r"/photos/(.*)", MyPhotoHandler),
+        url(r"/pictures/(.*)", tornado.web.RedirectHandler,
+            dict(url=r"/photos/\1")),
+        ])
 
-For example, notice how we redirect to a longer download URL on this
-website:
+Unlike `.RequestHandler.redirect`, `.RedirectHandler` uses permanent
+redirects by default.  This is because the routing table does not change
+at runtime and is presumed to be permanent, while redirects found in
+handlers are likely to be the result of other logic that may change.
+To send a temporary redirect with a `.RedirectHandler`, add
+``permanent=False`` to the `.RedirectHandler` initialization arguments.
 
-::
+Asynchronous handlers
+~~~~~~~~~~~~~~~~~~~~~
 
-    application = tornado.wsgi.WSGIApplication([
-        (r"/([a-z]*)", ContentHandler),
-        (r"/static/tornado-0.2.tar.gz", tornado.web.RedirectHandler,
-         dict(url="https://github.com/downloads/facebook/tornado/tornado-0.2.tar.gz")),
-    ], **settings)
+Tornado handlers are synchronous by default: when the
+``get()``/``post()`` method returns, the request is considered
+finished and the response is sent.  Since all other requests are
+blocked while one handler is running, any long-running handler should
+be made asynchronous so it can call its slow operations in a
+non-blocking way.  This topic is covered in more detail in
+:doc:`async`; this section is about the particulars of
+asynchronous techniques in `.RequestHandler` subclasses.
 
-The default ``RedirectHandler`` status code is
-``301 Moved Permanently``, but to use ``302 Found`` instead, set
-``permanent`` to ``False``.
+The simplest way to make a handler asynchronous is to use the
+`.coroutine` decorator.  This allows you to perform non-blocking I/O
+with the ``yield`` keyword, and no response will be sent until the
+coroutine has returned.  See :doc:`coroutines` for more details.
 
-::
+In some cases, coroutines may be less convenient thatn a
+callback-oriented style, in which case the `.tornado.web.asynchronous`
+decorator can be used instead.  When this decorator is used the response
+is not automatically sent; instead the request will be kept open until
+some callback calls `.RequestHandler.finish`.  It is up to the application
+to ensure that this method is called, or else the user's browser will
+simply hang.
 
-    application = tornado.wsgi.WSGIApplication([
-        (r"/foo", tornado.web.RedirectHandler, {"url":"/bar", "permanent":False}),
-    ], **settings)
-
-Note that the default value of ``permanent`` is different in
-``self.redirect`` than in ``RedirectHandler``. This should make some
-sense if you consider that ``self.redirect`` is used in your methods and
-is probably invoked by logic involving environment, authentication, or
-form submission, but ``RedirectHandler`` patterns are going to fire 100%
-of the time they match the request URL.
-
-Non-blocking, asynchronous requests
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-When a request handler is executed, the request is automatically
-finished. Since Tornado uses a non-blocking I/O style, you can override
-this default behavior if you want a request to remain open after the
-main request handler method returns using the
-``tornado.web.asynchronous`` decorator.
-
-When you use this decorator, it is your responsibility to call
-``self.finish()`` to finish the HTTP request, or the user's browser will
-simply hang:
-
-::
-
-    class MainHandler(tornado.web.RequestHandler):
-        @tornado.web.asynchronous
-        def get(self):
-            self.write("Hello, world")
-            self.finish()
-
-Here is a real example that makes a call to the FriendFeed API using
-Tornado's built-in asynchronous HTTP client:
-
-::
+Here is an example that makes a call to the FriendFeed API using
+Tornado's built-in `.AsyncHTTPClient`::
 
     class MainHandler(tornado.web.RequestHandler):
         @tornado.web.asynchronous
@@ -251,6 +323,17 @@ client eventually calls ``on_response()``, the request is still open,
 and the response is finally flushed to the client with the call to
 ``self.finish()``.
 
+For comparison, here is the same example using a coroutine::
+
+    class MainHandler(tornado.web.RequestHandler):
+        @tornado.gen.coroutine
+        def get(self):
+            http = tornado.httpclient.AsyncHTTPClient()
+            yield http.fetch("http://friendfeed-api.com/v2/feed/bret")
+            json = tornado.escape.json_decode(response.body)
+            self.write("Fetched " + str(len(json["entries"])) + " entries "
+                       "from the FriendFeed API")
+
 For a more advanced asynchronous example, take a look at the `chat
 example application
 <https://github.com/tornadoweb/tornado/tree/stable/demos/chat>`_, which
@@ -259,25 +342,3 @@ implements an AJAX chat room using `long polling
 of long polling may want to override ``on_connection_close()`` to
 clean up after the client closes the connection (but see that method's
 docstring for caveats).
-
-Asynchronous HTTP clients
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Tornado includes two non-blocking HTTP client implementations:
-``SimpleAsyncHTTPClient`` and ``CurlAsyncHTTPClient``. The simple client
-has no external dependencies because it is implemented directly on top
-of Tornado's ``IOLoop``. The Curl client requires that ``libcurl`` and
-``pycurl`` be installed (and a recent version of each is highly
-recommended to avoid bugs in older version's asynchronous interfaces),
-but is more likely to be compatible with sites that exercise little-used
-parts of the HTTP specification.
-
-Each of these clients is available in its own module
-(``tornado.simple_httpclient`` and ``tornado.curl_httpclient``), as well
-as via a configurable alias in ``tornado.httpclient``.
-``SimpleAsyncHTTPClient`` is the default, but to use a different
-implementation call the ``AsyncHTTPClient.configure`` method at startup:
-
-::
-
-    AsyncHTTPClient.configure('tornado.curl_httpclient.CurlAsyncHTTPClient')
