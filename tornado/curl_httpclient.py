@@ -390,7 +390,10 @@ def _curl_setup_request(curl, request, buffer, headers):
         raise KeyError('unknown method ' + request.method)
 
     # Handle curl's cryptic options for every individual HTTP method
-    if request.method in ("POST", "PUT"):
+    if request.method == "GET":
+        if request.body is not None:
+            raise AssertionError('Body must be empty for GET request')
+    elif request.method in ("POST", "PUT") or request.body:
         if request.body is None:
             raise AssertionError(
                 'Body must not be empty for "%s" request'
@@ -405,10 +408,8 @@ def _curl_setup_request(curl, request, buffer, headers):
             curl.setopt(pycurl.IOCTLFUNCTION, ioctl)
             curl.setopt(pycurl.POSTFIELDSIZE, len(request.body))
         else:
+            curl.setopt(pycurl.UPLOAD, True)
             curl.setopt(pycurl.INFILESIZE, len(request.body))
-    elif request.method == "GET":
-        if request.body is not None:
-            raise AssertionError('Body must be empty for GET request')
 
     if request.auth_username is not None:
         userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
