@@ -84,6 +84,12 @@ class ContentLength304Handler(RequestHandler):
         pass
 
 
+class PatchHandler(RequestHandler):
+    def patch(self):
+        "Return the request payload - so we can check it is being kept"
+        self.write(self.request.body)
+
+
 class AllMethodsHandler(RequestHandler):
     SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
 
@@ -109,6 +115,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/user_agent", UserAgentHandler),
             url("/304_with_content_length", ContentLength304Handler),
             url("/all_methods", AllMethodsHandler),
+            url('/patch', PatchHandler),
         ], gzip=True)
 
     def test_hello_world(self):
@@ -129,6 +136,12 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # with streaming_callback, data goes to the callback and not response.body
         self.assertEqual(chunks, [b"Hello world!"])
         self.assertFalse(response.body)
+
+    def test_patch_with_payload(self):
+        body = b"some patch data"
+        response = self.fetch("/patch", method='PATCH', body=body)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, body)
 
     def test_post(self):
         response = self.fetch("/post", method="POST",
