@@ -338,7 +338,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if (self.request.method == "POST" and
                 "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
-        if self.request.use_gzip:
+        if self.request.decompress_response:
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
                     (('?' + self.parsed.query) if self.parsed.query else ''))
@@ -348,7 +348,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             HTTP1ConnectionParameters(
                 no_keep_alive=True,
                 max_header_size=self.max_header_size,
-                use_gzip=self.request.use_gzip),
+                decompress=self.request.decompress_response),
             self._sockaddr)
         start_line = httputil.RequestStartLine(self.request.method,
                                                req_path, 'HTTP/1.1')

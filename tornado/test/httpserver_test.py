@@ -736,7 +736,7 @@ class GzipBaseTest(object):
 
 class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
     def get_httpserver_options(self):
-        return dict(gzip=True)
+        return dict(decompress_request=True)
 
     def test_gzip(self):
         response = self.post_gzip('foo=bar')
@@ -764,7 +764,7 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
         return SimpleAsyncHTTPClient(io_loop=self.io_loop)
 
     def get_httpserver_options(self):
-        return dict(chunk_size=self.CHUNK_SIZE, gzip=True)
+        return dict(chunk_size=self.CHUNK_SIZE, decompress_request=True)
 
     class MessageDelegate(HTTPMessageDelegate):
         def __init__(self, connection):

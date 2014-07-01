@@ -56,7 +56,7 @@ class HTTP1ConnectionParameters(object):
     """
     def __init__(self, no_keep_alive=False, chunk_size=None,
                  max_header_size=None, header_timeout=None, max_body_size=None,
-                 body_timeout=None, use_gzip=False):
+                 body_timeout=None, decompress=False):
         """
         :arg bool no_keep_alive: If true, always close the connection after
             one request.
@@ -65,7 +65,8 @@ class HTTP1ConnectionParameters(object):
         :arg float header_timeout: how long to wait for all headers (seconds)
         :arg int max_body_size: maximum amount of data for body
         :arg float body_timeout: how long to wait while reading body (seconds)
-        :arg bool use_gzip: if true, decode incoming ``Content-Encoding: gzip``
+        :arg bool decompress: if true, decode incoming
+            ``Content-Encoding: gzip``
         """
         self.no_keep_alive = no_keep_alive
         self.chunk_size = chunk_size or 65536
@@ -73,7 +74,7 @@ class HTTP1ConnectionParameters(object):
         self.header_timeout = header_timeout
         self.max_body_size = max_body_size
         self.body_timeout = body_timeout
-        self.use_gzip = use_gzip
+        self.decompress = decompress
 
 
 class HTTP1Connection(httputil.HTTPConnection):
@@ -141,7 +142,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         Returns a `.Future` that resolves to None after the full response has
         been read.
         """
-        if self.params.use_gzip:
+        if self.params.decompress:
             delegate = _GzipMessageDelegate(delegate, self.params.chunk_size)
         return self._read_message(delegate)
 

@@ -1627,7 +1627,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
                  **settings):
         if transforms is None:
             self.transforms = []
-            if settings.get("gzip"):
+            if settings.get("compress_response") or settings.get("gzip"):
                 self.transforms.append(GZipContentEncoding)
         else:
             self.transforms = transforms
