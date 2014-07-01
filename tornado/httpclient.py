@@ -279,7 +279,7 @@ class HTTPRequest(object):
         request_timeout=20.0,
         follow_redirects=True,
         max_redirects=5,
-        use_gzip=True,
+        decompress_response=True,
         proxy_password='',
         allow_nonstandard_methods=False,
         validate_cert=True)
@@ -296,7 +296,7 @@ class HTTPRequest(object):
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
                  client_key=None, client_cert=None, body_producer=None,
-                 expect_100_continue=False):
+                 expect_100_continue=False, decompress_response=None):
         r"""All parameters except ``url`` are optional.
 
         :arg string url: URL to fetch
@@ -330,7 +330,11 @@ class HTTPRequest(object):
            or return the 3xx response?
         :arg int max_redirects: Limit for ``follow_redirects``
         :arg string user_agent: String to send as ``User-Agent`` header
-        :arg bool use_gzip: Request gzip encoding from the server
+        :arg bool decompress_response: Request a compressed response from
+           the server and decompress it after downloading.  Default is True.
+           New in Tornado 4.0.
+        :arg bool use_gzip: Deprecated alias for ``decompress_response``
+           since Tornado 4.0.
         :arg string network_interface: Network interface to use for request.
            ``curl_httpclient`` only; see note below.
         :arg callable streaming_callback: If set, ``streaming_callback`` will
@@ -373,7 +377,6 @@ class HTTPRequest(object):
            before sending the request body.  Only supported with
            simple_httpclient.
 
-
         .. note::
 
             When using ``curl_httpclient`` certain options may be
@@ -414,7 +417,10 @@ class HTTPRequest(object):
         self.follow_redirects = follow_redirects
         self.max_redirects = max_redirects
         self.user_agent = user_agent
-        self.use_gzip = use_gzip
+        if decompress_response is not None:
+            self.decompress_response = decompress_response
+        else:
+            self.decompress_response = use_gzip
         self.network_interface = network_interface
         self.streaming_callback = streaming_callback
         self.header_callback = header_callback

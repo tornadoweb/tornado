@@ -149,8 +149,10 @@
          * ``default_handler_class`` and ``default_handler_args``:
            This handler will be used if no other match is found;
            use this to implement custom 404 pages (new in Tornado 3.2).
-         * ``gzip``: If ``True``, responses in textual formats will be
-           gzipped automatically.
+         * ``compress_response``: If ``True``, responses in textual formats
+           will be compressed automatically.  New in Tornado 4.0.
+         * ``gzip``: Deprecated alias for ``compress_response`` since
+           Tornado 4.0.
          * ``log_function``: This function will be called at the end
            of every request to log the result (with one argument, the
            `RequestHandler` object).  The default implementation

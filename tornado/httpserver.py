@@ -129,13 +129,14 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
        way other than `tornado.netutil.bind_sockets`.
 
     .. versionchanged:: 4.0
-       Added ``gzip``, ``chunk_size``, ``max_header_size``,
+       Added ``decompress_request``, ``chunk_size``, ``max_header_size``,
        ``idle_connection_timeout``, ``body_timeout``, ``max_body_size``
        arguments.  Added support for `.HTTPServerConnectionDelegate`
        instances as ``request_callback``.
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, protocol=None, gzip=False,
+                 xheaders=False, ssl_options=None, protocol=None,
+                 decompress_request=False,
                  chunk_size=None, max_header_size=None,
                  idle_connection_timeout=None, body_timeout=None,
                  max_body_size=None, max_buffer_size=None):
@@ -144,7 +145,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         self.xheaders = xheaders
         self.protocol = protocol
         self.conn_params = HTTP1ConnectionParameters(
-            use_gzip=gzip,
+            decompress=decompress_request,
             chunk_size=chunk_size,
             max_header_size=max_header_size,
             header_timeout=idle_connection_timeout or 3600,

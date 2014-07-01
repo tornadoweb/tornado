@@ -332,7 +332,7 @@ def _curl_setup_request(curl, request, buffer, headers):
         curl.setopt(pycurl.USERAGENT, "Mozilla/5.0 (compatible; pycurl)")
     if request.network_interface:
         curl.setopt(pycurl.INTERFACE, request.network_interface)
-    if request.use_gzip:
+    if request.decompress_response:
         curl.setopt(pycurl.ENCODING, "gzip,deflate")
     else:
         curl.setopt(pycurl.ENCODING, "none")

@@ -100,6 +100,8 @@ Other notes
   now works on Python 3.
 * Fixed a memory leak in `.AsyncHTTPClient` shutdown that affected
   applications that created many HTTP clients and IOLoops.
+* New client request parameter ``decompress_response`` replaces
+  the existing ``use_gzip`` parameter; both names are accepted.
 
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
@@ -109,8 +111,8 @@ Other notes
 * HTTP implementation has been unified with ``tornado.simple_httpclient``
   in `tornado.http1connection`.
 * Now supports ``Transfer-Encoding: chunked`` for request bodies.
-* Now supports ``Content-Encoding: gzip`` for request bodies if ``gzip=True``
-  is passed to the `.HTTPServer` constructor.
+* Now supports ``Content-Encoding: gzip`` for request bodies if
+  ``decompress_request=True`` is passed to the `.HTTPServer` constructor.
 * The ``connection`` attribute of `.HTTPServerRequest` is now documented
   for public use; applications are expected to write their responses
   via the `.HTTPConnection` interface.
@@ -265,6 +267,8 @@ Other notes
 * `.RequestHandler.flush` now returns a `.Future` if no callback is given.
 * ``HEAD`` requests in `.StaticFileHandler` no longer read the entire file.
 * `.StaticFileHandler` now streams response bodies to the client.
+* New setting ``compress_response`` replaces the existing ``gzip``
+  setting; both names are accepted.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
