@@ -206,7 +206,7 @@ class RequestHandler(object):
         return self.application.settings
 
     def head(self, *args, **kwargs):
-        apply(self.get, args, kwargs)
+        return self.get(*args, **kwargs)
 
     def get(self, *args, **kwargs):
         raise HTTPError(405)
