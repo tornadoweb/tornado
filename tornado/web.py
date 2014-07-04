@@ -35,8 +35,7 @@ Here is a simple "Hello, world" example app::
         application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
 
-See the :doc:`Tornado overview <overview>` for more details and a good getting
-started guide.
+See the :doc:`guide` for additional information.
 
 Thread-safety notes
 -------------------
@@ -48,6 +47,7 @@ not thread-safe.  In particular, methods such as
 you use multiple threads it is important to use `.IOLoop.add_callback`
 to transfer control back to the main thread before finishing the
 request.
+
 """
 
 from __future__ import absolute_import, division, print_function, with_statement

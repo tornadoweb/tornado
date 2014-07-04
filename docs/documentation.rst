@@ -5,7 +5,6 @@ Tornado Documentation
    :titlesonly:
 
    guide
-   overview
    webframework
    networking
    integration
