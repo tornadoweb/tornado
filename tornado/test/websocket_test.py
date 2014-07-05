@@ -4,7 +4,7 @@ import traceback
 
 from tornado.concurrent import Future
 from tornado.httpclient import HTTPError, HTTPRequest
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.test.util import unittest
 from tornado.web import Application, RequestHandler
@@ -46,6 +46,11 @@ class EchoHandler(TestWebSocketHandler):
         self.write_message(message, isinstance(message, bytes))
 
 
+class ErrorInOnMessageHandler(TestWebSocketHandler):
+    def on_message(self, message):
+        1/0
+
+
 class HeaderHandler(TestWebSocketHandler):
     def open(self):
         try:
@@ -76,6 +81,8 @@ class WebSocketTest(AsyncHTTPTestCase):
             ('/non_ws', NonWebSocketHandler),
             ('/header', HeaderHandler, dict(close_future=self.close_future)),
             ('/close_reason', CloseReasonHandler,
+             dict(close_future=self.close_future)),
+            ('/error_in_on_message', ErrorInOnMessageHandler,
              dict(close_future=self.close_future)),
         ])
 
@@ -125,6 +132,17 @@ class WebSocketTest(AsyncHTTPTestCase):
         ws.write_message(u('hello \u00e9'))
         response = yield ws.read_message()
         self.assertEqual(response, u('hello \u00e9'))
+        ws.close()
+        yield self.close_future
+
+    @gen_test
+    def test_error_in_on_message(self):
+        ws = yield websocket_connect(
+            'ws://localhost:%d/error_in_on_message' % self.get_http_port())
+        ws.write_message('hello')
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = yield ws.read_message()
+        self.assertIs(response, None)
         ws.close()
         yield self.close_future
 
