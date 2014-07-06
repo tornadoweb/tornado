@@ -2754,7 +2754,7 @@ class URLSpec(object):
           in the regex will be passed in to the handler's get/post/etc
           methods as arguments.
 
-        * ``handler_class``: `RequestHandler` subclass to be invoked.
+        * ``handler``: `RequestHandler` subclass to be invoked.
 
         * ``kwargs`` (optional): A dictionary of additional arguments
           to be passed to the handler's constructor.
