@@ -1954,6 +1954,20 @@ class XSRFTest(SimpleHandlerTestCase):
                 body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)))
         self.assertEqual(response.code, 403)
 
+    def test_xsrf_success_short_token(self):
+        with ExpectLog(gen_log, ".*XSRF cookie does not match POST"):
+            response = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf='deadbeef')))
+        self.assertEqual(response.code, 403)
+
+    def test_xsrf_success_non_hex_token(self):
+        with ExpectLog(gen_log, ".*XSRF cookie is not a hexadecimal"):
+            response = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf='xoxo')))
+        self.assertEqual(response.code, 400)
+
     def test_xsrf_fail_cookie_no_body(self):
         with ExpectLog(gen_log, ".*'_xsrf' argument missing"):
             response = self.fetch(
