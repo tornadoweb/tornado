@@ -1140,14 +1140,15 @@ class RequestHandler(object):
             else:
                 # Treat unknown versions as not present instead of failing.
                 return None, None, None
-        elif len(cookie) == 32:
+        else:
             version = 1
-            token = binascii.a2b_hex(utf8(cookie))
+            try:
+                token = binascii.a2b_hex(utf8(cookie))
+            except (binascii.Error, TypeError):
+                token = utf8(cookie)
             # We don't have a usable timestamp in older versions.
             timestamp = int(time.time())
             return (version, token, timestamp)
-        else:
-            return None, None, None
 
     def check_xsrf_cookie(self):
         """Verifies that the ``_xsrf`` cookie matches the ``_xsrf`` argument.
