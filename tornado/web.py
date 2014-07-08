@@ -1145,7 +1145,7 @@ class RequestHandler(object):
             try:
                 token = binascii.a2b_hex(utf8(cookie))
             except TypeError:
-                raise HTTPError(400, "XSRF cookie is not a hexadecimal")
+                token = utf8(cookie)
             # We don't have a usable timestamp in older versions.
             timestamp = int(time.time())
             return (version, token, timestamp)
