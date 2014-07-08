@@ -1144,7 +1144,7 @@ class RequestHandler(object):
             version = 1
             try:
                 token = binascii.a2b_hex(utf8(cookie))
-            except TypeError:
+            except (binascii.Error, TypeError):
                 token = utf8(cookie)
             # We don't have a usable timestamp in older versions.
             timestamp = int(time.time())
