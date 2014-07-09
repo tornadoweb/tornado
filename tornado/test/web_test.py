@@ -2193,6 +2193,20 @@ class XSRFTest(SimpleHandlerTestCase):
                 headers=self.cookie_headers())
         self.assertEqual(response.code, 403)
 
+    def test_xsrf_success_short_token(self):
+        response = self.fetch(
+            "/", method="POST",
+            body=urllib_parse.urlencode(dict(_xsrf='deadbeef')),
+            headers=self.cookie_headers(token='deadbeef'))
+        self.assertEqual(response.code, 200)
+
+    def test_xsrf_success_non_hex_token(self):
+        response = self.fetch(
+            "/", method="POST",
+            body=urllib_parse.urlencode(dict(_xsrf='xoxo')),
+            headers=self.cookie_headers(token='xoxo'))
+        self.assertEqual(response.code, 200)
+
     def test_xsrf_success_post_body(self):
         response = self.fetch(
             "/", method="POST",
