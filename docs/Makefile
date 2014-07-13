@@ -1,3 +1,6 @@
+.PHONY: all
+all: sphinx
+
 SPHINXOPTS=-n -W -d build/doctrees .
 
 .PHONY: sphinx
