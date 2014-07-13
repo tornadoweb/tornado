@@ -13,7 +13,7 @@ import traceback
 
 @contextlib.contextmanager
 def set_environ(name, value):
-    old_value = os.environ.get('name')
+    old_value = os.environ.get(name)
     os.environ[name] = value
 
     try:
