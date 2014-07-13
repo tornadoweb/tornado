@@ -90,7 +90,7 @@ latex_documents = [
 # this link must be referenced as :current_tarball:`z`
 extlinks = {
     'current_tarball': (
-'https://github.com/tornadoweb/tornado/tarball/master' % version,
+'https://github.com/tornadoweb/tornado/tarball/master',
         'tornado-%s.tar.g' % version),
     }
 
