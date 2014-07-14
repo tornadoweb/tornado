@@ -4,11 +4,28 @@ What's new in the next version of Tornado
 In progress
 -----------
 
+Highlights
+~~~~~~~~~~
+
+* The `tornado.web.stream_request_body` decorator allows large files to be
+  uploaded with limited memory usage.
+* Coroutines are now faster and are used extensively throughout Tornado itself.
+  More methods now return `Futures <.Future>`, including most `.IOStream`
+  methods and `.RequestHandler.flush`.
+* Many user-overridden methods are now allowed to return a `.Future`
+  for flow control.
+* HTTP-related code is now shared between the `tornado.httpserver`,
+  ``tornado.simple_httpclient`` and `tornado.wsgi` modules, making support
+  for features such as chunked and gzip encoding more consistent.
+  `.HTTPServer` now uses new delegate interfaces defined in `tornado.httputil`
+  in addition to its old single-callback interface.
+* New module `tornado.tcpclient` creates TCP connections with non-blocking
+  DNS, SSL handshaking, and support for IPv6.
+
+
 Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Authors of alternative `.IOLoop` implementations should see the changes
-  to `.IOLoop.add_handler` in this release.
 * `tornado.concurrent.Future` is no longer thread-safe; use
   `concurrent.futures.Future` when thread-safety is needed.
 * Tornado now depends on the `certifi <https://pypi.python.org/pypi/certifi>`_
@@ -21,6 +38,11 @@ Backwards-compatibility notes
 * WebSocket connections from other origin sites are now rejected by default.
   To accept cross-origin websocket connections, override
   the new method `.WebSocketHandler.check_origin`.
+* `.WebSocketHandler` no longer supports the old ``draft 76`` protocol
+  (this mainly affects Safari 5.x browsers).  Applications should use
+  non-websocket workarounds for these browsers.
+* Authors of alternative `.IOLoop` implementations should see the changes
+  to `.IOLoop.add_handler` in this release.
 * The ``RequestHandler.async_callback`` and ``WebSocketHandler.async_callback``
   wrapper functions have been removed; they have been obsolete for a long
   time due to stack contexts (and more recently coroutines).
@@ -28,9 +50,6 @@ Backwards-compatibility notes
   pycurl 7.18.2.
 * Support for ``RequestHandler.get_error_html`` has been removed;
   override `.RequestHandler.write_error` instead.
-* `.WebSocketHandler` no longer supports the old ``draft 76`` protocol
-  (this mainly affects Safari 5.x browsers).  Applications should use
-  non-websocket workarounds for these browsers.
 
 
 Other notes
@@ -72,12 +91,12 @@ Other notes
 `tornado.gen`
 ~~~~~~~~~~~~~
 
-* The internals of the `tornado.gen` module have been rewritten to
-  improve performance when using ``Futures``, at the expense of some
-  performance degradation for the older `.YieldPoint` interfaces.
 * Performance of coroutines has been improved.
 * Coroutines no longer generate ``StackContexts`` by default, but they
   will be created on demand when needed.
+* The internals of the `tornado.gen` module have been rewritten to
+  improve performance when using ``Futures``, at the expense of some
+  performance degradation for the older `.YieldPoint` interfaces.
 * New function `.with_timeout` wraps a `.Future` and raises an exception
   if it doesn't complete in a given amount of time.
 * New object `.moment` can be yielded to allow the IOLoop to run for
@@ -197,13 +216,13 @@ Other notes
 * When `.bind_sockets` chooses a port automatically, it will now use
   the same port for IPv4 and IPv6.
 * TLS compression is now disabled by default on Python 3.3 and higher
-  (it is not possible to change this option in older versions.
+  (it is not possible to change this option in older versions).
 
 `tornado.options`
 ~~~~~~~~~~~~~~~~~
 
 * It is now possible to disable the default logging configuration
-  by setting ``options.logging`` to ``None`` instead of the string "none".
+  by setting ``options.logging`` to ``None`` instead of the string ``"none"``.
 
 `tornado.platform.asyncio`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -251,20 +270,22 @@ Other notes
   but were not run with ``@gen_test`` or any similar decorator (this would
   previously result in the test silently being skipped).
 * Better stack traces are now displayed when a test times out.
-* Fixed the test suite when ``unittest2`` is installed on Python 3.
 * The ``@gen_test`` decorator now passes along ``*args, **kwargs`` so it
   can be used on functions with arguments.
+* Fixed the test suite when ``unittest2`` is installed on Python 3.
 
 `tornado.web`
 ~~~~~~~~~~~~~
 
-* When gzip support is enabled, all ``text/*`` mime types will be compressed,
-  not just those on a whitelist.
-* `.Application` now implements the `.HTTPMessageDelegate` interface.
 * It is now possible to support streaming request bodies with the
   `.stream_request_body` decorator and the new `.RequestHandler.data_received`
   method.
 * `.RequestHandler.flush` now returns a `.Future` if no callback is given.
+* New exception `.Finish` may be raised to finish a request without
+  triggering error handling.
+* When gzip support is enabled, all ``text/*`` mime types will be compressed,
+  not just those on a whitelist.
+* `.Application` now implements the `.HTTPMessageDelegate` interface.
 * ``HEAD`` requests in `.StaticFileHandler` no longer read the entire file.
 * `.StaticFileHandler` now streams response bodies to the client.
 * New setting ``compress_response`` replaces the existing ``gzip``
@@ -299,8 +320,6 @@ Other notes
   and this method may generate HTTP responses (error pages) in the usual
   way.  The HTTP response methods are still not allowed once the
   WebSocket handshake has completed.
-* New exception `.Finish` may be raised to finish a request without
-  triggering error handling.
 
 `tornado.wsgi`
 ~~~~~~~~~~~~~~
