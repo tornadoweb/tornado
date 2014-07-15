@@ -28,7 +28,6 @@ installed automatically when using ``pip`` or ``easy_install``.
 Quick links
 -----------
 
-* :doc:`Documentation <documentation>`
 * |Download current version|: :current_tarball:`z` (:doc:`release notes <releases>`)
 * `Source (github) <https://github.com/tornadoweb/tornado>`_
 * Mailing lists: `discussion <http://groups.google.com/group/python-tornado>`_ and `announcements <http://groups.google.com/group/python-tornado-announce>`_
@@ -122,6 +121,26 @@ development use).  Tornado will also run on Windows, although this
 configuration is not officially supported and is recommended only for
 development use.
 
+Documentation
+-------------
+
+This documentation is also available in `PDF and Epub formats
+<https://readthedocs.org/projects/tornado/downloads/>`_.
+
+.. toctree::
+   :titlesonly:
+
+   guide
+   webframework
+   networking
+   integration
+   utilities
+   releases
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+
 Discussion and support
 ----------------------
 
@@ -141,8 +160,3 @@ the `Apache License, Version 2.0
 
 This web site and all documentation is licensed under `Creative
 Commons 3.0 <http://creativecommons.org/licenses/by/3.0/>`_.
-
-.. toctree::
-   :hidden:
-
-   documentation
