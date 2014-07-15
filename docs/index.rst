@@ -17,14 +17,6 @@ can scale to tens of thousands of open connections, making it ideal for
 `WebSockets <http://en.wikipedia.org/wiki/WebSocket>`_, and other
 applications that require a long-lived connection to each user.
 
-Upgrade notes
--------------
-
-As of Tornado 3.2, the `backports.ssl_match_hostname
-<https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ package
-must be installed when running Tornado on Python 2.  This will be
-installed automatically when using ``pip`` or ``easy_install``.
-
 Quick links
 -----------
 
