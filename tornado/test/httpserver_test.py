@@ -25,11 +25,7 @@ import socket
 import ssl
 import sys
 import tempfile
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
+from io import BytesIO
 
 
 def read_stream_body(stream, callback):

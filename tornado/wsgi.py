@@ -32,6 +32,7 @@ provides WSGI support in two ways:
 from __future__ import absolute_import, division, print_function, with_statement
 
 import sys
+from io import BytesIO
 import tornado
 
 from tornado.concurrent import Future
@@ -42,10 +43,6 @@ from tornado import web
 from tornado.escape import native_str
 from tornado.util import bytes_type, unicode_type
 
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import urllib.parse as urllib_parse  # py3

@@ -19,11 +19,8 @@ import functools
 import re
 import socket
 import sys
+from io import BytesIO
 
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import urlparse  # py2
