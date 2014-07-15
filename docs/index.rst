@@ -132,7 +132,9 @@ This documentation is also available in `PDF and Epub formats
 
    guide
    webframework
+   http
    networking
+   coroutine
    integration
    utilities
    releases
