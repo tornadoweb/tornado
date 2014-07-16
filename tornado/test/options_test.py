@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, with_statement
 
 import datetime
@@ -32,9 +33,11 @@ class OptionsTest(unittest.TestCase):
     def test_parse_config_file(self):
         options = OptionParser()
         options.define("port", default=80)
+        options.define("username", default='foo')
         options.parse_config_file(os.path.join(os.path.dirname(__file__),
                                                "options_test.cfg"))
         self.assertEquals(options.port, 443)
+        self.assertEqual(options.username, "李康")
 
     def test_parse_callbacks(self):
         options = OptionParser()

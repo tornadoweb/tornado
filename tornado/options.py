@@ -273,8 +273,14 @@ class OptionParser(object):
         from multiple sources.
         """
         config = {}
-        with open(path) as f:
-            exec_in(f.read(), config, config)
+        try:
+            # python 3
+            with open(path, encoding="utf-8") as f:
+                exec_in(f.read(), config, config)
+        except TypeError:
+            # python 2
+            with open(path) as f:
+                exec_in(f.read(), config, config)
         for name in config:
             if name in self._options:
                 self._options[name].set(config[name])
