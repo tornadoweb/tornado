@@ -8,6 +8,7 @@ from contextlib import closing
 import functools
 import sys
 import threading
+from io import BytesIO
 
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
@@ -21,11 +22,6 @@ from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, Expec
 from tornado.test.util import unittest, skipOnTravis
 from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, url
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO
 
 
 class HelloWorldHandler(RequestHandler):

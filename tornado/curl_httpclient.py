@@ -23,6 +23,7 @@ import logging
 import pycurl
 import threading
 import time
+from io import BytesIO
 
 from tornado import httputil
 from tornado import ioloop
@@ -32,11 +33,6 @@ from tornado import stack_context
 from tornado.escape import utf8, native_str
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.util import bytes_type
-
-try:
-    from io import BytesIO  # py3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # py2
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):

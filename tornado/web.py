@@ -72,6 +72,7 @@ import time
 import tornado
 import traceback
 import types
+from io import BytesIO
 
 from tornado.concurrent import Future, is_future
 from tornado import escape
@@ -85,10 +86,6 @@ from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.util import bytes_type, import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
 
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import Cookie  # py2
