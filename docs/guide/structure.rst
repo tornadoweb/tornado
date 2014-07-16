@@ -329,7 +329,7 @@ For comparison, here is the same example using a coroutine::
         @tornado.gen.coroutine
         def get(self):
             http = tornado.httpclient.AsyncHTTPClient()
-            yield http.fetch("http://friendfeed-api.com/v2/feed/bret")
+            response = yield http.fetch("http://friendfeed-api.com/v2/feed/bret")
             json = tornado.escape.json_decode(response.body)
             self.write("Fetched " + str(len(json["entries"])) + " entries "
                        "from the FriendFeed API")
