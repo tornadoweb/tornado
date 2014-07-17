@@ -393,12 +393,12 @@ def _curl_setup_request(curl, request, buffer, headers):
                 % request.method)
 
         request_buffer = BytesIO(utf8(request.body))
+        def ioctl(cmd):
+            if cmd == curl.IOCMD_RESTARTREAD:
+                request_buffer.seek(0)
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
+        curl.setopt(pycurl.IOCTLFUNCTION, ioctl)
         if request.method == "POST":
-            def ioctl(cmd):
-                if cmd == curl.IOCMD_RESTARTREAD:
-                    request_buffer.seek(0)
-            curl.setopt(pycurl.IOCTLFUNCTION, ioctl)
             curl.setopt(pycurl.POSTFIELDSIZE, len(request.body))
         else:
             curl.setopt(pycurl.INFILESIZE, len(request.body))
