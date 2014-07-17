@@ -34,16 +34,6 @@ from distutils.core import Extension
 # to support installing without the extension on platforms where
 # no compiler is available.
 from distutils.command.build_ext import build_ext
-from distutils.errors import CCompilerError
-from distutils.errors import DistutilsPlatformError, DistutilsExecError
-if sys.platform == 'win32' and sys.version_info > (2, 6):
-    # 2.6's distutils.msvc9compiler can raise an IOError when failing to
-    # find the compiler
-    build_errors = (CCompilerError, DistutilsExecError,
-                    DistutilsPlatformError, IOError)
-else:
-    build_errors = (CCompilerError, DistutilsExecError, DistutilsPlatformError,
-                    SystemError)
 
 class custom_build_ext(build_ext):
     """Allow C extension building to fail.
@@ -83,7 +73,7 @@ http://api.mongodb.org/python/current/installation.html#osx
     def run(self):
         try:
             build_ext.run(self)
-        except build_errors:
+        except Exception:
             e = sys.exc_info()[1]
             sys.stdout.write('%s\n' % str(e))
             warnings.warn(self.warning_message % ("Extension modules",
@@ -95,7 +85,7 @@ http://api.mongodb.org/python/current/installation.html#osx
         name = ext.name
         try:
             build_ext.build_extension(self, ext)
-        except build_errors:
+        except Exception:
             e = sys.exc_info()[1]
             sys.stdout.write('%s\n' % str(e))
             warnings.warn(self.warning_message % ("The %s extension "
