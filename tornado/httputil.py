@@ -335,7 +335,7 @@ class HTTPServerRequest(object):
 
         # set remote IP and protocol
         context = getattr(connection, 'context', None)
-        self.remote_ip = getattr(context, 'remote_ip')
+        self.remote_ip = getattr(context, 'remote_ip', None)
         self.protocol = getattr(context, 'protocol', "http")
 
         self.host = host or self.headers.get("Host") or "127.0.0.1"
