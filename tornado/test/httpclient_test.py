@@ -37,6 +37,18 @@ class PostHandler(RequestHandler):
             self.get_argument("arg1"), self.get_argument("arg2")))
 
 
+class PutHandler(RequestHandler):
+    def put(self):
+        self.write("Put body: ")
+        self.write(self.request.body)
+
+
+class RedirectHandler(RequestHandler):
+    def prepare(self):
+        self.redirect(self.get_argument("url"),
+                      status=int(self.get_argument("status", "302")))
+
+
 class ChunkHandler(RequestHandler):
     def get(self):
         self.write("asdf")
@@ -97,6 +109,8 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         return Application([
             url("/hello", HelloWorldHandler),
             url("/post", PostHandler),
+            url("/put", PutHandler),
+            url("/redirect", RedirectHandler),
             url("/chunk", ChunkHandler),
             url("/auth", AuthHandler),
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
@@ -395,6 +409,17 @@ Transfer-Encoding: chunked
             yield self.http_client.fetch(hello_url, method='POST')
 
         self.assertTrue('must not be empty' in str(context.exception))
+
+    def test_post_307(self):
+        response = self.fetch("/redirect?status=307&url=/post",
+                              method="POST", body=b"arg1=foo&arg2=bar")
+        self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
+
+    def test_put_307(self):
+        response = self.fetch("/redirect?status=307&url=/put",
+                              method="PUT", body=b"hello")
+        response.rethrow()
+        self.assertEqual(response.body, b"Put body: hello")
 
 
 class RequestProxyTest(unittest.TestCase):
