@@ -185,6 +185,23 @@ class TestIOLoop(AsyncTestCase):
         self.wait()
         self.assertEqual(results, [1, 2, 3, 4])
 
+    def test_add_timeout_return(self):
+        # All the timeout methods return non-None handles that can be
+        # passed to remove_timeout.
+        handle = self.io_loop.add_timeout(self.io_loop.time(), lambda: None)
+        self.assertFalse(handle is None)
+        self.io_loop.remove_timeout(handle)
+
+    def test_call_at_return(self):
+        handle = self.io_loop.call_at(self.io_loop.time(), lambda: None)
+        self.assertFalse(handle is None)
+        self.io_loop.remove_timeout(handle)
+
+    def test_call_later_return(self):
+        handle = self.io_loop.call_later(0, lambda: None)
+        self.assertFalse(handle is None)
+        self.io_loop.remove_timeout(handle)
+
     def test_close_file_object(self):
         """When a file object is used instead of a numeric file descriptor,
         the object should be closed (by IOLoop.close(all_fds=True),
