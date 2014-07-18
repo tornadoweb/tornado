@@ -410,10 +410,21 @@ Transfer-Encoding: chunked
 
         self.assertTrue('must not be empty' in str(context.exception))
 
-    def test_post_307(self):
-        response = self.fetch("/redirect?status=307&url=/post",
-                              method="POST", body=b"arg1=foo&arg2=bar")
-        self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
+    # This test causes odd failures with the combination of
+    # curl_httpclient (at least with the version of libcurl available
+    # on ubuntu 12.04), TwistedIOLoop, and epoll.  For POST (but not PUT),
+    # curl decides the response came back too soon and closes the connection
+    # to start again.  It does this *before* telling the socket callback to
+    # unregister the FD.  Some IOLoop implementations have special kernel
+    # integration to discover this immediately.  Tornado's IOLoops
+    # ignore errors on remove_handler to accomodate this behavior, but
+    # Twisted's reactor does not.  The removeReader call fails and so
+    # do all future removeAll calls (which our tests do at cleanup).
+    #
+    #def test_post_307(self):
+    #    response = self.fetch("/redirect?status=307&url=/post",
+    #                          method="POST", body=b"arg1=foo&arg2=bar")
+    #    self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
 
     def test_put_307(self):
         response = self.fetch("/redirect?status=307&url=/put",
