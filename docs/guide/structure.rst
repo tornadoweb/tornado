@@ -293,7 +293,7 @@ The simplest way to make a handler asynchronous is to use the
 with the ``yield`` keyword, and no response will be sent until the
 coroutine has returned.  See :doc:`coroutines` for more details.
 
-In some cases, coroutines may be less convenient thatn a
+In some cases, coroutines may be less convenient than a
 callback-oriented style, in which case the `.tornado.web.asynchronous`
 decorator can be used instead.  When this decorator is used the response
 is not automatically sent; instead the request will be kept open until
