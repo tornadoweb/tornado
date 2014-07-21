@@ -141,7 +141,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         return self.wait()
 
     def test_patch_receives_payload(self):
-        body = "some patch data"
+        body = b"some patch data"
         response = self.fetch("/patch", method='PATCH', body=body)
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body, body)
