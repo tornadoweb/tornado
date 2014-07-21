@@ -33,6 +33,9 @@ information, see
 http://curl.haxx.se/libcurl/c/curl_easy_setopt.html#CURLOPTCONNECTTIMEOUTMS
 and comments in curl_httpclient.py).
 
+To select ``curl_httpclient``, call `AsyncHTTPClient.configure` at startup::
+
+    AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
 """
 
 from __future__ import absolute_import, division, print_function, with_statement

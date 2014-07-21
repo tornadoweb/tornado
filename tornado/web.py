@@ -35,8 +35,7 @@ Here is a simple "Hello, world" example app::
         application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
 
-See the :doc:`Tornado overview <overview>` for more details and a good getting
-started guide.
+See the :doc:`guide` for additional information.
 
 Thread-safety notes
 -------------------
@@ -48,6 +47,7 @@ not thread-safe.  In particular, methods such as
 you use multiple threads it is important to use `.IOLoop.add_callback`
 to transfer control back to the main thread before finishing the
 request.
+
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -72,6 +72,7 @@ import time
 import tornado
 import traceback
 import types
+from io import BytesIO
 
 from tornado.concurrent import Future, is_future
 from tornado import escape
@@ -85,10 +86,6 @@ from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.util import bytes_type, import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
 
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import Cookie  # py2
@@ -919,7 +916,7 @@ class RequestHandler(object):
             return
         self.clear()
 
-        reason = None
+        reason = kwargs.get('reason')
         if 'exc_info' in kwargs:
             exception = kwargs['exc_info'][1]
             if isinstance(exception, HTTPError) and exception.reason:
@@ -1128,14 +1125,15 @@ class RequestHandler(object):
             else:
                 # Treat unknown versions as not present instead of failing.
                 return None, None, None
-        elif len(cookie) == 32:
+        else:
             version = 1
-            token = binascii.a2b_hex(utf8(cookie))
+            try:
+                token = binascii.a2b_hex(utf8(cookie))
+            except (binascii.Error, TypeError):
+                token = utf8(cookie)
             # We don't have a usable timestamp in older versions.
             timestamp = int(time.time())
             return (version, token, timestamp)
-        else:
-            return None, None, None
 
     def check_xsrf_cookie(self):
         """Verifies that the ``_xsrf`` cookie matches the ``_xsrf`` argument.
@@ -2754,7 +2752,7 @@ class URLSpec(object):
           in the regex will be passed in to the handler's get/post/etc
           methods as arguments.
 
-        * ``handler_class``: `RequestHandler` subclass to be invoked.
+        * ``handler``: `RequestHandler` subclass to be invoked.
 
         * ``kwargs`` (optional): A dictionary of additional arguments
           to be passed to the handler's constructor.

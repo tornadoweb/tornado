@@ -132,11 +132,13 @@ Looping is tricky with coroutines since there is no way in Python
 to ``yield`` on every iteration of a ``for`` or ``while`` loop and
 capture the result of the yield.  Instead, you'll need to separate
 the loop condition from accessing the results, as in this example
-from `motor <http://motor.readthedocs.org/en/stable/>`_::
+from `Motor <http://motor.readthedocs.org/en/stable/>`_::
 
     import motor
+    db = motor.MotorClient().test
+    
     @gen.coroutine
     def loop_example(collection):
-        cursor = collection.find()
+        cursor = db.collection.find()
         while (yield cursor.fetch_next):
             doc = cursor.next_object()

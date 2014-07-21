@@ -586,7 +586,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._run_callback(self.handler.on_message, decoded)
         elif opcode == 0x2:
             # Binary data
-            self._run_callback(self.handler.on_message, decoded)
+            self._run_callback(self.handler.on_message, data)
         elif opcode == 0x8:
             # Close
             self.client_terminated = True

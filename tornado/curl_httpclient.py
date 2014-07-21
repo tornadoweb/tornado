@@ -23,6 +23,7 @@ import logging
 import pycurl
 import threading
 import time
+from io import BytesIO
 
 from tornado import httputil
 from tornado import ioloop
@@ -32,11 +33,6 @@ from tornado import stack_context
 from tornado.escape import utf8, native_str
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
 from tornado.util import bytes_type
-
-try:
-    from io import BytesIO  # py3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # py2
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
@@ -400,12 +396,12 @@ def _curl_setup_request(curl, request, buffer, headers):
                 % request.method)
 
         request_buffer = BytesIO(utf8(request.body))
+        def ioctl(cmd):
+            if cmd == curl.IOCMD_RESTARTREAD:
+                request_buffer.seek(0)
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
+        curl.setopt(pycurl.IOCTLFUNCTION, ioctl)
         if request.method == "POST":
-            def ioctl(cmd):
-                if cmd == curl.IOCMD_RESTARTREAD:
-                    request_buffer.seek(0)
-            curl.setopt(pycurl.IOCTLFUNCTION, ioctl)
             curl.setopt(pycurl.POSTFIELDSIZE, len(request.body))
         else:
             curl.setopt(pycurl.UPLOAD, True)

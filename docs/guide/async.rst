@@ -1,5 +1,5 @@
-Asynchronous and non-Blocking
------------------------------
+Asynchronous and non-Blocking I/O
+---------------------------------
 
 Real-time web features require a long-lived mostly-idle connection per
 user.  In a traditional synchronous web server, this implies devoting
@@ -78,7 +78,7 @@ callback argument::
         http_client = AsyncHTTPClient()
         def handle_response(response):
             callback(response.body)
-        http_client.fetch(url)
+        http_client.fetch(url, callback=handle_response)
 
 And again with a `.Future` instead of a callback::
 
