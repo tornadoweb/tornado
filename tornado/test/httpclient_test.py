@@ -91,6 +91,16 @@ class ContentLength304Handler(RequestHandler):
         pass
 
 
+class PatchHandler(RequestHandler):
+
+    def patch(self):
+        """
+        Patch implementation according to RFC-6902
+        http://tools.ietf.org/html/rfc6902
+        """
+        self.write(self.request.body)
+
+
 class AllMethodsHandler(RequestHandler):
     SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
 
@@ -118,7 +128,23 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/user_agent", UserAgentHandler),
             url("/304_with_content_length", ContentLength304Handler),
             url("/all_methods", AllMethodsHandler),
+            url('/patch', PatchHandler),
         ], gzip=True)
+
+    def fetch(self, path, body=None, **kwargs):
+        kwargs['url'] = self.get_url(path)
+        request = HTTPRequest(**kwargs)
+        if body is not None:
+            request.body = body
+        request.allow_nonstandard_methods = True
+        self.http_client.fetch(request, self.stop, method=None)
+        return self.wait()
+
+    def test_patch_receives_payload(self):
+        body = "some patch data"
+        response = self.fetch("/patch", method='PATCH', body=body)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, body)
 
     @skipOnTravis
     def test_hello_world(self):
