@@ -471,7 +471,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._finish_future.set_result(None)
 
     def _parse_headers(self, data):
-        data = native_str(data.decode('latin1'))
+        data = native_str(data.decode('latin1')).lstrip("\r\n")
         eol = data.find("\r\n")
         start_line = data[:eol]
         try:
