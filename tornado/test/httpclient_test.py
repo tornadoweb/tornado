@@ -94,10 +94,7 @@ class ContentLength304Handler(RequestHandler):
 class PatchHandler(RequestHandler):
 
     def patch(self):
-        """
-        Patch implementation according to RFC-6902
-        http://tools.ietf.org/html/rfc6902
-        """
+        "Return the request payload - so we can check it is being kept"
         self.write(self.request.body)
 
 
@@ -130,15 +127,6 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/all_methods", AllMethodsHandler),
             url('/patch', PatchHandler),
         ], gzip=True)
-
-    def fetch(self, path, body=None, **kwargs):
-        kwargs['url'] = self.get_url(path)
-        request = HTTPRequest(**kwargs)
-        if body is not None:
-            request.body = body
-        request.allow_nonstandard_methods = True
-        self.http_client.fetch(request, self.stop, method=None)
-        return self.wait()
 
     def test_patch_receives_payload(self):
         body = b"some patch data"
