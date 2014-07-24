@@ -683,6 +683,17 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.close()
 
+    def test_http10_keepalive_extra_crlf(self):
+        self.http_version = b'HTTP/1.0'
+        self.connect()
+        self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n\r\n')
+        self.read_response()
+        self.assertEqual(self.headers['Connection'], 'Keep-Alive')
+        self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
+        self.read_response()
+        self.assertEqual(self.headers['Connection'], 'Keep-Alive')
+        self.close()
+
     def test_pipelined_requests(self):
         self.connect()
         self.stream.write(b'GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n')
