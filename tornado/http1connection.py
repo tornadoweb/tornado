@@ -455,6 +455,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if start_line.version == "HTTP/1.1":
             return connection_header != "close"
         elif ("Content-Length" in headers
+              or headers.get("Transfer-Encoding", "").lower() == "chunked"
               or start_line.method in ("HEAD", "GET")):
             return connection_header == "keep-alive"
         return False
