@@ -96,7 +96,7 @@ class Future(object):
         self._cancelled = self._cancel_callback()
         if self._cancelled:
             self._done = True
-        return self.cancelled
+        return self._cancelled
 
     def cancelled(self):
         """Returns True if the operation has been canceled."""
