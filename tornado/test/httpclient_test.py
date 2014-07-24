@@ -338,10 +338,12 @@ Transfer-Encoding: chunked
         # Construct a new instance of the configured client class
         client = self.http_client.__class__(self.io_loop, force_instance=True,
                                             defaults=defaults)
-        client.fetch(self.get_url('/user_agent'), callback=self.stop)
-        response = self.wait()
-        self.assertEqual(response.body, b'TestDefaultUserAgent')
-        client.close()
+        try:
+            client.fetch(self.get_url('/user_agent'), callback=self.stop)
+            response = self.wait()
+            self.assertEqual(response.body, b'TestDefaultUserAgent')
+        finally:
+            client.close()
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
