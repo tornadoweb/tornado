@@ -8,7 +8,8 @@ from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncHTTPTestCase
 from tornado.test import httpclient_test
 from tornado.test.util import unittest
-from tornado.web import Application, RequestHandler
+from tornado.web import Application, RequestHandler, URLSpec
+
 
 try:
     import pycurl
