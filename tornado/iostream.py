@@ -1184,8 +1184,14 @@ class SSLIOStream(IOStream):
                 return self.close(exc_info=True)
             raise
         except socket.error as err:
-            if err.args[0] in _ERRNO_CONNRESET:
+            # Some port scans (e.g. nmap in -sT mode) have been known
+            # to cause do_handshake to raise EBADF, so make that error
+            # quiet as well.
+            # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
+            if (err.args[0] in _ERRNO_CONNRESET or
+                err.args[0] == errno.EBADF):
                 return self.close(exc_info=True)
+            raise
         except AttributeError:
             # On Linux, if the connection was reset before the call to
             # wrap_socket, do_handshake will fail with an
