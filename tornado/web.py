@@ -149,7 +149,8 @@ class RequestHandler(object):
     _template_loaders = {}  # {path: template.BaseLoader}
     _template_loader_lock = threading.Lock()
     _remove_control_chars_regex = re.compile(r"[\x00-\x08\x0e-\x1f]")
-
+    _json_content_type = "application/json; charset=UTF-8"
+    
     def __init__(self, application, request, **kwargs):
         super(RequestHandler, self).__init__()
 
@@ -653,7 +654,7 @@ class RequestHandler(object):
             raise TypeError("write() only accepts bytes, unicode, and dict objects")
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
-            self.set_header("Content-Type", "application/json; charset=UTF-8")
+            self.set_header("Content-Type", self._json_content_type)
         chunk = utf8(chunk)
         self._write_buffer.append(chunk)
 
