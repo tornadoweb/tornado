@@ -49,7 +49,7 @@ class MessageBuffer(object):
                     break
                 new_count += 1
             if new_count:
-                result_future.set_result(callback(self.cache[-new_count:]))
+                result_future.set_result(self.cache[-new_count:])
                 return result_future
         self.waiters.add(result_future)
         return result_future
