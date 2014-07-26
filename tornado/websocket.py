@@ -105,6 +105,21 @@ class WebSocketHandler(tornado.web.RequestHandler):
       };
 
     This script pops up an alert box that says "You said: Hello, world".
+
+    Web browsers allow any site to open a websocket connection to any other,
+    instead of using the same-origin policy that governs other network
+    access from javascript.  This can be surprising and is a potential
+    security hole, so since Tornado 4.0 `WebSocketHandler` requires
+    applications that wish to receive cross-origin websockets to opt in
+    by overriding the `~WebSocketHandler.check_origin` method (see that
+    method's docs for details).  Failure to do so is the most likely
+    cause of 403 errors when making a websocket connection.
+
+    When using a secure websocket connection (``wss://``) with a self-signed
+    certificate, the connection from a browser may fail because it wants
+    to show the "accept this certificate" dialog but has nowhere to show it.
+    You must first visit a regular HTML page using the same certificate
+    to accept it before the websocket connection will succeed.
     """
     def __init__(self, application, request, **kwargs):
         tornado.web.RequestHandler.__init__(self, application, request,
@@ -274,6 +289,19 @@ class WebSocketHandler(tornado.web.RequestHandler):
         This is a security protection against cross site scripting attacks on
         browsers, since WebSockets are allowed to bypass the usual same-origin
         policies and don't use CORS headers.
+
+        To accept all cross-origin traffic (which was the default prior to
+        Tornado 4.0), simply override this method to always return true::
+
+            def check_origin(self, origin):
+                return True
+
+        To allow connections from any subdomain of your site, you might
+        do something like::
+
+            def check_origin(self, origin):
+                parsed_origin = urllib.parse.urlparse(origin)
+                return parsed_origin.netloc.endswith(".mydomain.com")
 
         .. versionadded:: 4.0
         """
