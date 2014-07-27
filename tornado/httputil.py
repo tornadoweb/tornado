@@ -803,6 +803,8 @@ def parse_response_start_line(line):
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some
 # combinations of semicolons and double quotes.
+# It has also been modified to support valueless parameters as seen in
+# websocket extension negotiations.
 
 
 def _parseparam(s):
@@ -836,6 +838,8 @@ def _parse_header(line):
                 value = value[1:-1]
                 value = value.replace('\\\\', '\\').replace('\\"', '"')
             pdict[name] = value
+        else:
+            pdict[p] = None
     return key, pdict
 
 
