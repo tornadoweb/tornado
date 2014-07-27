@@ -843,6 +843,26 @@ def _parse_header(line):
     return key, pdict
 
 
+def _encode_header(key, pdict):
+    """Inverse of _parse_header.
+
+    >>> _encode_header('permessage-deflate',
+    ...     {'client_max_window_bits': 15, 'client_no_context_takeover': None})
+    'permessage-deflate; client_max_window_bits=15; client_no_context_takeover'
+    """
+    if not pdict:
+        return key
+    out = [key]
+    # Sort the parameters just to make it easy to test.
+    for k, v in sorted(pdict.items()):
+        if v is None:
+            out.append(k)
+        else:
+            # TODO: quote if necessary.
+            out.append('%s=%s' % (k, v))
+    return '; '.join(out)
+
+
 def doctests():
     import doctest
     return doctest.DocTestSuite()
