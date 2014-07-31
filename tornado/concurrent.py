@@ -25,8 +25,10 @@ module.
 from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
+import traceback
 import sys
 
+from tornado.log import app_log
 from tornado.stack_context import ExceptionStackContext, wrap
 from tornado.util import raise_exc_info, ArgReplacer
 
@@ -34,10 +36,95 @@ try:
     from concurrent import futures
 except ImportError:
     futures = None
+    
+_PY34 = sys.version_info >= (3, 4)
 
 
 class ReturnValueIgnoredError(Exception):
     pass
+
+# This class and associated code in the future object is derived
+# from the Trollius project, a backport of asyncio to Python 2.x - 3.x
+
+class _TracebackLogger(object):
+    """Helper to log a traceback upon destruction if not cleared.
+
+    This solves a nasty problem with Futures and Tasks that have an
+    exception set: if nobody asks for the exception, the exception is
+    never logged.  This violates the Zen of Python: 'Errors should
+    never pass silently.  Unless explicitly silenced.'
+
+    However, we don't want to log the exception as soon as
+    set_exception() is called: if the calling code is written
+    properly, it will get the exception and handle it properly.  But
+    we *do* want to log it if result() or exception() was never called
+    -- otherwise developers waste a lot of time wondering why their
+    buggy code fails silently.
+
+    An earlier attempt added a __del__() method to the Future class
+    itself, but this backfired because the presence of __del__()
+    prevents garbage collection from breaking cycles.  A way out of
+    this catch-22 is to avoid having a __del__() method on the Future
+    class itself, but instead to have a reference to a helper object
+    with a __del__() method that logs the traceback, where we ensure
+    that the helper object doesn't participate in cycles, and only the
+    Future has a reference to it.
+
+    The helper object is added when set_exception() is called.  When
+    the Future is collected, and the helper is present, the helper
+    object is also collected, and its __del__() method will log the
+    traceback.  When the Future's result() or exception() method is
+    called (and a helper object is present), it removes the the helper
+    object, after calling its clear() method to prevent it from
+    logging.
+
+    One downside is that we do a fair amount of work to extract the
+    traceback from the exception, even when it is never logged.  It
+    would seem cheaper to just store the exception object, but that
+    references the traceback, which references stack frames, which may
+    reference the Future, which references the _TracebackLogger, and
+    then the _TracebackLogger would be included in a cycle, which is
+    what we're trying to avoid!  As an optimization, we don't
+    immediately format the exception; we only do the work when
+    activate() is called, which call is delayed until after all the
+    Future's callbacks have run.  Since usually a Future has at least
+    one callback (typically set by 'yield From') and usually that
+    callback extracts the callback, thereby removing the need to
+    format the exception.
+
+    PS. I don't claim credit for this solution.  I first heard of it
+    in a discussion about closing files when they are collected.
+    """
+
+    __slots__ = ('loop', 'source_traceback', 'exc', 'tb')
+
+    def __init__(self, exc):
+        self.exc = exc
+        self.tb = None
+
+    def activate(self):
+        exc = self.exc
+        if exc is not None:
+            self.exc = None
+            if hasattr(exc, '__traceback__'):
+                self.tb = traceback.format_exception(exc.__class__, exc,
+                                                     exc.__traceback__)
+            else:
+                # could provide more information here
+                self.tb = traceback.format_exception_only(type(exc),
+                                                          exc)
+
+    def clear(self):
+        self.exc = None
+        self.tb = None
+
+    def __del__(self):
+        if self.tb:
+            msg = 'Future exception was never retrieved: %s' % \
+                    ''.join(self.tb).rstrip()
+            
+            # HACK: should probably call something
+            app_log.error(msg)
 
 
 class Future(object):
@@ -73,6 +160,10 @@ class Future(object):
         self._result = None
         self._exception = None
         self._exc_info = None
+        
+        self._log_traceback = False   # Used for Python >= 3.4
+        self._tb_logger = None        # Used for Python <= 3.3
+        
         self._callbacks = []
 
     def cancel(self):
@@ -103,6 +194,10 @@ class Future(object):
         """If the operation succeeded, return its result.  If it failed,
         re-raise its exception.
         """
+        self._log_traceback = False
+        if self._tb_logger is not None:
+            self._tb_logger.clear()
+            self._tb_logger = None
         if self._result is not None:
             return self._result
         if self._exc_info is not None:
@@ -116,6 +211,10 @@ class Future(object):
         """If the operation raised an exception, return the `Exception`
         object.  Otherwise returns None.
         """
+        self._log_traceback = False
+        if self._tb_logger is not None:
+            self._tb_logger.clear()
+            self._tb_logger = None
         if self._exception is not None:
             return self._exception
         else:
@@ -147,6 +246,22 @@ class Future(object):
     def set_exception(self, exception):
         """Sets the exception of a ``Future.``"""
         self._exception = exception
+        if _PY34:
+            self._log_traceback = True
+        else:
+            self._tb_logger = _TracebackLogger(exception)
+            if hasattr(exception, '__traceback__'):
+                # Python 3: exception contains a link to the traceback
+
+                # Arrange for the logger to be activated after all callbacks
+                # have had a chance to call result() or exception().
+                
+                # HACK: circular dependencies
+                from tornado.ioloop import IOLoop
+                IOLoop.current().add_callback(self._tb_logger.activate)
+            else:
+                self._tb_logger.activate()                
+            
         self._set_done()
 
     def exc_info(self):
@@ -176,6 +291,27 @@ class Future(object):
             # TODO: error handling
             cb(self)
         self._callbacks = None
+        
+    # On Python 3.3 or older, objects with a destructor part of a reference
+    # cycle are never destroyed. It's not more the case on Python 3.4 thanks to
+    # the PEP 442.
+    if _PY34:
+        def __del__(self):
+            if not self._log_traceback:
+                # set_exception() was not called, or result() or exception()
+                # has consumed the exception
+                return
+            
+            exc = self._exception
+            tb = traceback.format_exception(exc.__class__, exc,
+                                                 exc.__traceback__)
+            
+            msg = '%s exception was never retrieved: %s' % \
+                    (self.__class__.__name__, ''.join(tb).rstrip())
+            
+            # HACK: should probably call something
+            app_log.error(msg)
+            
 
 TracebackFuture = Future
 
