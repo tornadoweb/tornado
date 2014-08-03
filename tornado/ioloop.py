@@ -330,7 +330,8 @@ class IOLoop(Configurable):
         """
         raise NotImplementedError()
 
-    def _setup_logging(self):
+    @staticmethod
+    def _setup_logging():
         """The IOLoop catches and logs exceptions, so it's
         important that log output be visible.  However, python's
         default behavior for non-root loggers (prior to python
@@ -417,7 +418,8 @@ class IOLoop(Configurable):
             raise TimeoutError('Operation timed out after %s seconds' % timeout)
         return future_cell[0].result()
 
-    def time(self):
+    @staticmethod
+    def time():
         """Returns the current time according to the `IOLoop`'s clock.
 
         The return value is a floating-point number relative to an
@@ -572,7 +574,8 @@ class IOLoop(Configurable):
         except Exception:
             self.handle_callback_exception(callback)
 
-    def handle_callback_exception(self, callback):
+    @staticmethod
+    def handle_callback_exception(callback):
         """This method is called whenever a callback run by the `IOLoop`
         throws an exception.
 
@@ -584,7 +587,8 @@ class IOLoop(Configurable):
         """
         app_log.error("Exception in callback %r", callback, exc_info=True)
 
-    def split_fd(self, fd):
+    @staticmethod
+    def split_fd(fd):
         """Returns an (fd, obj) pair from an ``fd`` parameter.
 
         We accept both raw file descriptors and file-like objects as
@@ -605,7 +609,8 @@ class IOLoop(Configurable):
         except AttributeError:
             return fd, fd
 
-    def close_fd(self, fd):
+    @staticmethod
+    def close_fd(fd):
         """Utility method to close an ``fd``.
 
         If ``fd`` is a file-like object, we close it directly; otherwise
