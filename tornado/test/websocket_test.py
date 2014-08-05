@@ -78,6 +78,15 @@ class CloseReasonHandler(TestWebSocketHandler):
         self.close(1001, "goodbye")
 
 
+class AsyncPrepareHandler(TestWebSocketHandler):
+    @gen.coroutine
+    def prepare(self):
+        yield gen.moment
+
+    def on_message(self, message):
+        self.write_message(message)
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, compression_options=None):
@@ -106,6 +115,8 @@ class WebSocketTest(WebSocketBaseTestCase):
             ('/close_reason', CloseReasonHandler,
              dict(close_future=self.close_future)),
             ('/error_in_on_message', ErrorInOnMessageHandler,
+             dict(close_future=self.close_future)),
+            ('/async_prepare', AsyncPrepareHandler,
              dict(close_future=self.close_future)),
         ])
 
@@ -218,6 +229,15 @@ class WebSocketTest(WebSocketBaseTestCase):
         code, reason = yield self.close_future
         self.assertEqual(code, 1001)
         self.assertEqual(reason, 'goodbye')
+
+    @gen_test
+    def test_async_prepare(self):
+        # Previously, an async prepare method triggered a bug that would
+        # result in a timeout on test shutdown (and a memory leak).
+        ws = yield self.ws_connect('/async_prepare')
+        ws.write_message('hello')
+        res = yield ws.read_message()
+        self.assertEqual(res, 'hello')
 
     @gen_test
     def test_check_origin_valid_no_path(self):

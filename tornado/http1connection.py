@@ -294,6 +294,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         self._clear_callbacks()
         stream = self.stream
         self.stream = None
+        if not self._finish_future.done():
+            self._finish_future.set_result(None)
         return stream
 
     def set_body_timeout(self, timeout):
