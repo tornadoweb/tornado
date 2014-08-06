@@ -1325,12 +1325,8 @@ class RequestHandler(object):
                 except iostream.StreamClosedError:
                     return
 
-            method = getattr(self, self.request.method.lower())
-            result = method(*self.path_args, **self.path_kwargs)
-            if is_future(result):
-                result = yield result
-            if result is not None:
-                raise TypeError("Expected None, got %r" % result)
+            yield self._execute_method()
+
             if self._auto_finish and not self._finished:
                 self.finish()
         except Exception as e:
@@ -1341,6 +1337,15 @@ class RequestHandler(object):
                 # now (to unblock the HTTP server).  Note that this is not
                 # in a finally block to avoid GC issues prior to Python 3.4.
                 self._prepared_future.set_result(None)
+
+    @gen.coroutine
+    def _execute_method(self):                
+        method = getattr(self, self.request.method.lower())
+        result = method(*self.path_args, **self.path_kwargs)
+        if is_future(result):
+            result = yield result
+        if result is not None:
+            raise TypeError("Expected None, got %r" % result)
 
     def data_received(self, chunk):
         """Implement this method to handle streamed request data.
