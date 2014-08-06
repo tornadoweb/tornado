@@ -969,10 +969,11 @@ class PeriodicCallback(object):
         if not self._running:
             return
         try:
-            self.callback()
+            return self.callback()
         except Exception:
             self.io_loop.handle_callback_exception(self.callback)
-        self._schedule_next()
+        finally:
+            self._schedule_next()
 
     def _schedule_next(self):
         if self._running:
