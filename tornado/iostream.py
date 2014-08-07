@@ -505,7 +505,7 @@ class BaseIOStream(object):
         def wrapper():
             self._pending_callbacks -= 1
             try:
-                callback(*args)
+                return callback(*args)
             except Exception:
                 app_log.error("Uncaught exception, closing connection.",
                               exc_info=True)
@@ -517,7 +517,8 @@ class BaseIOStream(object):
                 # Re-raise the exception so that IOLoop.handle_callback_exception
                 # can see it and log the error
                 raise
-            self._maybe_add_error_listener()
+            finally:
+                self._maybe_add_error_listener()
         # We schedule callbacks to be run on the next IOLoop iteration
         # rather than running them directly for several reasons:
         # * Prevents unbounded stack growth when a callback calls an
