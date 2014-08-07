@@ -27,6 +27,7 @@ import collections
 import copy
 import datetime
 import email.utils
+import json
 import numbers
 import re
 import time
@@ -662,9 +663,9 @@ def _int_or_none(val):
 def parse_body_arguments(content_type, body, arguments, files, headers=None):
     """Parses a form request body.
 
-    Supports ``application/x-www-form-urlencoded`` and
-    ``multipart/form-data``.  The ``content_type`` parameter should be
-    a string and ``body`` should be a byte string.  The ``arguments``
+    Supports ``application/x-www-form-urlencoded``, ``application/json``
+    and ``multipart/form-data``.  The ``content_type`` parameter should
+    be a string and ``body`` should be a byte string.  The ``arguments``
     and ``files`` parameters are dictionaries that will be updated
     with the parsed contents.
     """
@@ -690,6 +691,14 @@ def parse_body_arguments(content_type, body, arguments, files, headers=None):
                 break
         else:
             gen_log.warning("Invalid multipart/form-data")
+    elif content_type.startswith("application/json"):
+        try:
+            data = json.loads(native_str(body))
+            data = dict([(k, [v]) for (k, v) in data.iteritems()])
+
+            arguments.update(data)
+        except ValueError as e:
+            gen_log.warning('Invalid JSON body: %s', e)
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):

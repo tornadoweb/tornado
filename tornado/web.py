@@ -454,7 +454,7 @@ class RequestHandler(object):
                 # Get rid of any weird control chars (unless decoding gave
                 # us bytes, in which case leave it alone)
                 v = RequestHandler._remove_control_chars_regex.sub(" ", v)
-            if strip:
+            if strip and isinstance(v, str):
                 v = v.strip()
             values.append(v)
         return values
@@ -474,6 +474,8 @@ class RequestHandler(object):
         """
         try:
             return _unicode(value)
+        except TypeError:
+            return value
         except UnicodeDecodeError:
             raise HTTPError(400, "Invalid unicode in %s: %r" %
                             (name or "url", value[:40]))
