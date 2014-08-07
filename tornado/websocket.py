@@ -216,6 +216,16 @@ class WebSocketHandler(tornado.web.RequestHandler):
         return None
 
     def get_compression_options(self):
+        """Override to return compression options for the connection.
+
+        If this method returns None (the default), compression will
+        be disabled.  If it returns a dict (even an empty one), it
+        will be enabled.  The contents of the dict may be used to
+        control the memory and CPU usage of the compression,
+        but no such options are currently implemented.
+
+        .. versionadded:: 4.1
+        """
         return None
 
     def open(self):
@@ -960,8 +970,14 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
     Takes a url and returns a Future whose result is a
     `WebSocketClientConnection`.
 
+    ``compression_options`` is interpreted in the same way as the
+    return value of `.WebSocketHandler.get_compression_options`.
+
     .. versionchanged:: 3.2
        Also accepts ``HTTPRequest`` objects in place of urls.
+
+    .. versionchanged:: 4.1
+       Added ``compression_options``.
     """
     if io_loop is None:
         io_loop = IOLoop.current()
