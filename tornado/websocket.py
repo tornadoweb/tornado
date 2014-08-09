@@ -703,7 +703,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def _on_close(self):
         self.on_message(None)
-        self.resolver.close()
+        self.tcp_client.close()
         super(WebSocketClientConnection, self)._on_close()
 
     def _on_http_response(self, response):
@@ -734,6 +734,11 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
         self.stream = self.connection.detach()
         self.stream.set_close_callback(self._on_close)
+        # Once we've taken over the connection, clear the final callback
+        # we set on the http request.  This deactivates the error handling
+        # in simple_httpclient that would otherwise interfere with our
+        # ability to see exceptions.
+        self.final_callback = None
 
         self.connect_future.set_result(self)
 
