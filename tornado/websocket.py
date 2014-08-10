@@ -894,12 +894,12 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.protocol.close(code, reason)
             self.protocol = None
 
-    def _on_close(self):
+    def on_connection_close(self):
         if not self.connect_future.done():
             self.connect_future.set_exception(StreamClosedError())
         self.on_message(None)
         self.tcp_client.close()
-        super(WebSocketClientConnection, self)._on_close()
+        super(WebSocketClientConnection, self).on_connection_close()
 
     def _on_http_response(self, response):
         if not self.connect_future.done():
@@ -926,7 +926,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self._timeout = None
 
         self.stream = self.connection.detach()
-        self.stream.set_close_callback(self._on_close)
+        self.stream.set_close_callback(self.on_connection_close)
         # Once we've taken over the connection, clear the final callback
         # we set on the http request.  This deactivates the error handling
         # in simple_httpclient that would otherwise interfere with our
