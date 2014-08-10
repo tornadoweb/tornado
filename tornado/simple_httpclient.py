@@ -277,7 +277,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             stream.close()
             return
         self.stream = stream
-        self.stream.set_close_callback(self._on_close)
+        self.stream.set_close_callback(self.on_connection_close)
         self._remove_timeout()
         if self.final_callback is None:
             return
@@ -418,12 +418,15 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # pass it along, unless it's just the stream being closed.
             return isinstance(value, StreamClosedError)
 
-    def _on_close(self):
+    def on_connection_close(self):
         if self.final_callback is not None:
             message = "Connection closed"
             if self.stream.error:
                 raise self.stream.error
-            raise HTTPError(599, message)
+            try:
+                raise HTTPError(599, message)
+            except HTTPError:
+                self._handle_exception(*sys.exc_info())
 
     def headers_received(self, first_line, headers):
         if self.request.expect_100_continue and first_line.code == 100:
@@ -433,34 +436,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.code = first_line.code
         self.reason = first_line.reason
 
-        if "Content-Length" in self.headers:
-            if "," in self.headers["Content-Length"]:
-                # Proxies sometimes cause Content-Length headers to get
-                # duplicated.  If all the values are identical then we can
-                # use them but if they differ it's an error.
-                pieces = re.split(r',\s*', self.headers["Content-Length"])
-                if any(i != pieces[0] for i in pieces):
-                    raise ValueError("Multiple unequal Content-Lengths: %r" %
-                                     self.headers["Content-Length"])
-                self.headers["Content-Length"] = pieces[0]
-            content_length = int(self.headers["Content-Length"])
-        else:
-            content_length = None
-
         if self.request.header_callback is not None:
             # Reassemble the start line.
             self.request.header_callback('%s %s %s\r\n' % first_line)
             for k, v in self.headers.get_all():
                 self.request.header_callback("%s: %s\r\n" % (k, v))
             self.request.header_callback('\r\n')
-
-        if 100 <= self.code < 200 or self.code == 204:
-            # These response codes never have bodies
-            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
-            if ("Transfer-Encoding" in self.headers or
-                    content_length not in (None, 0)):
-                raise ValueError("Response with code %d should not have body" %
-                                 self.code)
 
     def finish(self):
         data = b''.join(self.chunks)
