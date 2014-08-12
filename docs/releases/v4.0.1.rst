@@ -1,8 +1,8 @@
 What's new in Tornado 4.0.1
 ===========================
 
-In progress
------------
+Aug 12, 2014
+------------
 
 * The build will now fall back to pure-python mode if the C extension
   fails to build for any reason (previously it would fall back for some
