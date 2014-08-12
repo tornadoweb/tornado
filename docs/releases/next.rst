@@ -26,3 +26,4 @@ In progress
   `.WebSocketHandler.get_compression_options` to enable on the server
   side, and use the ``compression_options`` keyword argument to
   `.websocket_connect` on the client side.
+* `.RequestHandler.locale` now has a property setter.

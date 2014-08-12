@@ -956,12 +956,15 @@ class RequestHandler(object):
 
     @property
     def locale(self):
-        """The local for the current session.
+        """The locale for the current session.
 
         Determined by either `get_user_locale`, which you can override to
         set the locale based on, e.g., a user preference stored in a
         database, or `get_browser_locale`, which uses the ``Accept-Language``
         header.
+
+        .. versionchanged: 4.1
+           Added a property setter.
         """
         if not hasattr(self, "_locale"):
             self._locale = self.get_user_locale()
@@ -969,6 +972,10 @@ class RequestHandler(object):
                 self._locale = self.get_browser_locale()
                 assert self._locale
         return self._locale
+
+    @locale.setter
+    def locale(self, value):
+        self._locale = value
 
     def get_user_locale(self):
         """Override to determine the locale from the authenticated user.

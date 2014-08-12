@@ -4,6 +4,7 @@ from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
 from tornado.httputil import format_timestamp
 from tornado.iostream import IOStream
+from tornado import locale
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
@@ -21,7 +22,6 @@ import logging
 import os
 import re
 import socket
-import sys
 
 try:
     import urllib.parse as urllib_parse  # py3
@@ -1554,19 +1554,26 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
 
 
 @wsgi_safe
-class SetCurrentUserTest(SimpleHandlerTestCase):
+class SetLazyPropertiesTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def prepare(self):
             self.current_user = 'Ben'
+            self.locale = locale.get('en_US')
+
+        def get_user_locale(self):
+            raise NotImplementedError()
+
+        def get_current_user(self):
+            raise NotImplementedError()
 
         def get(self):
-            self.write('Hello %s' % self.current_user)
+            self.write('Hello %s (%s)' % (self.current_user, self.locale.code))
 
-    def test_set_current_user(self):
+    def test_set_properties(self):
         # Ensure that current_user can be assigned to normally for apps
         # that want to forgo the lazy get_current_user property
         response = self.fetch('/')
-        self.assertEqual(response.body, b'Hello Ben')
+        self.assertEqual(response.body, b'Hello Ben (en_US)')
 
 
 @wsgi_safe
