@@ -152,7 +152,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             del self.waiting[key]
 
     def _on_timeout(self, key):
-        request, callback, timeout_handle = self.waiting[key]
+        try:
+            request, callback, timeout_handle = self.waiting[key]
+        except KeyError:
+            return
         self.queue.remove((key, request, callback))
         timeout_response = HTTPResponse(
             request, 599, error=HTTPError(599, "Timeout"),
