@@ -754,17 +754,18 @@ class PollIOLoop(IOLoop):
                 # Do not run anything until we have determined which ones
                 # are ready, so timeouts that call add_timeout cannot
                 # schedule anything in this iteration.
+                due_timeouts = []
                 if self._timeouts:
                     now = self.time()
                     while self._timeouts:
                         if self._timeouts[0].callback is None:
-                            # the timeout was cancelled
+                            # The timeout was cancelled.  Note that the
+                            # cancellation check is repeated below for timeouts
+                            # that are cancelled by another timeout or callback.
                             heapq.heappop(self._timeouts)
                             self._cancellations -= 1
                         elif self._timeouts[0].deadline <= now:
-                            timeout = heapq.heappop(self._timeouts)
-                            callbacks.append(timeout.callback)
-                            del timeout
+                            due_timeouts.append(heapq.heappop(self._timeouts))
                         else:
                             break
                     if (self._cancellations > 512
@@ -778,9 +779,12 @@ class PollIOLoop(IOLoop):
 
                 for callback in callbacks:
                     self._run_callback(callback)
+                for timeout in due_timeouts:
+                    if timeout.callback is not None:
+                        self._run_callback(timeout.callback)
                 # Closures may be holding on to a lot of memory, so allow
                 # them to be freed before we go into our poll wait.
-                callbacks = callback = None
+                callbacks = callback = due_timeouts = timeout = None
 
                 if self._callbacks:
                     # If any callbacks or timeouts called add_callback,

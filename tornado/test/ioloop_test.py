@@ -173,6 +173,25 @@ class TestIOLoop(AsyncTestCase):
         self.io_loop.add_callback(lambda: self.io_loop.add_callback(self.stop))
         self.wait()
 
+    def test_remove_timeout_from_timeout(self):
+        calls = [False, False]
+
+        # Schedule several callbacks and wait for them all to come due at once.
+        # t2 should be cancelled by t1, even though it is already scheduled to
+        # be run before the ioloop even looks at it.
+        now = self.io_loop.time()
+        def t1():
+            calls[0] = True
+            self.io_loop.remove_timeout(t2_handle)
+        self.io_loop.add_timeout(now + 0.01, t1)
+        def t2():
+            calls[1] = True
+        t2_handle = self.io_loop.add_timeout(now + 0.02, t2)
+        self.io_loop.add_timeout(now + 0.03, self.stop)
+        time.sleep(0.03)
+        self.wait()
+        self.assertEqual(calls, [True, False])
+
     def test_timeout_with_arguments(self):
         # This tests that all the timeout methods pass through *args correctly.
         results = []
