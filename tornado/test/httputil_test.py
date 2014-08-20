@@ -2,8 +2,8 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
-from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp, HTTPServerRequest
-from tornado.escape import utf8
+from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp, HTTPServerRequest, parse_body_arguments
+from tornado.escape import utf8, json_encode
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
 from tornado.test.util import unittest
@@ -12,6 +12,16 @@ import datetime
 import logging
 import time
 
+class TestBodyArguments(unittest.TestCase):
+
+    def test_parse_body_arguments_application_json(self):
+
+        body = json_encode(dict(foo="bar"))
+        body_arguments = {}
+
+        parse_body_arguments("application/json", body, body_arguments, None)
+
+        self.assertIn("foo", body_arguments)
 
 class TestUrlConcat(unittest.TestCase):
 
