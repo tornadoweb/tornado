@@ -625,6 +625,19 @@ class IOLoop(Configurable):
         except OSError:
             pass
 
+    def is_yieldable(self, obj):
+        """Check if `obj` can be yielded from coroutine."""
+        return False
+
+    def wait_yielded(self, obj, callback):
+        """Wait obj yielded from coroutine.
+
+        Raises TypeError when this loop doesn't support waiting it.
+        """
+        if not is_yieldable(obj):
+            raise TypeError
+        raise NotImplementedError()
+
 
 class PollIOLoop(IOLoop):
     """Base class for IOLoops built around a select-like function.

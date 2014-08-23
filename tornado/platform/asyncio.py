@@ -129,6 +129,14 @@ class BaseAsyncIOLoop(IOLoop):
 
     add_callback_from_signal = add_callback
 
+    def is_yieldable(self, obj):
+        return isinstance(obj, asyncio.Future)
+
+    def wait_yielded(self, obj, callback):
+        if not isinstance(obj, asyncio.Future):
+            raise TypeError
+        obj.add_done_callback(callback)
+
 
 class AsyncIOMainLoop(BaseAsyncIOLoop):
     def initialize(self):

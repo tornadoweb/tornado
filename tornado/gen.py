@@ -696,6 +696,8 @@ class Runner(object):
                 self.io_loop.add_future(
                     self.future, lambda f: self.run())
                 return False
+        elif self.io_loop.is_yieldable(yielded):
+            self.io_loop.wait_yielded(yielded, lambda f: self.run())
         else:
             self.future = TracebackFuture()
             self.future.set_exception(BadYieldError(
