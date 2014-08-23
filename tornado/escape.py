@@ -394,3 +394,8 @@ def _build_unicode_map():
     return unicode_map
 
 _HTML_UNICODE_MAP = _build_unicode_map()
+
+try:
+    from .speedups import utf8
+except ImportError:
+    pass
