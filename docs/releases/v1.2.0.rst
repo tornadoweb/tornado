@@ -16,7 +16,7 @@ Feb 20, 2011
       http://groups.google.com/group/python-tornado/browse_thread/thread/b36191c781580cde
     * StackContexts that do something other than catch exceptions may need to
       be modified to be reentrant.
-      https://github.com/facebook/tornado/commit/7a7e24143e77481d140fb5579bc67e4c45cbcfad
+      https://github.com/tornadoweb/tornado/commit/7a7e24143e77481d140fb5579bc67e4c45cbcfad
     * When XSRF tokens are used, the token must also be present on PUT and
       DELETE requests (anything but GET and HEAD)
 

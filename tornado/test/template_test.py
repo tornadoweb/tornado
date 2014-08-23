@@ -387,6 +387,20 @@ raw: {% raw name %}""",
         self.assertEqual(render("foo.py", ["not a string"]),
                          b"""s = "['not a string']"\n""")
 
+    def test_minimize_whitespace(self):
+        # Whitespace including newlines is allowed within template tags
+        # and directives, and this is one way to avoid long lines while
+        # keeping extra whitespace out of the rendered output.
+        loader = DictLoader({'foo.txt': """\
+{% for i in items
+  %}{% if i > 0 %}, {% end %}{#
+  #}{{i
+  }}{% end
+%}""",
+                             })
+        self.assertEqual(loader.load("foo.txt").generate(items=range(5)),
+                         b"0, 1, 2, 3, 4")
+
 
 class TemplateLoaderTest(unittest.TestCase):
     def setUp(self):

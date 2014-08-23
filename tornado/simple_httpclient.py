@@ -6,10 +6,11 @@ from tornado.escape import utf8, _unicode
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
-from tornado.iostream import IOStream, SSLIOStream, StreamClosedError
+from tornado.iostream import StreamClosedError
 from tornado.netutil import Resolver, OverrideResolver
 from tornado.log import gen_log
 from tornado import stack_context
+from tornado.tcpclient import TCPClient
 
 import base64
 import collections
@@ -17,13 +18,9 @@ import copy
 import functools
 import re
 import socket
-import ssl
 import sys
+from io import BytesIO
 
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import urlparse  # py2
@@ -31,15 +28,23 @@ except ImportError:
     import urllib.parse as urlparse  # py3
 
 try:
+    import ssl
+except ImportError:
+    # ssl is not available on Google App Engine.
+    ssl = None
+
+try:
     import certifi
 except ImportError:
     certifi = None
+
 
 def _default_ca_certs():
     if certifi is None:
         raise Exception("The 'certifi' package is required to use https "
                         "in simple_httpclient")
     return certifi.where()
+
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -83,6 +88,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.waiting = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
+        # TCPClient could create a Resolver for us, but we have to do it
+        # ourselves to support hostname_mapping.
         if resolver:
             self.resolver = resolver
             self.own_resolver = False
@@ -92,11 +99,13 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         if hostname_mapping is not None:
             self.resolver = OverrideResolver(resolver=self.resolver,
                                              mapping=hostname_mapping)
+        self.tcp_client = TCPClient(resolver=self.resolver, io_loop=io_loop)
 
     def close(self):
         super(SimpleAsyncHTTPClient, self).close()
         if self.own_resolver:
             self.resolver.close()
+        self.tcp_client.close()
 
     def fetch_impl(self, request, callback):
         key = object()
@@ -128,7 +137,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     def _handle_request(self, request, release_callback, final_callback):
         _HTTPConnection(self.io_loop, self, request, release_callback,
-                        final_callback, self.max_buffer_size, self.resolver,
+                        final_callback, self.max_buffer_size, self.tcp_client,
                         self.max_header_size)
 
     def _release_fetch(self, key):
@@ -156,7 +165,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
     def __init__(self, io_loop, client, request, release_callback,
-                 final_callback, max_buffer_size, resolver,
+                 final_callback, max_buffer_size, tcp_client,
                  max_header_size):
         self.start_time = io_loop.time()
         self.io_loop = io_loop
@@ -165,7 +174,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.release_callback = release_callback
         self.final_callback = final_callback
         self.max_buffer_size = max_buffer_size
-        self.resolver = resolver
+        self.tcp_client = tcp_client
         self.max_header_size = max_header_size
         self.code = None
         self.headers = None
@@ -196,35 +205,24 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 host = host[1:-1]
             self.parsed_hostname = host  # save final host for _on_connect
 
-            if request.allow_ipv6:
-                af = socket.AF_UNSPEC
-            else:
-                # We only try the first IP we get from getaddrinfo,
-                # so restrict to ipv4 by default.
+            if request.allow_ipv6 is False:
                 af = socket.AF_INET
+            else:
+                af = socket.AF_UNSPEC
+
+            ssl_options = self._get_ssl_options(self.parsed.scheme)
 
             timeout = min(self.request.connect_timeout, self.request.request_timeout)
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
                     stack_context.wrap(self._on_timeout))
-            self.resolver.resolve(host, port, af, callback=self._on_resolve)
+            self.tcp_client.connect(host, port, af=af,
+                                    ssl_options=ssl_options,
+                                    callback=self._on_connect)
 
-    def _on_resolve(self, addrinfo):
-        if self.final_callback is None:
-            # final_callback is cleared if we've hit our timeout
-            return
-        self.stream = self._create_stream(addrinfo)
-        self.stream.set_close_callback(self._on_close)
-        # ipv6 addresses are broken (in self.parsed.hostname) until
-        # 2.7, here is correctly parsed value calculated in __init__
-        self._sockaddr = addrinfo[0][1]
-        self.stream.connect(self._sockaddr, self._on_connect,
-                            server_hostname=self.parsed_hostname)
-
-    def _create_stream(self, addrinfo):
-        af = addrinfo[0][0]
-        if self.parsed.scheme == "https":
+    def _get_ssl_options(self, scheme):
+        if scheme == "https":
             ssl_options = {}
             if self.request.validate_cert:
                 ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
@@ -257,15 +255,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 # of openssl, but python 2.6 doesn't expose version
                 # information.
                 ssl_options["ssl_version"] = ssl.PROTOCOL_TLSv1
-
-            return SSLIOStream(socket.socket(af),
-                               io_loop=self.io_loop,
-                               ssl_options=ssl_options,
-                               max_buffer_size=self.max_buffer_size)
-        else:
-            return IOStream(socket.socket(af),
-                            io_loop=self.io_loop,
-                            max_buffer_size=self.max_buffer_size)
+            return ssl_options
+        return None
 
     def _on_timeout(self):
         self._timeout = None
@@ -277,7 +268,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
-    def _on_connect(self):
+    def _on_connect(self, stream):
+        if self.final_callback is None:
+            # final_callback is cleared if we've hit our timeout.
+            stream.close()
+            return
+        self.stream = stream
+        self.stream.set_close_callback(self.on_connection_close)
         self._remove_timeout()
         if self.final_callback is None:
             return
@@ -318,13 +315,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if not self.request.allow_nonstandard_methods:
             if self.request.method in ("POST", "PATCH", "PUT"):
                 if (self.request.body is None and
-                    self.request.body_producer is None):
+                        self.request.body_producer is None):
                     raise AssertionError(
                         'Body must not be empty for "%s" request'
                         % self.request.method)
             else:
                 if (self.request.body is not None or
-                    self.request.body_producer is not None):
+                        self.request.body_producer is not None):
                     raise AssertionError(
                         'Body must be empty for "%s" request'
                         % self.request.method)
@@ -338,17 +335,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if (self.request.method == "POST" and
                 "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
-        if self.request.use_gzip:
+        if self.request.decompress_response:
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
-                   (('?' + self.parsed.query) if self.parsed.query else ''))
+                    (('?' + self.parsed.query) if self.parsed.query else ''))
         self.stream.set_nodelay(True)
         self.connection = HTTP1Connection(
             self.stream, True,
             HTTP1ConnectionParameters(
                 no_keep_alive=True,
                 max_header_size=self.max_header_size,
-                use_gzip=self.request.use_gzip),
+                decompress=self.request.decompress_response),
             self._sockaddr)
         start_line = httputil.RequestStartLine(self.request.method,
                                                req_path, 'HTTP/1.1')
@@ -375,7 +372,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.connection.finish()
         if start_read:
             self._read_response()
-
 
     def _read_response(self):
         # Ensure that any exception raised in read_response ends up in our
@@ -419,12 +415,15 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # pass it along, unless it's just the stream being closed.
             return isinstance(value, StreamClosedError)
 
-    def _on_close(self):
+    def on_connection_close(self):
         if self.final_callback is not None:
             message = "Connection closed"
             if self.stream.error:
-                message = str(self.stream.error)
-            raise HTTPError(599, message)
+                raise self.stream.error
+            try:
+                raise HTTPError(599, message)
+            except HTTPError:
+                self._handle_exception(*sys.exc_info())
 
     def headers_received(self, first_line, headers):
         if self.request.expect_100_continue and first_line.code == 100:
@@ -434,34 +433,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.code = first_line.code
         self.reason = first_line.reason
 
-        if "Content-Length" in self.headers:
-            if "," in self.headers["Content-Length"]:
-                # Proxies sometimes cause Content-Length headers to get
-                # duplicated.  If all the values are identical then we can
-                # use them but if they differ it's an error.
-                pieces = re.split(r',\s*', self.headers["Content-Length"])
-                if any(i != pieces[0] for i in pieces):
-                    raise ValueError("Multiple unequal Content-Lengths: %r" %
-                                     self.headers["Content-Length"])
-                self.headers["Content-Length"] = pieces[0]
-            content_length = int(self.headers["Content-Length"])
-        else:
-            content_length = None
-
         if self.request.header_callback is not None:
             # Reassemble the start line.
             self.request.header_callback('%s %s %s\r\n' % first_line)
             for k, v in self.headers.get_all():
                 self.request.header_callback("%s: %s\r\n" % (k, v))
             self.request.header_callback('\r\n')
-
-        if 100 <= self.code < 200 or self.code == 204:
-            # These response codes never have bodies
-            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
-            if ("Transfer-Encoding" in self.headers or
-                    content_length not in (None, 0)):
-                raise ValueError("Response with code %d should not have body" %
-                                 self.code)
 
     def finish(self):
         data = b''.join(self.chunks)

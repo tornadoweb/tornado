@@ -84,6 +84,10 @@
    .. automethod:: RequestHandler.get_secure_cookie
    .. automethod:: RequestHandler.set_secure_cookie
    .. automethod:: RequestHandler.create_signed_value
+   .. autodata:: MIN_SUPPORTED_SIGNED_VALUE_VERSION
+   .. autodata:: MAX_SUPPORTED_SIGNED_VALUE_VERSION
+   .. autodata:: DEFAULT_SIGNED_VALUE_VERSION
+   .. autodata:: DEFAULT_SIGNED_VALUE_MIN_VERSION
 
    Other
    ^^^^^
@@ -92,17 +96,18 @@
 
       The `Application` object serving this request
 
-   .. automethod:: RequestHandler.async_callback
    .. automethod:: RequestHandler.check_etag_header
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
    .. automethod:: RequestHandler.create_template_loader
+   .. autoattribute:: RequestHandler.current_user
    .. automethod:: RequestHandler.get_browser_locale
    .. automethod:: RequestHandler.get_current_user
    .. automethod:: RequestHandler.get_login_url
    .. automethod:: RequestHandler.get_status
    .. automethod:: RequestHandler.get_template_path
    .. automethod:: RequestHandler.get_user_locale
+   .. autoattribute:: RequestHandler.locale
    .. automethod:: RequestHandler.log_exception
    .. automethod:: RequestHandler.on_connection_close
    .. automethod:: RequestHandler.require_setting
@@ -111,6 +116,7 @@
    .. autoattribute:: RequestHandler.settings
    .. automethod:: RequestHandler.static_url
    .. automethod:: RequestHandler.xsrf_form_html
+   .. autoattribute:: RequestHandler.xsrf_token
 
 
 
@@ -145,8 +151,10 @@
          * ``default_handler_class`` and ``default_handler_args``:
            This handler will be used if no other match is found;
            use this to implement custom 404 pages (new in Tornado 3.2).
-         * ``gzip``: If ``True``, responses in textual formats will be
-           gzipped automatically.
+         * ``compress_response``: If ``True``, responses in textual formats
+           will be compressed automatically.  New in Tornado 4.0.
+         * ``gzip``: Deprecated alias for ``compress_response`` since
+           Tornado 4.0.
          * ``log_function``: This function will be called at the end
            of every request to log the result (with one argument, the
            `RequestHandler` object).  The default implementation
@@ -169,6 +177,12 @@
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`
          * ``xsrf_cookies``: If true, :ref:`xsrf` will be enabled.
+         * ``xsrf_cookie_version``: Controls the version of new XSRF
+           cookies produced by this server.  Should generally be left
+           at the default (which will always be the highest supported
+           version), but may be set to a lower value temporarily
+           during version transitions.  New in Tornado 3.2.2, which
+           introduced XSRF cookie version 2.
          * ``twitter_consumer_key``, ``twitter_consumer_secret``,
            ``friendfeed_consumer_key``, ``friendfeed_consumer_secret``,
            ``google_consumer_key``, ``google_consumer_secret``,
@@ -225,6 +239,7 @@
    Everything else
    ---------------
    .. autoexception:: HTTPError
+   .. autoexception:: Finish
    .. autoexception:: MissingArgumentError
    .. autoclass:: UIModule
       :members:

@@ -20,8 +20,8 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
 import os
+import platform
 import socket
-import ssl
 import stat
 
 from tornado.concurrent import dummy_executor, run_on_executor
@@ -29,9 +29,17 @@ from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 from tornado.util import u, Configurable, errno_from_exception
 
+try:
+    import ssl
+except ImportError:
+    # ssl is not available on Google App Engine
+    ssl = None
+
 if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
     ssl_match_hostname = ssl.match_hostname
     SSLCertificateError = ssl.CertificateError
+elif ssl is None:
+    ssl_match_hostname = SSLCertificateError = None
 else:
     import backports.ssl_match_hostname
     ssl_match_hostname = backports.ssl_match_hostname.match_hostname
@@ -43,6 +51,14 @@ else:
 # leading to deadlock. Avoid it by caching the idna encoder on the main
 # thread now.
 u('foo').encode('idna')
+
+# These errnos indicate that a non-blocking operation must be retried
+# at a later time.  On most platforms they're the same value, but on
+# some they differ.
+_ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
+
+if hasattr(errno, "WSAEWOULDBLOCK"):
+    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)
 
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
@@ -81,6 +97,15 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                       0, flags)):
         af, socktype, proto, canonname, sockaddr = res
+        if (platform.system() == 'Darwin' and address == 'localhost' and
+                af == socket.AF_INET6 and sockaddr[3] != 0):
+            # Mac OS X includes a link-local address fe80::1%lo0 in the
+            # getaddrinfo results for 'localhost'.  However, the firewall
+            # doesn't understand that this is a local address and will
+            # prompt for access (often repeatedly, due to an apparent
+            # bug in its ability to remember granting access to an
+            # application). Skip these addresses.
+            continue
         try:
             sock = socket.socket(af, socktype, proto)
         except socket.error as e:
@@ -163,9 +188,9 @@ def add_accept_handler(sock, callback, io_loop=None):
             try:
                 connection, address = sock.accept()
             except socket.error as e:
-                # EWOULDBLOCK and EAGAIN indicate we have accepted every
+                # _ERRNO_WOULDBLOCK indicate we have accepted every
                 # connection that is available.
-                if errno_from_exception(e) in (errno.EWOULDBLOCK, errno.EAGAIN):
+                if errno_from_exception(e) in _ERRNO_WOULDBLOCK:
                     return
                 # ECONNABORTED indicates that there was a connection
                 # but it was closed while still in the accept queue.

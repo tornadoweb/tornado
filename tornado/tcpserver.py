@@ -20,7 +20,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 import errno
 import os
 import socket
-import ssl
 
 from tornado.log import app_log
 from tornado.ioloop import IOLoop
@@ -28,6 +27,12 @@ from tornado.iostream import IOStream, SSLIOStream
 from tornado.netutil import bind_sockets, add_accept_handler, ssl_wrap_socket
 from tornado import process
 from tornado.util import errno_from_exception
+
+try:
+    import ssl
+except ImportError:
+    # ssl is not available on Google App Engine.
+    ssl = None
 
 
 class TCPServer(object):
@@ -233,7 +238,7 @@ class TCPServer(object):
                 # catch another error later on (AttributeError in
                 # SSLIOStream._do_ssl_handshake).
                 # To test this behavior, try nmap with the -sT flag.
-                # https://github.com/facebook/tornado/pull/750
+                # https://github.com/tornadoweb/tornado/pull/750
                 if errno_from_exception(err) in (errno.ECONNABORTED, errno.EINVAL):
                     return connection.close()
                 else:

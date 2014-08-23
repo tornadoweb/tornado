@@ -33,6 +33,7 @@ autodoc_docstring_signature = False
 coverage_skip_undoc_in_source = True
 coverage_ignore_modules = [
     "tornado.platform.asyncio",
+    "tornado.platform.caresresolver",
     "tornado.platform.twisted",
     ]
 # I wish this could go in a per-module file...
@@ -64,34 +65,16 @@ coverage_ignore_functions = [
     # various modules
     "doctests",
     "main",
+
+    # tornado.escape
+    # parse_qs_bytes should probably be documented but it's complicated by
+    # having different implementations between py2 and py3.
+    "parse_qs_bytes",
+
+    # tornado.gen
+    "multi_future",
 ]
 
-html_static_path = ['tornado.css']
-html_theme = 'default'
-html_style = "tornado.css"
-highlight_language = "none"
-html_theme_options = dict(
-    footerbgcolor="#fff",
-    footertextcolor="#000",
-    sidebarbgcolor="#fff",
-    #sidebarbtncolor
-    sidebartextcolor="#4d8cbf",
-    sidebarlinkcolor="#216093",
-    relbarbgcolor="#fff",
-    relbartextcolor="#000",
-    relbarlinkcolor="#216093",
-    bgcolor="#fff",
-    textcolor="#000",
-    linkcolor="#216093",
-    visitedlinkcolor="#216093",
-    headbgcolor="#fff",
-    headtextcolor="#4d8cbf",
-    codebgcolor="#fff",
-    codetextcolor="#060",
-    bodyfont="Georgia, serif",
-    headfont="Calibri, sans-serif",
-    stickysidebar=True,
-    )
 html_favicon = 'favicon.ico'
 
 latex_documents = [
@@ -114,3 +97,13 @@ extlinks = {
 intersphinx_mapping = {
     'python': ('http://python.readthedocs.org/en/latest/', None),
     }
+
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+
+# On RTD we can't import sphinx_rtd_theme, but it will be applied by
+# default anyway.  This block will use the same theme when building locally
+# as on RTD.
+if not on_rtd:
+    import sphinx_rtd_theme
+    html_theme = 'sphinx_rtd_theme'
+    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]

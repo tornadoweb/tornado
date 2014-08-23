@@ -83,10 +83,10 @@ class LogFormatter(logging.Formatter):
     DEFAULT_FORMAT = '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s'
     DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'
     DEFAULT_COLORS = {
-        logging.DEBUG:      4,  # Blue
-        logging.INFO:       2,  # Green
-        logging.WARNING:    3,  # Yellow
-        logging.ERROR:      1,  # Red
+        logging.DEBUG: 4,  # Blue
+        logging.INFO: 2,  # Green
+        logging.WARNING: 3,  # Yellow
+        logging.ERROR: 1,  # Red
     }
 
     def __init__(self, color=True, fmt=DEFAULT_FORMAT,
@@ -179,7 +179,7 @@ class LogFormatter(logging.Formatter):
 def enable_pretty_logging(options=None, logger=None):
     """Turns on formatted logging output as configured.
 
-    This is called automaticaly by `tornado.options.parse_command_line`
+    This is called automatically by `tornado.options.parse_command_line`
     and `tornado.options.parse_config_file`.
     """
     if options is None:

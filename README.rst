@@ -22,10 +22,10 @@ Quick links
 -----------
 
 * `Documentation <http://www.tornadoweb.org/en/stable/>`_
-* `Source (github) <https://github.com/facebook/tornado>`_
+* `Source (github) <https://github.com/tornadoweb/tornado>`_
 * `Mailing list <http://groups.google.com/group/python-tornado>`_
 * `Stack Overflow <http://stackoverflow.com/questions/tagged/tornado>`_
-* `Wiki <https://github.com/facebook/tornado/wiki/Links>`_
+* `Wiki <https://github.com/tornadoweb/tornado/wiki/Links>`_
 
 Hello, world
 ------------
@@ -49,7 +49,7 @@ Here is a simple "Hello, world" example web app for Tornado::
 
 This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room
-<https://github.com/facebook/tornado/tree/master/demos/chat>`_.
+<https://github.com/tornadoweb/tornado/tree/stable/demos/chat>`_.
 
 Installation
 ------------
@@ -75,7 +75,7 @@ copy of the source tarball as well.
     sudo python setup.py install
 
 The Tornado source code is `hosted on GitHub
-<https://github.com/facebook/tornado>`_.
+<https://github.com/tornadoweb/tornado>`_.
 
 **Prerequisites**: Tornado runs on Python 2.6, 2.7, 3.2, 3.3, and 3.4.  It
 requires the `certifi <https://pypi.python.org/pypi/certifi>`_ package
@@ -119,9 +119,12 @@ Discussion and support
 You can discuss Tornado on `the Tornado developer mailing list
 <http://groups.google.com/group/python-tornado>`_, and report bugs on
 the `GitHub issue tracker
-<https://github.com/facebook/tornado/issues>`_.  Links to additional
+<https://github.com/tornadoweb/tornado/issues>`_.  Links to additional
 resources can be found on the `Tornado wiki
-<https://github.com/facebook/tornado/wiki/Links>`_.
+<https://github.com/tornadoweb/tornado/wiki/Links>`_. New releases are
+announced on the `announcements mailing list
+<http://groups.google.com/group/python-tornado-announce>`_.
+
 
 Tornado is one of `Facebook's open source technologies
 <http://developers.facebook.com/opensource/>`_. It is available under

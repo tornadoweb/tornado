@@ -20,7 +20,7 @@ Typical applications have little direct interaction with the `HTTPServer`
 class except to start a server at the beginning of the process
 (and even that is often done indirectly via `tornado.web.Application.listen`).
 
-.. versionchanged:: 3.3
+.. versionchanged:: 4.0
 
    The ``HTTPRequest`` class that used to live in this module has been moved
    to `tornado.httputil.HTTPServerRequest`.  The old name remains as an alias.
@@ -128,14 +128,15 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
        servers if you want to create your listening sockets in some
        way other than `tornado.netutil.bind_sockets`.
 
-    .. versionchanged:: 3.3
-       Added ``gzip``, ``chunk_size``, ``max_header_size``,
+    .. versionchanged:: 4.0
+       Added ``decompress_request``, ``chunk_size``, ``max_header_size``,
        ``idle_connection_timeout``, ``body_timeout``, ``max_body_size``
        arguments.  Added support for `.HTTPServerConnectionDelegate`
        instances as ``request_callback``.
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, protocol=None, gzip=False,
+                 xheaders=False, ssl_options=None, protocol=None,
+                 decompress_request=False,
                  chunk_size=None, max_header_size=None,
                  idle_connection_timeout=None, body_timeout=None,
                  max_body_size=None, max_buffer_size=None):
@@ -144,7 +145,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         self.xheaders = xheaders
         self.protocol = protocol
         self.conn_params = HTTP1ConnectionParameters(
-            use_gzip=gzip,
+            decompress=decompress_request,
             chunk_size=chunk_size,
             max_header_size=max_header_size,
             header_timeout=idle_connection_timeout or 3600,
@@ -190,7 +191,7 @@ class _HTTPRequestContext(object):
             self.address_family = None
         # In HTTPServerRequest we want an IP, not a full socket address.
         if (self.address_family in (socket.AF_INET, socket.AF_INET6) and
-            address is not None):
+                address is not None):
             self.remote_ip = address[0]
         else:
             # Unix (or other) socket; fake the remote address.
@@ -203,7 +204,6 @@ class _HTTPRequestContext(object):
             self.protocol = "http"
         self._orig_remote_ip = self.remote_ip
         self._orig_protocol = self.protocol
-
 
     def __str__(self):
         if self.address_family in (socket.AF_INET, socket.AF_INET6):

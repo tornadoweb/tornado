@@ -29,16 +29,7 @@ could be written with ``gen`` as::
 Most asynchronous functions in Tornado return a `.Future`;
 yielding this object returns its `~.Future.result`.
 
-For functions that do not return ``Futures``, `Task` works with any
-function that takes a ``callback`` keyword argument (most Tornado functions
-can be used in either style, although the ``Future`` style is preferred
-since it is both shorter and provides better exception handling)::
-
-    @gen.coroutine
-    def get(self):
-        yield gen.Task(AsyncHTTPClient().fetch, "http://example.com")
-
-You can also yield a list or dict of ``Futures`` and/or ``Tasks``, which will be
+You can also yield a list or dict of ``Futures``, which will be
 started at the same time and run in parallel; a list or dict of results will
 be returned when they are all finished::
 
@@ -54,30 +45,6 @@ be returned when they are all finished::
 
 .. versionchanged:: 3.2
    Dict support added.
-
-For more complicated interfaces, `Task` can be split into two parts:
-`Callback` and `Wait`::
-
-    class GenAsyncHandler2(RequestHandler):
-        @gen.coroutine
-        def get(self):
-            http_client = AsyncHTTPClient()
-            http_client.fetch("http://example.com",
-                              callback=(yield gen.Callback("key")))
-            response = yield gen.Wait("key")
-            do_something_with_response(response)
-            self.render("template.html")
-
-The ``key`` argument to `Callback` and `Wait` allows for multiple
-asynchronous operations to be started at different times and proceed
-in parallel: yield several callbacks with different keys, then wait
-for them once all the async operations have started.
-
-The result of a `Wait` or `Task` yield expression depends on how the callback
-was run.  If it was called with no arguments, the result is ``None``.  If
-it was called with one argument, the result is that argument.  If it was
-called with more than one argument or any keyword arguments, the result
-is an `Arguments` object, which is a named tuple ``(args, kwargs)``.
 """
 from __future__ import absolute_import, division, print_function, with_statement
 
@@ -252,8 +219,8 @@ class Return(Exception):
 class YieldPoint(object):
     """Base class for objects that may be yielded from the generator.
 
-    Applications do not normally need to use this class, but it may be
-    subclassed to provide additional yielding behavior.
+    .. deprecated:: 4.0
+       Use `Futures <.Future>` instead.
     """
     def start(self, runner):
         """Called by the runner after the generator has yielded.
@@ -292,6 +259,9 @@ class Callback(YieldPoint):
 
     The callback may be called with zero or one arguments; if an argument
     is given it will be returned by `Wait`.
+
+    .. deprecated:: 4.0
+       Use `Futures <.Future>` instead.
     """
     def __init__(self, key):
         self.key = key
@@ -308,7 +278,11 @@ class Callback(YieldPoint):
 
 
 class Wait(YieldPoint):
-    """Returns the argument passed to the result of a previous `Callback`."""
+    """Returns the argument passed to the result of a previous `Callback`.
+
+    .. deprecated:: 4.0
+       Use `Futures <.Future>` instead.
+    """
     def __init__(self, key):
         self.key = key
 
@@ -329,6 +303,9 @@ class WaitAll(YieldPoint):
     a list of results in the same order.
 
     `WaitAll` is equivalent to yielding a list of `Wait` objects.
+
+    .. deprecated:: 4.0
+       Use `Futures <.Future>` instead.
     """
     def __init__(self, keys):
         self.keys = keys
@@ -343,39 +320,31 @@ class WaitAll(YieldPoint):
         return [self.runner.pop_result(key) for key in self.keys]
 
 
-class Task(YieldPoint):
-    """Runs a single asynchronous operation.
+def Task(func, *args, **kwargs):
+    """Adapts a callback-based asynchronous function for use in coroutines.
 
     Takes a function (and optional additional arguments) and runs it with
     those arguments plus a ``callback`` keyword argument.  The argument passed
     to the callback is returned as the result of the yield expression.
 
-    A `Task` is equivalent to a `Callback`/`Wait` pair (with a unique
-    key generated automatically)::
-
-        result = yield gen.Task(func, args)
-
-        func(args, callback=(yield gen.Callback(key)))
-        result = yield gen.Wait(key)
+    .. versionchanged:: 4.0
+       ``gen.Task`` is now a function that returns a `.Future`, instead of
+       a subclass of `YieldPoint`.  It still behaves the same way when
+       yielded.
     """
-    def __init__(self, func, *args, **kwargs):
-        assert "callback" not in kwargs
-        self.args = args
-        self.kwargs = kwargs
-        self.func = func
-
-    def start(self, runner):
-        self.runner = runner
-        self.key = object()
-        runner.register_callback(self.key)
-        self.kwargs["callback"] = runner.result_callback(self.key)
-        self.func(*self.args, **self.kwargs)
-
-    def is_ready(self):
-        return self.runner.is_ready(self.key)
-
-    def get_result(self):
-        return self.runner.pop_result(self.key)
+    future = Future()
+    def handle_exception(typ, value, tb):
+        if future.done():
+            return False
+        future.set_exc_info((typ, value, tb))
+        return True
+    def set_result(result):
+        if future.done():
+            return
+        future.set_result(result)
+    with stack_context.ExceptionStackContext(handle_exception):
+        func(*args, callback=_argument_adapter(set_result), **kwargs)
+    return future
 
 
 class YieldFuture(YieldPoint):
@@ -409,10 +378,14 @@ class YieldFuture(YieldPoint):
 class Multi(YieldPoint):
     """Runs multiple asynchronous operations in parallel.
 
-    Takes a list of ``Tasks`` or other ``YieldPoints`` and returns a list of
+    Takes a list of ``YieldPoints`` or ``Futures`` and returns a list of
     their responses.  It is not necessary to call `Multi` explicitly,
     since the engine will do so automatically when the generator yields
-    a list of ``YieldPoints``.
+    a list of ``YieldPoints`` or a mixture of ``YieldPoints`` and ``Futures``.
+
+    Instead of a list, the argument may also be a dictionary whose values are
+    Futures, in which case a parallel dictionary is returned mapping the same
+    keys to their results.
     """
     def __init__(self, children):
         self.keys = None
@@ -445,6 +418,54 @@ class Multi(YieldPoint):
             return list(result)
 
 
+def multi_future(children):
+    """Wait for multiple asynchronous futures in parallel.
+
+    Takes a list of ``Futures`` (but *not* other ``YieldPoints``) and returns
+    a new Future that resolves when all the other Futures are done.
+    If all the ``Futures`` succeeded, the returned Future's result is a list
+    of their results.  If any failed, the returned Future raises the exception
+    of the first one to fail.
+
+    Instead of a list, the argument may also be a dictionary whose values are
+    Futures, in which case a parallel dictionary is returned mapping the same
+    keys to their results.
+
+    It is not necessary to call `multi_future` explcitly, since the engine will
+    do so automatically when the generator yields a list of `Futures`.
+    This function is faster than the `Multi` `YieldPoint` because it does not
+    require the creation of a stack context.
+
+    .. versionadded:: 4.0
+    """
+    if isinstance(children, dict):
+        keys = list(children.keys())
+        children = children.values()
+    else:
+        keys = None
+    assert all(is_future(i) for i in children)
+    unfinished_children = set(children)
+
+    future = Future()
+    if not children:
+        future.set_result({} if keys is not None else [])
+    def callback(f):
+        unfinished_children.remove(f)
+        if not unfinished_children:
+            try:
+                result_list = [i.result() for i in children]
+            except Exception:
+                future.set_exc_info(sys.exc_info())
+            else:
+                if keys is not None:
+                    future.set_result(dict(zip(keys, result_list)))
+                else:
+                    future.set_result(result_list)
+    for f in children:
+        f.add_done_callback(callback)
+    return future
+
+
 def maybe_future(x):
     """Converts ``x`` into a `.Future`.
 
@@ -471,7 +492,7 @@ def with_timeout(timeout, future, io_loop=None):
 
     Currently only supports Futures, not other `YieldPoint` classes.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     # TODO: allow yield points in addition to futures?
     # Tricky to do with stack_context semantics.
@@ -504,6 +525,20 @@ def with_timeout(timeout, future, io_loop=None):
 
 _null_future = Future()
 _null_future.set_result(None)
+
+moment = Future()
+moment.__doc__ = \
+    """A special object which may be yielded to allow the IOLoop to run for
+one iteration.
+
+This is not needed in normal use but it can be helpful in long-running
+coroutines that are likely to yield Futures that are ready instantly.
+
+Usage: ``yield gen.moment``
+
+.. versionadded:: 4.0
+"""
+moment.set_result(None)
 
 
 class Runner(object):
@@ -621,8 +656,17 @@ class Runner(object):
             self.running = False
 
     def handle_yield(self, yielded):
-        if isinstance(yielded, (list, dict)):
-            yielded = Multi(yielded)
+        if isinstance(yielded, list):
+            if all(is_future(f) for f in yielded):
+                yielded = multi_future(yielded)
+            else:
+                yielded = Multi(yielded)
+        elif isinstance(yielded, dict):
+            if all(is_future(f) for f in yielded.values()):
+                yielded = multi_future(yielded)
+            else:
+                yielded = Multi(yielded)
+
         if isinstance(yielded, YieldPoint):
             self.future = TracebackFuture()
             def start_yield_point():
@@ -651,7 +695,7 @@ class Runner(object):
                 start_yield_point()
         elif is_future(yielded):
             self.future = yielded
-            if not self.future.done():
+            if not self.future.done() or self.future is moment:
                 self.io_loop.add_future(
                     self.future, lambda f: self.run())
                 return False
@@ -661,17 +705,9 @@ class Runner(object):
                 "yielded unknown object %r" % (yielded,)))
         return True
 
-
     def result_callback(self, key):
-        def inner(*args, **kwargs):
-            if kwargs or len(args) > 1:
-                result = Arguments(args, kwargs)
-            elif args:
-                result = args[0]
-            else:
-                result = None
-            self.set_result(key, result)
-        return stack_context.wrap(inner)
+        return stack_context.wrap(_argument_adapter(
+            functools.partial(self.set_result, key)))
 
     def handle_exception(self, typ, value, tb):
         if not self.running and not self.finished:
@@ -688,3 +724,20 @@ class Runner(object):
             self.stack_context_deactivate = None
 
 Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
+
+
+def _argument_adapter(callback):
+    """Returns a function that when invoked runs ``callback`` with one arg.
+
+    If the function returned by this function is called with exactly
+    one argument, that argument is passed to ``callback``.  Otherwise
+    the args tuple and kwargs dict are wrapped in an `Arguments` object.
+    """
+    def wrapper(*args, **kwargs):
+        if kwargs or len(args) > 1:
+            callback(Arguments(args, kwargs))
+        elif args:
+            callback(args[0])
+        else:
+            callback(None)
+    return wrapper

@@ -22,14 +22,20 @@ to switch to ``curl_httpclient`` for reasons such as the following:
 
 * ``curl_httpclient`` was the default prior to Tornado 2.0.
 
-Note that if you are using ``curl_httpclient``, it is highly recommended that
-you use a recent version of ``libcurl`` and ``pycurl``.  Currently the minimum
-supported version is 7.18.2, and the recommended version is 7.21.1 or newer.
-It is highly recommended that your ``libcurl`` installation is built with
-asynchronous DNS resolver (threaded or c-ares), otherwise you may encounter
-various problems with request timeouts (for more information, see
+Note that if you are using ``curl_httpclient``, it is highly
+recommended that you use a recent version of ``libcurl`` and
+``pycurl``.  Currently the minimum supported version of libcurl is
+7.21.1, and the minimum version of pycurl is 7.18.2.  It is highly
+recommended that your ``libcurl`` installation is built with
+asynchronous DNS resolver (threaded or c-ares), otherwise you may
+encounter various problems with request timeouts (for more
+information, see
 http://curl.haxx.se/libcurl/c/curl_easy_setopt.html#CURLOPTCONNECTTIMEOUTMS
 and comments in curl_httpclient.py).
+
+To select ``curl_httpclient``, call `AsyncHTTPClient.configure` at startup::
+
+    AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -110,10 +116,21 @@ class AsyncHTTPClient(Configurable):
     actually creates an instance of an implementation-specific
     subclass, and instances are reused as a kind of pseudo-singleton
     (one per `.IOLoop`).  The keyword argument ``force_instance=True``
-    can be used to suppress this singleton behavior.  Constructor
-    arguments other than ``io_loop`` and ``force_instance`` are
-    deprecated.  The implementation subclass as well as arguments to
-    its constructor can be set with the static method `configure()`
+    can be used to suppress this singleton behavior.  Unless
+    ``force_instance=True`` is used, no arguments other than
+    ``io_loop`` should be passed to the `AsyncHTTPClient` constructor.
+    The implementation subclass as well as arguments to its
+    constructor can be set with the static method `configure()`
+
+    All `AsyncHTTPClient` implementations support a ``defaults``
+    keyword argument, which can be used to set default values for
+    `HTTPRequest` attributes.  For example::
+
+        AsyncHTTPClient.configure(
+            None, defaults=dict(user_agent="MyUserAgent"))
+        # or with force_instance:
+        client = AsyncHTTPClient(force_instance=True,
+            defaults=dict(user_agent="MyUserAgent"))
     """
     @classmethod
     def configurable_base(cls):
@@ -133,12 +150,21 @@ class AsyncHTTPClient(Configurable):
 
     def __new__(cls, io_loop=None, force_instance=False, **kwargs):
         io_loop = io_loop or IOLoop.current()
-        if io_loop in cls._async_clients() and not force_instance:
-            return cls._async_clients()[io_loop]
+        if force_instance:
+            instance_cache = None
+        else:
+            instance_cache = cls._async_clients()
+        if instance_cache is not None and io_loop in instance_cache:
+            return instance_cache[io_loop]
         instance = super(AsyncHTTPClient, cls).__new__(cls, io_loop=io_loop,
                                                        **kwargs)
-        if not force_instance:
-            cls._async_clients()[io_loop] = instance
+        # Make sure the instance knows which cache to remove itself from.
+        # It can't simply call _async_clients() because we may be in
+        # __new__(AsyncHTTPClient) but instance.__class__ may be
+        # SimpleAsyncHTTPClient.
+        instance._instance_cache = instance_cache
+        if instance_cache is not None:
+            instance_cache[instance.io_loop] = instance
         return instance
 
     def initialize(self, io_loop, defaults=None):
@@ -146,6 +172,7 @@ class AsyncHTTPClient(Configurable):
         self.defaults = dict(HTTPRequest._DEFAULTS)
         if defaults is not None:
             self.defaults.update(defaults)
+        self._closed = False
 
     def close(self):
         """Destroys this HTTP client, freeing any file descriptors used.
@@ -160,8 +187,13 @@ class AsyncHTTPClient(Configurable):
         ``close()``.
 
         """
-        if self._async_clients().get(self.io_loop) is self:
-            del self._async_clients()[self.io_loop]
+        if self._closed:
+            return
+        self._closed = True
+        if self._instance_cache is not None:
+            if self._instance_cache.get(self.io_loop) is not self:
+                raise RuntimeError("inconsistent AsyncHTTPClient cache")
+            del self._instance_cache[self.io_loop]
 
     def fetch(self, request, callback=None, **kwargs):
         """Executes a request, asynchronously returning an `HTTPResponse`.
@@ -179,6 +211,8 @@ class AsyncHTTPClient(Configurable):
         Instead, you must check the response's ``error`` attribute or
         call its `~HTTPResponse.rethrow` method.
         """
+        if self._closed:
+            raise RuntimeError("fetch() called on closed AsyncHTTPClient")
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
         # We may modify this (to add Host, Accept-Encoding, etc),
@@ -248,7 +282,7 @@ class HTTPRequest(object):
         request_timeout=20.0,
         follow_redirects=True,
         max_redirects=5,
-        use_gzip=True,
+        decompress_response=True,
         proxy_password='',
         allow_nonstandard_methods=False,
         validate_cert=True)
@@ -265,7 +299,7 @@ class HTTPRequest(object):
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
                  client_key=None, client_cert=None, body_producer=None,
-                 expect_100_continue=False):
+                 expect_100_continue=False, decompress_response=None):
         r"""All parameters except ``url`` are optional.
 
         :arg string url: URL to fetch
@@ -284,7 +318,7 @@ class HTTPRequest(object):
            ``curl_httpclient``.  When using ``body_producer`` it is recommended
            to pass a ``Content-Length`` in the headers as otherwise chunked
            encoding will be used, and many servers do not support chunked
-           encoding on requests.  New in Tornado 3.3
+           encoding on requests.  New in Tornado 4.0
         :arg string auth_username: Username for HTTP authentication
         :arg string auth_password: Password for HTTP authentication
         :arg string auth_mode: Authentication mode; default is "basic".
@@ -299,7 +333,11 @@ class HTTPRequest(object):
            or return the 3xx response?
         :arg int max_redirects: Limit for ``follow_redirects``
         :arg string user_agent: String to send as ``User-Agent`` header
-        :arg bool use_gzip: Request gzip encoding from the server
+        :arg bool decompress_response: Request a compressed response from
+           the server and decompress it after downloading.  Default is True.
+           New in Tornado 4.0.
+        :arg bool use_gzip: Deprecated alias for ``decompress_response``
+           since Tornado 4.0.
         :arg string network_interface: Network interface to use for request.
            ``curl_httpclient`` only; see note below.
         :arg callable streaming_callback: If set, ``streaming_callback`` will
@@ -342,7 +380,6 @@ class HTTPRequest(object):
            before sending the request body.  Only supported with
            simple_httpclient.
 
-
         .. note::
 
             When using ``curl_httpclient`` certain options may be
@@ -358,7 +395,7 @@ class HTTPRequest(object):
         .. versionadded:: 3.1
            The ``auth_mode`` argument.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
            The ``body_producer`` and ``expect_100_continue`` arguments.
         """
         # Note that some of these attributes go through property setters
@@ -383,7 +420,10 @@ class HTTPRequest(object):
         self.follow_redirects = follow_redirects
         self.max_redirects = max_redirects
         self.user_agent = user_agent
-        self.use_gzip = use_gzip
+        if decompress_response is not None:
+            self.decompress_response = decompress_response
+        else:
+            self.decompress_response = use_gzip
         self.network_interface = network_interface
         self.streaming_callback = streaming_callback
         self.header_callback = header_callback
@@ -459,8 +499,6 @@ class HTTPResponse(object):
     * code: numeric HTTP status code, e.g. 200 or 404
 
     * reason: human-readable reason phrase describing the status code
-      (with curl_httpclient, this is a default value rather than the
-      server's actual response)
 
     * headers: `tornado.httputil.HTTPHeaders` object
 
@@ -502,7 +540,8 @@ class HTTPResponse(object):
             self.effective_url = effective_url
         if error is None:
             if self.code < 200 or self.code >= 300:
-                self.error = HTTPError(self.code, response=self)
+                self.error = HTTPError(self.code, message=self.reason,
+                                       response=self)
             else:
                 self.error = None
         else:

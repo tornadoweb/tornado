@@ -70,8 +70,8 @@ def get_unused_port():
     only that a series of get_unused_port calls in a single process return
     distinct ports.
 
-    **Deprecated**.  Use bind_unused_port instead, which is guaranteed
-    to find an unused port.
+    .. deprecated::
+       Use bind_unused_port instead, which is guaranteed to find an unused port.
     """
     global _next_port
     port = _next_port
@@ -114,8 +114,8 @@ class _TestMethodWrapper(object):
     def __init__(self, orig_method):
         self.orig_method = orig_method
 
-    def __call__(self):
-        result = self.orig_method()
+    def __call__(self, *args, **kwargs):
+        result = self.orig_method(*args, **kwargs)
         if isinstance(result, types.GeneratorType):
             raise TypeError("Generator test methods should be decorated with "
                             "tornado.testing.gen_test")
@@ -130,6 +130,7 @@ class _TestMethodWrapper(object):
         module, such as `unittest.skipIf`.
         """
         return getattr(self.orig_method, name)
+
 
 class AsyncTestCase(unittest.TestCase):
     """`~unittest.TestCase` subclass for testing `.IOLoop`-based
@@ -394,7 +395,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def tearDown(self):
         self.http_server.stop()
-        self.io_loop.run_sync(self.http_server.close_all_connections)
+        self.io_loop.run_sync(self.http_server.close_all_connections,
+                              timeout=get_async_test_timeout())
         if (not IOLoop.initialized() or
                 self.http_client.io_loop is not IOLoop.instance()):
             self.http_client.close()
@@ -457,6 +459,10 @@ def gen_test(func=None, timeout=None):
     .. versionadded:: 3.1
        The ``timeout`` argument and ``ASYNC_TEST_TIMEOUT`` environment
        variable.
+
+    .. versionchanged:: 4.0
+       The wrapper now passes along ``*args, **kwargs`` so it can be used
+       on functions with arguments.
     """
     if timeout is None:
         timeout = get_async_test_timeout()
@@ -471,8 +477,8 @@ def gen_test(func=None, timeout=None):
         # This is a good case study arguing for either some sort of
         # extensibility in the gen decorators or cancellation support.
         @functools.wraps(f)
-        def pre_coroutine(self):
-            result = f(self)
+        def pre_coroutine(self, *args, **kwargs):
+            result = f(self, *args, **kwargs)
             if isinstance(result, types.GeneratorType):
                 self._test_generator = result
             else:
@@ -482,10 +488,11 @@ def gen_test(func=None, timeout=None):
         coro = gen.coroutine(pre_coroutine)
 
         @functools.wraps(coro)
-        def post_coroutine(self):
+        def post_coroutine(self, *args, **kwargs):
             try:
                 return self.io_loop.run_sync(
-                    functools.partial(coro, self), timeout=timeout)
+                    functools.partial(coro, self, *args, **kwargs),
+                    timeout=timeout)
             except TimeoutError as e:
                 # run_sync raises an error with an unhelpful traceback.
                 # If we throw it back into the generator the stack trace

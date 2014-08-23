@@ -22,7 +22,7 @@ def run_tests():
     for i in range(1, num_tests + 1):
         logging.info('running test case %d', i)
         url = options.url + '/runCase?case=%d&agent=%s' % (i, options.name)
-        test_ws = yield websocket_connect(url, None)
+        test_ws = yield websocket_connect(url, None, compression_options={})
         while True:
             message = yield test_ws.read_message()
             if message is None:

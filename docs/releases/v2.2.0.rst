@@ -31,7 +31,7 @@ Backwards-incompatible changes
   without also supporting the insecure SSLv2.
 * `tornado.websocket` no longer supports the older "draft 76" version
   of the websocket protocol by default, although this version can
-  be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
+  be enabled by overriding ``tornado.websocket.WebSocketHandler.allow_draft76``.
 
 ``tornado.httpclient``
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -98,12 +98,12 @@ Backwards-incompatible changes
 * Many bugs were fixed in all supported protocol versions.
 * `tornado.websocket` no longer supports the older "draft 76" version
   of the websocket protocol by default, although this version can
-  be enabled by overriding `tornado.websocket.WebSocketHandler.allow_draft76`.
+  be enabled by overriding ``tornado.websocket.WebSocketHandler.allow_draft76``.
 * `.WebSocketHandler.write_message` now accepts a ``binary`` argument
   to send binary messages.
 * Subprotocols (i.e. the ``Sec-WebSocket-Protocol`` header) are now supported;
   see the `.WebSocketHandler.select_subprotocol` method for details.
-* `.WebSocketHandler.get_websocket_scheme` can be used to select the
+* ``.WebSocketHandler.get_websocket_scheme`` can be used to select the
   appropriate url scheme (``ws://`` or ``wss://``) in cases where
   ``HTTPRequest.protocol`` is not set correctly.
 

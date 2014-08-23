@@ -8,6 +8,7 @@ from contextlib import closing
 import functools
 import sys
 import threading
+from io import BytesIO
 
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
@@ -22,11 +23,6 @@ from tornado.test.util import unittest, skipOnTravis
 from tornado.util import u, bytes_type
 from tornado.web import Application, RequestHandler, url
 
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO
-
 
 class HelloWorldHandler(RequestHandler):
     def get(self):
@@ -39,6 +35,18 @@ class PostHandler(RequestHandler):
     def post(self):
         self.finish("Post arg1: %s, arg2: %s" % (
             self.get_argument("arg1"), self.get_argument("arg2")))
+
+
+class PutHandler(RequestHandler):
+    def put(self):
+        self.write("Put body: ")
+        self.write(self.request.body)
+
+
+class RedirectHandler(RequestHandler):
+    def prepare(self):
+        self.redirect(self.get_argument("url"),
+                      status=int(self.get_argument("status", "302")))
 
 
 class ChunkHandler(RequestHandler):
@@ -83,6 +91,13 @@ class ContentLength304Handler(RequestHandler):
         pass
 
 
+class PatchHandler(RequestHandler):
+
+    def patch(self):
+        "Return the request payload - so we can check it is being kept"
+        self.write(self.request.body)
+
+
 class AllMethodsHandler(RequestHandler):
     SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
 
@@ -101,6 +116,8 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         return Application([
             url("/hello", HelloWorldHandler),
             url("/post", PostHandler),
+            url("/put", PutHandler),
+            url("/redirect", RedirectHandler),
             url("/chunk", ChunkHandler),
             url("/auth", AuthHandler),
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
@@ -108,7 +125,14 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/user_agent", UserAgentHandler),
             url("/304_with_content_length", ContentLength304Handler),
             url("/all_methods", AllMethodsHandler),
+            url('/patch', PatchHandler),
         ], gzip=True)
+
+    def test_patch_receives_payload(self):
+        body = b"some patch data"
+        response = self.fetch("/patch", method='PATCH', body=body)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, body)
 
     @skipOnTravis
     def test_hello_world(self):
@@ -314,10 +338,12 @@ Transfer-Encoding: chunked
         # Construct a new instance of the configured client class
         client = self.http_client.__class__(self.io_loop, force_instance=True,
                                             defaults=defaults)
-        client.fetch(self.get_url('/user_agent'), callback=self.stop)
-        response = self.wait()
-        self.assertEqual(response.body, b'TestDefaultUserAgent')
-        client.close()
+        try:
+            client.fetch(self.get_url('/user_agent'), callback=self.stop)
+            response = self.wait()
+            self.assertEqual(response.body, b'TestDefaultUserAgent')
+        finally:
+            client.close()
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
@@ -399,6 +425,28 @@ Transfer-Encoding: chunked
             yield self.http_client.fetch(hello_url, method='POST')
 
         self.assertTrue('must not be empty' in str(context.exception))
+
+    # This test causes odd failures with the combination of
+    # curl_httpclient (at least with the version of libcurl available
+    # on ubuntu 12.04), TwistedIOLoop, and epoll.  For POST (but not PUT),
+    # curl decides the response came back too soon and closes the connection
+    # to start again.  It does this *before* telling the socket callback to
+    # unregister the FD.  Some IOLoop implementations have special kernel
+    # integration to discover this immediately.  Tornado's IOLoops
+    # ignore errors on remove_handler to accomodate this behavior, but
+    # Twisted's reactor does not.  The removeReader call fails and so
+    # do all future removeAll calls (which our tests do at cleanup).
+    #
+    #def test_post_307(self):
+    #    response = self.fetch("/redirect?status=307&url=/post",
+    #                          method="POST", body=b"arg1=foo&arg2=bar")
+    #    self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
+
+    def test_put_307(self):
+        response = self.fetch("/redirect?status=307&url=/put",
+                              method="PUT", body=b"hello")
+        response.rethrow()
+        self.assertEqual(response.body, b"Put body: hello")
 
 
 class RequestProxyTest(unittest.TestCase):

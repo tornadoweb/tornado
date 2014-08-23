@@ -75,7 +75,7 @@ def xhtml_unescape(value):
 
 
 # The fact that json_encode wraps json.dumps is an implementation detail.
-# Please see https://github.com/facebook/tornado/pull/706
+# Please see https://github.com/tornadoweb/tornado/pull/706
 # before sending a pull request that adds **kwargs to this function.
 def json_encode(value):
     """JSON-encodes the given Python object."""

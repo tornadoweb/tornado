@@ -1,30 +1,34 @@
-# Frozen pip requirements for tools used in the development of tornado
+# Frozen pip requirements for tools used in the development of tornado.
+# This list is for python 3.4; for 2.7 add:
+# - backports.ssl-match-hostname
+# - futures
+# - mock
+#
+# Use virtualenv instead of venv; tox seems to get confused otherwise.
 
 # Tornado's required dependencies
-backports.ssl-match-hostname==3.4.0.2
-certifi==1.0.1
+certifi==14.05.14
 
 # Tornado's optional dependencies
-Twisted==13.2.0
-futures==2.1.5
-mock==1.0.1
-pycares==0.5.0
-pycurl==7.19.0.3
+Twisted==14.0.0
+# pip on python 3.4 currently has trouble installing pycares.
+#pycares==0.6.1
+pycurl==7.19.3.1
 
 # Other useful tools
-Sphinx==1.2
-autopep8==0.9.7
+Sphinx==1.2.2
+autopep8==1.0.2
 coverage==3.7.1
-pep8==1.4.6
-pyflakes==0.7.3
-tox==1.6.1
-virtualenv==1.10.1
+pep8==1.5.6
+pyflakes==0.8.1
+sphinx-rtd-theme==0.1.6
+tox==1.7.1
+virtualenv==1.11.6
 
 # Indirect dependencies
-Jinja2==2.7.1
-MarkupSafe==0.18
+Jinja2==2.7.2
+MarkupSafe==0.23
 Pygments==1.6
 docutils==0.11
-py==1.4.19
-wsgiref==0.1.2
-zope.interface==4.0.5
+py==1.4.20
+zope.interface==4.1.1

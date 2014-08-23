@@ -17,23 +17,14 @@ can scale to tens of thousands of open connections, making it ideal for
 `WebSockets <http://en.wikipedia.org/wiki/WebSocket>`_, and other
 applications that require a long-lived connection to each user.
 
-Upgrade notes
--------------
-
-As of Tornado 3.2, the `backports.ssl_match_hostname
-<https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ package
-must be installed when running Tornado on Python 2.  This will be
-installed automatically when using ``pip`` or ``easy_install``.
-
 Quick links
 -----------
 
-* :doc:`Documentation <documentation>`
 * |Download current version|: :current_tarball:`z` (:doc:`release notes <releases>`)
-* `Source (github) <https://github.com/facebook/tornado>`_
-* `Mailing list <http://groups.google.com/group/python-tornado>`_
+* `Source (github) <https://github.com/tornadoweb/tornado>`_
+* Mailing lists: `discussion <http://groups.google.com/group/python-tornado>`_ and `announcements <http://groups.google.com/group/python-tornado-announce>`_
 * `Stack Overflow <http://stackoverflow.com/questions/tagged/tornado>`_
-* `Wiki <https://github.com/facebook/tornado/wiki/Links>`_
+* `Wiki <https://github.com/tornadoweb/tornado/wiki/Links>`_
 
 .. |Download current version| replace:: Download version |version|
 
@@ -59,7 +50,7 @@ Here is a simple "Hello, world" example web app for Tornado::
 
 This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room
-<https://github.com/facebook/tornado/tree/master/demos/chat>`_.
+<https://github.com/tornadoweb/tornado/tree/stable/demos/chat>`_.
 
 Installation
 ------------
@@ -84,7 +75,7 @@ copy of the source tarball as well.
     sudo python setup.py install
 
 The Tornado source code is `hosted on GitHub
-<https://github.com/facebook/tornado>`_.
+<https://github.com/tornadoweb/tornado>`_.
 
 **Prerequisites**: Tornado runs on Python 2.6, 2.7, 3.2, 3.3, and 3.4.  It
 requires the `certifi <https://pypi.python.org/pypi/certifi>`_ package
@@ -122,15 +113,39 @@ development use).  Tornado will also run on Windows, although this
 configuration is not officially supported and is recommended only for
 development use.
 
+Documentation
+-------------
+
+This documentation is also available in `PDF and Epub formats
+<https://readthedocs.org/projects/tornado/downloads/>`_.
+
+.. toctree::
+   :titlesonly:
+
+   guide
+   webframework
+   http
+   networking
+   coroutine
+   integration
+   utilities
+   releases
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+
 Discussion and support
 ----------------------
 
 You can discuss Tornado on `the Tornado developer mailing list
 <http://groups.google.com/group/python-tornado>`_, and report bugs on
 the `GitHub issue tracker
-<https://github.com/facebook/tornado/issues>`_.  Links to additional
+<https://github.com/tornadoweb/tornado/issues>`_.  Links to additional
 resources can be found on the `Tornado wiki
-<https://github.com/facebook/tornado/wiki/Links>`_.
+<https://github.com/tornadoweb/tornado/wiki/Links>`_.  New releases are
+announced on the `announcements mailing list
+<http://groups.google.com/group/python-tornado-announce>`_.
 
 Tornado is one of `Facebook's open source technologies
 <http://developers.facebook.com/opensource/>`_. It is available under
@@ -139,8 +154,3 @@ the `Apache License, Version 2.0
 
 This web site and all documentation is licensed under `Creative
 Commons 3.0 <http://creativecommons.org/licenses/by/3.0/>`_.
-
-.. toctree::
-   :hidden:
-
-   documentation

@@ -32,8 +32,10 @@ provides WSGI support in two ways:
 from __future__ import absolute_import, division, print_function, with_statement
 
 import sys
+from io import BytesIO
 import tornado
 
+from tornado.concurrent import Future
 from tornado import escape
 from tornado import httputil
 from tornado.log import access_log
@@ -41,10 +43,6 @@ from tornado import web
 from tornado.escape import native_str
 from tornado.util import bytes_type, unicode_type
 
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO  # python 2
 
 try:
     import urllib.parse as urllib_parse  # py3
@@ -76,12 +74,18 @@ else:
 class WSGIApplication(web.Application):
     """A WSGI equivalent of `tornado.web.Application`.
 
-    .. deprecated: 3.3::
+    .. deprecated:: 4.0
 
        Use a regular `.Application` and wrap it in `WSGIAdapter` instead.
     """
     def __call__(self, environ, start_response):
         return WSGIAdapter(self)(environ, start_response)
+
+
+# WSGI has no facilities for flow control, so just return an already-done
+# Future when the interface requires it.
+_dummy_future = Future()
+_dummy_future.set_result(None)
 
 
 class _WSGIConnection(httputil.HTTPConnection):
@@ -113,22 +117,24 @@ class _WSGIConnection(httputil.HTTPConnection):
             self.write(chunk, callback)
         elif callback is not None:
             callback()
+        return _dummy_future
 
     def write(self, chunk, callback=None):
         if self._expected_content_remaining is not None:
             self._expected_content_remaining -= len(chunk)
             if self._expected_content_remaining < 0:
-                self._error = httputil.HTTPOutputException(
+                self._error = httputil.HTTPOutputError(
                     "Tried to write more data than Content-Length")
                 raise self._error
         self._write_buffer.append(chunk)
         if callback is not None:
             callback()
+        return _dummy_future
 
     def finish(self):
         if (self._expected_content_remaining is not None and
-            self._expected_content_remaining != 0):
-            self._error = httputil.HTTPOutputException(
+                self._expected_content_remaining != 0):
+            self._error = httputil.HTTPOutputError(
                 "Tried to write %d bytes less than Content-Length" %
                 self._expected_content_remaining)
             raise self._error
@@ -166,7 +172,7 @@ class WSGIAdapter(object):
             server.serve_forever()
 
     See the `appengine demo
-    <https://github.com/facebook/tornado/tree/master/demos/appengine>`_
+    <https://github.com/tornadoweb/tornado/tree/stable/demos/appengine>`_
     for an example of using this module to run a Tornado app on Google
     App Engine.
 
@@ -174,7 +180,7 @@ class WSGIAdapter(object):
     that it is not possible to use `.AsyncHTTPClient`, or the
     `tornado.auth` or `tornado.websocket` modules.
 
-    .. versionadded:: 3.3
+    .. versionadded:: 4.0
     """
     def __init__(self, application):
         if isinstance(application, WSGIApplication):

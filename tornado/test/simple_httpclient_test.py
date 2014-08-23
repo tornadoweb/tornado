@@ -14,13 +14,13 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
-from tornado.log import gen_log
-from tornado.netutil import Resolver
+from tornado.log import gen_log, app_log
+from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
-from tornado.test.util import unittest, skipOnTravis
+from tornado.test.util import skipOnTravis, skipIfNoIPv6
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -242,24 +242,26 @@ class SimpleHTTPClientTestMixin(object):
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
-    @unittest.skipIf(not socket.has_ipv6, 'ipv6 support not present')
+    @skipIfNoIPv6
     def test_ipv6(self):
         try:
-            self.http_server.listen(self.get_http_port(), address='::1')
+            [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
+            port = sock.getsockname()[1]
+            self.http_server.add_socket(sock)
         except socket.gaierror as e:
             if e.args[0] == socket.EAI_ADDRFAMILY:
                 # python supports ipv6, but it's not configured on the network
                 # interface, so skip this test.
                 return
             raise
-        url = self.get_url("/hello").replace("localhost", "[::1]")
+        url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
 
-        # ipv6 is currently disabled by default and must be explicitly requested
-        self.http_client.fetch(url, self.stop)
+        # ipv6 is currently enabled by default but can be disabled
+        self.http_client.fetch(url, self.stop, allow_ipv6=False)
         response = self.wait()
         self.assertEqual(response.code, 599)
 
-        self.http_client.fetch(url, self.stop, allow_ipv6=True)
+        self.http_client.fetch(url, self.stop)
         response = self.wait()
         self.assertEqual(response.body, b"Hello world!")
 
@@ -292,10 +294,14 @@ class SimpleHTTPClientTestMixin(object):
         self.assertEqual(response.code, 204)
         # 204 status doesn't need a content-length, but tornado will
         # add a zero content-length anyway.
+        #
+        # A test without a content-length header is included below
+        # in HTTP204NoContentTestCase.
         self.assertEqual(response.headers["Content-length"], "0")
 
         # 204 status with non-zero content length is malformed
-        response = self.fetch("/no_content?error=1")
+        with ExpectLog(gen_log, "Malformed HTTP message"):
+            response = self.fetch("/no_content?error=1")
         self.assertEqual(response.code, 599)
 
     def test_host_header(self):
@@ -318,8 +324,10 @@ class SimpleHTTPClientTestMixin(object):
 
         if sys.platform != 'cygwin':
             # cygwin returns EPERM instead of ECONNREFUSED here
-            self.assertTrue(str(errno.ECONNREFUSED) in str(response.error),
-                            response.error)
+            contains_errno = str(errno.ECONNREFUSED) in str(response.error)
+            if not contains_errno and hasattr(errno, "WSAECONNREFUSED"):
+                contains_errno = str(errno.WSAECONNREFUSED) in str(response.error)
+            self.assertTrue(contains_errno, response.error)
             # This is usually "Connection refused".
             # On windows, strerror is broken and returns "Unknown error".
             expected_message = os.strerror(errno.ECONNREFUSED)
@@ -469,6 +477,27 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
     def test_100_continue(self):
         res = self.fetch('/')
         self.assertEqual(res.body, b'A')
+
+
+class HTTP204NoContentTestCase(AsyncHTTPTestCase):
+    def respond_204(self, request):
+        # A 204 response never has a body, even if doesn't have a content-length
+        # (which would otherwise mean read-until-close).  Tornado always
+        # sends a content-length, so we simulate here a server that sends
+        # no content length and does not close the connection.
+        #
+        # Tests of a 204 response with a Content-Length header are included
+        # in SimpleHTTPClientTestMixin.
+        request.connection.stream.write(
+            b"HTTP/1.1 204 No content\r\n\r\n")
+
+    def get_app(self):
+        return self.respond_204
+
+    def test_204_no_content(self):
+        resp = self.fetch('/')
+        self.assertEqual(resp.code, 204)
+        self.assertEqual(resp.body, b'')
 
 
 class HostnameMappingTestCase(AsyncHTTPTestCase):

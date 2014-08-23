@@ -67,9 +67,27 @@ class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
         self.finish(user)
 
     def _oauth_get_user(self, access_token, callback):
+        if self.get_argument('fail_in_get_user', None):
+            raise Exception("failing in get_user")
         if access_token != dict(key='uiop', secret='5678'):
             raise Exception("incorrect access token %r" % access_token)
         callback(dict(email='foo@example.com'))
+
+
+class OAuth1ClientLoginCoroutineHandler(OAuth1ClientLoginHandler):
+    """Replaces OAuth1ClientLoginCoroutineHandler's get() with a coroutine."""
+    @gen.coroutine
+    def get(self):
+        if self.get_argument('oauth_token', None):
+            # Ensure that any exceptions are set on the returned Future,
+            # not simply thrown into the surrounding StackContext.
+            try:
+                yield self.get_authenticated_user()
+            except Exception as e:
+                self.set_status(503)
+                self.write("got exception: %s" % e)
+        else:
+            yield self.authorize_redirect()
 
 
 class OAuth1ClientRequestParametersHandler(RequestHandler, OAuthMixin):
@@ -255,6 +273,9 @@ class AuthTest(AsyncHTTPTestCase):
                  dict(version='1.0')),
                 ('/oauth10a/client/login', OAuth1ClientLoginHandler,
                  dict(test=self, version='1.0a')),
+                ('/oauth10a/client/login_coroutine',
+                 OAuth1ClientLoginCoroutineHandler,
+                 dict(test=self, version='1.0a')),
                 ('/oauth10a/client/request_params',
                  OAuth1ClientRequestParametersHandler,
                  dict(version='1.0a')),
@@ -347,6 +368,12 @@ class AuthTest(AsyncHTTPTestCase):
         self.assertEqual(parsed['oauth_token'], 'uiop')
         self.assertTrue('oauth_nonce' in parsed)
         self.assertTrue('oauth_signature' in parsed)
+
+    def test_oauth10a_get_user_coroutine_exception(self):
+        response = self.fetch(
+            '/oauth10a/client/login_coroutine?oauth_token=zxcv&fail_in_get_user=true',
+            headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
+        self.assertEqual(response.code, 503)
 
     def test_oauth2_redirect(self):
         response = self.fetch('/oauth2/client/login', follow_redirects=False)

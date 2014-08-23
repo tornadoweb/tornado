@@ -12,6 +12,9 @@ class EchoHandler(WebSocketHandler):
     def on_message(self, message):
         self.write_message(message, binary=isinstance(message, bytes_type))
 
+    def get_compression_options(self):
+        return {}
+
 if __name__ == '__main__':
     parse_command_line()
     app = Application([

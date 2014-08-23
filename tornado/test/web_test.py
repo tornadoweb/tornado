@@ -4,23 +4,24 @@ from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
 from tornado.httputil import format_timestamp
 from tornado.iostream import IOStream
+from tornado import locale
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.util import u, bytes_type, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature, create_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish
 
 import binascii
 import contextlib
 import datetime
 import email.utils
+import itertools
 import logging
 import os
 import re
 import socket
-import sys
 
 try:
     import urllib.parse as urllib_parse  # py3
@@ -82,45 +83,49 @@ class CookieTestRequestHandler(RequestHandler):
         self._cookies[name] = value
 
 
-class SecureCookieTest(unittest.TestCase):
+# See SignedValueTest below for more.
+class SecureCookieV1Test(unittest.TestCase):
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
-        handler.set_secure_cookie('foo', b'bar')
-        self.assertEqual(handler.get_secure_cookie('foo'), b'bar')
+        handler.set_secure_cookie('foo', b'bar', version=1)
+        self.assertEqual(handler.get_secure_cookie('foo', min_version=1),
+                         b'bar')
 
     def test_cookie_tampering_future_timestamp(self):
         handler = CookieTestRequestHandler()
         # this string base64-encodes to '12345678'
-        handler.set_secure_cookie('foo', binascii.a2b_hex(b'd76df8e7aefc'))
+        handler.set_secure_cookie('foo', binascii.a2b_hex(b'd76df8e7aefc'),
+                                  version=1)
         cookie = handler._cookies['foo']
         match = re.match(br'12345678\|([0-9]+)\|([0-9a-f]+)', cookie)
         self.assertTrue(match)
         timestamp = match.group(1)
         sig = match.group(2)
         self.assertEqual(
-            _create_signature(handler.application.settings["cookie_secret"],
-                              'foo', '12345678', timestamp),
+            _create_signature_v1(handler.application.settings["cookie_secret"],
+                                 'foo', '12345678', timestamp),
             sig)
         # shifting digits from payload to timestamp doesn't alter signature
         # (this is not desirable behavior, just confirming that that's how it
         # works)
         self.assertEqual(
-            _create_signature(handler.application.settings["cookie_secret"],
-                              'foo', '1234', b'5678' + timestamp),
+            _create_signature_v1(handler.application.settings["cookie_secret"],
+                                 'foo', '1234', b'5678' + timestamp),
             sig)
         # tamper with the cookie
         handler._cookies['foo'] = utf8('1234|5678%s|%s' % (
             to_basestring(timestamp), to_basestring(sig)))
         # it gets rejected
         with ExpectLog(gen_log, "Cookie timestamp in future"):
-            self.assertTrue(handler.get_secure_cookie('foo') is None)
+            self.assertTrue(
+                handler.get_secure_cookie('foo', min_version=1) is None)
 
     def test_arbitrary_bytes(self):
         # Secure cookies accept arbitrary data (which is base64 encoded).
         # Note that normal cookies accept only a subset of ascii.
         handler = CookieTestRequestHandler()
-        handler.set_secure_cookie('foo', b'\xe9')
-        self.assertEqual(handler.get_secure_cookie('foo'), b'\xe9')
+        handler.set_secure_cookie('foo', b'\xe9', version=1)
+        self.assertEqual(handler.get_secure_cookie('foo', min_version=1), b'\xe9')
 
 
 class CookieTest(WebTestCase):
@@ -574,8 +579,8 @@ class WSGISafeWebTest(WebTestCase):
                 "/decode_arg/%E9?foo=%E9&encoding=latin1",
                 "/decode_arg_kw/%E9?foo=%E9&encoding=latin1",
                 ]
-        for url in urls:
-            response = self.fetch(url)
+        for req_url in urls:
+            response = self.fetch(req_url)
             response.rethrow()
             data = json_decode(response.body)
             self.assertEqual(data, {u('path'): [u('unicode'), u('\u00e9')],
@@ -601,8 +606,8 @@ class WSGISafeWebTest(WebTestCase):
         # These urls are all equivalent.
         urls = ["/decode_arg/1%20%2B%201?foo=1%20%2B%201&encoding=utf-8",
                 "/decode_arg/1%20+%201?foo=1+%2B+1&encoding=utf-8"]
-        for url in urls:
-            response = self.fetch(url)
+        for req_url in urls:
+            response = self.fetch(req_url)
             response.rethrow()
             data = json_decode(response.body)
             self.assertEqual(data, {u('path'): [u('unicode'), u('1 + 1')],
@@ -768,20 +773,6 @@ class ErrorResponseTest(WebTestCase):
                 else:
                     self.write("Status: %d" % status_code)
 
-        class GetErrorHtmlHandler(RequestHandler):
-            def get(self):
-                if self.get_argument("status", None):
-                    self.send_error(int(self.get_argument("status")))
-                else:
-                    1 / 0
-
-            def get_error_html(self, status_code, **kwargs):
-                self.set_header("Content-Type", "text/plain")
-                if "exception" in kwargs:
-                    self.write("Exception: %s" % sys.exc_info()[0].__name__)
-                else:
-                    self.write("Status: %d" % status_code)
-
         class FailedWriteErrorHandler(RequestHandler):
             def get(self):
                 1 / 0
@@ -791,7 +782,6 @@ class ErrorResponseTest(WebTestCase):
 
         return [url("/default", DefaultHandler),
                 url("/write_error", WriteErrorHandler),
-                url("/get_error_html", GetErrorHtmlHandler),
                 url("/failed_write_error", FailedWriteErrorHandler),
                 ]
 
@@ -812,16 +802,6 @@ class ErrorResponseTest(WebTestCase):
             self.assertEqual(b"Exception: ZeroDivisionError", response.body)
 
             response = self.fetch("/write_error?status=503")
-            self.assertEqual(response.code, 503)
-            self.assertEqual(b"Status: 503", response.body)
-
-    def test_get_error_html(self):
-        with ExpectLog(app_log, "Uncaught exception"):
-            response = self.fetch("/get_error_html")
-            self.assertEqual(response.code, 500)
-            self.assertEqual(b"Exception: ZeroDivisionError", response.body)
-
-            response = self.fetch("/get_error_html?status=503")
             self.assertEqual(response.code, 503)
             self.assertEqual(b"Status: 503", response.body)
 
@@ -914,17 +894,37 @@ class StaticFileTest(WebTestCase):
         response = self.fetch(path % int(include_host))
         self.assertEqual(response.body, utf8(str(True)))
 
+    def get_and_head(self, *args, **kwargs):
+        """Performs a GET and HEAD request and returns the GET response.
+
+        Fails if any ``Content-*`` headers returned by the two requests
+        differ.
+        """
+        head_response = self.fetch(*args, method="HEAD", **kwargs)
+        get_response = self.fetch(*args, method="GET", **kwargs)
+        content_headers = set()
+        for h in itertools.chain(head_response.headers, get_response.headers):
+            if h.startswith('Content-'):
+                content_headers.add(h)
+        for h in content_headers:
+            self.assertEqual(head_response.headers.get(h),
+                             get_response.headers.get(h),
+                             "%s differs between GET (%s) and HEAD (%s)" %
+                             (h, head_response.headers.get(h),
+                              get_response.headers.get(h)))
+        return get_response
+
     def test_static_304_if_modified_since(self):
-        response1 = self.fetch("/static/robots.txt")
-        response2 = self.fetch("/static/robots.txt", headers={
+        response1 = self.get_and_head("/static/robots.txt")
+        response2 = self.get_and_head("/static/robots.txt", headers={
             'If-Modified-Since': response1.headers['Last-Modified']})
         self.assertEqual(response2.code, 304)
         self.assertTrue('Content-Length' not in response2.headers)
         self.assertTrue('Last-Modified' not in response2.headers)
 
     def test_static_304_if_none_match(self):
-        response1 = self.fetch("/static/robots.txt")
-        response2 = self.fetch("/static/robots.txt", headers={
+        response1 = self.get_and_head("/static/robots.txt")
+        response2 = self.get_and_head("/static/robots.txt", headers={
             'If-None-Match': response1.headers['Etag']})
         self.assertEqual(response2.code, 304)
 
@@ -932,7 +932,7 @@ class StaticFileTest(WebTestCase):
         # On windows, the functions that work with time_t do not accept
         # negative values, and at least one client (processing.js) seems
         # to use if-modified-since 1/1/1960 as a cache-busting technique.
-        response = self.fetch("/static/robots.txt", headers={
+        response = self.get_and_head("/static/robots.txt", headers={
             'If-Modified-Since': 'Fri, 01 Jan 1960 00:00:00 GMT'})
         self.assertEqual(response.code, 200)
 
@@ -943,20 +943,20 @@ class StaticFileTest(WebTestCase):
         # when parsing If-Modified-Since.
         stat = os.stat(relpath('static/robots.txt'))
 
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'If-Modified-Since': format_timestamp(stat.st_mtime - 1)})
         self.assertEqual(response.code, 200)
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'If-Modified-Since': format_timestamp(stat.st_mtime + 1)})
         self.assertEqual(response.code, 304)
 
     def test_static_etag(self):
-        response = self.fetch('/static/robots.txt')
+        response = self.get_and_head('/static/robots.txt')
         self.assertEqual(utf8(response.headers.get("Etag")),
                          b'"' + self.robots_txt_hash + b'"')
 
     def test_static_with_range(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=0-9'})
         self.assertEqual(response.code, 206)
         self.assertEqual(response.body, b"User-agent")
@@ -967,7 +967,7 @@ class StaticFileTest(WebTestCase):
                          "bytes 0-9/26")
 
     def test_static_with_range_full_file(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=0-'})
         # Note: Chrome refuses to play audio if it gets an HTTP 206 in response
         # to ``Range: bytes=0-`` :(
@@ -979,7 +979,7 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"), None)
 
     def test_static_with_range_full_past_end(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=0-10000000'})
         self.assertEqual(response.code, 200)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
@@ -989,7 +989,7 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"), None)
 
     def test_static_with_range_partial_past_end(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=1-10000000'})
         self.assertEqual(response.code, 206)
         robots_file_path = os.path.join(self.static_dir, "robots.txt")
@@ -999,7 +999,7 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.headers.get("Content-Range"), "bytes 1-25/26")
 
     def test_static_with_range_end_edge(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=22-'})
         self.assertEqual(response.body, b": /\n")
         self.assertEqual(response.headers.get("Content-Length"), "4")
@@ -1007,7 +1007,7 @@ class StaticFileTest(WebTestCase):
                          "bytes 22-25/26")
 
     def test_static_with_range_neg_end(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=-4'})
         self.assertEqual(response.body, b": /\n")
         self.assertEqual(response.headers.get("Content-Length"), "4")
@@ -1015,19 +1015,19 @@ class StaticFileTest(WebTestCase):
                          "bytes 22-25/26")
 
     def test_static_invalid_range(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'asdf'})
         self.assertEqual(response.code, 200)
 
     def test_static_unsatisfiable_range_zero_suffix(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=-0'})
         self.assertEqual(response.headers.get("Content-Range"),
                          "bytes */26")
         self.assertEqual(response.code, 416)
 
     def test_static_unsatisfiable_range_invalid_start(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=26'})
         self.assertEqual(response.code, 416)
         self.assertEqual(response.headers.get("Content-Range"),
@@ -1052,7 +1052,7 @@ class StaticFileTest(WebTestCase):
                          b'"' + self.robots_txt_hash + b'"')
 
     def test_static_range_if_none_match(self):
-        response = self.fetch('/static/robots.txt', headers={
+        response = self.get_and_head('/static/robots.txt', headers={
             'Range': 'bytes=1-4',
             'If-None-Match': b'"' + self.robots_txt_hash + b'"'})
         self.assertEqual(response.code, 304)
@@ -1062,7 +1062,7 @@ class StaticFileTest(WebTestCase):
                          b'"' + self.robots_txt_hash + b'"')
 
     def test_static_404(self):
-        response = self.fetch('/static/blarg')
+        response = self.get_and_head('/static/blarg')
         self.assertEqual(response.code, 404)
 
 
@@ -1134,6 +1134,11 @@ class CustomStaticFileTest(WebTestCase):
                 if path == 'CustomStaticFileTest:foo.txt':
                     return b'bar'
                 raise Exception("unexpected path %r" % path)
+
+            def get_content_size(self):
+                if self.absolute_path == 'CustomStaticFileTest:foo.txt':
+                    return 3
+                raise Exception("unexpected path %r" % self.absolute_path)
 
             def get_modified_time(self):
                 return None
@@ -1549,19 +1554,26 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
 
 
 @wsgi_safe
-class SetCurrentUserTest(SimpleHandlerTestCase):
+class SetLazyPropertiesTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def prepare(self):
             self.current_user = 'Ben'
+            self.locale = locale.get('en_US')
+
+        def get_user_locale(self):
+            raise NotImplementedError()
+
+        def get_current_user(self):
+            raise NotImplementedError()
 
         def get(self):
-            self.write('Hello %s' % self.current_user)
+            self.write('Hello %s (%s)' % (self.current_user, self.locale.code))
 
-    def test_set_current_user(self):
+    def test_set_properties(self):
         # Ensure that current_user can be assigned to normally for apps
         # that want to forgo the lazy get_current_user property
         response = self.fetch('/')
-        self.assertEqual(response.body, b'Hello Ben')
+        self.assertEqual(response.body, b'Hello Ben (en_US)')
 
 
 @wsgi_safe
@@ -2024,3 +2036,287 @@ class ClientCloseTest(SimpleHandlerTestCase):
     def test_client_close(self):
         response = self.fetch('/')
         self.assertEqual(response.code, 599)
+
+
+class SignedValueTest(unittest.TestCase):
+    SECRET = "It's a secret to everybody"
+
+    def past(self):
+        return self.present() - 86400 * 32
+
+    def present(self):
+        return 1300000000
+
+    def test_known_values(self):
+        signed_v1 = create_signed_value(SignedValueTest.SECRET, "key", "value",
+                                        version=1, clock=self.present)
+        self.assertEqual(
+            signed_v1,
+            b"dmFsdWU=|1300000000|31c934969f53e48164c50768b40cbd7e2daaaa4f")
+
+        signed_v2 = create_signed_value(SignedValueTest.SECRET, "key", "value",
+                                        version=2, clock=self.present)
+        self.assertEqual(
+            signed_v2,
+            b"2|1:0|10:1300000000|3:key|8:dmFsdWU=|"
+            b"3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152")
+
+        signed_default = create_signed_value(SignedValueTest.SECRET,
+                                             "key", "value", clock=self.present)
+        self.assertEqual(signed_default, signed_v2)
+
+        decoded_v1 = decode_signed_value(SignedValueTest.SECRET, "key",
+                                         signed_v1, min_version=1,
+                                         clock=self.present)
+        self.assertEqual(decoded_v1, b"value")
+
+        decoded_v2 = decode_signed_value(SignedValueTest.SECRET, "key",
+                                         signed_v2, min_version=2,
+                                         clock=self.present)
+        self.assertEqual(decoded_v2, b"value")
+
+    def test_name_swap(self):
+        signed1 = create_signed_value(SignedValueTest.SECRET, "key1", "value",
+                                      clock=self.present)
+        signed2 = create_signed_value(SignedValueTest.SECRET, "key2", "value",
+                                      clock=self.present)
+        # Try decoding each string with the other's "name"
+        decoded1 = decode_signed_value(SignedValueTest.SECRET, "key2", signed1,
+                                       clock=self.present)
+        self.assertIs(decoded1, None)
+        decoded2 = decode_signed_value(SignedValueTest.SECRET, "key1", signed2,
+                                       clock=self.present)
+        self.assertIs(decoded2, None)
+
+    def test_expired(self):
+        signed = create_signed_value(SignedValueTest.SECRET, "key1", "value",
+                                     clock=self.past)
+        decoded_past = decode_signed_value(SignedValueTest.SECRET, "key1",
+                                           signed, clock=self.past)
+        self.assertEqual(decoded_past, b"value")
+        decoded_present = decode_signed_value(SignedValueTest.SECRET, "key1",
+                                              signed, clock=self.present)
+        self.assertIs(decoded_present, None)
+
+    def test_payload_tampering(self):
+        # These cookies are variants of the one in test_known_values.
+        sig = "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"
+        def validate(prefix):
+            return (b'value' ==
+                    decode_signed_value(SignedValueTest.SECRET, "key",
+                                        prefix + sig, clock=self.present))
+        self.assertTrue(validate("2|1:0|10:1300000000|3:key|8:dmFsdWU=|"))
+        # Change key version
+        self.assertFalse(validate("2|1:1|10:1300000000|3:key|8:dmFsdWU=|"))
+        # length mismatch (field too short)
+        self.assertFalse(validate("2|1:0|10:130000000|3:key|8:dmFsdWU=|"))
+        # length mismatch (field too long)
+        self.assertFalse(validate("2|1:0|10:1300000000|3:keey|8:dmFsdWU=|"))
+
+    def test_signature_tampering(self):
+        prefix = "2|1:0|10:1300000000|3:key|8:dmFsdWU=|"
+        def validate(sig):
+            return (b'value' ==
+                    decode_signed_value(SignedValueTest.SECRET, "key",
+                                        prefix + sig, clock=self.present))
+        self.assertTrue(validate(
+            "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"))
+        # All zeros
+        self.assertFalse(validate("0" * 32))
+        # Change one character
+        self.assertFalse(validate(
+            "4d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"))
+        # Change another character
+        self.assertFalse(validate(
+            "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e153"))
+        # Truncate
+        self.assertFalse(validate(
+            "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e15"))
+        # Lengthen
+        self.assertFalse(validate(
+            "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e1538"))
+
+    def test_non_ascii(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET, "key", value,
+                                     clock=self.present)
+        decoded = decode_signed_value(SignedValueTest.SECRET, "key", signed,
+                                      clock=self.present)
+        self.assertEqual(value, decoded)
+
+
+@wsgi_safe
+class XSRFTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            version = int(self.get_argument("version", "2"))
+            # This would be a bad idea in a real app, but in this test
+            # it's fine.
+            self.settings["xsrf_cookie_version"] = version
+            self.write(self.xsrf_token)
+
+        def post(self):
+            self.write("ok")
+
+    def get_app_kwargs(self):
+        return dict(xsrf_cookies=True)
+
+    def setUp(self):
+        super(XSRFTest, self).setUp()
+        self.xsrf_token = self.get_token()
+
+    def get_token(self, old_token=None, version=None):
+        if old_token is not None:
+            headers = self.cookie_headers(old_token)
+        else:
+            headers = None
+        response = self.fetch(
+            "/" if version is None else ("/?version=%d" % version),
+            headers=headers)
+        response.rethrow()
+        return native_str(response.body)
+
+    def cookie_headers(self, token=None):
+        if token is None:
+            token = self.xsrf_token
+        return {"Cookie": "_xsrf=" + token}
+
+    def test_xsrf_fail_no_token(self):
+        with ExpectLog(gen_log, ".*'_xsrf' argument missing"):
+            response = self.fetch("/", method="POST", body=b"")
+        self.assertEqual(response.code, 403)
+
+    def test_xsrf_fail_body_no_cookie(self):
+        with ExpectLog(gen_log, ".*XSRF cookie does not match POST"):
+            response = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)))
+        self.assertEqual(response.code, 403)
+
+    def test_xsrf_fail_cookie_no_body(self):
+        with ExpectLog(gen_log, ".*'_xsrf' argument missing"):
+            response = self.fetch(
+                "/", method="POST", body=b"",
+                headers=self.cookie_headers())
+        self.assertEqual(response.code, 403)
+
+    def test_xsrf_success_short_token(self):
+        response = self.fetch(
+            "/", method="POST",
+            body=urllib_parse.urlencode(dict(_xsrf='deadbeef')),
+            headers=self.cookie_headers(token='deadbeef'))
+        self.assertEqual(response.code, 200)
+
+    def test_xsrf_success_non_hex_token(self):
+        response = self.fetch(
+            "/", method="POST",
+            body=urllib_parse.urlencode(dict(_xsrf='xoxo')),
+            headers=self.cookie_headers(token='xoxo'))
+        self.assertEqual(response.code, 200)
+
+    def test_xsrf_success_post_body(self):
+        response = self.fetch(
+            "/", method="POST",
+            body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)),
+            headers=self.cookie_headers())
+        self.assertEqual(response.code, 200)
+
+    def test_xsrf_success_query_string(self):
+        response = self.fetch(
+            "/?" + urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)),
+            method="POST", body=b"",
+            headers=self.cookie_headers())
+        self.assertEqual(response.code, 200)
+
+    def test_xsrf_success_header(self):
+        response = self.fetch("/", method="POST", body=b"",
+                              headers=dict({"X-Xsrftoken": self.xsrf_token},
+                                           **self.cookie_headers()))
+        self.assertEqual(response.code, 200)
+
+    def test_distinct_tokens(self):
+        # Every request gets a distinct token.
+        NUM_TOKENS = 10
+        tokens = set()
+        for i in range(NUM_TOKENS):
+            tokens.add(self.get_token())
+        self.assertEqual(len(tokens), NUM_TOKENS)
+
+    def test_cross_user(self):
+        token2 = self.get_token()
+        # Each token can be used to authenticate its own request.
+        for token in (self.xsrf_token, token2):
+            response  = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf=token)),
+                headers=self.cookie_headers(token))
+            self.assertEqual(response.code, 200)
+        # Sending one in the cookie and the other in the body is not allowed.
+        for cookie_token, body_token in ((self.xsrf_token, token2),
+                                         (token2, self.xsrf_token)):
+            with ExpectLog(gen_log, '.*XSRF cookie does not match POST'):
+                response = self.fetch(
+                    "/", method="POST",
+                    body=urllib_parse.urlencode(dict(_xsrf=body_token)),
+                    headers=self.cookie_headers(cookie_token))
+            self.assertEqual(response.code, 403)
+
+    def test_refresh_token(self):
+        token = self.xsrf_token
+        tokens_seen = set([token])
+        # A user's token is stable over time.  Refreshing the page in one tab
+        # might update the cookie while an older tab still has the old cookie
+        # in its DOM.  Simulate this scenario by passing a constant token
+        # in the body and re-querying for the token.
+        for i in range(5):
+            token = self.get_token(token)
+            # Tokens are encoded uniquely each time
+            tokens_seen.add(token)
+            response = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)),
+                headers=self.cookie_headers(token))
+            self.assertEqual(response.code, 200)
+        self.assertEqual(len(tokens_seen), 6)
+
+    def test_versioning(self):
+        # Version 1 still produces distinct tokens per request.
+        self.assertNotEqual(self.get_token(version=1),
+                            self.get_token(version=1))
+
+        # Refreshed v1 tokens are all identical.
+        v1_token = self.get_token(version=1)
+        for i in range(5):
+            self.assertEqual(self.get_token(v1_token, version=1), v1_token)
+
+        # Upgrade to a v2 version of the same token
+        v2_token = self.get_token(v1_token)
+        self.assertNotEqual(v1_token, v2_token)
+        # Each v1 token can map to many v2 tokens.
+        self.assertNotEqual(v2_token, self.get_token(v1_token))
+
+        # The tokens are cross-compatible.
+        for cookie_token, body_token in ((v1_token, v2_token),
+                                         (v2_token, v1_token)):
+            response = self.fetch(
+                "/", method="POST",
+                body=urllib_parse.urlencode(dict(_xsrf=body_token)),
+                headers=self.cookie_headers(cookie_token))
+            self.assertEqual(response.code, 200)
+
+
+@wsgi_safe
+class FinishExceptionTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.set_status(401)
+            self.set_header('WWW-Authenticate', 'Basic realm="something"')
+            self.write('authentication required')
+            raise Finish()
+
+    def test_finish_exception(self):
+        response = self.fetch('/')
+        self.assertEqual(response.code, 401)
+        self.assertEqual('Basic realm="something"',
+                         response.headers.get('WWW-Authenticate'))
+        self.assertEqual(b'authentication required', response.body)

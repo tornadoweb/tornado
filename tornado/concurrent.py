@@ -64,7 +64,7 @@ class Future(Configurable):
     This functionality was previously available in a separate class
     ``TracebackFuture``, which is now a deprecated alias for this class.
 
-    .. versionchanged:: 3.3
+    .. versionchanged:: 4.0
        `tornado.concurrent.Future` is always a thread-unsafe ``Future``
        with support for the ``exc_info`` methods.  Previously it would
        be an alias for the thread-safe `concurrent.futures.Future`
@@ -142,7 +142,7 @@ class Future(Configurable):
     def exc_info(self):
         """Returns a tuple in the same format as `sys.exc_info` or None.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
         """
         raise NotImplementedError()
 
@@ -151,7 +151,7 @@ class Future(Configurable):
 
         Preserves tracebacks on Python 2.
 
-        .. versionadded:: 3.3
+        .. versionadded:: 4.0
         """
         raise NotImplementedError()
 
@@ -237,6 +237,7 @@ if concurrent_futures is not None:
     FUTURES += (concurrent_futures.Future,)
 if asyncio_futures is not None:
     FUTURES += (asyncio_futures.Future,)
+
 
 def is_future(x):
     return isinstance(x, FUTURES)
