@@ -1348,12 +1348,25 @@ class GzipTestCase(SimpleHandlerTestCase):
             self.write('hello world')
 
     def get_app_kwargs(self):
-        return dict(gzip=True)
+        return dict(
+            gzip=True,
+            static_path=os.path.join(os.path.dirname(__file__), 'static'))
 
     def test_gzip(self):
         response = self.fetch('/')
         # simple_httpclient renames the content-encoding header;
         # curl_httpclient doesn't.
+        self.assertEqual(
+            response.headers.get(
+                'Content-Encoding',
+                response.headers.get('X-Consumed-Content-Encoding')),
+            'gzip')
+        self.assertEqual(response.headers['Vary'], 'Accept-Encoding')
+
+    def test_gzip_static(self):
+        # The streaming responses in StaticFileHandler have subtle
+        # interactions with the gzip output so test this case separately.
+        response = self.fetch('/robots.txt')
         self.assertEqual(
             response.headers.get(
                 'Content-Encoding',

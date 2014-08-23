@@ -2548,7 +2548,6 @@ class GZipContentEncoding(OutputTransform):
             ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = self._compressible_type(ctype) and \
                 (not finishing or len(chunk) >= self.MIN_LENGTH) and \
-                (finishing or "Content-Length" not in headers) and \
                 ("Content-Encoding" not in headers)
         if self._gzipping:
             headers["Content-Encoding"] = "gzip"
@@ -2556,7 +2555,14 @@ class GZipContentEncoding(OutputTransform):
             self._gzip_file = gzip.GzipFile(mode="w", fileobj=self._gzip_value)
             chunk = self.transform_chunk(chunk, finishing)
             if "Content-Length" in headers:
-                headers["Content-Length"] = str(len(chunk))
+                # The original content length is no longer correct.
+                # If this is the last (and only) chunk, we can set the new
+                # content-length; otherwise we remove it and fall back to
+                # chunked encoding.
+                if finishing:
+                    headers["Content-Length"] = str(len(chunk))
+                else:
+                    del headers["Content-Length"]
         return status_code, headers, chunk
 
     def transform_chunk(self, chunk, finishing):
