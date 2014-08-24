@@ -262,6 +262,7 @@ class Template(object):
             "datetime": datetime,
             "_tt_utf8": escape.utf8,  # for internal use
             "_tt_string_types": (unicode_type, bytes_type),
+            "_tt_str": unicode_type,
             # __name__ and __loader__ allow the traceback mechanism to find
             # the generated source code.
             "__name__": self.name.replace('.', '_'),
@@ -542,7 +543,7 @@ class _Expression(_Node):
         writer.write_line("_tt_tmp = %s" % self.expression, self.line)
         writer.write_line("if isinstance(_tt_tmp, _tt_string_types):"
                           " _tt_tmp = _tt_utf8(_tt_tmp)", self.line)
-        writer.write_line("else: _tt_tmp = _tt_utf8(str(_tt_tmp))", self.line)
+        writer.write_line("else: _tt_tmp = _tt_utf8(_tt_str(_tt_tmp))", self.line)
         if not self.raw and writer.current_template.autoescape is not None:
             # In python3 functions like xhtml_escape return unicode,
             # so we have to convert to utf8 again.
