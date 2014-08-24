@@ -724,7 +724,7 @@ class PollIOLoop(IOLoop):
         #
         # If someone has already set a wakeup fd, we don't want to
         # disturb it.  This is an issue for twisted, which does its
-        # SIGCHILD processing in response to its own wakeup fd being
+        # SIGCHLD processing in response to its own wakeup fd being
         # written to.  As long as the wakeup fd is registered on the IOLoop,
         # the loop will still wake up and everything should work.
         old_wakeup_fd = None
