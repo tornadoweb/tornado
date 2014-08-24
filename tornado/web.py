@@ -2492,7 +2492,7 @@ class FallbackHandler(RequestHandler):
             django.core.handlers.wsgi.WSGIHandler())
         application = tornado.web.Application([
             (r"/foo", FooHandler),
-            (r".*", FallbackHandler, dict(fallback=wsgi_app),
+            (r".*", FallbackHandler, dict(fallback=wsgi_app)),
         ])
     """
     def initialize(self, fallback):
