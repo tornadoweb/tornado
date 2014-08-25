@@ -84,7 +84,7 @@ from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import bytes_type, import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
+from tornado.util import import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
 
 
 try:
@@ -341,7 +341,7 @@ class RequestHandler(object):
     _INVALID_HEADER_CHAR_RE = re.compile(br"[\x00-\x1f]")
 
     def _convert_header_value(self, value):
-        if isinstance(value, bytes_type):
+        if isinstance(value, bytes):
             pass
         elif isinstance(value, unicode_type):
             value = value.encode('utf-8')
@@ -649,7 +649,7 @@ class RequestHandler(object):
             raise RuntimeError("Cannot write() after finish().  May be caused "
                                "by using async operations without the "
                                "@asynchronous decorator.")
-        if not isinstance(chunk, (bytes_type, unicode_type, dict)):
+        if not isinstance(chunk, (bytes, unicode_type, dict)):
             raise TypeError("write() only accepts bytes, unicode, and dict objects")
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
@@ -674,7 +674,7 @@ class RequestHandler(object):
                 js_embed.append(utf8(embed_part))
             file_part = module.javascript_files()
             if file_part:
-                if isinstance(file_part, (unicode_type, bytes_type)):
+                if isinstance(file_part, (unicode_type, bytes)):
                     js_files.append(file_part)
                 else:
                     js_files.extend(file_part)
@@ -683,7 +683,7 @@ class RequestHandler(object):
                 css_embed.append(utf8(embed_part))
             file_part = module.css_files()
             if file_part:
-                if isinstance(file_part, (unicode_type, bytes_type)):
+                if isinstance(file_part, (unicode_type, bytes)):
                     css_files.append(file_part)
                 else:
                     css_files.extend(file_part)
@@ -2169,7 +2169,7 @@ class StaticFileHandler(RequestHandler):
 
         if include_body:
             content = self.get_content(self.absolute_path, start, end)
-            if isinstance(content, bytes_type):
+            if isinstance(content, bytes):
                 content = [content]
             for chunk in content:
                 self.write(chunk)
@@ -2340,7 +2340,7 @@ class StaticFileHandler(RequestHandler):
         """
         data = cls.get_content(abspath)
         hasher = hashlib.md5()
-        if isinstance(data, bytes_type):
+        if isinstance(data, bytes):
             hasher.update(data)
         else:
             for chunk in data:
@@ -2715,7 +2715,7 @@ class TemplateModule(UIModule):
     def javascript_files(self):
         result = []
         for f in self._get_resources("javascript_files"):
-            if isinstance(f, (unicode_type, bytes_type)):
+            if isinstance(f, (unicode_type, bytes)):
                 result.append(f)
             else:
                 result.extend(f)
@@ -2727,7 +2727,7 @@ class TemplateModule(UIModule):
     def css_files(self):
         result = []
         for f in self._get_resources("css_files"):
-            if isinstance(f, (unicode_type, bytes_type)):
+            if isinstance(f, (unicode_type, bytes)):
                 result.append(f)
             else:
                 result.extend(f)
@@ -2832,7 +2832,7 @@ class URLSpec(object):
             return self._path
         converted_args = []
         for a in args:
-            if not isinstance(a, (unicode_type, bytes_type)):
+            if not isinstance(a, (unicode_type, bytes)):
                 a = str(a)
             converted_args.append(escape.url_escape(utf8(a), plus=False))
         return self._path % tuple(converted_args)

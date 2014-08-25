@@ -41,7 +41,7 @@ from tornado import httputil
 from tornado.log import access_log
 from tornado import web
 from tornado.escape import native_str
-from tornado.util import bytes_type, unicode_type
+from tornado.util import unicode_type
 
 
 try:
@@ -55,7 +55,7 @@ except ImportError:
 # here to minimize the temptation to use them in non-wsgi contexts.
 if str is unicode_type:
     def to_wsgi_str(s):
-        assert isinstance(s, bytes_type)
+        assert isinstance(s, bytes)
         return s.decode('latin1')
 
     def from_wsgi_str(s):
@@ -63,7 +63,7 @@ if str is unicode_type:
         return s.encode('latin1')
 else:
     def to_wsgi_str(s):
-        assert isinstance(s, bytes_type)
+        assert isinstance(s, bytes)
         return s
 
     def from_wsgi_str(s):

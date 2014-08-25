@@ -20,7 +20,7 @@ from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
 from tornado.test.util import unittest, skipOnTravis
-from tornado.util import u, bytes_type
+from tornado.util import u
 from tornado.web import Application, RequestHandler, url
 
 
@@ -287,7 +287,7 @@ Transfer-Encoding: chunked
 
     def test_types(self):
         response = self.fetch("/hello")
-        self.assertEqual(type(response.body), bytes_type)
+        self.assertEqual(type(response.body), bytes)
         self.assertEqual(type(response.headers["Content-Type"]), str)
         self.assertEqual(type(response.code), int)
         self.assertEqual(type(response.effective_url), str)

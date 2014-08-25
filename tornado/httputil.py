@@ -33,7 +33,7 @@ import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import ObjectDict, bytes_type
+from tornado.util import ObjectDict
 
 try:
     import Cookie  # py2
@@ -379,7 +379,7 @@ class HTTPServerRequest(object):
            Use ``request.connection`` and the `.HTTPConnection` methods
            to write the response.
         """
-        assert isinstance(chunk, bytes_type)
+        assert isinstance(chunk, bytes)
         self.connection.write(chunk, callback=callback)
 
     def finish(self):

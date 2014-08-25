@@ -115,13 +115,11 @@ def import_object(name):
 if type('') is not type(b''):
     def u(s):
         return s
-    bytes_type = bytes
     unicode_type = str
     basestring_type = str
 else:
     def u(s):
         return s.decode('unicode_escape')
-    bytes_type = str
     unicode_type = unicode
     basestring_type = basestring
 
@@ -237,7 +235,7 @@ class Configurable(object):
         some parameters.
         """
         base = cls.configurable_base()
-        if isinstance(impl, (unicode_type, bytes_type)):
+        if isinstance(impl, (unicode_type, bytes)):
             impl = import_object(impl)
         if impl is not None and not issubclass(impl, cls):
             raise ValueError("Invalid subclass of %s" % cls)

@@ -199,7 +199,7 @@ import threading
 
 from tornado import escape
 from tornado.log import app_log
-from tornado.util import bytes_type, ObjectDict, exec_in, unicode_type
+from tornado.util import ObjectDict, exec_in, unicode_type
 
 try:
     from cStringIO import StringIO  # py2
@@ -261,7 +261,7 @@ class Template(object):
             "linkify": escape.linkify,
             "datetime": datetime,
             "_tt_utf8": escape.utf8,  # for internal use
-            "_tt_string_types": (unicode_type, bytes_type),
+            "_tt_string_types": (unicode_type, bytes),
             # __name__ and __loader__ allow the traceback mechanism to find
             # the generated source code.
             "__name__": self.name.replace('.', '_'),

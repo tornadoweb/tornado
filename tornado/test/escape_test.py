@@ -5,7 +5,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import tornado.escape
 
 from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode
-from tornado.util import u, unicode_type, bytes_type
+from tornado.util import u, unicode_type
 from tornado.test.util import unittest
 
 linkify_tests = [
@@ -212,6 +212,6 @@ class EscapeTestCase(unittest.TestCase):
         # convert automatically if they are utf8; on python 3 byte strings
         # are not allowed.
         self.assertEqual(json_decode(json_encode(u("\u00e9"))), u("\u00e9"))
-        if bytes_type is str:
+        if bytes is str:
             self.assertEqual(json_decode(json_encode(utf8(u("\u00e9")))), u("\u00e9"))
             self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")

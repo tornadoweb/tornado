@@ -10,7 +10,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
-from tornado.util import u, bytes_type, ObjectDict, unicode_type
+from tornado.util import u, ObjectDict, unicode_type
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish
 
 import binascii
@@ -302,7 +302,7 @@ class EchoHandler(RequestHandler):
             if type(key) != str:
                 raise Exception("incorrect type for key: %r" % type(key))
             for value in self.request.arguments[key]:
-                if type(value) != bytes_type:
+                if type(value) != bytes:
                     raise Exception("incorrect type for value: %r" %
                                     type(value))
             for value in self.get_arguments(key):
@@ -370,10 +370,10 @@ class TypeCheckHandler(RequestHandler):
         if list(self.cookies.keys()) != ['asdf']:
             raise Exception("unexpected values for cookie keys: %r" %
                             self.cookies.keys())
-        self.check_type('get_secure_cookie', self.get_secure_cookie('asdf'), bytes_type)
+        self.check_type('get_secure_cookie', self.get_secure_cookie('asdf'), bytes)
         self.check_type('get_cookie', self.get_cookie('asdf'), str)
 
-        self.check_type('xsrf_token', self.xsrf_token, bytes_type)
+        self.check_type('xsrf_token', self.xsrf_token, bytes)
         self.check_type('xsrf_form_html', self.xsrf_form_html(), str)
 
         self.check_type('reverse_url', self.reverse_url('typecheck', 'foo'), str)
@@ -399,7 +399,7 @@ class TypeCheckHandler(RequestHandler):
 
 class DecodeArgHandler(RequestHandler):
     def decode_argument(self, value, name=None):
-        if type(value) != bytes_type:
+        if type(value) != bytes:
             raise Exception("unexpected type for value: %r" % type(value))
         # use self.request.arguments directly to avoid recursion
         if 'encoding' in self.request.arguments:
@@ -409,7 +409,7 @@ class DecodeArgHandler(RequestHandler):
 
     def get(self, arg):
         def describe(s):
-            if type(s) == bytes_type:
+            if type(s) == bytes:
                 return ["bytes", native_str(binascii.b2a_hex(s))]
             elif type(s) == unicode_type:
                 return ["unicode", s]

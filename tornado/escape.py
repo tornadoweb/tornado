@@ -25,7 +25,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import re
 import sys
 
-from tornado.util import bytes_type, unicode_type, basestring_type, u
+from tornado.util import unicode_type, basestring_type, u
 
 try:
     from urllib.parse import parse_qs as _parse_qs  # py3
@@ -187,7 +187,7 @@ else:
         return encoded
 
 
-_UTF8_TYPES = (bytes_type, type(None))
+_UTF8_TYPES = (bytes, type(None))
 
 
 def utf8(value):
@@ -215,7 +215,7 @@ def to_unicode(value):
     """
     if isinstance(value, _TO_UNICODE_TYPES):
         return value
-    if not isinstance(value, bytes_type):
+    if not isinstance(value, bytes):
         raise TypeError(
             "Expected bytes, unicode, or None; got %r" % type(value)
         )
@@ -246,7 +246,7 @@ def to_basestring(value):
     """
     if isinstance(value, _BASESTRING_TYPES):
         return value
-    if not isinstance(value, bytes_type):
+    if not isinstance(value, bytes):
         raise TypeError(
             "Expected bytes, unicode, or None; got %r" % type(value)
         )
@@ -264,7 +264,7 @@ def recursive_unicode(obj):
         return list(recursive_unicode(i) for i in obj)
     elif isinstance(obj, tuple):
         return tuple(recursive_unicode(i) for i in obj)
-    elif isinstance(obj, bytes_type):
+    elif isinstance(obj, bytes):
         return to_unicode(obj)
     else:
         return obj

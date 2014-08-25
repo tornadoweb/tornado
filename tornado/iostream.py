@@ -39,7 +39,7 @@ from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError
 from tornado import stack_context
-from tornado.util import bytes_type, errno_from_exception
+from tornado.util import errno_from_exception
 
 try:
     from tornado.platform.posix import _set_nonblocking
@@ -324,7 +324,7 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Now returns a `.Future` if no callback is given.
         """
-        assert isinstance(data, bytes_type)
+        assert isinstance(data, bytes)
         self._check_closed()
         # We use bool(_write_buffer) as a proxy for write_buffer_size>0,
         # so never put empty strings in the buffer.
