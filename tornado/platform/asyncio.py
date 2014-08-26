@@ -191,7 +191,7 @@ class AsyncIOFuture(asyncio.Future, concurrent.Future):
         asyncio.get_event_loop().run_forever()
     """
 
-    def __init__(self, *, loop=None):
+    def __init__(self, loop=None):
         asyncio.Future.__init__(self, loop=loop)
 
     def exc_info(self):
@@ -208,7 +208,7 @@ class AsyncIOFuture(asyncio.Future, concurrent.Future):
         asyncio.Future.add_done_callback(self, stack_context.wrap(fn))
 
 
-def wrap_tornado_future(future, *, loop=None):
+def wrap_tornado_future(future, loop=None):
     """Wraps a `.tornado.concurrent.Future` in an ``asyncio.Future``.
 
     If ``loop`` is not supplied, an event loop will be retrieved
