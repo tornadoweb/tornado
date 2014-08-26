@@ -222,6 +222,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     stack_context.wrap(self._on_timeout))
             self.tcp_client.connect(host, port, af=af,
                                     ssl_options=ssl_options,
+                                    max_buffer_size=self.max_buffer_size,
                                     callback=self._on_connect)
 
     def _get_ssl_options(self, scheme):
