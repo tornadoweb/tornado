@@ -32,7 +32,6 @@ from tornado import stack_context
 
 from tornado.escape import utf8, native_str
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
-from tornado.util import bytes_type
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
@@ -307,7 +306,7 @@ def _curl_setup_request(curl, request, buffer, headers):
         write_function = request.streaming_callback
     else:
         write_function = buffer.write
-    if bytes_type is str:  # py2
+    if bytes is str:  # py2
         curl.setopt(pycurl.WRITEFUNCTION, write_function)
     else:  # py3
         # Upstream pycurl doesn't support py3, but ubuntu 12.10 includes

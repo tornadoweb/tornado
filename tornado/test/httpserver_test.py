@@ -14,7 +14,7 @@ from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipOnTravis
-from tornado.util import u, bytes_type
+from tornado.util import u
 from tornado.web import Application, RequestHandler, asynchronous, stream_request_body
 from contextlib import closing
 import datetime
@@ -293,10 +293,10 @@ class TypeCheckHandler(RequestHandler):
         # secure cookies
 
         self.check_type('arg_key', list(self.request.arguments.keys())[0], str)
-        self.check_type('arg_value', list(self.request.arguments.values())[0][0], bytes_type)
+        self.check_type('arg_value', list(self.request.arguments.values())[0][0], bytes)
 
     def post(self):
-        self.check_type('body', self.request.body, bytes_type)
+        self.check_type('body', self.request.body, bytes)
         self.write(self.errors)
 
     def get(self):
@@ -354,7 +354,7 @@ class HTTPServerTest(AsyncHTTPTestCase):
         # if the data is not utf8.  On python 2 parse_qs will work,
         # but then the recursive_unicode call in EchoHandler will
         # fail.
-        if str is bytes_type:
+        if str is bytes:
             return
         with ExpectLog(gen_log, 'Invalid x-www-form-urlencoded body'):
             response = self.fetch(

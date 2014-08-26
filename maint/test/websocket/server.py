@@ -2,7 +2,6 @@
 
 from tornado.ioloop import IOLoop
 from tornado.options import define, options, parse_command_line
-from tornado.util import bytes_type
 from tornado.websocket import WebSocketHandler
 from tornado.web import Application
 
@@ -10,7 +9,7 @@ define('port', default=9000)
 
 class EchoHandler(WebSocketHandler):
     def on_message(self, message):
-        self.write_message(message, binary=isinstance(message, bytes_type))
+        self.write_message(message, binary=isinstance(message, bytes))
 
     def get_compression_options(self):
         return {}

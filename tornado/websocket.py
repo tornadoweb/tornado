@@ -36,7 +36,7 @@ from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
 from tornado import simple_httpclient
 from tornado.tcpclient import TCPClient
-from tornado.util import bytes_type, _websocket_mask
+from tornado.util import _websocket_mask
 
 try:
     from urllib.parse import urlparse # py2
@@ -651,7 +651,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         else:
             opcode = 0x1
         message = tornado.escape.utf8(message)
-        assert isinstance(message, bytes_type)
+        assert isinstance(message, bytes)
         self._message_bytes_out += len(message)
         flags = 0
         if self._compressor:
@@ -664,7 +664,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def write_ping(self, data):
         """Send ping frame."""
-        assert isinstance(data, bytes_type)
+        assert isinstance(data, bytes)
         self._write_frame(True, 0x9, data)
 
     def _receive_frame(self):

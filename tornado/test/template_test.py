@@ -7,7 +7,7 @@ import traceback
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
 from tornado.test.util import unittest
-from tornado.util import u, bytes_type, ObjectDict, unicode_type
+from tornado.util import u, ObjectDict, unicode_type
 
 
 class TemplateTest(unittest.TestCase):
@@ -374,7 +374,7 @@ raw: {% raw name %}""",
                              "{% autoescape py_escape %}s = {{ name }}\n"})
 
         def py_escape(s):
-            self.assertEqual(type(s), bytes_type)
+            self.assertEqual(type(s), bytes)
             return repr(native_str(s))
 
         def render(template, name):
