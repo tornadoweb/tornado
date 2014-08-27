@@ -226,13 +226,6 @@ def to_unicode(value):
 # but to avoid conflicts with the built-in unicode() function/type
 _unicode = to_unicode
 
-# When dealing with the standard library across python 2 and 3 it is
-# sometimes useful to have a direct conversion to the native string type
-if str is unicode_type:
-    native_str = to_unicode
-else:
-    native_str = utf8
-
 _BASESTRING_TYPES = (basestring_type, type(None))
 
 
@@ -409,3 +402,10 @@ else:
         if os.environ.get('TORNADO_EXTENSION') == '1':
             raise
         utf8 = _utf8_python
+
+# When dealing with the standard library across python 2 and 3 it is
+# sometimes useful to have a direct conversion to the native string type
+if str is unicode_type:
+    native_str = to_unicode
+else:
+    native_str = utf8
