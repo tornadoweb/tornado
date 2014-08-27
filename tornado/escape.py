@@ -22,6 +22,7 @@ have crept in over time.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import os
 import re
 import sys
 
@@ -190,7 +191,7 @@ else:
 _UTF8_TYPES = (bytes_type, type(None))
 
 
-def utf8(value):
+def _utf8_python(value):
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
@@ -395,7 +396,16 @@ def _build_unicode_map():
 
 _HTML_UNICODE_MAP = _build_unicode_map()
 
-try:
-    from .speedups import utf8
-except ImportError:
-    pass
+
+if (os.environ.get('TORNADO_NO_EXTENSION') or
+    os.environ.get('TORNADO_EXTENSION') == '0'):
+    # These environment variables exist to make it easier to do performance
+    # comparisons; they are not guaranteed to remain supported in the future.
+    utf8 = _utf8_python
+else:
+    try:
+        from tornado.speedups import utf8
+    except ImportError:
+        if os.environ.get('TORNADO_EXTENSION') == '1':
+            raise
+        utf8 = _utf8_python
