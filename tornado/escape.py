@@ -22,6 +22,7 @@ have crept in over time.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import os
 import re
 import sys
 
@@ -190,7 +191,7 @@ else:
 _UTF8_TYPES = (bytes, type(None))
 
 
-def utf8(value):
+def _utf8_python(value):
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
@@ -224,13 +225,6 @@ def to_unicode(value):
 # to_unicode was previously named _unicode not because it was private,
 # but to avoid conflicts with the built-in unicode() function/type
 _unicode = to_unicode
-
-# When dealing with the standard library across python 2 and 3 it is
-# sometimes useful to have a direct conversion to the native string type
-if str is unicode_type:
-    native_str = to_unicode
-else:
-    native_str = utf8
 
 _BASESTRING_TYPES = (basestring_type, type(None))
 
@@ -394,3 +388,24 @@ def _build_unicode_map():
     return unicode_map
 
 _HTML_UNICODE_MAP = _build_unicode_map()
+
+
+if (os.environ.get('TORNADO_NO_EXTENSION') or
+    os.environ.get('TORNADO_EXTENSION') == '0'):
+    # These environment variables exist to make it easier to do performance
+    # comparisons; they are not guaranteed to remain supported in the future.
+    utf8 = _utf8_python
+else:
+    try:
+        from tornado.speedups import utf8
+    except ImportError:
+        if os.environ.get('TORNADO_EXTENSION') == '1':
+            raise
+        utf8 = _utf8_python
+
+# When dealing with the standard library across python 2 and 3 it is
+# sometimes useful to have a direct conversion to the native string type
+if str is unicode_type:
+    native_str = to_unicode
+else:
+    native_str = utf8
