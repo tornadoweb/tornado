@@ -123,6 +123,9 @@ else:
     unicode_type = unicode
     basestring_type = basestring
 
+# Deprecated alias that was used before we dropped py25 support.
+# Left here in case anyone outside Tornado is using it.
+bytes_type = bytes
 
 if sys.version_info > (3,):
     exec("""
