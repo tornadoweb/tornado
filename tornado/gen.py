@@ -185,7 +185,18 @@ def _make_coroutine_wrapper(func, replace_callback):
                     future.set_exc_info(sys.exc_info())
                 else:
                     Runner(result, future, yielded)
-                return future
+                try:
+                    return future
+                finally:
+                    # Subtle memory optimization: if next() raised an exception,
+                    # the future's exc_info contains a traceback which
+                    # includes this stack frame.  This creates a cycle,
+                    # which will be collected at the next full GC but has
+                    # been shown to greatly increase memory usage of
+                    # benchmarks (relative to the refcount-based scheme
+                    # used in the absence of cycles).  We can avoid the
+                    # cycle by clearing the local variable after we return it.
+                    future = None
         future.set_result(result)
         return future
     return wrapper
