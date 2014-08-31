@@ -35,6 +35,11 @@ except ImportError:
     # ssl is not available on Google App Engine
     ssl = None
 
+try:
+    xrange  # py2
+except NameError:
+    xrange = range  # py3
+
 if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
     ssl_match_hostname = ssl.match_hostname
     SSLCertificateError = ssl.CertificateError
@@ -60,8 +65,11 @@ _ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
 if hasattr(errno, "WSAEWOULDBLOCK"):
     _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)
 
+# Default backlog used when calling sock.listen()
+_DEFAULT_BACKLOG = 128
 
-def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
+def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
+                 backlog=_DEFAULT_BACKLOG, flags=None):
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -141,7 +149,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
     return sockets
 
 if hasattr(socket, 'AF_UNIX'):
-    def bind_unix_socket(file, mode=0o600, backlog=128):
+    def bind_unix_socket(file, mode=0o600, backlog=_DEFAULT_BACKLOG):
         """Creates a listening unix socket.
 
         If a socket with the given name already exists, it will be deleted.
@@ -184,7 +192,18 @@ def add_accept_handler(sock, callback, io_loop=None):
         io_loop = IOLoop.current()
 
     def accept_handler(fd, events):
-        while True:
+        # More connections may come in while we're handling callbacks;
+        # to prevent starvation of other tasks we must limit the number
+        # of connections we accept at a time.  Ideally we would accept
+        # up to the number of connections that were waiting when we
+        # entered this method, but this information is not available
+        # (and rearranging this method to call accept() as many times
+        # as possible before running any callbacks would have adverse
+        # effects on load balancing in multiprocess configurations).
+        # Instead, we use the (default) listen backlog as a rough
+        # heuristic for the number of connections we can reasonably
+        # accept at once.
+        for i in xrange(_DEFAULT_BACKLOG):
             try:
                 connection, address = sock.accept()
             except socket.error as e:
