@@ -25,6 +25,14 @@ class TemplateTest(unittest.TestCase):
         template = Template("2 + 2 = {{ 2 + 2 }}")
         self.assertEqual(template.generate(), b"2 + 2 = 4")
 
+    def test_expression_fail_silently(self):
+        template = Template("Hello {{ names[1] }}!", fail_silently=True)
+        self.assertEqual(template.generate(names=["Ben"]), "Hello !")
+
+    def test_expression_fail_silently_from_loader(self):
+        loader = DictLoader({"expression.html": "Hello {{ names[1] }}!"}, fail_silently=True)
+        self.assertEqual(loader.load("expression.html").generate(names=['Ben']), "Hello !")
+
     def test_comment(self):
         template = Template("Hello{# TODO i18n #} {{ name }}!")
         self.assertEqual(template.generate(name=utf8("Ben")),
