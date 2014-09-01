@@ -269,6 +269,7 @@ class Template(object):
             "datetime": datetime,
             "_tt_utf8": escape.utf8,  # for internal use
             "_tt_string_types": (unicode_type, bytes),
+            "_tt_log": app_log,
             # __name__ and __loader__ allow the traceback mechanism to find
             # the generated source code.
             "__name__": self.name.replace('.', '_'),
@@ -552,6 +553,7 @@ class _Expression(_Node):
             writer.write_line("try:", self.line)
             writer.write_line(" _tt_tmp = %s" % self.expression, self.line)
             writer.write_line("except:", self.line)
+            writer.write_line(" _tt_log.error('Template expression error', exc_info=True)", self.line)
             writer.write_line(" _tt_tmp = ''", self.line)
         else:
             writer.write_line("_tt_tmp = %s" % self.expression, self.line)
