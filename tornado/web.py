@@ -806,6 +806,10 @@ class RequestHandler(object):
             # autoescape=None means "no escaping", so we have to be sure
             # to only pass this kwarg if the user asked for it.
             kwargs["autoescape"] = settings["autoescape"]
+
+        if 'template_fail_silently' in settings:
+            kwargs['fail_silently'] = settings['template_fail_silently']
+
         return template.Loader(template_path, **kwargs)
 
     def flush(self, include_footers=False, callback=None):
