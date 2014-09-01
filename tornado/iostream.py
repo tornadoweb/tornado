@@ -993,6 +993,11 @@ class IOStream(BaseIOStream):
 
         """
         self._connecting = True
+        if callback is not None:
+            self._connect_callback = stack_context.wrap(callback)
+            future = None
+        else:
+            future = self._connect_future = TracebackFuture()
         try:
             self.socket.connect(address)
         except socket.error as e:
@@ -1008,12 +1013,7 @@ class IOStream(BaseIOStream):
                 gen_log.warning("Connect error on fd %s: %s",
                                 self.socket.fileno(), e)
                 self.close(exc_info=True)
-                return
-        if callback is not None:
-            self._connect_callback = stack_context.wrap(callback)
-            future = None
-        else:
-            future = self._connect_future = TracebackFuture()
+                return future
         self._add_io_state(self.io_loop.WRITE)
         return future
 
