@@ -207,6 +207,7 @@ except ImportError:
     from io import StringIO  # py3
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
+_DEFAULT_FAIL_SILENTLY = False
 _UNSET = object()
 
 
@@ -220,7 +221,7 @@ class Template(object):
     # autodoc because _UNSET looks like garbage.  When changing
     # this signature update website/sphinx/template.rst too.
     def __init__(self, template_string, name="<string>", loader=None,
-                 compress_whitespace=None, autoescape=_UNSET):
+                 compress_whitespace=None, autoescape=_UNSET, fail_silently=_UNSET):
         self.name = name
         if compress_whitespace is None:
             compress_whitespace = name.endswith(".html") or \
@@ -231,6 +232,12 @@ class Template(object):
             self.autoescape = loader.autoescape
         else:
             self.autoescape = _DEFAULT_AUTOESCAPE
+        if fail_silently is not _UNSET:
+            self.fail_silently = fail_silently
+        elif loader:
+            self.fail_silently = loader.fail_silently
+        else:
+            self.fail_silently = _DEFAULT_FAIL_SILENTLY
         self.namespace = loader.namespace if loader else {}
         reader = _TemplateReader(name, escape.native_str(template_string))
         self.file = _File(self, _parse(reader, self))
@@ -262,6 +269,7 @@ class Template(object):
             "datetime": datetime,
             "_tt_utf8": escape.utf8,  # for internal use
             "_tt_string_types": (unicode_type, bytes),
+            "_tt_log": app_log,
             # __name__ and __loader__ allow the traceback mechanism to find
             # the generated source code.
             "__name__": self.name.replace('.', '_'),
@@ -312,12 +320,13 @@ class BaseLoader(object):
     ``{% extends %}`` and ``{% include %}``. The loader caches all
     templates after they are loaded the first time.
     """
-    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None):
+    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None, fail_silently=_DEFAULT_FAIL_SILENTLY):
         """``autoescape`` must be either None or a string naming a function
         in the template namespace, such as "xhtml_escape".
         """
         self.autoescape = autoescape
         self.namespace = namespace or {}
+        self.fail_silently = fail_silently
         self.templates = {}
         # self.lock protects self.templates.  It's a reentrant lock
         # because templates may load other templates via `include` or
@@ -533,13 +542,22 @@ class _Statement(_Node):
 
 
 class _Expression(_Node):
-    def __init__(self, expression, line, raw=False):
+    def __init__(self, expression, line, raw=False, fail_silently=False):
         self.expression = expression
         self.line = line
         self.raw = raw
+        self.fail_silently = fail_silently
 
     def generate(self, writer):
-        writer.write_line("_tt_tmp = %s" % self.expression, self.line)
+        if self.fail_silently:
+            writer.write_line("try:", self.line)
+            writer.write_line(" _tt_tmp = %s" % self.expression, self.line)
+            writer.write_line("except:", self.line)
+            writer.write_line(" _tt_log.error('Template expression error', exc_info=True)", self.line)
+            writer.write_line(" _tt_tmp = ''", self.line)
+        else:
+            writer.write_line("_tt_tmp = %s" % self.expression, self.line)
+
         writer.write_line("if isinstance(_tt_tmp, _tt_string_types):"
                           " _tt_tmp = _tt_utf8(_tt_tmp)", self.line)
         writer.write_line("else: _tt_tmp = _tt_utf8(str(_tt_tmp))", self.line)
@@ -757,7 +775,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
             reader.consume(2)
             if not contents:
                 raise ParseError("Empty expression on line %d" % line)
-            body.chunks.append(_Expression(contents, line))
+            body.chunks.append(_Expression(contents, line, fail_silently=template.fail_silently))
             continue
 
         # Block
