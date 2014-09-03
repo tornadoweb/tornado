@@ -27,11 +27,11 @@ class TemplateTest(unittest.TestCase):
 
     def test_expression_fail_silently(self):
         template = Template("Hello {{ names[1] }}!", fail_silently=True)
-        self.assertEqual(template.generate(names=["Ben"]), "Hello !")
+        self.assertEqual(template.generate(names=["Ben"]), b"Hello !")
 
     def test_expression_fail_silently_from_loader(self):
         loader = DictLoader({"expression.html": "Hello {{ names[1] }}!"}, fail_silently=True)
-        self.assertEqual(loader.load("expression.html").generate(names=['Ben']), "Hello !")
+        self.assertEqual(loader.load("expression.html").generate(names=['Ben']), b"Hello !")
 
     def test_comment(self):
         template = Template("Hello{# TODO i18n #} {{ name }}!")
