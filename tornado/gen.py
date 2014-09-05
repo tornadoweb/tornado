@@ -136,6 +136,17 @@ def coroutine(func, replace_callback=True):
 
     From the caller's perspective, ``@gen.coroutine`` is similar to
     the combination of ``@return_future`` and ``@gen.engine``.
+
+    .. warning::
+
+       When exceptions occur inside a coroutine, the exception
+       information will be stored in the `.Future` object. You must
+       examine the result of the `.Future` object, or the exception
+       may go unnoticed by your code. This means yielding the function
+       if called from another coroutine, using something like
+       `.IOLoop.run_sync` for top-level calls, or passing the `.Future`
+       to `.IOLoop.add_future`.
+
     """
     return _make_coroutine_wrapper(func, replace_callback=True)
 
