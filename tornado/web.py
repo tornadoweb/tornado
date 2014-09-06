@@ -88,11 +88,6 @@ from tornado.util import import_object, ObjectDict, raise_exc_info, unicode_type
 
 
 try:
-    import Cookie  # py2
-except ImportError:
-    import http.cookies as Cookie  # py3
-
-try:
     import urlparse  # py2
 except ImportError:
     import urllib.parse as urlparse  # py3
@@ -505,7 +500,7 @@ class RequestHandler(object):
             # Don't let us accidentally inject bad stuff
             raise ValueError("Invalid cookie %r: %r" % (name, value))
         if not hasattr(self, "_new_cookie"):
-            self._new_cookie = Cookie.SimpleCookie()
+            self._new_cookie = httputil.SilentCookie()
         if name in self._new_cookie:
             del self._new_cookie[name]
         self._new_cookie[name] = value

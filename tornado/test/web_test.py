@@ -185,6 +185,9 @@ class CookieTest(WebTestCase):
         response = self.fetch("/get", headers={"Cookie": 'foo="bar"'})
         self.assertEqual(response.body, b"bar")
 
+        response = self.fetch("/get", headers={"Cookie": "foo=bar; foo:bar=baz; bad%cookie=foo"})
+        self.assertEqual(response.body, b"bar")
+
         response = self.fetch("/get", headers={"Cookie": "/=exception;"})
         self.assertEqual(response.body, b"default")
 
