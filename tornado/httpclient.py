@@ -309,7 +309,7 @@ class HTTPRequest(object):
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
         :arg body: HTTP request body as a string (byte or unicode; if unicode
            the utf-8 encoding will be used)
-        :arg query_params additional query parameters
+        :arg dict query_params: additional query parameters
         :arg body_producer: Callable used for lazy/asynchronous request bodies.
            It is called with one argument, a ``write`` function, and should
            return a `.Future`.  It should call the write function with new
