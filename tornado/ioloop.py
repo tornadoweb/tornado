@@ -197,7 +197,7 @@ class IOLoop(Configurable):
 
         An `IOLoop` automatically becomes current for its thread
         when it is started, but it is sometimes useful to call
-        `make_current` explictly before starting the `IOLoop`,
+        `make_current` explicitly before starting the `IOLoop`,
         so that code run at startup time can find the right
         instance.
         """

@@ -155,7 +155,7 @@ def errno_from_exception(e):
     """Provides the errno from an Exception object.
 
     There are cases that the errno attribute was not set so we pull
-    the errno out of the args but if someone instatiates an Exception
+    the errno out of the args but if someone instantiates an Exception
     without any args you will get a tuple error. So this function
     abstracts all that behavior to give you a safe way to get the
     errno.
@@ -203,7 +203,7 @@ class Configurable(object):
             impl = cls
         args.update(kwargs)
         instance = super(Configurable, cls).__new__(impl)
-        # initialize vs __init__ chosen for compatiblity with AsyncHTTPClient
+        # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.
         instance.initialize(**args)

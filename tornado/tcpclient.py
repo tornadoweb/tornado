@@ -163,7 +163,7 @@ class TCPClient(object):
             functools.partial(self._create_stream, max_buffer_size))
         af, addr, stream = yield connector.start()
         # TODO: For better performance we could cache the (af, addr)
-        # information here and re-use it on sbusequent connections to
+        # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
             stream = yield stream.start_tls(False, ssl_options=ssl_options,
