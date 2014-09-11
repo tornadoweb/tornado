@@ -38,7 +38,7 @@ main function::
 This is the easiest way to start multiple processes and have them all
 share the same port, although it has some limitations.  First, each
 child process will have its own IOLoop, so it is important that
-nothing touch the global IOLoop instance (even indirectly) before the
+nothing touches the global IOLoop instance (even indirectly) before the
 fork.  Second, it is difficult to do zero-downtime updates in this model.
 Finally, since all the processes share the same port it is more difficult
 to monitor them individually.
