@@ -4,7 +4,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 import tornado.escape
 
-from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode
+from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode, squeeze
 from tornado.util import u, unicode_type
 from tornado.test.util import unittest
 
@@ -215,3 +215,8 @@ class EscapeTestCase(unittest.TestCase):
         if bytes is str:
             self.assertEqual(json_decode(json_encode(utf8(u("\u00e9")))), u("\u00e9"))
             self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")
+
+    def test_squeeze(self):
+        self.assertEqual(squeeze(u('sequences     of    whitespace   chars'))
+            , u('sequences of whitespace chars'))
+        

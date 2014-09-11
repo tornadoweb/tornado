@@ -554,7 +554,7 @@ class BaseIOStream(object):
             # Pretend to have a pending callback so that an EOF in
             # _read_to_buffer doesn't trigger an immediate close
             # callback.  At the end of this method we'll either
-            # estabilsh a real pending callback via
+            # establish a real pending callback via
             # _read_from_buffer or run the close callback.
             #
             # We need two try statements here so that
