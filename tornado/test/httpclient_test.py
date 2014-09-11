@@ -443,7 +443,8 @@ Transfer-Encoding: chunked
     #    self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
 
     def test_put_307(self):
-        response = self.fetch("/redirect?status=307&url=/put",
+        response = self.fetch("/redirect",
+                              query_params=dict(status="307", url="/put"),
                               method="PUT", body=b"hello")
         response.rethrow()
         self.assertEqual(response.body, b"Put body: hello")
@@ -563,3 +564,7 @@ class HTTPRequestTestCase(unittest.TestCase):
         request = HTTPRequest('http://example.com')
         request.body = 'foo'
         self.assertEqual(request.body, utf8('foo'))
+
+    def test_queryparams(self):
+        request = HTTPRequest('http://example.com', query_params={'foo': 'bar'})
+        self.assertEqual(request.query_params, {'foo': 'bar'})

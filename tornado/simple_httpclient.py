@@ -184,7 +184,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self._timeout = None
         self._sockaddr = None
         with stack_context.ExceptionStackContext(self._handle_exception):
-            self.parsed = urlparse.urlsplit(_unicode(self.request.url))
+            self.parsed = urlparse.urlsplit(_unicode(self.request.uri))
             if self.parsed.scheme not in ("http", "https"):
                 raise ValueError("Unsupported url scheme: %s" %
                                  self.request.url)
