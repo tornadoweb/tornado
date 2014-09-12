@@ -4,7 +4,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 import tornado.escape
 
-from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode, squeeze
+from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode, squeeze, recursive_unicode
 from tornado.util import u, unicode_type
 from tornado.test.util import unittest
 
@@ -219,4 +219,15 @@ class EscapeTestCase(unittest.TestCase):
     def test_squeeze(self):
         self.assertEqual(squeeze(u('sequences     of    whitespace   chars'))
             , u('sequences of whitespace chars'))
-        
+    
+    def test_recursive_unicode(self):
+        tests = {
+            'dict': {b"foo": b"bar"},
+            'list': [b"foo", b"bar"],
+            'tuple': (b"foo", b"bar"),
+            'bytes': b"foo"
+        }
+        self.assertEqual(recursive_unicode(tests['dict']), {u("foo"): u("bar")})
+        self.assertEqual(recursive_unicode(tests['list']), [u("foo"), u("bar")])
+        self.assertEqual(recursive_unicode(tests['tuple']), (u("foo"), u("bar")))
+        self.assertEqual(recursive_unicode(tests['bytes']), u("foo"))
