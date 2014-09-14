@@ -1,9 +1,9 @@
 ``tornado.platform.asyncio`` --- Bridge between ``asyncio`` and Tornado
 =======================================================================
 
-.. module:: tornado.platform.asyncio
-
 .. versionadded:: 3.2
+
+.. module:: tornado.platform.asyncio
 
 This module integrates Tornado with the ``asyncio`` module introduced
 in Python 3.4 (and available `as a separate download
@@ -15,11 +15,26 @@ default ``asyncio`` event loop.  Applications that need to run event
 loops on multiple threads may use `AsyncIOLoop` to create multiple
 loops.
 
+This is a work in progress and interfaces are subject to change.
+
+IOLoops
+-------
+
+.. py:class:: BaseAsyncIOLoop
+
+    Serves as a base for `.AsyncIOMainLoop` and `.AsyncIOLoop`.
+
+.. py:method:: BaseAsyncIOLoop.get_asyncio_loop
+
+    Returns the ``asyncio`` event loop used for this `.BaseAsyncIOLoop` object.
+
 .. py:class:: AsyncIOMainLoop
 
     ``AsyncIOMainLoop`` creates an `.IOLoop` that corresponds to the
     current ``asyncio`` event loop (i.e. the one returned by
-    ``asyncio.get_event_loop()``).  Recommended usage::
+    ``asyncio.get_event_loop()``).
+
+    Recommended usage::
 
         from tornado.platform.asyncio import AsyncIOMainLoop
         import asyncio
@@ -29,6 +44,7 @@ loops.
 .. py:class:: AsyncIOLoop
 
     ``AsyncIOLoop`` is an `.IOLoop` that runs on an ``asyncio`` event loop.
+
     This class follows the usual Tornado semantics for creating new
     ``IOLoops``; these loops are not necessarily related to the
     ``asyncio`` default event loop.  Recommended usage::
@@ -36,3 +52,29 @@ loops.
         from tornado.ioloop import IOLoop
         IOLoop.configure('tornado.platform.asyncio.AsyncIOLoop')
         IOLoop.instance().start()
+
+Future-related convenience functions
+------------------------------------
+
+.. py:class:: AsyncIOFuture
+
+    A Tornado-compatible ``asyncio.Future``.
+
+    Tornado can be instructed to use this class internally in place of the standard
+    `tornado.concurrent.Future`, making it possible to use ``Futures`` returned by
+    Tornado in coroutines running on an ``asyncio.Task`` without having to call
+    `wrap_tornado_future`. Recommended usage::
+
+        from tornado.concurrent import Future
+        from tornado.platform.asyncio import AsyncIOMainLoop
+        import asyncio
+        AsyncIOMainLoop().install()
+        Future.configure('tornado.platform.asyncio.AsyncIOFuture')
+        asyncio.get_event_loop().run_forever()
+
+.. py:function:: wrap_tornado_future(future, *, loop=None)
+
+    Wraps a `.tornado.concurrent.Future` in an ``asyncio.Future``.
+
+    If ``loop`` is not supplied, an event loop will be retrieved
+    using ``asyncio.get_event_loop()`` for use with the returned Future.

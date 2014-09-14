@@ -28,19 +28,23 @@ import functools
 import sys
 
 from tornado.stack_context import ExceptionStackContext, wrap
-from tornado.util import raise_exc_info, ArgReplacer
+from tornado.util import raise_exc_info, ArgReplacer, Configurable
 
 try:
-    from concurrent import futures
+    from concurrent import futures as concurrent_futures
 except ImportError:
-    futures = None
+    concurrent_futures = None
+try:
+    from asyncio import futures as asyncio_futures
+except ImportError:
+    asyncio_futures = None
 
 
 class ReturnValueIgnoredError(Exception):
     pass
 
 
-class Future(object):
+class Future(Configurable):
     """Placeholder for an asynchronous result.
 
     A ``Future`` encapsulates the result of an asynchronous
@@ -68,6 +72,92 @@ class Future(object):
        implementation if it was not.
 
     """
+
+    @classmethod
+    def configurable_base(cls):
+        return Future
+
+    @classmethod
+    def configurable_default(cls):
+        return TornadoFuture
+
+    def cancel(self):
+        """Cancel the operation, if possible.
+
+        Tornado ``Futures`` do not support cancellation, so this method always
+        returns False.
+        """
+        raise NotImplementedError()
+
+    def cancelled(self):
+        """Returns True if the operation has been cancelled.
+
+        Tornado ``Futures`` do not support cancellation, so this method
+        always returns False.
+        """
+        raise NotImplementedError()
+
+    def running(self):
+        """Returns True if this operation is currently running."""
+        raise NotImplementedError()
+
+    def done(self):
+        """Returns True if the future has finished running."""
+        raise NotImplementedError()
+
+    def result(self, timeout=None):
+        """If the operation succeeded, return its result.  If it failed,
+        re-raise its exception.
+        """
+        raise NotImplementedError()
+
+    def exception(self, timeout=None):
+        """If the operation raised an exception, return the `Exception`
+        object.  Otherwise returns None.
+        """
+        raise NotImplementedError()
+
+    def add_done_callback(self, fn):
+        """Attaches the given callback to the `Future`.
+
+        It will be invoked with the `Future` as its argument when the Future
+        has finished running and its result is available.  In Tornado
+        consider using `.IOLoop.add_future` instead of calling
+        `add_done_callback` directly.
+        """
+        raise NotImplementedError()
+
+    def set_result(self, result):
+        """Sets the result of a ``Future``.
+
+        It is undefined to call any of the ``set`` methods more than once
+        on the same object.
+        """
+        raise NotImplementedError()
+
+    def set_exception(self, exception):
+        """Sets the exception of a ``Future.``"""
+        raise NotImplementedError()
+
+    def exc_info(self):
+        """Returns a tuple in the same format as `sys.exc_info` or None.
+
+        .. versionadded:: 4.0
+        """
+        raise NotImplementedError()
+
+    def set_exc_info(self, exc_info):
+        """Sets the exception information of a ``Future.``
+
+        Preserves tracebacks on Python 2.
+
+        .. versionadded:: 4.0
+        """
+        raise NotImplementedError()
+
+
+
+class TornadoFuture(Future):
     def __init__(self):
         self._done = False
         self._result = None
@@ -76,33 +166,18 @@ class Future(object):
         self._callbacks = []
 
     def cancel(self):
-        """Cancel the operation, if possible.
-
-        Tornado ``Futures`` do not support cancellation, so this method always
-        returns False.
-        """
         return False
 
     def cancelled(self):
-        """Returns True if the operation has been cancelled.
-
-        Tornado ``Futures`` do not support cancellation, so this method
-        always returns False.
-        """
         return False
 
     def running(self):
-        """Returns True if this operation is currently running."""
         return not self._done
 
     def done(self):
-        """Returns True if the future has finished running."""
         return self._done
 
     def result(self, timeout=None):
-        """If the operation succeeded, return its result.  If it failed,
-        re-raise its exception.
-        """
         if self._result is not None:
             return self._result
         if self._exc_info is not None:
@@ -113,9 +188,6 @@ class Future(object):
         return self._result
 
     def exception(self, timeout=None):
-        """If the operation raised an exception, return the `Exception`
-        object.  Otherwise returns None.
-        """
         if self._exception is not None:
             return self._exception
         else:
@@ -123,46 +195,23 @@ class Future(object):
             return None
 
     def add_done_callback(self, fn):
-        """Attaches the given callback to the `Future`.
-
-        It will be invoked with the `Future` as its argument when the Future
-        has finished running and its result is available.  In Tornado
-        consider using `.IOLoop.add_future` instead of calling
-        `add_done_callback` directly.
-        """
         if self._done:
             fn(self)
         else:
             self._callbacks.append(fn)
 
     def set_result(self, result):
-        """Sets the result of a ``Future``.
-
-        It is undefined to call any of the ``set`` methods more than once
-        on the same object.
-        """
         self._result = result
         self._set_done()
 
     def set_exception(self, exception):
-        """Sets the exception of a ``Future.``"""
         self._exception = exception
         self._set_done()
 
     def exc_info(self):
-        """Returns a tuple in the same format as `sys.exc_info` or None.
-
-        .. versionadded:: 4.0
-        """
         return self._exc_info
 
     def set_exc_info(self, exc_info):
-        """Sets the exception information of a ``Future.``
-
-        Preserves tracebacks on Python 2.
-
-        .. versionadded:: 4.0
-        """
         self._exc_info = exc_info
         self.set_exception(exc_info[1])
 
@@ -177,12 +226,17 @@ class Future(object):
             cb(self)
         self._callbacks = None
 
+    def __iter__(self):
+        raise StopIteration((yield self))
+
+
 TracebackFuture = Future
 
-if futures is None:
-    FUTURES = Future
-else:
-    FUTURES = (futures.Future, Future)
+FUTURES = (Future,)
+if concurrent_futures is not None:
+    FUTURES += (concurrent_futures.Future,)
+if asyncio_futures is not None:
+    FUTURES += (asyncio_futures.Future,)
 
 
 def is_future(x):

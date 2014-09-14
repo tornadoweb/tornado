@@ -255,6 +255,9 @@ class YieldPoint(object):
         """
         raise NotImplementedError()
 
+    def __iter__(self):
+        raise StopIteration((yield self))
+
 
 class Callback(YieldPoint):
     """Returns a callable object that will allow a matching `Wait` to proceed.

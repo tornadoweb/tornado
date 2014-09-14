@@ -3,7 +3,7 @@
 
 .. automodule:: tornado.concurrent
     :members:
-    :exclude-members: Future, TracebackFuture
+    :exclude-members: Future, TracebackFuture, TornadoFuture
 
     .. autoclass:: Future
 
