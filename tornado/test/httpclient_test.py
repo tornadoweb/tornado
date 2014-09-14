@@ -433,7 +433,7 @@ Transfer-Encoding: chunked
     # to start again.  It does this *before* telling the socket callback to
     # unregister the FD.  Some IOLoop implementations have special kernel
     # integration to discover this immediately.  Tornado's IOLoops
-    # ignore errors on remove_handler to accomodate this behavior, but
+    # ignore errors on remove_handler to accommodate this behavior, but
     # Twisted's reactor does not.  The removeReader call fails and so
     # do all future removeAll calls (which our tests do at cleanup).
     #
