@@ -11,7 +11,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.util import u, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash
 
 import binascii
 import contextlib
@@ -2344,3 +2344,38 @@ class FinishExceptionTest(SimpleHandlerTestCase):
         self.assertEqual('Basic realm="something"',
                          response.headers.get('WWW-Authenticate'))
         self.assertEqual(b'authentication required', response.body)
+
+
+class DecoratorTest(WebTestCase):
+    def get_handlers(self):
+        class RemoveSlashHandler(RequestHandler):
+            @removeslash
+            def get(self):
+                pass
+
+        class AddSlashHandler(RequestHandler):
+            @addslash
+            def get(self):
+                pass
+
+        return [("/removeslash/", RemoveSlashHandler),
+                ("/addslash", AddSlashHandler),
+                ]
+
+    def test_removeslash(self):
+        response = self.fetch("/removeslash/", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/removeslash")
+
+        response = self.fetch("/removeslash/?foo=bar", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/removeslash?foo=bar")
+
+    def test_addslash(self):
+        response = self.fetch("/addslash", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/addslash/")
+
+        response = self.fetch("/addslash?foo=bar", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/addslash/?foo=bar")
