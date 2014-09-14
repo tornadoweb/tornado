@@ -167,12 +167,17 @@ class CookieTest(WebTestCase):
             def get(self):
                 self.set_cookie("foo", "bar", max_age=10)
 
+        class SetCookieExpiresDaysHandler(RequestHandler):
+            def get(self):
+                self.set_cookie("foo", "bar", expires_days=10)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
                 ("/special_char", SetCookieSpecialCharHandler),
                 ("/set_overwrite", SetCookieOverwriteHandler),
                 ("/set_max_age", SetCookieMaxAgeHandler),
+                ("/set_expires_days", SetCookieExpiresDaysHandler),
                 ]
 
     def test_set_cookie(self):
@@ -232,7 +237,17 @@ class CookieTest(WebTestCase):
         headers = response.headers.get_list("Set-Cookie")
         self.assertEqual(sorted(headers),
                          ["foo=bar; Max-Age=10; Path=/"])
+    
+    def test_set_cookie_expires_days(self):
+        response = self.fetch("/set_expires_days")
+        header = response.headers.get("Set-Cookie")
+        self.assertTrue(re.match('foo=bar; expires=(.+); Path=/', header))
 
+        expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
+        header_expires = datetime.datetime(*email.utils.parsedate(
+            header[17:header.find('; Path=/')])[:6])
+        self.assertTrue(expires - header_expires < datetime.timedelta(seconds=10))
+    
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
