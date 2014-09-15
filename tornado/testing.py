@@ -28,7 +28,7 @@ except ImportError:
     IOLoop = None
     netutil = None
     SimpleAsyncHTTPClient = None
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type
 import functools
@@ -237,7 +237,11 @@ class AsyncTestCase(unittest.TestCase):
         return IOLoop()
 
     def _handle_exception(self, typ, value, tb):
-        self.__failure = (typ, value, tb)
+        if self.__failure is None:
+            self.__failure = (typ, value, tb)
+        else:
+            app_log.error("multiple unhandled exceptions in test",
+                          exc_info=(typ, value, tb))
         self.stop()
         return True
 
