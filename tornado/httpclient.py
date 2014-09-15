@@ -63,7 +63,12 @@ class HTTPClient(object):
             response = http_client.fetch("http://www.google.com/")
             print response.body
         except httpclient.HTTPError as e:
-            print "Error:", e
+            # HTTPError is raised for non-200 responses; the response
+            # can be found in e.response.
+            print("Error: " + str(e))
+        except Exception as e:
+            # Other errors are possible, such as IOError.
+            print("Error: " + str(e))
         http_client.close()
     """
     def __init__(self, async_client_class=None, **kwargs):
