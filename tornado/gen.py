@@ -109,7 +109,10 @@ def engine(func):
                 raise ReturnValueIgnoredError(
                     "@gen.engine functions cannot return values: %r" %
                     (future.result(),))
-        future.add_done_callback(final_callback)
+        # The engine interface doesn't give us any way to return
+        # errors but to raise them into the stack context.
+        # Save the stack context here to use when the Future has resolved.
+        future.add_done_callback(stack_context.wrap(final_callback))
     return wrapper
 
 
