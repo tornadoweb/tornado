@@ -15,18 +15,18 @@ env:
 
 install:
     # always install unittest2 on py26 even if $DEPS is unset
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install unittest2; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then pip install futures mock Monotime==1.0; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy'* && $DEPS == true ]]; then pip install futures mock; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then pip install pycares pycurl; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then pip install mock; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then travis_retry pip install unittest2; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then travis_retry pip install futures mock Monotime==1.0; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy'* && $DEPS == true ]]; then travis_retry pip install futures mock; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry pip install pycares pycurl; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then travis_retry pip install mock; fi
     # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy' && $DEPS == true ]]; then pip install Twisted; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then pip install sphinx==1.2.2 sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy' && $DEPS == true ]]; then travis_retry pip install Twisted; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then travis_retry pip install sphinx==1.2.2 sphinx_rtd_theme; fi
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - python setup.py install
-    - pip install coveralls
+    - travis_retry pip install coveralls
 
 script:
     # Get out of the source directory before running tests to avoid PYTHONPATH
