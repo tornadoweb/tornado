@@ -10,7 +10,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
-from tornado.util import u, ObjectDict, unicode_type
+from tornado.util import u, ObjectDict, unicode_type, timedelta_to_seconds
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish
 
 import binascii
@@ -241,12 +241,13 @@ class CookieTest(WebTestCase):
     def test_set_cookie_expires_days(self):
         response = self.fetch("/set_expires_days")
         header = response.headers.get("Set-Cookie")
-        self.assertTrue(re.match('foo=bar; expires=(.+); Path=/', header))
+        match = re.match("foo=bar; expires=(?P<expires>.+); Path=/", header)
+        self.assertIsNotNone(match)
 
         expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
-        header_expires = datetime.datetime(*email.utils.parsedate(
-            header[17:header.find('; Path=/')])[:6])
-        self.assertTrue(expires - header_expires < datetime.timedelta(seconds=10))
+        header_expires = datetime.datetime(
+            *email.utils.parsedate(match.groupdict()["expires"])[:6])
+        self.assertTrue(abs(timedelta_to_seconds(expires - header_expires)) < 10)
     
 
 class AuthRedirectRequestHandler(RequestHandler):
