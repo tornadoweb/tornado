@@ -8,6 +8,7 @@ from contextlib import closing
 import functools
 import sys
 import threading
+import datetime
 from io import BytesIO
 
 from tornado.escape import utf8
@@ -22,6 +23,7 @@ from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, Expec
 from tornado.test.util import unittest, skipOnTravis
 from tornado.util import u
 from tornado.web import Application, RequestHandler, url
+from tornado.httputil import format_timestamp
 
 
 class HelloWorldHandler(RequestHandler):
@@ -563,3 +565,9 @@ class HTTPRequestTestCase(unittest.TestCase):
         request = HTTPRequest('http://example.com')
         request.body = 'foo'
         self.assertEqual(request.body, utf8('foo'))
+
+    def test_if_modified_since(self):
+        http_date = datetime.datetime.utcnow()
+        request = HTTPRequest('http://example.com', if_modified_since=http_date)
+        self.assertEqual(request.headers, 
+            {'If-Modified-Since': format_timestamp(http_date)})
