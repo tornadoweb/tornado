@@ -10,7 +10,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
-from tornado.util import u, ObjectDict, unicode_type
+from tornado.util import u, ObjectDict, unicode_type, timedelta_to_seconds
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash
 
 import binascii
@@ -167,12 +167,17 @@ class CookieTest(WebTestCase):
             def get(self):
                 self.set_cookie("foo", "bar", max_age=10)
 
+        class SetCookieExpiresDaysHandler(RequestHandler):
+            def get(self):
+                self.set_cookie("foo", "bar", expires_days=10)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
                 ("/special_char", SetCookieSpecialCharHandler),
                 ("/set_overwrite", SetCookieOverwriteHandler),
                 ("/set_max_age", SetCookieMaxAgeHandler),
+                ("/set_expires_days", SetCookieExpiresDaysHandler),
                 ]
 
     def test_set_cookie(self):
@@ -232,7 +237,18 @@ class CookieTest(WebTestCase):
         headers = response.headers.get_list("Set-Cookie")
         self.assertEqual(sorted(headers),
                          ["foo=bar; Max-Age=10; Path=/"])
+    
+    def test_set_cookie_expires_days(self):
+        response = self.fetch("/set_expires_days")
+        header = response.headers.get("Set-Cookie")
+        match = re.match("foo=bar; expires=(?P<expires>.+); Path=/", header)
+        self.assertIsNotNone(match)
 
+        expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
+        header_expires = datetime.datetime(
+            *email.utils.parsedate(match.groupdict()["expires"])[:6])
+        self.assertTrue(abs(timedelta_to_seconds(expires - header_expires)) < 10)
+    
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
