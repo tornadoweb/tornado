@@ -235,7 +235,7 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipOnTravis
     def test_request_timeout(self):
-        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
+        response = self.fetch('/trigger', query_params={'wake': 'false'}, request_timeout=0.1)
         self.assertEqual(response.code, 599)
         self.assertTrue(0.099 < response.request_time < 0.15, response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
@@ -266,9 +266,9 @@ class SimpleHTTPClientTestMixin(object):
         self.assertEqual(response.body, b"Hello world!")
 
     def xtest_multiple_content_length_accepted(self):
-        response = self.fetch("/content_length?value=2,2")
+        response = self.fetch("/content_length", query_params={"value": "2,2"})
         self.assertEqual(response.body, b"ok")
-        response = self.fetch("/content_length?value=2,%202,2")
+        response = self.fetch("/content_length", query_params={"value": "2, 2,2"})
         self.assertEqual(response.body, b"ok")
 
         response = self.fetch("/content_length?value=2,4")

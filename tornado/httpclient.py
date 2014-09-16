@@ -49,6 +49,7 @@ from tornado.escape import utf8, native_str
 from tornado import httputil, stack_context
 from tornado.ioloop import IOLoop
 from tornado.util import Configurable
+from tornado.httputil import url_concat
 
 
 class HTTPClient(object):
@@ -293,8 +294,8 @@ class HTTPRequest(object):
         validate_cert=True)
 
     def __init__(self, url, method="GET", headers=None, body=None,
-                 auth_username=None, auth_password=None, auth_mode=None,
-                 connect_timeout=None, request_timeout=None,
+                 query_params=None, auth_username=None, auth_password=None,
+                 auth_mode=None, connect_timeout=None, request_timeout=None,
                  if_modified_since=None, follow_redirects=None,
                  max_redirects=None, user_agent=None, use_gzip=None,
                  network_interface=None, streaming_callback=None,
@@ -313,6 +314,7 @@ class HTTPRequest(object):
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
         :arg body: HTTP request body as a string (byte or unicode; if unicode
            the utf-8 encoding will be used)
+        :arg dict query_params: additional query parameters
         :arg body_producer: Callable used for lazy/asynchronous request bodies.
            It is called with one argument, a ``write`` function, and should
            return a `.Future`.  It should call the write function with new
@@ -416,6 +418,7 @@ class HTTPRequest(object):
         self.url = url
         self.method = method
         self.body = body
+        self.query_params = query_params
         self.body_producer = body_producer
         self.auth_username = auth_username
         self.auth_password = auth_password
@@ -492,6 +495,10 @@ class HTTPRequest(object):
     @prepare_curl_callback.setter
     def prepare_curl_callback(self, value):
         self._prepare_curl_callback = stack_context.wrap(value)
+
+    @property
+    def uri(self):
+        return url_concat(self.url, self.query_params)
 
 
 class HTTPResponse(object):

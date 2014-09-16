@@ -855,9 +855,11 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.read_queue = collections.deque()
         self.key = base64.b64encode(os.urandom(16))
 
-        scheme, sep, rest = request.url.partition(':')
+        scheme, sep, rest = request.uri.partition(':')
         scheme = {'ws': 'http', 'wss': 'https'}[scheme]
-        request.url = scheme + sep + rest
+        request.request.url = scheme + sep + rest
+        request.request.query_params = dict()
+
         request.headers.update({
             'Upgrade': 'websocket',
             'Connection': 'Upgrade',

@@ -270,7 +270,7 @@ def _curl_create():
 
 
 def _curl_setup_request(curl, request, buffer, headers):
-    curl.setopt(pycurl.URL, native_str(request.url))
+    curl.setopt(pycurl.URL, native_str(request.uri))
 
     # libcurl's magic "Expect: 100-continue" behavior causes delays
     # with servers that don't support it (which include, among others,
@@ -417,11 +417,11 @@ def _curl_setup_request(curl, request, buffer, headers):
             raise ValueError("Unsupported auth_mode %s" % request.auth_mode)
 
         curl.setopt(pycurl.USERPWD, native_str(userpwd))
-        gen_log.debug("%s %s (username: %r)", request.method, request.url,
+        gen_log.debug("%s %s (username: %r)", request.method, request.uri,
                       request.auth_username)
     else:
         curl.unsetopt(pycurl.USERPWD)
-        gen_log.debug("%s %s", request.method, request.url)
+        gen_log.debug("%s %s", request.method, request.uri)
 
     if request.client_cert is not None:
         curl.setopt(pycurl.SSLCERT, request.client_cert)
