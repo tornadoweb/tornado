@@ -625,8 +625,12 @@ class RequestHandler(object):
         else:
             assert isinstance(status, int) and 300 <= status <= 399
         self.set_status(status)
-        self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
-                                                     utf8(url)))
+
+        url = urlparse.urljoin(utf8(self.request.uri), utf8(url)).replace('//', '/')
+        location = "".join([self.request.protocol, "://", self.request.host, url])
+
+        self.set_header("Location",  location)
+
         self.finish()
 
     def write(self, chunk):
