@@ -27,11 +27,12 @@ from io import BytesIO
 
 from tornado import httputil
 from tornado import ioloop
-from tornado.log import gen_log
 from tornado import stack_context
 
 from tornado.escape import utf8, native_str
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
+
+curl_log = logging.getLogger("tornado.curl_httpclient")
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
@@ -263,7 +264,7 @@ class CurlError(HTTPError):
 
 def _curl_create():
     curl = pycurl.Curl()
-    if gen_log.isEnabledFor(logging.DEBUG):
+    if curl_log.isEnabledFor(logging.DEBUG):
         curl.setopt(pycurl.VERBOSE, 1)
         curl.setopt(pycurl.DEBUGFUNCTION, _curl_debug)
     return curl
@@ -417,11 +418,11 @@ def _curl_setup_request(curl, request, buffer, headers):
             raise ValueError("Unsupported auth_mode %s" % request.auth_mode)
 
         curl.setopt(pycurl.USERPWD, native_str(userpwd))
-        gen_log.debug("%s %s (username: %r)", request.method, request.url,
-                      request.auth_username)
+        curl_log.debug("%s %s (username: %r)", request.method, request.url,
+                       request.auth_username)
     else:
         curl.unsetopt(pycurl.USERPWD)
-        gen_log.debug("%s %s", request.method, request.url)
+        curl_log.debug("%s %s", request.method, request.url)
 
     if request.client_cert is not None:
         curl.setopt(pycurl.SSLCERT, request.client_cert)
@@ -461,12 +462,12 @@ def _curl_header_callback(headers, header_line):
 def _curl_debug(debug_type, debug_msg):
     debug_types = ('I', '<', '>', '<', '>')
     if debug_type == 0:
-        gen_log.debug('%s', debug_msg.strip())
+        curl_log.debug('%s', debug_msg.strip())
     elif debug_type in (1, 2):
         for line in debug_msg.splitlines():
-            gen_log.debug('%s %s', debug_types[debug_type], line)
+            curl_log.debug('%s %s', debug_types[debug_type], line)
     elif debug_type == 4:
-        gen_log.debug('%s %r', debug_types[debug_type], debug_msg)
+        curl_log.debug('%s %r', debug_types[debug_type], debug_msg)
 
 if __name__ == "__main__":
     AsyncHTTPClient.configure(CurlAsyncHTTPClient)
