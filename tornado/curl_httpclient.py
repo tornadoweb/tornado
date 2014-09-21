@@ -19,6 +19,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import collections
+import functools
 import logging
 import pycurl
 import threading
@@ -287,15 +288,12 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.HTTPHEADER,
                         [native_str("%s: %s" % i) for i in request.headers.items()])
 
-        if request.header_callback:
-            curl.setopt(pycurl.HEADERFUNCTION,
-                        lambda line: request.header_callback(native_str(line)))
-        else:
-            curl.setopt(pycurl.HEADERFUNCTION,
-                        lambda line: self._curl_header_callback(
-                            headers, native_str(line)))
+        curl.setopt(pycurl.HEADERFUNCTION,
+                    functools.partial(self._curl_header_callback,
+                        headers, request.header_callback))
         if request.streaming_callback:
-            write_function = request.streaming_callback
+            write_function = lambda chunk: self.io_loop.add_callback(
+                request.streaming_callback, chunk)
         else:
             write_function = buffer.write
         if bytes is str:  # py2
@@ -434,7 +432,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if request.prepare_curl_callback is not None:
             request.prepare_curl_callback(curl)
 
-    def _curl_header_callback(self, headers, header_line):
+    def _curl_header_callback(self, headers, header_callback, header_line):
+        header_line = native_str(header_line)
+        if header_callback is not None:
+            self.io_loop.add_callback(header_callback, header_line)
         # header_line as returned by curl includes the end-of-line characters.
         header_line = header_line.strip()
         if header_line.startswith("HTTP/"):
