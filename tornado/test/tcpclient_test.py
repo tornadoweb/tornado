@@ -89,6 +89,8 @@ class TCPClientTest(AsyncTestCase):
             data = yield self.server.streams[0].read_bytes(5)
             self.assertEqual(data, b"hello")
 
+    do_test_connect.__test__ = False # or nosetests would run it directly
+
     def test_connect_ipv4_ipv4(self):
         self.do_test_connect(socket.AF_INET, '127.0.0.1')
 
