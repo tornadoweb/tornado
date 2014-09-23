@@ -84,3 +84,10 @@ class EnglishTest(unittest.TestCase):
     def test_friendly_number(self):
         locale = tornado.locale.get('en_US')
         self.assertEqual(locale.friendly_number(1000000), '1,000,000')
+
+    def test_list(self):
+        locale = tornado.locale.get('en_US')
+        self.assertEqual(locale.list([]), '')
+        self.assertEqual(locale.list(['A']), 'A')
+        self.assertEqual(locale.list(['A', 'B']), 'A and B')
+        self.assertEqual(locale.list(['A', 'B', 'C']), 'A, B and C')
