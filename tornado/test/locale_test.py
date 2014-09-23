@@ -80,3 +80,7 @@ class EnglishTest(unittest.TestCase):
         date = now - datetime.timedelta(days=500)
         self.assertEqual(locale.format_date(date, full_format=False, shorter=True),
                          '%s %d, %d' % (locale._months[date.month - 1], date.day, date.year))
+
+    def test_friendly_number(self):
+        locale = tornado.locale.get('en_US')
+        self.assertEqual(locale.friendly_number(1000000), '1,000,000')
