@@ -91,3 +91,9 @@ class EnglishTest(unittest.TestCase):
         self.assertEqual(locale.list(['A']), 'A')
         self.assertEqual(locale.list(['A', 'B']), 'A and B')
         self.assertEqual(locale.list(['A', 'B', 'C']), 'A, B and C')
+
+    def test_format_day(self):
+        locale = tornado.locale.get('en_US')
+        date = datetime.datetime(2013, 4, 28, 18, 35)
+        self.assertEqual(locale.format_day(date=date, dow=True), 'Sunday, April 28')
+        self.assertEqual(locale.format_day(date=date, dow=False), 'April 28')
