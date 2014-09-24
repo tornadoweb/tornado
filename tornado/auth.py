@@ -994,11 +994,12 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     """
     _OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
     _OAUTH_ACCESS_TOKEN_URL = "https://accounts.google.com/o/oauth2/token"
+    _OAUTH_BASE_URL = "https://www.googleapis.com/oauth2/v2"
     _OAUTH_NO_CALLBACKS = False
     _OAUTH_SETTINGS_KEY = 'google_oauth'
 
     @_auth_return_future
-    def get_authenticated_user(self, redirect_uri, code, callback):
+    def get_authenticated_user(self, redirect_uri, code, client_id=None, client_secret=None, callback=None):
         """Handles the login for the Google user, returning a user object.
 
         Example usage::
@@ -1024,8 +1025,11 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         body = urllib_parse.urlencode({
             "redirect_uri": redirect_uri,
             "code": code,
-            "client_id": self.settings[self._OAUTH_SETTINGS_KEY]['key'],
-            "client_secret": self.settings[self._OAUTH_SETTINGS_KEY]['secret'],
+            # TODO #### before pull request
+            "client_id": client_id,
+            "client_secret": client_secret,
+            # "client_id": self.settings[self._OAUTH_SETTINGS_KEY]['key'],
+            # "client_secret": self.settings[self._OAUTH_SETTINGS_KEY]['secret'],
             "grant_type": "authorization_code",
         })
 
@@ -1040,7 +1044,52 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             return
 
         args = escape.json_decode(response.body)
-        future.set_result(args)
+        session = {
+            "access_token": args["access_token"],
+            "expires": args.get("expires_in")
+        }
+
+        self.google_request(
+            path="/userinfo",
+            callback=functools.partial(
+                self._on_get_user_info, future, session),
+            access_token=args["access_token"],
+        )
+
+    @_auth_return_future
+    def google_request(self, path, callback, access_token=None,
+                         post_args=None, **args):
+        url = self._OAUTH_BASE_URL + path
+        all_args = {}
+        if access_token:
+            all_args["access_token"] = access_token
+            all_args.update(args)
+
+        if all_args:
+            url += "?" + urllib_parse.urlencode(all_args)
+        callback = functools.partial(self._on_google_request, callback)
+        http = self.get_auth_http_client()
+        if post_args is not None:
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, callback=callback)
+
+    def _on_google_request(self, future, response):
+        if response.error:
+            future.set_exception(AuthError("Error response %s fetching %s" %
+                                           (response.error, response.request.url)))
+            return
+
+        future.set_result(escape.json_decode(response.body))
+
+    def _on_get_user_info(self, future, session, user):
+        if user is None:
+            future.set_result(None)
+            return
+
+        user.update({"access_token": session["access_token"], "session_expires": session.get("expires")})
+        future.set_result(user)
 
     def get_auth_http_client(self):
         """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
@@ -1405,6 +1454,352 @@ class FacebookGraphMixin(OAuth2Mixin):
             return
 
         future.set_result(escape.json_decode(response.body))
+
+    @staticmethod
+    def get_auth_http_client():
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+
+        May be overridden by subclasses to use an HTTP client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
+
+
+class YandexOAuth2Mixin(OAuth2Mixin):
+    """ Yandex implementation
+
+    It's nothing special but the same two methods:
+        authorize redirect
+        get authenticated user
+    """
+    _OAUTH_AUTHORIZE_URL = 'https://oauth.yandex.ru/authorize'
+    _OAUTH_ACCESS_TOKEN_URL = 'https://oauth.yandex.ru/token'
+    _YANDEX_BASE_URL = 'https://login.yandex.ru'
+
+    @staticmethod
+    def _get_auth_http_client():
+        return httpclient.AsyncHTTPClient()
+
+    def _oauth_request_token_url(self, redirect_uri=None, client_id=None, client_secret=None, code=None,
+                                 extra_params=None):
+        url = self._OAUTH_ACCESS_TOKEN_URL
+        args = dict(
+            code=code,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+        if extra_params:
+            args.update(extra_params)
+        return url, urllib_parse.urlencode(args)
+
+    @_auth_return_future
+    def get_authenticated_user(self, client_id=None, client_secret=None, code=None, extra_params=None, callback=None):
+        http = self.get_auth_http_client()
+        args = {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "extra_params": extra_params,
+        }
+        token_request_url, token_request_args = self._oauth_request_token_url(**args)
+        http.fetch(request=token_request_url,
+                   body=token_request_args,
+                   method="POST",
+                   callback=functools.partial(self._on_access_token, client_id,
+                                              client_secret, callback))
+
+    def _on_access_token(self, client_id, client_secret,
+                         future, response):
+        if response.error:
+            future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
+            return
+
+        args = escape.json_decode(escape.native_str(response.body))
+        session = {
+            "access_token": args["access_token"],
+            "expires": args.get("expires_in")
+        }
+
+        self.yandex_request(
+            path="/info",
+            callback=functools.partial(
+                self._on_get_user_info, future, session),
+            access_token=session["access_token"],
+        )
+
+    def _on_get_user_info(self, future, session, user):
+        if user is None:
+            future.set_result(None)
+            return
+
+        user.update({"access_token": session["access_token"], "session_expires": session.get("expires")})
+        future.set_result(user)
+
+    @_auth_return_future
+    def yandex_request(self, path, callback, access_token=None,
+                       post_args=None, **args):
+        url = self._YANDEX_BASE_URL + path
+        all_args = {}
+        if access_token:
+            all_args["oauth_token"] = access_token
+            all_args.update(args)
+
+        if all_args:
+            url += "?" + urllib_parse.urlencode(all_args)
+        callback = functools.partial(self._on_yandex_request, callback)
+        http = self.get_auth_http_client()
+        if post_args is not None:
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, callback=callback)
+
+    def _on_yandex_request(self, future, response):
+        if response.error:
+            future.set_exception(AuthError("Error response %s fetching %s" %
+                                           (response.error, response.request.url)))
+            return
+
+        future.set_result(escape.json_decode(response.body))
+
+    @staticmethod
+    def get_auth_http_client():
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+
+        May be overridden by subclasses to use an HTTP client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
+
+
+class MailRuOAuth2Mixin(OAuth2Mixin):
+    """ Mail.ru implementation
+
+    As usual we have two methods here:
+        authorize redirect
+        get authenticated user
+    """
+    _OAUTH_ACCESS_TOKEN_URL = 'https://connect.mail.ru/oauth/token'
+    _OAUTH_AUTHORIZE_URL = 'https://connect.mail.ru/oauth/authorize'
+    _MAIL_RU_BASE_URL = 'http://www.appsmail.ru/platform/api'
+
+    @staticmethod
+    def _get_auth_http_client():
+        return httpclient.AsyncHTTPClient()
+
+    def _oauth_request_token_url(self, redirect_uri=None, client_id=None, client_secret=None, code=None,
+                                 extra_params=None):
+        url = self._OAUTH_ACCESS_TOKEN_URL
+        args = dict(
+            redirect_uri=redirect_uri,
+            code=code,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+        if extra_params:
+            args.update(extra_params)
+        return url, urllib_parse.urlencode(args)
+
+    @_auth_return_future
+    def get_authenticated_user(self, redirect_uri=None, client_id=None, client_secret=None, code=None,
+                               extra_params=None, callback=None):
+
+        http = self._get_auth_http_client()
+        args = {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            'redirect_uri': redirect_uri,
+            "extra_params": extra_params,
+        }
+        token_request_url, token_request_args = self._oauth_request_token_url(**args)
+
+        http.fetch(request=token_request_url,
+                   body=token_request_args,
+                   method="POST",
+                   callback=functools.partial(self._on_access_token, client_id,
+                                              client_secret, callback))
+
+    def _on_access_token(self, client_id, client_secret,
+                         future, response):
+        if response.error:
+            future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
+            return
+
+        args = escape.json_decode(escape.native_str(response.body))
+        session = {
+            "access_token": args["access_token"],
+            "refresh_token": args["refresh_token"],
+            "expires": args.get("expires_in")
+        }
+
+        sig_params = 'app_id=%smethod=users.getInfosecure=1session_key=%s%s' % (
+            client_id, session['access_token'], client_secret)
+        api_params = {
+            'method': 'users.getInfo',
+            'secure': 1,
+            'app_id': client_id,
+            'session_key': session['access_token'],
+            'sig': hashlib.md5(sig_params).hexdigest()
+        }
+
+        self.mail_ru_request(api_params=api_params,
+                             callback=functools.partial(self._on_get_user_info, future, session),)
+
+    @_auth_return_future
+    def mail_ru_request(self, api_params, callback, post_args=None):
+        url = url_concat(self._MAIL_RU_BASE_URL, api_params)
+
+        callback = functools.partial(self._on_mail_ru_request, callback)
+        http = self._get_auth_http_client()
+        if post_args is not None:
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, callback=callback)
+
+    def _on_get_user_info(self, future, session, response):
+        if response is None:
+            future.set_result(None)
+            return
+        user = response[0]
+        user.update({
+            "access_token": session["access_token"],
+            "session_expires": session.get("expires"),
+            "refresh_token": session.get("refresh_token")
+        })
+        future.set_result(user)
+
+    def _on_mail_ru_request(self, future, response):
+        if response.error:
+            future.set_exception(AuthError("Error response %s fetching %s" %
+                                           (response.error, response.request.url)))
+            return
+
+        future.set_result(escape.json_decode(response.body))
+
+
+class OKMixin(OAuth2Mixin):
+    _OAUTH_ACCESS_TOKEN_URL = "http://api.odnoklassniki.ru/oauth/token.do"
+    _OAUTH_AUTHORIZE_URL = "http://www.odnoklassniki.ru/oauth/authorize"
+    _OAUTH_REQUEST_URL = "http://api.odnoklassniki.ru/"
+
+    @return_future
+    def get_authenticated_user(self, redirect_uri, code, callback):
+        http = self.get_auth_http_client()
+        body = urllib_parse.urlencode({
+            "redirect_uri": redirect_uri,
+            "code": code,
+            "client_id": settings.OAUTH_ODNOKLASSNIKI['API_KEY'],
+            "client_secret": settings.OAUTH_ODNOKLASSNIKI['SECRET'],
+            "grant_type": "authorization_code",
+        })
+        http.fetch(self._OAUTH_ACCESS_TOKEN_URL,
+                   self.async_callback(self._on_access_token, callback),
+                   method="POST", headers={'Content-Type': 'application/x-www-form-urlencoded'}, body=body)
+
+    @staticmethod
+    def _on_access_token(future, response):
+        """Callback function for the exchange to the access token."""
+        if response.error:
+            future.set_exception(AuthError('Google auth error: %s' % str(response)))
+            return
+
+        args = escape.json_decode(response.body)
+        # print(args)
+        future.set_result(args)
+
+    @staticmethod
+    def get_auth_http_client():
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+
+        May be overridden by subclasses to use an HTTP client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
+
+    def ok_request(self, callback, api_method, params, access_token=None):
+        if access_token is None:
+            callback()
+            return
+
+        args = {"access_token": access_token}
+
+        if params:
+            args.update(params)
+        url = self._OAUTH_REQUEST_URL + api_method + ".json?" + urlencode(args)
+
+        http = httpclient.AsyncHTTPClient()
+        http.fetch(url, self.async_callback(self._on_ok_request, callback), validate_cert=False)
+
+    @staticmethod
+    def _on_ok_request(callback, response):
+        if response.error:
+            callback(None)
+            return
+        callback(tornado.escape.json_decode(response.body))
+
+    def _oauth_get_consumer_token(self):
+        #self.require_setting("client_secret", "Client OAuth2.0 Secret")
+        #self.require_setting("client_id", "Client OAuth2.0 ID")
+        return dict(
+            client_id=settings.OAUTH_ODNOKLASSNIKI['API_KEY'],
+            client_secret=settings.OAUTH_ODNOKLASSNIKI['SECRET'])
+
+
+class VKAuth2Mixin(OAuth2Mixin):
+    """Google authentication using OAuth2.
+
+    .. versionadded:: 3.2
+    """
+    _OAUTH_AUTHORIZE_URL = "https://oauth.vk.com/authorize"
+    _OAUTH_ACCESS_TOKEN_URL = "https://oauth.vk.com/access_token"
+    _OAUTH_NO_CALLBACKS = False
+
+    @return_future
+    def get_authenticated_user(self, redirect_uri, code, callback):
+        """Handles the login for the Google user, returning a user object.
+
+        Example usage::
+
+            class GoogleOAuth2LoginHandler(LoginHandler,
+                                           tornado.auth.GoogleOAuth2Mixin):
+                @tornado.gen.coroutine
+                def get(self):
+                    if self.get_argument('code', False):
+                        user = yield self.get_authenticated_user(
+                            redirect_uri='http://your.site.com/auth/google',
+                            code=self.get_argument('code'))
+                        # Save the user with e.g. set_secure_cookie
+                    else:
+                        yield self.authorize_redirect(
+                            redirect_uri='http://your.site.com/auth/google',
+                            client_id=self.settings['google_oauth']['key'],
+                            scope=['profile', 'email'],
+                            response_type='code',
+                            extra_params={'approval_prompt': 'auto'})
+        """
+        http = self.get_auth_http_client()
+        body = urllib_parse.urlencode({
+            "redirect_uri": redirect_uri,
+            "code": code,
+            "client_id": settings.OAUTH_VKONTAKTE['API_KEY'],
+            "client_secret": settings.OAUTH_VKONTAKTE['SECRET'],
+            "grant_type": "authorization_code",
+        })
+
+        http.fetch(self._OAUTH_ACCESS_TOKEN_URL,
+                   functools.partial(self._on_access_token, callback),
+                   method="POST", headers={'Content-Type': 'application/x-www-form-urlencoded'}, body=body)
+
+    def _on_access_token(self, future, response):
+        """Callback function for the exchange to the access token."""
+        if response.error:
+            future.set_exception(AuthError('Vk auth error: %s' % str(response)))
+            return
+
+        args = escape.json_decode(response.body)
+        future.set_result(args)
 
     def get_auth_http_client(self):
         """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
