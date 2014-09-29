@@ -53,6 +53,7 @@ import functools
 import itertools
 import sys
 import types
+import contextlib
 
 from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
@@ -763,3 +764,97 @@ def _argument_adapter(callback):
         else:
             callback(None)
     return wrapper
+
+
+class Locker(object):
+    """
+    See https://docs.python.org/3/library/asyncio-sync.html Lock class
+
+    How to Tornado locker:
+
+    locker = gen.Locker()
+
+    @locker.locked
+    @gen.coroutine
+    def do_async(param):
+        yield something()
+
+    @locker.locked
+    def do_sync(param):
+        return something
+
+    @gen.coroutine
+    def some_function():
+        with (yield locker.lock_manager()):
+            yield do_something_async()
+
+    @gen.coroutine
+    def some_fun():
+        yield locker.acquire()
+        try:
+            do_something_async()
+        finally:
+            locker.release()
+    """
+
+    def __init__(self):
+        self._locked = False
+        self._waiters = set()
+
+    def locked(self):
+        return self._locked
+
+    @coroutine
+    def acquire(self):
+        if not self._locked:
+            self._locked = True
+            return
+        waiter = Future()
+        self._waiters.add(waiter)
+        yield waiter
+        if self._locked:
+            raise RuntimeError('Mutex is still locked after brought up')
+        self._locked = True
+        raise Return(True) # see https://docs.python.org/3/library/asyncio-sync.html
+
+    def release(self):
+        if not self._locked:
+            raise RuntimeError('Attempting to unlock mutex while not locked')
+        self._locked = False
+        if self._waiters:
+            someone = self._waiters.pop()
+            # TODO: on nexttick? stack overflow possible?
+            someone.set_result(None)
+
+    def locked(self, fun):
+        """
+        Decorator
+        """
+        @functools.wraps(fun)
+        @coroutine
+        def wrapper(*args, **kwargs):
+            yield self.acquire()
+            try:
+                # either future, or None may be returned or exception may occur
+                ret = fun(*args, **kwargs)
+                if is_future(ret):
+                    ret = yield ret
+                raise Return(ret)
+            finally:
+                self.release()
+        return wrapper
+
+    @coroutine
+    def lock_manager(self):
+        """
+        mimic to API of asyncio.lock as much as possible
+        """
+        yield self.acquire()
+        @contextlib.contextmanager
+        def cm():
+            try:
+                yield
+            finally:
+                # release() is not asynchronous...
+                self.release() 
+        raise Return(cm())
