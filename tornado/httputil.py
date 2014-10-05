@@ -562,11 +562,18 @@ class HTTPConnection(object):
 
 
 def url_concat(url, args):
-    """Concatenate url and argument dictionary regardless of whether
+    """Concatenate url and arguments regardless of whether
     url has existing query parameters.
 
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat("http://example.com/foo", dict(c="d"))
+    'http://example.com/foo?c=d'
     >>> url_concat("http://example.com/foo?a=b", dict(c="d"))
     'http://example.com/foo?a=b&c=d'
+    >>> url_concat("http://example.com/foo?a=b", [("c", "d"), ("c", "d2")])
+    'http://example.com/foo?a=b&c=d&c=d2'
     """
     if not args:
         return url
