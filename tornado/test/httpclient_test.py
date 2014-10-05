@@ -416,17 +416,17 @@ Transfer-Encoding: chunked
         self.assertEqual(response.body, b'OTHER')
 
     @gen_test
-    def test_body(self):
+    def test_body_sanity_checks(self):
         hello_url = self.get_url('/hello')
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             yield self.http_client.fetch(hello_url, body='data')
 
-        self.assertTrue('must be empty' in str(context.exception))
+        self.assertTrue('must be None' in str(context.exception))
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             yield self.http_client.fetch(hello_url, method='POST')
 
-        self.assertTrue('must not be empty' in str(context.exception))
+        self.assertTrue('must not be None' in str(context.exception))
 
     # This test causes odd failures with the combination of
     # curl_httpclient (at least with the version of libcurl available

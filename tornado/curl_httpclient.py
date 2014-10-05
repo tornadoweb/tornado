@@ -377,11 +377,11 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # Handle curl's cryptic options for every individual HTTP method
         if request.method == "GET":
             if request.body is not None:
-                raise AssertionError('Body must be empty for GET request')
+                raise ValueError('Body must be None for GET request')
         elif request.method in ("POST", "PUT") or request.body:
             if request.body is None:
-                raise AssertionError(
-                    'Body must not be empty for "%s" request'
+                raise ValueError(
+                    'Body must not be None for "%s" request'
                     % request.method)
 
             request_buffer = BytesIO(utf8(request.body))

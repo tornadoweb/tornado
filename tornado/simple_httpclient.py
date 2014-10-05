@@ -314,18 +314,18 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
-            if self.request.method in ("POST", "PATCH", "PUT"):
-                if (self.request.body is None and
-                        self.request.body_producer is None):
-                    raise AssertionError(
-                        'Body must not be empty for "%s" request'
-                        % self.request.method)
-            else:
-                if (self.request.body is not None or
-                        self.request.body_producer is not None):
-                    raise AssertionError(
-                        'Body must be empty for "%s" request'
-                        % self.request.method)
+            # Some HTTP methods nearly always have bodies while others
+            # almost never do. Fail in this case unless the user has
+            # opted out of sanity checks with allow_nonstandard_methods.
+            body_expected = self.request.method in ("POST", "PATCH", "PUT")
+            body_present = (self.request.body is not None or
+                            self.request.body_producer is not None)
+            if ((body_expected and not body_present) or
+                (body_present and not body_expected)):
+                raise ValueError(
+                    'Body must %sbe None for method %s (unelss '
+                    'allow_nonstandard_methods is true)' %
+                    ('not ' if body_expected else '', self.request.method))
         if self.request.expect_100_continue:
             self.request.headers["Expect"] = "100-continue"
         if self.request.body is not None:
