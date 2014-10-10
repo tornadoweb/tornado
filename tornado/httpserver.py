@@ -50,6 +50,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
 
         import tornado.httpserver
         import tornado.ioloop
+        from tornado import httputil
 
         def handle_request(request):
            message = "You requested %s\n" % request.uri
