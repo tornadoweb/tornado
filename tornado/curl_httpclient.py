@@ -280,13 +280,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if "Pragma" not in request.headers:
             request.headers["Pragma"] = ""
 
-        # Request headers may be either a regular dict or HTTPHeaders object
-        if isinstance(request.headers, httputil.HTTPHeaders):
-            curl.setopt(pycurl.HTTPHEADER,
-                        [native_str("%s: %s" % i) for i in request.headers.get_all()])
-        else:
-            curl.setopt(pycurl.HTTPHEADER,
-                        [native_str("%s: %s" % i) for i in request.headers.items()])
+        curl.setopt(pycurl.HTTPHEADER,
+                    ["%s: %s" % (native_str(k), native_str(v))
+                     for k, v in request.headers.get_all()])
 
         curl.setopt(pycurl.HEADERFUNCTION,
                     functools.partial(self._curl_header_callback,

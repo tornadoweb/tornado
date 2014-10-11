@@ -23,7 +23,7 @@ from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, Expec
 from tornado.test.util import unittest, skipOnTravis
 from tornado.util import u
 from tornado.web import Application, RequestHandler, url
-from tornado.httputil import format_timestamp
+from tornado.httputil import format_timestamp, HTTPHeaders
 
 
 class HelloWorldHandler(RequestHandler):
@@ -346,6 +346,21 @@ Transfer-Encoding: chunked
             self.assertEqual(response.body, b'TestDefaultUserAgent')
         finally:
             client.close()
+
+    def test_header_types(self):
+        # Header values may be passed as character or utf8 byte strings,
+        # in a plain dictionary or an HTTPHeaders object.
+        # Keys must always be the native str type.
+        # All combinations should have the same results on the wire.
+        for value in [u("MyUserAgent"), b"MyUserAgent"]:
+            for container in [dict, HTTPHeaders]:
+                headers = container()
+                headers['User-Agent'] = value
+                resp = self.fetch('/user_agent', headers=headers)
+                self.assertEqual(
+                    resp.body, b"MyUserAgent",
+                    "response=%r, value=%r, container=%r" %
+                    (resp.body, value, container))
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
