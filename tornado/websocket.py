@@ -176,10 +176,11 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 self, compression_options=self.get_compression_options())
             self.ws_connection.accept_connection()
         else:
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 426 Upgrade Required\r\n"
-                "Sec-WebSocket-Version: 8\r\n\r\n"))
-            self.stream.close()
+            if not self.stream.closed():
+                self.stream.write(tornado.escape.utf8(
+                    "HTTP/1.1 426 Upgrade Required\r\n"
+                    "Sec-WebSocket-Version: 8\r\n\r\n"))
+                self.stream.close()
 
 
     def write_message(self, message, binary=False):
@@ -554,6 +555,9 @@ class WebSocketProtocol13(WebSocketProtocol):
                                         'permessage-deflate', ext[1]))
                 break
 
+        if self.stream.closed():
+            self._abort()
+            return
         self.stream.write(tornado.escape.utf8(
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
@@ -642,7 +646,10 @@ class WebSocketProtocol13(WebSocketProtocol):
             data = mask + _websocket_mask(mask, data)
         frame += data
         self._wire_bytes_out += len(frame)
-        self.stream.write(frame)
+        try:
+            self.stream.write(frame)
+        except StreamClosedError:
+            self._abort()
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket."""
@@ -657,10 +664,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         if self._compressor:
             message = self._compressor.compress(message)
             flags |= self.RSV1
-        try:
-            self._write_frame(True, opcode, message, flags=flags)
-        except StreamClosedError:
-            self._abort()
+        self._write_frame(True, opcode, message, flags=flags)
 
     def write_ping(self, data):
         """Send ping frame."""
