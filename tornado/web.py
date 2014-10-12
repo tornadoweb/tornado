@@ -2172,8 +2172,11 @@ class StaticFileHandler(RequestHandler):
             if isinstance(content, bytes):
                 content = [content]
             for chunk in content:
-                self.write(chunk)
-                yield self.flush()
+                try:
+                    self.write(chunk)
+                    yield self.flush()
+                except iostream.StreamClosedError:
+                    return
         else:
             assert self.request.method == "HEAD"
 
