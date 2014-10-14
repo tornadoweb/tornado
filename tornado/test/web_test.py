@@ -275,7 +275,7 @@ class AuthRedirectTest(WebTestCase):
                                follow_redirects=False)
         response = self.wait()
         self.assertEqual(response.code, 302)
-        self.assertEqual(response.headers['Location'], '/login?next=%2Frelative')
+        self.assertTrue('/login?next=%2Frelative' in response.headers['Location'])
 
     def test_absolute_auth_redirect(self):
         self.http_client.fetch(self.get_url('/absolute'), self.stop,
@@ -2391,17 +2391,17 @@ class DecoratorTest(WebTestCase):
     def test_removeslash(self):
         response = self.fetch("/removeslash/", follow_redirects=False)
         self.assertEqual(response.code, 301)
-        self.assertEqual(response.headers['Location'], "/removeslash")
+        self.assertTrue("/removeslash" in response.headers['Location'])
 
         response = self.fetch("/removeslash/?foo=bar", follow_redirects=False)
         self.assertEqual(response.code, 301)
-        self.assertEqual(response.headers['Location'], "/removeslash?foo=bar")
+        self.assertTrue("/removeslash?foo=bar" in response.headers['Location'])
 
     def test_addslash(self):
         response = self.fetch("/addslash", follow_redirects=False)
         self.assertEqual(response.code, 301)
-        self.assertEqual(response.headers['Location'], "/addslash/")
+        self.assertTrue("/addslash/" in response.headers['Location'])
 
         response = self.fetch("/addslash?foo=bar", follow_redirects=False)
         self.assertEqual(response.code, 301)
-        self.assertEqual(response.headers['Location'], "/addslash/?foo=bar")
+        self.assertTrue("/addslash/?foo=bar" in response.headers['Location'])
