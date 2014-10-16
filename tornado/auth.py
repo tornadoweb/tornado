@@ -634,9 +634,12 @@ class OAuth2Mixin(object):
         An introduction to the Facebook Graph API can be found at
         http://developers.facebook.com/docs/api
 
+        An introduction to the Google OAuth2 API can be found at
+        https://developers.google.com/accounts/docs/OAuth2
+
         Many methods require an OAuth access token which you can
         obtain through `~OAuth2Mixin.authorize_redirect` and
-        `get_authenticated_user`. The user returned through that
+        ``get_authenticated_user``. The user returned through that
         process includes an ``access_token`` attribute that can be
         used to make authenticated requests via this method.
 
@@ -1174,7 +1177,7 @@ class FacebookMixin(object):
                     raise tornado.web.HTTPError(500, "Facebook auth failed")
                 # Save the user using, e.g., set_secure_cookie()
 
-    The user object returned by `get_authenticated_user` includes the
+    The user object returned by ``get_authenticated_user`` includes the
     attributes ``facebook_uid`` and ``name`` in addition to session attributes
     like ``session_key``. You should save the session key with the user; it is
     required to make requests on behalf of the user later with
