@@ -15,7 +15,10 @@ configuring a WSGI container to find your application, you write a
         main()
 
 Configure your operating system or process manager to run this program to
-start the server.
+start the server. Please note that it may be necessary to increase the number 
+of open files per process (to avoid "Too many open files"-Error). 
+To raise this limit you can use the ulimit command or modify 
+/etc/security/limits.conf (setting it to 50000 for example).
 
 Processes and ports
 ~~~~~~~~~~~~~~~~~~~
