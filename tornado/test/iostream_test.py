@@ -224,10 +224,11 @@ class TestIOStreamMixin(object):
 
         def connect_callback():
             self.connect_called = True
+            self.stop()
         stream.set_close_callback(self.stop)
         # log messages vary by platform and ioloop implementation
         with ExpectLog(gen_log, ".*", required=False):
-            stream.connect(("localhost", port), connect_callback)
+            stream.connect(("127.0.0.1", port), connect_callback)
             self.wait()
         self.assertFalse(self.connect_called)
         self.assertTrue(isinstance(stream.error, socket.error), stream.error)
