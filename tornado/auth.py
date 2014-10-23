@@ -1418,13 +1418,17 @@ class FacebookGraphMixin(OAuth2Mixin):
             "expires": args.get("expires")
         }
 
-        self.auth_request(
+        self.facebook_request(
             path="/me",
             callback=functools.partial(
                 self._on_get_user_info, future, session, fields),
             access_token=session["access_token"],
             fields=",".join(fields)
         )
+
+    def facebook_request(self, path, callback, access_token=None,
+                         post_args=None, **args):
+        self.auth_request(path, callback, access_token, post_args, **args)
 
     def _on_get_user_info(self, future, session, fields, user):
         if user is None:
