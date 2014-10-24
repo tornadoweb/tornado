@@ -17,7 +17,7 @@ libcurl4-openssl-dev
 
 apt-get -y install $APT_PACKAGES
 
-# Ubuntu 12.10 includes python 2.7 and 3.2.
+# Ubuntu 14.04 includes python 2.7 and 3.4.
 
 PIP_PACKAGES="
 futures

@@ -3,17 +3,17 @@
 
 .. automodule:: tornado.wsgi
 
-   WSGIApplication
-   ---------------
+   Running Tornado apps on WSGI servers
+   ------------------------------------
+
+   .. autoclass:: WSGIAdapter
+      :members:
 
    .. autoclass:: WSGIApplication
       :members:
 
-   .. autoclass:: HTTPRequest
-      :members:
-
-   WSGIContainer
-   -------------
+   Running WSGI apps on Tornado servers
+   ------------------------------------
   
    .. autoclass:: WSGIContainer
       :members:

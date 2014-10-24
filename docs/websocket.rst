@@ -22,16 +22,16 @@
    Configuration
    -------------
 
-   .. automethod:: WebSocketHandler.allow_draft76
-   .. automethod:: WebSocketHandler.get_websocket_scheme
+   .. automethod:: WebSocketHandler.check_origin
+   .. automethod:: WebSocketHandler.get_compression_options
    .. automethod:: WebSocketHandler.set_nodelay
 
    Other
    -----
 
-   .. automethod:: WebSocketHandler.async_callback
    .. automethod:: WebSocketHandler.ping
    .. automethod:: WebSocketHandler.on_pong
+   .. autoexception:: WebSocketClosedError
 
 
    Client-side support

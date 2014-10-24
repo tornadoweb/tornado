@@ -41,13 +41,13 @@ Example usage::
             sys.exit(1)
 
     with StackContext(die_on_error):
-        # Any exception thrown here *or in callback and its desendents*
+        # Any exception thrown here *or in callback and its descendants*
         # will cause the process to exit instead of spinning endlessly
         # in the ioloop.
         http_client.fetch(url, callback)
     ioloop.start()
 
-Most applications shouln't have to work with `StackContext` directly.
+Most applications shouldn't have to work with `StackContext` directly.
 Here are a few rules of thumb for when it's necessary:
 
 * If you're writing an asynchronous library that doesn't rely on a
@@ -265,6 +265,18 @@ def wrap(fn):
     # Capture current stack head
     # TODO: Any other better way to store contexts and update them in wrapped function?
     cap_contexts = [_state.contexts]
+
+    if not cap_contexts[0][0] and not cap_contexts[0][1]:
+        # Fast path when there are no active contexts.
+        def null_wrapper(*args, **kwargs):
+            try:
+                current_state = _state.contexts
+                _state.contexts = cap_contexts[0]
+                return fn(*args, **kwargs)
+            finally:
+                _state.contexts = current_state
+        null_wrapper._wrapped = True
+        return null_wrapper
 
     def wrapped(*args, **kwargs):
         ret = None

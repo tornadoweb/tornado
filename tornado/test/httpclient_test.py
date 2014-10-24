@@ -8,6 +8,8 @@ from contextlib import closing
 import functools
 import sys
 import threading
+import datetime
+from io import BytesIO
 
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
@@ -18,14 +20,10 @@ from tornado.log import gen_log
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
-from tornado.test.util import unittest
-from tornado.util import u, bytes_type
+from tornado.test.util import unittest, skipOnTravis
+from tornado.util import u
 from tornado.web import Application, RequestHandler, url
-
-try:
-    from io import BytesIO  # python 3
-except ImportError:
-    from cStringIO import StringIO as BytesIO
+from tornado.httputil import format_timestamp, HTTPHeaders
 
 
 class HelloWorldHandler(RequestHandler):
@@ -39,6 +37,18 @@ class PostHandler(RequestHandler):
     def post(self):
         self.finish("Post arg1: %s, arg2: %s" % (
             self.get_argument("arg1"), self.get_argument("arg2")))
+
+
+class PutHandler(RequestHandler):
+    def put(self):
+        self.write("Put body: ")
+        self.write(self.request.body)
+
+
+class RedirectHandler(RequestHandler):
+    def prepare(self):
+        self.redirect(self.get_argument("url"),
+                      status=int(self.get_argument("status", "302")))
 
 
 class ChunkHandler(RequestHandler):
@@ -83,6 +93,13 @@ class ContentLength304Handler(RequestHandler):
         pass
 
 
+class PatchHandler(RequestHandler):
+
+    def patch(self):
+        "Return the request payload - so we can check it is being kept"
+        self.write(self.request.body)
+
+
 class AllMethodsHandler(RequestHandler):
     SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('OTHER',)
 
@@ -101,6 +118,8 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         return Application([
             url("/hello", HelloWorldHandler),
             url("/post", PostHandler),
+            url("/put", PutHandler),
+            url("/redirect", RedirectHandler),
             url("/chunk", ChunkHandler),
             url("/auth", AuthHandler),
             url("/countdown/([0-9]+)", CountdownHandler, name="countdown"),
@@ -108,8 +127,16 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/user_agent", UserAgentHandler),
             url("/304_with_content_length", ContentLength304Handler),
             url("/all_methods", AllMethodsHandler),
+            url('/patch', PatchHandler),
         ], gzip=True)
 
+    def test_patch_receives_payload(self):
+        body = b"some patch data"
+        response = self.fetch("/patch", method='PATCH', body=body)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, body)
+
+    @skipOnTravis
     def test_hello_world(self):
         response = self.fetch("/hello")
         self.assertEqual(response.code, 200)
@@ -262,7 +289,7 @@ Transfer-Encoding: chunked
 
     def test_types(self):
         response = self.fetch("/hello")
-        self.assertEqual(type(response.body), bytes_type)
+        self.assertEqual(type(response.body), bytes)
         self.assertEqual(type(response.headers["Content-Type"]), str)
         self.assertEqual(type(response.code), int)
         self.assertEqual(type(response.effective_url), str)
@@ -309,14 +336,31 @@ Transfer-Encoding: chunked
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 
     def test_configure_defaults(self):
-        defaults = dict(user_agent='TestDefaultUserAgent')
+        defaults = dict(user_agent='TestDefaultUserAgent', allow_ipv6=False)
         # Construct a new instance of the configured client class
         client = self.http_client.__class__(self.io_loop, force_instance=True,
                                             defaults=defaults)
-        client.fetch(self.get_url('/user_agent'), callback=self.stop)
-        response = self.wait()
-        self.assertEqual(response.body, b'TestDefaultUserAgent')
-        client.close()
+        try:
+            client.fetch(self.get_url('/user_agent'), callback=self.stop)
+            response = self.wait()
+            self.assertEqual(response.body, b'TestDefaultUserAgent')
+        finally:
+            client.close()
+
+    def test_header_types(self):
+        # Header values may be passed as character or utf8 byte strings,
+        # in a plain dictionary or an HTTPHeaders object.
+        # Keys must always be the native str type.
+        # All combinations should have the same results on the wire.
+        for value in [u("MyUserAgent"), b"MyUserAgent"]:
+            for container in [dict, HTTPHeaders]:
+                headers = container()
+                headers['User-Agent'] = value
+                resp = self.fetch('/user_agent', headers=headers)
+                self.assertEqual(
+                    resp.body, b"MyUserAgent",
+                    "response=%r, value=%r, container=%r" %
+                    (resp.body, value, container))
 
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
@@ -355,11 +399,10 @@ Transfer-Encoding: chunked
 
     @gen_test
     def test_future_http_error(self):
-        try:
+        with self.assertRaises(HTTPError) as context:
             yield self.http_client.fetch(self.get_url('/notfound'))
-        except HTTPError as e:
-            self.assertEqual(e.code, 404)
-            self.assertEqual(e.response.code, 404)
+        self.assertEqual(context.exception.code, 404)
+        self.assertEqual(context.exception.response.code, 404)
 
     @gen_test
     def test_reuse_request_from_response(self):
@@ -386,6 +429,41 @@ Transfer-Encoding: chunked
         response = self.fetch('/all_methods', method='OTHER',
                               allow_nonstandard_methods=True)
         self.assertEqual(response.body, b'OTHER')
+
+    @gen_test
+    def test_body_sanity_checks(self):
+        hello_url = self.get_url('/hello')
+        with self.assertRaises(ValueError) as context:
+            yield self.http_client.fetch(hello_url, body='data')
+
+        self.assertTrue('must be None' in str(context.exception))
+
+        with self.assertRaises(ValueError) as context:
+            yield self.http_client.fetch(hello_url, method='POST')
+
+        self.assertTrue('must not be None' in str(context.exception))
+
+    # This test causes odd failures with the combination of
+    # curl_httpclient (at least with the version of libcurl available
+    # on ubuntu 12.04), TwistedIOLoop, and epoll.  For POST (but not PUT),
+    # curl decides the response came back too soon and closes the connection
+    # to start again.  It does this *before* telling the socket callback to
+    # unregister the FD.  Some IOLoop implementations have special kernel
+    # integration to discover this immediately.  Tornado's IOLoops
+    # ignore errors on remove_handler to accommodate this behavior, but
+    # Twisted's reactor does not.  The removeReader call fails and so
+    # do all future removeAll calls (which our tests do at cleanup).
+    #
+    #def test_post_307(self):
+    #    response = self.fetch("/redirect?status=307&url=/post",
+    #                          method="POST", body=b"arg1=foo&arg2=bar")
+    #    self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
+
+    def test_put_307(self):
+        response = self.fetch("/redirect?status=307&url=/put",
+                              method="PUT", body=b"hello")
+        response.rethrow()
+        self.assertEqual(response.body, b"Put body: hello")
 
 
 class RequestProxyTest(unittest.TestCase):
@@ -433,11 +511,16 @@ class HTTPResponseTestCase(unittest.TestCase):
 
 class SyncHTTPClientTest(unittest.TestCase):
     def setUp(self):
-        if IOLoop.configured_class().__name__ == 'TwistedIOLoop':
+        if IOLoop.configured_class().__name__ in ('TwistedIOLoop',
+                                                  'AsyncIOMainLoop'):
             # TwistedIOLoop only supports the global reactor, so we can't have
             # separate IOLoops for client and server threads.
+            # AsyncIOMainLoop doesn't work with the default policy
+            # (although it could with some tweaks to this test and a
+            # policy that created loops for non-main threads).
             raise unittest.SkipTest(
-                'Sync HTTPClient not compatible with TwistedIOLoop')
+                'Sync HTTPClient not compatible with TwistedIOLoop or '
+                'AsyncIOMainLoop')
         self.server_ioloop = IOLoop()
 
         sock, self.port = bind_unused_port()
@@ -472,3 +555,34 @@ class SyncHTTPClientTest(unittest.TestCase):
         with self.assertRaises(HTTPError) as assertion:
             self.http_client.fetch(self.get_url('/notfound'))
         self.assertEqual(assertion.exception.code, 404)
+
+
+class HTTPRequestTestCase(unittest.TestCase):
+    def test_headers(self):
+        request = HTTPRequest('http://example.com', headers={'foo': 'bar'})
+        self.assertEqual(request.headers, {'foo': 'bar'})
+
+    def test_headers_setter(self):
+        request = HTTPRequest('http://example.com')
+        request.headers = {'bar': 'baz'}
+        self.assertEqual(request.headers, {'bar': 'baz'})
+
+    def test_null_headers_setter(self):
+        request = HTTPRequest('http://example.com')
+        request.headers = None
+        self.assertEqual(request.headers, {})
+
+    def test_body(self):
+        request = HTTPRequest('http://example.com', body='foo')
+        self.assertEqual(request.body, utf8('foo'))
+
+    def test_body_setter(self):
+        request = HTTPRequest('http://example.com')
+        request.body = 'foo'
+        self.assertEqual(request.body, utf8('foo'))
+
+    def test_if_modified_since(self):
+        http_date = datetime.datetime.utcnow()
+        request = HTTPRequest('http://example.com', if_modified_since=http_date)
+        self.assertEqual(request.headers, 
+            {'If-Modified-Since': format_timestamp(http_date)})

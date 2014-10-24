@@ -13,6 +13,7 @@ class ImportTest(unittest.TestCase):
         # import tornado.curl_httpclient  # depends on pycurl
         import tornado.escape
         import tornado.gen
+        import tornado.http1connection
         import tornado.httpclient
         import tornado.httpserver
         import tornado.httputil

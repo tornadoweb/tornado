@@ -30,6 +30,12 @@ from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, LogTrapTestCase, bind_unused_port, gen_test
 
 
+try:
+    from concurrent import futures
+except ImportError:
+    futures = None
+
+
 class ReturnFutureTest(AsyncTestCase):
     @return_future
     def sync_future(self, callback):

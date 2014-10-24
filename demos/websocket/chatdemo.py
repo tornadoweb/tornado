@@ -56,9 +56,9 @@ class ChatSocketHandler(tornado.websocket.WebSocketHandler):
     cache = []
     cache_size = 200
 
-    def allow_draft76(self):
-        # for iOS 5.0 Safari
-        return True
+    def get_compression_options(self):
+        # Non-None enables compression with default options.
+        return {}
 
     def open(self):
         ChatSocketHandler.waiters.add(self)

@@ -47,4 +47,6 @@
    Exceptions
    ----------
 
+   .. autoexception:: StreamBufferFullError
    .. autoexception:: StreamClosedError
+   .. autoexception:: UnsatisfiableReadError

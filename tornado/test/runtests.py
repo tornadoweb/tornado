@@ -13,6 +13,11 @@ from tornado.netutil import Resolver
 from tornado.options import define, options, add_parse_callback
 from tornado.test.util import unittest
 
+try:
+    reduce  # py2
+except NameError:
+    from functools import reduce  # py3
+
 TEST_MODULES = [
     'tornado.httputil.doctests',
     'tornado.iostream.doctests',
@@ -35,6 +40,7 @@ TEST_MODULES = [
     'tornado.test.process_test',
     'tornado.test.simple_httpclient_test',
     'tornado.test.stack_context_test',
+    'tornado.test.tcpclient_test',
     'tornado.test.template_test',
     'tornado.test.testing_test',
     'tornado.test.twisted_test',
@@ -60,7 +66,8 @@ class TornadoTextTestRunner(unittest.TextTestRunner):
             self.stream.write("\n")
         return result
 
-if __name__ == '__main__':
+
+def main():
     # The -W command-line option does not work in a virtualenv with
     # python 3 (as of virtualenv 1.7), so configure warnings
     # programmatically instead.
@@ -77,6 +84,9 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("error", category=DeprecationWarning,
                             module=r"tornado\..*")
+    warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
+    warnings.filterwarnings("error", category=PendingDeprecationWarning,
+                            module=r"tornado\..*")
     # The unittest module is aggressive about deprecating redundant methods,
     # leaving some without non-deprecated spellings that work on both
     # 2.7 and 3.2
@@ -86,7 +96,8 @@ if __name__ == '__main__':
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
     define('httpclient', type=str, default=None,
-           callback=AsyncHTTPClient.configure)
+           callback=lambda s: AsyncHTTPClient.configure(
+               s, defaults=dict(allow_ipv6=False)))
     define('ioloop', type=str, default=None)
     define('ioloop_time_monotonic', default=False)
     define('resolver', type=str, default=None,
@@ -121,3 +132,6 @@ if __name__ == '__main__':
         kwargs['warnings'] = False
     kwargs['testRunner'] = TornadoTextTestRunner
     tornado.testing.main(**kwargs)
+
+if __name__ == '__main__':
+    main()

@@ -20,18 +20,56 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
 import os
-import re
+import platform
 import socket
-import ssl
 import stat
 
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.util import Configurable
+from tornado.util import u, Configurable, errno_from_exception
 
+try:
+    import ssl
+except ImportError:
+    # ssl is not available on Google App Engine
+    ssl = None
 
-def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags=None):
+try:
+    xrange  # py2
+except NameError:
+    xrange = range  # py3
+
+if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
+    ssl_match_hostname = ssl.match_hostname
+    SSLCertificateError = ssl.CertificateError
+elif ssl is None:
+    ssl_match_hostname = SSLCertificateError = None
+else:
+    import backports.ssl_match_hostname
+    ssl_match_hostname = backports.ssl_match_hostname.match_hostname
+    SSLCertificateError = backports.ssl_match_hostname.CertificateError
+
+# ThreadedResolver runs getaddrinfo on a thread. If the hostname is unicode,
+# getaddrinfo attempts to import encodings.idna. If this is done at
+# module-import time, the import lock is already held by the main thread,
+# leading to deadlock. Avoid it by caching the idna encoder on the main
+# thread now.
+u('foo').encode('idna')
+
+# These errnos indicate that a non-blocking operation must be retried
+# at a later time.  On most platforms they're the same value, but on
+# some they differ.
+_ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
+
+if hasattr(errno, "WSAEWOULDBLOCK"):
+    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)
+
+# Default backlog used when calling sock.listen()
+_DEFAULT_BACKLOG = 128
+
+def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
+                 backlog=_DEFAULT_BACKLOG, flags=None):
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -63,13 +101,23 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
         family = socket.AF_INET
     if flags is None:
         flags = socket.AI_PASSIVE
+    bound_port = None
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
                                       0, flags)):
         af, socktype, proto, canonname, sockaddr = res
+        if (platform.system() == 'Darwin' and address == 'localhost' and
+                af == socket.AF_INET6 and sockaddr[3] != 0):
+            # Mac OS X includes a link-local address fe80::1%lo0 in the
+            # getaddrinfo results for 'localhost'.  However, the firewall
+            # doesn't understand that this is a local address and will
+            # prompt for access (often repeatedly, due to an apparent
+            # bug in its ability to remember granting access to an
+            # application). Skip these addresses.
+            continue
         try:
             sock = socket.socket(af, socktype, proto)
         except socket.error as e:
-            if e.args[0] == errno.EAFNOSUPPORT:
+            if errno_from_exception(e) == errno.EAFNOSUPPORT:
                 continue
             raise
         set_close_exec(sock.fileno())
@@ -86,14 +134,22 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC, backlog=128, flags
             # Python 2.x on windows doesn't have IPPROTO_IPV6.
             if hasattr(socket, "IPPROTO_IPV6"):
                 sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+
+        # automatic port allocation with port=None
+        # should bind on the same port on IPv4 and IPv6
+        host, requested_port = sockaddr[:2]
+        if requested_port == 0 and bound_port is not None:
+            sockaddr = tuple([host, bound_port] + list(sockaddr[2:]))
+
         sock.setblocking(0)
         sock.bind(sockaddr)
+        bound_port = sock.getsockname()[1]
         sock.listen(backlog)
         sockets.append(sock)
     return sockets
 
 if hasattr(socket, 'AF_UNIX'):
-    def bind_unix_socket(file, mode=0o600, backlog=128):
+    def bind_unix_socket(file, mode=0o600, backlog=_DEFAULT_BACKLOG):
         """Creates a listening unix socket.
 
         If a socket with the given name already exists, it will be deleted.
@@ -110,7 +166,7 @@ if hasattr(socket, 'AF_UNIX'):
         try:
             st = os.stat(file)
         except OSError as err:
-            if err.errno != errno.ENOENT:
+            if errno_from_exception(err) != errno.ENOENT:
                 raise
         else:
             if stat.S_ISSOCK(st.st_mode):
@@ -136,22 +192,33 @@ def add_accept_handler(sock, callback, io_loop=None):
         io_loop = IOLoop.current()
 
     def accept_handler(fd, events):
-        while True:
+        # More connections may come in while we're handling callbacks;
+        # to prevent starvation of other tasks we must limit the number
+        # of connections we accept at a time.  Ideally we would accept
+        # up to the number of connections that were waiting when we
+        # entered this method, but this information is not available
+        # (and rearranging this method to call accept() as many times
+        # as possible before running any callbacks would have adverse
+        # effects on load balancing in multiprocess configurations).
+        # Instead, we use the (default) listen backlog as a rough
+        # heuristic for the number of connections we can reasonably
+        # accept at once.
+        for i in xrange(_DEFAULT_BACKLOG):
             try:
                 connection, address = sock.accept()
             except socket.error as e:
-                # EWOULDBLOCK and EAGAIN indicate we have accepted every
+                # _ERRNO_WOULDBLOCK indicate we have accepted every
                 # connection that is available.
-                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                if errno_from_exception(e) in _ERRNO_WOULDBLOCK:
                     return
                 # ECONNABORTED indicates that there was a connection
                 # but it was closed while still in the accept queue.
                 # (observed on FreeBSD).
-                if e.args[0] == errno.ECONNABORTED:
+                if errno_from_exception(e) == errno.ECONNABORTED:
                     continue
                 raise
             callback(connection, address)
-    io_loop.add_handler(sock.fileno(), accept_handler, IOLoop.READ)
+    io_loop.add_handler(sock, accept_handler, IOLoop.READ)
 
 
 def is_valid_ip(ip):
@@ -367,6 +434,10 @@ def ssl_options_to_context(ssl_options):
         context.load_verify_locations(ssl_options['ca_certs'])
     if 'ciphers' in ssl_options:
         context.set_ciphers(ssl_options['ciphers'])
+    if hasattr(ssl, 'OP_NO_COMPRESSION'):
+        # Disable TLS compression to avoid CRIME and related attacks.
+        # This constant wasn't added until python 3.3.
+        context.options |= ssl.OP_NO_COMPRESSION
     return context
 
 
@@ -391,73 +462,3 @@ def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
             return context.wrap_socket(socket, **kwargs)
     else:
         return ssl.wrap_socket(socket, **dict(context, **kwargs))
-
-if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
-    ssl_match_hostname = ssl.match_hostname
-    SSLCertificateError = ssl.CertificateError
-else:
-    # match_hostname was added to the standard library ssl module in python 3.2.
-    # The following code was backported for older releases and copied from
-    # https://bitbucket.org/brandon/backports.ssl_match_hostname
-    class SSLCertificateError(ValueError):
-        pass
-
-    def _dnsname_to_pat(dn, max_wildcards=1):
-        pats = []
-        for frag in dn.split(r'.'):
-            if frag.count('*') > max_wildcards:
-                # Issue #17980: avoid denials of service by refusing more
-                # than one wildcard per fragment.  A survery of established
-                # policy among SSL implementations showed it to be a
-                # reasonable choice.
-                raise SSLCertificateError(
-                    "too many wildcards in certificate DNS name: " + repr(dn))
-            if frag == '*':
-                # When '*' is a fragment by itself, it matches a non-empty dotless
-                # fragment.
-                pats.append('[^.]+')
-            else:
-                # Otherwise, '*' matches any dotless fragment.
-                frag = re.escape(frag)
-                pats.append(frag.replace(r'\*', '[^.]*'))
-        return re.compile(r'\A' + r'\.'.join(pats) + r'\Z', re.IGNORECASE)
-
-    def ssl_match_hostname(cert, hostname):
-        """Verify that *cert* (in decoded format as returned by
-        SSLSocket.getpeercert()) matches the *hostname*.  RFC 2818 rules
-        are mostly followed, but IP addresses are not accepted for *hostname*.
-
-        CertificateError is raised on failure. On success, the function
-        returns nothing.
-        """
-        if not cert:
-            raise ValueError("empty or no certificate")
-        dnsnames = []
-        san = cert.get('subjectAltName', ())
-        for key, value in san:
-            if key == 'DNS':
-                if _dnsname_to_pat(value).match(hostname):
-                    return
-                dnsnames.append(value)
-        if not dnsnames:
-            # The subject is only checked when there is no dNSName entry
-            # in subjectAltName
-            for sub in cert.get('subject', ()):
-                for key, value in sub:
-                    # XXX according to RFC 2818, the most specific Common Name
-                    # must be used.
-                    if key == 'commonName':
-                        if _dnsname_to_pat(value).match(hostname):
-                            return
-                        dnsnames.append(value)
-        if len(dnsnames) > 1:
-            raise SSLCertificateError("hostname %r "
-                                      "doesn't match either of %s"
-                                      % (hostname, ', '.join(map(repr, dnsnames))))
-        elif len(dnsnames) == 1:
-            raise SSLCertificateError("hostname %r "
-                                      "doesn't match %r"
-                                      % (hostname, dnsnames[0]))
-        else:
-            raise SSLCertificateError("no appropriate commonName or "
-                                      "subjectAltName fields were found")

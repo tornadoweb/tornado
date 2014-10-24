@@ -5,8 +5,8 @@ from tornado.escape import json_decode
 from tornado.test.httpserver_test import TypeCheckHandler
 from tornado.testing import AsyncHTTPTestCase
 from tornado.util import u
-from tornado.web import RequestHandler
-from tornado.wsgi import WSGIApplication, WSGIContainer
+from tornado.web import RequestHandler, Application
+from tornado.wsgi import WSGIApplication, WSGIContainer, WSGIAdapter
 
 
 class WSGIContainerTest(AsyncHTTPTestCase):
@@ -74,14 +74,27 @@ class WSGIConnectionTest(httpserver_test.HTTPConnectionTest):
         return WSGIContainer(validator(WSGIApplication(self.get_handlers())))
 
 
-def wrap_web_tests():
+def wrap_web_tests_application():
     result = {}
     for cls in web_test.wsgi_safe_tests:
-        class WSGIWrappedTest(cls):
+        class WSGIApplicationWrappedTest(cls):
             def get_app(self):
                 self.app = WSGIApplication(self.get_handlers(),
                                            **self.get_app_kwargs())
                 return WSGIContainer(validator(self.app))
-        result["WSGIWrapped_" + cls.__name__] = WSGIWrappedTest
+        result["WSGIApplication_" + cls.__name__] = WSGIApplicationWrappedTest
     return result
-globals().update(wrap_web_tests())
+globals().update(wrap_web_tests_application())
+
+
+def wrap_web_tests_adapter():
+    result = {}
+    for cls in web_test.wsgi_safe_tests:
+        class WSGIAdapterWrappedTest(cls):
+            def get_app(self):
+                self.app = Application(self.get_handlers(),
+                                       **self.get_app_kwargs())
+                return WSGIContainer(validator(WSGIAdapter(self.app)))
+        result["WSGIAdapter_" + cls.__name__] = WSGIAdapterWrappedTest
+    return result
+globals().update(wrap_web_tests_adapter())

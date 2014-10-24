@@ -17,7 +17,7 @@ try:
     from tornado.httpclient import AsyncHTTPClient
     from tornado.httpserver import HTTPServer
     from tornado.simple_httpclient import SimpleAsyncHTTPClient
-    from tornado.ioloop import IOLoop
+    from tornado.ioloop import IOLoop, TimeoutError
     from tornado import netutil
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
@@ -28,7 +28,7 @@ except ImportError:
     IOLoop = None
     netutil = None
     SimpleAsyncHTTPClient = None
-from tornado.log import gen_log
+from tornado.log import gen_log, app_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type
 import functools
@@ -38,6 +38,7 @@ import re
 import signal
 import socket
 import sys
+import types
 
 try:
     from cStringIO import StringIO  # py2
@@ -48,10 +49,16 @@ except ImportError:
 # (either py27+ or unittest2) so tornado.test.util enforces
 # this requirement, but for other users of tornado.testing we want
 # to allow the older version if unitest2 is not available.
-try:
-    import unittest2 as unittest
-except ImportError:
+if sys.version_info >= (3,):
+    # On python 3, mixing unittest2 and unittest (including doctest)
+    # doesn't seem to work, so always use unittest.
     import unittest
+else:
+    # On python 2, prefer unittest2 when available.
+    try:
+        import unittest2 as unittest
+    except ImportError:
+        import unittest
 
 _next_port = 10000
 
@@ -63,8 +70,8 @@ def get_unused_port():
     only that a series of get_unused_port calls in a single process return
     distinct ports.
 
-    **Deprecated**.  Use bind_unused_port instead, which is guaranteed
-    to find an unused port.
+    .. deprecated::
+       Use bind_unused_port instead, which is guaranteed to find an unused port.
     """
     global _next_port
     port = _next_port
@@ -93,6 +100,36 @@ def get_async_test_timeout():
         return float(os.environ.get('ASYNC_TEST_TIMEOUT'))
     except (ValueError, TypeError):
         return 5
+
+
+class _TestMethodWrapper(object):
+    """Wraps a test method to raise an error if it returns a value.
+
+    This is mainly used to detect undecorated generators (if a test
+    method yields it must use a decorator to consume the generator),
+    but will also detect other kinds of return values (these are not
+    necessarily errors, but we alert anyway since there is no good
+    reason to return a value from a test.
+    """
+    def __init__(self, orig_method):
+        self.orig_method = orig_method
+
+    def __call__(self, *args, **kwargs):
+        result = self.orig_method(*args, **kwargs)
+        if isinstance(result, types.GeneratorType):
+            raise TypeError("Generator test methods should be decorated with "
+                            "tornado.testing.gen_test")
+        elif result is not None:
+            raise ValueError("Return value from test method ignored: %r" %
+                             result)
+
+    def __getattr__(self, name):
+        """Proxy all unknown attributes to the original method.
+
+        This is important for some of the decorators in the `unittest`
+        module, such as `unittest.skipIf`.
+        """
+        return getattr(self.orig_method, name)
 
 
 class AsyncTestCase(unittest.TestCase):
@@ -157,13 +194,19 @@ class AsyncTestCase(unittest.TestCase):
                 self.assertIn("FriendFeed", response.body)
                 self.stop()
     """
-    def __init__(self, *args, **kwargs):
-        super(AsyncTestCase, self).__init__(*args, **kwargs)
+    def __init__(self, methodName='runTest', **kwargs):
+        super(AsyncTestCase, self).__init__(methodName, **kwargs)
         self.__stopped = False
         self.__running = False
         self.__failure = None
         self.__stop_args = None
         self.__timeout = None
+
+        # It's easy to forget the @gen_test decorator, but if you do
+        # the test will silently be ignored because nothing will consume
+        # the generator.  Replace the test method with a wrapper that will
+        # make sure it's not an undecorated generator.
+        setattr(self, methodName, _TestMethodWrapper(getattr(self, methodName)))
 
     def setUp(self):
         super(AsyncTestCase, self).setUp()
@@ -194,7 +237,11 @@ class AsyncTestCase(unittest.TestCase):
         return IOLoop()
 
     def _handle_exception(self, typ, value, tb):
-        self.__failure = (typ, value, tb)
+        if self.__failure is None:
+            self.__failure = (typ, value, tb)
+        else:
+            app_log.error("multiple unhandled exceptions in test",
+                          exc_info=(typ, value, tb))
         self.stop()
         return True
 
@@ -352,6 +399,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def tearDown(self):
         self.http_server.stop()
+        self.io_loop.run_sync(self.http_server.close_all_connections,
+                              timeout=get_async_test_timeout())
         if (not IOLoop.initialized() or
                 self.http_client.io_loop is not IOLoop.instance()):
             self.http_client.close()
@@ -414,18 +463,50 @@ def gen_test(func=None, timeout=None):
     .. versionadded:: 3.1
        The ``timeout`` argument and ``ASYNC_TEST_TIMEOUT`` environment
        variable.
+
+    .. versionchanged:: 4.0
+       The wrapper now passes along ``*args, **kwargs`` so it can be used
+       on functions with arguments.
     """
     if timeout is None:
         timeout = get_async_test_timeout()
 
     def wrap(f):
-        f = gen.coroutine(f)
-
+        # Stack up several decorators to allow us to access the generator
+        # object itself.  In the innermost wrapper, we capture the generator
+        # and save it in an attribute of self.  Next, we run the wrapped
+        # function through @gen.coroutine.  Finally, the coroutine is
+        # wrapped again to make it synchronous with run_sync.
+        #
+        # This is a good case study arguing for either some sort of
+        # extensibility in the gen decorators or cancellation support.
         @functools.wraps(f)
-        def wrapper(self):
-            return self.io_loop.run_sync(
-                functools.partial(f, self), timeout=timeout)
-        return wrapper
+        def pre_coroutine(self, *args, **kwargs):
+            result = f(self, *args, **kwargs)
+            if isinstance(result, types.GeneratorType):
+                self._test_generator = result
+            else:
+                self._test_generator = None
+            return result
+
+        coro = gen.coroutine(pre_coroutine)
+
+        @functools.wraps(coro)
+        def post_coroutine(self, *args, **kwargs):
+            try:
+                return self.io_loop.run_sync(
+                    functools.partial(coro, self, *args, **kwargs),
+                    timeout=timeout)
+            except TimeoutError as e:
+                # run_sync raises an error with an unhelpful traceback.
+                # If we throw it back into the generator the stack trace
+                # will be replaced by the point where the test is stopped.
+                self._test_generator.throw(e)
+                # In case the test contains an overly broad except clause,
+                # we may get back here.  In this case re-raise the original
+                # exception, which is better than nothing.
+                raise
+        return post_coroutine
 
     if func is not None:
         # Used like:

@@ -33,10 +33,14 @@
 
    .. automethod:: RequestHandler.get_argument
    .. automethod:: RequestHandler.get_arguments
+   .. automethod:: RequestHandler.get_query_argument
+   .. automethod:: RequestHandler.get_query_arguments
+   .. automethod:: RequestHandler.get_body_argument
+   .. automethod:: RequestHandler.get_body_arguments
    .. automethod:: RequestHandler.decode_argument
    .. attribute:: RequestHandler.request
 
-      The `tornado.httpserver.HTTPRequest` object containing additional
+      The `tornado.httputil.HTTPServerRequest` object containing additional
       request parameters including e.g. headers and body data.
 
    .. attribute:: RequestHandler.path_args
@@ -66,6 +70,7 @@
    .. automethod:: RequestHandler.send_error
    .. automethod:: RequestHandler.write_error
    .. automethod:: RequestHandler.clear
+   .. automethod:: RequestHandler.data_received
 
 
    Cookies
@@ -79,6 +84,10 @@
    .. automethod:: RequestHandler.get_secure_cookie
    .. automethod:: RequestHandler.set_secure_cookie
    .. automethod:: RequestHandler.create_signed_value
+   .. autodata:: MIN_SUPPORTED_SIGNED_VALUE_VERSION
+   .. autodata:: MAX_SUPPORTED_SIGNED_VALUE_VERSION
+   .. autodata:: DEFAULT_SIGNED_VALUE_VERSION
+   .. autodata:: DEFAULT_SIGNED_VALUE_MIN_VERSION
 
    Other
    ^^^^^
@@ -87,23 +96,27 @@
 
       The `Application` object serving this request
 
-   .. automethod:: RequestHandler.async_callback
+   .. automethod:: RequestHandler.check_etag_header
    .. automethod:: RequestHandler.check_xsrf_cookie
    .. automethod:: RequestHandler.compute_etag
    .. automethod:: RequestHandler.create_template_loader
+   .. autoattribute:: RequestHandler.current_user
    .. automethod:: RequestHandler.get_browser_locale
    .. automethod:: RequestHandler.get_current_user
    .. automethod:: RequestHandler.get_login_url
    .. automethod:: RequestHandler.get_status
    .. automethod:: RequestHandler.get_template_path
    .. automethod:: RequestHandler.get_user_locale
+   .. autoattribute:: RequestHandler.locale
    .. automethod:: RequestHandler.log_exception
    .. automethod:: RequestHandler.on_connection_close
    .. automethod:: RequestHandler.require_setting
    .. automethod:: RequestHandler.reverse_url
+   .. automethod:: RequestHandler.set_etag_header
    .. autoattribute:: RequestHandler.settings
    .. automethod:: RequestHandler.static_url
    .. automethod:: RequestHandler.xsrf_form_html
+   .. autoattribute:: RequestHandler.xsrf_token
 
 
 
@@ -127,15 +140,30 @@
 
          General settings:
 
-         * ``debug``: If ``True`` the application runs in debug mode,
-           described in :ref:`debug-mode`.
-         * ``gzip``: If ``True``, responses in textual formats will be
-           gzipped automatically.
+         * ``autoreload``: If ``True``, the server process will restart
+           when any source files change, as described in :ref:`debug-mode`.
+           This option is new in Tornado 3.2; previously this functionality
+           was controlled by the ``debug`` setting.
+         * ``debug``: Shorthand for several debug mode settings,
+           described in :ref:`debug-mode`.  Setting ``debug=True`` is
+           equivalent to ``autoreload=True``, ``compiled_template_cache=False``,
+           ``static_hash_cache=False``, ``serve_traceback=True``.
+         * ``default_handler_class`` and ``default_handler_args``:
+           This handler will be used if no other match is found;
+           use this to implement custom 404 pages (new in Tornado 3.2).
+         * ``compress_response``: If ``True``, responses in textual formats
+           will be compressed automatically.  New in Tornado 4.0.
+         * ``gzip``: Deprecated alias for ``compress_response`` since
+           Tornado 4.0.
          * ``log_function``: This function will be called at the end
            of every request to log the result (with one argument, the
            `RequestHandler` object).  The default implementation
            writes to the `logging` module's root logger.  May also be
            customized by overriding `Application.log_request`.
+         * ``serve_traceback``: If true, the default error page
+           will include the traceback of the error.  This option is new in
+           Tornado 3.2; previously this functionality was controlled by
+           the ``debug`` setting.
          * ``ui_modules`` and ``ui_methods``: May be set to a mapping
            of `UIModule` or UI methods to be made available to templates.
            May be set to a module, dictionary, or a list of modules
@@ -149,6 +177,12 @@
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`
          * ``xsrf_cookies``: If true, :ref:`xsrf` will be enabled.
+         * ``xsrf_cookie_version``: Controls the version of new XSRF
+           cookies produced by this server.  Should generally be left
+           at the default (which will always be the highest supported
+           version), but may be set to a lower value temporarily
+           during version transitions.  New in Tornado 3.2.2, which
+           introduced XSRF cookie version 2.
          * ``twitter_consumer_key``, ``twitter_consumer_secret``,
            ``friendfeed_consumer_key``, ``friendfeed_consumer_secret``,
            ``google_consumer_key``, ``google_consumer_secret``,
@@ -162,6 +196,10 @@
            of a function that all output should be passed through.
            Defaults to ``"xhtml_escape"``.  Can be changed on a per-template
            basis with the ``{% autoescape %}`` directive.
+         * ``compiled_template_cache``: Default is ``True``; if ``False``
+           templates will be recompiled on every request.  This option
+           is new in Tornado 3.2; previously this functionality was controlled
+           by the ``debug`` setting.
          * ``template_path``: Directory containing template files.  Can be
            further customized by overriding `RequestHandler.get_template_path`
          * ``template_loader``: Assign to an instance of
@@ -172,6 +210,10 @@
 
          Static file settings:
 
+         * ``static_hash_cache``: Default is ``True``; if ``False``
+           static urls will be recomputed on every request.  This option
+           is new in Tornado 3.2; previously this functionality was controlled
+           by the ``debug`` setting.
          * ``static_path``: Directory from which static files will be
            served.
          * ``static_url_prefix``:  Url prefix for static files,
@@ -192,10 +234,12 @@
    .. autofunction:: authenticated
    .. autofunction:: addslash
    .. autofunction:: removeslash
+   .. autofunction:: stream_request_body
 
    Everything else
    ---------------
    .. autoexception:: HTTPError
+   .. autoexception:: Finish
    .. autoexception:: MissingArgumentError
    .. autoclass:: UIModule
       :members:

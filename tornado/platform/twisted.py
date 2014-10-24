@@ -68,6 +68,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import datetime
 import functools
+import numbers
 import socket
 
 import twisted.internet.abstract
@@ -90,6 +91,7 @@ from tornado.log import app_log
 from tornado.netutil import Resolver
 from tornado.stack_context import NullContext, wrap
 from tornado.ioloop import IOLoop
+from tornado.util import timedelta_to_seconds
 
 
 @implementer(IDelayedCall)
@@ -139,7 +141,7 @@ class TornadoDelayedCall(object):
 class TornadoReactor(PosixReactorBase):
     """Twisted reactor built on the Tornado IOLoop.
 
-    Since it is intented to be used in applications where the top-level
+    Since it is intended to be used in applications where the top-level
     event loop is ``io_loop.start()`` rather than ``reactor.run()``,
     it is implemented a little differently than other Twisted reactors.
     We override `mainLoop` instead of `doIteration` and must implement
@@ -365,8 +367,9 @@ def install(io_loop=None):
 
 @implementer(IReadDescriptor, IWriteDescriptor)
 class _FD(object):
-    def __init__(self, fd, handler):
+    def __init__(self, fd, fileobj, handler):
         self.fd = fd
+        self.fileobj = fileobj
         self.handler = handler
         self.reading = False
         self.writing = False
@@ -377,15 +380,15 @@ class _FD(object):
 
     def doRead(self):
         if not self.lost:
-            self.handler(self.fd, tornado.ioloop.IOLoop.READ)
+            self.handler(self.fileobj, tornado.ioloop.IOLoop.READ)
 
     def doWrite(self):
         if not self.lost:
-            self.handler(self.fd, tornado.ioloop.IOLoop.WRITE)
+            self.handler(self.fileobj, tornado.ioloop.IOLoop.WRITE)
 
     def connectionLost(self, reason):
         if not self.lost:
-            self.handler(self.fd, tornado.ioloop.IOLoop.ERROR)
+            self.handler(self.fileobj, tornado.ioloop.IOLoop.ERROR)
             self.lost = True
 
     def logPrefix(self):
@@ -412,14 +415,19 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         self.reactor.callWhenRunning(self.make_current)
 
     def close(self, all_fds=False):
+        fds = self.fds
         self.reactor.removeAll()
         for c in self.reactor.getDelayedCalls():
             c.cancel()
+        if all_fds:
+            for fd in fds.values():
+                self.close_fd(fd.fileobj)
 
     def add_handler(self, fd, handler, events):
         if fd in self.fds:
-            raise ValueError('fd %d added twice' % fd)
-        self.fds[fd] = _FD(fd, wrap(handler))
+            raise ValueError('fd %s added twice' % fd)
+        fd, fileobj = self.split_fd(fd)
+        self.fds[fd] = _FD(fd, fileobj, wrap(handler))
         if events & tornado.ioloop.IOLoop.READ:
             self.fds[fd].reading = True
             self.reactor.addReader(self.fds[fd])
@@ -428,6 +436,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
             self.reactor.addWriter(self.fds[fd])
 
     def update_handler(self, fd, events):
+        fd, fileobj = self.split_fd(fd)
         if events & tornado.ioloop.IOLoop.READ:
             if not self.fds[fd].reading:
                 self.fds[fd].reading = True
@@ -446,6 +455,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
                 self.reactor.removeWriter(self.fds[fd])
 
     def remove_handler(self, fd):
+        fd, fileobj = self.split_fd(fd)
         if fd not in self.fds:
             return
         self.fds[fd].lost = True
@@ -456,33 +466,34 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         del self.fds[fd]
 
     def start(self):
+        self._setup_logging()
         self.reactor.run()
 
     def stop(self):
         self.reactor.crash()
 
-    def _run_callback(self, callback, *args, **kwargs):
-        try:
-            callback(*args, **kwargs)
-        except Exception:
-            self.handle_callback_exception(callback)
-
-    def add_timeout(self, deadline, callback):
-        if isinstance(deadline, (int, long, float)):
+    def add_timeout(self, deadline, callback, *args, **kwargs):
+        # This method could be simplified (since tornado 4.0) by
+        # overriding call_at instead of add_timeout, but we leave it
+        # for now as a test of backwards-compatibility.
+        if isinstance(deadline, numbers.Real):
             delay = max(deadline - self.time(), 0)
         elif isinstance(deadline, datetime.timedelta):
-            delay = tornado.ioloop._Timeout.timedelta_to_seconds(deadline)
+            delay = timedelta_to_seconds(deadline)
         else:
             raise TypeError("Unsupported deadline %r")
-        return self.reactor.callLater(delay, self._run_callback, wrap(callback))
+        return self.reactor.callLater(
+            delay, self._run_callback,
+            functools.partial(wrap(callback), *args, **kwargs))
 
     def remove_timeout(self, timeout):
         if timeout.active():
             timeout.cancel()
 
     def add_callback(self, callback, *args, **kwargs):
-        self.reactor.callFromThread(self._run_callback,
-                                    wrap(callback), *args, **kwargs)
+        self.reactor.callFromThread(
+            self._run_callback,
+            functools.partial(wrap(callback), *args, **kwargs))
 
     def add_callback_from_signal(self, callback, *args, **kwargs):
         self.add_callback(callback, *args, **kwargs)
@@ -527,8 +538,10 @@ class TwistedResolver(Resolver):
             resolved_family = socket.AF_INET6
         else:
             deferred = self.resolver.getHostByName(utf8(host))
-            resolved = yield gen.Task(deferred.addCallback)
-            if twisted.internet.abstract.isIPAddress(resolved):
+            resolved = yield gen.Task(deferred.addBoth)
+            if isinstance(resolved, failure.Failure):
+                resolved.raiseException()
+            elif twisted.internet.abstract.isIPAddress(resolved):
                 resolved_family = socket.AF_INET
             elif twisted.internet.abstract.isIPv6Address(resolved):
                 resolved_family = socket.AF_INET6

@@ -10,13 +10,22 @@ can scale to tens of thousands of open connections, making it ideal for
 applications that require a long-lived connection to each user.
 
 
+Upgrade notes
+-------------
+
+As of Tornado 3.2, the `backports.ssl_match_hostname
+<https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ package
+must be installed when running Tornado on Python 2.  This will be
+installed automatically when using ``pip`` or ``easy_install``.
+
 Quick links
 -----------
 
 * `Documentation <http://www.tornadoweb.org/en/stable/>`_
-* `Source (github) <https://github.com/facebook/tornado>`_
+* `Source (github) <https://github.com/tornadoweb/tornado>`_
 * `Mailing list <http://groups.google.com/group/python-tornado>`_
-* `Wiki <https://github.com/facebook/tornado/wiki/Links>`_
+* `Stack Overflow <http://stackoverflow.com/questions/tagged/tornado>`_
+* `Wiki <https://github.com/tornadoweb/tornado/wiki/Links>`_
 
 Hello, world
 ------------
@@ -40,7 +49,7 @@ Here is a simple "Hello, world" example web app for Tornado::
 
 This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room
-<https://github.com/facebook/tornado/tree/master/demos/chat>`_.
+<https://github.com/tornadoweb/tornado/tree/stable/demos/chat>`_.
 
 Installation
 ------------
@@ -66,11 +75,15 @@ copy of the source tarball as well.
     sudo python setup.py install
 
 The Tornado source code is `hosted on GitHub
-<https://github.com/facebook/tornado>`_.
+<https://github.com/tornadoweb/tornado>`_.
 
-**Prerequisites**: Tornado runs on Python 2.6, 2.7, 3.2, and 3.3.  It has
-no strict dependencies outside the Python standard library, although some
-features may require one of the following libraries:
+**Prerequisites**: Tornado runs on Python 2.6, 2.7, 3.2, 3.3, and 3.4.  It
+requires the `certifi <https://pypi.python.org/pypi/certifi>`_ package
+on all Python versions, and the `backports.ssl_match_hostname
+<https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ package
+on Python 2.  These will be installed automatically when using
+``pip`` or ``easy_install``).  Some Tornado features may
+require one of the following optional libraries:
 
 * `unittest2 <https://pypi.python.org/pypi/unittest2>`_ is needed to run
   Tornado's test suite on Python 2.6 (it is unnecessary on more recent
@@ -93,9 +106,12 @@ features may require one of the following libraries:
 
 **Platforms**: Tornado should run on any Unix-like platform, although
 for the best performance and scalability only Linux (with ``epoll``)
-and BSD (with ``kqueue``) are recommended (even though Mac OS X is
-derived from BSD and supports kqueue, its networking performance is
-generally poor so it is recommended only for development use).
+and BSD (with ``kqueue``) are recommended for production deployment
+(even though Mac OS X is derived from BSD and supports kqueue, its
+networking performance is generally poor so it is recommended only for
+development use).  Tornado will also run on Windows, although this
+configuration is not officially supported and is recommended only for
+development use.
 
 Discussion and support
 ----------------------
@@ -103,9 +119,12 @@ Discussion and support
 You can discuss Tornado on `the Tornado developer mailing list
 <http://groups.google.com/group/python-tornado>`_, and report bugs on
 the `GitHub issue tracker
-<https://github.com/facebook/tornado/issues>`_.  Links to additional
+<https://github.com/tornadoweb/tornado/issues>`_.  Links to additional
 resources can be found on the `Tornado wiki
-<https://github.com/facebook/tornado/wiki/Links>`_.
+<https://github.com/tornadoweb/tornado/wiki/Links>`_. New releases are
+announced on the `announcements mailing list
+<http://groups.google.com/group/python-tornado-announce>`_.
+
 
 Tornado is one of `Facebook's open source technologies
 <http://developers.facebook.com/opensource/>`_. It is available under

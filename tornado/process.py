@@ -21,7 +21,6 @@ the server into multiple processes and managing subprocesses.
 from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
-import multiprocessing
 import os
 import signal
 import subprocess
@@ -35,6 +34,13 @@ from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
 from tornado import stack_context
+from tornado.util import errno_from_exception
+
+try:
+    import multiprocessing
+except ImportError:
+    # Multiprocessing is not available on Google App Engine.
+    multiprocessing = None
 
 try:
     long  # py2
@@ -44,6 +50,8 @@ except NameError:
 
 def cpu_count():
     """Returns the number of processors on this machine."""
+    if multiprocessing is None:
+        return 1
     try:
         return multiprocessing.cpu_count()
     except NotImplementedError:
@@ -92,7 +100,8 @@ def fork_processes(num_processes, max_restarts=100):
     between any server code.
 
     Note that multiple processes are not compatible with the autoreload
-    module (or the debug=True option to `tornado.web.Application`).
+    module (or the ``autoreload=True`` option to `tornado.web.Application`
+    which defaults to True when ``debug=True``).
     When using multiple processes, no IOLoops can be created or
     referenced until after the call to ``fork_processes``.
 
@@ -135,7 +144,7 @@ def fork_processes(num_processes, max_restarts=100):
         try:
             pid, status = os.wait()
         except OSError as e:
-            if e.errno == errno.EINTR:
+            if errno_from_exception(e) == errno.EINTR:
                 continue
             raise
         if pid not in children:
@@ -231,7 +240,7 @@ class Subprocess(object):
 
         The callback takes one argument, the return code of the process.
 
-        This method uses a ``SIGCHILD`` handler, which is a global setting
+        This method uses a ``SIGCHLD`` handler, which is a global setting
         and may conflict if you have other libraries trying to handle the
         same signal.  If you are using more than one ``IOLoop`` it may
         be necessary to call `Subprocess.initialize` first to designate
@@ -248,7 +257,7 @@ class Subprocess(object):
 
     @classmethod
     def initialize(cls, io_loop=None):
-        """Initializes the ``SIGCHILD`` handler.
+        """Initializes the ``SIGCHLD`` handler.
 
         The signal handler is run on an `.IOLoop` to avoid locking issues.
         Note that the `.IOLoop` used for signal handling need not be the
@@ -266,7 +275,7 @@ class Subprocess(object):
 
     @classmethod
     def uninitialize(cls):
-        """Removes the ``SIGCHILD`` handler."""
+        """Removes the ``SIGCHLD`` handler."""
         if not cls._initialized:
             return
         signal.signal(signal.SIGCHLD, cls._old_sigchld)
@@ -282,7 +291,7 @@ class Subprocess(object):
         try:
             ret_pid, status = os.waitpid(pid, os.WNOHANG)
         except OSError as e:
-            if e.args[0] == errno.ECHILD:
+            if errno_from_exception(e) == errno.ECHILD:
                 return
         if ret_pid == 0:
             return

@@ -31,6 +31,9 @@
 
    .. autoclass:: GoogleMixin
       :members:
+   
+   .. autoclass:: GoogleOAuth2Mixin
+      :members:
 
    Facebook
    --------

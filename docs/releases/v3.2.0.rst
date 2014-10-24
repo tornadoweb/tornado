@@ -1,0 +1,194 @@
+What's new in Tornado 3.2
+=========================
+
+Jan 14, 2014
+------------
+
+Installation
+~~~~~~~~~~~~
+* Tornado now depends on the `backports.ssl_match_hostname
+  <https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ when
+  running on Python 2.  This will be installed automatically when using ``pip``
+  or ``easy_install``
+* Tornado now includes an optional C extension module, which greatly improves
+  performance of websockets.  This extension will be built automatically
+  if a C compiler is found at install time.
+
+New modules
+~~~~~~~~~~~
+
+* The `tornado.platform.asyncio` module provides integration with the
+  ``asyncio`` module introduced in Python 3.4 (also available for Python
+  3.3 with ``pip install asyncio``).
+
+`tornado.auth`
+~~~~~~~~~~~~~~
+
+* Added `.GoogleOAuth2Mixin` support authentication to Google services
+  with OAuth 2 instead of OpenID and OAuth 1.
+* `.FacebookGraphMixin` has been updated to use the current Facebook login
+  URL, which saves a redirect.
+
+`tornado.concurrent`
+~~~~~~~~~~~~~~~~~~~~
+
+* ``TracebackFuture`` now accepts a ``timeout`` keyword argument (although
+  it is still incorrect to use a non-zero timeout in non-blocking code).
+
+``tornado.curl_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``tornado.curl_httpclient`` now works on Python 3 with the
+  soon-to-be-released pycurl 7.19.3, which will officially support
+  Python 3 for the first time.  Note that there are some unofficial
+  Python 3 ports of pycurl (Ubuntu has included one for its past
+  several releases); these are not supported for use with Tornado.
+
+`tornado.escape`
+~~~~~~~~~~~~~~~~
+
+* `.xhtml_escape` now escapes apostrophes as well.
+* `tornado.escape.utf8`, `.to_unicode`, and `.native_str` now raise
+  `TypeError` instead of `AssertionError` when given an invalid value.
+
+`tornado.gen`
+~~~~~~~~~~~~~
+
+* Coroutines may now yield dicts in addition to lists to wait for
+  multiple tasks in parallel.
+* Improved performance of `tornado.gen` when yielding a `.Future` that is
+  already done.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+* `tornado.httpclient.HTTPRequest` now uses property setters so that
+  setting attributes after construction applies the same conversions
+  as ``__init__`` (e.g. converting the body attribute to bytes).
+
+`tornado.httpserver`
+~~~~~~~~~~~~~~~~~~~~
+
+* Malformed ``x-www-form-urlencoded`` request bodies will now log a warning
+  and continue instead of causing the request to fail (similar to the existing
+  handling of malformed ``multipart/form-data`` bodies.  This is done mainly
+  because some libraries send this content type by default even when the data
+  is not form-encoded.
+* Fix some error messages for unix sockets (and other non-IP sockets)
+
+`tornado.ioloop`
+~~~~~~~~~~~~~~~~
+
+* `.IOLoop` now uses `~.IOLoop.handle_callback_exception` consistently for
+  error logging.
+* `.IOLoop` now frees callback objects earlier, reducing memory usage
+  while idle.
+* `.IOLoop` will no longer call `logging.basicConfig` if there is a handler
+  defined for the root logger or for the ``tornado`` or ``tornado.application``
+  loggers (previously it only looked at the root logger).
+
+`tornado.iostream`
+~~~~~~~~~~~~~~~~~~
+
+* `.IOStream` now recognizes ``ECONNABORTED`` error codes in more places
+  (which was mainly an issue on Windows).
+* `.IOStream` now frees memory earlier if a connection is closed while
+  there is data in the write buffer.
+* `.PipeIOStream` now handles ``EAGAIN`` error codes correctly.
+* `.SSLIOStream` now initiates the SSL handshake automatically without
+  waiting for the application to try and read or write to the connection.
+* Swallow a spurious exception from ``set_nodelay`` when a connection
+  has been reset.
+
+`tornado.locale`
+~~~~~~~~~~~~~~~~
+
+* `.Locale.format_date` no longer forces the use of absolute
+  dates in Russian.
+
+`tornado.log`
+~~~~~~~~~~~~~
+
+* Fix an error from `tornado.log.enable_pretty_logging` when
+  `sys.stderr` does not have an ``isatty`` method.
+* `tornado.log.LogFormatter` now accepts keyword arguments ``fmt``
+  and ``datefmt``.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+* `.is_valid_ip` (and therefore ``HTTPRequest.remote_ip``) now rejects
+  empty strings.
+* Synchronously using `.ThreadedResolver` at import time to resolve
+  a unicode hostname no longer deadlocks.
+
+`tornado.platform.twisted`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* `.TwistedResolver` now has better error handling.
+
+`tornado.process`
+~~~~~~~~~~~~~~~~~
+
+* `.Subprocess` no longer leaks file descriptors if `subprocess.Popen` fails.
+
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``simple_httpclient`` now applies the ``connect_timeout`` to requests
+  that are queued and have not yet started.
+* On Python 2.6, ``simple_httpclient`` now uses TLSv1 instead of SSLv3.
+* ``simple_httpclient`` now enforces the connect timeout during DNS resolution.
+* The embedded ``ca-certificates.crt`` file has been updated with the current
+  Mozilla CA list.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+* `.StaticFileHandler` no longer fails if the client requests a ``Range`` that
+  is larger than the entire file (Facebook has a crawler that does this).
+* `.RequestHandler.on_connection_close` now works correctly on subsequent
+  requests of a keep-alive connection.
+* New application setting ``default_handler_class`` can be used to easily
+  set up custom 404 pages.
+* New application settings ``autoreload``, ``compiled_template_cache``,
+  ``static_hash_cache``, and ``serve_traceback`` can be used to control
+  individual aspects of debug mode.
+* New methods `.RequestHandler.get_query_argument` and
+  `.RequestHandler.get_body_argument` and new attributes
+  ``HTTPRequest.query_arguments`` and ``HTTPRequest.body_arguments`` allow access
+  to arguments without intermingling those from the query string with those
+  from the request body.
+* `.RequestHandler.decode_argument` and related methods now raise
+  an ``HTTPError(400)`` instead of `UnicodeDecodeError` when the
+  argument could not be decoded.
+* `.RequestHandler.clear_all_cookies` now accepts ``domain`` and ``path``
+  arguments, just like `~.RequestHandler.clear_cookie`.
+* It is now possible to specify handlers by name when using the `.URLSpec`
+  class.
+* `.Application` now accepts 4-tuples to specify the ``name`` parameter
+  (which previously required constructing a `.URLSpec` object instead of
+  a tuple).
+* Fixed an incorrect error message when handler methods return a value
+  other than None or a Future.
+* Exceptions will no longer be logged twice when using both ``@asynchronous``
+  and ``@gen.coroutine``
+
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+* `.WebSocketHandler.write_message` now raises `.WebSocketClosedError` instead
+  of `AttributeError` when the connection has been closed.
+* `.websocket_connect` now accepts preconstructed ``HTTPRequest`` objects.
+* Fix a bug with `.WebSocketHandler` when used with some proxies that
+  unconditionally modify the ``Connection`` header.
+* `.websocket_connect` now returns an error immediately for refused connections
+  instead of waiting for the timeout.
+* `.WebSocketClientConnection` now has a ``close`` method.
+
+`tornado.wsgi`
+~~~~~~~~~~~~~~
+
+* `.WSGIContainer` now calls the iterable's ``close()`` method even if
+  an error is raised, in compliance with the spec.

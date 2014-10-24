@@ -470,9 +470,8 @@ if have_twisted:
         'twisted.internet.test.test_core.ObjectModelIntegrationTest': [],
         'twisted.internet.test.test_core.SystemEventTestsBuilder': [
             'test_iterate',  # deliberately not supported
-            'test_runAfterCrash',  # fails because TwistedIOLoop uses the global reactor
-        ] if issubclass(IOLoop.configured_class(), TwistedIOLoop) else [
-            'test_iterate',  # deliberately not supported
+            # Fails on TwistedIOLoop and AsyncIOLoop.
+            'test_runAfterCrash',
         ],
         'twisted.internet.test.test_fdset.ReactorFDSetTestsBuilder': [
             "test_lostFileDescriptor",  # incompatible with epoll and kqueue

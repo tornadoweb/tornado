@@ -7,7 +7,7 @@ import traceback
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
 from tornado.test.util import unittest
-from tornado.util import u, bytes_type, ObjectDict, unicode_type
+from tornado.util import u, ObjectDict, unicode_type
 
 
 class TemplateTest(unittest.TestCase):
@@ -182,6 +182,7 @@ three
         """})
         try:
             loader.load("test.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
@@ -192,6 +193,7 @@ three{%end%}
         """})
         try:
             loader.load("test.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# test.html:2" in traceback.format_exc())
 
@@ -202,6 +204,7 @@ three{%end%}
         }, namespace={"_tt_modules": ObjectDict({"Template": lambda path, **kwargs: loader.load(path).generate(**kwargs)})})
         try:
             loader.load("base.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             exc_stack = traceback.format_exc()
             self.assertTrue('# base.html:1' in exc_stack)
@@ -214,6 +217,7 @@ three{%end%}
         })
         try:
             loader.load("base.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# sub.html:1 (via base.html:1)" in
                             traceback.format_exc())
@@ -225,6 +229,7 @@ three{%end%}
         })
         try:
             loader.load("sub.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             exc_stack = traceback.format_exc()
         self.assertTrue("# base.html:1" in exc_stack)
@@ -240,6 +245,7 @@ three{%end%}
             """})
         try:
             loader.load("sub.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# sub.html:4 (via base.html:1)" in
                             traceback.format_exc())
@@ -252,6 +258,7 @@ three{%end%}
         })
         try:
             loader.load("a.html").generate()
+            self.fail("did not get expected exception")
         except ZeroDivisionError:
             self.assertTrue("# c.html:1 (via b.html:1, a.html:1)" in
                             traceback.format_exc())
@@ -367,7 +374,7 @@ raw: {% raw name %}""",
                              "{% autoescape py_escape %}s = {{ name }}\n"})
 
         def py_escape(s):
-            self.assertEqual(type(s), bytes_type)
+            self.assertEqual(type(s), bytes)
             return repr(native_str(s))
 
         def render(template, name):
@@ -379,6 +386,20 @@ raw: {% raw name %}""",
                          b"""s = "';sys.exit()"\n""")
         self.assertEqual(render("foo.py", ["not a string"]),
                          b"""s = "['not a string']"\n""")
+
+    def test_minimize_whitespace(self):
+        # Whitespace including newlines is allowed within template tags
+        # and directives, and this is one way to avoid long lines while
+        # keeping extra whitespace out of the rendered output.
+        loader = DictLoader({'foo.txt': """\
+{% for i in items
+  %}{% if i > 0 %}, {% end %}{#
+  #}{{i
+  }}{% end
+%}""",
+                             })
+        self.assertEqual(loader.load("foo.txt").generate(items=range(5)),
+                         b"0, 1, 2, 3, 4")
 
 
 class TemplateLoaderTest(unittest.TestCase):

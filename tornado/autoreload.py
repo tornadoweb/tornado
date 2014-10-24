@@ -14,13 +14,17 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""xAutomatically restart the server when a source file is modified.
+"""Automatically restart the server when a source file is modified.
 
-Most applications should not access this module directly.  Instead, pass the
-keyword argument ``debug=True`` to the `tornado.web.Application` constructor.
-This will enable autoreload mode as well as checking for changes to templates
-and static resources.  Note that restarting is a destructive operation
-and any requests in progress will be aborted when the process restarts.
+Most applications should not access this module directly.  Instead,
+pass the keyword argument ``autoreload=True`` to the
+`tornado.web.Application` constructor (or ``debug=True``, which
+enables this setting and several others).  This will enable autoreload
+mode as well as checking for changes to templates and static
+resources.  Note that restarting is a destructive operation and any
+requests in progress will be aborted when the process restarts.  (If
+you want to disable autoreload while using other debug-mode features,
+pass both ``debug=True`` and ``autoreload=False``).
 
 This module can also be used as a command-line wrapper around scripts
 such as unit test runners.  See the `main` method for details.
@@ -38,6 +42,7 @@ Reloading loses any Python interpreter command-line arguments (e.g. ``-u``)
 because it re-executes Python using ``sys.executable`` and ``sys.argv``.
 Additionally, modifying these variables will cause reloading to behave
 incorrectly.
+
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
