@@ -331,7 +331,7 @@ class BaseIOStream(object):
         if data:
             if (self.max_write_buffer_size is not None and
                     self._write_buffer_size + len(data) > self.max_write_buffer_size):
-                raise StreamBufferFullError("Reached maximum read buffer size")
+                raise StreamBufferFullError("Reached maximum write buffer size")
             # Break up large contiguous strings before inserting them in the
             # write buffer, so we don't have to recopy the entire thing
             # as we slice off pieces to send to the socket.
