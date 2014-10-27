@@ -42,30 +42,10 @@ from tornado.tcpserver import TCPServer
 class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     r"""A non-blocking, single-threaded HTTP server.
 
-    A server is defined by either a request callback that takes a
-    `.HTTPServerRequest` as an argument or a `.HTTPServerConnectionDelegate`
-    instance.
-
-    A simple example server that echoes back the URI you requested::
-
-        import tornado.httpserver
-        import tornado.ioloop
-        from tornado import httputil
-
-        def handle_request(request):
-           message = "You requested %s\n" % request.uri
-           request.connection.write_headers(
-               httputil.ResponseStartLine('HTTP/1.1', 200, 'OK'),
-               httputil.HTTPHeaders({"Content-Length": str(len(message))}))
-           request.connection.write(message)
-           request.connection.finish()
-
-        http_server = tornado.httpserver.HTTPServer(handle_request)
-        http_server.listen(8888)
-        tornado.ioloop.IOLoop.instance().start()
-
-    Applications should use the methods of `.HTTPConnection` to write
-    their response.
+    A server is defined by a subclass of `.HTTPServerConnectionDelegate`,
+    or, for backwards compatibility, a callback that takes an
+    `.HTTPServerRequest` as an argument. The delegate is usually a
+    `tornado.web.Application`.
 
     `HTTPServer` supports keep-alive connections by default
     (automatically for HTTP/1.1, or for HTTP/1.0 when the client
