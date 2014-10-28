@@ -92,6 +92,10 @@ def main():
     # 2.7 and 3.2
     warnings.filterwarnings("ignore", category=DeprecationWarning,
                             message="Please use assert.* instead")
+    # unittest2 0.6 on py26 reports these as PendingDeprecationWarnings
+    # instead of DeprecationWarnings.
+    warnings.filterwarnings("ignore", category=PendingDeprecationWarning,
+                            message="Please use assert.* instead")
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
