@@ -1147,9 +1147,6 @@ class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_iterator(self):
         futures = [Future(), Future(), Future(), Future()]
-
-        class TestException(Exception):
-            pass
         
         self.finish_coroutines(0, futures)
 

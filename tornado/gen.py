@@ -53,6 +53,7 @@ import functools
 import itertools
 import sys
 import types
+import weakref
 
 from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
@@ -241,7 +242,7 @@ class Return(Exception):
         self.value = value
 
 class WaitIterator(object):
-    """Provides an iterator to yield the result of futures as they finish
+    """Provides an iterator to yield the results of futures as they finish
 
     Yielding a set of futures like this:
 
@@ -250,8 +251,7 @@ class WaitIterator(object):
     pauses the coroutine until both ``future1`` and ``future2``
     return, and then restarts the coroutine with the results of both
     futures. If either future is an exception, the expression will
-    raise that exception and the result of the other future will be
-    lost.
+    raise that exception and all the results will be lost.
 
     If you need to get the result of each future as soon as possible,
     or if you need the result of some futures even if others produce
@@ -279,11 +279,14 @@ class WaitIterator(object):
     def __init__(self, *args, **kwargs):
         if args and kwargs:
             raise ValueError(
-                "You must provide a list of futures or key/values, not both")
+                "You must provide args or kwargs, not both")
 
         if kwargs:
-            self._keys = kwargs.keys()
-            self._futures = kwargs.values()
+            self._keys, self._futures = list(), list()
+            for k, v in kwargs.items():
+                self._keys.append(k)
+                self._futures.append(v)
+            
         else:
             self._keys = None
             self._futures = list(args)
@@ -295,7 +298,9 @@ class WaitIterator(object):
             if future.done():
                 self._queue.append(future)
             else:
-                future.add_done_callback(self._done_callback)
+                self_ref = weakref.ref(self)
+                future.add_done_callback(functools.partial(
+                        self._done_callback, self_ref))
 
     def __iter__(self):
         return self
@@ -304,8 +309,8 @@ class WaitIterator(object):
         return self.next()
 
     def next(self):
-        """Return a `.Future` that will yield the next avaliable
-        result
+        """Returns a `.Future` that will yield the next available
+        result.
         """
         if all(x is None for x in self._futures):
             self._current_future = None
@@ -322,23 +327,26 @@ class WaitIterator(object):
         return self._running_future
     
     def current_index(self):
-        """Returns the index of the most recently completed `.Future`
-        from the argument list. If keyword arguments were used, the
-        keyword will be returned.
+        """Returns the index of the current `.Future` from the
+        argument list. If keyword arguments were used, the keyword
+        will be returned.
         """
         if self._current_future:
             return self._current_future[0]
             
     def current_future(self):
-        """Returns the most recently completed `.Future` object"""
+        """Returns the current `.Future` object."""
         if self._current_future:
             return self._current_future[1]
-        
-    def _done_callback(self, done):
-        if self._running_future and not self._running_future.done():
-            self._return_result(done)
-        else:
-            self._queue.append(done)
+
+    @staticmethod
+    def _done_callback(self_ref, done):
+        self = self_ref()
+        if self is not None:
+            if self._running_future and not self._running_future.done():
+                self._return_result(done)
+            else:
+                self._queue.append(done)
 
     def _return_result(self, done):
         """Called set the returned future's state that of the future
