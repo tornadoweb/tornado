@@ -73,6 +73,7 @@ import tornado
 import traceback
 import types
 from io import BytesIO
+from inspect import isclass
 
 from tornado.concurrent import Future, is_future
 from tornado import escape
@@ -2787,6 +2788,10 @@ class URLSpec(object):
             # import the Module and instantiate the class
             # Must be a fully qualified name (module.ClassName)
             handler = import_object(handler)
+
+        if not isclass(handler) or not issubclass(handler, RequestHandler):
+            raise TypeError(
+                'RequestHandler needed for pattern: %s' % pattern)
 
         self.handler_class = handler
         self.kwargs = kwargs or {}
