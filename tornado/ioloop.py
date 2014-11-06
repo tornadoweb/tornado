@@ -901,6 +901,12 @@ class PollIOLoop(IOLoop):
                 # if the signal is handled on another thread, we can add
                 # it normally (modulo the NullContext)
                 self.add_callback(callback, *args, **kwargs)
+            elif self._callbacks is None:
+                # Already closed. This might be an exit callback on some
+                # signal, like SIGCHILD for Subprocess, that was created when
+                # this IOLoop was active. Can't do anything, there's nothing
+                # to run this callback on. So drop it.
+                pass
             else:
                 # If we're on the IOLoop's thread, we cannot use
                 # the regular add_callback because it may deadlock on
