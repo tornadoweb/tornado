@@ -38,6 +38,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.readers = set()
         self.writers = set()
         self.closing = False
+        self._closed = False
 
     def close(self, all_fds=False):
         self.closing = True
@@ -48,6 +49,11 @@ class BaseAsyncIOLoop(IOLoop):
                 self.close_fd(fileobj)
         if self.close_loop:
             self.asyncio_loop.close()
+        self._closed = True
+
+    @property
+    def closed(self):
+        return self._closed
 
     def add_handler(self, fd, handler, events):
         fd, fileobj = self.split_fd(fd)

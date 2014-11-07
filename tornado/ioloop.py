@@ -226,6 +226,10 @@ class IOLoop(Configurable):
     def initialize(self):
         pass
 
+    @property
+    def closed(self):
+        raise NotImplementedError()
+
     def close(self, all_fds=False):
         """Closes the `IOLoop`, freeing any resources used.
 
@@ -658,6 +662,10 @@ class PollIOLoop(IOLoop):
         self.add_handler(self._waker.fileno(),
                          lambda fd, events: self._waker.consume(),
                          self.READ)
+
+    @property
+    def closed(self):
+        return self._callbacks is None
 
     def close(self, all_fds=False):
         with self._callback_lock:

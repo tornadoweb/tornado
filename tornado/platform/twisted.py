@@ -413,6 +413,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         self.reactor = reactor
         self.fds = {}
         self.reactor.callWhenRunning(self.make_current)
+        self._closed = False
 
     def close(self, all_fds=False):
         fds = self.fds
@@ -422,6 +423,11 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         if all_fds:
             for fd in fds.values():
                 self.close_fd(fd.fileobj)
+        self._closed = True
+
+    @property
+    def closed(self):
+        return self._closed
 
     def add_handler(self, fd, handler, events):
         if fd in self.fds:
