@@ -229,7 +229,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         return None
 
-    def open(self):
+    def open(self, *args, **kwargs):
         """Invoked when a new WebSocket is opened.
 
         The arguments to `open` are extracted from the `tornado.web.URLSpec`
