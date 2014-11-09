@@ -195,6 +195,7 @@ class Subprocess(object):
     STREAM = object()
 
     _initialized = False
+    _io_loop = None
     _waiting = {}
 
     def __init__(self, *args, **kwargs):
@@ -264,10 +265,19 @@ class Subprocess(object):
         same one used by individual Subprocess objects (as long as the
         ``IOLoops`` are each running in separate threads).
         """
+        try:
+            if cls._initialized and cls._io_loop.closed:
+                # If stuck with an already closed ioloop, that can't be used
+                # anymore, so uninitialize so we can re-init with a new ioloop.
+                cls.uninitialize()
+        except NotImplementedError:
+            # Can't tell. Fall back to old behavior.
+            pass
         if cls._initialized:
             return
         if io_loop is None:
             io_loop = ioloop.IOLoop.current()
+        cls._io_loop = io_loop
         cls._old_sigchld = signal.signal(
             signal.SIGCHLD,
             lambda sig, frame: io_loop.add_callback_from_signal(cls._cleanup))

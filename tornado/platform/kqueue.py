@@ -28,12 +28,18 @@ class _KQueue(object):
     def __init__(self):
         self._kqueue = select.kqueue()
         self._active = {}
+        self._closed = False
 
     def fileno(self):
         return self._kqueue.fileno()
 
     def close(self):
         self._kqueue.close()
+        self._closed = True
+
+    @property
+    def closed(self):
+        return self._closed
 
     def register(self, fd, events):
         if fd in self._active:
