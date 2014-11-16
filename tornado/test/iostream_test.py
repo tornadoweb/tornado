@@ -725,6 +725,26 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    def test_flow_control(self):
+        MB = 1024 * 1024
+        server, client = self.make_iostream_pair(max_buffer_size=5 * MB)
+        try:
+            # Client writes more than the server will accept.
+            client.write(b"a" * 10 * MB)
+            # The server pauses while reading.
+            server.read_bytes(MB, self.stop)
+            self.wait()
+            self.io_loop.call_later(0.1, self.stop)
+            self.wait()
+            # The client's writes have been blocked; the server can
+            # continue to read gradually.
+            for i in range(9):
+                server.read_bytes(MB, self.stop)
+                self.wait()
+        finally:
+            server.close()
+            client.close()
+
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):
