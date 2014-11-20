@@ -342,3 +342,7 @@ implements an AJAX chat room using `long polling
 of long polling may want to override ``on_connection_close()`` to
 clean up after the client closes the connection (but see that method's
 docstring for caveats).
+
+Note that, there is another `chat example application
+<https://github.com/tornadoweb/tornado/tree/stable/demos/websocket>`_, which 
+implements a WebSocket chat room.
