@@ -1845,7 +1845,7 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         handlers = app._get_host_handlers(self.request)
         if not handlers:
             self.handler_class = RedirectHandler
-            self.handler_kwargs = dict(url="http://" + app.default_host + "/")
+            self.handler_kwargs = dict(url="%s://%s/" % (self.request.protocol, app.default_host))
             return
         for spec in handlers:
             match = spec.regex.match(self.request.path)
