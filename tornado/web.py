@@ -1729,7 +1729,9 @@ class Application(httputil.HTTPServerConnectionDelegate):
         self.transforms.append(transform_class)
 
     def _get_host_handlers(self, request):
-        host = request.host.lower().split(':')[0]
+        host = request.host.lower()
+        if not host.endswith(']'): # excluding IPv6 addresses without port
+            host = host.rsplit(':', 1)[0]
         matches = []
         for pattern, handlers in self.handlers:
             if pattern.match(host):
