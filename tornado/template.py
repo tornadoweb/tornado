@@ -368,8 +368,12 @@ class Loader(BaseLoader):
     def _create_template(self, name):
         path = os.path.join(self.root, name)
         with open(path, "rb") as f:
-            template = Template(f.read(), name=name, loader=self)
-            return template
+            try:
+                template = Template(f.read(), name=name, loader=self)
+                return template
+            except ParseError as exception:
+                exception.args = exception.args + (path, )
+                raise
 
 
 class DictLoader(BaseLoader):
