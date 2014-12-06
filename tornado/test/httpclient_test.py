@@ -405,6 +405,11 @@ Transfer-Encoding: chunked
         self.assertEqual(context.exception.response.code, 404)
 
     @gen_test
+    def test_future_http_error_no_raise(self):
+        response = yield self.http_client.fetch(self.get_url('/notfound'), raise_error=False)
+        self.assertEqual(response.code, 404)
+
+    @gen_test
     def test_reuse_request_from_response(self):
         # The response.request attribute should be an HTTPRequest, not
         # a _RequestProxy.
