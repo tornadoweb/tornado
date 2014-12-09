@@ -19,7 +19,8 @@ need to set up MySQL and the database schema for the demo to run.
 3. Install Python prerequisites
 
    Install the packages MySQL-python, torndb, and markdown (e.g. using pip or
-   easy_install)
+   easy_install). Note that these packages currently only work on
+   Python 2. Tornado supports Python 3, but this blog demo does not.
 
 3. Connect to MySQL and create a database and user for the blog.
 

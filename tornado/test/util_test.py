@@ -1,9 +1,10 @@
 # coding: utf-8
 from __future__ import absolute_import, division, print_function, with_statement
 import sys
+import datetime
 
 from tornado.escape import utf8
-from tornado.util import raise_exc_info, Configurable, u, exec_in, ArgReplacer
+from tornado.util import raise_exc_info, Configurable, u, exec_in, ArgReplacer, timedelta_to_seconds
 from tornado.test.util import unittest
 
 try:
@@ -170,3 +171,9 @@ class ArgReplacerTest(unittest.TestCase):
         self.assertEqual(self.replacer.get_old_value(args, kwargs), 'old')
         self.assertEqual(self.replacer.replace('new', args, kwargs),
                          ('old', (1,), dict(y=2, callback='new', z=3)))
+
+
+class TimedeltaToSecondsTest(unittest.TestCase):
+    def test_timedelta_to_seconds(self):
+        time_delta = datetime.timedelta(hours=1)
+        self.assertEqual(timedelta_to_seconds(time_delta), 3600.0)

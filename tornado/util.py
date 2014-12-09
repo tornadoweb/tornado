@@ -115,16 +115,17 @@ def import_object(name):
 if type('') is not type(b''):
     def u(s):
         return s
-    bytes_type = bytes
     unicode_type = str
     basestring_type = str
 else:
     def u(s):
         return s.decode('unicode_escape')
-    bytes_type = str
     unicode_type = unicode
     basestring_type = basestring
 
+# Deprecated alias that was used before we dropped py25 support.
+# Left here in case anyone outside Tornado is using it.
+bytes_type = bytes
 
 if sys.version_info > (3,):
     exec("""
@@ -154,7 +155,7 @@ def errno_from_exception(e):
     """Provides the errno from an Exception object.
 
     There are cases that the errno attribute was not set so we pull
-    the errno out of the args but if someone instatiates an Exception
+    the errno out of the args but if someone instantiates an Exception
     without any args you will get a tuple error. So this function
     abstracts all that behavior to give you a safe way to get the
     errno.
@@ -202,7 +203,7 @@ class Configurable(object):
             impl = cls
         args.update(kwargs)
         instance = super(Configurable, cls).__new__(impl)
-        # initialize vs __init__ chosen for compatiblity with AsyncHTTPClient
+        # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.
         instance.initialize(**args)
@@ -237,7 +238,7 @@ class Configurable(object):
         some parameters.
         """
         base = cls.configurable_base()
-        if isinstance(impl, (unicode_type, bytes_type)):
+        if isinstance(impl, (unicode_type, bytes)):
             impl = import_object(impl)
         if impl is not None and not issubclass(impl, cls):
             raise ValueError("Invalid subclass of %s" % cls)

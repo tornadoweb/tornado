@@ -14,7 +14,7 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
-from tornado.log import gen_log, app_log
+from tornado.log import gen_log
 from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
@@ -294,10 +294,13 @@ class SimpleHTTPClientTestMixin(object):
         self.assertEqual(response.code, 204)
         # 204 status doesn't need a content-length, but tornado will
         # add a zero content-length anyway.
+        #
+        # A test without a content-length header is included below
+        # in HTTP204NoContentTestCase.
         self.assertEqual(response.headers["Content-length"], "0")
 
         # 204 status with non-zero content length is malformed
-        with ExpectLog(app_log, "Uncaught exception"):
+        with ExpectLog(gen_log, "Malformed HTTP message"):
             response = self.fetch("/no_content?error=1")
         self.assertEqual(response.code, 599)
 
@@ -474,6 +477,27 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
     def test_100_continue(self):
         res = self.fetch('/')
         self.assertEqual(res.body, b'A')
+
+
+class HTTP204NoContentTestCase(AsyncHTTPTestCase):
+    def respond_204(self, request):
+        # A 204 response never has a body, even if doesn't have a content-length
+        # (which would otherwise mean read-until-close).  Tornado always
+        # sends a content-length, so we simulate here a server that sends
+        # no content length and does not close the connection.
+        #
+        # Tests of a 204 response with a Content-Length header are included
+        # in SimpleHTTPClientTestMixin.
+        request.connection.stream.write(
+            b"HTTP/1.1 204 No content\r\n\r\n")
+
+    def get_app(self):
+        return self.respond_204
+
+    def test_204_no_content(self):
+        resp = self.fetch('/')
+        self.assertEqual(resp.code, 204)
+        self.assertEqual(resp.body, b'')
 
 
 class HostnameMappingTestCase(AsyncHTTPTestCase):

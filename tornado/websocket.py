@@ -36,7 +36,7 @@ from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
 from tornado import simple_httpclient
 from tornado.tcpclient import TCPClient
-from tornado.util import bytes_type, _websocket_mask
+from tornado.util import _websocket_mask
 
 try:
     from urllib.parse import urlparse # py2
@@ -176,10 +176,11 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 self, compression_options=self.get_compression_options())
             self.ws_connection.accept_connection()
         else:
-            self.stream.write(tornado.escape.utf8(
-                "HTTP/1.1 426 Upgrade Required\r\n"
-                "Sec-WebSocket-Version: 8\r\n\r\n"))
-            self.stream.close()
+            if not self.stream.closed():
+                self.stream.write(tornado.escape.utf8(
+                    "HTTP/1.1 426 Upgrade Required\r\n"
+                    "Sec-WebSocket-Version: 8\r\n\r\n"))
+                self.stream.close()
 
 
     def write_message(self, message, binary=False):
@@ -216,9 +217,19 @@ class WebSocketHandler(tornado.web.RequestHandler):
         return None
 
     def get_compression_options(self):
+        """Override to return compression options for the connection.
+
+        If this method returns None (the default), compression will
+        be disabled.  If it returns a dict (even an empty one), it
+        will be enabled.  The contents of the dict may be used to
+        control the memory and CPU usage of the compression,
+        but no such options are currently implemented.
+
+        .. versionadded:: 4.1
+        """
         return None
 
-    def open(self):
+    def open(self, *args, **kwargs):
         """Invoked when a new WebSocket is opened.
 
         The arguments to `open` are extracted from the `tornado.web.URLSpec`
@@ -544,6 +555,9 @@ class WebSocketProtocol13(WebSocketProtocol):
                                         'permessage-deflate', ext[1]))
                 break
 
+        if self.stream.closed():
+            self._abort()
+            return
         self.stream.write(tornado.escape.utf8(
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
@@ -632,7 +646,10 @@ class WebSocketProtocol13(WebSocketProtocol):
             data = mask + _websocket_mask(mask, data)
         frame += data
         self._wire_bytes_out += len(frame)
-        self.stream.write(frame)
+        try:
+            self.stream.write(frame)
+        except StreamClosedError:
+            self._abort()
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket."""
@@ -641,20 +658,17 @@ class WebSocketProtocol13(WebSocketProtocol):
         else:
             opcode = 0x1
         message = tornado.escape.utf8(message)
-        assert isinstance(message, bytes_type)
+        assert isinstance(message, bytes)
         self._message_bytes_out += len(message)
         flags = 0
         if self._compressor:
             message = self._compressor.compress(message)
             flags |= self.RSV1
-        try:
-            self._write_frame(True, opcode, message, flags=flags)
-        except StreamClosedError:
-            self._abort()
+        self._write_frame(True, opcode, message, flags=flags)
 
     def write_ping(self, data):
         """Send ping frame."""
-        assert isinstance(data, bytes_type)
+        assert isinstance(data, bytes)
         self._write_frame(True, 0x9, data)
 
     def _receive_frame(self):
@@ -884,12 +898,12 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.protocol.close(code, reason)
             self.protocol = None
 
-    def _on_close(self):
+    def on_connection_close(self):
         if not self.connect_future.done():
             self.connect_future.set_exception(StreamClosedError())
         self.on_message(None)
-        self.resolver.close()
-        super(WebSocketClientConnection, self)._on_close()
+        self.tcp_client.close()
+        super(WebSocketClientConnection, self).on_connection_close()
 
     def _on_http_response(self, response):
         if not self.connect_future.done():
@@ -916,7 +930,12 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self._timeout = None
 
         self.stream = self.connection.detach()
-        self.stream.set_close_callback(self._on_close)
+        self.stream.set_close_callback(self.on_connection_close)
+        # Once we've taken over the connection, clear the final callback
+        # we set on the http request.  This deactivates the error handling
+        # in simple_httpclient that would otherwise interfere with our
+        # ability to see exceptions.
+        self.final_callback = None
 
         self.connect_future.set_result(self)
 
@@ -960,8 +979,14 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
     Takes a url and returns a Future whose result is a
     `WebSocketClientConnection`.
 
+    ``compression_options`` is interpreted in the same way as the
+    return value of `.WebSocketHandler.get_compression_options`.
+
     .. versionchanged:: 3.2
        Also accepts ``HTTPRequest`` objects in place of urls.
+
+    .. versionchanged:: 4.1
+       Added ``compression_options``.
     """
     if io_loop is None:
         io_loop = IOLoop.current()

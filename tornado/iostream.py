@@ -39,7 +39,7 @@ from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError
 from tornado import stack_context
-from tornado.util import bytes_type, errno_from_exception
+from tornado.util import errno_from_exception
 
 try:
     from tornado.platform.posix import _set_nonblocking
@@ -324,14 +324,14 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Now returns a `.Future` if no callback is given.
         """
-        assert isinstance(data, bytes_type)
+        assert isinstance(data, bytes)
         self._check_closed()
         # We use bool(_write_buffer) as a proxy for write_buffer_size>0,
         # so never put empty strings in the buffer.
         if data:
             if (self.max_write_buffer_size is not None and
                     self._write_buffer_size + len(data) > self.max_write_buffer_size):
-                raise StreamBufferFullError("Reached maximum read buffer size")
+                raise StreamBufferFullError("Reached maximum write buffer size")
             # Break up large contiguous strings before inserting them in the
             # write buffer, so we don't have to recopy the entire thing
             # as we slice off pieces to send to the socket.
@@ -505,7 +505,7 @@ class BaseIOStream(object):
         def wrapper():
             self._pending_callbacks -= 1
             try:
-                callback(*args)
+                return callback(*args)
             except Exception:
                 app_log.error("Uncaught exception, closing connection.",
                               exc_info=True)
@@ -517,7 +517,8 @@ class BaseIOStream(object):
                 # Re-raise the exception so that IOLoop.handle_callback_exception
                 # can see it and log the error
                 raise
-            self._maybe_add_error_listener()
+            finally:
+                self._maybe_add_error_listener()
         # We schedule callbacks to be run on the next IOLoop iteration
         # rather than running them directly for several reasons:
         # * Prevents unbounded stack growth when a callback calls an
@@ -553,7 +554,7 @@ class BaseIOStream(object):
             # Pretend to have a pending callback so that an EOF in
             # _read_to_buffer doesn't trigger an immediate close
             # callback.  At the end of this method we'll either
-            # estabilsh a real pending callback via
+            # establish a real pending callback via
             # _read_from_buffer or run the close callback.
             #
             # We need two try statements here so that
@@ -992,6 +993,11 @@ class IOStream(BaseIOStream):
 
         """
         self._connecting = True
+        if callback is not None:
+            self._connect_callback = stack_context.wrap(callback)
+            future = None
+        else:
+            future = self._connect_future = TracebackFuture()
         try:
             self.socket.connect(address)
         except socket.error as e:
@@ -1007,12 +1013,7 @@ class IOStream(BaseIOStream):
                 gen_log.warning("Connect error on fd %s: %s",
                                 self.socket.fileno(), e)
                 self.close(exc_info=True)
-                return
-        if callback is not None:
-            self._connect_callback = stack_context.wrap(callback)
-            future = None
-        else:
-            future = self._connect_future = TracebackFuture()
+                return future
         self._add_io_state(self.io_loop.WRITE)
         return future
 

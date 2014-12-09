@@ -19,6 +19,7 @@ try:
     from tornado.simple_httpclient import SimpleAsyncHTTPClient
     from tornado.ioloop import IOLoop, TimeoutError
     from tornado import netutil
+    from tornado.process import Subprocess
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
     # won't work, but e.g. LogTrapTestCase and main() will.
@@ -28,7 +29,8 @@ except ImportError:
     IOLoop = None
     netutil = None
     SimpleAsyncHTTPClient = None
-from tornado.log import gen_log
+    Subprocess = None
+from tornado.log import gen_log, app_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type
 import functools
@@ -114,8 +116,8 @@ class _TestMethodWrapper(object):
     def __init__(self, orig_method):
         self.orig_method = orig_method
 
-    def __call__(self):
-        result = self.orig_method()
+    def __call__(self, *args, **kwargs):
+        result = self.orig_method(*args, **kwargs)
         if isinstance(result, types.GeneratorType):
             raise TypeError("Generator test methods should be decorated with "
                             "tornado.testing.gen_test")
@@ -214,6 +216,8 @@ class AsyncTestCase(unittest.TestCase):
         self.io_loop.make_current()
 
     def tearDown(self):
+        # Clean up Subprocess, so it can be used again with a new ioloop.
+        Subprocess.uninitialize()
         self.io_loop.clear_current()
         if (not IOLoop.initialized() or
                 self.io_loop is not IOLoop.instance()):
@@ -237,7 +241,11 @@ class AsyncTestCase(unittest.TestCase):
         return IOLoop()
 
     def _handle_exception(self, typ, value, tb):
-        self.__failure = (typ, value, tb)
+        if self.__failure is None:
+            self.__failure = (typ, value, tb)
+        else:
+            app_log.error("multiple unhandled exceptions in test",
+                          exc_info=(typ, value, tb))
         self.stop()
         return True
 
@@ -395,7 +403,8 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def tearDown(self):
         self.http_server.stop()
-        self.io_loop.run_sync(self.http_server.close_all_connections)
+        self.io_loop.run_sync(self.http_server.close_all_connections,
+                              timeout=get_async_test_timeout())
         if (not IOLoop.initialized() or
                 self.http_client.io_loop is not IOLoop.instance()):
             self.http_client.close()

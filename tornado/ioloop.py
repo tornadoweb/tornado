@@ -197,7 +197,7 @@ class IOLoop(Configurable):
 
         An `IOLoop` automatically becomes current for its thread
         when it is started, but it is sometimes useful to call
-        `make_current` explictly before starting the `IOLoop`,
+        `make_current` explicitly before starting the `IOLoop`,
         so that code run at startup time can find the right
         instance.
         """
@@ -724,7 +724,7 @@ class PollIOLoop(IOLoop):
         #
         # If someone has already set a wakeup fd, we don't want to
         # disturb it.  This is an issue for twisted, which does its
-        # SIGCHILD processing in response to its own wakeup fd being
+        # SIGCHLD processing in response to its own wakeup fd being
         # written to.  As long as the wakeup fd is registered on the IOLoop,
         # the loop will still wake up and everything should work.
         old_wakeup_fd = None
@@ -754,17 +754,18 @@ class PollIOLoop(IOLoop):
                 # Do not run anything until we have determined which ones
                 # are ready, so timeouts that call add_timeout cannot
                 # schedule anything in this iteration.
+                due_timeouts = []
                 if self._timeouts:
                     now = self.time()
                     while self._timeouts:
                         if self._timeouts[0].callback is None:
-                            # the timeout was cancelled
+                            # The timeout was cancelled.  Note that the
+                            # cancellation check is repeated below for timeouts
+                            # that are cancelled by another timeout or callback.
                             heapq.heappop(self._timeouts)
                             self._cancellations -= 1
                         elif self._timeouts[0].deadline <= now:
-                            timeout = heapq.heappop(self._timeouts)
-                            callbacks.append(timeout.callback)
-                            del timeout
+                            due_timeouts.append(heapq.heappop(self._timeouts))
                         else:
                             break
                     if (self._cancellations > 512
@@ -778,9 +779,12 @@ class PollIOLoop(IOLoop):
 
                 for callback in callbacks:
                     self._run_callback(callback)
+                for timeout in due_timeouts:
+                    if timeout.callback is not None:
+                        self._run_callback(timeout.callback)
                 # Closures may be holding on to a lot of memory, so allow
                 # them to be freed before we go into our poll wait.
-                callbacks = callback = None
+                callbacks = callback = due_timeouts = timeout = None
 
                 if self._callbacks:
                     # If any callbacks or timeouts called add_callback,
@@ -969,10 +973,11 @@ class PeriodicCallback(object):
         if not self._running:
             return
         try:
-            self.callback()
+            return self.callback()
         except Exception:
             self.io_loop.handle_callback_exception(self.callback)
-        self._schedule_next()
+        finally:
+            self._schedule_next()
 
     def _schedule_next(self):
         if self._running:

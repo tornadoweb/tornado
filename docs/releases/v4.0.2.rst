@@ -1,0 +1,22 @@
+What's new in Tornado 4.0.2
+===========================
+
+Sept 10, 2014
+-------------
+
+Bug fixes
+~~~~~~~~~
+
+* Fixed a bug that could sometimes cause a timeout to fire after being
+  cancelled.
+* `.AsyncTestCase` once again passes along arguments to test methods,
+  making it compatible with extensions such as Nose's test generators.
+* `.StaticFileHandler` can again compress its responses when gzip is enabled.
+* ``simple_httpclient`` passes its ``max_buffer_size`` argument to the
+  underlying stream.
+* Fixed a reference cycle that can lead to increased memory consumption.
+* `.add_accept_handler` will now limit the number of times it will call
+  `~socket.socket.accept` per `.IOLoop` iteration, addressing a potential
+  starvation issue.
+* Improved error handling in `.IOStream.connect` (primarily for FreeBSD
+  systems)

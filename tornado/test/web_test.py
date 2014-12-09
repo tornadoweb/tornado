@@ -4,13 +4,14 @@ from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
 from tornado.httputil import format_timestamp
 from tornado.iostream import IOStream
+from tornado import locale
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
-from tornado.util import u, bytes_type, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish
+from tornado.util import u, ObjectDict, unicode_type, timedelta_to_seconds
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler
 
 import binascii
 import contextlib
@@ -21,7 +22,6 @@ import logging
 import os
 import re
 import socket
-import sys
 
 try:
     import urllib.parse as urllib_parse  # py3
@@ -163,11 +163,21 @@ class CookieTest(WebTestCase):
                 # Attributes from the first call are not carried over.
                 self.set_cookie("a", "e")
 
+        class SetCookieMaxAgeHandler(RequestHandler):
+            def get(self):
+                self.set_cookie("foo", "bar", max_age=10)
+
+        class SetCookieExpiresDaysHandler(RequestHandler):
+            def get(self):
+                self.set_cookie("foo", "bar", expires_days=10)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
                 ("/special_char", SetCookieSpecialCharHandler),
                 ("/set_overwrite", SetCookieOverwriteHandler),
+                ("/set_max_age", SetCookieMaxAgeHandler),
+                ("/set_expires_days", SetCookieExpiresDaysHandler),
                 ]
 
     def test_set_cookie(self):
@@ -222,6 +232,23 @@ class CookieTest(WebTestCase):
         self.assertEqual(sorted(headers),
                          ["a=e; Path=/", "c=d; Domain=example.com; Path=/"])
 
+    def test_set_cookie_max_age(self):
+        response = self.fetch("/set_max_age")
+        headers = response.headers.get_list("Set-Cookie")
+        self.assertEqual(sorted(headers),
+                         ["foo=bar; Max-Age=10; Path=/"])
+    
+    def test_set_cookie_expires_days(self):
+        response = self.fetch("/set_expires_days")
+        header = response.headers.get("Set-Cookie")
+        match = re.match("foo=bar; expires=(?P<expires>.+); Path=/", header)
+        self.assertIsNotNone(match)
+
+        expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
+        header_expires = datetime.datetime(
+            *email.utils.parsedate(match.groupdict()["expires"])[:6])
+        self.assertTrue(abs(timedelta_to_seconds(expires - header_expires)) < 10)
+    
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
@@ -302,7 +329,7 @@ class EchoHandler(RequestHandler):
             if type(key) != str:
                 raise Exception("incorrect type for key: %r" % type(key))
             for value in self.request.arguments[key]:
-                if type(value) != bytes_type:
+                if type(value) != bytes:
                     raise Exception("incorrect type for value: %r" %
                                     type(value))
             for value in self.get_arguments(key):
@@ -370,10 +397,10 @@ class TypeCheckHandler(RequestHandler):
         if list(self.cookies.keys()) != ['asdf']:
             raise Exception("unexpected values for cookie keys: %r" %
                             self.cookies.keys())
-        self.check_type('get_secure_cookie', self.get_secure_cookie('asdf'), bytes_type)
+        self.check_type('get_secure_cookie', self.get_secure_cookie('asdf'), bytes)
         self.check_type('get_cookie', self.get_cookie('asdf'), str)
 
-        self.check_type('xsrf_token', self.xsrf_token, bytes_type)
+        self.check_type('xsrf_token', self.xsrf_token, bytes)
         self.check_type('xsrf_form_html', self.xsrf_form_html(), str)
 
         self.check_type('reverse_url', self.reverse_url('typecheck', 'foo'), str)
@@ -399,7 +426,7 @@ class TypeCheckHandler(RequestHandler):
 
 class DecodeArgHandler(RequestHandler):
     def decode_argument(self, value, name=None):
-        if type(value) != bytes_type:
+        if type(value) != bytes:
             raise Exception("unexpected type for value: %r" % type(value))
         # use self.request.arguments directly to avoid recursion
         if 'encoding' in self.request.arguments:
@@ -409,7 +436,7 @@ class DecodeArgHandler(RequestHandler):
 
     def get(self, arg):
         def describe(s):
-            if type(s) == bytes_type:
+            if type(s) == bytes:
                 return ["bytes", native_str(binascii.b2a_hex(s))]
             elif type(s) == unicode_type:
                 return ["unicode", s]
@@ -550,6 +577,8 @@ class WSGISafeWebTest(WebTestCase):
             url("/optional_path/(.+)?", OptionalPathHandler),
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
+            url("/web_redirect_permanent", WebRedirectHandler, {"url": "/web_redirect_newpath"}),
+            url("/web_redirect", WebRedirectHandler, {"url": "/web_redirect_newpath", "permanent": False}),
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
@@ -674,6 +703,14 @@ js_embed()
         self.assertEqual(response.code, 302)
         response = self.fetch("/redirect?status=307", follow_redirects=False)
         self.assertEqual(response.code, 307)
+
+    def test_web_redirect(self):
+        response = self.fetch("/web_redirect_permanent", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
+        response = self.fetch("/web_redirect", follow_redirects=False)
+        self.assertEqual(response.code, 302)
+        self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
 
     def test_header_injection(self):
         response = self.fetch("/header_injection")
@@ -1348,12 +1385,25 @@ class GzipTestCase(SimpleHandlerTestCase):
             self.write('hello world')
 
     def get_app_kwargs(self):
-        return dict(gzip=True)
+        return dict(
+            gzip=True,
+            static_path=os.path.join(os.path.dirname(__file__), 'static'))
 
     def test_gzip(self):
         response = self.fetch('/')
         # simple_httpclient renames the content-encoding header;
         # curl_httpclient doesn't.
+        self.assertEqual(
+            response.headers.get(
+                'Content-Encoding',
+                response.headers.get('X-Consumed-Content-Encoding')),
+            'gzip')
+        self.assertEqual(response.headers['Vary'], 'Accept-Encoding')
+
+    def test_gzip_static(self):
+        # The streaming responses in StaticFileHandler have subtle
+        # interactions with the gzip output so test this case separately.
+        response = self.fetch('/robots.txt')
         self.assertEqual(
             response.headers.get(
                 'Content-Encoding',
@@ -1554,19 +1604,26 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
 
 
 @wsgi_safe
-class SetCurrentUserTest(SimpleHandlerTestCase):
+class SetLazyPropertiesTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def prepare(self):
             self.current_user = 'Ben'
+            self.locale = locale.get('en_US')
+
+        def get_user_locale(self):
+            raise NotImplementedError()
+
+        def get_current_user(self):
+            raise NotImplementedError()
 
         def get(self):
-            self.write('Hello %s' % self.current_user)
+            self.write('Hello %s (%s)' % (self.current_user, self.locale.code))
 
-    def test_set_current_user(self):
+    def test_set_properties(self):
         # Ensure that current_user can be assigned to normally for apps
         # that want to forgo the lazy get_current_user property
         response = self.fetch('/')
-        self.assertEqual(response.body, b'Hello Ben')
+        self.assertEqual(response.body, b'Hello Ben (en_US)')
 
 
 @wsgi_safe
@@ -2313,3 +2370,38 @@ class FinishExceptionTest(SimpleHandlerTestCase):
         self.assertEqual('Basic realm="something"',
                          response.headers.get('WWW-Authenticate'))
         self.assertEqual(b'authentication required', response.body)
+
+
+class DecoratorTest(WebTestCase):
+    def get_handlers(self):
+        class RemoveSlashHandler(RequestHandler):
+            @removeslash
+            def get(self):
+                pass
+
+        class AddSlashHandler(RequestHandler):
+            @addslash
+            def get(self):
+                pass
+
+        return [("/removeslash/", RemoveSlashHandler),
+                ("/addslash", AddSlashHandler),
+                ]
+
+    def test_removeslash(self):
+        response = self.fetch("/removeslash/", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/removeslash")
+
+        response = self.fetch("/removeslash/?foo=bar", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/removeslash?foo=bar")
+
+    def test_addslash(self):
+        response = self.fetch("/addslash", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/addslash/")
+
+        response = self.fetch("/addslash?foo=bar", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/addslash/?foo=bar")

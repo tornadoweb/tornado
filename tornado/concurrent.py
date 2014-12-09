@@ -31,6 +31,7 @@ import sys
 from tornado.log import app_log
 from tornado.stack_context import ExceptionStackContext, wrap
 from tornado.util import raise_exc_info, ArgReplacer
+from tornado.log import app_log
 
 try:
     from concurrent import futures
@@ -288,8 +289,11 @@ class Future(object):
     def _set_done(self):
         self._done = True
         for cb in self._callbacks:
-            # TODO: error handling
-            cb(self)
+            try:
+                cb(self)
+            except Exception:
+                app_log.exception('exception calling callback %r for %r',
+                                  cb, self)
         self._callbacks = None
         
     # On Python 3.3 or older, objects with a destructor part of a reference

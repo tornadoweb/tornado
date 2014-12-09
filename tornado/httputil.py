@@ -33,7 +33,7 @@ import time
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import ObjectDict, bytes_type
+from tornado.util import ObjectDict
 
 try:
     import Cookie  # py2
@@ -379,7 +379,7 @@ class HTTPServerRequest(object):
            Use ``request.connection`` and the `.HTTPConnection` methods
            to write the response.
         """
-        assert isinstance(chunk, bytes_type)
+        assert isinstance(chunk, bytes)
         self.connection.write(chunk, callback=callback)
 
     def finish(self):
@@ -562,11 +562,18 @@ class HTTPConnection(object):
 
 
 def url_concat(url, args):
-    """Concatenate url and argument dictionary regardless of whether
+    """Concatenate url and arguments regardless of whether
     url has existing query parameters.
 
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat("http://example.com/foo", dict(c="d"))
+    'http://example.com/foo?c=d'
     >>> url_concat("http://example.com/foo?a=b", dict(c="d"))
     'http://example.com/foo?a=b&c=d'
+    >>> url_concat("http://example.com/foo?a=b", [("c", "d"), ("c", "d2")])
+    'http://example.com/foo?a=b&c=d&c=d2'
     """
     if not args:
         return url

@@ -76,7 +76,7 @@ from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import bytes_type, u, unicode_type, ArgReplacer
+from tornado.util import u, unicode_type, ArgReplacer
 
 try:
     import urlparse  # py2
@@ -333,7 +333,7 @@ class OAuthMixin(object):
 
         The ``callback_uri`` may be omitted if you have previously
         registered a callback URI with the third-party service.  For
-        some sevices (including Friendfeed), you must use a
+        some services (including Friendfeed), you must use a
         previously-registered callback URI and cannot specify a
         callback via this method.
 
@@ -1112,7 +1112,7 @@ class FacebookMixin(object):
             args["cancel_url"] = urlparse.urljoin(
                 self.request.full_url(), cancel_uri)
         if extended_permissions:
-            if isinstance(extended_permissions, (unicode_type, bytes_type)):
+            if isinstance(extended_permissions, (unicode_type, bytes)):
                 extended_permissions = [extended_permissions]
             args["req_perms"] = ",".join(extended_permissions)
         self.redirect("http://www.facebook.com/login.php?" +

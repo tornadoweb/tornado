@@ -84,7 +84,7 @@ from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import bytes_type, import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
+from tornado.util import import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
 
 
 try:
@@ -341,7 +341,7 @@ class RequestHandler(object):
     _INVALID_HEADER_CHAR_RE = re.compile(br"[\x00-\x1f]")
 
     def _convert_header_value(self, value):
-        if isinstance(value, bytes_type):
+        if isinstance(value, bytes):
             pass
         elif isinstance(value, unicode_type):
             value = value.encode('utf-8')
@@ -649,7 +649,7 @@ class RequestHandler(object):
             raise RuntimeError("Cannot write() after finish().  May be caused "
                                "by using async operations without the "
                                "@asynchronous decorator.")
-        if not isinstance(chunk, (bytes_type, unicode_type, dict)):
+        if not isinstance(chunk, (bytes, unicode_type, dict)):
             raise TypeError("write() only accepts bytes, unicode, and dict objects")
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
@@ -674,7 +674,7 @@ class RequestHandler(object):
                 js_embed.append(utf8(embed_part))
             file_part = module.javascript_files()
             if file_part:
-                if isinstance(file_part, (unicode_type, bytes_type)):
+                if isinstance(file_part, (unicode_type, bytes)):
                     js_files.append(file_part)
                 else:
                     js_files.extend(file_part)
@@ -683,7 +683,7 @@ class RequestHandler(object):
                 css_embed.append(utf8(embed_part))
             file_part = module.css_files()
             if file_part:
-                if isinstance(file_part, (unicode_type, bytes_type)):
+                if isinstance(file_part, (unicode_type, bytes)):
                     css_files.append(file_part)
                 else:
                     css_files.extend(file_part)
@@ -956,12 +956,15 @@ class RequestHandler(object):
 
     @property
     def locale(self):
-        """The local for the current session.
+        """The locale for the current session.
 
         Determined by either `get_user_locale`, which you can override to
         set the locale based on, e.g., a user preference stored in a
         database, or `get_browser_locale`, which uses the ``Accept-Language``
         header.
+
+        .. versionchanged: 4.1
+           Added a property setter.
         """
         if not hasattr(self, "_locale"):
             self._locale = self.get_user_locale()
@@ -969,6 +972,10 @@ class RequestHandler(object):
                 self._locale = self.get_browser_locale()
                 assert self._locale
         return self._locale
+
+    @locale.setter
+    def locale(self, value):
+        self._locale = value
 
     def get_user_locale(self):
         """Override to determine the locale from the authenticated user.
@@ -1838,7 +1845,7 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         handlers = app._get_host_handlers(self.request)
         if not handlers:
             self.handler_class = RedirectHandler
-            self.handler_kwargs = dict(url="http://" + app.default_host + "/")
+            self.handler_kwargs = dict(url="%s://%s/" % (self.request.protocol, app.default_host))
             return
         for spec in handlers:
             match = spec.regex.match(self.request.path)
@@ -2162,11 +2169,14 @@ class StaticFileHandler(RequestHandler):
 
         if include_body:
             content = self.get_content(self.absolute_path, start, end)
-            if isinstance(content, bytes_type):
+            if isinstance(content, bytes):
                 content = [content]
             for chunk in content:
-                self.write(chunk)
-                yield self.flush()
+                try:
+                    self.write(chunk)
+                    yield self.flush()
+                except iostream.StreamClosedError:
+                    return
         else:
             assert self.request.method == "HEAD"
 
@@ -2333,7 +2343,7 @@ class StaticFileHandler(RequestHandler):
         """
         data = cls.get_content(abspath)
         hasher = hashlib.md5()
-        if isinstance(data, bytes_type):
+        if isinstance(data, bytes):
             hasher.update(data)
         else:
             for chunk in data:
@@ -2545,7 +2555,6 @@ class GZipContentEncoding(OutputTransform):
             ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = self._compressible_type(ctype) and \
                 (not finishing or len(chunk) >= self.MIN_LENGTH) and \
-                (finishing or "Content-Length" not in headers) and \
                 ("Content-Encoding" not in headers)
         if self._gzipping:
             headers["Content-Encoding"] = "gzip"
@@ -2553,7 +2562,14 @@ class GZipContentEncoding(OutputTransform):
             self._gzip_file = gzip.GzipFile(mode="w", fileobj=self._gzip_value)
             chunk = self.transform_chunk(chunk, finishing)
             if "Content-Length" in headers:
-                headers["Content-Length"] = str(len(chunk))
+                # The original content length is no longer correct.
+                # If this is the last (and only) chunk, we can set the new
+                # content-length; otherwise we remove it and fall back to
+                # chunked encoding.
+                if finishing:
+                    headers["Content-Length"] = str(len(chunk))
+                else:
+                    del headers["Content-Length"]
         return status_code, headers, chunk
 
     def transform_chunk(self, chunk, finishing):
@@ -2702,7 +2718,7 @@ class TemplateModule(UIModule):
     def javascript_files(self):
         result = []
         for f in self._get_resources("javascript_files"):
-            if isinstance(f, (unicode_type, bytes_type)):
+            if isinstance(f, (unicode_type, bytes)):
                 result.append(f)
             else:
                 result.extend(f)
@@ -2714,7 +2730,7 @@ class TemplateModule(UIModule):
     def css_files(self):
         result = []
         for f in self._get_resources("css_files"):
-            if isinstance(f, (unicode_type, bytes_type)):
+            if isinstance(f, (unicode_type, bytes)):
                 result.append(f)
             else:
                 result.extend(f)
@@ -2819,7 +2835,7 @@ class URLSpec(object):
             return self._path
         converted_args = []
         for a in args:
-            if not isinstance(a, (unicode_type, bytes_type)):
+            if not isinstance(a, (unicode_type, bytes)):
                 a = str(a)
             converted_args.append(escape.url_escape(utf8(a), plus=False))
         return self._path % tuple(converted_args)

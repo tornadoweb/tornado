@@ -224,10 +224,11 @@ class TestIOStreamMixin(object):
 
         def connect_callback():
             self.connect_called = True
+            self.stop()
         stream.set_close_callback(self.stop)
         # log messages vary by platform and ioloop implementation
         with ExpectLog(gen_log, ".*", required=False):
-            stream.connect(("localhost", port), connect_callback)
+            stream.connect(("127.0.0.1", port), connect_callback)
             self.wait()
         self.assertFalse(self.connect_called)
         self.assertTrue(isinstance(stream.error, socket.error), stream.error)
@@ -511,7 +512,7 @@ class TestIOStreamMixin(object):
         server, client = self.make_iostream_pair()
         server.set_close_callback(self.stop)
         try:
-            # Start a read that will be fullfilled asynchronously.
+            # Start a read that will be fulfilled asynchronously.
             server.read_bytes(1, lambda data: None)
             client.write(b'a')
             # Stub out read_from_fd to make it fail.
@@ -720,6 +721,26 @@ class TestIOStreamMixin(object):
                 client.read_until(b"\n", self.stop, max_bytes=4096)
                 data = self.wait()
                 self.assertEqual(data, b"a" * 1023 + b"\n")
+        finally:
+            server.close()
+            client.close()
+
+    def test_flow_control(self):
+        MB = 1024 * 1024
+        server, client = self.make_iostream_pair(max_buffer_size=5 * MB)
+        try:
+            # Client writes more than the server will accept.
+            client.write(b"a" * 10 * MB)
+            # The server pauses while reading.
+            server.read_bytes(MB, self.stop)
+            self.wait()
+            self.io_loop.call_later(0.1, self.stop)
+            self.wait()
+            # The client's writes have been blocked; the server can
+            # continue to read gradually.
+            for i in range(9):
+                server.read_bytes(MB, self.stop)
+                self.wait()
         finally:
             server.close()
             client.close()

@@ -2,15 +2,12 @@
 
 chsh -s bash vagrant
 
-# This doesn't get created automatically for freebsd since virtualbox
-# shared folders don't work.
-ln -snf /tornado/maint/vm/freebsd /vagrant
-
-PORTS="
-lang/python27
-devel/py-pip
-devel/py-virtualenv
-ftp/curl
+PACKAGES="
+curl
+python
+python34
+py27-pip
+py27-virtualenv
 "
 
 PIP_PACKAGES="
@@ -19,13 +16,8 @@ pycurl
 tox
 "
 
-cd /usr/ports
-
-for port in $PORTS; do
-    make -C $port -DBATCH install
-done
+ASSUME_ALWAYS_YES=true pkg install $PACKAGES
 
 pip install $PIP_PACKAGES
 
 /tornado/maint/vm/shared-setup.sh
-

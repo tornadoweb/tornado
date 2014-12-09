@@ -138,7 +138,7 @@ object is only present if the files were uploaded with a form wrapper
 (i.e. a ``multipart/form-data`` Content-Type); if this format was not used
 the raw uploaded data is available in ``self.request.body``.
 By default uploaded files are fully buffered in memory; if you need to
-handle files that are too large to comfortable keep in memory see the
+handle files that are too large to comfortably keep in memory see the
 `.stream_request_body` class decorator.
 
 Due to the quirks of the HTML form encoding (e.g. the ambiguity around
