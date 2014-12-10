@@ -235,9 +235,16 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipOnTravis
     def test_request_timeout(self):
-        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
+        timeout = 0.1
+        timeout_min, timeout_max = 0.099, 0.15
+        if os.name == 'nt':
+            timeout = 0.5
+            timeout_min, timeout_max = 0.4, 0.6
+
+        response = self.fetch('/trigger?wake=false', request_timeout=timeout)
         self.assertEqual(response.code, 599)
-        self.assertTrue(0.099 < response.request_time < 0.15, response.request_time)
+        self.assertTrue(timeout_min < response.request_time < timeout_max,
+                        response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
