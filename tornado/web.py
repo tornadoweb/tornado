@@ -1223,6 +1223,8 @@ class RequestHandler(object):
 
         if include_host:
             base = self.request.protocol + "://" + self.request.host
+		elif include_host and type(include_host).__name__ != 'bool':
+			base = self.request.protocol + "://" + include_host
         else:
             base = ""
 
