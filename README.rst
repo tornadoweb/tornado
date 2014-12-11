@@ -13,6 +13,10 @@ Tornado Web Server
     :target: https://pypi.python.org/pypi/tornado
     :alt: Supported Python versions
 
+.. image:: https://img.shields.io/coveralls/tornadoweb/tornado.svg?style=flat
+    :target: https://coveralls.io/r/tornadoweb/tornado
+    :alt: Coverage
+
 `Tornado <http://www.tornadoweb.org>`_ is a Python web framework and
 asynchronous networking library, originally developed at `FriendFeed
 <http://friendfeed.com>`_.  By using non-blocking network I/O, Tornado
