@@ -2,13 +2,16 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import tornado.web
 from tornado import gen, ioloop
 from tornado.log import app_log
-from tornado.testing import AsyncTestCase, gen_test, ExpectLog
+from tornado.testing import AsyncTestCase, AsyncHTTPTestCase, gen_test, ExpectLog
 from tornado.test.util import unittest
 
 import contextlib
+import json
 import os
+import time
 import traceback
 
 
@@ -106,6 +109,69 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         test.run(result)
         self.assertEqual(len(result.errors), 1)
         self.assertIn("Return value from test method ignored", result.errors[0][1])
+
+
+class HelloRequestHandler(tornado.web.RequestHandler):
+
+    def get(self):
+        name = self.get_argument('name', '')
+        if self.request.headers.get('Accept', '') == 'application/json':
+            data = {'msg': 'Hello {}'.format(name)}
+        else:
+            data = 'Hello {}'.format(name)
+        return self.write(data)
+
+    def post(self):
+        name = self.get_argument('name', '')
+        self.set_status(201)
+        return self.write('Hello {}'.format(name))
+
+    def put(self):
+        self.set_status(204)
+        return self.write('')
+
+    def patch(self):
+        time.sleep(2)
+        return self.write('')
+
+    def delete(self):
+        return self.redirect('/')
+
+
+class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
+
+    def get_app(self):
+        return tornado.web.Application([('/', HelloRequestHandler)])
+
+    def test_get(self):
+        code, data = self.get('/', params={'name': 'Bob'})
+        self.assertEqual(code, 200)
+        self.assertEqual(data, 'Hello Bob')
+
+    def test_post(self):
+        code, data = self.post('/', data={'name': 'Bob'})
+        self.assertEqual(code, 201)
+        self.assertEqual(data, 'Hello Bob')
+
+    def test_put(self):
+        code, data = self.put('/', data={'name': 'Bob'})
+        self.assertEqual(code, 204)
+        self.assertEqual(data, None)
+
+    def test_patch_with_timeout(self):
+        with self.assertRaises(self.failureException):
+            self.patch('/', data={'name': 'Amy'}, timeout=1)
+
+    def test_delete_with_redirect(self):
+        code, data = self.delete('/')
+        self.assertEqual(code, 302)
+        self.assertEqual(data, None)
+
+    def test_get_with_custom_headers(self):
+        code, data = self.get('/', params={'name': 'Bob'},
+                              headers={'Accept': 'application/json'})
+        self.assertEqual(code, 200)
+        self.assertEqual(data, json.dumps({'msg': 'Hello Bob'}))
 
 
 class SetUpTearDownTest(unittest.TestCase):

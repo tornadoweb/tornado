@@ -41,6 +41,7 @@ import signal
 import socket
 import sys
 import types
+import urllib
 
 try:
     from cStringIO import StringIO  # py2
@@ -409,6 +410,72 @@ class AsyncHTTPTestCase(AsyncTestCase):
                 self.http_client.io_loop is not IOLoop.instance()):
             self.http_client.close()
         super(AsyncHTTPTestCase, self).tearDown()
+
+    def _query(self, path, method, headers=None, params=None, data=None,
+               timeout=None):
+        """Executes a HTTP request synchronously, return status code
+        and response data.
+
+        :arg string path: URL path
+        :arg string method: HTTP method
+        :arg headers: Additional HTTP headers to pass on the request
+        :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
+        :arg dict params: dictionary to be used as query string
+        :arg dict data: dictionary to be used as request body
+        :arg float timeout: timeout in seconds
+        :return: status code and response data
+        :rtype: tuple
+        """
+        if params:
+            path += '?' + urllib.urlencode(params)
+        if data and method in ('POST', 'PATCH', 'PUT'):
+            data = urllib.urlencode(data)
+
+        if timeout:
+            self.http_client.fetch(self.get_url(path),
+                                   self.stop,
+                                   method=method,
+                                   headers=headers,
+                                   body=data,
+                                   follow_redirects=False)
+            response = self.wait(timeout=timeout)
+        else:
+            response = self.fetch(path,
+                                  method=method,
+                                  headers=headers,
+                                  body=data,
+                                  follow_redirects=False)
+        resp_code = response.code
+        if response.body:
+            resp_data = response.body
+        else:
+            resp_data = None
+        return resp_code, resp_data
+
+    def get(self, path, headers=None, params=None, timeout=None):
+        """HTTP GET request"""
+        return self._query(path, 'GET', headers=headers, params=params,
+                           timeout=timeout)
+
+    def post(self, path, headers=None, params=None, data=None, timeout=None):
+        """HTTP POST request"""
+        return self._query(path, 'POST', headers=headers, params=params,
+                           data=data, timeout=timeout)
+
+    def put(self, path, headers=None, params=None, data=None, timeout=None):
+        """HTTP PUT request"""
+        return self._query(path, 'PUT', headers=headers, params=params,
+                           data=data, timeout=timeout)
+
+    def patch(self, path, headers=None, params=None, data=None, timeout=None):
+        """HTTP PATCH request"""
+        return self._query(path, 'PATCH', headers=headers, params=params,
+                           data=data, timeout=timeout)
+
+    def delete(self, path, headers=None, params=None, timeout=None):
+        """HTTP DELETE request"""
+        return self._query(path, 'DELETE', headers=headers, params=params,
+                           timeout=timeout)
 
 
 class AsyncHTTPSTestCase(AsyncHTTPTestCase):
