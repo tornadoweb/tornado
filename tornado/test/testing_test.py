@@ -116,15 +116,15 @@ class HelloRequestHandler(tornado.web.RequestHandler):
     def get(self):
         name = self.get_argument('name', '')
         if self.request.headers.get('Accept', '') == 'application/json':
-            data = {'msg': 'Hello {}'.format(name)}
+            data = {'msg': 'Hello {0}'.format(name)}
         else:
-            data = 'Hello {}'.format(name)
+            data = 'Hello {0}'.format(name)
         return self.write(data)
 
     def post(self):
         name = self.get_argument('name', '')
         self.set_status(201)
-        return self.write('Hello {}'.format(name))
+        return self.write('Hello {0}'.format(name))
 
     def put(self):
         self.set_status(204)

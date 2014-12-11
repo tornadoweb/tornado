@@ -41,7 +41,11 @@ import signal
 import socket
 import sys
 import types
-import urllib
+
+try:
+    from urllib import urlencode  # py2
+except ImportError:
+    from urllib.parse import urlencode  # py3
 
 try:
     from cStringIO import StringIO  # py2
@@ -427,9 +431,9 @@ class AsyncHTTPTestCase(AsyncTestCase):
         :rtype: tuple
         """
         if params:
-            path += '?' + urllib.urlencode(params)
+            path += '?' + urlencode(params)
         if data and method in ('POST', 'PATCH', 'PUT'):
-            data = urllib.urlencode(data)
+            data = urlencode(data)
 
         if timeout:
             self.http_client.fetch(self.get_url(path),
