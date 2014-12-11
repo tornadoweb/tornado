@@ -171,7 +171,7 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
         code, data = self.get('/', params={'name': 'Bob'},
                               headers={'Accept': 'application/json'})
         self.assertEqual(code, 200)
-        self.assertEqual(data, json.dumps({'msg': 'Hello Bob'}))
+        self.assertDictEqual(json.loads(data), {'msg': 'Hello Bob'})
 
 
 class SetUpTearDownTest(unittest.TestCase):
