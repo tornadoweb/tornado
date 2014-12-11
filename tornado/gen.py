@@ -528,9 +528,11 @@ def with_timeout(timeout, future, io_loop=None):
     chain_future(future, result)
     if io_loop is None:
         io_loop = IOLoop.current()
+    def timeout_callback():
+        result.set_exception(TimeoutError("Timeout"))
+        future.add_done_callback(lambda f: f.exception())
     timeout_handle = io_loop.add_timeout(
-        timeout,
-        lambda: result.set_exception(TimeoutError("Timeout")))
+        timeout, timeout_callback)
     if isinstance(future, Future):
         # We know this future will resolve on the IOLoop, so we don't
         # need the extra thread-safety of IOLoop.add_future (and we also

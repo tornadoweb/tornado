@@ -25,21 +25,24 @@ module.
 from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
+import platform
 import traceback
 import sys
 
 from tornado.log import app_log
 from tornado.stack_context import ExceptionStackContext, wrap
 from tornado.util import raise_exc_info, ArgReplacer
-from tornado.log import app_log
 
 try:
     from concurrent import futures
 except ImportError:
     futures = None
-    
-_PY34 = sys.version_info >= (3, 4)
 
+
+# Can the garbage collector handle cycles that include __del__ methods?
+# This is true in cpython beginning with version 3.4 (PEP 442).
+_GC_CYCLE_FINALIZERS = (platform.python_implementation() == 'CPython' and
+                        sys.version_info >= (3, 4))
 
 class ReturnValueIgnoredError(Exception):
     pass
@@ -97,35 +100,26 @@ class _TracebackLogger(object):
     in a discussion about closing files when they are collected.
     """
 
-    __slots__ = ('loop', 'source_traceback', 'exc', 'tb')
+    __slots__ = ('exc_info', 'formatted_tb')
 
-    def __init__(self, exc):
-        self.exc = exc
-        self.tb = None
+    def __init__(self, exc_info):
+        self.exc_info = exc_info
+        self.formatted_tb = None
 
     def activate(self):
-        exc = self.exc
-        if exc is not None:
-            self.exc = None
-            if hasattr(exc, '__traceback__'):
-                self.tb = traceback.format_exception(exc.__class__, exc,
-                                                     exc.__traceback__)
-            else:
-                # could provide more information here
-                self.tb = traceback.format_exception_only(type(exc),
-                                                          exc)
+        exc_info = self.exc_info
+        if exc_info is not None:
+            self.exc_info = None
+            self.formatted_tb = traceback.format_exception(*exc_info)
 
     def clear(self):
-        self.exc = None
-        self.tb = None
+        self.exc_info = None
+        self.formatted_tb = None
 
     def __del__(self):
-        if self.tb:
-            msg = 'Future exception was never retrieved: %s' % \
-                    ''.join(self.tb).rstrip()
-            
-            # HACK: should probably call something
-            app_log.error(msg)
+        if self.formatted_tb:
+            app_log.error('Future exception was never retrieved: %s',
+                          ''.join(self.formatted_tb).rstrip())
 
 
 class Future(object):
@@ -159,12 +153,11 @@ class Future(object):
     def __init__(self):
         self._done = False
         self._result = None
-        self._exception = None
         self._exc_info = None
-        
+
         self._log_traceback = False   # Used for Python >= 3.4
         self._tb_logger = None        # Used for Python <= 3.3
-        
+
         self._callbacks = []
 
     def cancel(self):
@@ -191,20 +184,21 @@ class Future(object):
         """Returns True if the future has finished running."""
         return self._done
 
-    def result(self, timeout=None):
-        """If the operation succeeded, return its result.  If it failed,
-        re-raise its exception.
-        """
+    def _clear_tb_log(self):
         self._log_traceback = False
         if self._tb_logger is not None:
             self._tb_logger.clear()
             self._tb_logger = None
+
+    def result(self, timeout=None):
+        """If the operation succeeded, return its result.  If it failed,
+        re-raise its exception.
+        """
+        self._clear_tb_log()
         if self._result is not None:
             return self._result
         if self._exc_info is not None:
             raise_exc_info(self._exc_info)
-        elif self._exception is not None:
-            raise self._exception
         self._check_done()
         return self._result
 
@@ -212,12 +206,9 @@ class Future(object):
         """If the operation raised an exception, return the `Exception`
         object.  Otherwise returns None.
         """
-        self._log_traceback = False
-        if self._tb_logger is not None:
-            self._tb_logger.clear()
-            self._tb_logger = None
-        if self._exception is not None:
-            return self._exception
+        self._clear_tb_log()
+        if self._exc_info is not None:
+            return self._exc_info[1]
         else:
             self._check_done()
             return None
@@ -246,30 +237,17 @@ class Future(object):
 
     def set_exception(self, exception):
         """Sets the exception of a ``Future.``"""
-        self._exception = exception
-        if _PY34:
-            self._log_traceback = True
-        else:
-            self._tb_logger = _TracebackLogger(exception)
-            if hasattr(exception, '__traceback__'):
-                # Python 3: exception contains a link to the traceback
-
-                # Arrange for the logger to be activated after all callbacks
-                # have had a chance to call result() or exception().
-                
-                # HACK: circular dependencies
-                from tornado.ioloop import IOLoop
-                IOLoop.current().add_callback(self._tb_logger.activate)
-            else:
-                self._tb_logger.activate()                
-            
-        self._set_done()
+        self.set_exc_info(
+            (exception.__class__,
+             exception,
+             getattr(exception, '__traceback__', None)))
 
     def exc_info(self):
         """Returns a tuple in the same format as `sys.exc_info` or None.
 
         .. versionadded:: 4.0
         """
+        self._clear_tb_log()
         return self._exc_info
 
     def set_exc_info(self, exc_info):
@@ -280,7 +258,18 @@ class Future(object):
         .. versionadded:: 4.0
         """
         self._exc_info = exc_info
-        self.set_exception(exc_info[1])
+        self._log_traceback = True
+        if not _GC_CYCLE_FINALIZERS:
+            self._tb_logger = _TracebackLogger(exc_info)
+
+        try:
+            self._set_done()
+        finally:
+            # Activate the logger after all callbacks have had a
+            # chance to call result() or exception().
+            if self._log_traceback and self._tb_logger is not None:
+                self._tb_logger.activate()
+        self._exc_info = exc_info
 
     def _check_done(self):
         if not self._done:
@@ -295,27 +284,21 @@ class Future(object):
                 app_log.exception('exception calling callback %r for %r',
                                   cb, self)
         self._callbacks = None
-        
+
     # On Python 3.3 or older, objects with a destructor part of a reference
-    # cycle are never destroyed. It's not more the case on Python 3.4 thanks to
+    # cycle are never destroyed. It's no longer the case on Python 3.4 thanks to
     # the PEP 442.
-    if _PY34:
+    if _GC_CYCLE_FINALIZERS:
         def __del__(self):
             if not self._log_traceback:
                 # set_exception() was not called, or result() or exception()
                 # has consumed the exception
                 return
-            
-            exc = self._exception
-            tb = traceback.format_exception(exc.__class__, exc,
-                                                 exc.__traceback__)
-            
-            msg = '%s exception was never retrieved: %s' % \
-                    (self.__class__.__name__, ''.join(tb).rstrip())
-            
-            # HACK: should probably call something
-            app_log.error(msg)
-            
+
+            tb = traceback.format_exception(*self._exc_info)
+
+            app_log.error('Future %r exception was never retrieved: %s',
+                          self, ''.join(tb).rstrip())
 
 TracebackFuture = Future
 
@@ -429,6 +412,10 @@ def return_future(f):
             # If the initial synchronous part of f() raised an exception,
             # go ahead and raise it to the caller directly without waiting
             # for them to inspect the Future.
+            #
+            # "Consume" the exception from the future so it will not be logged
+            # as uncaught.
+            future.exception()
             raise_exc_info(exc_info)
 
         # If the caller passed in a callback, schedule it to be called

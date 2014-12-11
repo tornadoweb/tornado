@@ -374,6 +374,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self.stream.closed():
             future = self._write_future = Future()
             future.set_exception(iostream.StreamClosedError())
+            future.exception()
         else:
             if callback is not None:
                 self._write_callback = stack_context.wrap(callback)
@@ -412,6 +413,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self.stream.closed():
             future = self._write_future = Future()
             self._write_future.set_exception(iostream.StreamClosedError())
+            self._write_future.exception()
         else:
             if callback is not None:
                 self._write_callback = stack_context.wrap(callback)
@@ -451,6 +453,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._pending_write.add_done_callback(self._finish_request)
 
     def _on_write_complete(self, future):
+        future.exception()
         if self._write_callback is not None:
             callback = self._write_callback
             self._write_callback = None
