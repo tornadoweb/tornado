@@ -4,12 +4,12 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import tornado.web
 from tornado import gen, ioloop
+from tornado.escape import json_decode
 from tornado.log import app_log
 from tornado.testing import AsyncTestCase, AsyncHTTPTestCase, gen_test, ExpectLog
 from tornado.test.util import unittest
 
 import contextlib
-import json
 import os
 import time
 import traceback
@@ -146,12 +146,12 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
     def test_get(self):
         code, data = self.get('/', params={'name': 'Bob'})
         self.assertEqual(code, 200)
-        self.assertEqual(data, 'Hello Bob')
+        self.assertEqual(data, b'Hello Bob')
 
     def test_post(self):
         code, data = self.post('/', data={'name': 'Bob'})
         self.assertEqual(code, 201)
-        self.assertEqual(data, 'Hello Bob')
+        self.assertEqual(data, b'Hello Bob')
 
     def test_put(self):
         code, data = self.put('/', data={'name': 'Bob'})
@@ -171,7 +171,7 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
         code, data = self.get('/', params={'name': 'Bob'},
                               headers={'Accept': 'application/json'})
         self.assertEqual(code, 200)
-        self.assertDictEqual(json.loads(data), {'msg': 'Hello Bob'})
+        self.assertDictEqual(json_decode(data), {'msg': 'Hello Bob'})
 
 
 class SetUpTearDownTest(unittest.TestCase):
