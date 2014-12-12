@@ -1,6 +1,6 @@
 # Frozen pip requirements for tools used in the development of tornado.
 # This list is for python 3.4; for 2.7 add:
-# - backports.ssl-match-hostname
+# - backports.ssl-match-hostname (<2.7.9 only)
 # - futures
 # - mock
 #
