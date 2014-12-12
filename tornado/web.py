@@ -1314,7 +1314,7 @@ class RequestHandler(object):
         # Split If-None-Match with `,` because RFC 2616 allows multiple etag
         # values in a single header.
         inm = utf8(self.request.headers.get("If-None-Match", "")).split(',')
-        # For the case of weak validator, strip inm entities with `W\"`.
+        # For the case of weak validator, lstrip inm entities with `W/`.
         tags = [x.lstrip('W/') for x in inm]
         match = (inm[0] == '"*"') or (etag in tags)
         return bool(etag and match)
