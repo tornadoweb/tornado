@@ -38,37 +38,18 @@ class Application(tornado.web.Application):
     def __init__(self):
         handlers = [
             (r"/", MainHandler, {"url":"http://www.example.com/"}),
-            (r"/coroutine", MainHandler, {"fetcher":"CoroutineFetcher"}),
+            (r"/coroutine", MainHandler, {"fetcher":CoroutineFetcher}),
             (r"/err", MainHandler, {"url":"asdf://this.is.broken/"}),
             (r"/spiffy", MainHandler, {"subst":"Spiffy"}),
-            (r"/hello", MainHandler, {"fetcher":"HelloFetcher"})
+            (r"/hello", MainHandler, {"fetcher":HelloFetcher})
         ]
         tornado.web.Application.__init__(self, handlers,dict())
 
-class MainHandler(tornado.web.RequestHandler):
-    def initialize(self,url="http://www.example.com/",subst=None,fetcher="CoroutineFetcher"):
-        """This handler accepts named parameters.  After __init__ is called, 
-        the application calls initialize() with the parameters contained
-        in the dictionary passed in each handler's entry."""
-        self.url=url
-        self.subst=subst
-        self.fetcher=fetcher
-
-    @gen.coroutine
-    def get(self):
-        # construct the appropriate fetcher
-        fetcher=eval(self.fetcher + "()")
- 
-        # maybe_future makes yield work whether or not the fetcher returns a future
-        response=yield gen.maybe_future(fetcher.go_fetch(self.url))
-        body=response.body
-
-        # If a substitution was requested, perform it (post-processing)
-        if self.subst:
-            body=body.replace(bytearray("Example","utf8"),bytearray(self.subst,"utf8"))
-
-        # write out the result
-        self.write(body)
+#
+# The three fetchers following describe how to get information 
+# from the source.  Two demonstrate asynchronous non blocking IO,
+# and HelloFetcher returns a plain string wrapped in a mock response.
+#
 
 class CoroutineFetcher():
     """This is an ordinary async IO invocation with coroutine"""
@@ -103,6 +84,31 @@ class HelloFetcher():
        it requires special handling by the caller."""
     def go_fetch(self,url):
        return MockResponse("Hello, world!")
+
+class MainHandler(tornado.web.RequestHandler):
+    def initialize(self,fetcher=CoroutineFetcher,url="http://www.example.com/",subst=None):
+        """This handler accepts named parameters.  After __init__ is called, 
+        the application calls initialize() with the parameters contained
+        in the dictionary passed in each handler's entry."""
+        self.url=url
+        self.subst=subst
+        self.fetcher=fetcher
+
+    @gen.coroutine
+    def get(self):
+        # construct the appropriate fetcher
+        fetcher=self.fetcher()
+ 
+        # maybe_future makes yield work whether or not the fetcher returns a future
+        response=yield gen.maybe_future(fetcher.go_fetch(self.url))
+        body=response.body
+
+        # If a substitution was requested, perform it (post-processing)
+        if self.subst:
+            body=body.replace(bytearray("Example","utf8"),bytearray(self.subst,"utf8"))
+
+        # write out the result
+        self.write(body)
 
 def main():
     parse_command_line()
