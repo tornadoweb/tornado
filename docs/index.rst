@@ -81,8 +81,8 @@ The Tornado source code is `hosted on GitHub
 requires the `certifi <https://pypi.python.org/pypi/certifi>`_ package
 on all Python versions, and the `backports.ssl_match_hostname
 <https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ package
-on Python 2.  These will be installed automatically when using
-``pip`` or ``easy_install``).  Some Tornado features may
+on Python 2 (before 2.7.9).  These will be installed automatically when
+using ``pip`` or ``easy_install``).  Some Tornado features may
 require one of the following optional libraries:
 
 * `unittest2 <https://pypi.python.org/pypi/unittest2>`_ is needed to run
