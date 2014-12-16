@@ -85,6 +85,7 @@ from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.util import import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
+from tornado.httputil import split_host_and_port
 
 
 try:
@@ -1729,7 +1730,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         self.transforms.append(transform_class)
 
     def _get_host_handlers(self, request):
-        host = request.host.lower().split(':')[0]
+        host = split_host_and_port(request.host.lower())[0]
         matches = []
         for pattern, handlers in self.handlers:
             if pattern.match(host):
