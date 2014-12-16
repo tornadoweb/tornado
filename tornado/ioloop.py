@@ -41,6 +41,7 @@ import sys
 import threading
 import time
 import traceback
+import math
 
 from tornado.concurrent import TracebackFuture, is_future
 from tornado.log import app_log, gen_log
@@ -982,6 +983,9 @@ class PeriodicCallback(object):
     def _schedule_next(self):
         if self._running:
             current_time = self.io_loop.time()
-            while self._next_timeout <= current_time:
-                self._next_timeout += self.callback_time / 1000.0
+            
+            if self._next_timeout <= current_time:
+                callback_time_sec = self.callback_time / 1000.0
+                self._next_timeout += (math.floor((current_time - self._next_timeout) / callback_time_sec) + 1) * callback_time_sec
+
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
