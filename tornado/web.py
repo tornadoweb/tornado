@@ -1519,7 +1519,7 @@ def stream_request_body(cls):
       the entire body has been read.
 
     There is a subtle interaction between ``data_received`` and asynchronous
-    ``prepare``: The first call to ``data_recieved`` may occur at any point
+    ``prepare``: The first call to ``data_received`` may occur at any point
     after the call to ``prepare`` has returned *or yielded*.
     """
     if not issubclass(cls, RequestHandler):
