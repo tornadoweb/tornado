@@ -881,8 +881,14 @@ class TestIOStreamStartTLS(AsyncTestCase):
             with self.assertRaises(ssl.SSLError):
                 yield client_future
 
+
+    @unittest.skipIf(not hasattr(ssl, 'create_default_context'),
+                     'ssl.create_default_context not present')
     @gen_test
     def test_check_hostname(self):
+        # Test that server_hostname parameter to start_tls is being used.
+        # The check_hostname functionality is only available in python 2.7 and
+        # up and in python 3.4 and up.
         self.server_start_tls(_server_ssl_options())
         client_future = self.client_start_tls(
             ssl.create_default_context(),
