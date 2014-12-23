@@ -841,10 +841,10 @@ class TestIOStreamStartTLS(AsyncTestCase):
         recv_line = yield self.client_stream.read_until(b"\r\n")
         self.assertEqual(line, recv_line)
 
-    def client_start_tls(self, ssl_options=None):
+    def client_start_tls(self, ssl_options=None, server_hostname=None):
         client_stream = self.client_stream
         self.client_stream = None
-        return client_stream.start_tls(False, ssl_options)
+        return client_stream.start_tls(False, ssl_options, server_hostname)
 
     def server_start_tls(self, ssl_options=None):
         server_stream = self.server_stream
@@ -877,6 +877,16 @@ class TestIOStreamStartTLS(AsyncTestCase):
         self.server_start_tls(_server_ssl_options())
         client_future = self.client_start_tls(
             dict(cert_reqs=ssl.CERT_REQUIRED, ca_certs=certifi.where()))
+        with ExpectLog(gen_log, "SSL Error"):
+            with self.assertRaises(ssl.SSLError):
+                yield client_future
+
+    @gen_test
+    def test_check_hostname(self):
+        self.server_start_tls(_server_ssl_options())
+        client_future = self.client_start_tls(
+            ssl.create_default_context(),
+            server_hostname=b'127.0.0.1')
         with ExpectLog(gen_log, "SSL Error"):
             with self.assertRaises(ssl.SSLError):
                 yield client_future
