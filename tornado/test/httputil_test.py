@@ -264,6 +264,10 @@ class HTTPServerRequestTest(unittest.TestCase):
         # more required parameters slip in.
         HTTPServerRequest(uri='/')
 
+    def test_body_is_a_byte_string(self):
+        requets = HTTPServerRequest(uri='/')
+        self.assertIsInstance(requets.body, bytes)
+
 
 class ParseRequestStartLineTest(unittest.TestCase):
     METHOD = "GET"

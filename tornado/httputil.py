@@ -331,7 +331,7 @@ class HTTPServerRequest(object):
         self.uri = uri
         self.version = version
         self.headers = headers or HTTPHeaders()
-        self.body = body or ""
+        self.body = body or b""
 
         # set remote IP and protocol
         context = getattr(connection, 'context', None)
