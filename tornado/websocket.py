@@ -171,8 +171,11 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.stream = self.request.connection.detach()
         self.stream.set_close_callback(self.on_connection_close)
 
-        if self.request.headers.get("Sec-WebSocket-Version") in ("7", "8", "13"):
-            self.ws_connection = WebSocketProtocol13(
+        protocol_subclass = self.get_websocket_protocol_subclass(
+            self.request.headers.get("Sec-WebSocket-Version"))
+
+        if protocol_subclass:
+            self.ws_connection = protocol_subclass(
                 self, compression_options=self.get_compression_options())
             self.ws_connection.accept_connection()
         else:
@@ -182,6 +185,19 @@ class WebSocketHandler(tornado.web.RequestHandler):
                     "Sec-WebSocket-Version: 8\r\n\r\n"))
                 self.stream.close()
 
+    def get_websocket_protocol_subclass(self, web_socket_version):
+        """Returns WebSocketProtocol subclass for specific WebSocket version.
+        ``web_socket_version`` argument is a protocol version string passed in
+        "Sec-WebSocket-Version" header.
+
+        This method can be overridden in subclasses to add support for
+        custom protocol implementations.
+
+        .. versionadded:: 4.1
+        """
+
+        if web_socket_version in ("7", "8", "13"):
+            return WebSocketProtocol13
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket.
