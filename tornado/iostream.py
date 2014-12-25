@@ -55,7 +55,7 @@ except ImportError:
 # These errnos indicate that a non-blocking operation must be retried
 # at a later time.  On most platforms they're the same value, but on
 # some they differ.
-_ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
+_ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN, errno.EINTR)
 
 if hasattr(errno, "WSAEWOULDBLOCK"):
     _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)
