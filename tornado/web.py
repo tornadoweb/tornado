@@ -1124,7 +1124,11 @@ class RequestHandler(object):
         if m:
             version = int(m.group(1))
             if version == 2:
-                _, mask, masked_token, timestamp = cookie.split("|")
+                try:
+                    _, mask, masked_token, timestamp = cookie.split("|")
+                except ValueError:
+                    return None, None, None
+
                 mask = binascii.a2b_hex(utf8(mask))
                 token = _websocket_mask(
                     mask, binascii.a2b_hex(utf8(masked_token)))
