@@ -2,7 +2,8 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 from tornado.concurrent import is_future
-from tornado.escape import utf8, _unicode
+from tornado.escape import native_str, utf8, _unicode
+from tornado import gen
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
@@ -54,9 +55,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     specification, but it does enough to work with major web service APIs.
 
     Some features found in the curl-based AsyncHTTPClient are not yet
-    supported.  In particular, proxies are not supported, connections
-    are not reused, and callers cannot select the network interface to be
-    used.
+    supported.  In particular, connections are not reused, and callers
+    cannot select the network interface to be used.
     """
     def initialize(self, io_loop, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
@@ -199,7 +199,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if re.match(r'^\[.*\]$', host):
                 # raw ipv6 addresses in urls are enclosed in brackets
                 host = host[1:-1]
-            self.parsed_hostname = host  # save final host for _on_connect
+            self.parsed_hostname = host  # save final host for _on_connect and _on_proxy_connect
+            self.parsed_port = port      # save port for _on_proxy_connect
 
             if request.allow_ipv6 is False:
                 af = socket.AF_INET
@@ -213,10 +214,27 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
                     stack_context.wrap(self._on_timeout))
-            self.tcp_client.connect(host, port, af=af,
-                                    ssl_options=ssl_options,
-                                    max_buffer_size=self.max_buffer_size,
-                                    callback=self._on_connect)
+
+            proxy_host = getattr(self.request, "proxy_host", None)
+            proxy_port = getattr(self.request, "proxy_port", None)
+            if proxy_host is not None or proxy_port is not None:
+                if proxy_host is not None and proxy_port is not None:
+                    self.proxy_host = proxy_host
+                    self.proxy_port = int(proxy_port)
+                    self.use_connect_proxy = ssl_options is not None
+                    callback = self._on_proxy_connect if self.use_connect_proxy else self._on_connect
+                    self.tcp_client.connect(self.proxy_host, self.proxy_port, af=af,
+                                            max_buffer_size=self.max_buffer_size,
+                                            callback=callback)
+                else:
+                    raise ValueError("Both proxy_host and proxy_port must be set.")
+            else:
+                self.proxy_host = self.proxy_port = None
+                self.use_connect_proxy = False
+                self.tcp_client.connect(host, port, af=af,
+                                        ssl_options=ssl_options,
+                                        max_buffer_size=self.max_buffer_size,
+                                        callback=self._on_connect)
 
     def _get_ssl_options(self, scheme):
         if scheme == "https":
@@ -282,9 +300,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if (self.request.method not in self._SUPPORTED_METHODS and
                 not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
-        for key in ('network_interface',
-                    'proxy_host', 'proxy_port',
-                    'proxy_username', 'proxy_password'):
+        for key in ('network_interface'):
             if getattr(self.request, key, None):
                 raise NotImplementedError('%s not supported' % key)
         if "Connection" not in self.request.headers:
@@ -307,6 +323,20 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             auth = utf8(username) + b":" + utf8(password)
             self.request.headers["Authorization"] = (b"Basic " +
                                                      base64.b64encode(auth))
+
+        # Add a Proxy-Authorization header if this connection is not using the transparent CONNECT proxy.
+        if not self.use_connect_proxy:
+            proxy_username = getattr(self.request, "proxy_username", None)
+            proxy_password = getattr(self.request, "proxy_password", None)
+            if proxy_username is not None and proxy_password is not None:
+                if self.proxy_host is None or self.proxy_port is None:
+                    raise ValueError("proxy_username and proxy_password set without proxy_host and proxy_port both set")
+                proxy_username = proxy_username or ''
+                proxy_password = proxy_password or ''
+                proxy_auth = utf8(proxy_username) + b":" + utf8(proxy_password)
+                self.request.headers["Proxy-Authorization"] = (b"Basic " +
+                                                               base64.b64encode(proxy_auth))
+
         if self.request.user_agent:
             self.request.headers["User-Agent"] = self.request.user_agent
         if not self.request.allow_nonstandard_methods:
@@ -334,8 +364,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
         if self.request.decompress_response:
             self.request.headers["Accept-Encoding"] = "gzip"
-        req_path = ((self.parsed.path or '/') +
-                    (('?' + self.parsed.query) if self.parsed.query else ''))
+
+        if self.proxy_host is not None and not self.use_connect_proxy:
+            req_path = self.request.url
+        else:
+            req_path = ((self.parsed.path or '/') +
+                        (('?' + self.parsed.query) if self.parsed.query else ''))
+
         self.stream.set_nodelay(True)
         self.connection = HTTP1Connection(
             self.stream, True,
@@ -351,6 +386,76 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._read_response()
         else:
             self._write_body(True)
+
+    # Establish a tunnel through the proxy using the HTTP CONNECT method.
+    @gen.coroutine
+    def _on_proxy_connect(self, stream):
+        if self.final_callback is None:
+            # final_callback is cleared if we've hit our timeout.
+            stream.close()
+            return
+
+        self.stream = stream
+        self.stream.set_close_callback(self.on_connection_close)
+        self._remove_timeout()
+        if self.final_callback is None:
+            return
+
+        stream.set_nodelay(True)
+
+        proxy_auth_header = None
+        proxy_username = getattr(self.request, "proxy_username", None)
+        proxy_password = getattr(self.request, "proxy_password", None)
+        if proxy_username is not None and proxy_password is not None:
+            auth = utf8(proxy_username) + b":" + utf8(proxy_password)
+            proxy_auth_header = b"Basic " + base64.b64encode(auth)
+
+        host_port_str = utf8(self.parsed_hostname) + b":" + utf8(str(self.parsed_port))
+        headers = b"CONNECT {host_port} HTTP/1.1\r\nHost: {host_port}\r\n".format(host_port=host_port_str)
+        if proxy_auth_header is not None:
+            headers += b"Proxy-Authorization: " + proxy_auth_header + b"\r\n"
+        headers += "\r\n"
+
+        yield stream.write(headers)
+
+        def _parse_headers(data):
+            data = native_str(data.decode('latin1'))
+            eol = data.find("\r\n")
+            start_line = data[:eol]
+            try:
+                headers = httputil.HTTPHeaders.parse(data[eol:])
+            except ValueError:
+                # probably form split() if there was no ':' in the line
+                raise httputil.HTTPInputException("Malformed HTTP headers: %r" %
+                                                  data[eol:100])
+            return start_line, headers
+
+        response_data = yield stream.read_until_regex(b"\r?\n\r?\n")
+        start_line, headers = _parse_headers(response_data)
+        start_line = httputil.parse_response_start_line(start_line)
+        if 200 <= start_line.code < 300:
+            # Tunnel established. Continue with the main request.
+            ssl_options = self._get_ssl_options(self.parsed.scheme)
+            if ssl_options is not None:
+                ssl_stream = yield stream.start_tls(False, ssl_options, server_hostname=self.parsed_hostname)
+                self.io_loop.add_callback(self._on_connect, ssl_stream)
+            else:
+                self.io_loop.add_callback(self._on_connect, stream)
+        else:
+            content_length = headers.get("Content-Length")
+            if content_length:
+                content_length = int(content_length)
+                if content_length > self._max_body_size:
+                    raise httputil.HTTPInputException("Content-Length too long")
+                response = ""
+                while content_length > 0:
+                    body = yield self.stream.read_bytes(content_length, partial=True)
+                    content_length -= len(body)
+                    response.append(body)
+            else:
+                yield stream.read_until_close()
+
+            raise HTTPError(start_line.code, start_line.reason)
 
     def _write_body(self, start_read):
         if self.request.body is not None:
