@@ -207,7 +207,7 @@ class WSGIAdapter(object):
             body = environ["wsgi.input"].read(
                 int(headers["Content-Length"]))
         else:
-            body = ""
+            body = b""
         protocol = environ["wsgi.url_scheme"]
         remote_ip = environ.get("REMOTE_ADDR", "")
         if environ.get("HTTP_HOST"):
