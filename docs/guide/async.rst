@@ -108,4 +108,6 @@ the original synchronous version::
     def fetch_coroutine(url):
         http_client = AsyncHTTPClient()
         response = yield http_client.fetch(url)
-        return response.body
+        raise gen.Return(response.body)
+
+The statement ``raise gen.Return(response.body)`` is an artifact of Python 2, in which generators aren't allowed to return values. To overcome this, Tornado coroutines raise a special kind of exception called a ``Return``. The coroutine catches this exception and treats it like a returned value. In Python 3, a ``return response.body`` achieves the same result.
