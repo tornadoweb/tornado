@@ -179,7 +179,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             if not self.stream.closed():
                 self.stream.write(tornado.escape.utf8(
                     "HTTP/1.1 426 Upgrade Required\r\n"
-                    "Sec-WebSocket-Version: 8\r\n\r\n"))
+                    "Sec-WebSocket-Version: 7, 8, 13\r\n\r\n"))
                 self.stream.close()
 
 
