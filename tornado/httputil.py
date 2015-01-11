@@ -62,6 +62,11 @@ except ImportError:
         pass
 
 
+# RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line
+# terminator and ignore any preceding CR.
+_CRLF_RE = re.compile(r'\r?\n')
+
+
 class _NormalizedHeaderCache(dict):
     """Dynamic cached mapping of header names to Http-Header-Case.
 
@@ -193,7 +198,7 @@ class HTTPHeaders(dict):
         [('Content-Length', '42'), ('Content-Type', 'text/html')]
         """
         h = cls()
-        for line in headers.splitlines():
+        for line in _CRLF_RE.split(headers):
             if line:
                 h.parse_line(line)
         return h
