@@ -491,8 +491,9 @@ class HTTP1Connection(httputil.HTTPConnection):
         # we SHOULD ignore at least one empty line before the request.
         # http://tools.ietf.org/html/rfc7230#section-3.5
         data = native_str(data.decode('latin1')).lstrip("\r\n")
-        eol = data.find("\r\n")
-        start_line = data[:eol]
+        # RFC 7230 section allows for both CRLF and bare LF.
+        eol = data.find("\n")
+        start_line = data[:eol].rstrip("\r")
         try:
             headers = httputil.HTTPHeaders.parse(data[eol:])
         except ValueError:

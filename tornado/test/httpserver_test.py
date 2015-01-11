@@ -195,14 +195,14 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application(self.get_handlers())
 
-    def raw_fetch(self, headers, body):
+    def raw_fetch(self, headers, body, newline=b"\r\n"):
         with closing(IOStream(socket.socket())) as stream:
             stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
             self.wait()
             stream.write(
-                b"\r\n".join(headers +
-                             [utf8("Content-Length: %d\r\n" % len(body))]) +
-                b"\r\n" + body)
+                newline.join(headers +
+                             [utf8("Content-Length: %d" % len(body))]) +
+                newline + newline + body)
             read_stream_body(stream, self.stop)
             headers, body = self.wait()
             return body
@@ -231,6 +231,13 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         self.assertEqual(u("\u00e1"), data["argument"])
         self.assertEqual(u("\u00f3"), data["filename"])
         self.assertEqual(u("\u00fa"), data["filebody"])
+
+    def test_newlines(self):
+        # We support both CRLF and bare LF as line separators.
+        for newline in (b"\r\n", b"\n"):
+            response = self.raw_fetch([b"GET /hello HTTP/1.0"], b"",
+                                      newline=newline)
+            self.assertEqual(response, b'Hello world')
 
     def test_100_continue(self):
         # Run through a 100-continue interaction by hand:
