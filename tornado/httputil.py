@@ -885,6 +885,8 @@ def split_host_and_port(netloc):
     """Returns ``(host, port)`` tuple from ``netloc``.
 
     Returned ``port`` will be ``None`` if not present.
+
+    .. versionadded:: 4.1
     """
     match = re.match(r'^(.+):(\d+)$', netloc)
     if match:
