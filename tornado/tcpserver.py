@@ -95,7 +95,7 @@ class TCPServer(object):
         self._pending_sockets = []
         self._started = False
         self.max_buffer_size = max_buffer_size
-        self.read_chunk_size = None
+        self.read_chunk_size = read_chunk_size
 
         # Verify the SSL options. Otherwise we don't get errors until clients
         # connect. This doesn't verify that the keys are legitimate, but
