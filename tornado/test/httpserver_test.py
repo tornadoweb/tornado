@@ -562,7 +562,7 @@ class UnixSocketTest(AsyncTestCase):
         self.stream.write(b"GET /hello HTTP/1.0\r\n\r\n")
         self.stream.read_until(b"\r\n", self.stop)
         response = self.wait()
-        self.assertEqual(response, b"HTTP/1.0 200 OK\r\n")
+        self.assertEqual(response, b"HTTP/1.1 200 OK\r\n")
         self.stream.read_until(b"\r\n\r\n", self.stop)
         headers = HTTPHeaders.parse(self.wait().decode('latin1'))
         self.stream.read_bytes(int(headers["Content-Length"]), self.stop)
@@ -636,7 +636,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
     def read_headers(self):
         self.stream.read_until(b'\r\n', self.stop)
         first_line = self.wait()
-        self.assertTrue(first_line.startswith(self.http_version + b' 200'), first_line)
+        self.assertTrue(first_line.startswith(b'HTTP/1.1 200'), first_line)
         self.stream.read_until(b'\r\n\r\n', self.stop)
         header_bytes = self.wait()
         headers = HTTPHeaders.parse(header_bytes.decode('latin1'))

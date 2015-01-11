@@ -326,8 +326,10 @@ class HTTP1Connection(httputil.HTTPConnection):
 
     def write_headers(self, start_line, headers, chunk=None, callback=None):
         """Implements `.HTTPConnection.write_headers`."""
+        lines = []
         if self.is_client:
             self._request_start_line = start_line
+            lines.append(utf8('%s %s HTTP/1.1' % (start_line[0], start_line[1])))
             # Client requests with a non-empty body must have either a
             # Content-Length or a Transfer-Encoding.
             self._chunking_output = (
@@ -336,6 +338,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 'Transfer-Encoding' not in headers)
         else:
             self._response_start_line = start_line
+            lines.append(utf8('HTTP/1.1 %s %s' % (start_line[1], start_line[2])))
             self._chunking_output = (
                 # TODO: should this use
                 # self._request_start_line.version or
@@ -365,7 +368,6 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._expected_content_remaining = int(headers['Content-Length'])
         else:
             self._expected_content_remaining = None
-        lines = [utf8("%s %s %s" % start_line)]
         lines.extend([utf8(n) + b": " + utf8(v) for n, v in headers.get_all()])
         for line in lines:
             if b'\n' in line:

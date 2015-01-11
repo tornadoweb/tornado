@@ -548,6 +548,8 @@ class HTTPConnection(object):
             headers.
         :arg callback: a callback to be run when the write is complete.
 
+        The ``version`` field of ``start_line`` is ignored.
+
         Returns a `.Future` if no callback is given.
         """
         raise NotImplementedError()
@@ -787,7 +789,7 @@ def parse_request_start_line(line):
         method, path, version = line.split(" ")
     except ValueError:
         raise HTTPInputError("Malformed HTTP request line")
-    if not version.startswith("HTTP/"):
+    if not re.match(r"^HTTP/1\.[0-9]$", version):
         raise HTTPInputError(
             "Malformed HTTP version in HTTP Request-Line: %r" % version)
     return RequestStartLine(method, path, version)
@@ -806,7 +808,7 @@ def parse_response_start_line(line):
     ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')
     """
     line = native_str(line)
-    match = re.match("(HTTP/1.[01]) ([0-9]+) ([^\r]*)", line)
+    match = re.match("(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)", line)
     if not match:
         raise HTTPInputError("Error parsing response start line")
     return ResponseStartLine(match.group(1), int(match.group(2)),

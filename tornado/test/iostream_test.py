@@ -57,7 +57,7 @@ class TestIOStreamWebMixin(object):
 
         stream.read_until_close(self.stop)
         data = self.wait()
-        self.assertTrue(data.startswith(b"HTTP/1.0 200"))
+        self.assertTrue(data.startswith(b"HTTP/1.1 200"))
         self.assertTrue(data.endswith(b"Hello"))
 
     def test_read_zero_bytes(self):
@@ -70,7 +70,7 @@ class TestIOStreamWebMixin(object):
         # normal read
         self.stream.read_bytes(9, self.stop)
         data = self.wait()
-        self.assertEqual(data, b"HTTP/1.0 ")
+        self.assertEqual(data, b"HTTP/1.1 ")
 
         # zero bytes
         self.stream.read_bytes(0, self.stop)
@@ -125,7 +125,7 @@ class TestIOStreamWebMixin(object):
         self.assertIs(connect_result, stream)
         yield stream.write(b"GET / HTTP/1.0\r\n\r\n")
         first_line = yield stream.read_until(b"\r\n")
-        self.assertEqual(first_line, b"HTTP/1.0 200 OK\r\n")
+        self.assertEqual(first_line, b"HTTP/1.1 200 OK\r\n")
         # callback=None is equivalent to no callback.
         header_data = yield stream.read_until(b"\r\n\r\n", callback=None)
         headers = HTTPHeaders.parse(header_data.decode('latin1'))

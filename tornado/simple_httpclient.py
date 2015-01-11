@@ -345,7 +345,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 decompress=self.request.decompress_response),
             self._sockaddr)
         start_line = httputil.RequestStartLine(self.request.method,
-                                               req_path, 'HTTP/1.1')
+                                               req_path, '')
         self.connection.write_headers(start_line, self.request.headers)
         if self.request.expect_100_continue:
             self._read_response()

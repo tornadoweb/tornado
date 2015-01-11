@@ -840,7 +840,7 @@ class RequestHandler(object):
                 for cookie in self._new_cookie.values():
                     self.add_header("Set-Cookie", cookie.OutputString(None))
 
-            start_line = httputil.ResponseStartLine(self.request.version,
+            start_line = httputil.ResponseStartLine('',
                                                     self._status_code,
                                                     self._reason)
             return self.request.connection.write_headers(
