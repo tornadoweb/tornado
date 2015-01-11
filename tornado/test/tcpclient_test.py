@@ -24,8 +24,8 @@ from tornado.concurrent import Future
 from tornado.netutil import bind_sockets, Resolver
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, bind_unused_port, gen_test
-from tornado.test.util import skipIfNoIPv6, unittest
+from tornado.testing import AsyncTestCase, gen_test
+from tornado.test.util import skipIfNoIPv6, unittest, refusing_port
 
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
@@ -120,8 +120,8 @@ class TCPClientTest(AsyncTestCase):
 
     @gen_test
     def test_refused_ipv4(self):
-        sock, port = bind_unused_port()
-        sock.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         with self.assertRaises(IOError):
             yield self.client.connect('127.0.0.1', port)
 

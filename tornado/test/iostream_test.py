@@ -8,7 +8,7 @@ from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket
 from tornado.stack_context import NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
-from tornado.test.util import unittest, skipIfNonUnix
+from tornado.test.util import unittest, skipIfNonUnix, refusing_port
 from tornado.web import RequestHandler, Application
 import certifi
 import errno
@@ -217,8 +217,8 @@ class TestIOStreamMixin(object):
         # When a connection is refused, the connect callback should not
         # be run.  (The kqueue IOLoop used to behave differently from the
         # epoll IOLoop in this respect)
-        server_socket, port = bind_unused_port()
-        server_socket.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         stream = IOStream(socket.socket(), self.io_loop)
         self.connect_called = False
 

@@ -19,8 +19,8 @@ from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -322,8 +322,8 @@ class SimpleHTTPClientTestMixin(object):
         self.assertTrue(host_re.match(response.body), response.body)
 
     def test_connection_refused(self):
-        server_socket, port = bind_unused_port()
-        server_socket.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
             self.http_client.fetch("http://localhost:%d/" % port, self.stop)
             response = self.wait()
