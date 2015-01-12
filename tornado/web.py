@@ -1771,9 +1771,9 @@ class Application(httputil.HTTPServerConnectionDelegate):
                 except TypeError:
                     pass
 
-    def start_request(self, connection):
+    def start_request(self, server_conn, request_conn):
         # Modern HTTPServer interface
-        return _RequestDispatcher(self, connection)
+        return _RequestDispatcher(self, request_conn)
 
     def __call__(self, request):
         # Legacy HTTPServer interface

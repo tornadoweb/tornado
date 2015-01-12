@@ -815,8 +815,8 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
 
     def get_app(self):
         class App(HTTPServerConnectionDelegate):
-            def start_request(self, connection):
-                return StreamingChunkSizeTest.MessageDelegate(connection)
+            def start_request(self, server_conn, request_conn):
+                return StreamingChunkSizeTest.MessageDelegate(request_conn)
         return App()
 
     def fetch_chunk_sizes(self, **kwargs):
