@@ -1058,7 +1058,9 @@ class IOStream(BaseIOStream):
         socket = self.socket
         self.io_loop.remove_handler(socket)
         self.socket = None
-        socket = ssl_wrap_socket(socket, ssl_options, server_side=server_side,
+        socket = ssl_wrap_socket(socket, ssl_options,
+                                 server_hostname=server_hostname,
+                                 server_side=server_side,
                                  do_handshake_on_connect=False)
         orig_close_callback = self._close_callback
         self._close_callback = None
