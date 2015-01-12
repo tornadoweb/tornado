@@ -1120,32 +1120,36 @@ class RequestHandler(object):
         """Convert a cookie string into a the tuple form returned by
         _get_raw_xsrf_token.
         """
-        m = _signed_value_version_re.match(utf8(cookie))
-        if m:
-            version = int(m.group(1))
-            if version == 2:
-                try:
-                    _, mask, masked_token, timestamp = cookie.split("|")
-                except ValueError:
-                    return None, None, None
 
-                mask = binascii.a2b_hex(utf8(mask))
-                token = _websocket_mask(
-                    mask, binascii.a2b_hex(utf8(masked_token)))
-                timestamp = int(timestamp)
-                return version, token, timestamp
+        try:
+            m = _signed_value_version_re.match(utf8(cookie))
+
+            if m:
+                version = int(m.group(1))
+                if version == 2:
+                    _, mask, masked_token, timestamp = cookie.split("|")
+
+                    mask = binascii.a2b_hex(utf8(mask))
+                    token = _websocket_mask(
+                        mask, binascii.a2b_hex(utf8(masked_token)))
+                    timestamp = int(timestamp)
+                    return version, token, timestamp
+                else:
+                    # Treat unknown versions as not present instead of failing.
+                    raise Exception("Unknown xsrf cookie version")
             else:
-                # Treat unknown versions as not present instead of failing.
-                return None, None, None
-        else:
-            version = 1
-            try:
-                token = binascii.a2b_hex(utf8(cookie))
-            except (binascii.Error, TypeError):
-                token = utf8(cookie)
-            # We don't have a usable timestamp in older versions.
-            timestamp = int(time.time())
-            return (version, token, timestamp)
+                version = 1
+                try:
+                    token = binascii.a2b_hex(utf8(cookie))
+                except (binascii.Error, TypeError):
+                    token = utf8(cookie)
+                # We don't have a usable timestamp in older versions.
+                timestamp = int(time.time())
+                return (version, token, timestamp)
+        except Exception:
+            # Catch exceptions and return nothing instead of failing.
+            gen_log.debug("Uncaught exception in _decode_xsrf_token", exc_info=True)
+            return None, None, None
 
     def check_xsrf_cookie(self):
         """Verifies that the ``_xsrf`` cookie matches the ``_xsrf`` argument.
