@@ -333,7 +333,7 @@ class OAuthMixin(object):
 
         The ``callback_uri`` may be omitted if you have previously
         registered a callback URI with the third-party service.  For
-        some sevices (including Friendfeed), you must use a
+        some services (including Friendfeed), you must use a
         previously-registered callback URI and cannot specify a
         callback via this method.
 

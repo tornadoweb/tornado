@@ -8,7 +8,7 @@ from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket
 from tornado.stack_context import NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
-from tornado.test.util import unittest, skipIfNonUnix
+from tornado.test.util import unittest, skipIfNonUnix, refusing_port
 from tornado.web import RequestHandler, Application
 import certifi
 import errno
@@ -57,7 +57,7 @@ class TestIOStreamWebMixin(object):
 
         stream.read_until_close(self.stop)
         data = self.wait()
-        self.assertTrue(data.startswith(b"HTTP/1.0 200"))
+        self.assertTrue(data.startswith(b"HTTP/1.1 200"))
         self.assertTrue(data.endswith(b"Hello"))
 
     def test_read_zero_bytes(self):
@@ -70,7 +70,7 @@ class TestIOStreamWebMixin(object):
         # normal read
         self.stream.read_bytes(9, self.stop)
         data = self.wait()
-        self.assertEqual(data, b"HTTP/1.0 ")
+        self.assertEqual(data, b"HTTP/1.1 ")
 
         # zero bytes
         self.stream.read_bytes(0, self.stop)
@@ -125,7 +125,7 @@ class TestIOStreamWebMixin(object):
         self.assertIs(connect_result, stream)
         yield stream.write(b"GET / HTTP/1.0\r\n\r\n")
         first_line = yield stream.read_until(b"\r\n")
-        self.assertEqual(first_line, b"HTTP/1.0 200 OK\r\n")
+        self.assertEqual(first_line, b"HTTP/1.1 200 OK\r\n")
         # callback=None is equivalent to no callback.
         header_data = yield stream.read_until(b"\r\n\r\n", callback=None)
         headers = HTTPHeaders.parse(header_data.decode('latin1'))
@@ -217,17 +217,18 @@ class TestIOStreamMixin(object):
         # When a connection is refused, the connect callback should not
         # be run.  (The kqueue IOLoop used to behave differently from the
         # epoll IOLoop in this respect)
-        server_socket, port = bind_unused_port()
-        server_socket.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         stream = IOStream(socket.socket(), self.io_loop)
         self.connect_called = False
 
         def connect_callback():
             self.connect_called = True
+            self.stop()
         stream.set_close_callback(self.stop)
         # log messages vary by platform and ioloop implementation
         with ExpectLog(gen_log, ".*", required=False):
-            stream.connect(("localhost", port), connect_callback)
+            stream.connect(("127.0.0.1", port), connect_callback)
             self.wait()
         self.assertFalse(self.connect_called)
         self.assertTrue(isinstance(stream.error, socket.error), stream.error)
@@ -511,7 +512,7 @@ class TestIOStreamMixin(object):
         server, client = self.make_iostream_pair()
         server.set_close_callback(self.stop)
         try:
-            # Start a read that will be fullfilled asynchronously.
+            # Start a read that will be fulfilled asynchronously.
             server.read_bytes(1, lambda data: None)
             client.write(b'a')
             # Stub out read_from_fd to make it fail.
@@ -724,6 +725,26 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    def test_flow_control(self):
+        MB = 1024 * 1024
+        server, client = self.make_iostream_pair(max_buffer_size=5 * MB)
+        try:
+            # Client writes more than the server will accept.
+            client.write(b"a" * 10 * MB)
+            # The server pauses while reading.
+            server.read_bytes(MB, self.stop)
+            self.wait()
+            self.io_loop.call_later(0.1, self.stop)
+            self.wait()
+            # The client's writes have been blocked; the server can
+            # continue to read gradually.
+            for i in range(9):
+                server.read_bytes(MB, self.stop)
+                self.wait()
+        finally:
+            server.close()
+            client.close()
+
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):
@@ -820,10 +841,10 @@ class TestIOStreamStartTLS(AsyncTestCase):
         recv_line = yield self.client_stream.read_until(b"\r\n")
         self.assertEqual(line, recv_line)
 
-    def client_start_tls(self, ssl_options=None):
+    def client_start_tls(self, ssl_options=None, server_hostname=None):
         client_stream = self.client_stream
         self.client_stream = None
-        return client_stream.start_tls(False, ssl_options)
+        return client_stream.start_tls(False, ssl_options, server_hostname)
 
     def server_start_tls(self, ssl_options=None):
         server_stream = self.server_stream
@@ -856,6 +877,22 @@ class TestIOStreamStartTLS(AsyncTestCase):
         self.server_start_tls(_server_ssl_options())
         client_future = self.client_start_tls(
             dict(cert_reqs=ssl.CERT_REQUIRED, ca_certs=certifi.where()))
+        with ExpectLog(gen_log, "SSL Error"):
+            with self.assertRaises(ssl.SSLError):
+                yield client_future
+
+
+    @unittest.skipIf(not hasattr(ssl, 'create_default_context'),
+                     'ssl.create_default_context not present')
+    @gen_test
+    def test_check_hostname(self):
+        # Test that server_hostname parameter to start_tls is being used.
+        # The check_hostname functionality is only available in python 2.7 and
+        # up and in python 3.4 and up.
+        self.server_start_tls(_server_ssl_options())
+        client_future = self.client_start_tls(
+            ssl.create_default_context(),
+            server_hostname=b'127.0.0.1')
         with ExpectLog(gen_log, "SSL Error"):
             with self.assertRaises(ssl.SSLError):
                 yield client_future

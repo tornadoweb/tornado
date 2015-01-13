@@ -39,7 +39,7 @@ from tornado.util import errno_from_exception
 try:
     import multiprocessing
 except ImportError:
-    # Multiprocessing is not availble on Google App Engine.
+    # Multiprocessing is not available on Google App Engine.
     multiprocessing = None
 
 try:

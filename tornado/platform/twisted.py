@@ -141,7 +141,7 @@ class TornadoDelayedCall(object):
 class TornadoReactor(PosixReactorBase):
     """Twisted reactor built on the Tornado IOLoop.
 
-    Since it is intented to be used in applications where the top-level
+    Since it is intended to be used in applications where the top-level
     event loop is ``io_loop.start()`` rather than ``reactor.run()``,
     it is implemented a little differently than other Twisted reactors.
     We override `mainLoop` instead of `doIteration` and must implement

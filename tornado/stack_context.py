@@ -41,13 +41,13 @@ Example usage::
             sys.exit(1)
 
     with StackContext(die_on_error):
-        # Any exception thrown here *or in callback and its desendents*
+        # Any exception thrown here *or in callback and its descendants*
         # will cause the process to exit instead of spinning endlessly
         # in the ioloop.
         http_client.fetch(url, callback)
     ioloop.start()
 
-Most applications shouln't have to work with `StackContext` directly.
+Most applications shouldn't have to work with `StackContext` directly.
 Here are a few rules of thumb for when it's necessary:
 
 * If you're writing an asynchronous library that doesn't rely on a

@@ -10,8 +10,8 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
-from tornado.util import u, ObjectDict, unicode_type
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish
+from tornado.util import u, ObjectDict, unicode_type, timedelta_to_seconds
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler
 
 import binascii
 import contextlib
@@ -163,11 +163,21 @@ class CookieTest(WebTestCase):
                 # Attributes from the first call are not carried over.
                 self.set_cookie("a", "e")
 
+        class SetCookieMaxAgeHandler(RequestHandler):
+            def get(self):
+                self.set_cookie("foo", "bar", max_age=10)
+
+        class SetCookieExpiresDaysHandler(RequestHandler):
+            def get(self):
+                self.set_cookie("foo", "bar", expires_days=10)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
                 ("/special_char", SetCookieSpecialCharHandler),
                 ("/set_overwrite", SetCookieOverwriteHandler),
+                ("/set_max_age", SetCookieMaxAgeHandler),
+                ("/set_expires_days", SetCookieExpiresDaysHandler),
                 ]
 
     def test_set_cookie(self):
@@ -222,6 +232,23 @@ class CookieTest(WebTestCase):
         self.assertEqual(sorted(headers),
                          ["a=e; Path=/", "c=d; Domain=example.com; Path=/"])
 
+    def test_set_cookie_max_age(self):
+        response = self.fetch("/set_max_age")
+        headers = response.headers.get_list("Set-Cookie")
+        self.assertEqual(sorted(headers),
+                         ["foo=bar; Max-Age=10; Path=/"])
+    
+    def test_set_cookie_expires_days(self):
+        response = self.fetch("/set_expires_days")
+        header = response.headers.get("Set-Cookie")
+        match = re.match("foo=bar; expires=(?P<expires>.+); Path=/", header)
+        self.assertIsNotNone(match)
+
+        expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
+        header_expires = datetime.datetime(
+            *email.utils.parsedate(match.groupdict()["expires"])[:6])
+        self.assertTrue(abs(timedelta_to_seconds(expires - header_expires)) < 10)
+    
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
@@ -550,6 +577,8 @@ class WSGISafeWebTest(WebTestCase):
             url("/optional_path/(.+)?", OptionalPathHandler),
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
+            url("/web_redirect_permanent", WebRedirectHandler, {"url": "/web_redirect_newpath"}),
+            url("/web_redirect", WebRedirectHandler, {"url": "/web_redirect_newpath", "permanent": False}),
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
@@ -674,6 +703,14 @@ js_embed()
         self.assertEqual(response.code, 302)
         response = self.fetch("/redirect?status=307", follow_redirects=False)
         self.assertEqual(response.code, 307)
+
+    def test_web_redirect(self):
+        response = self.fetch("/web_redirect_permanent", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
+        response = self.fetch("/web_redirect", follow_redirects=False)
+        self.assertEqual(response.code, 302)
+        self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
 
     def test_header_injection(self):
         response = self.fetch("/header_injection")
@@ -2333,3 +2370,38 @@ class FinishExceptionTest(SimpleHandlerTestCase):
         self.assertEqual('Basic realm="something"',
                          response.headers.get('WWW-Authenticate'))
         self.assertEqual(b'authentication required', response.body)
+
+
+class DecoratorTest(WebTestCase):
+    def get_handlers(self):
+        class RemoveSlashHandler(RequestHandler):
+            @removeslash
+            def get(self):
+                pass
+
+        class AddSlashHandler(RequestHandler):
+            @addslash
+            def get(self):
+                pass
+
+        return [("/removeslash/", RemoveSlashHandler),
+                ("/addslash", AddSlashHandler),
+                ]
+
+    def test_removeslash(self):
+        response = self.fetch("/removeslash/", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/removeslash")
+
+        response = self.fetch("/removeslash/?foo=bar", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/removeslash?foo=bar")
+
+    def test_addslash(self):
+        response = self.fetch("/addslash", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/addslash/")
+
+        response = self.fetch("/addslash?foo=bar", follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], "/addslash/?foo=bar")

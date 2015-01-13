@@ -10,12 +10,10 @@ unfinished callbacks on the event loop that fail when it resumes)
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
-import datetime
 import functools
 
 from tornado.ioloop import IOLoop
 from tornado import stack_context
-from tornado.util import timedelta_to_seconds
 
 try:
     # Import the real asyncio module for py33+ first.  Older versions of the

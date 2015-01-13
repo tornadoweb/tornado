@@ -8,6 +8,7 @@ from contextlib import closing
 import functools
 import sys
 import threading
+import datetime
 from io import BytesIO
 
 from tornado.escape import utf8
@@ -22,6 +23,7 @@ from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, Expec
 from tornado.test.util import unittest, skipOnTravis
 from tornado.util import u
 from tornado.web import Application, RequestHandler, url
+from tornado.httputil import format_timestamp, HTTPHeaders
 
 
 class HelloWorldHandler(RequestHandler):
@@ -345,6 +347,21 @@ Transfer-Encoding: chunked
         finally:
             client.close()
 
+    def test_header_types(self):
+        # Header values may be passed as character or utf8 byte strings,
+        # in a plain dictionary or an HTTPHeaders object.
+        # Keys must always be the native str type.
+        # All combinations should have the same results on the wire.
+        for value in [u("MyUserAgent"), b"MyUserAgent"]:
+            for container in [dict, HTTPHeaders]:
+                headers = container()
+                headers['User-Agent'] = value
+                resp = self.fetch('/user_agent', headers=headers)
+                self.assertEqual(
+                    resp.body, b"MyUserAgent",
+                    "response=%r, value=%r, container=%r" %
+                    (resp.body, value, container))
+
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
         # Content-Length or other entity headers, but some servers do it
@@ -388,6 +405,11 @@ Transfer-Encoding: chunked
         self.assertEqual(context.exception.response.code, 404)
 
     @gen_test
+    def test_future_http_error_no_raise(self):
+        response = yield self.http_client.fetch(self.get_url('/notfound'), raise_error=False)
+        self.assertEqual(response.code, 404)
+
+    @gen_test
     def test_reuse_request_from_response(self):
         # The response.request attribute should be an HTTPRequest, not
         # a _RequestProxy.
@@ -414,17 +436,17 @@ Transfer-Encoding: chunked
         self.assertEqual(response.body, b'OTHER')
 
     @gen_test
-    def test_body(self):
+    def test_body_sanity_checks(self):
         hello_url = self.get_url('/hello')
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             yield self.http_client.fetch(hello_url, body='data')
 
-        self.assertTrue('must be empty' in str(context.exception))
+        self.assertTrue('must be None' in str(context.exception))
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             yield self.http_client.fetch(hello_url, method='POST')
 
-        self.assertTrue('must not be empty' in str(context.exception))
+        self.assertTrue('must not be None' in str(context.exception))
 
     # This test causes odd failures with the combination of
     # curl_httpclient (at least with the version of libcurl available
@@ -433,7 +455,7 @@ Transfer-Encoding: chunked
     # to start again.  It does this *before* telling the socket callback to
     # unregister the FD.  Some IOLoop implementations have special kernel
     # integration to discover this immediately.  Tornado's IOLoops
-    # ignore errors on remove_handler to accomodate this behavior, but
+    # ignore errors on remove_handler to accommodate this behavior, but
     # Twisted's reactor does not.  The removeReader call fails and so
     # do all future removeAll calls (which our tests do at cleanup).
     #
@@ -563,3 +585,9 @@ class HTTPRequestTestCase(unittest.TestCase):
         request = HTTPRequest('http://example.com')
         request.body = 'foo'
         self.assertEqual(request.body, utf8('foo'))
+
+    def test_if_modified_since(self):
+        http_date = datetime.datetime.utcnow()
+        request = HTTPRequest('http://example.com', if_modified_since=http_date)
+        self.assertEqual(request.headers, 
+            {'If-Modified-Since': format_timestamp(http_date)})

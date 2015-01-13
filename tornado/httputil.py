@@ -62,6 +62,11 @@ except ImportError:
         pass
 
 
+# RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line
+# terminator and ignore any preceding CR.
+_CRLF_RE = re.compile(r'\r?\n')
+
+
 class _NormalizedHeaderCache(dict):
     """Dynamic cached mapping of header names to Http-Header-Case.
 
@@ -193,7 +198,7 @@ class HTTPHeaders(dict):
         [('Content-Length', '42'), ('Content-Type', 'text/html')]
         """
         h = cls()
-        for line in headers.splitlines():
+        for line in _CRLF_RE.split(headers):
             if line:
                 h.parse_line(line)
         return h
@@ -331,7 +336,7 @@ class HTTPServerRequest(object):
         self.uri = uri
         self.version = version
         self.headers = headers or HTTPHeaders()
-        self.body = body or ""
+        self.body = body or b""
 
         # set remote IP and protocol
         context = getattr(connection, 'context', None)
@@ -543,6 +548,8 @@ class HTTPConnection(object):
             headers.
         :arg callback: a callback to be run when the write is complete.
 
+        The ``version`` field of ``start_line`` is ignored.
+
         Returns a `.Future` if no callback is given.
         """
         raise NotImplementedError()
@@ -562,11 +569,18 @@ class HTTPConnection(object):
 
 
 def url_concat(url, args):
-    """Concatenate url and argument dictionary regardless of whether
+    """Concatenate url and arguments regardless of whether
     url has existing query parameters.
 
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat("http://example.com/foo", dict(c="d"))
+    'http://example.com/foo?c=d'
     >>> url_concat("http://example.com/foo?a=b", dict(c="d"))
     'http://example.com/foo?a=b&c=d'
+    >>> url_concat("http://example.com/foo?a=b", [("c", "d"), ("c", "d2")])
+    'http://example.com/foo?a=b&c=d&c=d2'
     """
     if not args:
         return url
@@ -775,7 +789,7 @@ def parse_request_start_line(line):
         method, path, version = line.split(" ")
     except ValueError:
         raise HTTPInputError("Malformed HTTP request line")
-    if not version.startswith("HTTP/"):
+    if not re.match(r"^HTTP/1\.[0-9]$", version):
         raise HTTPInputError(
             "Malformed HTTP version in HTTP Request-Line: %r" % version)
     return RequestStartLine(method, path, version)
@@ -794,7 +808,7 @@ def parse_response_start_line(line):
     ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')
     """
     line = native_str(line)
-    match = re.match("(HTTP/1.[01]) ([0-9]+) ([^\r]*)", line)
+    match = re.match("(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)", line)
     if not match:
         raise HTTPInputError("Error parsing response start line")
     return ResponseStartLine(match.group(1), int(match.group(2)),
@@ -866,3 +880,19 @@ def _encode_header(key, pdict):
 def doctests():
     import doctest
     return doctest.DocTestSuite()
+
+def split_host_and_port(netloc):
+    """Returns ``(host, port)`` tuple from ``netloc``.
+
+    Returned ``port`` will be ``None`` if not present.
+
+    .. versionadded:: 4.1
+    """
+    match = re.match(r'^(.+):(\d+)$', netloc)
+    if match:
+        host = match.group(1)
+        port = int(match.group(2))
+    else:
+        host = netloc
+        port = None
+    return (host, port)

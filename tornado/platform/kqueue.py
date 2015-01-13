@@ -54,8 +54,7 @@ class _KQueue(object):
         if events & IOLoop.WRITE:
             kevents.append(select.kevent(
                 fd, filter=select.KQ_FILTER_WRITE, flags=flags))
-        if events & IOLoop.READ or not kevents:
-            # Always read when there is not a write
+        if events & IOLoop.READ:
             kevents.append(select.kevent(
                 fd, filter=select.KQ_FILTER_READ, flags=flags))
         # Even though control() takes a list, it seems to return EINVAL

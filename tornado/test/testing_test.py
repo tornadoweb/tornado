@@ -3,7 +3,8 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 from tornado import gen, ioloop
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.log import app_log
+from tornado.testing import AsyncTestCase, gen_test, ExpectLog
 from tornado.test.util import unittest
 
 import contextlib
@@ -61,6 +62,17 @@ class AsyncTestCaseTest(AsyncTestCase):
         self.wait(timeout=0.02)
         self.io_loop.add_timeout(self.io_loop.time() + 0.03, self.stop)
         self.wait(timeout=0.15)
+
+    def test_multiple_errors(self):
+        def fail(message):
+            raise Exception(message)
+        self.io_loop.add_callback(lambda: fail("error one"))
+        self.io_loop.add_callback(lambda: fail("error two"))
+        # The first error gets raised; the second gets logged.
+        with ExpectLog(app_log, "multiple unhandled exceptions"):
+            with self.assertRaises(Exception) as cm:
+                self.wait()
+        self.assertEqual(str(cm.exception), "error one")
 
 
 class AsyncTestCaseWrapperTest(unittest.TestCase):

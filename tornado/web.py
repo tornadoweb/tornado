@@ -85,6 +85,7 @@ from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.util import import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
+from tornado.httputil import split_host_and_port
 
 
 try:
@@ -839,7 +840,7 @@ class RequestHandler(object):
                 for cookie in self._new_cookie.values():
                     self.add_header("Set-Cookie", cookie.OutputString(None))
 
-            start_line = httputil.ResponseStartLine(self.request.version,
+            start_line = httputil.ResponseStartLine('',
                                                     self._status_code,
                                                     self._reason)
             return self.request.connection.write_headers(
@@ -1477,7 +1478,7 @@ def asynchronous(method):
         with stack_context.ExceptionStackContext(
                 self._stack_context_handle_exception):
             result = method(self, *args, **kwargs)
-            if isinstance(result, Future):
+            if is_future(result):
                 # If @asynchronous is used with @gen.coroutine, (but
                 # not @gen.engine), we can automatically finish the
                 # request when the future resolves.  Additionally,
@@ -1518,7 +1519,7 @@ def stream_request_body(cls):
       the entire body has been read.
 
     There is a subtle interaction between ``data_received`` and asynchronous
-    ``prepare``: The first call to ``data_recieved`` may occur at any point
+    ``prepare``: The first call to ``data_received`` may occur at any point
     after the call to ``prepare`` has returned *or yielded*.
     """
     if not issubclass(cls, RequestHandler):
@@ -1729,7 +1730,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         self.transforms.append(transform_class)
 
     def _get_host_handlers(self, request):
-        host = request.host.lower().split(':')[0]
+        host = split_host_and_port(request.host.lower())[0]
         matches = []
         for pattern, handlers in self.handlers:
             if pattern.match(host):
@@ -1770,9 +1771,9 @@ class Application(httputil.HTTPServerConnectionDelegate):
                 except TypeError:
                     pass
 
-    def start_request(self, connection):
+    def start_request(self, server_conn, request_conn):
         # Modern HTTPServer interface
-        return _RequestDispatcher(self, connection)
+        return _RequestDispatcher(self, request_conn)
 
     def __call__(self, request):
         # Legacy HTTPServer interface
@@ -1845,7 +1846,7 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         handlers = app._get_host_handlers(self.request)
         if not handlers:
             self.handler_class = RedirectHandler
-            self.handler_kwargs = dict(url="http://" + app.default_host + "/")
+            self.handler_kwargs = dict(url="%s://%s/" % (self.request.protocol, app.default_host))
             return
         for spec in handlers:
             match = spec.regex.match(self.request.path)
@@ -2172,8 +2173,11 @@ class StaticFileHandler(RequestHandler):
             if isinstance(content, bytes):
                 content = [content]
             for chunk in content:
-                self.write(chunk)
-                yield self.flush()
+                try:
+                    self.write(chunk)
+                    yield self.flush()
+                except iostream.StreamClosedError:
+                    return
         else:
             assert self.request.method == "HEAD"
 

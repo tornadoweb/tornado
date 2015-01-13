@@ -14,13 +14,13 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
-from tornado.log import gen_log, app_log
+from tornado.log import gen_log
 from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -235,9 +235,16 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipOnTravis
     def test_request_timeout(self):
-        response = self.fetch('/trigger?wake=false', request_timeout=0.1)
+        timeout = 0.1
+        timeout_min, timeout_max = 0.099, 0.15
+        if os.name == 'nt':
+            timeout = 0.5
+            timeout_min, timeout_max = 0.4, 0.6
+
+        response = self.fetch('/trigger?wake=false', request_timeout=timeout)
         self.assertEqual(response.code, 599)
-        self.assertTrue(0.099 < response.request_time < 0.15, response.request_time)
+        self.assertTrue(timeout_min < response.request_time < timeout_max,
+                        response.request_time)
         self.assertEqual(str(response.error), "HTTP 599: Timeout")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
@@ -315,8 +322,8 @@ class SimpleHTTPClientTestMixin(object):
         self.assertTrue(host_re.match(response.body), response.body)
 
     def test_connection_refused(self):
-        server_socket, port = bind_unused_port()
-        server_socket.close()
+        cleanup_func, port = refusing_port()
+        self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
             self.http_client.fetch("http://localhost:%d/" % port, self.stop)
             response = self.wait()

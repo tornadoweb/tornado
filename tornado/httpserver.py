@@ -42,29 +42,10 @@ from tornado.tcpserver import TCPServer
 class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     r"""A non-blocking, single-threaded HTTP server.
 
-    A server is defined by either a request callback that takes a
-    `.HTTPServerRequest` as an argument or a `.HTTPServerConnectionDelegate`
-    instance.
-
-    A simple example server that echoes back the URI you requested::
-
-        import tornado.httpserver
-        import tornado.ioloop
-
-        def handle_request(request):
-           message = "You requested %s\n" % request.uri
-           request.connection.write_headers(
-               httputil.ResponseStartLine('HTTP/1.1', 200, 'OK'),
-               {"Content-Length": str(len(message))})
-           request.connection.write(message)
-           request.connection.finish()
-
-        http_server = tornado.httpserver.HTTPServer(handle_request)
-        http_server.listen(8888)
-        tornado.ioloop.IOLoop.instance().start()
-
-    Applications should use the methods of `.HTTPConnection` to write
-    their response.
+    A server is defined by a subclass of `.HTTPServerConnectionDelegate`,
+    or, for backwards compatibility, a callback that takes an
+    `.HTTPServerRequest` as an argument. The delegate is usually a
+    `tornado.web.Application`.
 
     `HTTPServer` supports keep-alive connections by default
     (automatically for HTTP/1.1, or for HTTP/1.0 when the client
@@ -133,6 +114,11 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
        ``idle_connection_timeout``, ``body_timeout``, ``max_body_size``
        arguments.  Added support for `.HTTPServerConnectionDelegate`
        instances as ``request_callback``.
+
+    .. versionchanged:: 4.1
+       `.HTTPServerConnectionDelegate.start_request` is now called with
+       two arguments ``(server_conn, request_conn)`` (in accordance with the
+       documentation) instead of one ``(request_conn)``.
     """
     def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
                  xheaders=False, ssl_options=None, protocol=None,
@@ -172,7 +158,7 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
         conn.start_serving(self)
 
     def start_request(self, server_conn, request_conn):
-        return _ServerRequestAdapter(self, request_conn)
+        return _ServerRequestAdapter(self, server_conn, request_conn)
 
     def on_close(self, server_conn):
         self._connections.remove(server_conn)
@@ -245,13 +231,14 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
     """Adapts the `HTTPMessageDelegate` interface to the interface expected
     by our clients.
     """
-    def __init__(self, server, connection):
+    def __init__(self, server, server_conn, request_conn):
         self.server = server
-        self.connection = connection
+        self.connection = request_conn
         self.request = None
         if isinstance(server.request_callback,
                       httputil.HTTPServerConnectionDelegate):
-            self.delegate = server.request_callback.start_request(connection)
+            self.delegate = server.request_callback.start_request(
+                server_conn, request_conn)
             self._chunks = None
         else:
             self.delegate = None

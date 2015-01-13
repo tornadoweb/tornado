@@ -331,7 +331,7 @@ class BaseIOStream(object):
         if data:
             if (self.max_write_buffer_size is not None and
                     self._write_buffer_size + len(data) > self.max_write_buffer_size):
-                raise StreamBufferFullError("Reached maximum read buffer size")
+                raise StreamBufferFullError("Reached maximum write buffer size")
             # Break up large contiguous strings before inserting them in the
             # write buffer, so we don't have to recopy the entire thing
             # as we slice off pieces to send to the socket.
@@ -554,7 +554,7 @@ class BaseIOStream(object):
             # Pretend to have a pending callback so that an EOF in
             # _read_to_buffer doesn't trigger an immediate close
             # callback.  At the end of this method we'll either
-            # estabilsh a real pending callback via
+            # establish a real pending callback via
             # _read_from_buffer or run the close callback.
             #
             # We need two try statements here so that
@@ -993,6 +993,11 @@ class IOStream(BaseIOStream):
 
         """
         self._connecting = True
+        if callback is not None:
+            self._connect_callback = stack_context.wrap(callback)
+            future = None
+        else:
+            future = self._connect_future = TracebackFuture()
         try:
             self.socket.connect(address)
         except socket.error as e:
@@ -1008,12 +1013,7 @@ class IOStream(BaseIOStream):
                 gen_log.warning("Connect error on fd %s: %s",
                                 self.socket.fileno(), e)
                 self.close(exc_info=True)
-                return
-        if callback is not None:
-            self._connect_callback = stack_context.wrap(callback)
-            future = None
-        else:
-            future = self._connect_future = TracebackFuture()
+                return future
         self._add_io_state(self.io_loop.WRITE)
         return future
 
@@ -1058,7 +1058,9 @@ class IOStream(BaseIOStream):
         socket = self.socket
         self.io_loop.remove_handler(socket)
         self.socket = None
-        socket = ssl_wrap_socket(socket, ssl_options, server_side=server_side,
+        socket = ssl_wrap_socket(socket, ssl_options,
+                                 server_hostname=server_hostname,
+                                 server_side=server_side,
                                  do_handshake_on_connect=False)
         orig_close_callback = self._close_callback
         self._close_callback = None

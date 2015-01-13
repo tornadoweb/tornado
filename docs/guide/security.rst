@@ -50,7 +50,7 @@ cookies.
 
 By default, Tornado's secure cookies expire after 30 days.  To change this,
 use the ``expires_days`` keyword argument to ``set_secure_cookie`` *and* the
-``max_age_days`` argument to ``set_secure_cookie``.  These two values are
+``max_age_days`` argument to ``get_secure_cookie``.  These two values are
 passed separately so that you may e.g. have a cookie that is valid for 30 days
 for most purposes, but for certain sensitive actions (such as changing billing
 information) you use a smaller ``max_age_days`` when reading the cookie.

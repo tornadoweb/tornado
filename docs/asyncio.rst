@@ -15,6 +15,12 @@ default ``asyncio`` event loop.  Applications that need to run event
 loops on multiple threads may use `AsyncIOLoop` to create multiple
 loops.
 
+.. note::
+
+   Tornado requires the `~asyncio.BaseEventLoop.add_reader` family of methods,
+   so it is not compatible with the `~asyncio.ProactorEventLoop` on Windows.
+   Use the `~asyncio.SelectorEventLoop` instead.
+
 .. py:class:: AsyncIOMainLoop
 
     ``AsyncIOMainLoop`` creates an `.IOLoop` that corresponds to the
