@@ -543,6 +543,9 @@ class LogTrapTestCase(unittest.TestCase):
     `logging.basicConfig` and the "pretty logging" configured by
     `tornado.options`.  It is not compatible with other log buffering
     mechanisms, such as those provided by some test runners.
+
+    .. deprecated:: 4.1
+       Use the unittest module's ``--buffer`` option instead, or `.ExpectLog`.
     """
     def run(self, result=None):
         logger = logging.getLogger()
