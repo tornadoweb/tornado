@@ -107,8 +107,10 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             self.resolver.close()
         self.tcp_client.close()
 
-    def fetch_impl(self, request, callback):
+    def fetch_impl(self, request, callback, future=None):
         key = object()
+        if future:
+            future.set_cancel_callback(functools.partial(self._on_cancel, key))
         self.queue.append((key, request, callback))
         if not len(self.active) < self.max_clients:
             timeout_handle = self.io_loop.add_timeout(
@@ -131,12 +133,12 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 if key not in self.waiting:
                     continue
                 self._remove_timeout(key)
-                self.active[key] = (request, callback)
                 release_callback = functools.partial(self._release_fetch, key)
-                self._handle_request(request, release_callback, callback)
+                connection = self._handle_request(request, release_callback, callback)
+                self.active[key] = (request, callback, connection)
 
     def _handle_request(self, request, release_callback, final_callback):
-        _HTTPConnection(self.io_loop, self, request, release_callback,
+        return _HTTPConnection(self.io_loop, self, request, release_callback,
                         final_callback, self.max_buffer_size, self.tcp_client,
                         self.max_header_size)
 
@@ -159,6 +161,21 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             request_time=self.io_loop.time() - request.start_time)
         self.io_loop.add_callback(callback, timeout_response)
         del self.waiting[key]
+
+    def _on_cancel(self, key):
+        if key in self.active:
+            request, callback, connection = self.active[key]
+            connection.finish()
+            return True
+        elif key in self.waiting:
+            request, callback, timeout_handle = self.waiting[key]
+
+            # Can't timeout if it doesn't need to run anymore.
+            self._remove_timeout(key)
+            # Dequeue it since it's over.
+            self.queue.remove((key, request, callback))
+            return True
+        return False
 
 
 class _HTTPConnection(httputil.HTTPMessageDelegate):

@@ -250,10 +250,10 @@ class AsyncHTTPClient(Configurable):
                 future.set_exception(response.error)
             else:
                 future.set_result(response)
-        self.fetch_impl(request, handle_response)
+        self.fetch_impl(request, handle_response, future)
         return future
 
-    def fetch_impl(self, request, callback):
+    def fetch_impl(self, request, callback, future=None):
         raise NotImplementedError()
 
     @classmethod
