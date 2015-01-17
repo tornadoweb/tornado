@@ -1915,9 +1915,10 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         # trapped in the Future it returns (which we are ignoring here).
         # However, that shouldn't happen because _execute has a blanket
         # except handler, and we cannot easily access the IOLoop here to
-        # call add_future.
+        # call add_future (because of the requirement to remain compatible
+        # with WSGI)
         f = self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
-        f.add_done_callback(lambda f: f.exception()) # XXX
+        f.add_done_callback(lambda f: f.exception())
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)

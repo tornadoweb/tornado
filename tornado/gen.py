@@ -56,6 +56,7 @@ import types
 
 from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
+from tornado.log import app_log
 from tornado import stack_context
 
 
@@ -504,7 +505,7 @@ def maybe_future(x):
         return fut
 
 
-def with_timeout(timeout, future, io_loop=None):
+def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
     """Wraps a `.Future` in a timeout.
 
     Raises `TimeoutError` if the input future does not complete before
@@ -512,9 +513,17 @@ def with_timeout(timeout, future, io_loop=None):
     `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
     relative to `.IOLoop.time`)
 
+    If the wrapped `.Future` fails after it has timed out, the exception
+    will be logged unless it is of a type contained in ``quiet_exceptions``
+    (which may be an exception type or a sequence of types).
+
     Currently only supports Futures, not other `YieldPoint` classes.
 
     .. versionadded:: 4.0
+
+    .. versionchanged:: 4.1
+       Added the ``quiet_exceptions`` argument and the logging of unhandled
+       exceptions.
     """
     # TODO: allow yield points in addition to futures?
     # Tricky to do with stack_context semantics.
@@ -528,9 +537,17 @@ def with_timeout(timeout, future, io_loop=None):
     chain_future(future, result)
     if io_loop is None:
         io_loop = IOLoop.current()
+    def error_callback(future):
+        try:
+            future.result()
+        except Exception as e:
+            if not isinstance(e, quiet_exceptions):
+                app_log.error("Exception in Future %r after timeout",
+                              future, exc_info=True)
     def timeout_callback():
         result.set_exception(TimeoutError("Timeout"))
-        future.add_done_callback(lambda f: f.exception())
+        # In case the wrapped future goes on to fail, log it.
+        future.add_done_callback(error_callback)
     timeout_handle = io_loop.add_timeout(
         timeout, timeout_callback)
     if isinstance(future, Future):

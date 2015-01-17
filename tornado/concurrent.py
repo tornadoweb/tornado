@@ -149,6 +149,14 @@ class Future(object):
        if that package was available and fall back to the thread-unsafe
        implementation if it was not.
 
+    .. versionchanged:: 4.1
+       If a `.Future` contains an error but that error is never observed
+       (by calling ``result()``, ``exception()``, or ``exc_info()``),
+       a stack trace will be logged when the `.Future` is garbage collected.
+       This normally indicates an error in the application, but in cases
+       where it results in undesired logging it may be necessary to
+       suppress the logging by ensuring that the exception is observed:
+       ``f.add_done_callback(lambda f: f.exception())``.
     """
     def __init__(self):
         self._done = False
@@ -412,11 +420,7 @@ def return_future(f):
             # If the initial synchronous part of f() raised an exception,
             # go ahead and raise it to the caller directly without waiting
             # for them to inspect the Future.
-            #
-            # "Consume" the exception from the future so it will not be logged
-            # as uncaught.
-            future.exception()
-            raise_exc_info(exc_info)
+            future.result()
 
         # If the caller passed in a callback, schedule it to be called
         # when the future resolves.  It is important that this happens
