@@ -70,7 +70,8 @@ class TornadoTextTestRunner(unittest.TextTestRunner):
 class LogCounter(logging.Filter):
     """Counts the number of WARNING or higher log records."""
     def __init__(self, *args, **kwargs):
-        super(LogCounter, self).__init__(*args, **kwargs)
+        # Can't use super() because logging.Filter is an old-style class in py26
+        logging.Filter.__init__(self, *args, **kwargs)
         self.warning_count = self.error_count = 0
 
     def filter(self, record):
