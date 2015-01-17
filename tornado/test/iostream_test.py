@@ -881,7 +881,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
         with ExpectLog(gen_log, "SSL Error"):
             with self.assertRaises(ssl.SSLError):
                 yield client_future
-        with self.assertRaises(ssl.SSLError):
+        with self.assertRaises((ssl.SSLError, socket.error)):
             yield server_future
 
 
@@ -899,7 +899,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
         with ExpectLog(gen_log, "SSL Error"):
             with self.assertRaises(ssl.SSLError):
                 yield client_future
-        with self.assertRaises(ssl.SSLError):
+        with self.assertRaises((ssl.SSLError, socket.error)):
             yield server_future
 
 
