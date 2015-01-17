@@ -249,7 +249,8 @@ class TestIOStreamMixin(object):
         # opendns and some ISPs return bogus addresses for nonexistent
         # domains instead of the proper error codes).
         with ExpectLog(gen_log, "Connect error"):
-            stream.connect(('an invalid domain', 54321))
+            stream.connect(('an invalid domain', 54321), callback=self.stop)
+            self.wait()
             self.assertTrue(isinstance(stream.error, socket.gaierror), stream.error)
 
     def test_read_callback_error(self):
@@ -874,12 +875,14 @@ class TestIOStreamStartTLS(AsyncTestCase):
 
     @gen_test
     def test_handshake_fail(self):
-        self.server_start_tls(_server_ssl_options())
+        server_future = self.server_start_tls(_server_ssl_options())
         client_future = self.client_start_tls(
             dict(cert_reqs=ssl.CERT_REQUIRED, ca_certs=certifi.where()))
         with ExpectLog(gen_log, "SSL Error"):
             with self.assertRaises(ssl.SSLError):
                 yield client_future
+        with self.assertRaises(ssl.SSLError):
+            yield server_future
 
 
     @unittest.skipIf(not hasattr(ssl, 'create_default_context'),

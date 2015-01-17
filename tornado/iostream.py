@@ -230,6 +230,12 @@ class BaseIOStream(object):
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
             self.close(exc_info=True)
             return future
+        except:
+            if future is not None:
+                # Ensure that the future doesn't log an error because its
+                # failure was never examined.
+                future.add_done_callback(lambda f: f.exception())
+            raise
         return future
 
     def read_until(self, delimiter, callback=None, max_bytes=None):
@@ -257,6 +263,10 @@ class BaseIOStream(object):
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
             self.close(exc_info=True)
             return future
+        except:
+            if future is not None:
+                future.add_done_callback(lambda f: f.exception())
+            raise
         return future
 
     def read_bytes(self, num_bytes, callback=None, streaming_callback=None,
@@ -281,7 +291,12 @@ class BaseIOStream(object):
         self._read_bytes = num_bytes
         self._read_partial = partial
         self._streaming_callback = stack_context.wrap(streaming_callback)
-        self._try_inline_read()
+        try:
+            self._try_inline_read()
+        except:
+            if future is not None:
+                future.add_done_callback(lambda f: f.exception())
+            raise
         return future
 
     def read_until_close(self, callback=None, streaming_callback=None):
@@ -305,7 +320,11 @@ class BaseIOStream(object):
             self._run_read_callback(self._read_buffer_size, False)
             return future
         self._read_until_close = True
-        self._try_inline_read()
+        try:
+            self._try_inline_read()
+        except:
+            future.add_done_callback(lambda f: f.exception())
+            raise
         return future
 
     def write(self, data, callback=None):
@@ -344,6 +363,7 @@ class BaseIOStream(object):
             future = None
         else:
             future = self._write_future = TracebackFuture()
+            future.add_done_callback(lambda f: f.exception())
         if not self._connecting:
             self._handle_write()
             if self._write_buffer:

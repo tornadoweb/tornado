@@ -67,6 +67,20 @@ class TornadoTextTestRunner(unittest.TextTestRunner):
         return result
 
 
+class LogCounter(logging.Filter):
+    """Counts the number of WARNING or higher log records."""
+    def __init__(self, *args, **kwargs):
+        super(LogCounter, self).__init__(*args, **kwargs)
+        self.warning_count = self.error_count = 0
+
+    def filter(self, record):
+        if record.levelno >= logging.ERROR:
+            self.error_count += 1
+        elif record.levelno >= logging.WARNING:
+            self.warning_count += 1
+        return True
+
+
 def main():
     # The -W command-line option does not work in a virtualenv with
     # python 3 (as of virtualenv 1.7), so configure warnings
@@ -125,6 +139,10 @@ def main():
             IOLoop.configure(options.ioloop, **kwargs)
     add_parse_callback(configure_ioloop)
 
+    log_counter = LogCounter()
+    add_parse_callback(
+        lambda: logging.getLogger().handlers[0].addFilter(log_counter))
+
     import tornado.testing
     kwargs = {}
     if sys.version_info >= (3, 2):
@@ -135,7 +153,16 @@ def main():
         # detail.  http://bugs.python.org/issue15626
         kwargs['warnings'] = False
     kwargs['testRunner'] = TornadoTextTestRunner
-    tornado.testing.main(**kwargs)
+    try:
+        tornado.testing.main(**kwargs)
+    finally:
+        # The tests should run clean; consider it a failure if they logged
+        # any warnings or errors. We'd like to ban info logs too, but
+        # we can't count them cleanly due to interactions with LogTrapTestCase.
+        if log_counter.warning_count > 0 or log_counter.error_count > 0:
+            logging.error("logged %d warnings and %d errors",
+                          log_counter.warning_count, log_counter.error_count)
+            sys.exit(1)
 
 if __name__ == '__main__':
     main()

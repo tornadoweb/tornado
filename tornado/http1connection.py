@@ -162,7 +162,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                     header_data = yield gen.with_timeout(
                         self.stream.io_loop.time() + self.params.header_timeout,
                         header_future,
-                        io_loop=self.stream.io_loop)
+                        io_loop=self.stream.io_loop,
+                        quiet_exceptions=iostream.StreamClosedError)
                 except gen.TimeoutError:
                     self.close()
                     raise gen.Return(False)
@@ -221,7 +222,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                         try:
                             yield gen.with_timeout(
                                 self.stream.io_loop.time() + self._body_timeout,
-                                body_future, self.stream.io_loop)
+                                body_future, self.stream.io_loop,
+                                quiet_exceptions=iostream.StreamClosedError)
                         except gen.TimeoutError:
                             gen_log.info("Timeout reading body from %s",
                                          self.context)
@@ -376,6 +378,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self.stream.closed():
             future = self._write_future = Future()
             future.set_exception(iostream.StreamClosedError())
+            future.exception()
         else:
             if callback is not None:
                 self._write_callback = stack_context.wrap(callback)
@@ -414,6 +417,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self.stream.closed():
             future = self._write_future = Future()
             self._write_future.set_exception(iostream.StreamClosedError())
+            self._write_future.exception()
         else:
             if callback is not None:
                 self._write_callback = stack_context.wrap(callback)
@@ -453,6 +457,9 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._pending_write.add_done_callback(self._finish_request)
 
     def _on_write_complete(self, future):
+        exc = future.exception()
+        if exc is not None and not isinstance(exc, iostream.StreamClosedError):
+            future.result()
         if self._write_callback is not None:
             callback = self._write_callback
             self._write_callback = None

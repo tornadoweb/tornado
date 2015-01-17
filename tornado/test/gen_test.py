@@ -1039,7 +1039,7 @@ class WithTimeoutTest(AsyncTestCase):
         future = Future()
         self.io_loop.add_timeout(
             datetime.timedelta(seconds=0.1),
-            lambda: future.set_exception(ZeroDivisionError))
+            lambda: future.set_exception(ZeroDivisionError()))
         with self.assertRaises(ZeroDivisionError):
             yield gen.with_timeout(datetime.timedelta(seconds=3600), future)
 
