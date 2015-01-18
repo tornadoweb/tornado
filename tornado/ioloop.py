@@ -970,6 +970,10 @@ class PeriodicCallback(object):
             self._timeout = None
 
     def is_running(self):
+        """Return True if this `.PeriodicCallback` has been started.
+
+        .. versionadded:: 4.1
+        """
         return self._running
 
     def _run(self):
