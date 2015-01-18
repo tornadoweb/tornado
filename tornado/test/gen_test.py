@@ -1070,18 +1070,13 @@ class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_empty_iterator(self):
         g = gen.WaitIterator()
-        for i in g:
-            self.assertTrue(True, 'empty generator iterated')
+        self.assertTrue(g.done(), 'empty generator iterated')
 
-        try:
+        with self.assertRaises(ValueError):
             g = gen.WaitIterator(False, bar=False)
-        except ValueError:
-            pass
-        else:
-            self.assertTrue(True, 'missed incompatible args')
 
-        self.assertEqual(g.current_index(), None, "bad nil current index")
-        self.assertEqual(g.current_future(), None, "bad nil current future")
+        self.assertEqual(g.current_index, None, "bad nil current index")
+        self.assertEqual(g.current_future, None, "bad nil current future")
 
     @gen_test
     def test_already_done(self):
@@ -1094,43 +1089,45 @@ class WaitIteratorTest(AsyncTestCase):
 
         g = gen.WaitIterator(f1, f2, f3)
         i = 0
-        for f in g:
-            r = yield f
+        while not g.done():
+            r = yield g.next()
+            # Order is not guaranteed, but the current implementation
+            # preserves ordering of already-done Futures.
             if i == 0:
-                self.assertTrue(
-                    all([g.current_index()==0, g.current_future()==f1, r==24]),
-                    "WaitIterator status incorrect")
+                self.assertEqual(g.current_index, 0)
+                self.assertIs(g.current_future, f1)
+                self.assertEqual(r, 24)
             elif i == 1:
-                self.assertTrue(
-                    all([g.current_index()==1, g.current_future()==f2, r==42]),
-                    "WaitIterator status incorrect")
+                self.assertEqual(g.current_index, 1)
+                self.assertIs(g.current_future, f2)
+                self.assertEqual(r, 42)
             elif i == 2:
-                self.assertTrue(
-                    all([g.current_index()==2, g.current_future()==f3, r==84]),
-                    "WaitIterator status incorrect")
+                self.assertEqual(g.current_index, 2)
+                self.assertIs(g.current_future, f3)
+                self.assertEqual(r, 84)
             i += 1
 
-        self.assertEqual(g.current_index(), None, "bad nil current index")
-        self.assertEqual(g.current_future(), None, "bad nil current future")
+        self.assertEqual(g.current_index, None, "bad nil current index")
+        self.assertEqual(g.current_future, None, "bad nil current future")
 
         dg = gen.WaitIterator(f1=f1, f2=f2)
 
-        for df in dg:
-            dr = yield df
-            if dg.current_index() == "f1":
-                self.assertTrue(dg.current_future()==f1 and dr==24,
+        while not dg.done():
+            dr = yield dg.next()
+            if dg.current_index == "f1":
+                self.assertTrue(dg.current_future==f1 and dr==24,
                                 "WaitIterator dict status incorrect")
-            elif dg.current_index() == "f2":
-                self.assertTrue(dg.current_future()==f2 and dr==42,
+            elif dg.current_index == "f2":
+                self.assertTrue(dg.current_future==f2 and dr==42,
                                 "WaitIterator dict status incorrect")
             else:
-                self.assertTrue(False, "got bad WaitIterator index {}".format(
-                    dg.current_index()))
+                self.fail("got bad WaitIterator index {}".format(
+                    dg.current_index))
 
             i += 1
 
-        self.assertEqual(dg.current_index(), None, "bad nil current index")
-        self.assertEqual(dg.current_future(), None, "bad nil current future")
+        self.assertEqual(dg.current_index, None, "bad nil current index")
+        self.assertEqual(dg.current_future, None, "bad nil current future")
 
     def finish_coroutines(self, iteration, futures):
         if iteration == 3:
@@ -1153,22 +1150,22 @@ class WaitIteratorTest(AsyncTestCase):
         g = gen.WaitIterator(*futures)
 
         i = 0
-        for f in g:
+        while not g.done():
             try:
-                r = yield f
+                r = yield g.next()
             except ZeroDivisionError:
-                self.assertEqual(g.current_future(), futures[0],
-                                 'exception future invalid')
+                self.assertIs(g.current_future, futures[0],
+                              'exception future invalid')
             else:
                 if i == 0:
                     self.assertEqual(r, 24, 'iterator value incorrect')
-                    self.assertEqual(g.current_index(), 2, 'wrong index')
+                    self.assertEqual(g.current_index, 2, 'wrong index')
                 elif i == 2:
                     self.assertEqual(r, 42, 'iterator value incorrect')
-                    self.assertEqual(g.current_index(), 1, 'wrong index')
+                    self.assertEqual(g.current_index, 1, 'wrong index')
                 elif i == 3:
                     self.assertEqual(r, 84, 'iterator value incorrect')
-                    self.assertEqual(g.current_index(), 3, 'wrong index')
+                    self.assertEqual(g.current_index, 3, 'wrong index')
             i += 1
 
 if __name__ == '__main__':

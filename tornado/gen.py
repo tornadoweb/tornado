@@ -243,7 +243,7 @@ class Return(Exception):
         self.value = value
 
 class WaitIterator(object):
-    """Provides an iterator to yield the results of futures as they finish
+    """Provides an iterator to yield the results of futures as they finish.
 
     Yielding a set of futures like this:
 
@@ -261,21 +261,26 @@ class WaitIterator(object):
     ::
 
       wait_iterator = gen.WaitIterator(future1, future2)
-      for future in wait_iterator:
+      while not wait_iterator.done():
           try:
-              result = yield future
+              result = yield wait_iterator.next()
           except Exception as e:
-              print "Error {} from {}".format(e, wait_iterator.current_future())
+              print "Error {} from {}".format(e, wait_iterator.current_future)
           else:
               print "Result {} recieved from {} at {}".format(
-                  result, wait_iterator.current_future(), wait_iterator.current_index())
+                  result, wait_iterator.current_future,
+                  wait_iterator.current_index)
 
     Because results are returned as soon as they are available the
     output from the iterator *will not be in the same order as the
     input arguments*. If you need to know which future produced the
-    current result, you can use ``WaitIterator.current_future()``, or
-    ``WaitIterator.current_index()`` to yield the index of the future
-    from the input list.
+    current result, you can use the attributes
+    ``WaitIterator.current_future``, or ``WaitIterator.current_index``
+    to get the index of the future from the input list. (if keyword
+    arguments were used in the construction of the `WaitIterator`,
+    ``current_index`` will use the corresponding keyword).
+
+    .. versionadded:: 4.1
     """
     def __init__(self, *args, **kwargs):
         if args and kwargs:
@@ -283,61 +288,40 @@ class WaitIterator(object):
                 "You must provide args or kwargs, not both")
 
         if kwargs:
-            self._keys, self._futures = list(), list()
-            for k, v in kwargs.items():
-                self._keys.append(k)
-                self._futures.append(v)
+            self._unfinished = dict((f, k) for (k, f) in kwargs.items())
+            futures = list(kwargs.values())
         else:
-            self._keys = None
-            self._futures = list(args)
+            self._unfinished = dict((f, i) for (i, f) in enumerate(args))
+            futures = args
 
-        self._queue = collections.deque()
-        self._current_future = None
+        self._finished = collections.deque()
+        self.current_index = self.current_future = None
+        self._running_future = None
 
-        for future in self._futures:
-            if future.done():
-                self._queue.append(future)
-            else:
-                self_ref = weakref.ref(self)
-                future.add_done_callback(functools.partial(
-                        self._done_callback, self_ref))
+        self_ref = weakref.ref(self)
+        for future in futures:
+            future.add_done_callback(functools.partial(
+                self._done_callback, self_ref))
 
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return self.next()
+    def done(self):
+        if self._finished or self._unfinished:
+            return False
+        # Clear the 'current' values when iteration is done.
+        self.current_index = self.current_future = None
+        return True
 
     def next(self):
-        """Returns a `.Future` that will yield the next available
-        result.
-        """
-        if all(x is None for x in self._futures):
-            self._current_future = None
-            raise StopIteration
+        """Returns a `.Future` that will yield the next available result.
 
+        Note that this `.Future` will not be the same object as any of
+        the inputs.
+        """
         self._running_future = TracebackFuture()
 
-        try:
-            done = self._queue.popleft()
-            self._return_result(done)
-        except IndexError:
-            pass
+        if self._finished:
+            self._return_result(self._finished.popleft())
 
         return self._running_future
-
-    def current_index(self):
-        """Returns the index of the current `.Future` from the
-        argument list. If keyword arguments were used, the keyword
-        will be returned.
-        """
-        if self._current_future:
-            return self._current_future[0]
-
-    def current_future(self):
-        """Returns the current `.Future` object."""
-        if self._current_future:
-            return self._current_future[1]
 
     @staticmethod
     def _done_callback(self_ref, done):
@@ -346,26 +330,17 @@ class WaitIterator(object):
             if self._running_future and not self._running_future.done():
                 self._return_result(done)
             else:
-                self._queue.append(done)
+                self._finished.append(done)
 
     def _return_result(self, done):
         """Called set the returned future's state that of the future
         we yielded, and set the current future for the iterator.
         """
-        exception = done.exception()
-        if exception:
-            self._running_future.set_exception(exception)
-        else:
-            self._running_future.set_result(done.result())
+        chain_future(done, self._running_future)
 
-        index = self._futures.index(done)
-        ## Eliminate the reference for GC
-        self._futures[index] = None
+        self.current_future = done
+        self.current_index = self._unfinished.pop(done)
 
-        if self._keys:
-            index = self._keys[index]
-
-        self._current_future = (index, done)
 
 class YieldPoint(object):
     """Base class for objects that may be yielded from the generator.
