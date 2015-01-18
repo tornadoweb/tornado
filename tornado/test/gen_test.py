@@ -1066,6 +1066,110 @@ class WithTimeoutTest(AsyncTestCase):
             yield gen.with_timeout(datetime.timedelta(seconds=3600),
                                    executor.submit(lambda: None))
 
+class WaitIteratorTest(AsyncTestCase):
+    @gen_test
+    def test_empty_iterator(self):
+        g = gen.WaitIterator()
+        for i in g:
+            self.assertTrue(True, 'empty generator iterated')
+
+        try:
+            g = gen.WaitIterator(False, bar=False)
+        except ValueError:
+            pass
+        else:
+            self.assertTrue(True, 'missed incompatible args')
+
+        self.assertEqual(g.current_index(), None, "bad nil current index")
+        self.assertEqual(g.current_future(), None, "bad nil current future")
+
+    @gen_test
+    def test_already_done(self):
+        f1 = Future()
+        f2 = Future()
+        f3 = Future()
+        f1.set_result(24)
+        f2.set_result(42)
+        f3.set_result(84)
+        
+        g = gen.WaitIterator(f1, f2, f3)
+        i = 0
+        for f in g:
+            r = yield f
+            if i == 0:
+                self.assertTrue(
+                    all([g.current_index()==0, g.current_future()==f1, r==24]),
+                    "WaitIterator status incorrect")
+            elif i == 1:
+                self.assertTrue(
+                    all([g.current_index()==1, g.current_future()==f2, r==42]),
+                    "WaitIterator status incorrect")
+            elif i == 2:
+                self.assertTrue(
+                    all([g.current_index()==2, g.current_future()==f3, r==84]),
+                    "WaitIterator status incorrect")
+            i += 1
+
+        self.assertEqual(g.current_index(), None, "bad nil current index")
+        self.assertEqual(g.current_future(), None, "bad nil current future")
+
+        dg = gen.WaitIterator(f1=f1, f2=f2)
+                        
+        for df in dg:
+            dr = yield df
+            if dg.current_index() == "f1":
+                self.assertTrue(dg.current_future()==f1 and dr==24,
+                                "WaitIterator dict status incorrect")
+            elif dg.current_index() == "f2":
+                self.assertTrue(dg.current_future()==f2 and dr==42,
+                                "WaitIterator dict status incorrect")
+            else:
+                self.assertTrue(False, "got bad WaitIterator index {}".format(
+                    dg.current_index()))
+
+            i += 1
+
+        self.assertEqual(dg.current_index(), None, "bad nil current index")
+        self.assertEqual(dg.current_future(), None, "bad nil current future")
+
+    def finish_coroutines(self, iteration, futures):
+        if iteration == 3:
+            futures[2].set_result(24)
+        elif iteration == 5:
+            futures[0].set_exception(ZeroDivisionError)
+        elif iteration == 8:
+            futures[1].set_result(42)
+            futures[3].set_result(84)
+
+        if iteration < 8:
+            self.io_loop.add_callback(self.finish_coroutines, iteration+1, futures)
+
+    @gen_test
+    def test_iterator(self):
+        futures = [Future(), Future(), Future(), Future()]
+        
+        self.finish_coroutines(0, futures)
+
+        g = gen.WaitIterator(*futures)
+
+        i = 0
+        for f in g:
+            try:
+                r = yield f
+            except ZeroDivisionError:
+                self.assertEqual(g.current_future(), futures[0],
+                                 'exception future invalid')
+            else:
+                if i == 0:
+                    self.assertEqual(r, 24, 'iterator value incorrect')
+                    self.assertEqual(g.current_index(), 2, 'wrong index')
+                elif i == 2:
+                    self.assertEqual(r, 42, 'iterator value incorrect')
+                    self.assertEqual(g.current_index(), 1, 'wrong index')
+                elif i == 3:
+                    self.assertEqual(r, 84, 'iterator value incorrect')
+                    self.assertEqual(g.current_index(), 3, 'wrong index')
+            i += 1
 
 if __name__ == '__main__':
     unittest.main()
