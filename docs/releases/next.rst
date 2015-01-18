@@ -66,3 +66,24 @@ In progress
 * Header parsing again supports both CRLF and bare LF line separators.
 * `.HTTPServer` now always reports ``HTTP/1.1`` instead of echoing
   the request version.
+* If a `.Future` contains an exception but that exception is never
+  examined or re-raised (e.g. by yielding the `.Future`), a stack
+  trace will be logged when the `.Future` is garbage-collected.
+* `.IOStream.start_tls` now uses the ``server_hostname`` parameter
+  for certificate validation.
+* Malformed ``_xsrf`` cookies are now ignored instead of causing
+  uncaught exceptions.
+* `.Application.start_request` now has the same signature as
+  `.HTTPServerConnectionDelegate.start_request`.
+* `.HTTPServer` now calls ``start_request`` with the correct
+  arguments.  This change is backwards-incompatible, afffecting any
+  application which implemented `.HTTPServerConnectionDelegate` by
+  following the example of `.Application` instead of the documented
+  method signatures.
+* New method `.PeriodicCallback.is_running` can be used to see
+  whether the `.PeriodicCallback` has been started.
+* `.TCPClient` will no longer raise an exception due to an ill-timed
+  timeout.
+* Malformed ``multipart/form-data`` bodies will always be logged
+  quietly instead of raising an unhandled exception; previously
+  the behavior was inconsistent depending on the exact error.
