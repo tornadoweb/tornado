@@ -696,14 +696,17 @@ def parse_body_arguments(content_type, body, arguments, files, headers=None):
             if values:
                 arguments.setdefault(name, []).extend(values)
     elif content_type.startswith("multipart/form-data"):
-        fields = content_type.split(";")
-        for field in fields:
-            k, sep, v = field.strip().partition("=")
-            if k == "boundary" and v:
-                parse_multipart_form_data(utf8(v), body, arguments, files)
-                break
-        else:
-            gen_log.warning("Invalid multipart/form-data")
+        try:
+            fields = content_type.split(";")
+            for field in fields:
+                k, sep, v = field.strip().partition("=")
+                if k == "boundary" and v:
+                    parse_multipart_form_data(utf8(v), body, arguments, files)
+                    break
+            else:
+                raise ValueError("multipart boundary not found")
+        except Exception as e:
+            gen_log.warning("Invalid multipart/form-data: %s", e)
 
 
 def parse_multipart_form_data(boundary, data, arguments, files):
