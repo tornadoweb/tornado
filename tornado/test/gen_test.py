@@ -1091,7 +1091,7 @@ class WaitIteratorTest(AsyncTestCase):
         f1.set_result(24)
         f2.set_result(42)
         f3.set_result(84)
-        
+
         g = gen.WaitIterator(f1, f2, f3)
         i = 0
         for f in g:
@@ -1114,7 +1114,7 @@ class WaitIteratorTest(AsyncTestCase):
         self.assertEqual(g.current_future(), None, "bad nil current future")
 
         dg = gen.WaitIterator(f1=f1, f2=f2)
-                        
+
         for df in dg:
             dr = yield df
             if dg.current_index() == "f1":
@@ -1136,7 +1136,7 @@ class WaitIteratorTest(AsyncTestCase):
         if iteration == 3:
             futures[2].set_result(24)
         elif iteration == 5:
-            futures[0].set_exception(ZeroDivisionError)
+            futures[0].set_exception(ZeroDivisionError())
         elif iteration == 8:
             futures[1].set_result(42)
             futures[3].set_result(84)
@@ -1147,7 +1147,7 @@ class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_iterator(self):
         futures = [Future(), Future(), Future(), Future()]
-        
+
         self.finish_coroutines(0, futures)
 
         g = gen.WaitIterator(*futures)

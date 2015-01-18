@@ -287,14 +287,13 @@ class WaitIterator(object):
             for k, v in kwargs.items():
                 self._keys.append(k)
                 self._futures.append(v)
-            
         else:
             self._keys = None
             self._futures = list(args)
-            
+
         self._queue = collections.deque()
         self._current_future = None
-        
+
         for future in self._futures:
             if future.done():
                 self._queue.append(future)
@@ -326,7 +325,7 @@ class WaitIterator(object):
             pass
 
         return self._running_future
-    
+
     def current_index(self):
         """Returns the index of the current `.Future` from the
         argument list. If keyword arguments were used, the keyword
@@ -334,7 +333,7 @@ class WaitIterator(object):
         """
         if self._current_future:
             return self._current_future[0]
-            
+
     def current_future(self):
         """Returns the current `.Future` object."""
         if self._current_future:
@@ -362,10 +361,10 @@ class WaitIterator(object):
         index = self._futures.index(done)
         ## Eliminate the reference for GC
         self._futures[index] = None
-        
+
         if self._keys:
             index = self._keys[index]
-        
+
         self._current_future = (index, done)
 
 class YieldPoint(object):
