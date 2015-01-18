@@ -372,6 +372,11 @@ def Task(func, *args, **kwargs):
 
 class YieldFuture(YieldPoint):
     def __init__(self, future, io_loop=None):
+        """Adapts a `.Future` to the `YieldPoint` interface.
+
+        .. versionchanged:: 4.1
+           The ``io_loop`` argument is deprecated.
+        """
         self.future = future
         self.io_loop = io_loop or IOLoop.current()
 

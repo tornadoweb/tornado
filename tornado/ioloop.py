@@ -167,28 +167,26 @@ class IOLoop(Configurable):
             del IOLoop._instance
 
     @staticmethod
-    def current():
+    def current(instance=True):
         """Returns the current thread's `IOLoop`.
 
-        If an `IOLoop` is currently running or has been marked as current
-        by `make_current`, returns that instance.  Otherwise returns
-        `IOLoop.instance()`, i.e. the main thread's `IOLoop`.
-
-        A common pattern for classes that depend on ``IOLoops`` is to use
-        a default argument to enable programs with multiple ``IOLoops``
-        but not require the argument for simpler applications::
-
-            class MyClass(object):
-                def __init__(self, io_loop=None):
-                    self.io_loop = io_loop or IOLoop.current()
+        If an `IOLoop` is currently running or has been marked as
+        current by `make_current`, returns that instance.  If there is
+        no current `IOLoop`, returns `IOLoop.instance()` (i.e. the
+        main thread's `IOLoop`, creating one if necessary) if ``instance``
+        is true.
 
         In general you should use `IOLoop.current` as the default when
         constructing an asynchronous object, and use `IOLoop.instance`
         when you mean to communicate to the main thread from a different
         one.
+
+        .. versionchanged:: 4.1
+           Added ``instance`` argument to control the
+
         """
         current = getattr(IOLoop._current, "instance", None)
-        if current is None:
+        if current is None and instance:
             return IOLoop.instance()
         return current
 
@@ -200,6 +198,10 @@ class IOLoop(Configurable):
         `make_current` explicitly before starting the `IOLoop`,
         so that code run at startup time can find the right
         instance.
+
+        .. versionchanged:: 4.1
+           An `IOLoop` created while there is no current `IOLoop`
+           will automatically become current.
         """
         IOLoop._current.instance = self
 
@@ -224,7 +226,8 @@ class IOLoop(Configurable):
         return SelectIOLoop
 
     def initialize(self):
-        pass
+        if IOLoop.current(instance=False) is None:
+            self.make_current()
 
     def close(self, all_fds=False):
         """Closes the `IOLoop`, freeing any resources used.
@@ -946,6 +949,9 @@ class PeriodicCallback(object):
     The callback is called every ``callback_time`` milliseconds.
 
     `start` must be called after the `PeriodicCallback` is created.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
     """
     def __init__(self, callback, callback_time, io_loop=None):
         self.callback = callback

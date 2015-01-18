@@ -187,6 +187,9 @@ def add_accept_handler(sock, callback, io_loop=None):
     address of the other end of the connection).  Note that this signature
     is different from the ``callback(fd, events)`` signature used for
     `.IOLoop` handlers.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
     """
     if io_loop is None:
         io_loop = IOLoop.current()
@@ -301,6 +304,9 @@ class ExecutorResolver(Resolver):
     The executor will be shut down when the resolver is closed unless
     ``close_resolver=False``; use this if you want to reuse the same
     executor elsewhere.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
     """
     def initialize(self, io_loop=None, executor=None, close_executor=True):
         self.io_loop = io_loop or IOLoop.current()

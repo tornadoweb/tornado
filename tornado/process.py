@@ -191,6 +191,9 @@ class Subprocess(object):
       ``tornado.process.Subprocess.STREAM``, which will make the corresponding
       attribute of the resulting Subprocess a `.PipeIOStream`.
     * A new keyword argument ``io_loop`` may be used to pass in an IOLoop.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
     """
     STREAM = object()
 
@@ -263,6 +266,9 @@ class Subprocess(object):
         Note that the `.IOLoop` used for signal handling need not be the
         same one used by individual Subprocess objects (as long as the
         ``IOLoops`` are each running in separate threads).
+
+        .. versionchanged:: 4.1
+           The ``io_loop`` argument is deprecated.
         """
         if cls._initialized:
             return

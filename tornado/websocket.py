@@ -986,7 +986,7 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
        Also accepts ``HTTPRequest`` objects in place of urls.
 
     .. versionchanged:: 4.1
-       Added ``compression_options``.
+       Added ``compression_options``. The ``io_loop`` argument is deprecated.
     """
     if io_loop is None:
         io_loop = IOLoop.current()

@@ -108,7 +108,11 @@ _io_loops = weakref.WeakKeyDictionary()
 
 
 def start(io_loop=None, check_time=500):
-    """Begins watching source files for changes using the given `.IOLoop`. """
+    """Begins watching source files for changes.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
+    """
     io_loop = io_loop or ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return

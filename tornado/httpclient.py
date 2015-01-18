@@ -137,6 +137,9 @@ class AsyncHTTPClient(Configurable):
         # or with force_instance:
         client = AsyncHTTPClient(force_instance=True,
             defaults=dict(user_agent="MyUserAgent"))
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
     """
     @classmethod
     def configurable_base(cls):

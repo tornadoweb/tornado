@@ -147,6 +147,9 @@ class TornadoReactor(PosixReactorBase):
     We override `mainLoop` instead of `doIteration` and must implement
     timed call functionality on top of `IOLoop.add_timeout` rather than
     using the implementation in `PosixReactorBase`.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
     """
     def __init__(self, io_loop=None):
         if not io_loop:
@@ -356,7 +359,11 @@ class _TestReactor(TornadoReactor):
 
 
 def install(io_loop=None):
-    """Install this package as the default Twisted reactor."""
+    """Install this package as the default Twisted reactor.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
+    """
     if not io_loop:
         io_loop = tornado.ioloop.IOLoop.current()
     reactor = TornadoReactor(io_loop)
@@ -512,6 +519,9 @@ class TwistedResolver(Resolver):
     ``socket.AF_UNSPEC``.
 
     Requires Twisted 12.1 or newer.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
     """
     def initialize(self, io_loop=None):
         self.io_loop = io_loop or IOLoop.current()

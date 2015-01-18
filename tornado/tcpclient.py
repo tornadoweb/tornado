@@ -136,6 +136,9 @@ class _Connector(object):
 
 class TCPClient(object):
     """A non-blocking TCP connection factory.
+
+    .. versionchanged:: 4.1
+       The ``io_loop`` argument is deprecated.
     """
     def __init__(self, resolver=None, io_loop=None):
         self.io_loop = io_loop or IOLoop.current()

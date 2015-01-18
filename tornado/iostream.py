@@ -122,6 +122,7 @@ class BaseIOStream(object):
         """`BaseIOStream` constructor.
 
         :arg io_loop: The `.IOLoop` to use; defaults to `.IOLoop.current`.
+                      Deprecated since Tornado 4.1.
         :arg max_buffer_size: Maximum amount of incoming data to buffer;
             defaults to 100MB.
         :arg read_chunk_size: Amount of data to read at one time from the
