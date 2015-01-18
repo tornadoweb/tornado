@@ -111,6 +111,7 @@ class _Connector(object):
             if self.timeout is not None:
                 # If the first attempt failed, don't wait for the
                 # timeout to try an address from the secondary queue.
+                self.io_loop.remove_timeout(self.timeout)
                 self.on_timeout()
             return
         self.clear_timeout()

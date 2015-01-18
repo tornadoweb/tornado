@@ -42,6 +42,7 @@ def refusing_port():
     # ephemeral port number to ensure that nothing can listen on that
     # port.
     server_socket, port = bind_unused_port()
+    server_socket.setblocking(1)
     client_socket = socket.socket()
     client_socket.connect(("127.0.0.1", port))
     conn, client_addr = server_socket.accept()
