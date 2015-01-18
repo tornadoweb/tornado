@@ -969,6 +969,9 @@ class PeriodicCallback(object):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
+    def is_running(self):
+        return self._running
+
     def _run(self):
         if not self._running:
             return
