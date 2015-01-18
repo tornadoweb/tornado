@@ -73,7 +73,7 @@ In progress
   for certificate validation.
 * Malformed ``_xsrf`` cookies are now ignored instead of causing
   uncaught exceptions.
-* `.Application.start_request` now has the same signature as
+* ``Application.start_request`` now has the same signature as
   `.HTTPServerConnectionDelegate.start_request`.
 * `.HTTPServer` now calls ``start_request`` with the correct
   arguments.  This change is backwards-incompatible, afffecting any
