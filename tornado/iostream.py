@@ -68,6 +68,14 @@ _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE,
 if hasattr(errno, "WSAECONNRESET"):
     _ERRNO_CONNRESET += (errno.WSAECONNRESET, errno.WSAECONNABORTED, errno.WSAETIMEDOUT)
 
+if sys.platform == 'darwin':
+    # OSX appears to have a race condition that causes send(2) to return
+    # EPROTOTYPE if called while a socket is being torn down:
+    # http://erickt.github.io/blog/2014/11/19/adventures-in-debugging-a-potential-osx-kernel-bug/
+    # Since the socket is being closed anyway, treat this as an ECONNRESET
+    # instead of an unexpected error.
+    _ERRNO_CONNRESET += (errno.EPROTOTYPE,)
+
 # More non-portable errnos:
 _ERRNO_INPROGRESS = (errno.EINPROGRESS,)
 
