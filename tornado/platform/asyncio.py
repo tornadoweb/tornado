@@ -141,10 +141,17 @@ class AsyncIOLoop(BaseAsyncIOLoop):
         super(AsyncIOLoop, self).initialize(asyncio.new_event_loop(),
                                             close_loop=True)
 
+def to_tornado_future(asyncio_future):
+    """Convert an ``asyncio.Future`` to a `tornado.concurrent.Future`."""
+    tf = tornado.concurrent.Future()
+    tornado.concurrent.chain_future(asyncio_future, tf)
+    return tf
+
+def to_asyncio_future(tornado_future):
+    """Convert a `tornado.concurrent.Future` to an ``asyncio.Future``."""
+    af = asyncio.Future()
+    tornado.concurrent.chain_future(tornado_future, af)
+    return af
 
 if hasattr(convert_yielded, 'register'):
-    @convert_yielded.register(asyncio.Future)
-    def _(af):
-        tf = tornado.concurrent.Future()
-        tornado.concurrent.chain_future(af, tf)
-        return tf
+    convert_yielded.register(asyncio.Future, to_tornado_future)
