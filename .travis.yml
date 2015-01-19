@@ -16,12 +16,12 @@ env:
 install:
     # always install unittest2 on py26 even if $DEPS is unset
     - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then travis_retry pip install unittest2; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then travis_retry pip install futures mock Monotime==1.0; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' && $DEPS == true ]]; then travis_retry pip install futures mock; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then travis_retry pip install futures mock Monotime==1.0 singledispatch; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' && $DEPS == true ]]; then travis_retry pip install futures mock singledispatch; fi
     # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
     #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry pip install pycares; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry pip install pycurl; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then travis_retry pip install mock; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then travis_retry pip install mock singledispatch; fi
     # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
     - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry travis_retry pip install Twisted; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then travis_retry travis_retry pip install sphinx==1.2.2 sphinx_rtd_theme; fi

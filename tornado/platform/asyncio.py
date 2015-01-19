@@ -12,6 +12,8 @@ unfinished callbacks on the event loop that fail when it resumes)
 from __future__ import absolute_import, division, print_function, with_statement
 import functools
 
+import tornado.concurrent
+from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop
 from tornado import stack_context
 
@@ -138,3 +140,11 @@ class AsyncIOLoop(BaseAsyncIOLoop):
     def initialize(self):
         super(AsyncIOLoop, self).initialize(asyncio.new_event_loop(),
                                             close_loop=True)
+
+
+if hasattr(convert_yielded, 'register'):
+    @convert_yielded.register(asyncio.Future)
+    def _(af):
+        tf = tornado.concurrent.Future()
+        tornado.concurrent.chain_future(af, tf)
+        return tf

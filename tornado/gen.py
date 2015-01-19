@@ -60,6 +60,14 @@ from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
 
+try:
+    from functools import singledispatch  # py34+
+except ImportError as e:
+    try:
+        from singledispatch import singledispatch  # backport
+    except ImportError:
+        singledispatch = None
+
 
 class KeyReuseError(Exception):
     pass
@@ -900,3 +908,6 @@ def convert_yielded(yielded):
         return yielded
     else:
         raise BadYieldError("yielded unknown object %r" % (yielded,))
+
+if singledispatch is not None:
+    convert_yielded = singledispatch(convert_yielded)
