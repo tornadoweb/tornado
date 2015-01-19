@@ -802,18 +802,18 @@ class Runner(object):
             self.running = False
 
     def handle_yield(self, yielded):
-        if isinstance(yielded, list):
-            if all(is_future(f) for f in yielded):
-                yielded = multi_future(yielded)
-            else:
-                yielded = Multi(yielded)
-        elif isinstance(yielded, dict):
-            if all(is_future(f) for f in yielded.values()):
-                yielded = multi_future(yielded)
-            else:
-                yielded = Multi(yielded)
+        # Lists containing YieldPoints require stack contexts;
+        # other lists are handled via multi_future in convert_yielded.
+        if (isinstance(yielded, list) and
+            any(isinstance(f, YieldPoint) for f in yielded)):
+            yielded = Multi(yielded)
+        elif (isinstance(yielded, dict) and
+            any(isinstance(f, YieldPoint) for f in yielded.values())):
+            yielded = Multi(yielded)
 
         if isinstance(yielded, YieldPoint):
+            # YieldPoints are too closely coupled to the Runner to go
+            # through the generic convert_yielded mechanism.
             self.future = TracebackFuture()
             def start_yield_point():
                 try:
@@ -826,6 +826,7 @@ class Runner(object):
                 except Exception:
                     self.future = TracebackFuture()
                     self.future.set_exc_info(sys.exc_info())
+
             if self.stack_context_deactivate is None:
                 # Start a stack context if this is the first
                 # YieldPoint we've seen.
@@ -839,16 +840,17 @@ class Runner(object):
                     return False
             else:
                 start_yield_point()
-        elif is_future(yielded):
-            self.future = yielded
-            if not self.future.done() or self.future is moment:
-                self.io_loop.add_future(
-                    self.future, lambda f: self.run())
-                return False
         else:
-            self.future = TracebackFuture()
-            self.future.set_exception(BadYieldError(
-                "yielded unknown object %r" % (yielded,)))
+            try:
+                self.future = convert_yielded(yielded)
+            except BadYieldError:
+                self.future = TracebackFuture()
+                self.future.set_exc_info(sys.exc_info())
+
+        if not self.future.done() or self.future is moment:
+            self.io_loop.add_future(
+                self.future, lambda f: self.run())
+            return False
         return True
 
     def result_callback(self, key):
@@ -887,3 +889,14 @@ def _argument_adapter(callback):
         else:
             callback(None)
     return wrapper
+
+
+def convert_yielded(yielded):
+    # Lists and dicts containing YieldPoints were handled separately
+    # via Multi().
+    if isinstance(yielded, (list, dict)):
+        return multi_future(yielded)
+    elif is_future(yielded):
+        return yielded
+    else:
+        raise BadYieldError("yielded unknown object %r" % (yielded,))
