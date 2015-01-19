@@ -75,6 +75,7 @@ class NonWebSocketHandler(RequestHandler):
 
 class CloseReasonHandler(TestWebSocketHandler):
     def open(self):
+        self.on_close_called = False
         self.close(1001, "goodbye")
 
 
@@ -221,6 +222,8 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.assertIs(msg, None)
         self.assertEqual(ws.close_code, 1001)
         self.assertEqual(ws.close_reason, "goodbye")
+        # The on_close callback is called no matter which side closed.
+        yield self.close_future
 
     @gen_test
     def test_client_close_reason(self):
