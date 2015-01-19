@@ -482,6 +482,7 @@ class CompatibilityTests(unittest.TestCase):
         self.assertEqual(response, 'Hello from tornado!')
 
 
+@skipIfNoTwisted
 @skipIfNoSingleDispatch
 class ConvertDeferredTest(unittest.TestCase):
     def test_success(self):
