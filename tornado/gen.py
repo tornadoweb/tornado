@@ -690,6 +690,25 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
     return result
 
 
+def sleep(duration):
+    """Return a `.Future` that resolves after the given number of seconds.
+
+    When used with ``yield`` in a coroutine, this is a non-blocking
+    analogue to `time.sleep` (which should not be used in coroutines
+    because it is blocking)::
+
+        yield gen.sleep(0.5)
+
+    Note that calling this function on its own does nothing; you must
+    wait on the `.Future` it returns (usually by yielding it).
+
+    .. versionadded:: 4.1
+    """
+    f = Future()
+    IOLoop.current().call_later(duration, lambda: f.set_result(None))
+    return f
+
+
 _null_future = Future()
 _null_future.set_result(None)
 

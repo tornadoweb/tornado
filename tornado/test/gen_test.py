@@ -838,6 +838,11 @@ class GenCoroutineTest(AsyncTestCase):
         yield [f('a', gen.moment), f('b', immediate)]
         self.assertEqual(''.join(calls), 'abbbbbaaaa')
 
+    @gen_test
+    def test_sleep(self):
+        yield gen.sleep(0.01)
+        self.finished = True
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
