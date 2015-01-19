@@ -70,8 +70,10 @@ import datetime
 import functools
 import numbers
 import socket
+import sys
 
 import twisted.internet.abstract
+from twisted.internet.defer import Deferred
 from twisted.internet.posixbase import PosixReactorBase
 from twisted.internet.interfaces import \
     IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor
@@ -84,6 +86,7 @@ import twisted.names.resolve
 
 from zope.interface import implementer
 
+from tornado.concurrent import Future
 from tornado.escape import utf8
 from tornado import gen
 import tornado.ioloop
@@ -564,3 +567,17 @@ class TwistedResolver(Resolver):
             (resolved_family, (resolved, port)),
         ]
         raise gen.Return(result)
+
+if hasattr(gen.convert_yielded, 'register'):
+    @gen.convert_yielded.register(Deferred)
+    def _(d):
+        f = Future()
+        def errback(failure):
+            try:
+                failure.raiseException()
+                # Should never happen, but just in case
+                raise Exception("errback called without error")
+            except:
+                f.set_exc_info(sys.exc_info())
+        d.addCallbacks(f.set_result, errback)
+        return f

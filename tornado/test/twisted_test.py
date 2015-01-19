@@ -27,7 +27,7 @@ import threading
 
 try:
     import fcntl
-    from twisted.internet.defer import Deferred
+    from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
     from twisted.internet.interfaces import IReadDescriptor, IWriteDescriptor
     from twisted.internet.protocol import Protocol
     from twisted.python import log
@@ -40,7 +40,7 @@ except ImportError:
 # The core of Twisted 12.3.0 is available on python 3, but twisted.web is not
 # so test for it separately.
 try:
-    from twisted.web.client import Agent
+    from twisted.web.client import Agent, readBody
     from twisted.web.resource import Resource
     from twisted.web.server import Site
     have_twisted_web = True
@@ -52,6 +52,7 @@ try:
 except ImportError:
     import _thread as thread  # py3
 
+from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
@@ -65,6 +66,8 @@ from tornado.web import RequestHandler, Application
 skipIfNoTwisted = unittest.skipUnless(have_twisted,
                                       "twisted module not present")
 
+skipIfNoSingleDispatch = unittest.skipIf(
+    gen.singledispatch is None, "singledispatch module not present")
 
 def save_signal_handlers():
     saved = {}
@@ -432,6 +435,21 @@ class CompatibilityTests(unittest.TestCase):
         self.assertTrue(chunks)
         return ''.join(chunks)
 
+    def twisted_coroutine_fetch(self, url, runner):
+        body = [None]
+        @gen.coroutine
+        def f():
+            # This is simpler than the non-coroutine version, but it cheats
+            # by reading the body in one blob instead of streaming it with
+            # a Protocol.
+            client = Agent(self.reactor)
+            response = yield client.request('GET', url)
+            body[0] = yield readBody(response)
+            self.stop_loop()
+        self.io_loop.add_callback(f)
+        runner()
+        return body[0]
+
     def testTwistedServerTornadoClientIOLoop(self):
         self.start_twisted_server()
         response = self.tornado_fetch(
@@ -455,6 +473,37 @@ class CompatibilityTests(unittest.TestCase):
         response = self.twisted_fetch(
             'http://localhost:%d' % self.tornado_port, self.run_reactor)
         self.assertEqual(response, 'Hello from tornado!')
+
+    @skipIfNoSingleDispatch
+    def testTornadoServerTwistedCoroutineClientIOLoop(self):
+        self.start_tornado_server()
+        response = self.twisted_coroutine_fetch(
+            'http://localhost:%d' % self.tornado_port, self.run_ioloop)
+        self.assertEqual(response, 'Hello from tornado!')
+
+
+@skipIfNoSingleDispatch
+class ConvertDeferredTest(unittest.TestCase):
+    def test_success(self):
+        @inlineCallbacks
+        def fn():
+            if False:
+                # inlineCallbacks doesn't work with regular functions;
+                # must have a yield even if it's unreachable.
+                yield
+            returnValue(42)
+        f = gen.convert_yielded(fn())
+        self.assertEqual(f.result(), 42)
+
+    def test_failure(self):
+        @inlineCallbacks
+        def fn():
+            if False:
+                yield
+            1 / 0
+        f = gen.convert_yielded(fn())
+        with self.assertRaises(ZeroDivisionError):
+            f.result()
 
 
 if have_twisted:
