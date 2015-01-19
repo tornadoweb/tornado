@@ -42,3 +42,6 @@ loops.
         from tornado.ioloop import IOLoop
         IOLoop.configure('tornado.platform.asyncio.AsyncIOLoop')
         IOLoop.instance().start()
+
+    Each ``AsyncIOLoop`` creates a new ``asyncio.EventLoop``; this object
+    can be accessed with the ``asyncio_loop`` attribute.
