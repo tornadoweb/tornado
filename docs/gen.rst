@@ -34,6 +34,8 @@
       used either as a tuple ``(args, kwargs)`` or an object with attributes
       ``args`` and ``kwargs``.
 
+   .. autofunction:: convert_yielded
+
    Legacy interface
    ----------------
 

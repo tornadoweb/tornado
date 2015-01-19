@@ -43,8 +43,21 @@ be returned when they are all finished::
         response3 = response_dict['response3']
         response4 = response_dict['response4']
 
+If the `~functools.singledispatch` library is available (standard in
+Python 3.4, available via the `singledispatch
+<https://pypi.python.org/pypi/singledispatch>`_ package on older
+versions), additional types of objects may be yielded. Tornado includes
+support for ``asyncio.Future`` and Twisted's ``Deferred`` class when
+``tornado.platform.asyncio`` and ``tornado.platform.twisted`` are imported.
+See the `convert_yielded` function to extend this mechanism.
+
 .. versionchanged:: 3.2
    Dict support added.
+
+.. versionchanged:: 4.1
+   Support added for yielding ``asyncio`` Futures and Twisted Deferreds
+   via ``singledispatch``.
+
 """
 from __future__ import absolute_import, division, print_function, with_statement
 
@@ -900,6 +913,19 @@ def _argument_adapter(callback):
 
 
 def convert_yielded(yielded):
+    """Convert a yielded object into a `.Future`.
+
+    The default implementation accepts lists, dictionaries, and Futures.
+
+    If the `~functools.singledispatch` library is available, this function
+    may be extended to support additional types. For example::
+
+        @convert_yielded.register(asyncio.Future)
+        def _(asyncio_future):
+            return tornado.platform.asyncio.to_tornado_future(asyncio_future)
+
+    .. versionadded:: 4.1
+    """
     # Lists and dicts containing YieldPoints were handled separately
     # via Multi().
     if isinstance(yielded, (list, dict)):

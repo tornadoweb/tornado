@@ -45,3 +45,15 @@ loops.
 
     Each ``AsyncIOLoop`` creates a new ``asyncio.EventLoop``; this object
     can be accessed with the ``asyncio_loop`` attribute.
+
+.. py:function:: to_tornado_future
+
+   Convert an ``asyncio.Future`` to a `tornado.concurrent.Future`.
+
+   .. versionadded:: 4.1
+
+.. py:function:: to_asyncio_future
+
+   Convert a `tornado.concurrent.Future` to an ``asyncio.Future``.
+
+   .. versionadded:: 4.1
