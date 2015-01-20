@@ -516,13 +516,22 @@ options = OptionParser()
 All defined options are available as attributes on this object.
 """
 
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 def define(name, default=None, type=None, help=None, metavar=None,
            multiple=False, group=None, callback=None):
     """Defines an option in the global namespace.
-
+    
     See `OptionParser.define`.
     """
+    if(name=="port" and is_number(default) and default>65535 or 65535<1):
+        raise Error("Invalid Port number; 0 < port range < 65536")
+
     return options.define(name, default=default, type=type, help=help,
                           metavar=metavar, multiple=multiple, group=group,
                           callback=callback)
