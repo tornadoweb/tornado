@@ -181,7 +181,7 @@ try{% set y = 1/x %}
             raise gen.Return('Hello, Ben')
         template = Template(utf8("{{ yield value() }}"), coroutine=True)
         result = yield template.generate(value=value)
-        self.assertEqual(result, 'Hello, Ben')
+        self.assertEqual(result, b'Hello, Ben')
 
     @gen.coroutine
     def test_coroutine_template_exception(self):
