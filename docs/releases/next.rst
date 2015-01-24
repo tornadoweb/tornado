@@ -87,3 +87,26 @@ In progress
 * Malformed ``multipart/form-data`` bodies will always be logged
   quietly instead of raising an unhandled exception; previously
   the behavior was inconsistent depending on the exact error.
+* `.websocket_connect` now has a ``on_message_callback`` keyword argument
+  for callback-style use without ``read_message()``.
+* New class `tornado.gen.WaitIterator` provides a way to iterate
+  over ``Futures`` in the order they resolve.
+* When a new `.IOLoop` is created, it automatically becomes "current"
+  for the thread if there is not already a current instance.
+* When the `~functools.singledispatch` library is available (standard on
+  Python 3.4, available via ``pip install singledispatch`` on older versions),
+  the `.convert_yielded` function can be used to make other kinds of objects
+  yieldable in coroutines.
+* It is now possible to yield ``asyncio.Future`` objects in coroutines
+  when the `~functools.singledispatch` library is available and
+  ``tornado.platform.asyncio`` has been imported.
+* It is now possible to yield ``Deferred`` objects in coroutines
+  when the `~functools.singledispatch` library is available and
+  ``tornado.platform.twisted`` has been imported.
+* New methods `tornado.platform.asyncio.to_tornado_future` and
+  `~tornado.platform.asyncio.to_asyncio_future` convert between
+  the two libraries' `.Future` classes.
+* New function `tornado.gen.sleep` is a coroutine-friendly
+  analogue to `time.sleep`.
+* ``tornado.curl_httpclient`` now uses its own logger for debug output
+  so it can be filtered more easily.

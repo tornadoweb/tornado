@@ -1000,11 +1000,26 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
     ``compression_options`` is interpreted in the same way as the
     return value of `.WebSocketHandler.get_compression_options`.
 
+    The connection supports two styles of operation. In the coroutine
+    style, the application typically calls
+    `~.WebSocketClientConnection.read_message` in a loop::
+
+        conn = yield websocket_connection(loop)
+        while True:
+            msg = yield conn.read_message()
+            if msg is None: break
+            # Do something with msg
+
+    In the callback style, pass an ``on_message_callback`` to
+    ``websocket_connect``. In both styles, a message of ``None``
+    indicates that the connection has been closed.
+
     .. versionchanged:: 3.2
        Also accepts ``HTTPRequest`` objects in place of urls.
 
     .. versionchanged:: 4.1
-       Added ``compression_options``. The ``io_loop`` argument is deprecated.
+       Added ``compression_options`` and ``on_message_callback``.
+       The ``io_loop`` argument is deprecated.
     """
     if io_loop is None:
         io_loop = IOLoop.current()

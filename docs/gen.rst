@@ -20,10 +20,14 @@
 
    .. autofunction:: maybe_future
 
+   .. autofunction:: sleep
+
    .. autodata:: moment
       :annotation:
 
    .. autofunction:: Task
+
+   .. autoclass:: WaitIterator
 
    .. class:: Arguments
 
