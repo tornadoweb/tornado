@@ -200,6 +200,7 @@ import threading
 from tornado import escape
 from tornado.log import app_log
 from tornado.util import ObjectDict, exec_in, unicode_type
+from tornado import gen
 
 try:
     from cStringIO import StringIO  # py2
@@ -220,7 +221,7 @@ class Template(object):
     # autodoc because _UNSET looks like garbage.  When changing
     # this signature update website/sphinx/template.rst too.
     def __init__(self, template_string, name="<string>", loader=None,
-                 compress_whitespace=None, autoescape=_UNSET):
+                 compress_whitespace=None, autoescape=_UNSET, coroutine=False):
         self.name = name
         if compress_whitespace is None:
             compress_whitespace = name.endswith(".html") or \
@@ -233,9 +234,10 @@ class Template(object):
             self.autoescape = _DEFAULT_AUTOESCAPE
         self.namespace = loader.namespace if loader else {}
         reader = _TemplateReader(name, escape.native_str(template_string))
-        self.file = _File(self, _parse(reader, self))
+        self.file = _File(self, _parse(reader, self), coroutine)
         self.code = self._generate_python(loader, compress_whitespace)
         self.loader = loader
+        self.coroutine = coroutine
         try:
             # Under python2.5, the fake filename used here must match
             # the module name used in __name__ below.
@@ -267,6 +269,12 @@ class Template(object):
             "__name__": self.name.replace('.', '_'),
             "__loader__": ObjectDict(get_source=lambda name: self.code),
         }
+        if self.coroutine:
+            coroutine = {
+                "coroutine": gen.coroutine,
+                "Return": gen.Return
+            }
+            namespace.update(coroutine)
         namespace.update(self.namespace)
         namespace.update(kwargs)
         exec_in(self.compiled, namespace)
@@ -312,12 +320,14 @@ class BaseLoader(object):
     ``{% extends %}`` and ``{% include %}``. The loader caches all
     templates after they are loaded the first time.
     """
-    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None):
+    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None, 
+                 coroutine=False):
         """``autoescape`` must be either None or a string naming a function
         in the template namespace, such as "xhtml_escape".
         """
         self.autoescape = autoescape
         self.namespace = namespace or {}
+        self.coroutine = coroutine
         self.templates = {}
         # self.lock protects self.templates.  It's a reentrant lock
         # because templates may load other templates via `include` or
@@ -368,7 +378,8 @@ class Loader(BaseLoader):
     def _create_template(self, name):
         path = os.path.join(self.root, name)
         with open(path, "rb") as f:
-            template = Template(f.read(), name=name, loader=self)
+            template = Template(f.read(), name=name, loader=self,
+                                coroutine=self.coroutine)
             return template
 
 
@@ -387,7 +398,8 @@ class DictLoader(BaseLoader):
         return name
 
     def _create_template(self, name):
-        return Template(self.dict[name], name=name, loader=self)
+        return Template(self.dict[name], name=name, loader=self,
+                        coroutine=self.coroutine)
 
 
 class _Node(object):
@@ -403,18 +415,25 @@ class _Node(object):
 
 
 class _File(_Node):
-    def __init__(self, template, body):
+    def __init__(self, template, body, coroutine):
         self.template = template
         self.body = body
+        self.coroutine = coroutine
         self.line = 0
 
     def generate(self, writer):
+        if self.coroutine:
+            writer.write_line("@coroutine", self.line)
         writer.write_line("def _tt_execute():", self.line)
         with writer.indent():
             writer.write_line("_tt_buffer = []", self.line)
             writer.write_line("_tt_append = _tt_buffer.append", self.line)
             self.body.generate(writer)
-            writer.write_line("return _tt_utf8('').join(_tt_buffer)", self.line)
+            buf = "_tt_utf8('').join(_tt_buffer)"
+            if not self.coroutine:
+                writer.write_line("return %s" % buf, self.line)
+            else:
+                writer.write_line("raise Return(%s)" % buf, self.line)
 
     def each_child(self):
         return (self.body,)
