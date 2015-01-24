@@ -325,6 +325,7 @@ class WaitIterator(object):
                 self._done_callback, self_ref))
 
     def done(self):
+        """Returns True if this iterator has no more results."""
         if self._finished or self._unfinished:
             return False
         # Clear the 'current' values when iteration is done.

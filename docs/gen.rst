@@ -28,6 +28,7 @@
    .. autofunction:: Task
 
    .. autoclass:: WaitIterator
+      :members:
 
    .. class:: Arguments
 
