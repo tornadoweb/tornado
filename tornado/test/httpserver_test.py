@@ -244,7 +244,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         # When given Expect: 100-continue, we get a 100 response after the
         # headers, and then the real response after the body.
         stream = IOStream(socket.socket(), io_loop=self.io_loop)
-        stream.connect(("localhost", self.get_http_port()), callback=self.stop)
+        stream.connect(("127.0.0.1", self.get_http_port()), callback=self.stop)
         self.wait()
         stream.write(b"\r\n".join([b"POST /hello HTTP/1.1",
                                    b"Content-Length: 1024",
@@ -381,7 +381,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
     def setUp(self):
         super(HTTPServerRawTest, self).setUp()
         self.stream = IOStream(socket.socket())
-        self.stream.connect(('localhost', self.get_http_port()), self.stop)
+        self.stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
         self.wait()
 
     def tearDown(self):
@@ -630,7 +630,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
     # The next few methods are a crude manual http client
     def connect(self):
         self.stream = IOStream(socket.socket(), io_loop=self.io_loop)
-        self.stream.connect(('localhost', self.get_http_port()), self.stop)
+        self.stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
         self.wait()
 
     def read_headers(self):
@@ -907,7 +907,7 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
 
     def connect(self):
         stream = IOStream(socket.socket())
-        stream.connect(('localhost', self.get_http_port()), self.stop)
+        stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
         self.wait()
         self.streams.append(stream)
         return stream

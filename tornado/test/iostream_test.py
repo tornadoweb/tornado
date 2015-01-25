@@ -51,7 +51,7 @@ class TestIOStreamWebMixin(object):
 
     def test_read_until_close(self):
         stream = self._make_client_iostream()
-        stream.connect(('localhost', self.get_http_port()), callback=self.stop)
+        stream.connect(('127.0.0.1', self.get_http_port()), callback=self.stop)
         self.wait()
         stream.write(b"GET / HTTP/1.0\r\n\r\n")
 
@@ -62,7 +62,7 @@ class TestIOStreamWebMixin(object):
 
     def test_read_zero_bytes(self):
         self.stream = self._make_client_iostream()
-        self.stream.connect(("localhost", self.get_http_port()),
+        self.stream.connect(("127.0.0.1", self.get_http_port()),
                             callback=self.stop)
         self.wait()
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
@@ -91,7 +91,7 @@ class TestIOStreamWebMixin(object):
         def connected_callback():
             connected[0] = True
             self.stop()
-        stream.connect(("localhost", self.get_http_port()),
+        stream.connect(("127.0.0.1", self.get_http_port()),
                        callback=connected_callback)
         # unlike the previous tests, try to write before the connection
         # is complete.
@@ -121,7 +121,7 @@ class TestIOStreamWebMixin(object):
         """Basic test of IOStream's ability to return Futures."""
         stream = self._make_client_iostream()
         connect_result = yield stream.connect(
-            ("localhost", self.get_http_port()))
+            ("127.0.0.1", self.get_http_port()))
         self.assertIs(connect_result, stream)
         yield stream.write(b"GET / HTTP/1.0\r\n\r\n")
         first_line = yield stream.read_until(b"\r\n")
@@ -137,7 +137,7 @@ class TestIOStreamWebMixin(object):
     @gen_test
     def test_future_close_while_reading(self):
         stream = self._make_client_iostream()
-        yield stream.connect(("localhost", self.get_http_port()))
+        yield stream.connect(("127.0.0.1", self.get_http_port()))
         yield stream.write(b"GET / HTTP/1.0\r\n\r\n")
         with self.assertRaises(StreamClosedError):
             yield stream.read_bytes(1024 * 1024)
@@ -147,7 +147,7 @@ class TestIOStreamWebMixin(object):
     def test_future_read_until_close(self):
         # Ensure that the data comes through before the StreamClosedError.
         stream = self._make_client_iostream()
-        yield stream.connect(("localhost", self.get_http_port()))
+        yield stream.connect(("127.0.0.1", self.get_http_port()))
         yield stream.write(b"GET / HTTP/1.0\r\nConnection: close\r\n\r\n")
         yield stream.read_until(b"\r\n\r\n")
         body = yield stream.read_until_close()

@@ -305,7 +305,7 @@ class ConnectionCloseTest(WebTestCase):
 
     def test_connection_close(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
+        s.connect(("127.0.0.1", self.get_http_port()))
         self.stream = IOStream(s, io_loop=self.io_loop)
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
         self.wait()
@@ -1907,7 +1907,7 @@ class StreamingRequestBodyTest(WebTestCase):
     def connect(self, url, connection_close):
         # Use a raw connection so we can control the sending of data.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
+        s.connect(("127.0.0.1", self.get_http_port()))
         stream = IOStream(s, io_loop=self.io_loop)
         stream.write(b"GET " + url + b" HTTP/1.1\r\n")
         if connection_close:

@@ -548,7 +548,7 @@ class SyncHTTPClientTest(unittest.TestCase):
         self.server_ioloop.close(all_fds=True)
 
     def get_url(self, path):
-        return 'http://localhost:%d%s' % (self.port, path)
+        return 'http://127.0.0.1:%d%s' % (self.port, path)
 
     def test_sync_client(self):
         response = self.http_client.fetch(self.get_url('/'))

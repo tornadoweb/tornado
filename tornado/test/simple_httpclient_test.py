@@ -325,7 +325,7 @@ class SimpleHTTPClientTestMixin(object):
         cleanup_func, port = refusing_port()
         self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
-            self.http_client.fetch("http://localhost:%d/" % port, self.stop)
+            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
             response = self.wait()
         self.assertEqual(599, response.code)
 

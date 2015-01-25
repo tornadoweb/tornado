@@ -92,7 +92,7 @@ class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, compression_options=None):
         ws = yield websocket_connect(
-            'ws://localhost:%d%s' % (self.get_http_port(), path),
+            'ws://127.0.0.1:%d%s' % (self.get_http_port(), path),
             compression_options=compression_options)
         raise gen.Return(ws)
 
@@ -136,7 +136,7 @@ class WebSocketTest(WebSocketBaseTestCase):
 
     def test_websocket_callbacks(self):
         websocket_connect(
-            'ws://localhost:%d/echo' % self.get_http_port(),
+            'ws://127.0.0.1:%d/echo' % self.get_http_port(),
             io_loop=self.io_loop, callback=self.stop)
         ws = self.wait().result()
         ws.write_message('hello')
@@ -190,14 +190,14 @@ class WebSocketTest(WebSocketBaseTestCase):
         with self.assertRaises(IOError):
             with ExpectLog(gen_log, ".*"):
                 yield websocket_connect(
-                    'ws://localhost:%d/' % port,
+                    'ws://127.0.0.1:%d/' % port,
                     io_loop=self.io_loop,
                     connect_timeout=3600)
 
     @gen_test
     def test_websocket_close_buffered_data(self):
         ws = yield websocket_connect(
-            'ws://localhost:%d/echo' % self.get_http_port())
+            'ws://127.0.0.1:%d/echo' % self.get_http_port())
         ws.write_message('hello')
         ws.write_message('world')
         # Close the underlying stream.
@@ -208,7 +208,7 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_websocket_headers(self):
         # Ensure that arbitrary headers can be passed through websocket_connect.
         ws = yield websocket_connect(
-            HTTPRequest('ws://localhost:%d/header' % self.get_http_port(),
+            HTTPRequest('ws://127.0.0.1:%d/header' % self.get_http_port(),
                         headers={'X-Test': 'hello'}))
         response = yield ws.read_message()
         self.assertEqual(response, 'hello')
@@ -246,8 +246,8 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_check_origin_valid_no_path(self):
         port = self.get_http_port()
 
-        url = 'ws://localhost:%d/echo' % port
-        headers = {'Origin': 'http://localhost:%d' % port}
+        url = 'ws://127.0.0.1:%d/echo' % port
+        headers = {'Origin': 'http://127.0.0.1:%d' % port}
 
         ws = yield websocket_connect(HTTPRequest(url, headers=headers),
             io_loop=self.io_loop)
@@ -260,8 +260,8 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_check_origin_valid_with_path(self):
         port = self.get_http_port()
 
-        url = 'ws://localhost:%d/echo' % port
-        headers = {'Origin': 'http://localhost:%d/something' % port}
+        url = 'ws://127.0.0.1:%d/echo' % port
+        headers = {'Origin': 'http://127.0.0.1:%d/something' % port}
 
         ws = yield websocket_connect(HTTPRequest(url, headers=headers),
             io_loop=self.io_loop)
@@ -274,8 +274,8 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_check_origin_invalid_partial_url(self):
         port = self.get_http_port()
 
-        url = 'ws://localhost:%d/echo' % port
-        headers = {'Origin': 'localhost:%d' % port}
+        url = 'ws://127.0.0.1:%d/echo' % port
+        headers = {'Origin': '127.0.0.1:%d' % port}
 
         with self.assertRaises(HTTPError) as cm:
             yield websocket_connect(HTTPRequest(url, headers=headers),
@@ -286,8 +286,8 @@ class WebSocketTest(WebSocketBaseTestCase):
     def test_check_origin_invalid(self):
         port = self.get_http_port()
 
-        url = 'ws://localhost:%d/echo' % port
-        # Host is localhost, which should not be accessible from some other
+        url = 'ws://127.0.0.1:%d/echo' % port
+        # Host is 127.0.0.1, which should not be accessible from some other
         # domain
         headers = {'Origin': 'http://somewhereelse.com'}
 
