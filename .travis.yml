@@ -14,7 +14,7 @@ env:
 
 install:
     # always install unittest2 on py26 even if $DEPS is unset
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install unittest2; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install 'unittest2<0.6'; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then pip install futures mock Monotime==1.0; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' && $DEPS == true ]]; then pip install futures mock; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' && $DEPS == true ]]; then pip install pycares pycurl; fi
