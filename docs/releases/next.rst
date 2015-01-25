@@ -17,6 +17,8 @@ Highlights
   `.WebSocketHandler.get_compression_options` to enable on the server
   side, and use the ``compression_options`` keyword argument to
   `.websocket_connect` on the client side.
+* When the appropriate packages are installed, it is possible to yield
+  `asyncio.Future` or Twisted ``Defered`` objects in Tornado coroutines.
 
 Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
