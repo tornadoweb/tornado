@@ -120,7 +120,7 @@ if (platform.python_implementation() == 'CPython' and
 
 if setuptools is not None:
     # If setuptools is not available, you're on your own for dependencies.
-    install_requires = ['certifi']
+    install_requires = ['certifi', 'pycurl']
     if sys.version_info < (3, 2):
         install_requires.append('backports.ssl_match_hostname')
     kwargs['install_requires'] = install_requires
