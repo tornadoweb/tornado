@@ -43,10 +43,10 @@ class TranslationLoaderTest(unittest.TestCase):
         self.assertEqual(locale.translate("school"), u("\u00e9cole"))
         self.assertEqual(locale.pgettext("law", "right"), u("le droit"))
         self.assertEqual(locale.pgettext("good", "right"), u("le bien"))
-        self.assertEqual(locale.npgettext("organization", "club", "clubs", 1), u("le club"))
-        self.assertEqual(locale.npgettext("organization", "club", "clubs", 2), u("les clubs"))
-        self.assertEqual(locale.npgettext("stick", "club", "clubs", 1), u("le b\xe2ton"))
-        self.assertEqual(locale.npgettext("stick", "club", "clubs", 2), u("les b\xe2tons"))
+        self.assertEqual(locale.pgettext("organization", "club", "clubs", 1), u("le club"))
+        self.assertEqual(locale.pgettext("organization", "club", "clubs", 2), u("les clubs"))
+        self.assertEqual(locale.pgettext("stick", "club", "clubs", 1), u("le b\xe2ton"))
+        self.assertEqual(locale.pgettext("stick", "club", "clubs", 2), u("les b\xe2tons"))
 
 
 class LocaleDataTest(unittest.TestCase):

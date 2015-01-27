@@ -274,10 +274,7 @@ class Locale(object):
         """
         raise NotImplementedError()
 
-    def pgettext(self, context, message):
-        raise NotImplementedError()
-
-    def npgettext(self, context, singular, plural, number):
+    def pgettext(self, context, message, plural_message=None, count=None):
         raise NotImplementedError()
 
     def format_date(self, date, gmt_offset=0, relative=True, shorter=False,
@@ -429,13 +426,9 @@ class CSVLocale(Locale):
             message_dict = self.translations.get("unknown", {})
         return message_dict.get(message, message)
 
-    def pgettext(self, context, message):
+    def pgettext(self, context, message, plural_message=None, count=None):
         gen_log.warning('pgettext is not supported by CSVLocale')
-        return self.translate(message)
-
-    def npgettext(self, context, singular, plural, number):
-        gen_log.warning('npgettext is not supported by CSVLocale')
-        return self.translate(singular, plural, number)
+        return self.translate(message, plural_message, count)
 
 
 class GettextLocale(Locale):
@@ -460,47 +453,41 @@ class GettextLocale(Locale):
         else:
             return self.gettext(message)
 
-    def pgettext(self, context, message):
-        """Allows to set context for translation.
+    def pgettext(self, context, message, plural_message=None, count=None):
+        """Allows to set context for translation, accept plural forms.
 
         Usage example:
 
             pgettext("law", "right")
             pgettext("good", "right")
 
-        To generate POT file with context, add following option to step 1
-        of `load_gettext_translations` sequence:
+        Plural message example:
 
-            xgettext [basic options] --keyword=pgettext:1c,2
-        """
-        msg_with_ctxt = "%s%s%s" % (context, CONTEXT_SEPARATOR, message)
-        result = self.gettext(msg_with_ctxt)
-        if CONTEXT_SEPARATOR in result:
-            # Translation not found
-            result = message
-        return result
-
-    def npgettext(self, context, singular, plural, number):
-        """Allows to set context for translation with plural form.
-
-        Usage example:
-
-            npgettext("organization", "club", "clubs", len(clubs))
-            npgettext("stick", "club", "clubs", len(clubs))
+            pgettext("organization", "club", "clubs", len(clubs))
+            pgettext("stick", "club", "clubs", len(clubs))
 
         To generate POT file with context, add following option to step 1
         of `load_gettext_translations` sequence:
 
-            xgettext [basic options] --keyword=npgettext:1c,2,3
+            xgettext [basic options] --keyword=pgettext:1c,2 --keyword=pgettext:1c,2,3
         """
-        msgs_with_ctxt = ("%s%s%s" % (context, CONTEXT_SEPARATOR, singular),
-                          "%s%s%s" % (context, CONTEXT_SEPARATOR, plural),
-                          number)
-        result = self.ngettext(*msgs_with_ctxt)
-        if CONTEXT_SEPARATOR in result:
-            # Translation not found
-            result = self.ngettext(singular, plural, number)
-        return result
+        if plural_message is not None:
+            assert count is not None
+            msgs_with_ctxt = ("%s%s%s" % (context, CONTEXT_SEPARATOR, message),
+                          "%s%s%s" % (context, CONTEXT_SEPARATOR, plural_message),
+                          count)
+            result = self.ngettext(*msgs_with_ctxt)
+            if CONTEXT_SEPARATOR in result:
+                # Translation not found
+                result = self.ngettext(message, plural_message, count)
+            return result
+        else:
+            msg_with_ctxt = "%s%s%s" % (context, CONTEXT_SEPARATOR, message)
+            result = self.gettext(msg_with_ctxt)
+            if CONTEXT_SEPARATOR in result:
+                # Translation not found
+                result = message
+            return result
 
 LOCALE_NAMES = {
     "af_ZA": {"name_en": u("Afrikaans"), "name": u("Afrikaans")},
