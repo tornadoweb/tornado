@@ -55,6 +55,7 @@ _default_locale = "en_US"
 _translations = {}
 _supported_locales = frozenset([_default_locale])
 _use_gettext = False
+CONTEXT_SEPARATOR = "\x04"
 
 
 def get(*locale_codes):
@@ -273,6 +274,12 @@ class Locale(object):
         """
         raise NotImplementedError()
 
+    def pgettext(self, context, message):
+        raise NotImplementedError()
+
+    def npgettext(self, context, singular, plural, number):
+        raise NotImplementedError()
+
     def format_date(self, date, gmt_offset=0, relative=True, shorter=False,
                     full_format=False):
         """Formats the given date (which should be GMT).
@@ -422,6 +429,14 @@ class CSVLocale(Locale):
             message_dict = self.translations.get("unknown", {})
         return message_dict.get(message, message)
 
+    def pgettext(self, context, message):
+        gen_log.warning('pgettext is not supported by CSVLocale')
+        return self.translate(message)
+
+    def npgettext(self, context, singular, plural, number):
+        gen_log.warning('npgettext is not supported by CSVLocale')
+        return self.translate(singular, plural, number)
+
 
 class GettextLocale(Locale):
     """Locale implementation using the `gettext` module."""
@@ -444,6 +459,24 @@ class GettextLocale(Locale):
             return self.ngettext(message, plural_message, count)
         else:
             return self.gettext(message)
+
+    def pgettext(self, context, message):
+        msg_with_ctxt = "%s%s%s" % (context, CONTEXT_SEPARATOR, message)
+        result = self.gettext(msg_with_ctxt)
+        if CONTEXT_SEPARATOR in result:
+            # Translation not found
+            result = message
+        return result
+
+    def npgettext(self, context, singular, plural, number):
+        msgs_with_ctxt = ("%s%s%s" % (context, CONTEXT_SEPARATOR, singular),
+                          "%s%s%s" % (context, CONTEXT_SEPARATOR, plural),
+                          number)
+        result = self.ngettext(*msgs_with_ctxt)
+        if CONTEXT_SEPARATOR in result:
+            # Translation not found
+            result = self.ngettext(singular, plural, number)
+        return result
 
 LOCALE_NAMES = {
     "af_ZA": {"name_en": u("Afrikaans"), "name": u("Afrikaans")},

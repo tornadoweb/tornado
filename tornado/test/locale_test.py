@@ -41,6 +41,12 @@ class TranslationLoaderTest(unittest.TestCase):
         locale = tornado.locale.get("fr_FR")
         self.assertTrue(isinstance(locale, tornado.locale.GettextLocale))
         self.assertEqual(locale.translate("school"), u("\u00e9cole"))
+        self.assertEqual(locale.pgettext("law", "right"), u("le droit"))
+        self.assertEqual(locale.pgettext("good", "right"), u("le bien"))
+        self.assertEqual(locale.npgettext("organization", "club", "clubs", 1), u("le club"))
+        self.assertEqual(locale.npgettext("organization", "club", "clubs", 2), u("les clubs"))
+        self.assertEqual(locale.npgettext("stick", "club", "clubs", 1), u("le b\xe2ton"))
+        self.assertEqual(locale.npgettext("stick", "club", "clubs", 2), u("les b\xe2tons"))
 
 
 class LocaleDataTest(unittest.TestCase):
