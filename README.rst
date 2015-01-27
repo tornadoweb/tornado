@@ -1,3 +1,6 @@
+.. image:: https://travis-ci.org/tornadoweb/tornado.svg?branch=master
+    :target: https://travis-ci.org/tornadoweb/tornado
+
 Tornado Web Server
 ==================
 
