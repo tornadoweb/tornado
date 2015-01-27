@@ -413,7 +413,10 @@ class IOLoop(Configurable):
         self.add_callback(run)
         if timeout is not None:
             timeout_handle = self.add_timeout(self.time() + timeout, self.stop)
-        self.start()
+        while True:
+            self.start()
+            if future_cell[0].done() or (timeout is not None and self.time() >= timeout_handle.deadline):
+                break
         if timeout is not None:
             self.remove_timeout(timeout_handle)
         if not future_cell[0].done():
