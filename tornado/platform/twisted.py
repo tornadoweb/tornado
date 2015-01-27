@@ -138,7 +138,10 @@ class TornadoDelayedCall(object):
 
     def active(self):
         return self._active
-
+            
+    @property
+    def deadline(self):
+        return self._time
 
 @implementer(IReactorTime, IReactorFDSet)
 class TornadoReactor(PosixReactorBase):
