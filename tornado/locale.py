@@ -461,6 +461,18 @@ class GettextLocale(Locale):
             return self.gettext(message)
 
     def pgettext(self, context, message):
+        """Allows to set context for translation.
+
+        Usage example:
+
+            pgettext("law", "right")
+            pgettext("good", "right")
+
+        To generate POT file with context, add following option to step 1
+        of `load_gettext_translations` sequence:
+
+            xgettext [basic options] --keyword=pgettext:1c,2
+        """
         msg_with_ctxt = "%s%s%s" % (context, CONTEXT_SEPARATOR, message)
         result = self.gettext(msg_with_ctxt)
         if CONTEXT_SEPARATOR in result:
@@ -469,6 +481,18 @@ class GettextLocale(Locale):
         return result
 
     def npgettext(self, context, singular, plural, number):
+        """Allows to set context for translation with plural form.
+
+        Usage example:
+
+            npgettext("organization", "club", "clubs", len(clubs))
+            npgettext("stick", "club", "clubs", len(clubs))
+
+        To generate POT file with context, add following option to step 1
+        of `load_gettext_translations` sequence:
+
+            xgettext [basic options] --keyword=npgettext:1c,2,3
+        """
         msgs_with_ctxt = ("%s%s%s" % (context, CONTEXT_SEPARATOR, singular),
                           "%s%s%s" % (context, CONTEXT_SEPARATOR, plural),
                           number)
