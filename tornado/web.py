@@ -1311,12 +1311,13 @@ class RequestHandler(object):
         (perhaps with `set_etag_header`) before calling this method.
         """
         etag = self._headers.get("Etag")
-        # Split If-None-Match with `,` because RFC 2616 allows multiple etag
-        # values in a single header.
-        inm = utf8(self.request.headers.get("If-None-Match", "")).split(',')
-        # For the case of weak validator, lstrip inm entities with `W/`.
-        tags = [x.lstrip('W/') for x in inm]
-        match = (inm[0] == '"*"') or (etag in tags)
+        # Find all weak and strong etag values from If-None-Match header
+        # because RFC 7232 allows multiple etag values in a single header.
+        etags = re.findall(
+            r'(?:W/)?"[^"]*"',
+            utf8(self.request.headers.get("If-None-Match", ""))
+        )
+        match = etags and ((etags[0] == '"*"') or (etag in etags))
         return bool(etag and match)
 
     def _stack_context_handle_exception(self, type, value, traceback):
