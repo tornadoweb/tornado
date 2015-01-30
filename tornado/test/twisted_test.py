@@ -24,6 +24,7 @@ import shutil
 import signal
 import tempfile
 import threading
+import warnings
 
 try:
     import fcntl
@@ -444,7 +445,11 @@ class CompatibilityTests(unittest.TestCase):
             # a Protocol.
             client = Agent(self.reactor)
             response = yield client.request('GET', url)
-            body[0] = yield readBody(response)
+            with warnings.catch_warnings():
+                # readBody has a buggy DeprecationWarning in Twisted 15.0:
+                # https://twistedmatrix.com/trac/changeset/43379
+                warnings.simplefilter('ignore', category=DeprecationWarning)
+                body[0] = yield readBody(response)
             self.stop_loop()
         self.io_loop.add_callback(f)
         runner()
