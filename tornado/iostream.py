@@ -1039,8 +1039,9 @@ class IOStream(BaseIOStream):
             # reported later in _handle_connect.
             if (errno_from_exception(e) not in _ERRNO_INPROGRESS and
                     errno_from_exception(e) not in _ERRNO_WOULDBLOCK):
-                gen_log.warning("Connect error on fd %s: %s",
-                                self.socket.fileno(), e)
+                if future is None:
+                    gen_log.warning("Connect error on fd %s: %s",
+                                    self.socket.fileno(), e)
                 self.close(exc_info=True)
                 return future
         self._add_io_state(self.io_loop.WRITE)
