@@ -112,6 +112,9 @@ def main():
     # instead of DeprecationWarnings.
     warnings.filterwarnings("ignore", category=PendingDeprecationWarning,
                             message="Please use assert.* instead")
+    # Twisted 15.0.0 triggers some warnings on py3 with -bb.
+    warnings.filterwarnings("ignore", category=BytesWarning,
+                            module=r"twisted\..*")
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 

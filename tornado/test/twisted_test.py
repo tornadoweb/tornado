@@ -19,9 +19,11 @@ Unittest for the twisted-style reactor.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import logging
 import os
 import shutil
 import signal
+import sys
 import tempfile
 import threading
 import warnings
@@ -44,7 +46,9 @@ try:
     from twisted.web.client import Agent, readBody
     from twisted.web.resource import Resource
     from twisted.web.server import Site
-    have_twisted_web = True
+    # As of Twisted 15.0.0, twisted.web is present but fails our
+    # tests due to internal str/bytes errors.
+    have_twisted_web = sys.version_info < (3,)
 except ImportError:
     have_twisted_web = False
 
@@ -53,6 +57,7 @@ try:
 except ImportError:
     import _thread as thread  # py3
 
+from tornado.escape import utf8
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
@@ -411,7 +416,7 @@ class CompatibilityTests(unittest.TestCase):
         # http://twistedmatrix.com/documents/current/web/howto/client.html
         chunks = []
         client = Agent(self.reactor)
-        d = client.request('GET', url)
+        d = client.request(b'GET', utf8(url))
 
         class Accumulator(Protocol):
             def __init__(self, finished):
@@ -429,8 +434,17 @@ class CompatibilityTests(unittest.TestCase):
             return finished
         d.addCallback(callback)
 
-        def shutdown(ignored):
-            self.stop_loop()
+        def shutdown(failure):
+            if hasattr(self, 'stop_loop'):
+                self.stop_loop()
+            elif failure is not None:
+                # loop hasn't been initialized yet; try our best to
+                # get an error message out. (the runner() interaction
+                # should probably be refactored).
+                try:
+                    failure.raiseException()
+                except:
+                    logging.error('exception before starting loop', exc_info=True)
         d.addBoth(shutdown)
         runner()
         self.assertTrue(chunks)
@@ -444,7 +458,7 @@ class CompatibilityTests(unittest.TestCase):
             # by reading the body in one blob instead of streaming it with
             # a Protocol.
             client = Agent(self.reactor)
-            response = yield client.request('GET', url)
+            response = yield client.request(b'GET', utf8(url))
             with warnings.catch_warnings():
                 # readBody has a buggy DeprecationWarning in Twisted 15.0:
                 # https://twistedmatrix.com/trac/changeset/43379
