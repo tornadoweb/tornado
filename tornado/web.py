@@ -2633,6 +2633,8 @@ class UIModule(object):
     UI modules often execute additional queries, and they can include
     additional CSS and JavaScript that will be included in the output
     page, which is automatically inserted on page render.
+
+    Subclasses of UIModule must override the `render` method.
     """
     def __init__(self, handler):
         self.handler = handler
@@ -2645,31 +2647,43 @@ class UIModule(object):
         return self.handler.current_user
 
     def render(self, *args, **kwargs):
-        """Overridden in subclasses to return this module's output."""
+        """Override in subclasses to return this module's output."""
         raise NotImplementedError()
 
     def embedded_javascript(self):
-        """Returns a JavaScript string that will be embedded in the page."""
+        """Override to return a JavaScript string to be embedded in the page."""
         return None
 
     def javascript_files(self):
-        """Returns a list of JavaScript files required by this module."""
+        """Override to return a list of JavaScript files needed by this module.
+
+        If the return values are relative paths, they will be passed to
+        `RequestHandler.static_url`; otherwise they will be used as-is.
+        """
         return None
 
     def embedded_css(self):
-        """Returns a CSS string that will be embedded in the page."""
+        """Override to return a CSS string that will be embedded in the page."""
         return None
 
     def css_files(self):
-        """Returns a list of CSS files required by this module."""
+        """Override to returns a list of CSS files required by this module.
+
+        If the return values are relative paths, they will be passed to
+        `RequestHandler.static_url`; otherwise they will be used as-is.
+        """
         return None
 
     def html_head(self):
-        """Returns a CSS string that will be put in the <head/> element"""
+        """Override to return an HTML string that will be put in the <head/>
+        element.
+        """
         return None
 
     def html_body(self):
-        """Returns an HTML string that will be put in the <body/> element"""
+        """Override to return an HTML string that will be put at the end of
+        the <body/> element.
+        """
         return None
 
     def render_string(self, path, **kwargs):
