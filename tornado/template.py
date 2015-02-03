@@ -479,7 +479,7 @@ class _NamedBlock(_Node):
 
     def generate(self, writer):
         block = writer.named_blocks[self.name]
-        funcName = "_tt_block_%s()" % self.name
+        funcName = "_tt_block_%s()" % abs(hash(self.name))
         writer.write_line("def %s:" % funcName, self.line)
         with writer.indent():
             declaration = writer.declarations.get(block.template.name)
