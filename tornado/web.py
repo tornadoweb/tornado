@@ -524,6 +524,12 @@ class RequestHandler(object):
         for k, v in kwargs.items():
             if k == 'max_age':
                 k = 'max-age'
+
+            # skip falsy values for httponly and secure flags because
+            # SimpleCookie sets them regardless
+            if k in ['httponly', 'secure'] and not v:
+                continue
+
             morsel[k] = v
 
     def clear_cookie(self, name, path="/", domain=None):
