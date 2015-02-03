@@ -192,6 +192,18 @@ with ``{# ... #}``.
 
 ``{% set *x* = *y* %}``
     Sets a local variable.
+    
+``{% default *x* to *y* %}``
+    Defines a default value for a global variable. Can be used in
+    conjuction with ``extends``.::
+    
+        <!-- base.html -->
+        {% default width to "100%" %}
+        <body style="width: {{width}}; color: {{color}};">{% block content %}Default{% end %}</body>
+        
+        <!-- mypage.html -->
+        {% extends "base.html" with color = "red" %}
+        {% block content %}Custom content{% end %}
 
 ``{% try %}...{% except %}...{% else %}...{% finally %}...{% end %}``
     Same as the python ``try`` statement.
@@ -491,8 +503,11 @@ class _ExtendsBlock(_Node):
         
     def find_declarations(self, loader, declarations):
         if self.declaration:
-            print("{} resolves to {}".format(self.name, loader.resolve_path(self.name, self.template_name)))
-            declarations[loader.resolve_path(self.name, self.template_name)] = self.declaration
+            toExtend = loader.resolve_path(self.name, self.template_name)
+            if toExtend in declarations:
+                declarations[toExtend] += "; {}".format(self.declaration)
+            else:
+                declarations[toExtend] = self.declaration
 
 
 class _IncludeBlock(_Node):
@@ -569,6 +584,23 @@ class _Statement(_Node):
     def generate(self, writer):
         writer.write_line(self.statement, self.line)
 
+class _Default(_Node):
+    def __init__(self, reader, varName, varValue, line):
+        self.template_name = reader.name
+        self.varName = varName
+        self.varValue = varValue
+        self.line = line
+        
+    def generate(self, writer):
+        pass
+        
+    def find_declarations(self, loader, declarations):
+        declaration =  declarations.get(self.template_name)
+        statement = '{name}={value} if "{name}" not in globals() else {name}'.format(name = self.varName, value = self.varValue)
+        if declaration:
+            declarations[self.template_name] =  statement + "; " + delcaration
+        else:
+            declarations[self.template_name] = statement
 
 class _Expression(_Node):
     def __init__(self, expression, line, raw=False):
@@ -835,7 +867,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
                 raise ParseError("Extra {%% end %%} block on line %d" % line)
             return body
 
-        elif operator in ("extends", "include", "set", "import", "from",
+        elif operator in ("extends", "include", "set", "default", "import", "from",
                           "comment", "autoescape", "raw", "module"):
             if operator == "comment":
                 continue
@@ -861,6 +893,13 @@ def _parse(reader, template, in_block=None, in_loop=None):
                 if not suffix:
                     raise ParseError("set missing statement on line %d" % line)
                 block = _Statement(suffix, line)
+            elif operator == "default":
+                name, separator, value = suffix.partition("to")
+                if not suffix:
+                    raise ParseError("default missing statement on line %d" % line)
+                if not value:
+                    raise ParseError("default missing value on line %d" % line)
+                block = _Default(reader, name, value, line)
             elif operator == "autoescape":
                 fn = suffix.strip()
                 if fn == "None":
