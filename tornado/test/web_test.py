@@ -171,6 +171,13 @@ class CookieTest(WebTestCase):
             def get(self):
                 self.set_cookie("foo", "bar", expires_days=10)
 
+        class SetCookieFalsyFlags(RequestHandler):
+            def get(self):
+                self.set_cookie("a", "1", secure=True)
+                self.set_cookie("b", "1", secure=False)
+                self.set_cookie("c", "1", httponly=True)
+                self.set_cookie("d", "1", httponly=False)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
@@ -178,6 +185,7 @@ class CookieTest(WebTestCase):
                 ("/set_overwrite", SetCookieOverwriteHandler),
                 ("/set_max_age", SetCookieMaxAgeHandler),
                 ("/set_expires_days", SetCookieExpiresDaysHandler),
+                ("/set_falsy_flags", SetCookieFalsyFlags)
                 ]
 
     def test_set_cookie(self):
@@ -248,7 +256,15 @@ class CookieTest(WebTestCase):
         header_expires = datetime.datetime(
             *email.utils.parsedate(match.groupdict()["expires"])[:6])
         self.assertTrue(abs(timedelta_to_seconds(expires - header_expires)) < 10)
-    
+
+    def test_set_cookie_false_flags(self):
+        response = self.fetch("/set_falsy_flags")
+        headers = sorted(response.headers.get_list("Set-Cookie"))
+        self.assertEqual(headers[0], 'a=1; Path=/; secure')
+        self.assertEqual(headers[1], 'b=1; Path=/')
+        self.assertEqual(headers[2], 'c=1; httponly; Path=/')
+        self.assertEqual(headers[3], 'd=1; Path=/')
+
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
