@@ -1,7 +1,7 @@
-What's new in the next release of Tornado
-=========================================
+What's new in Tornado 4.1
+=========================
 
-In progress
+Feb 7, 2015
 -----------
 
 Highlights
