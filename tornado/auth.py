@@ -123,15 +123,18 @@ def _auth_return_future(f):
         if callback is not None:
             future.add_done_callback(
                 functools.partial(_auth_future_to_callback, callback))
+
         def handle_exception(typ, value, tb):
             if future.done():
                 return False
             else:
                 future.set_exc_info((typ, value, tb))
                 return True
+
         with ExceptionStackContext(handle_exception):
             f(*args, **kwargs)
         return future
+
     return wrapper
 
 
@@ -145,6 +148,7 @@ class OpenIdMixin(object):
 
     * ``_OPENID_ENDPOINT``: the identity provider's URI.
     """
+
     @return_future
     def authenticate_redirect(self, callback_uri=None,
                               ax_attrs=["name", "email", "language", "username"],
@@ -190,16 +194,16 @@ class OpenIdMixin(object):
             http_client = self.get_auth_http_client()
         http_client.fetch(url, functools.partial(
             self._on_authentication_verified, callback),
-            method="POST", body=urllib_parse.urlencode(args))
+                          method="POST", body=urllib_parse.urlencode(args))
 
     def _openid_args(self, callback_uri, ax_attrs=[], oauth_scope=None):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)
         args = {
             "openid.ns": "http://specs.openid.net/auth/2.0",
             "openid.claimed_id":
-            "http://specs.openid.net/auth/2.0/identifier_select",
+                "http://specs.openid.net/auth/2.0/identifier_select",
             "openid.identity":
-            "http://specs.openid.net/auth/2.0/identifier_select",
+                "http://specs.openid.net/auth/2.0/identifier_select",
             "openid.return_to": url,
             "openid.realm": urlparse.urljoin(url, '/'),
             "openid.mode": "checkid_setup",
@@ -216,11 +220,11 @@ class OpenIdMixin(object):
                 required += ["firstname", "fullname", "lastname"]
                 args.update({
                     "openid.ax.type.firstname":
-                    "http://axschema.org/namePerson/first",
+                        "http://axschema.org/namePerson/first",
                     "openid.ax.type.fullname":
-                    "http://axschema.org/namePerson",
+                        "http://axschema.org/namePerson",
                     "openid.ax.type.lastname":
-                    "http://axschema.org/namePerson/last",
+                        "http://axschema.org/namePerson/last",
                 })
             known_attrs = {
                 "email": "http://axschema.org/contact/email",
@@ -234,7 +238,7 @@ class OpenIdMixin(object):
         if oauth_scope:
             args.update({
                 "openid.ns.oauth":
-                "http://specs.openid.net/extensions/oauth/1.0",
+                    "http://specs.openid.net/extensions/oauth/1.0",
                 "openid.oauth.consumer": self.request.host.split(":")[0],
                 "openid.oauth.scope": oauth_scope,
             })
@@ -251,7 +255,7 @@ class OpenIdMixin(object):
         ax_ns = None
         for name in self.request.arguments:
             if name.startswith("openid.ns.") and \
-                    self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
+                            self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
                 ax_ns = name[10:]
                 break
 
@@ -326,6 +330,7 @@ class OAuthMixin(object):
     Subclasses must also override the `_oauth_get_user_future` and
     `_oauth_consumer_token` methods.
     """
+
     @return_future
     def authorize_redirect(self, callback_uri=None, extra_params=None,
                            http_client=None, callback=None):
@@ -572,6 +577,7 @@ class OAuth2Mixin(object):
     * ``_OAUTH_AUTHORIZE_URL``: The service's authorization url.
     * ``_OAUTH_ACCESS_TOKEN_URL``:  The service's access token url.
     """
+
     @return_future
     def authorize_redirect(self, redirect_uri=None, client_id=None,
                            client_secret=None, extra_params=None,
@@ -616,6 +622,84 @@ class OAuth2Mixin(object):
         if extra_params:
             args.update(extra_params)
         return url_concat(url, args)
+
+    @_auth_return_future
+    def auth_request(self, path, callback, access_token=None,
+                     post_args=None, **args):
+        """Fetches the given relative API path, e.g., "/btaylor/picture"
+
+        If the request is a POST, ``post_args`` should be provided. Query
+        string arguments should be given as keyword arguments.
+
+        An introduction to the Facebook Graph API can be found at
+        http://developers.facebook.com/docs/api
+
+        An introduction to the Google OAuth2 API can be found at
+        https://developers.google.com/accounts/docs/OAuth2
+
+        Many methods require an OAuth access token which you can
+        obtain through `~OAuth2Mixin.authorize_redirect` and
+        ``get_authenticated_user``. The user returned through that
+        process includes an ``access_token`` attribute that can be
+        used to make authenticated requests via this method.
+
+        Example usage::
+
+            class MainHandler(tornado.web.RequestHandler,
+                              tornado.auth.FacebookGraphMixin):
+                @tornado.web.authenticated
+                @tornado.gen.coroutine
+                def get(self):
+                    new_entry = yield self.auth_request(
+                        "/me/feed",
+                        post_args={"message": "I am posting from my Tornado application!"},
+                        access_token=self.current_user["access_token"])
+
+                    if not new_entry:
+                        # Call failed; perhaps missing permission?
+                        yield self.authorize_redirect()
+                        return
+                    self.finish("Posted a message!")
+
+        The given path is relative to ``self._FACEBOOK_BASE_URL``,
+        by default "https://graph.facebook.com".
+
+        .. versionchanged:: 3.1
+           Added the ability to override ``self._FACEBOOK_BASE_URL``.
+        """
+        url = self._OAUTH_BASE_URL + path
+        all_args = {}
+        if access_token:
+            all_args["access_token"] = access_token
+            all_args.update(args)
+
+        if all_args:
+            url += "?" + urllib_parse.urlencode(all_args)
+        callback = functools.partial(self._on_request, callback)
+        http = self.get_auth_http_client()
+        if post_args is not None:
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, callback=callback)
+
+    @staticmethod
+    def _on_request(future, response):
+            if response.error:
+                future.set_exception(AuthError("Error response %s fetching %s" %
+                                               (response.error, response.request.url)))
+                return
+
+            future.set_result(escape.json_decode(response.body))
+
+    @staticmethod
+    def get_auth_http_client():
+            """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+
+            May be overridden by subclasses to use an HTTP client other than
+            the default.
+            """
+            return httpclient.AsyncHTTPClient()
 
 
 class TwitterMixin(OAuthMixin):
@@ -950,7 +1034,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
         oauth_ns = ""
         for name, values in self.request.arguments.items():
             if name.startswith("openid.ns.") and \
-                    values[-1] == b"http://specs.openid.net/extensions/oauth/1.0":
+                            values[-1] == b"http://specs.openid.net/extensions/oauth/1.0":
                 oauth_ns = name[10:]
                 break
         token = self.get_argument("openid." + oauth_ns + ".request_token", "")
@@ -994,11 +1078,12 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     """
     _OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
     _OAUTH_ACCESS_TOKEN_URL = "https://accounts.google.com/o/oauth2/token"
+    _OAUTH_BASE_URL = "https://www.googleapis.com/oauth2/v2"
     _OAUTH_NO_CALLBACKS = False
     _OAUTH_SETTINGS_KEY = 'google_oauth'
 
     @_auth_return_future
-    def get_authenticated_user(self, redirect_uri, code, callback):
+    def get_authenticated_user(self, redirect_uri, code, callback=None):
         """Handles the login for the Google user, returning a user object.
 
         Example usage::
@@ -1040,15 +1125,26 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             return
 
         args = escape.json_decode(response.body)
-        future.set_result(args)
+        session = {
+            "access_token": args["access_token"],
+            "expires": args.get("expires_in")
+        }
 
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+        self.auth_request(
+            path="/userinfo",
+            callback=functools.partial(
+                self._on_get_user_info, future, session),
+            access_token=args["access_token"],
+        )
 
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
+    @staticmethod
+    def _on_get_user_info(future, session, user):
+        if user is None:
+            future.set_result(None)
+            return
+
+        user.update({"access_token": session["access_token"], "session_expires": session.get("expires")})
+        future.set_result(user)
 
 
 class FacebookMixin(object):
@@ -1081,12 +1177,13 @@ class FacebookMixin(object):
                     raise tornado.web.HTTPError(500, "Facebook auth failed")
                 # Save the user using, e.g., set_secure_cookie()
 
-    The user object returned by `get_authenticated_user` includes the
+    The user object returned by ``get_authenticated_user`` includes the
     attributes ``facebook_uid`` and ``name`` in addition to session attributes
     like ``session_key``. You should save the session key with the user; it is
     required to make requests on behalf of the user later with
     `facebook_request`.
     """
+
     @return_future
     def authenticate_redirect(self, callback_uri=None, cancel_uri=None,
                               extended_permissions=None, callback=None):
@@ -1206,7 +1303,7 @@ class FacebookMixin(object):
         args["format"] = "json"
         args["sig"] = self._signature(args)
         url = "http://api.facebook.com/restserver.php?" + \
-            urllib_parse.urlencode(args)
+              urllib_parse.urlencode(args)
         http = self.get_auth_http_client()
         http.fetch(url, callback=functools.partial(
             self._parse_response, callback))
@@ -1267,7 +1364,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     _OAUTH_ACCESS_TOKEN_URL = "https://graph.facebook.com/oauth/access_token?"
     _OAUTH_AUTHORIZE_URL = "https://www.facebook.com/dialog/oauth?"
     _OAUTH_NO_CALLBACKS = False
-    _FACEBOOK_BASE_URL = "https://graph.facebook.com"
+    _OAUTH_BASE_URL = "https://graph.facebook.com"
 
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
@@ -1307,7 +1404,7 @@ class FacebookGraphMixin(OAuth2Mixin):
 
         http.fetch(self._oauth_request_token_url(**args),
                    functools.partial(self._on_access_token, redirect_uri, client_id,
-                                       client_secret, callback, fields))
+                                     client_secret, callback, fields))
 
     def _on_access_token(self, redirect_uri, client_id, client_secret,
                          future, fields, response):
@@ -1329,6 +1426,10 @@ class FacebookGraphMixin(OAuth2Mixin):
             fields=",".join(fields)
         )
 
+    def facebook_request(self, path, callback, access_token=None,
+                         post_args=None, **args):
+        self.auth_request(path, callback, access_token, post_args, **args)
+
     def _on_get_user_info(self, future, session, fields, user):
         if user is None:
             future.set_result(None)
@@ -1340,79 +1441,6 @@ class FacebookGraphMixin(OAuth2Mixin):
 
         fieldmap.update({"access_token": session["access_token"], "session_expires": session.get("expires")})
         future.set_result(fieldmap)
-
-    @_auth_return_future
-    def facebook_request(self, path, callback, access_token=None,
-                         post_args=None, **args):
-        """Fetches the given relative API path, e.g., "/btaylor/picture"
-
-        If the request is a POST, ``post_args`` should be provided. Query
-        string arguments should be given as keyword arguments.
-
-        An introduction to the Facebook Graph API can be found at
-        http://developers.facebook.com/docs/api
-
-        Many methods require an OAuth access token which you can
-        obtain through `~OAuth2Mixin.authorize_redirect` and
-        `get_authenticated_user`. The user returned through that
-        process includes an ``access_token`` attribute that can be
-        used to make authenticated requests via this method.
-
-        Example usage::
-
-            class MainHandler(tornado.web.RequestHandler,
-                              tornado.auth.FacebookGraphMixin):
-                @tornado.web.authenticated
-                @tornado.gen.coroutine
-                def get(self):
-                    new_entry = yield self.facebook_request(
-                        "/me/feed",
-                        post_args={"message": "I am posting from my Tornado application!"},
-                        access_token=self.current_user["access_token"])
-
-                    if not new_entry:
-                        # Call failed; perhaps missing permission?
-                        yield self.authorize_redirect()
-                        return
-                    self.finish("Posted a message!")
-
-        The given path is relative to ``self._FACEBOOK_BASE_URL``,
-        by default "https://graph.facebook.com".
-
-        .. versionchanged:: 3.1
-           Added the ability to override ``self._FACEBOOK_BASE_URL``.
-        """
-        url = self._FACEBOOK_BASE_URL + path
-        all_args = {}
-        if access_token:
-            all_args["access_token"] = access_token
-            all_args.update(args)
-
-        if all_args:
-            url += "?" + urllib_parse.urlencode(all_args)
-        callback = functools.partial(self._on_facebook_request, callback)
-        http = self.get_auth_http_client()
-        if post_args is not None:
-            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
-                       callback=callback)
-        else:
-            http.fetch(url, callback=callback)
-
-    def _on_facebook_request(self, future, response):
-        if response.error:
-            future.set_exception(AuthError("Error response %s fetching %s" %
-                                           (response.error, response.request.url)))
-            return
-
-        future.set_result(escape.json_decode(response.body))
-
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
-
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
 
 
 def _oauth_signature(consumer_token, method, url, parameters={}, token=None):

@@ -14,3 +14,4 @@ MANIFEST
 /env/
 # Used in demo apps
 secrets.cfg
+.idea
