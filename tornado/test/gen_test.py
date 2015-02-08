@@ -816,6 +816,7 @@ class GenCoroutineTest(AsyncTestCase):
     @gen_test
     def test_moment(self):
         calls = []
+
         @gen.coroutine
         def f(name, yieldable):
             for i in range(5):

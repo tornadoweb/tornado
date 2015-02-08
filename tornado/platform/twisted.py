@@ -572,6 +572,7 @@ if hasattr(gen.convert_yielded, 'register'):
     @gen.convert_yielded.register(Deferred)
     def _(d):
         f = Future()
+
         def errback(failure):
             try:
                 failure.raiseException()

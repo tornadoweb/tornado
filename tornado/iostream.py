@@ -1104,6 +1104,7 @@ class IOStream(BaseIOStream):
         # If we had an "unwrap" counterpart to this method we would need
         # to restore the original callback after our Future resolves
         # so that repeated wrap/unwrap calls don't build up layers.
+
         def close_callback():
             if not future.done():
                 future.set_exception(ssl_stream.error or StreamClosedError())

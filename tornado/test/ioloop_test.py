@@ -180,10 +180,12 @@ class TestIOLoop(AsyncTestCase):
         # t2 should be cancelled by t1, even though it is already scheduled to
         # be run before the ioloop even looks at it.
         now = self.io_loop.time()
+
         def t1():
             calls[0] = True
             self.io_loop.remove_timeout(t2_handle)
         self.io_loop.add_timeout(now + 0.01, t1)
+
         def t2():
             calls[1] = True
         t2_handle = self.io_loop.add_timeout(now + 0.02, t2)
@@ -252,6 +254,7 @@ class TestIOLoop(AsyncTestCase):
         """The handler callback receives the same fd object it passed in."""
         server_sock, port = bind_unused_port()
         fds = []
+
         def handle_connection(fd, events):
             fds.append(fd)
             conn, addr = server_sock.accept()
@@ -274,6 +277,7 @@ class TestIOLoop(AsyncTestCase):
 
     def test_mixed_fd_fileobj(self):
         server_sock, port = bind_unused_port()
+
         def f(fd, events):
             pass
         self.io_loop.add_handler(server_sock, f, IOLoop.READ)
@@ -288,6 +292,7 @@ class TestIOLoop(AsyncTestCase):
         """Calling start() twice should raise an error, not deadlock."""
         returned_from_start = [False]
         got_exception = [False]
+
         def callback():
             try:
                 self.io_loop.start()
@@ -344,6 +349,7 @@ class TestIOLoop(AsyncTestCase):
 
             # After reading from one fd, remove the other from the IOLoop.
             chunks = []
+
             def handle_read(fd, events):
                 chunks.append(fd.recv(1024))
                 if fd is client:

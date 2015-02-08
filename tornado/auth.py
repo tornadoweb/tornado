@@ -123,6 +123,7 @@ def _auth_return_future(f):
         if callback is not None:
             future.add_done_callback(
                 functools.partial(_auth_future_to_callback, callback))
+
         def handle_exception(typ, value, tb):
             if future.done():
                 return False

@@ -1487,6 +1487,7 @@ def asynchronous(method):
     """
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
+
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         self._auto_finish = False

@@ -1549,6 +1549,7 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
         def my_ui_method(handler, x):
             return "In my_ui_method(%s) with handler value %s." % (
                 x, handler.value())
+
         class MyModule(UIModule):
             def render(self, x):
                 return "In MyModule(%s) with handler value %s." % (
@@ -2167,6 +2168,7 @@ class SignedValueTest(unittest.TestCase):
     def test_payload_tampering(self):
         # These cookies are variants of the one in test_known_values.
         sig = "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"
+
         def validate(prefix):
             return (b'value' ==
                     decode_signed_value(SignedValueTest.SECRET, "key",
@@ -2181,6 +2183,7 @@ class SignedValueTest(unittest.TestCase):
 
     def test_signature_tampering(self):
         prefix = "2|1:0|10:1300000000|3:key|8:dmFsdWU=|"
+
         def validate(sig):
             return (b'value' ==
                     decode_signed_value(SignedValueTest.SECRET, "key",

@@ -124,9 +124,11 @@ def engine(func):
     which use ``self.finish()`` in place of a callback argument.
     """
     func = _make_coroutine_wrapper(func, replace_callback=False)
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         future = func(*args, **kwargs)
+
         def final_callback(future):
             if future.result() is not None:
                 raise ReturnValueIgnoredError(
@@ -479,11 +481,13 @@ def Task(func, *args, **kwargs):
        yielded.
     """
     future = Future()
+
     def handle_exception(typ, value, tb):
         if future.done():
             return False
         future.set_exc_info((typ, value, tb))
         return True
+
     def set_result(result):
         if future.done():
             return
@@ -600,6 +604,7 @@ def multi_future(children):
     future = Future()
     if not children:
         future.set_result({} if keys is not None else [])
+
     def callback(f):
         unfinished_children.remove(f)
         if not unfinished_children:
@@ -665,6 +670,7 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
     chain_future(future, result)
     if io_loop is None:
         io_loop = IOLoop.current()
+
     def error_callback(future):
         try:
             future.result()
@@ -672,6 +678,7 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
             if not isinstance(e, quiet_exceptions):
                 app_log.error("Exception in Future %r after timeout",
                               future, exc_info=True)
+
     def timeout_callback():
         result.set_exception(TimeoutError("Timeout"))
         # In case the wrapped future goes on to fail, log it.
@@ -857,6 +864,7 @@ class Runner(object):
             # YieldPoints are too closely coupled to the Runner to go
             # through the generic convert_yielded mechanism.
             self.future = TracebackFuture()
+
             def start_yield_point():
                 try:
                     yielded.start(self)
@@ -875,6 +883,7 @@ class Runner(object):
                 with stack_context.ExceptionStackContext(
                         self.handle_exception) as deactivate:
                     self.stack_context_deactivate = deactivate
+
                     def cb():
                         start_yield_point()
                         self.run()

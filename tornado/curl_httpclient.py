@@ -289,8 +289,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     functools.partial(self._curl_header_callback,
                                       headers, request.header_callback))
         if request.streaming_callback:
-            write_function = lambda chunk: self.io_loop.add_callback(
-                request.streaming_callback, chunk)
+            def write_function(chunk):
+                self.io_loop.add_callback(request.streaming_callback, chunk)
         else:
             write_function = buffer.write
         if bytes is str:  # py2
@@ -382,6 +382,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     % request.method)
 
             request_buffer = BytesIO(utf8(request.body))
+
             def ioctl(cmd):
                 if cmd == curl.IOCMD_RESTARTREAD:
                     request_buffer.seek(0)

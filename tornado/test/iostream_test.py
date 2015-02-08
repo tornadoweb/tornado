@@ -310,6 +310,7 @@ class TestIOStreamMixin(object):
             def streaming_callback(data):
                 chunks.append(data)
                 self.stop()
+
             def close_callback(data):
                 assert not data, data
                 closed[0] = True
@@ -355,6 +356,7 @@ class TestIOStreamMixin(object):
     def test_future_delayed_close_callback(self):
         # Same as test_delayed_close_callback, but with the future interface.
         server, client = self.make_iostream_pair()
+
         # We can't call make_iostream_pair inside a gen_test function
         # because the ioloop is not reentrant.
         @gen_test
@@ -534,6 +536,7 @@ class TestIOStreamMixin(object):
         # and IOStream._maybe_add_error_listener.
         server, client = self.make_iostream_pair()
         closed = [False]
+
         def close_callback():
             closed[0] = True
             self.stop()

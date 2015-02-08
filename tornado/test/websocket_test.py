@@ -12,7 +12,7 @@ from tornado.web import Application, RequestHandler
 from tornado.util import u
 
 try:
-    import tornado.websocket
+    import tornado.websocket  # noqa
     from tornado.util import _websocket_mask_python
 except ImportError:
     # The unittest module presents misleading errors on ImportError
