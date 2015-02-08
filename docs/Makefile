@@ -23,5 +23,9 @@ latex:
 pdf: latex
 	cd build/latex && pdflatex -interaction=nonstopmode tornado.tex
 
+.PHONY: doctest
+doctest:
+	sphinx-build -b doctest $(SPHINXOPTS) build/doctest
+
 clean:
 	rm -rf build
