@@ -263,6 +263,7 @@ class Return(Exception):
         super(Return, self).__init__()
         self.value = value
 
+
 class WaitIterator(object):
     """Provides an iterator to yield the results of futures as they finish.
 
@@ -846,10 +847,10 @@ class Runner(object):
         # Lists containing YieldPoints require stack contexts;
         # other lists are handled via multi_future in convert_yielded.
         if (isinstance(yielded, list) and
-            any(isinstance(f, YieldPoint) for f in yielded)):
+                any(isinstance(f, YieldPoint) for f in yielded)):
             yielded = Multi(yielded)
         elif (isinstance(yielded, dict) and
-            any(isinstance(f, YieldPoint) for f in yielded.values())):
+              any(isinstance(f, YieldPoint) for f in yielded.values())):
             yielded = Multi(yielded)
 
         if isinstance(yielded, YieldPoint):

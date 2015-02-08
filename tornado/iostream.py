@@ -83,6 +83,8 @@ if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)
 
 #######################################################
+
+
 class StreamClosedError(IOError):
     """Exception raised by `IOStream` methods when the stream is closed.
 
@@ -1222,7 +1224,7 @@ class SSLIOStream(IOStream):
             # quiet as well.
             # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
             if (err.args[0] in _ERRNO_CONNRESET or
-                err.args[0] == errno.EBADF):
+                    err.args[0] == errno.EBADF):
                 return self.close(exc_info=True)
             raise
         except AttributeError:

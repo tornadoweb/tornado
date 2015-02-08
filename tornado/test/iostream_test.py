@@ -884,7 +884,6 @@ class TestIOStreamStartTLS(AsyncTestCase):
         with self.assertRaises((ssl.SSLError, socket.error)):
             yield server_future
 
-
     @unittest.skipIf(not hasattr(ssl, 'create_default_context'),
                      'ssl.create_default_context not present')
     @gen_test

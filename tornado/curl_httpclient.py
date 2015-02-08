@@ -35,6 +35,7 @@ from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
 
 curl_log = logging.getLogger('tornado.curl_httpclient')
 
+
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(self, io_loop, max_clients=10, defaults=None):
         super(CurlAsyncHTTPClient, self).initialize(io_loop, defaults=defaults)
@@ -286,7 +287,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
         curl.setopt(pycurl.HEADERFUNCTION,
                     functools.partial(self._curl_header_callback,
-                        headers, request.header_callback))
+                                      headers, request.header_callback))
         if request.streaming_callback:
             write_function = lambda chunk: self.io_loop.add_callback(
                 request.streaming_callback, chunk)
@@ -404,7 +405,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
             curl.setopt(pycurl.USERPWD, native_str(userpwd))
             curl_log.debug("%s %s (username: %r)", request.method, request.url,
-                          request.auth_username)
+                           request.auth_username)
         else:
             curl.unsetopt(pycurl.USERPWD)
             curl_log.debug("%s %s", request.method, request.url)

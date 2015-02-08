@@ -39,9 +39,9 @@ from tornado.tcpclient import TCPClient
 from tornado.util import _websocket_mask
 
 try:
-    from urllib.parse import urlparse # py2
+    from urllib.parse import urlparse  # py2
 except ImportError:
-    from urlparse import urlparse # py3
+    from urlparse import urlparse  # py3
 
 try:
     xrange  # py2
@@ -159,7 +159,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
             origin = self.request.headers.get("Origin")
         else:
             origin = self.request.headers.get("Sec-Websocket-Origin", None)
-
 
         # If there was an origin header, check to make sure it matches
         # according to check_origin. When the origin is None, we assume it
@@ -549,12 +548,12 @@ class WebSocketProtocol13(WebSocketProtocol):
         extensions = self._parse_extensions_header(self.request.headers)
         for ext in extensions:
             if (ext[0] == 'permessage-deflate' and
-                self._compression_options is not None):
+                    self._compression_options is not None):
                 # TODO: negotiate parameters if compression_options
                 # specifies limits.
                 self._create_compressors('server', ext[1])
                 if ('client_max_window_bits' in ext[1] and
-                    ext[1]['client_max_window_bits'] is None):
+                        ext[1]['client_max_window_bits'] is None):
                     # Don't echo an offered client_max_window_bits
                     # parameter with no value.
                     del ext[1]['client_max_window_bits']
@@ -599,7 +598,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         extensions = self._parse_extensions_header(headers)
         for ext in extensions:
             if (ext[0] == 'permessage-deflate' and
-                self._compression_options is not None):
+                    self._compression_options is not None):
                 self._create_compressors('client', ext[1])
             else:
                 raise ValueError("unsupported extension %r", ext)

@@ -245,7 +245,7 @@ class CookieTest(WebTestCase):
         headers = response.headers.get_list("Set-Cookie")
         self.assertEqual(sorted(headers),
                          ["foo=bar; Max-Age=10; Path=/"])
-    
+
     def test_set_cookie_expires_days(self):
         response = self.fetch("/set_expires_days")
         header = response.headers.get("Set-Cookie")
@@ -2312,7 +2312,7 @@ class XSRFTest(SimpleHandlerTestCase):
         token2 = self.get_token()
         # Each token can be used to authenticate its own request.
         for token in (self.xsrf_token, token2):
-            response  = self.fetch(
+            response = self.fetch(
                 "/", method="POST",
                 body=urllib_parse.urlencode(dict(_xsrf=token)),
                 headers=self.cookie_headers(token))

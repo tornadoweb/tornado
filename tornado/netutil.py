@@ -68,6 +68,7 @@ if hasattr(errno, "WSAEWOULDBLOCK"):
 # Default backlog used when calling sock.listen()
 _DEFAULT_BACKLOG = 128
 
+
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
                  backlog=_DEFAULT_BACKLOG, flags=None):
     """Creates listening sockets bound to the given port and address.

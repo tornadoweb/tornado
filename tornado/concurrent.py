@@ -44,11 +44,13 @@ except ImportError:
 _GC_CYCLE_FINALIZERS = (platform.python_implementation() == 'CPython' and
                         sys.version_info >= (3, 4))
 
+
 class ReturnValueIgnoredError(Exception):
     pass
 
 # This class and associated code in the future object is derived
 # from the Trollius project, a backport of asyncio to Python 2.x - 3.x
+
 
 class _TracebackLogger(object):
     """Helper to log a traceback upon destruction if not cleared.

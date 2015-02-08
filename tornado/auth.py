@@ -1307,7 +1307,7 @@ class FacebookGraphMixin(OAuth2Mixin):
 
         http.fetch(self._oauth_request_token_url(**args),
                    functools.partial(self._on_access_token, redirect_uri, client_id,
-                                       client_secret, callback, fields))
+                                     client_secret, callback, fields))
 
     def _on_access_token(self, redirect_uri, client_id, client_secret,
                          future, fields, response):

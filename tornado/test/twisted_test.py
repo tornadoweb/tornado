@@ -75,6 +75,7 @@ skipIfNoTwisted = unittest.skipUnless(have_twisted,
 skipIfNoSingleDispatch = unittest.skipIf(
     gen.singledispatch is None, "singledispatch module not present")
 
+
 def save_signal_handlers():
     saved = {}
     for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:

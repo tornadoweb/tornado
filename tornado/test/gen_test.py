@@ -1072,6 +1072,7 @@ class WithTimeoutTest(AsyncTestCase):
             yield gen.with_timeout(datetime.timedelta(seconds=3600),
                                    executor.submit(lambda: None))
 
+
 class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_empty_iterator(self):
@@ -1121,10 +1122,10 @@ class WaitIteratorTest(AsyncTestCase):
         while not dg.done():
             dr = yield dg.next()
             if dg.current_index == "f1":
-                self.assertTrue(dg.current_future==f1 and dr==24,
+                self.assertTrue(dg.current_future == f1 and dr == 24,
                                 "WaitIterator dict status incorrect")
             elif dg.current_index == "f2":
-                self.assertTrue(dg.current_future==f2 and dr==42,
+                self.assertTrue(dg.current_future == f2 and dr == 42,
                                 "WaitIterator dict status incorrect")
             else:
                 self.fail("got bad WaitIterator index {}".format(
@@ -1145,7 +1146,7 @@ class WaitIteratorTest(AsyncTestCase):
             futures[3].set_result(84)
 
         if iteration < 8:
-            self.io_loop.add_callback(self.finish_coroutines, iteration+1, futures)
+            self.io_loop.add_callback(self.finish_coroutines, iteration + 1, futures)
 
     @gen_test
     def test_iterator(self):

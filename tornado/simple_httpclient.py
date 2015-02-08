@@ -317,7 +317,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             body_present = (self.request.body is not None or
                             self.request.body_producer is not None)
             if ((body_expected and not body_present) or
-                (body_present and not body_expected)):
+                    (body_present and not body_expected)):
                 raise ValueError(
                     'Body must %sbe None for method %s (unelss '
                     'allow_nonstandard_methods is true)' %

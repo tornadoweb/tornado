@@ -31,6 +31,7 @@ skipIfNoNetwork = unittest.skipIf('NO_NETWORK' in os.environ,
 
 skipIfNoIPv6 = unittest.skipIf(not socket.has_ipv6, 'ipv6 support not present')
 
+
 def refusing_port():
     """Returns a local port number that will refuse all connections.
 

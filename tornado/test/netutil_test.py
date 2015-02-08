@@ -67,9 +67,11 @@ class _ResolverErrorTestMixin(object):
             yield self.resolver.resolve('an invalid domain', 80,
                                         socket.AF_UNSPEC)
 
+
 def _failing_getaddrinfo(*args):
     """Dummy implementation of getaddrinfo for use in mocks"""
     raise socket.gaierror("mock: lookup failed")
+
 
 @skipIfNoNetwork
 class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):

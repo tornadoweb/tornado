@@ -53,7 +53,7 @@ class EchoHandler(TestWebSocketHandler):
 
 class ErrorInOnMessageHandler(TestWebSocketHandler):
     def on_message(self, message):
-        1/0
+        1 / 0
 
 
 class HeaderHandler(TestWebSocketHandler):
@@ -105,6 +105,7 @@ class WebSocketBaseTestCase(AsyncHTTPTestCase):
         """
         ws.close()
         yield self.close_future
+
 
 class WebSocketTest(WebSocketBaseTestCase):
     def get_app(self):
@@ -250,7 +251,7 @@ class WebSocketTest(WebSocketBaseTestCase):
         headers = {'Origin': 'http://127.0.0.1:%d' % port}
 
         ws = yield websocket_connect(HTTPRequest(url, headers=headers),
-            io_loop=self.io_loop)
+                                     io_loop=self.io_loop)
         ws.write_message('hello')
         response = yield ws.read_message()
         self.assertEqual(response, 'hello')
@@ -264,7 +265,7 @@ class WebSocketTest(WebSocketBaseTestCase):
         headers = {'Origin': 'http://127.0.0.1:%d/something' % port}
 
         ws = yield websocket_connect(HTTPRequest(url, headers=headers),
-            io_loop=self.io_loop)
+                                     io_loop=self.io_loop)
         ws.write_message('hello')
         response = yield ws.read_message()
         self.assertEqual(response, 'hello')

@@ -884,6 +884,7 @@ def doctests():
     import doctest
     return doctest.DocTestSuite()
 
+
 def split_host_and_port(netloc):
     """Returns ``(host, port)`` tuple from ``netloc``.
 
