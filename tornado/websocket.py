@@ -74,17 +74,22 @@ class WebSocketHandler(tornado.web.RequestHandler):
     http://tools.ietf.org/html/rfc6455.
 
     Here is an example WebSocket handler that echos back all received messages
-    back to the client::
+    back to the client:
 
-      class EchoWebSocket(websocket.WebSocketHandler):
+    .. testcode::
+
+      class EchoWebSocket(tornado.websocket.WebSocketHandler):
           def open(self):
-              print "WebSocket opened"
+              print("WebSocket opened")
 
           def on_message(self, message):
               self.write_message(u"You said: " + message)
 
           def on_close(self):
-              print "WebSocket closed"
+              print("WebSocket closed")
+
+    .. testoutput::
+       :hide:
 
     WebSockets are not standard HTTP connections. The "handshake" is
     HTTP, but after the handshake, the protocol is

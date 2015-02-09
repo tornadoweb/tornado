@@ -32,7 +32,9 @@ They all take slightly different arguments due to the fact all these
 services implement authentication and authorization slightly differently.
 See the individual service classes below for complete documentation.
 
-Example usage for Google OpenID::
+Example usage for Google OpenID:
+
+.. testcode::
 
     class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                    tornado.auth.GoogleOAuth2Mixin):
@@ -50,6 +52,10 @@ Example usage for Google OpenID::
                     scope=['profile', 'email'],
                     response_type='code',
                     extra_params={'approval_prompt': 'auto'})
+
+.. testoutput::
+   :hide:
+
 
 .. versionchanged:: 4.0
    All of the callback interfaces in this module are now guaranteed
@@ -630,7 +636,9 @@ class TwitterMixin(OAuthMixin):
     URL you registered as your application's callback URL.
 
     When your application is set up, you can use this mixin like this
-    to authenticate the user with Twitter and get access to their stream::
+    to authenticate the user with Twitter and get access to their stream:
+
+    .. testcode::
 
         class TwitterLoginHandler(tornado.web.RequestHandler,
                                   tornado.auth.TwitterMixin):
@@ -641,6 +649,9 @@ class TwitterMixin(OAuthMixin):
                     # Save the user using e.g. set_secure_cookie()
                 else:
                     yield self.authorize_redirect()
+
+    .. testoutput::
+       :hide:
 
     The user object returned by `~OAuthMixin.get_authenticated_user`
     includes the attributes ``username``, ``name``, ``access_token``,
@@ -690,7 +701,9 @@ class TwitterMixin(OAuthMixin):
         `~OAuthMixin.get_authenticated_user`. The user returned through that
         process includes an 'access_token' attribute that can be used
         to make authenticated requests via this method. Example
-        usage::
+        usage:
+
+        .. testcode::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.TwitterMixin):
@@ -706,6 +719,9 @@ class TwitterMixin(OAuthMixin):
                         yield self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
+
+        .. testoutput::
+           :hide:
 
         """
         if path.startswith('http:') or path.startswith('https:'):
@@ -769,7 +785,9 @@ class FriendFeedMixin(OAuthMixin):
     for the URL you registered as your application's Callback URL.
 
     When your application is set up, you can use this mixin like this
-    to authenticate the user with FriendFeed and get access to their feed::
+    to authenticate the user with FriendFeed and get access to their feed:
+
+    .. testcode::
 
         class FriendFeedLoginHandler(tornado.web.RequestHandler,
                                      tornado.auth.FriendFeedMixin):
@@ -780,6 +798,10 @@ class FriendFeedMixin(OAuthMixin):
                     # Save the user using e.g. set_secure_cookie()
                 else:
                     yield self.authorize_redirect()
+
+    .. testoutput::
+       :hide:
+
 
     The user object returned by `~OAuthMixin.get_authenticated_user()` includes the
     attributes ``username``, ``name``, and ``description`` in addition to
@@ -812,7 +834,9 @@ class FriendFeedMixin(OAuthMixin):
         can be used to make authenticated requests via this
         method.
 
-        Example usage::
+        Example usage:
+
+        .. testcode::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FriendFeedMixin):
@@ -829,6 +853,9 @@ class FriendFeedMixin(OAuthMixin):
                         yield self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
+
+        .. testoutput::
+           :hide:
 
         """
         # Add the OAuth resource request signature if we have credentials
@@ -901,7 +928,9 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
     the values for the user, including ``email``, ``name``, and
     ``locale``.
 
-    Example usage::
+    Example usage:
+
+    .. testcode::
 
         class GoogleLoginHandler(tornado.web.RequestHandler,
                                  tornado.auth.GoogleMixin):
@@ -912,6 +941,10 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
                    # Save the user with e.g. set_secure_cookie()
                else:
                    yield self.authenticate_redirect()
+
+    .. testoutput::
+       :hide:
+
     """
     _OPENID_ENDPOINT = "https://www.google.com/accounts/o8/ud"
     _OAUTH_ACCESS_TOKEN_URL = "https://www.google.com/accounts/OAuthGetAccessToken"
@@ -1002,7 +1035,9 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     def get_authenticated_user(self, redirect_uri, code, callback):
         """Handles the login for the Google user, returning a user object.
 
-        Example usage::
+        Example usage:
+
+        .. testcode::
 
             class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                            tornado.auth.GoogleOAuth2Mixin):
@@ -1020,6 +1055,10 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                             scope=['profile', 'email'],
                             response_type='code',
                             extra_params={'approval_prompt': 'auto'})
+
+        .. testoutput::
+           :hide:
+
         """
         http = self.get_auth_http_client()
         body = urllib_parse.urlencode({
@@ -1066,7 +1105,9 @@ class FacebookMixin(object):
     ``facebook_api_key`` and ``facebook_secret``.
 
     When your application is set up, you can use this mixin like this
-    to authenticate the user with Facebook::
+    to authenticate the user with Facebook:
+
+    .. testcode::
 
         class FacebookHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookMixin):
@@ -1081,6 +1122,9 @@ class FacebookMixin(object):
                 if not user:
                     raise tornado.web.HTTPError(500, "Facebook auth failed")
                 # Save the user using, e.g., set_secure_cookie()
+
+    .. testoutput::
+       :hide:
 
     The user object returned by `get_authenticated_user` includes the
     attributes ``facebook_uid`` and ``name`` in addition to session attributes
@@ -1176,7 +1220,9 @@ class FacebookMixin(object):
         The available Facebook methods are documented here:
         http://wiki.developers.facebook.com/index.php/API
 
-        Here is an example for the stream.get() method::
+        Here is an example for the stream.get() method:
+
+        .. testcode::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookMixin):
@@ -1194,6 +1240,9 @@ class FacebookMixin(object):
                        self.redirect(self.authorize_redirect("read_stream"))
                        return
                     self.render("stream.html", stream=stream)
+
+        .. testoutput::
+           :hide:
 
         """
         self.require_setting("facebook_api_key", "Facebook Connect")
@@ -1275,9 +1324,12 @@ class FacebookGraphMixin(OAuth2Mixin):
                                code, callback, extra_fields=None):
         """Handles the login for the Facebook user, returning a user object.
 
-        Example usage::
+        Example usage:
 
-            class FacebookGraphLoginHandler(LoginHandler, tornado.auth.FacebookGraphMixin):
+        .. testcode::
+
+            class FacebookGraphLoginHandler(tornado.web.RequestHandler,
+                                            tornado.auth.FacebookGraphMixin):
               @tornado.gen.coroutine
               def get(self):
                   if self.get_argument("code", False):
@@ -1292,6 +1344,10 @@ class FacebookGraphMixin(OAuth2Mixin):
                           redirect_uri='/auth/facebookgraph/',
                           client_id=self.settings["facebook_api_key"],
                           extra_params={"scope": "read_stream,offline_access"})
+
+        .. testoutput::
+           :hide:
+
         """
         http = self.get_auth_http_client()
         args = {
@@ -1359,7 +1415,9 @@ class FacebookGraphMixin(OAuth2Mixin):
         process includes an ``access_token`` attribute that can be
         used to make authenticated requests via this method.
 
-        Example usage::
+        Example usage:
+
+        ..testcode::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
@@ -1376,6 +1434,9 @@ class FacebookGraphMixin(OAuth2Mixin):
                         yield self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
+
+        .. testoutput::
+           :hide:
 
         The given path is relative to ``self._FACEBOOK_BASE_URL``,
         by default "https://graph.facebook.com".

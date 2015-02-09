@@ -3,7 +3,9 @@ work in an asynchronous environment.  Code using the ``gen`` module
 is technically asynchronous, but it is written as a single generator
 instead of a collection of separate functions.
 
-For example, the following asynchronous handler::
+For example, the following asynchronous handler:
+
+.. testcode::
 
     class AsyncHandler(RequestHandler):
         @asynchronous
@@ -16,7 +18,12 @@ For example, the following asynchronous handler::
             do_something_with_response(response)
             self.render("template.html")
 
-could be written with ``gen`` as::
+.. testoutput::
+   :hide:
+
+could be written with ``gen`` as:
+
+.. testcode::
 
     class GenAsyncHandler(RequestHandler):
         @gen.coroutine
@@ -26,12 +33,17 @@ could be written with ``gen`` as::
             do_something_with_response(response)
             self.render("template.html")
 
+.. testoutput::
+   :hide:
+
 Most asynchronous functions in Tornado return a `.Future`;
 yielding this object returns its `~.Future.result`.
 
 You can also yield a list or dict of ``Futures``, which will be
 started at the same time and run in parallel; a list or dict of results will
-be returned when they are all finished::
+be returned when they are all finished:
+
+.. testcode::
 
     @gen.coroutine
     def get(self):
@@ -42,6 +54,9 @@ be returned when they are all finished::
                                    response4=http_client.fetch(url4))
         response3 = response_dict['response3']
         response4 = response_dict['response4']
+
+.. testoutput::
+   :hide:
 
 If the `~functools.singledispatch` library is available (standard in
 Python 3.4, available via the `singledispatch
@@ -280,20 +295,18 @@ class WaitIterator(object):
 
     If you need to get the result of each future as soon as possible,
     or if you need the result of some futures even if others produce
-    errors, you can use ``WaitIterator``:
-
-    ::
+    errors, you can use ``WaitIterator``::
 
       wait_iterator = gen.WaitIterator(future1, future2)
       while not wait_iterator.done():
           try:
               result = yield wait_iterator.next()
           except Exception as e:
-              print "Error {} from {}".format(e, wait_iterator.current_future)
+              print("Error {} from {}".format(e, wait_iterator.current_future))
           else:
-              print "Result {} recieved from {} at {}".format(
+              print("Result {} recieved from {} at {}".format(
                   result, wait_iterator.current_future,
-                  wait_iterator.current_index)
+                  wait_iterator.current_index))
 
     Because results are returned as soon as they are available the
     output from the iterator *will not be in the same order as the

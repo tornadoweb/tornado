@@ -379,7 +379,9 @@ def return_future(f):
     wait for the function to complete (perhaps by yielding it in a
     `.gen.engine` function, or passing it to `.IOLoop.add_future`).
 
-    Usage::
+    Usage:
+
+    .. testcode::
 
         @return_future
         def future_func(arg1, arg2, callback):
@@ -390,6 +392,8 @@ def return_future(f):
         def caller(callback):
             yield future_func(arg1, arg2)
             callback()
+
+    ..
 
     Note that ``@return_future`` and ``@gen.engine`` can be applied to the
     same function, provided ``@return_future`` appears first.  However,

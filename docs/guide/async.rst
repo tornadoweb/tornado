@@ -60,7 +60,9 @@ things asynchronous).
 Examples
 ~~~~~~~~
 
-Here is a sample synchronous function::
+Here is a sample synchronous function:
+
+.. testcode::
 
     from tornado.httpclient import HTTPClient
 
@@ -69,8 +71,13 @@ Here is a sample synchronous function::
         response = http_client.fetch(url)
         return response.body
 
+.. testoutput::
+   :hide:
+
 And here is the same function rewritten to be asynchronous with a
-callback argument::
+callback argument:
+
+.. testcode::
 
     from tornado.httpclient import AsyncHTTPClient
 
@@ -80,7 +87,12 @@ callback argument::
             callback(response.body)
         http_client.fetch(url, callback=handle_response)
 
-And again with a `.Future` instead of a callback::
+.. testoutput::
+   :hide:
+
+And again with a `.Future` instead of a callback:
+
+.. testcode::
 
     from tornado.concurrent import Future
 
@@ -92,6 +104,9 @@ And again with a `.Future` instead of a callback::
             lambda f: my_future.set_result(f.result()))
         return my_future
 
+.. testoutput::
+   :hide:
+
 The raw `.Future` version is more complex, but ``Futures`` are
 nonetheless recommended practice in Tornado because they have two
 major advantages.  Error handling is more consistent since the
@@ -100,7 +115,9 @@ the ad-hoc error handling common in callback-oriented interfaces), and
 ``Futures`` lend themselves well to use with coroutines.  Coroutines
 will be discussed in depth in the next section of this guide.  Here is
 the coroutine version of our sample function, which is very similar to
-the original synchronous version::
+the original synchronous version:
+
+.. testcode::
 
     from tornado import gen
 
@@ -109,6 +126,9 @@ the original synchronous version::
         http_client = AsyncHTTPClient()
         response = yield http_client.fetch(url)
         raise gen.Return(response.body)
+
+.. testoutput::
+   :hide:
 
 The statement ``raise gen.Return(response.body)`` is an artifact of
 Python 2 (and 3.2), in which generators aren't allowed to return

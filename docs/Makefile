@@ -1,6 +1,8 @@
 .PHONY: all
 all: sphinx
 
+# No -W for doctests because that disallows tests with empty output.
+SPHINX_DOCTEST_OPTS=-n -d build/doctress .
 SPHINXOPTS=-n -W -d build/doctrees .
 
 .PHONY: sphinx
@@ -25,7 +27,7 @@ pdf: latex
 
 .PHONY: doctest
 doctest:
-	sphinx-build -b doctest $(SPHINXOPTS) build/doctest
+	sphinx-build -b doctest $(SPHINX_DOCTEST_OPTS) build/doctest
 
 clean:
 	rm -rf build

@@ -19,7 +19,9 @@ features that allow it to scale to large numbers of open connections,
 making it ideal for `long polling
 <http://en.wikipedia.org/wiki/Push_technology#Long_polling>`_.
 
-Here is a simple "Hello, world" example app::
+Here is a simple "Hello, world" example app:
+
+.. testcode::
 
     import tornado.ioloop
     import tornado.web
@@ -34,6 +36,10 @@ Here is a simple "Hello, world" example app::
         ])
         application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
+
+.. testoutput::
+   :hide:
+
 
 See the :doc:`guide` for additional information.
 
@@ -1470,10 +1476,12 @@ def asynchronous(method):
     method returns. It is up to the request handler to call
     `self.finish() <RequestHandler.finish>` to finish the HTTP
     request. Without this decorator, the request is automatically
-    finished when the ``get()`` or ``post()`` method returns. Example::
+    finished when the ``get()`` or ``post()`` method returns. Example:
 
-       class MyRequestHandler(web.RequestHandler):
-           @web.asynchronous
+    .. testcode::
+
+       class MyRequestHandler(RequestHandler):
+           @asynchronous
            def get(self):
               http = httpclient.AsyncHTTPClient()
               http.fetch("http://friendfeed.com/", self._on_download)
@@ -1481,6 +1489,9 @@ def asynchronous(method):
            def _on_download(self, response):
               self.write("Downloaded!")
               self.finish()
+
+    .. testoutput::
+       :hide:
 
     .. versionadded:: 3.1
        The ability to use ``@gen.coroutine`` without ``@asynchronous``.

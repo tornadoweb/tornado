@@ -1,6 +1,10 @@
 Templates and UI
 ================
 
+.. testsetup::
+
+   import tornado.web
+
 Tornado includes a simple, fast, and flexible templating language.
 This section describes that language as well as related issues
 such as internationalization.
@@ -51,12 +55,15 @@ Python control sequences and expressions embedded within the markup::
 If you saved this template as "template.html" and put it in the same
 directory as your Python file, you could render this template with:
 
-::
+.. testcode::
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):
             items = ["Item 1", "Item 2", "Item 3"]
             self.render("template.html", title="My title", items=items)
+
+.. testoutput::
+   :hide:
 
 Tornado templates support *control statements* and *expressions*.
 Control statements are surrounded by ``{%`` and ``%}``, e.g.,
@@ -178,7 +185,9 @@ By default, we detect the user's locale using the ``Accept-Language``
 header sent by the user's browser. We choose ``en_US`` if we can't find
 an appropriate ``Accept-Language`` value. If you let user's set their
 locale as a preference, you can override this default locale selection
-by overriding `.RequestHandler.get_user_locale`::
+by overriding `.RequestHandler.get_user_locale`:
+
+.. testcode::
 
     class BaseHandler(tornado.web.RequestHandler):
         def get_current_user(self):
@@ -191,6 +200,9 @@ by overriding `.RequestHandler.get_user_locale`::
                 # Use the Accept-Language header
                 return None
             return self.current_user.prefs["locale"]
+
+.. testoutput::
+   :hide:
 
 If ``get_user_locale`` returns ``None``, we fall back on the
 ``Accept-Language`` header.

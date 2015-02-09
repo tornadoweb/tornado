@@ -928,7 +928,9 @@ class IOStream(BaseIOStream):
     connected before passing it to the `IOStream` or connected with
     `IOStream.connect`.
 
-    A very simple (and broken) HTTP client using this class::
+    A very simple (and broken) HTTP client using this class:
+
+    .. testcode::
 
         import tornado.ioloop
         import tornado.iostream
@@ -947,14 +949,19 @@ class IOStream(BaseIOStream):
             stream.read_bytes(int(headers[b"Content-Length"]), on_body)
 
         def on_body(data):
-            print data
+            print(data)
             stream.close()
             tornado.ioloop.IOLoop.instance().stop()
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        stream = tornado.iostream.IOStream(s)
-        stream.connect(("friendfeed.com", 80), send_request)
-        tornado.ioloop.IOLoop.instance().start()
+        if __name__ == '__main__':
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+            stream = tornado.iostream.IOStream(s)
+            stream.connect(("friendfeed.com", 80), send_request)
+            tornado.ioloop.IOLoop.instance().start()
+
+    .. testoutput::
+       :hide:
+
     """
     def __init__(self, socket, *args, **kwargs):
         self.socket = socket
