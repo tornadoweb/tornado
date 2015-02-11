@@ -131,11 +131,11 @@ class ConditionTest(AsyncTestCase):
         for _ in range(101):
             c.wait(timedelta(seconds=0.01))
 
-        future = c.wait(timedelta(seconds=0.1))
+        future = c.wait()
         self.assertEqual(102, len(c._waiters))
 
         # Let first 101 waiters time out, triggering a collection.
-        yield gen.sleep(0.015)
+        yield gen.sleep(0.02)
         self.assertEqual(1, len(c._waiters))
 
         # Final waiter is still active.
