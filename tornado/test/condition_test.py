@@ -124,5 +124,25 @@ class ConditionTest(AsyncTestCase):
         c.notify_all()
         self.assertEqual(['TimeoutError', 0, 2], self.history)
 
+    @gen_test
+    def test_garbage_collection(self):
+        # Test that timed-out waiters are occasionally cleaned from the queue.
+        c = locks.Condition()
+        for _ in range(101):
+            c.wait(timedelta(seconds=0.01))
+
+        future = c.wait(timedelta(seconds=0.02))
+        self.assertEqual(102, len(c._waiters))
+
+        # Let first 101 waiters time out, triggering a collection.
+        yield gen.sleep(0.015)
+        self.assertEqual(1, len(c._waiters))
+
+        # Final waiter is still active.
+        self.assertFalse(future.done())
+        c.notify()
+        self.assertTrue(future.done())
+
+
 if __name__ == '__main__':
     unittest.main()

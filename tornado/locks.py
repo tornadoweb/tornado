@@ -32,6 +32,7 @@ class Condition(object):
     def __init__(self):
         self.io_loop = ioloop.IOLoop.current()
         self._waiters = collections.deque()  # Futures.
+        self._timeouts = 0
 
     def __str__(self):
         result = '<%s' % (self.__class__.__name__, )
@@ -55,6 +56,7 @@ class Condition(object):
 
             # Set waiter's exception after the timeout so notify(n) skips it.
             concurrent.chain_future(timed, waiter)
+            timed.add_done_callback(self._garbage_collect)
             return timed
         else:
             return waiter
@@ -74,3 +76,12 @@ class Condition(object):
     def notify_all(self):
         """Wake all waiters."""
         self.notify(len(self._waiters))
+
+    def _garbage_collect(self, _):
+        # Occasionally clear timed-out waiters, if many coroutines wait with a
+        # timeout but notify is called rarely.
+        self._timeouts += 1
+        if self._timeouts > 100:
+            self._timeouts = 0
+            self._waiters = collections.deque(
+                w for w in self._waiters if not w.done())
