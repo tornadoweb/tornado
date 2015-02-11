@@ -25,10 +25,8 @@ from tornado.concurrent import Future
 class Condition(object):
     """A condition allows one or more coroutines to wait until notified.
 
-    Like a standard Condition_, but does not need an underlying lock that
-    is acquired and released.
-
-    .. _Condition: http://docs.python.org/library/threading.html#threading.Condition
+    Like a standard `threading.Condition`, but does not need an underlying lock
+    that is acquired and released.
     """
 
     def __init__(self, io_loop=None):
