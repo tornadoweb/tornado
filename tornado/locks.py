@@ -31,12 +31,12 @@ class Condition(object):
 
     def __init__(self):
         self.io_loop = ioloop.IOLoop.current()
-        self.waiters = collections.deque()  # Futures.
+        self._waiters = collections.deque()  # Futures.
 
     def __str__(self):
         result = '<%s' % (self.__class__.__name__, )
-        if self.waiters:
-            result += ' waiters[%s]' % len(self.waiters)
+        if self._waiters:
+            result += ' waiters[%s]' % len(self._waiters)
         return result + '>'
 
     def wait(self, timeout=None):
@@ -48,7 +48,7 @@ class Condition(object):
         relative to `.IOLoop.time`)
         """
         waiter = Future()
-        self.waiters.append(waiter)
+        self._waiters.append(waiter)
         if timeout:
             timed = gen.with_timeout(timeout, waiter, self.io_loop,
                                      quiet_exceptions=gen.TimeoutError)
@@ -62,8 +62,8 @@ class Condition(object):
     def notify(self, n=1):
         """Wake ``n`` waiters."""
         waiters = []  # Waiters we plan to run right now.
-        while n and self.waiters:
-            waiter = self.waiters.popleft()
+        while n and self._waiters:
+            waiter = self._waiters.popleft()
             if not waiter.done():  # Might have timed out.
                 n -= 1
                 waiters.append(waiter)
@@ -73,4 +73,4 @@ class Condition(object):
 
     def notify_all(self):
         """Wake all waiters."""
-        self.notify(len(self.waiters))
+        self.notify(len(self._waiters))
