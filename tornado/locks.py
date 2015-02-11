@@ -39,7 +39,7 @@ class Condition(object):
             result += ' waiters[%s]' % len(self.waiters)
         return result + '>'
 
-    def wait(self, deadline=None):
+    def wait(self, timeout=None):
         """Wait for `.notify`. Returns a `.Future`.
 
         Raises `.TimeoutError` if the condition is not notified before
@@ -49,11 +49,11 @@ class Condition(object):
         """
         waiter = Future()
         self.waiters.append(waiter)
-        if deadline:
-            timed = gen.with_timeout(deadline, waiter, self.io_loop,
+        if timeout:
+            timed = gen.with_timeout(timeout, waiter, self.io_loop,
                                      quiet_exceptions=gen.TimeoutError)
 
-            # Set waiter's exception after the deadline so notify(n) skips it.
+            # Set waiter's exception after the timeout so notify(n) skips it.
             concurrent.chain_future(timed, waiter)
             return timed
         else:

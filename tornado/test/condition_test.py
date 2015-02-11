@@ -77,7 +77,7 @@ class TestCondition(AsyncTestCase):
     def test_wait_timeout(self):
         c = locks.Condition()
         with self.assertRaises(gen.TimeoutError):
-            yield c.wait(deadline=timedelta(seconds=0.01))
+            yield c.wait(timedelta(seconds=0.01))
 
     @gen_test
     def test_wait_timeout_preempted(self):
@@ -85,7 +85,7 @@ class TestCondition(AsyncTestCase):
 
         # This fires before the wait times out.
         self.io_loop.call_later(0.01, c.notify)
-        yield c.wait(deadline=timedelta(seconds=1))
+        yield c.wait(timedelta(seconds=1))
 
     @gen_test
     def test_notify_n_with_timeout(self):
@@ -95,7 +95,7 @@ class TestCondition(AsyncTestCase):
         # not count against the 'n' argument to notify().
         c = locks.Condition()
         self.record_done(c.wait(), 0)
-        self.record_done(c.wait(deadline=timedelta(seconds=0.01)), 1)
+        self.record_done(c.wait(timedelta(seconds=0.01)), 1)
 
         self.record_done(c.wait(), 2)
         self.record_done(c.wait(), 3)
@@ -116,7 +116,7 @@ class TestCondition(AsyncTestCase):
         c = locks.Condition()
         st = time.time()
         self.record_done(c.wait(), 0)
-        self.record_done(c.wait(deadline=timedelta(seconds=.1)), 1)
+        self.record_done(c.wait(timedelta(seconds=.1)), 1)
 
         self.record_done(c.wait(), 2)
 
