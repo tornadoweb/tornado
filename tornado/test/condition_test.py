@@ -2,10 +2,9 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 from datetime import timedelta
 import time
-import unittest
 
 from tornado import gen, locks
-from tornado.testing import gen_test, AsyncTestCase
+from tornado.testing import AsyncTestCase, gen_test, unittest
 
 
 class TestCondition(AsyncTestCase):
