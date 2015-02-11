@@ -6,9 +6,9 @@ from tornado import gen, locks
 from tornado.testing import AsyncTestCase, gen_test, unittest
 
 
-class TestCondition(AsyncTestCase):
+class ConditionTest(AsyncTestCase):
     def setUp(self):
-        super(TestCondition, self).setUp()
+        super(ConditionTest, self).setUp()
         self.history = []
 
     def record_done(self, future, key):
