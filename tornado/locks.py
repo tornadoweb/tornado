@@ -29,8 +29,8 @@ class Condition(object):
     that is acquired and released.
     """
 
-    def __init__(self, io_loop=None):
-        self.io_loop = io_loop or ioloop.IOLoop.current()
+    def __init__(self):
+        self.io_loop = ioloop.IOLoop.current()
         self.waiters = collections.deque()  # Futures.
 
     def __str__(self):
