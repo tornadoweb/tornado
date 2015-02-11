@@ -2,7 +2,7 @@ __all__ = ['Condition']
 
 import collections
 
-from tornado import gen, ioloop
+from tornado import concurrent, gen, ioloop
 from tornado.concurrent import Future
 
 
@@ -40,7 +40,7 @@ class Condition(object):
                                      quiet_exceptions=gen.TimeoutError)
 
             # Set waiter's exception after the deadline so notify(n) skips it.
-            gen.chain_future(timed, waiter)
+            concurrent.chain_future(timed, waiter)
             return timed
         else:
             return waiter
