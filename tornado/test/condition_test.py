@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 from datetime import timedelta
-import time
 
 from tornado import gen, locks
 from tornado.testing import AsyncTestCase, gen_test, unittest
@@ -100,11 +99,11 @@ class TestCondition(AsyncTestCase):
         self.record_done(c.wait(), 3)
 
         # Wait for callback 1 to time out.
-        yield gen.sleep(0.2)
+        yield gen.sleep(0.02)
         self.assertEqual(['TimeoutError'], self.history)
 
         c.notify(2)
-        yield gen.sleep(0.1)
+        yield gen.sleep(0.01)
         self.assertEqual(['TimeoutError', 0, 2], self.history)
         self.assertEqual(['TimeoutError', 0, 2], self.history)
         c.notify()
@@ -113,14 +112,13 @@ class TestCondition(AsyncTestCase):
     @gen_test
     def test_notify_all_with_timeout(self):
         c = locks.Condition()
-        st = time.time()
         self.record_done(c.wait(), 0)
-        self.record_done(c.wait(timedelta(seconds=.1)), 1)
+        self.record_done(c.wait(timedelta(seconds=0.01)), 1)
 
         self.record_done(c.wait(), 2)
 
         # Wait for callback 1 to time out.
-        yield gen.Task(self.io_loop.add_timeout, st + 0.2)
+        yield gen.sleep(0.02)
         self.assertEqual(['TimeoutError'], self.history)
 
         c.notify_all()
