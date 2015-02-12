@@ -16,7 +16,8 @@ the protocol (known as "draft 76") and are not compatible with this module.
    Removed support for the draft 76 protocol version.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import (absolute_import, division,
+                        print_function, with_statement)
 # Author: Jacob Kristhammar, 2010
 
 import base64
@@ -144,16 +145,22 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':
             self.set_status(400)
-            self.finish("Can \"Upgrade\" only to \"WebSocket\".")
+            log_msg = "Can \"Upgrade\" only to \"WebSocket\"."
+            self.finish(log_msg)
+            gen_log.debug(log_msg)
             return
 
-        # Connection header should be upgrade. Some proxy servers/load balancers
+        # Connection header should be upgrade.
+        # Some proxy servers/load balancers
         # might mess with it.
         headers = self.request.headers
-        connection = map(lambda s: s.strip().lower(), headers.get("Connection", "").split(","))
+        connection = map(lambda s: s.strip().lower(),
+                         headers.get("Connection", "").split(","))
         if 'upgrade' not in connection:
             self.set_status(400)
-            self.finish("\"Connection\" must be \"Upgrade\".")
+            log_msg = "\"Connection\" must be \"Upgrade\"."
+            self.finish(log_msg)
+            gen_log.debug(log_msg)
             return
 
         # Handle WebSocket Origin naming convention differences
@@ -170,7 +177,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # did not come from a browser and that it can be passed on.
         if origin is not None and not self.check_origin(origin):
             self.set_status(403)
-            self.finish("Cross origin websockets not allowed")
+            log_msg = "Cross origin websockets not allowed"
+            self.finish(log_msg)
+            gen_log.debug(log_msg)
             return
 
         self.stream = self.request.connection.detach()
@@ -511,7 +520,8 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._handle_websocket_headers()
             self._accept_connection()
         except ValueError:
-            gen_log.debug("Malformed WebSocket request received", exc_info=True)
+            gen_log.debug("Malformed WebSocket request received",
+                          exc_info=True)
             self._abort()
             return
 
@@ -547,7 +557,8 @@ class WebSocketProtocol13(WebSocketProtocol):
             selected = self.handler.select_subprotocol(subprotocols)
             if selected:
                 assert selected in subprotocols
-                subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
+                subprotocol_header = ("Sec-WebSocket-Protocol: %s\r\n"
+                                      % selected)
 
         extension_header = ''
         extensions = self._parse_extensions_header(self.request.headers)
@@ -715,7 +726,8 @@ class WebSocketProtocol13(WebSocketProtocol):
                 if self._masked_frame:
                     self.stream.read_bytes(4, self._on_masking_key)
                 else:
-                    self.stream.read_bytes(self._frame_length, self._on_frame_data)
+                    self.stream.read_bytes(self._frame_length,
+                                           self._on_frame_data)
             elif payloadlen == 126:
                 self.stream.read_bytes(2, self._on_frame_length_16)
             elif payloadlen == 127:
@@ -749,7 +761,8 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in += len(data)
         self._frame_mask = data
         try:
-            self.stream.read_bytes(self._frame_length, self._on_masked_frame_data)
+            self.stream.read_bytes(self._frame_length,
+                                   self._on_masked_frame_data)
         except StreamClosedError:
             self._abort()
 
