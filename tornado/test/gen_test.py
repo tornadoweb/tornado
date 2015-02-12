@@ -844,6 +844,29 @@ class GenCoroutineTest(AsyncTestCase):
         yield gen.sleep(0.01)
         self.finished = True
 
+    @skipBefore33
+    @gen_test
+    def test_py3_leak_exception_context(self):
+        class LeakedException(Exception):
+            pass
+
+        @gen.coroutine
+        def inner(iteration):
+            raise LeakedException(iteration)
+
+        try:
+            yield inner(1)
+        except LeakedException as e:
+            self.assertEqual(str(e), "1")
+            self.assertIsNone(e.__context__)
+
+        try:
+            yield inner(2)
+        except LeakedException as e:
+            self.assertEqual(str(e), "2")
+            self.assertIsNone(e.__context__)
+
+        self.finished = True
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
