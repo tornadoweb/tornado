@@ -824,13 +824,20 @@ class Runner(object):
                 self.future = None
                 try:
                     orig_stack_contexts = stack_context._state.contexts
+                    exc_info = None
+
                     try:
                         value = future.result()
                     except Exception:
                         self.had_exception = True
-                        yielded = self.gen.throw(*sys.exc_info())
+                        exc_info = sys.exc_info()
+
+                    if exc_info is not None:
+                        yielded = self.gen.throw(*exc_info)
+                        exc_info = None
                     else:
                         yielded = self.gen.send(value)
+
                     if stack_context._state.contexts is not orig_stack_contexts:
                         self.gen.throw(
                             stack_context.StackContextInconsistentError(
