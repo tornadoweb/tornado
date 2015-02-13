@@ -41,25 +41,19 @@ class Condition(object):
         return result + '>'
 
     def wait(self, timeout=None):
-        """Wait for `.notify`. Returns a `.Future`.
+        """Wait for `.notify`.
 
-        Raises `.TimeoutError` if the condition is not notified before
-        ``timeout``, which may be specified in any form allowed by
-        `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
-        relative to `.IOLoop.time`)
+        Returns a `.Future` that resolves ``True`` if the condition is notified,
+        or ``False`` after a timeout.
         """
         waiter = Future()
         self._waiters.append(waiter)
         if timeout:
-            timed = gen.with_timeout(timeout, waiter, self.io_loop,
-                                     quiet_exceptions=gen.TimeoutError)
-
-            # Set waiter's exception after the timeout so notify(n) skips it.
-            concurrent.chain_future(timed, waiter)
-            timed.add_done_callback(self._garbage_collect)
-            return timed
-        else:
-            return waiter
+            def on_timeout():
+                waiter.set_result(False)
+                self._garbage_collect()
+            self.io_loop.add_timeout(timeout, on_timeout)
+        return waiter
 
     def notify(self, n=1):
         """Wake ``n`` waiters."""
@@ -71,13 +65,13 @@ class Condition(object):
                 waiters.append(waiter)
 
         for waiter in waiters:
-            waiter.set_result(None)
+            waiter.set_result(True)
 
     def notify_all(self):
         """Wake all waiters."""
         self.notify(len(self._waiters))
 
-    def _garbage_collect(self, _):
+    def _garbage_collect(self):
         # Occasionally clear timed-out waiters, if many coroutines wait with a
         # timeout but notify is called rarely.
         self._timeouts += 1

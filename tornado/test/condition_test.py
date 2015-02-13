@@ -12,10 +12,11 @@ class ConditionTest(AsyncTestCase):
         self.history = []
 
     def record_done(self, future, key):
+        """Record the resolution of a Future returned by Condition.wait."""
         def callback(_):
-            exc = future.exception()
-            if exc:
-                self.history.append(exc.__class__.__name__)
+            if not future.result():
+                # wait() resolved to False, meaning it timed out.
+                self.history.append('timeout')
             else:
                 self.history.append(key)
         future.add_done_callback(callback)
@@ -74,8 +75,7 @@ class ConditionTest(AsyncTestCase):
     @gen_test
     def test_wait_timeout(self):
         c = locks.Condition()
-        with self.assertRaises(gen.TimeoutError):
-            yield c.wait(timedelta(seconds=0.01))
+        self.assertFalse((yield c.wait(timedelta(seconds=0.01))))
 
     @gen_test
     def test_wait_timeout_preempted(self):
@@ -94,35 +94,33 @@ class ConditionTest(AsyncTestCase):
         c = locks.Condition()
         self.record_done(c.wait(), 0)
         self.record_done(c.wait(timedelta(seconds=0.01)), 1)
-
         self.record_done(c.wait(), 2)
         self.record_done(c.wait(), 3)
 
         # Wait for callback 1 to time out.
         yield gen.sleep(0.02)
-        self.assertEqual(['TimeoutError'], self.history)
+        self.assertEqual(['timeout'], self.history)
 
         c.notify(2)
         yield gen.sleep(0.01)
-        self.assertEqual(['TimeoutError', 0, 2], self.history)
-        self.assertEqual(['TimeoutError', 0, 2], self.history)
+        self.assertEqual(['timeout', 0, 2], self.history)
+        self.assertEqual(['timeout', 0, 2], self.history)
         c.notify()
-        self.assertEqual(['TimeoutError', 0, 2, 3], self.history)
+        self.assertEqual(['timeout', 0, 2, 3], self.history)
 
     @gen_test
     def test_notify_all_with_timeout(self):
         c = locks.Condition()
         self.record_done(c.wait(), 0)
         self.record_done(c.wait(timedelta(seconds=0.01)), 1)
-
         self.record_done(c.wait(), 2)
 
         # Wait for callback 1 to time out.
         yield gen.sleep(0.02)
-        self.assertEqual(['TimeoutError'], self.history)
+        self.assertEqual(['timeout'], self.history)
 
         c.notify_all()
-        self.assertEqual(['TimeoutError', 0, 2], self.history)
+        self.assertEqual(['timeout', 0, 2], self.history)
 
     @gen_test
     def test_garbage_collection(self):
