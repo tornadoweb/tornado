@@ -123,6 +123,21 @@ class ConditionTest(AsyncTestCase):
         self.assertEqual(['timeout', 0, 2], self.history)
 
     @gen_test
+    def test_nested_notify(self):
+        # Ensure no notifications lost, even if notify() is reentered by a
+        # waiter calling notify().
+        c = locks.Condition()
+
+        # Three waiters.
+        futures = [c.wait() for _ in range(3)]
+
+        # First and second futures resolved. Second future reenters notify(),
+        # resolving third future.
+        futures[1].add_done_callback(lambda _: c.notify())
+        c.notify(2)
+        self.assertTrue(all(f.done() for f in futures))
+
+    @gen_test
     def test_garbage_collection(self):
         # Test that timed-out waiters are occasionally cleaned from the queue.
         c = locks.Condition()
