@@ -389,8 +389,7 @@ class HTTPRequest(object):
            ``simple_httpclient`` (unsupported by ``curl_httpclient``).
            Overrides ``validate_cert``, ``ca_certs``, ``client_key``,
            and ``client_cert``.
-        :arg bool allow_ipv6: Use IPv6 when available?  Default is false in
-           ``simple_httpclient`` and true in ``curl_httpclient``
+        :arg bool allow_ipv6: Use IPv6 when available?  Default is true.
         :arg bool expect_100_continue: If true, send the
            ``Expect: 100-continue`` header and wait for a continue response
            before sending the request body.  Only supported with
