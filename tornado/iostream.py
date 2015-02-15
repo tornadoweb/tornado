@@ -319,9 +319,16 @@ class BaseIOStream(object):
         If a callback is given, it will be run with the data as an argument;
         if not, this method returns a `.Future`.
 
+        Note that if a ``streaming_callback`` is used, data will be
+        read from the socket as quickly as it becomes available; there
+        is no way to apply backpressure or cancel the reads. If flow
+        control or cancellation are desired, use a loop with
+        `read_bytes(partial=True) <.read_bytes>` instead.
+
         .. versionchanged:: 4.0
             The callback argument is now optional and a `.Future` will
             be returned if it is omitted.
+
         """
         future = self._set_read_callback(callback)
         self._streaming_callback = stack_context.wrap(streaming_callback)
