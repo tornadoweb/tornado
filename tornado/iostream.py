@@ -26,6 +26,7 @@ Contents:
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import certifi
 import collections
 import errno
 import numbers
@@ -82,7 +83,26 @@ _ERRNO_INPROGRESS = (errno.EINPROGRESS,)
 if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)
 
-#######################################################
+if hasattr(ssl, 'SSLContext'):
+    if hasattr(ssl, 'create_default_context'):
+        # Python 2.7.9+, 3.4+
+        # Note that the naming of ssl.Purpose is confusing; the purpose
+        # of a context is to authentiate the opposite side of the connection.
+        _client_ssl_defaults = ssl.create_default_context(
+            ssl.Purpose.SERVER_AUTH)
+        _server_ssl_defaults = ssl.create_default_context(
+            ssl.Purpose.CLIENT_AUTH)
+    else:
+        # Python 3.2-3.3
+        _client_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        _client_ssl_defaults.verify_mode = ssl.CERT_REQUIRED
+        _client_ssl_defaults.load_verify_locations(certifi.where())
+        _server_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+else:
+    # Python 2.6-2.7.8
+    _client_ssl_defaults = dict(cert_reqs=ssl.CERT_REQUIRED,
+                                ca_certs=certifi.where())
+    _ssl_server_defaults = {}
 
 
 class StreamClosedError(IOError):
@@ -1022,10 +1042,10 @@ class IOStream(BaseIOStream):
         returns a `.Future` (whose result after a successful
         connection will be the stream itself).
 
-        If specified, the ``server_hostname`` parameter will be used
-        in SSL connections for certificate validation (if requested in
-        the ``ssl_options``) and SNI (if supported; requires
-        Python 2.7.9+).
+        In SSL mode, the ``server_hostname`` parameter will be used
+        for certificate validation (unless disabled in the
+        ``ssl_options``) and SNI (if supported; requires Python
+        2.7.9+).
 
         Note that it is safe to call `IOStream.write
         <BaseIOStream.write>` while the connection is pending, in
@@ -1036,6 +1056,11 @@ class IOStream(BaseIOStream):
         .. versionchanged:: 4.0
             If no callback is given, returns a `.Future`.
 
+        .. versionchanged:: 4.2
+           SSL certificates are validated by default; pass
+           ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
+           suitably-configured `ssl.SSLContext` to the
+           `SSLIOStream` constructor to disable.
         """
         self._connecting = True
         if callback is not None:
@@ -1080,9 +1105,9 @@ class IOStream(BaseIOStream):
 
         The ``ssl_options`` argument may be either an `ssl.SSLContext`
         object or a dictionary of keyword arguments for the
-        `ssl.wrap_socket` function.  If a ``server_hostname`` is
-        given, it will be used for certificate verification (as
-        configured in the ``ssl_options``).
+        `ssl.wrap_socket` function.  The ``server_hostname`` argument
+        will be used for certificate validation unless disabled
+        in the ``ssl_options``.
 
         This method returns a `.Future` whose result is the new
         `SSLIOStream`.  After this method has been called,
@@ -1092,6 +1117,11 @@ class IOStream(BaseIOStream):
         transferred to the new stream.
 
         .. versionadded:: 4.0
+
+        .. versionchanged:: 4.2
+           SSL certificates are validated by default; pass
+           ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
+           suitably-configured `ssl.SSLContext` to disable.
         """
         if (self._read_callback or self._read_future or
                 self._write_callback or self._write_future or
@@ -1100,7 +1130,10 @@ class IOStream(BaseIOStream):
                 self._read_buffer or self._write_buffer):
             raise ValueError("IOStream is not idle; cannot convert to SSL")
         if ssl_options is None:
-            ssl_options = {}
+            if server_side:
+                ssl_options = _server_ssl_defaults
+            else:
+                ssl_options = _client_ssl_defaults
 
         socket = self.socket
         self.io_loop.remove_handler(socket)
@@ -1184,7 +1217,7 @@ class SSLIOStream(IOStream):
         `ssl.SSLContext` object or a dictionary of keywords arguments
         for `ssl.wrap_socket`
         """
-        self._ssl_options = kwargs.pop('ssl_options', {})
+        self._ssl_options = kwargs.pop('ssl_options', _client_ssl_defaults)
         super(SSLIOStream, self).__init__(*args, **kwargs)
         self._ssl_accepting = True
         self._handshake_reading = False
