@@ -220,6 +220,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def _get_ssl_options(self, scheme):
         if scheme == "https":
+            if self.request.ssl_options is not None:
+                return self.request.ssl_options
             ssl_options = {}
             if self.request.validate_cert:
                 ssl_options["cert_reqs"] = ssl.CERT_REQUIRED

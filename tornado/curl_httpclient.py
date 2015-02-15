@@ -417,6 +417,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if request.client_key is not None:
             curl.setopt(pycurl.SSLKEY, request.client_key)
 
+        if request.ssl_options is not None:
+            raise ValueError("ssl_options not supported in curl_httpclient")
+
         if threading.activeCount() > 1:
             # libcurl/pycurl is not thread-safe by default.  When multiple threads
             # are used, signals should be disabled.  This has the side effect

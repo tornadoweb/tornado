@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import socket
+import ssl
 import sys
 
 from tornado import gen
@@ -431,6 +432,28 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
                                      defaults=dict(validate_cert=False),
                                      **kwargs)
+
+    def test_ssl_options(self):
+        resp = self.fetch("/hello", ssl_options={})
+        self.assertEqual(resp.body, b"Hello world!")
+
+    def test_ssl_context(self):
+        resp = self.fetch("/hello",
+                          ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
+        self.assertEqual(resp.body, b"Hello world!")
+
+    def test_ssl_options_handshake_fail(self):
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
+            resp = self.fetch(
+                "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
+        self.assertRaises(ssl.SSLError, resp.rethrow)
+
+    def test_ssl_context_handshake_fail(self):
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
+            ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+            ctx.verify_mode = ssl.CERT_REQUIRED
+            resp = self.fetch("/hello", ssl_options=ctx)
+        self.assertRaises(ssl.SSLError, resp.rethrow)
 
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase):
