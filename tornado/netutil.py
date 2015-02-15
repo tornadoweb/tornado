@@ -66,6 +66,12 @@ if hasattr(ssl, 'SSLContext'):
         _client_ssl_defaults.verify_mode = ssl.CERT_REQUIRED
         _client_ssl_defaults.load_verify_locations(certifi.where())
         _server_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        if hasattr(ssl, 'OP_NO_COMPRESSION'):
+            # Disable TLS compression to avoid CRIME and related attacks.
+            # This constant wasn't added until python 3.3.
+            _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
+            _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
+
 else:
     # Python 2.6-2.7.8
     _client_ssl_defaults = dict(cert_reqs=ssl.CERT_REQUIRED,
