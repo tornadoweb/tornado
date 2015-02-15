@@ -363,7 +363,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.ws_connection.on_connection_close()
             self.ws_connection = None
         if not self._on_close_called:
-            self._on_close_called
+            self._on_close_called = True
             self.on_close()
 
     def send_error(self, *args, **kwargs):
