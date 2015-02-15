@@ -7,7 +7,7 @@ from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.iostream import StreamClosedError
-from tornado.netutil import Resolver, OverrideResolver
+from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
 from tornado import stack_context
 from tornado.tcpclient import TCPClient
@@ -222,6 +222,13 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if scheme == "https":
             if self.request.ssl_options is not None:
                 return self.request.ssl_options
+            # If we are using the defaults, don't construct a
+            # new SSLContext.
+            if (self.request.validate_cert and
+                    self.request.ca_certs is None and
+                    self.request.client_cert is None and
+                    self.request.client_key is None):
+                return _client_ssl_defaults
             ssl_options = {}
             if self.request.validate_cert:
                 ssl_options["cert_reqs"] = ssl.CERT_REQUIRED

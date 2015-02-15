@@ -18,6 +18,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import certifi
 import errno
 import os
 import sys
@@ -49,6 +50,27 @@ else:
     import backports.ssl_match_hostname
     ssl_match_hostname = backports.ssl_match_hostname.match_hostname
     SSLCertificateError = backports.ssl_match_hostname.CertificateError
+
+if hasattr(ssl, 'SSLContext'):
+    if hasattr(ssl, 'create_default_context'):
+        # Python 2.7.9+, 3.4+
+        # Note that the naming of ssl.Purpose is confusing; the purpose
+        # of a context is to authentiate the opposite side of the connection.
+        _client_ssl_defaults = ssl.create_default_context(
+            ssl.Purpose.SERVER_AUTH)
+        _server_ssl_defaults = ssl.create_default_context(
+            ssl.Purpose.CLIENT_AUTH)
+    else:
+        # Python 3.2-3.3
+        _client_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        _client_ssl_defaults.verify_mode = ssl.CERT_REQUIRED
+        _client_ssl_defaults.load_verify_locations(certifi.where())
+        _server_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+else:
+    # Python 2.6-2.7.8
+    _client_ssl_defaults = dict(cert_reqs=ssl.CERT_REQUIRED,
+                                ca_certs=certifi.where())
+    _server_ssl_defaults = {}
 
 # ThreadedResolver runs getaddrinfo on a thread. If the hostname is unicode,
 # getaddrinfo attempts to import encodings.idna. If this is done at

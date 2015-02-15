@@ -26,7 +26,6 @@ Contents:
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import certifi
 import collections
 import errno
 import numbers
@@ -38,7 +37,7 @@ import re
 from tornado.concurrent import TracebackFuture
 from tornado import ioloop
 from tornado.log import gen_log, app_log
-from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError
+from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError, _client_ssl_defaults, _server_ssl_defaults
 from tornado import stack_context
 from tornado.util import errno_from_exception
 
@@ -82,27 +81,6 @@ _ERRNO_INPROGRESS = (errno.EINPROGRESS,)
 
 if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)
-
-if hasattr(ssl, 'SSLContext'):
-    if hasattr(ssl, 'create_default_context'):
-        # Python 2.7.9+, 3.4+
-        # Note that the naming of ssl.Purpose is confusing; the purpose
-        # of a context is to authentiate the opposite side of the connection.
-        _client_ssl_defaults = ssl.create_default_context(
-            ssl.Purpose.SERVER_AUTH)
-        _server_ssl_defaults = ssl.create_default_context(
-            ssl.Purpose.CLIENT_AUTH)
-    else:
-        # Python 3.2-3.3
-        _client_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-        _client_ssl_defaults.verify_mode = ssl.CERT_REQUIRED
-        _client_ssl_defaults.load_verify_locations(certifi.where())
-        _server_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-else:
-    # Python 2.6-2.7.8
-    _client_ssl_defaults = dict(cert_reqs=ssl.CERT_REQUIRED,
-                                ca_certs=certifi.where())
-    _ssl_server_defaults = {}
 
 
 class StreamClosedError(IOError):
