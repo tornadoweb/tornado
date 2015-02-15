@@ -21,7 +21,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, unittest
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -437,6 +437,8 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         resp = self.fetch("/hello", ssl_options={})
         self.assertEqual(resp.body, b"Hello world!")
 
+    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
+                     'ssl.SSLContext not present')
     def test_ssl_context(self):
         resp = self.fetch("/hello",
                           ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
@@ -446,8 +448,14 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
             resp = self.fetch(
                 "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
+            # On python 2.6, the server logs an exception a little after
+            # the client finishes ("unexpected EOF")
+            self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
+            self.wait()
         self.assertRaises(ssl.SSLError, resp.rethrow)
 
+    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
+                     'ssl.SSLContext not present')
     def test_ssl_context_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
             ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
