@@ -420,7 +420,7 @@ def ssl_options_to_context(ssl_options):
     `~ssl.SSLContext` object.
 
     The ``ssl_options`` dictionary contains keywords to be passed to
-    `ssl.wrap_socket`.  In Python 3.2+, `ssl.SSLContext` objects can
+    `ssl.wrap_socket`.  In Python 2.7.9+, `ssl.SSLContext` objects can
     be used instead.  This function converts the dict form to its
     `~ssl.SSLContext` equivalent, and may be used when a component which
     accepts both forms needs to upgrade to the `~ssl.SSLContext` version
@@ -451,11 +451,11 @@ def ssl_options_to_context(ssl_options):
 def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
     """Returns an ``ssl.SSLSocket`` wrapping the given socket.
 
-    ``ssl_options`` may be either a dictionary (as accepted by
-    `ssl_options_to_context`) or an `ssl.SSLContext` object.
-    Additional keyword arguments are passed to ``wrap_socket``
-    (either the `~ssl.SSLContext` method or the `ssl` module function
-    as appropriate).
+    ``ssl_options`` may be either an `ssl.SSLContext` object or a
+    dictionary (as accepted by `ssl_options_to_context`).  Additional
+    keyword arguments are passed to ``wrap_socket`` (either the
+    `~ssl.SSLContext` method or the `ssl` module function as
+    appropriate).
     """
     context = ssl_options_to_context(ssl_options)
     if hasattr(ssl, 'SSLContext') and isinstance(context, ssl.SSLContext):

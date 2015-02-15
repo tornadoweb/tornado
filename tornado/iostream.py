@@ -1025,7 +1025,7 @@ class IOStream(BaseIOStream):
         If specified, the ``server_hostname`` parameter will be used
         in SSL connections for certificate validation (if requested in
         the ``ssl_options``) and SNI (if supported; requires
-        Python 3.2+).
+        Python 2.7.9+).
 
         Note that it is safe to call `IOStream.write
         <BaseIOStream.write>` while the connection is pending, in
@@ -1078,10 +1078,11 @@ class IOStream(BaseIOStream):
         data.  It can also be used immediately after connecting,
         before any reads or writes.
 
-        The ``ssl_options`` argument may be either a dictionary
-        of options or an `ssl.SSLContext`.  If a ``server_hostname``
-        is given, it will be used for certificate verification
-        (as configured in the ``ssl_options``).
+        The ``ssl_options`` argument may be either an `ssl.SSLContext`
+        object or a dictionary of keyword arguments for the
+        `ssl.wrap_socket` function.  If a ``server_hostname`` is
+        given, it will be used for certificate verification (as
+        configured in the ``ssl_options``).
 
         This method returns a `.Future` whose result is the new
         `SSLIOStream`.  After this method has been called,
@@ -1179,9 +1180,9 @@ class SSLIOStream(IOStream):
     wrapped when `IOStream.connect` is finished.
     """
     def __init__(self, *args, **kwargs):
-        """The ``ssl_options`` keyword argument may either be a dictionary
-        of keywords arguments for `ssl.wrap_socket`, or an `ssl.SSLContext`
-        object.
+        """The ``ssl_options`` keyword argument may either be an
+        `ssl.SSLContext` object or a dictionary of keywords arguments
+        for `ssl.wrap_socket`
         """
         self._ssl_options = kwargs.pop('ssl_options', {})
         super(SSLIOStream, self).__init__(*args, **kwargs)

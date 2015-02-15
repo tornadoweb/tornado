@@ -411,15 +411,14 @@ class HTTPServerRequest(object):
     def get_ssl_certificate(self, binary_form=False):
         """Returns the client's SSL certificate, if any.
 
-        To use client certificates, the HTTPServer must have been constructed
-        with cert_reqs set in ssl_options, e.g.::
+        To use client certificates, the HTTPServer's
+        `ssl.SSLContext.verify_mode` field must be set, e.g.::
 
-            server = HTTPServer(app,
-                ssl_options=dict(
-                    certfile="foo.crt",
-                    keyfile="foo.key",
-                    cert_reqs=ssl.CERT_REQUIRED,
-                    ca_certs="cacert.crt"))
+            ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_ctx.load_cert_chain("foo.crt", "foo.key")
+            ssl_ctx.load_verify_locations("cacerts.pem")
+            ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+            server = HTTPServer(app, ssl_options=ssl_ctx)
 
         By default, the return value is a dictionary (or None, if no
         client certificate is present).  If ``binary_form`` is true, a
