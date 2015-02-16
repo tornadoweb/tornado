@@ -18,7 +18,7 @@ __all__ = ['Condition']
 
 import collections
 
-from tornado import concurrent, gen, ioloop
+from tornado import ioloop
 from tornado.concurrent import Future
 
 
