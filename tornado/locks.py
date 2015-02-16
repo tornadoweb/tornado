@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-__all__ = ['Condition']
+__all__ = ['Condition', 'Event']
 
 import collections
 
@@ -79,3 +79,51 @@ class Condition(object):
             self._timeouts = 0
             self._waiters = collections.deque(
                 w for w in self._waiters if not w.done())
+
+_true_future = Future()
+_true_future.set_result(True)
+
+
+class Event(object):
+    """An event blocks coroutines until its internal flag is set to True.
+
+    Similar to `threading.Event`.
+    """
+    def __init__(self):
+        self.io_loop = ioloop.IOLoop.current()
+        self._condition = Condition()
+        self._flag = False
+
+    def __str__(self):
+        return '<%s %s>' % (
+            self.__class__.__name__, 'set' if self._flag else 'clear')
+
+    def is_set(self):
+        """Return ``True`` if the internal flag is true."""
+        return self._flag
+
+    def set(self):
+        """Set the internal flag to ``True``. All waiters are awakened.
+
+        Calling `.wait` once the flag is set will not block.
+        """
+        self._flag = True
+        self._condition.notify_all()
+
+    def clear(self):
+        """Reset the internal flag to ``False``.
+        
+        Calls to `.wait` will block until `.set` is called.
+        """
+        self._flag = False
+
+    def wait(self, deadline=None):
+        """Block until the internal flag is true.
+
+        Returns a `.Future` that resolves ``True`` if the condition is notified,
+        or ``False`` after a timeout.
+        """
+        if self._flag:
+            return _true_future
+        else:
+            return self._condition.wait(deadline)
