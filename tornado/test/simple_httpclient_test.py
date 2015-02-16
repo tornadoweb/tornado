@@ -445,7 +445,8 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         self.assertEqual(resp.body, b"Hello world!")
 
     def test_ssl_options_handshake_fail(self):
-        with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception",
+                       required=False):
             resp = self.fetch(
                 "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
             # On python 2.6, the server logs an exception a little after

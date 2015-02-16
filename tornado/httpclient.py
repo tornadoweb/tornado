@@ -385,7 +385,7 @@ class HTTPRequest(object):
            note below when used with ``curl_httpclient``.
         :arg string client_cert: Filename for client SSL certificate, if any.
            See note below when used with ``curl_httpclient``.
-        :arg SSLContext ssl_options: `ssl.SSLContext` object for use in
+        :arg ssl.SSLContext ssl_options: `ssl.SSLContext` object for use in
            ``simple_httpclient`` (unsupported by ``curl_httpclient``).
            Overrides ``validate_cert``, ``ca_certs``, ``client_key``,
            and ``client_cert``.
@@ -413,7 +413,7 @@ class HTTPRequest(object):
         .. versionadded:: 4.0
            The ``body_producer`` and ``expect_100_continue`` arguments.
 
-        .. verisonadded:: 4.2
+        .. versionadded:: 4.2
            The ``ssl_options`` argument.
         """
         # Note that some of these attributes go through property setters
