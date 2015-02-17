@@ -90,7 +90,6 @@ class Event(object):
     Similar to `threading.Event`.
     """
     def __init__(self):
-        self.io_loop = ioloop.IOLoop.current()
         self._condition = Condition()
         self._flag = False
 
