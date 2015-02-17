@@ -18,7 +18,7 @@ __all__ = ['Condition', 'Event']
 
 import collections
 
-from tornado import ioloop
+from tornado import gen, ioloop
 from tornado.concurrent import Future
 
 
@@ -80,9 +80,6 @@ class Condition(object):
             self._waiters = collections.deque(
                 w for w in self._waiters if not w.done())
 
-_true_future = Future()
-_true_future.set_result(True)
-
 
 class Event(object):
     """An event blocks coroutines until its internal flag is set to True.
@@ -90,39 +87,38 @@ class Event(object):
     Similar to `threading.Event`.
     """
     def __init__(self):
-        self._condition = Condition()
-        self._flag = False
+        self._future = Future()
 
     def __str__(self):
         return '<%s %s>' % (
-            self.__class__.__name__, 'set' if self._flag else 'clear')
+            self.__class__.__name__, 'set' if self.is_set() else 'clear')
 
     def is_set(self):
         """Return ``True`` if the internal flag is true."""
-        return self._flag
+        return self._future.done()
 
     def set(self):
         """Set the internal flag to ``True``. All waiters are awakened.
 
         Calling `.wait` once the flag is set will not block.
         """
-        self._flag = True
-        self._condition.notify_all()
+        if not self._future.done():
+            self._future.set_result(None)
 
     def clear(self):
         """Reset the internal flag to ``False``.
         
         Calls to `.wait` will block until `.set` is called.
         """
-        self._flag = False
+        self._future = Future()
 
-    def wait(self, deadline=None):
+    def wait(self, timeout=None):
         """Block until the internal flag is true.
 
-        Returns a `.Future` that resolves ``True`` if the condition is notified,
-        or ``False`` after a timeout.
+        Returns a Future, which raises :exc:`~tornado.gen.TimeoutError` after a
+        timeout.
         """
-        if self._flag:
-            return _true_future
+        if timeout is None:
+            return self._future
         else:
-            return self._condition.wait(deadline)
+            return gen.with_timeout(timeout, self._future)

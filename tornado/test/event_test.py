@@ -14,6 +14,7 @@ from datetime import timedelta
 import unittest
 
 from tornado import gen, locks
+from tornado.gen import TimeoutError
 from tornado.testing import gen_test, AsyncTestCase
 
 
@@ -26,40 +27,33 @@ class TestEvent(AsyncTestCase):
         self.assertFalse('clear' in str(event))
         self.assertTrue('set' in str(event))
 
-    @gen.coroutine
-    def _test_event(self, n):
+    def test_event(self):
         e = locks.Event()
-        futures = [e.wait() for _ in range(n)]
+        future_0 = e.wait()
         e.set()
+        future_1 = e.wait()
         e.clear()
-        results = yield futures
-        self.assertTrue(all(results))
+        future_2 = e.wait()
 
-    @gen_test
-    def test_event_1(self):
-        yield self._test_event(1)
-
-    @gen_test
-    def test_event_200(self):
-        yield self._test_event(200)
+        self.assertTrue(future_0.done())
+        self.assertTrue(future_1.done())
+        self.assertFalse(future_2.done())
 
     @gen_test
     def test_event_timeout(self):
         e = locks.Event()
-        result = yield e.wait(deadline=timedelta(seconds=0.01))
-        self.assertEqual(False, result)
+        with self.assertRaises(TimeoutError):
+            yield e.wait(timedelta(seconds=0.01))
 
         # After a timed-out waiter, normal operation works.
         self.io_loop.add_timeout(timedelta(seconds=0.01), e.set)
-        result = yield e.wait(deadline=timedelta(seconds=1))
-        self.assertTrue(result)
+        yield e.wait(timedelta(seconds=1))
 
-    @gen_test
-    def test_event_nowait(self):
+    def test_event_set_multiple(self):
         e = locks.Event()
         e.set()
-        self.assertEqual(True, e.is_set())
-        self.assertTrue(e.wait().result())
+        e.set()
+        self.assertTrue(e.is_set())
 
 
 if __name__ == '__main__':
