@@ -260,10 +260,12 @@ class CookieTest(WebTestCase):
     def test_set_cookie_false_flags(self):
         response = self.fetch("/set_falsy_flags")
         headers = sorted(response.headers.get_list("Set-Cookie"))
-        self.assertEqual(headers[0], 'a=1; Path=/; secure')
-        self.assertEqual(headers[1], 'b=1; Path=/')
-        self.assertEqual(headers[2], 'c=1; httponly; Path=/')
-        self.assertEqual(headers[3], 'd=1; Path=/')
+        # The secure and httponly headers are capitalized in py35 and
+        # lowercase in older versions.
+        self.assertEqual(headers[0].lower(), 'a=1; path=/; secure')
+        self.assertEqual(headers[1].lower(), 'b=1; path=/')
+        self.assertEqual(headers[2].lower(), 'c=1; httponly; path=/')
+        self.assertEqual(headers[3].lower(), 'd=1; path=/')
 
 
 class AuthRedirectRequestHandler(RequestHandler):
