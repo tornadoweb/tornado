@@ -227,4 +227,4 @@ def define_logging_options(options=None):
     options.define("log_file_num_backups", type=int, default=10,
                    help="number of log files to keep")
 
-    options.add_parse_callback(enable_pretty_logging)
+    options.add_parse_callback(lambda: enable_pretty_logging(options))
