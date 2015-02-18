@@ -110,7 +110,8 @@ class Event(object):
         
         Calls to `.wait` will block until `.set` is called.
         """
-        self._future = Future()
+        if self._future.done():
+            self._future = Future()
 
     def wait(self, timeout=None):
         """Block until the internal flag is true.

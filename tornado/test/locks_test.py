@@ -206,6 +206,15 @@ class TestEvent(AsyncTestCase):
         e.set()
         self.assertTrue(e.is_set())
 
+    def test_event_wait_clear(self):
+        e = locks.Event()
+        f0 = e.wait()
+        e.clear()
+        f1 = e.wait()
+        e.set()
+        self.assertTrue(f0.done())
+        self.assertTrue(f1.done())
+
 
 if __name__ == '__main__':
     unittest.main()
