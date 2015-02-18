@@ -14,11 +14,11 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-__all__ = ['Condition']
+__all__ = ['Condition', 'Event']
 
 import collections
 
-from tornado import concurrent, gen, ioloop
+from tornado import gen, ioloop
 from tornado.concurrent import Future
 
 
@@ -79,3 +79,47 @@ class Condition(object):
             self._timeouts = 0
             self._waiters = collections.deque(
                 w for w in self._waiters if not w.done())
+
+
+class Event(object):
+    """An event blocks coroutines until its internal flag is set to True.
+
+    Similar to `threading.Event`.
+    """
+    def __init__(self):
+        self._future = Future()
+
+    def __str__(self):
+        return '<%s %s>' % (
+            self.__class__.__name__, 'set' if self.is_set() else 'clear')
+
+    def is_set(self):
+        """Return ``True`` if the internal flag is true."""
+        return self._future.done()
+
+    def set(self):
+        """Set the internal flag to ``True``. All waiters are awakened.
+
+        Calling `.wait` once the flag is set will not block.
+        """
+        if not self._future.done():
+            self._future.set_result(None)
+
+    def clear(self):
+        """Reset the internal flag to ``False``.
+        
+        Calls to `.wait` will block until `.set` is called.
+        """
+        if self._future.done():
+            self._future = Future()
+
+    def wait(self, timeout=None):
+        """Block until the internal flag is true.
+
+        Returns a Future, which raises :exc:`~tornado.gen.TimeoutError` after a
+        timeout.
+        """
+        if timeout is None:
+            return self._future
+        else:
+            return gen.with_timeout(timeout, self._future)
