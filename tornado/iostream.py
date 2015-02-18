@@ -1341,6 +1341,20 @@ class SSLIOStream(IOStream):
                                       do_handshake_on_connect=False)
         self._add_io_state(old_state)
 
+    def write_to_fd(self, data):
+        try:
+            return self.socket.send(data)
+        except ssl.SSLError as e:
+            if e.args[0] == ssl.SSL_ERROR_WANT_WRITE:
+                # In Python 3.5+, SSLSocket.send raises a WANT_WRITE error if
+                # the socket is not writeable; we need to transform this into
+                # an EWOULDBLOCK socket.error or a zero return value,
+                # either of which will be recognized by the caller of this
+                # method. Prior to Python 3.5, an unwriteable socket would
+                # simply return 0 bytes written.
+                return 0
+            raise
+
     def read_from_fd(self):
         if self._ssl_accepting:
             # If the handshake hasn't finished yet, there can't be anything
