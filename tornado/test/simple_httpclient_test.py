@@ -192,9 +192,6 @@ class SimpleHTTPClientTestMixin(object):
             response = self.wait()
             response.rethrow()
 
-    def test_default_certificates_exist(self):
-        open(_default_ca_certs()).close()
-
     def test_gzip(self):
         # All the tests in this file should be using gzip, but this test
         # ensures that it is in fact getting compressed.

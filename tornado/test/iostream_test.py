@@ -10,7 +10,6 @@ from tornado.stack_context import NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix, refusing_port
 from tornado.web import RequestHandler, Application
-import certifi
 import errno
 import logging
 import os

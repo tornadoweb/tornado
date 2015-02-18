@@ -234,7 +234,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
             if self.request.ca_certs is not None:
                 ssl_options["ca_certs"] = self.request.ca_certs
-            else:
+            elif not hasattr(ssl, 'create_default_context'):
+                # When create_default_context is present,
+                # we can omit the "ca_certs" parameter entirely,
+                # which avoids the dependency on "certifi" for py34.
                 ssl_options["ca_certs"] = _default_ca_certs()
             if self.request.client_key is not None:
                 ssl_options["keyfile"] = self.request.client_key

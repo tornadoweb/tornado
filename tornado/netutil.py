@@ -18,7 +18,6 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import certifi
 import errno
 import os
 import sys
@@ -35,6 +34,14 @@ try:
 except ImportError:
     # ssl is not available on Google App Engine
     ssl = None
+
+try:
+    import certifi
+except ImportError:
+    # certifi is optional as long as we have ssl.create_default_context.
+    if not hasattr(ssl, 'create_default_context'):
+        raise
+    certifi = None
 
 try:
     xrange  # py2
