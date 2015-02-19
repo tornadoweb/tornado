@@ -35,6 +35,7 @@ TEST_MODULES = [
     'tornado.test.ioloop_test',
     'tornado.test.iostream_test',
     'tornado.test.locale_test',
+    'tornado.test.locks_test',
     'tornado.test.netutil_test',
     'tornado.test.log_test',
     'tornado.test.options_test',

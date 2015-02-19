@@ -37,6 +37,7 @@ class _QuietException(Exception):
     def __init__(self):
         pass
 
+
 class _ExceptionLoggingContext(object):
     """Used with the ``with`` statement when calling delegate methods to
     log any exceptions with the given logger.  Any exceptions caught are
@@ -52,6 +53,7 @@ class _ExceptionLoggingContext(object):
         if value is not None:
             self.logger.error("Uncaught exception", exc_info=(typ, value, tb))
             raise _QuietException
+
 
 class HTTP1ConnectionParameters(object):
     """Parameters for `.HTTP1Connection` and `.HTTP1ServerConnection`.
@@ -202,7 +204,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                     # 1xx responses should never indicate the presence of
                     # a body.
                     if ('Content-Length' in headers or
-                        'Transfer-Encoding' in headers):
+                            'Transfer-Encoding' in headers):
                         raise httputil.HTTPInputError(
                             "Response code %d cannot have body" % code)
                     # TODO: client delegates will get headers_received twice

@@ -4,7 +4,9 @@ Running and deploying
 Since Tornado supplies its own HTTPServer, running and deploying it is
 a little different from other Python web frameworks.  Instead of
 configuring a WSGI container to find your application, you write a
-``main()`` function that starts the server::
+``main()`` function that starts the server:
+
+.. testcode::
 
     def main():
         app = make_app()
@@ -13,6 +15,9 @@ configuring a WSGI container to find your application, you write a
 
     if __name__ == '__main__':
         main()
+
+.. testoutput::
+   :hide:
 
 Configure your operating system or process manager to run this program to
 start the server. Please note that it may be necessary to increase the number 
@@ -29,7 +34,9 @@ Typically it is best to run one process per CPU.
 
 Tornado includes a built-in multi-process mode to start several
 processes at once.  This requires a slight alteration to the standard
-main function::
+main function:
+
+.. testcode::
 
     def main():
         app = make_app()
@@ -37,6 +44,9 @@ main function::
         server.bind(8888)
         server.start(0)  # forks one process per cpu
         IOLoop.current().start()
+
+.. testoutput::
+   :hide:
 
 This is the easiest way to start multiple processes and have them all
 share the same port, although it has some limitations.  First, each
@@ -279,7 +289,9 @@ decorator, `.AsyncHTTPClient`, the ``auth`` module, and WebSockets.
 
 You can convert a Tornado `.Application` to a WSGI application
 with `tornado.wsgi.WSGIAdapter`.  In this example, configure
-your WSGI container to find the ``application`` object::
+your WSGI container to find the ``application`` object:
+
+.. testcode::
 
     import tornado.web
     import tornado.wsgi
@@ -292,6 +304,9 @@ your WSGI container to find the ``application`` object::
         (r"/", MainHandler),
     ])
     application = tornado.wsgi.WSGIAdapter(tornado_app)
+
+.. testoutput::
+   :hide:
 
 See the `appengine example application
 <https://github.com/tornadoweb/tornado/tree/stable/demos/appengine>`_ for a

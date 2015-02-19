@@ -180,10 +180,12 @@ class TestIOLoop(AsyncTestCase):
         # t2 should be cancelled by t1, even though it is already scheduled to
         # be run before the ioloop even looks at it.
         now = self.io_loop.time()
+
         def t1():
             calls[0] = True
             self.io_loop.remove_timeout(t2_handle)
         self.io_loop.add_timeout(now + 0.01, t1)
+
         def t2():
             calls[1] = True
         t2_handle = self.io_loop.add_timeout(now + 0.02, t2)
@@ -252,6 +254,7 @@ class TestIOLoop(AsyncTestCase):
         """The handler callback receives the same fd object it passed in."""
         server_sock, port = bind_unused_port()
         fds = []
+
         def handle_connection(fd, events):
             fds.append(fd)
             conn, addr = server_sock.accept()
@@ -274,6 +277,7 @@ class TestIOLoop(AsyncTestCase):
 
     def test_mixed_fd_fileobj(self):
         server_sock, port = bind_unused_port()
+
         def f(fd, events):
             pass
         self.io_loop.add_handler(server_sock, f, IOLoop.READ)
@@ -288,6 +292,7 @@ class TestIOLoop(AsyncTestCase):
         """Calling start() twice should raise an error, not deadlock."""
         returned_from_start = [False]
         got_exception = [False]
+
         def callback():
             try:
                 self.io_loop.start()
@@ -305,7 +310,7 @@ class TestIOLoop(AsyncTestCase):
         # Use a NullContext to keep the exception from being caught by
         # AsyncTestCase.
         with NullContext():
-            self.io_loop.add_callback(lambda: 1/0)
+            self.io_loop.add_callback(lambda: 1 / 0)
             self.io_loop.add_callback(self.stop)
             with ExpectLog(app_log, "Exception in callback"):
                 self.wait()
@@ -316,7 +321,7 @@ class TestIOLoop(AsyncTestCase):
             @gen.coroutine
             def callback():
                 self.io_loop.add_callback(self.stop)
-                1/0
+                1 / 0
             self.io_loop.add_callback(callback)
             with ExpectLog(app_log, "Exception in callback"):
                 self.wait()
@@ -324,12 +329,12 @@ class TestIOLoop(AsyncTestCase):
     def test_spawn_callback(self):
         # An added callback runs in the test's stack_context, so will be
         # re-arised in wait().
-        self.io_loop.add_callback(lambda: 1/0)
+        self.io_loop.add_callback(lambda: 1 / 0)
         with self.assertRaises(ZeroDivisionError):
             self.wait()
         # A spawned callback is run directly on the IOLoop, so it will be
         # logged without stopping the test.
-        self.io_loop.spawn_callback(lambda: 1/0)
+        self.io_loop.spawn_callback(lambda: 1 / 0)
         self.io_loop.add_callback(self.stop)
         with ExpectLog(app_log, "Exception in callback"):
             self.wait()
@@ -344,6 +349,7 @@ class TestIOLoop(AsyncTestCase):
 
             # After reading from one fd, remove the other from the IOLoop.
             chunks = []
+
             def handle_read(fd, events):
                 chunks.append(fd.recv(1024))
                 if fd is client:
@@ -352,7 +358,7 @@ class TestIOLoop(AsyncTestCase):
                     self.io_loop.remove_handler(client)
             self.io_loop.add_handler(client, handle_read, self.io_loop.READ)
             self.io_loop.add_handler(server, handle_read, self.io_loop.READ)
-            self.io_loop.call_later(0.01, self.stop)
+            self.io_loop.call_later(0.03, self.stop)
             self.wait()
 
             # Only one fd was read; the other was cleanly removed.

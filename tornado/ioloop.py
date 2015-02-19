@@ -41,6 +41,7 @@ import sys
 import threading
 import time
 import traceback
+import math
 
 from tornado.concurrent import TracebackFuture, is_future
 from tornado.log import app_log, gen_log
@@ -76,34 +77,40 @@ class IOLoop(Configurable):
     simultaneous connections, you should use a system that supports
     either ``epoll`` or ``kqueue``.
 
-    Example usage for a simple TCP server::
+    Example usage for a simple TCP server:
+
+    .. testcode::
 
         import errno
         import functools
-        import ioloop
+        import tornado.ioloop
         import socket
 
         def connection_ready(sock, fd, events):
             while True:
                 try:
                     connection, address = sock.accept()
-                except socket.error, e:
+                except socket.error as e:
                     if e.args[0] not in (errno.EWOULDBLOCK, errno.EAGAIN):
                         raise
                     return
                 connection.setblocking(0)
                 handle_connection(connection, address)
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setblocking(0)
-        sock.bind(("", port))
-        sock.listen(128)
+        if __name__ == '__main__':
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.setblocking(0)
+            sock.bind(("", port))
+            sock.listen(128)
 
-        io_loop = ioloop.IOLoop.instance()
-        callback = functools.partial(connection_ready, sock)
-        io_loop.add_handler(sock.fileno(), callback, io_loop.READ)
-        io_loop.start()
+            io_loop = tornado.ioloop.IOLoop.instance()
+            callback = functools.partial(connection_ready, sock)
+            io_loop.add_handler(sock.fileno(), callback, io_loop.READ)
+            io_loop.start()
+
+    .. testoutput::
+       :hide:
 
     """
     # Constants from the epoll module
@@ -995,6 +1002,9 @@ class PeriodicCallback(object):
     def _schedule_next(self):
         if self._running:
             current_time = self.io_loop.time()
-            while self._next_timeout <= current_time:
-                self._next_timeout += self.callback_time / 1000.0
+            
+            if self._next_timeout <= current_time:
+                callback_time_sec = self.callback_time / 1000.0
+                self._next_timeout += (math.floor((current_time - self._next_timeout) / callback_time_sec) + 1) * callback_time_sec
+
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)

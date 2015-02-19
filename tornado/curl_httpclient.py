@@ -35,6 +35,7 @@ from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
 
 curl_log = logging.getLogger('tornado.curl_httpclient')
 
+
 class CurlAsyncHTTPClient(AsyncHTTPClient):
     def initialize(self, io_loop, max_clients=10, defaults=None):
         super(CurlAsyncHTTPClient, self).initialize(io_loop, defaults=defaults)
@@ -286,10 +287,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
         curl.setopt(pycurl.HEADERFUNCTION,
                     functools.partial(self._curl_header_callback,
-                        headers, request.header_callback))
+                                      headers, request.header_callback))
         if request.streaming_callback:
-            write_function = lambda chunk: self.io_loop.add_callback(
-                request.streaming_callback, chunk)
+            def write_function(chunk):
+                self.io_loop.add_callback(request.streaming_callback, chunk)
         else:
             write_function = buffer.write
         if bytes is str:  # py2
@@ -381,6 +382,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     % request.method)
 
             request_buffer = BytesIO(utf8(request.body))
+
             def ioctl(cmd):
                 if cmd == curl.IOCMD_RESTARTREAD:
                     request_buffer.seek(0)
@@ -404,7 +406,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
             curl.setopt(pycurl.USERPWD, native_str(userpwd))
             curl_log.debug("%s %s (username: %r)", request.method, request.url,
-                          request.auth_username)
+                           request.auth_username)
         else:
             curl.unsetopt(pycurl.USERPWD)
             curl_log.debug("%s %s", request.method, request.url)
@@ -414,6 +416,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
         if request.client_key is not None:
             curl.setopt(pycurl.SSLKEY, request.client_key)
+
+        if request.ssl_options is not None:
+            raise ValueError("ssl_options not supported in curl_httpclient")
 
         if threading.activeCount() > 1:
             # libcurl/pycurl is not thread-safe by default.  When multiple threads

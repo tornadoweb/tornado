@@ -32,6 +32,7 @@ def read_stream_body(stream, callback):
     """Reads an HTTP response from `stream` and runs callback with its
     headers and body."""
     chunks = []
+
     class Delegate(HTTPMessageDelegate):
         def headers_received(self, start_line, headers):
             self.headers = headers
@@ -589,6 +590,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
         class HelloHandler(RequestHandler):
             def get(self):
                 self.finish('Hello world')
+
             def post(self):
                 self.finish('Hello world')
 
@@ -863,6 +865,7 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
     def test_chunked_compressed(self):
         compressed = self.compress(self.BODY)
         self.assertGreater(len(compressed), 20)
+
         def body_producer(write):
             write(compressed[:20])
             write(compressed[20:])

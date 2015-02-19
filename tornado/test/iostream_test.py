@@ -10,7 +10,6 @@ from tornado.stack_context import NullContext
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix, refusing_port
 from tornado.web import RequestHandler, Application
-import certifi
 import errno
 import logging
 import os
@@ -310,6 +309,7 @@ class TestIOStreamMixin(object):
             def streaming_callback(data):
                 chunks.append(data)
                 self.stop()
+
             def close_callback(data):
                 assert not data, data
                 closed[0] = True
@@ -355,6 +355,7 @@ class TestIOStreamMixin(object):
     def test_future_delayed_close_callback(self):
         # Same as test_delayed_close_callback, but with the future interface.
         server, client = self.make_iostream_pair()
+
         # We can't call make_iostream_pair inside a gen_test function
         # because the ioloop is not reentrant.
         @gen_test
@@ -534,6 +535,7 @@ class TestIOStreamMixin(object):
         # and IOStream._maybe_add_error_listener.
         server, client = self.make_iostream_pair()
         closed = [False]
+
         def close_callback():
             closed[0] = True
             self.stop()
@@ -754,7 +756,8 @@ class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
 
 class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase):
     def _make_client_iostream(self):
-        return SSLIOStream(socket.socket(), io_loop=self.io_loop)
+        return SSLIOStream(socket.socket(), io_loop=self.io_loop,
+                           ssl_options=dict(cert_reqs=ssl.CERT_NONE))
 
 
 class TestIOStream(TestIOStreamMixin, AsyncTestCase):
@@ -774,7 +777,9 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
         return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
 
     def _make_client_iostream(self, connection, **kwargs):
-        return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
+        return SSLIOStream(connection, io_loop=self.io_loop,
+                           ssl_options=dict(cert_reqs=ssl.CERT_NONE),
+                           **kwargs)
 
 
 # This will run some tests that are basically redundant but it's the
@@ -864,7 +869,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
         yield self.server_send_line(b"250 STARTTLS\r\n")
         yield self.client_send_line(b"STARTTLS\r\n")
         yield self.server_send_line(b"220 Go ahead\r\n")
-        client_future = self.client_start_tls()
+        client_future = self.client_start_tls(dict(cert_reqs=ssl.CERT_NONE))
         server_future = self.server_start_tls(_server_ssl_options())
         self.client_stream = yield client_future
         self.server_stream = yield server_future
@@ -876,14 +881,13 @@ class TestIOStreamStartTLS(AsyncTestCase):
     @gen_test
     def test_handshake_fail(self):
         server_future = self.server_start_tls(_server_ssl_options())
-        client_future = self.client_start_tls(
-            dict(cert_reqs=ssl.CERT_REQUIRED, ca_certs=certifi.where()))
+        # Certificates are verified with the default configuration.
+        client_future = self.client_start_tls(server_hostname="localhost")
         with ExpectLog(gen_log, "SSL Error"):
             with self.assertRaises(ssl.SSLError):
                 yield client_future
         with self.assertRaises((ssl.SSLError, socket.error)):
             yield server_future
-
 
     @unittest.skipIf(not hasattr(ssl, 'create_default_context'),
                      'ssl.create_default_context not present')

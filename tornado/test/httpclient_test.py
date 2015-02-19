@@ -459,7 +459,7 @@ Transfer-Encoding: chunked
     # Twisted's reactor does not.  The removeReader call fails and so
     # do all future removeAll calls (which our tests do at cleanup).
     #
-    #def test_post_307(self):
+    # def test_post_307(self):
     #    response = self.fetch("/redirect?status=307&url=/post",
     #                          method="POST", body=b"arg1=foo&arg2=bar")
     #    self.assertEqual(response.body, b"Post arg1: foo, arg2: bar")
@@ -589,5 +589,5 @@ class HTTPRequestTestCase(unittest.TestCase):
     def test_if_modified_since(self):
         http_date = datetime.datetime.utcnow()
         request = HTTPRequest('http://example.com', if_modified_since=http_date)
-        self.assertEqual(request.headers, 
-            {'If-Modified-Since': format_timestamp(http_date)})
+        self.assertEqual(request.headers,
+                         {'If-Modified-Since': format_timestamp(http_date)})

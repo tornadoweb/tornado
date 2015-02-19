@@ -78,6 +78,25 @@ class GzipDecompressor(object):
         return self.decompressobj.flush()
 
 
+# Fake unicode literal support:  Python 3.2 doesn't have the u'' marker for
+# literal strings, and alternative solutions like "from __future__ import
+# unicode_literals" have other problems (see PEP 414).  u() can be applied
+# to ascii strings that include \u escapes (but they must not contain
+# literal non-ascii characters).
+if not isinstance(b'', type('')):
+    def u(s):
+        return s
+    unicode_type = str
+    basestring_type = str
+else:
+    def u(s):
+        return s.decode('unicode_escape')
+    # These names don't exist in py3, so use noqa comments to disable
+    # warnings in flake8.
+    unicode_type = unicode  # noqa
+    basestring_type = basestring  # noqa
+
+
 def import_object(name):
     """Imports an object by name.
 
@@ -96,6 +115,9 @@ def import_object(name):
         ...
     ImportError: No module named missing_module
     """
+    if isinstance(name, unicode_type) and str is not unicode_type:
+        # On python 2 a byte string is required.
+        name = name.encode('utf-8')
     if name.count('.') == 0:
         return __import__(name, None, None)
 
@@ -106,22 +128,6 @@ def import_object(name):
     except AttributeError:
         raise ImportError("No module named %s" % parts[-1])
 
-
-# Fake unicode literal support:  Python 3.2 doesn't have the u'' marker for
-# literal strings, and alternative solutions like "from __future__ import
-# unicode_literals" have other problems (see PEP 414).  u() can be applied
-# to ascii strings that include \u escapes (but they must not contain
-# literal non-ascii characters).
-if type('') is not type(b''):
-    def u(s):
-        return s
-    unicode_type = str
-    basestring_type = str
-else:
-    def u(s):
-        return s.decode('unicode_escape')
-    unicode_type = unicode
-    basestring_type = basestring
 
 # Deprecated alias that was used before we dropped py25 support.
 # Left here in case anyone outside Tornado is using it.
@@ -339,7 +345,7 @@ def _websocket_mask_python(mask, data):
         return unmasked.tostring()
 
 if (os.environ.get('TORNADO_NO_EXTENSION') or
-    os.environ.get('TORNADO_EXTENSION') == '0'):
+        os.environ.get('TORNADO_EXTENSION') == '0'):
     # These environment variables exist to make it easier to do performance
     # comparisons; they are not guaranteed to remain supported in the future.
     _websocket_mask = _websocket_mask_python

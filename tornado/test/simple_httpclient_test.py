@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import socket
+import ssl
 import sys
 
 from tornado import gen
@@ -20,7 +21,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, unittest
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -190,9 +191,6 @@ class SimpleHTTPClientTestMixin(object):
                          max_redirects=3)
             response = self.wait()
             response.rethrow()
-
-    def test_default_certificates_exist(self):
-        open(_default_ca_certs()).close()
 
     def test_gzip(self):
         # All the tests in this file should be using gzip, but this test
@@ -431,6 +429,37 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
                                      defaults=dict(validate_cert=False),
                                      **kwargs)
+
+    def test_ssl_options(self):
+        resp = self.fetch("/hello", ssl_options={})
+        self.assertEqual(resp.body, b"Hello world!")
+
+    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
+                     'ssl.SSLContext not present')
+    def test_ssl_context(self):
+        resp = self.fetch("/hello",
+                          ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
+        self.assertEqual(resp.body, b"Hello world!")
+
+    def test_ssl_options_handshake_fail(self):
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception",
+                       required=False):
+            resp = self.fetch(
+                "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
+            # On python 2.6, the server logs an exception a little after
+            # the client finishes ("unexpected EOF")
+            self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
+            self.wait()
+        self.assertRaises(ssl.SSLError, resp.rethrow)
+
+    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
+                     'ssl.SSLContext not present')
+    def test_ssl_context_handshake_fail(self):
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
+            ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+            ctx.verify_mode = ssl.CERT_REQUIRED
+            resp = self.fetch("/hello", ssl_options=ctx)
+        self.assertRaises(ssl.SSLError, resp.rethrow)
 
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase):

@@ -27,6 +27,7 @@ except ImportError:
 skipIfNoSingleDispatch = unittest.skipIf(
     gen.singledispatch is None, "singledispatch module not present")
 
+
 @unittest.skipIf(asyncio is None, "asyncio module not present")
 class AsyncIOLoopTest(AsyncTestCase):
     def get_new_ioloop(self):

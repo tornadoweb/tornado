@@ -1,6 +1,10 @@
 ``tornado.auth`` --- Third-party login with OpenID and OAuth
 ============================================================
 
+.. testsetup::
+
+   import tornado.auth, tornado.gen, tornado.web
+
 .. automodule:: tornado.auth
 
    Common protocols

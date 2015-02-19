@@ -19,7 +19,9 @@ features that allow it to scale to large numbers of open connections,
 making it ideal for `long polling
 <http://en.wikipedia.org/wiki/Push_technology#Long_polling>`_.
 
-Here is a simple "Hello, world" example app::
+Here is a simple "Hello, world" example app:
+
+.. testcode::
 
     import tornado.ioloop
     import tornado.web
@@ -34,6 +36,10 @@ Here is a simple "Hello, world" example app::
         ])
         application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
+
+.. testoutput::
+   :hide:
+
 
 See the :doc:`guide` for additional information.
 
@@ -50,7 +56,8 @@ request.
 
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import (absolute_import, division,
+                        print_function, with_statement)
 
 
 import base64
@@ -84,7 +91,8 @@ from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
+from tornado.util import (import_object, ObjectDict, raise_exc_info,
+                          unicode_type, _websocket_mask)
 from tornado.httputil import split_host_and_port
 
 
@@ -400,7 +408,8 @@ class RequestHandler(object):
 
         .. versionadded:: 3.2
         """
-        return self._get_argument(name, default, self.request.body_arguments, strip)
+        return self._get_argument(name, default, self.request.body_arguments,
+                                  strip)
 
     def get_body_arguments(self, name, strip=True):
         """Returns a list of the body arguments with the given name.
@@ -427,7 +436,8 @@ class RequestHandler(object):
 
         .. versionadded:: 3.2
         """
-        return self._get_argument(name, default, self.request.query_arguments, strip)
+        return self._get_argument(name, default,
+                                  self.request.query_arguments, strip)
 
     def get_query_arguments(self, name, strip=True):
         """Returns a list of the query arguments with the given name.
@@ -482,7 +492,8 @@ class RequestHandler(object):
 
     @property
     def cookies(self):
-        """An alias for `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
+        """An alias for
+        `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
         return self.request.cookies
 
     def get_cookie(self, name, default=None):
@@ -524,6 +535,12 @@ class RequestHandler(object):
         for k, v in kwargs.items():
             if k == 'max_age':
                 k = 'max-age'
+
+            # skip falsy values for httponly and secure flags because
+            # SimpleCookie sets them regardless
+            if k in ['httponly', 'secure'] and not v:
+                continue
+
             morsel[k] = v
 
     def clear_cookie(self, name, path="/", domain=None):
@@ -652,7 +669,8 @@ class RequestHandler(object):
                                "by using async operations without the "
                                "@asynchronous decorator.")
         if not isinstance(chunk, (bytes, unicode_type, dict)):
-            raise TypeError("write() only accepts bytes, unicode, and dict objects")
+            raise TypeError(
+                "write() only accepts bytes, unicode, and dict objects")
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
@@ -829,7 +847,8 @@ class RequestHandler(object):
             for transform in self._transforms:
                 self._status_code, self._headers, chunk = \
                     transform.transform_first_chunk(
-                        self._status_code, self._headers, chunk, include_footers)
+                        self._status_code, self._headers,
+                        chunk, include_footers)
             # Ignore the chunk and only write the headers for HEAD requests
             if self.request.method == "HEAD":
                 chunk = None
@@ -1149,7 +1168,8 @@ class RequestHandler(object):
                 return (version, token, timestamp)
         except Exception:
             # Catch exceptions and return nothing instead of failing.
-            gen_log.debug("Uncaught exception in _decode_xsrf_token", exc_info=True)
+            gen_log.debug("Uncaught exception in _decode_xsrf_token",
+                          exc_info=True)
             return None, None, None
 
     def check_xsrf_cookie(self):
@@ -1464,10 +1484,12 @@ def asynchronous(method):
     method returns. It is up to the request handler to call
     `self.finish() <RequestHandler.finish>` to finish the HTTP
     request. Without this decorator, the request is automatically
-    finished when the ``get()`` or ``post()`` method returns. Example::
+    finished when the ``get()`` or ``post()`` method returns. Example:
 
-       class MyRequestHandler(web.RequestHandler):
-           @web.asynchronous
+    .. testcode::
+
+       class MyRequestHandler(RequestHandler):
+           @asynchronous
            def get(self):
               http = httpclient.AsyncHTTPClient()
               http.fetch("http://friendfeed.com/", self._on_download)
@@ -1476,11 +1498,15 @@ def asynchronous(method):
               self.write("Downloaded!")
               self.finish()
 
+    .. testoutput::
+       :hide:
+
     .. versionadded:: 3.1
        The ability to use ``@gen.coroutine`` without ``@asynchronous``.
     """
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
+
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         self._auto_finish = False
@@ -1838,7 +1864,8 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
 
     def headers_received(self, start_line, headers):
         self.set_request(httputil.HTTPServerRequest(
-            connection=self.connection, start_line=start_line, headers=headers))
+            connection=self.connection, start_line=start_line,
+            headers=headers))
         if self.stream_request_body:
             self.request.body = Future()
             return self.execute()
@@ -1855,7 +1882,9 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         handlers = app._get_host_handlers(self.request)
         if not handlers:
             self.handler_class = RedirectHandler
-            self.handler_kwargs = dict(url="%s://%s/" % (self.request.protocol, app.default_host))
+            self.handler_kwargs = dict(url="%s://%s/"
+                                       % (self.request.protocol,
+                                          app.default_host))
             return
         for spec in handlers:
             match = spec.regex.match(self.request.path)
@@ -1926,7 +1955,8 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         # except handler, and we cannot easily access the IOLoop here to
         # call add_future (because of the requirement to remain compatible
         # with WSGI)
-        f = self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
+        f = self.handler._execute(transforms, *self.path_args,
+                                  **self.path_kwargs)
         f.add_done_callback(lambda f: f.exception())
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
@@ -2221,7 +2251,8 @@ class StaticFileHandler(RequestHandler):
         if content_type:
             self.set_header("Content-Type", content_type)
 
-        cache_time = self.get_cache_time(self.path, self.modified, content_type)
+        cache_time = self.get_cache_time(self.path, self.modified,
+                                         content_type)
         if cache_time > 0:
             self.set_header("Expires", datetime.datetime.utcnow() +
                             datetime.timedelta(seconds=cache_time))
@@ -2390,7 +2421,8 @@ class StaticFileHandler(RequestHandler):
         .. versionadded:: 3.1
         """
         stat_result = self._stat()
-        modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
+        modified = datetime.datetime.utcfromtimestamp(
+            stat_result[stat.ST_MTIME])
         return modified
 
     def get_content_type(self):
@@ -2651,7 +2683,8 @@ class UIModule(object):
         raise NotImplementedError()
 
     def embedded_javascript(self):
-        """Override to return a JavaScript string to be embedded in the page."""
+        """Override to return a JavaScript string
+        to be embedded in the page."""
         return None
 
     def javascript_files(self):
@@ -2663,7 +2696,8 @@ class UIModule(object):
         return None
 
     def embedded_css(self):
-        """Override to return a CSS string that will be embedded in the page."""
+        """Override to return a CSS string
+        that will be embedded in the page."""
         return None
 
     def css_files(self):
@@ -2906,7 +2940,8 @@ def create_signed_value(secret, name, value, version=None, clock=None):
         #
         # The fields are:
         # - format version (i.e. 2; no length prefix)
-        # - key version (currently 0; reserved for future key rotation features)
+        # - key version (currently 0; reserved for future
+        #       key rotation features)
         # - timestamp (integer seconds since epoch)
         # - name (not encoded; assumed to be ~alphanumeric)
         # - value (base64-encoded)
@@ -2924,11 +2959,13 @@ def create_signed_value(secret, name, value, version=None, clock=None):
     else:
         raise ValueError("Unsupported version %d" % version)
 
-# A leading version number in decimal with no leading zeros, followed by a pipe.
+# A leading version number in decimal
+# with no leading zeros, followed by a pipe.
 _signed_value_version_re = re.compile(br"^([1-9][0-9]*)\|(.*)$")
 
 
-def decode_signed_value(secret, name, value, max_age_days=31, clock=None, min_version=None):
+def decode_signed_value(secret, name, value, max_age_days=31,
+                        clock=None, min_version=None):
     if clock is None:
         clock = time.time
     if min_version is None:
@@ -2962,9 +2999,11 @@ def decode_signed_value(secret, name, value, max_age_days=31, clock=None, min_ve
     if version < min_version:
         return None
     if version == 1:
-        return _decode_signed_value_v1(secret, name, value, max_age_days, clock)
+        return _decode_signed_value_v1(secret, name, value,
+                                       max_age_days, clock)
     elif version == 2:
-        return _decode_signed_value_v2(secret, name, value, max_age_days, clock)
+        return _decode_signed_value_v2(secret, name, value,
+                                       max_age_days, clock)
     else:
         return None
 
@@ -2987,7 +3026,8 @@ def _decode_signed_value_v1(secret, name, value, max_age_days, clock):
         # digits from the payload to the timestamp without altering the
         # signature.  For backwards compatibility, sanity-check timestamp
         # here instead of modifying _cookie_signature.
-        gen_log.warning("Cookie timestamp in future; possible tampering %r", value)
+        gen_log.warning("Cookie timestamp in future; possible tampering %r",
+                        value)
         return None
     if parts[1].startswith(b"0"):
         gen_log.warning("Tampered cookie %r", value)
