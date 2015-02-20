@@ -169,7 +169,7 @@ class ConditionTest(AsyncTestCase):
         self.assertTrue(future.done())
 
 
-class TestEvent(AsyncTestCase):
+class EventTest(AsyncTestCase):
     def test_str(self):
         event = locks.Event()
         self.assertTrue('clear' in str(event))
