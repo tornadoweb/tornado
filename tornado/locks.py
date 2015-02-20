@@ -116,7 +116,8 @@ class Event(object):
     def wait(self, timeout=None):
         """Block until the internal flag is true.
 
-        Returns a Future, which raises `.TimeoutError` after a timeout.
+        Returns a Future, which raises `tornado.gen.TimeoutError` after a
+        timeout.
         """
         if timeout is None:
             return self._future
