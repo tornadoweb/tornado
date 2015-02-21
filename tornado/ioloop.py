@@ -877,7 +877,11 @@ class PollIOLoop(IOLoop):
             deadline,
             functools.partial(stack_context.wrap(callback), *args, **kwargs),
             self)
-        heapq.heappush(self._timeouts, timeout)
+        try:
+            heapq.heappush(self._timeouts, timeout)
+        except:
+            print(self._timeouts, timeout)
+            raise
         return timeout
 
     def remove_timeout(self, timeout):
@@ -954,6 +958,11 @@ class PeriodicCallback(object):
     """Schedules the given callback to be called periodically.
 
     The callback is called every ``callback_time`` milliseconds.
+    Note that the timeout is given in milliseconds, while most other
+    time-related functions in Tornado use seconds.
+
+    If the callback runs for longer than ``callback_time`` milliseconds,
+    subsequent invocations will be skipped to get back on schedule.
 
     `start` must be called after the `PeriodicCallback` is created.
 
@@ -1002,7 +1011,7 @@ class PeriodicCallback(object):
     def _schedule_next(self):
         if self._running:
             current_time = self.io_loop.time()
-            
+
             if self._next_timeout <= current_time:
                 callback_time_sec = self.callback_time / 1000.0
                 self._next_timeout += (math.floor((current_time - self._next_timeout) / callback_time_sec) + 1) * callback_time_sec
