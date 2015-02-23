@@ -5,4 +5,5 @@ Coroutines and concurrency
 
    gen
    concurrent
+   locks
    process

@@ -206,6 +206,14 @@ def enable_pretty_logging(options=None, logger=None):
 
 
 def define_logging_options(options=None):
+    """Add logging-related flags to ``options``.
+
+    These options are present automatically on the default options instance;
+    this method is only necessary if you have created your own `.OptionParser`.
+
+    .. versionadded:: 4.2
+        This function existed in prior versions but was broken and undocumented until 4.2.
+    """
     if options is None:
         # late import to prevent cycle
         from tornado.options import options
@@ -227,4 +235,4 @@ def define_logging_options(options=None):
     options.define("log_file_num_backups", type=int, default=10,
                    help="number of log files to keep")
 
-    options.add_parse_callback(enable_pretty_logging)
+    options.add_parse_callback(lambda: enable_pretty_logging(options))

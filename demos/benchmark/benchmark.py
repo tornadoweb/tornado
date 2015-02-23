@@ -22,6 +22,11 @@ import random
 import signal
 import subprocess
 
+try:
+    xrange
+except NameError:
+    xrange = range
+
 # choose a random port to avoid colliding with TIME_WAIT sockets left over
 # from previous runs.
 define("min_port", type=int, default=8000)

@@ -35,6 +35,7 @@ from distutils.core import Extension
 # no compiler is available.
 from distutils.command.build_ext import build_ext
 
+
 class custom_build_ext(build_ext):
     """Allow C extension building to fail.
 
@@ -98,13 +99,13 @@ http://api.mongodb.org/python/current/installation.html#osx
 
 kwargs = {}
 
-version = "4.1"
+version = "4.2.dev1"
 
 with open('README.rst') as f:
     kwargs['long_description'] = f.read()
 
 if (platform.python_implementation() == 'CPython' and
-    os.environ.get('TORNADO_EXTENSION') != '0'):
+        os.environ.get('TORNADO_EXTENSION') != '0'):
     # This extension builds and works on pypy as well, although pypy's jit
     # produces equivalent performance.
     kwargs['ext_modules'] = [
@@ -120,16 +121,21 @@ if (platform.python_implementation() == 'CPython' and
 
 if setuptools is not None:
     # If setuptools is not available, you're on your own for dependencies.
-    install_requires = ['certifi']
+    install_requires = []
     if sys.version_info < (3, 2):
         install_requires.append('backports.ssl_match_hostname')
+    if sys.version_info < (3, 4):
+        # Certifi is also optional on 2.7.9+, although making our dependencies
+        # conditional on micro version numbers seems like a bad idea
+        # until we have more declarative metadata.
+        install_requires.append('certifi')
     kwargs['install_requires'] = install_requires
 
 setup(
     name="tornado",
     version=version,
-    packages = ["tornado", "tornado.test", "tornado.platform"],
-    package_data = {
+    packages=["tornado", "tornado.test", "tornado.platform"],
+    package_data={
         # data files need to be listed both here (which determines what gets
         # installed) and in MANIFEST.in (which determines what gets included
         # in the sdist tarball)

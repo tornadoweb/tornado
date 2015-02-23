@@ -1,6 +1,10 @@
 ``tornado.web`` --- ``RequestHandler`` and ``Application`` classes
 ==================================================================
 
+.. testsetup::
+
+   from tornado.web import *
+
 .. automodule:: tornado.web
 
    Request handlers

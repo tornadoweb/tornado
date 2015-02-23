@@ -37,7 +37,7 @@ import re
 from tornado.concurrent import TracebackFuture
 from tornado import ioloop
 from tornado.log import gen_log, app_log
-from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError
+from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError, _client_ssl_defaults, _server_ssl_defaults
 from tornado import stack_context
 from tornado.util import errno_from_exception
 
@@ -82,7 +82,7 @@ _ERRNO_INPROGRESS = (errno.EINPROGRESS,)
 if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)
 
-#######################################################
+
 class StreamClosedError(IOError):
     """Exception raised by `IOStream` methods when the stream is closed.
 
@@ -317,9 +317,16 @@ class BaseIOStream(object):
         If a callback is given, it will be run with the data as an argument;
         if not, this method returns a `.Future`.
 
+        Note that if a ``streaming_callback`` is used, data will be
+        read from the socket as quickly as it becomes available; there
+        is no way to apply backpressure or cancel the reads. If flow
+        control or cancellation are desired, use a loop with
+        `read_bytes(partial=True) <.read_bytes>` instead.
+
         .. versionchanged:: 4.0
             The callback argument is now optional and a `.Future` will
             be returned if it is omitted.
+
         """
         future = self._set_read_callback(callback)
         self._streaming_callback = stack_context.wrap(streaming_callback)
@@ -926,7 +933,9 @@ class IOStream(BaseIOStream):
     connected before passing it to the `IOStream` or connected with
     `IOStream.connect`.
 
-    A very simple (and broken) HTTP client using this class::
+    A very simple (and broken) HTTP client using this class:
+
+    .. testcode::
 
         import tornado.ioloop
         import tornado.iostream
@@ -945,14 +954,19 @@ class IOStream(BaseIOStream):
             stream.read_bytes(int(headers[b"Content-Length"]), on_body)
 
         def on_body(data):
-            print data
+            print(data)
             stream.close()
             tornado.ioloop.IOLoop.instance().stop()
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        stream = tornado.iostream.IOStream(s)
-        stream.connect(("friendfeed.com", 80), send_request)
-        tornado.ioloop.IOLoop.instance().start()
+        if __name__ == '__main__':
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+            stream = tornado.iostream.IOStream(s)
+            stream.connect(("friendfeed.com", 80), send_request)
+            tornado.ioloop.IOLoop.instance().start()
+
+    .. testoutput::
+       :hide:
+
     """
     def __init__(self, socket, *args, **kwargs):
         self.socket = socket
@@ -1006,10 +1020,10 @@ class IOStream(BaseIOStream):
         returns a `.Future` (whose result after a successful
         connection will be the stream itself).
 
-        If specified, the ``server_hostname`` parameter will be used
-        in SSL connections for certificate validation (if requested in
-        the ``ssl_options``) and SNI (if supported; requires
-        Python 3.2+).
+        In SSL mode, the ``server_hostname`` parameter will be used
+        for certificate validation (unless disabled in the
+        ``ssl_options``) and SNI (if supported; requires Python
+        2.7.9+).
 
         Note that it is safe to call `IOStream.write
         <BaseIOStream.write>` while the connection is pending, in
@@ -1020,6 +1034,11 @@ class IOStream(BaseIOStream):
         .. versionchanged:: 4.0
             If no callback is given, returns a `.Future`.
 
+        .. versionchanged:: 4.2
+           SSL certificates are validated by default; pass
+           ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
+           suitably-configured `ssl.SSLContext` to the
+           `SSLIOStream` constructor to disable.
         """
         self._connecting = True
         if callback is not None:
@@ -1062,10 +1081,11 @@ class IOStream(BaseIOStream):
         data.  It can also be used immediately after connecting,
         before any reads or writes.
 
-        The ``ssl_options`` argument may be either a dictionary
-        of options or an `ssl.SSLContext`.  If a ``server_hostname``
-        is given, it will be used for certificate verification
-        (as configured in the ``ssl_options``).
+        The ``ssl_options`` argument may be either an `ssl.SSLContext`
+        object or a dictionary of keyword arguments for the
+        `ssl.wrap_socket` function.  The ``server_hostname`` argument
+        will be used for certificate validation unless disabled
+        in the ``ssl_options``.
 
         This method returns a `.Future` whose result is the new
         `SSLIOStream`.  After this method has been called,
@@ -1075,6 +1095,11 @@ class IOStream(BaseIOStream):
         transferred to the new stream.
 
         .. versionadded:: 4.0
+
+        .. versionchanged:: 4.2
+           SSL certificates are validated by default; pass
+           ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
+           suitably-configured `ssl.SSLContext` to disable.
         """
         if (self._read_callback or self._read_future or
                 self._write_callback or self._write_future or
@@ -1083,7 +1108,10 @@ class IOStream(BaseIOStream):
                 self._read_buffer or self._write_buffer):
             raise ValueError("IOStream is not idle; cannot convert to SSL")
         if ssl_options is None:
-            ssl_options = {}
+            if server_side:
+                ssl_options = _server_ssl_defaults
+            else:
+                ssl_options = _client_ssl_defaults
 
         socket = self.socket
         self.io_loop.remove_handler(socket)
@@ -1102,6 +1130,7 @@ class IOStream(BaseIOStream):
         # If we had an "unwrap" counterpart to this method we would need
         # to restore the original callback after our Future resolves
         # so that repeated wrap/unwrap calls don't build up layers.
+
         def close_callback():
             if not future.done():
                 future.set_exception(ssl_stream.error or StreamClosedError())
@@ -1162,11 +1191,11 @@ class SSLIOStream(IOStream):
     wrapped when `IOStream.connect` is finished.
     """
     def __init__(self, *args, **kwargs):
-        """The ``ssl_options`` keyword argument may either be a dictionary
-        of keywords arguments for `ssl.wrap_socket`, or an `ssl.SSLContext`
-        object.
+        """The ``ssl_options`` keyword argument may either be an
+        `ssl.SSLContext` object or a dictionary of keywords arguments
+        for `ssl.wrap_socket`
         """
-        self._ssl_options = kwargs.pop('ssl_options', {})
+        self._ssl_options = kwargs.pop('ssl_options', _client_ssl_defaults)
         super(SSLIOStream, self).__init__(*args, **kwargs)
         self._ssl_accepting = True
         self._handshake_reading = False
@@ -1222,7 +1251,7 @@ class SSLIOStream(IOStream):
             # quiet as well.
             # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
             if (err.args[0] in _ERRNO_CONNRESET or
-                err.args[0] == errno.EBADF):
+                    err.args[0] == errno.EBADF):
                 return self.close(exc_info=True)
             raise
         except AttributeError:
@@ -1311,6 +1340,20 @@ class SSLIOStream(IOStream):
                                       server_hostname=self._server_hostname,
                                       do_handshake_on_connect=False)
         self._add_io_state(old_state)
+
+    def write_to_fd(self, data):
+        try:
+            return self.socket.send(data)
+        except ssl.SSLError as e:
+            if e.args[0] == ssl.SSL_ERROR_WANT_WRITE:
+                # In Python 3.5+, SSLSocket.send raises a WANT_WRITE error if
+                # the socket is not writeable; we need to transform this into
+                # an EWOULDBLOCK socket.error or a zero return value,
+                # either of which will be recognized by the caller of this
+                # method. Prior to Python 3.5, an unwriteable socket would
+                # simply return 0 bytes written.
+                return 0
+            raise
 
     def read_from_fd(self):
         if self._ssl_accepting:

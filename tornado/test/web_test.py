@@ -171,6 +171,13 @@ class CookieTest(WebTestCase):
             def get(self):
                 self.set_cookie("foo", "bar", expires_days=10)
 
+        class SetCookieFalsyFlags(RequestHandler):
+            def get(self):
+                self.set_cookie("a", "1", secure=True)
+                self.set_cookie("b", "1", secure=False)
+                self.set_cookie("c", "1", httponly=True)
+                self.set_cookie("d", "1", httponly=False)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
@@ -178,6 +185,7 @@ class CookieTest(WebTestCase):
                 ("/set_overwrite", SetCookieOverwriteHandler),
                 ("/set_max_age", SetCookieMaxAgeHandler),
                 ("/set_expires_days", SetCookieExpiresDaysHandler),
+                ("/set_falsy_flags", SetCookieFalsyFlags)
                 ]
 
     def test_set_cookie(self):
@@ -237,7 +245,7 @@ class CookieTest(WebTestCase):
         headers = response.headers.get_list("Set-Cookie")
         self.assertEqual(sorted(headers),
                          ["foo=bar; Max-Age=10; Path=/"])
-    
+
     def test_set_cookie_expires_days(self):
         response = self.fetch("/set_expires_days")
         header = response.headers.get("Set-Cookie")
@@ -248,7 +256,17 @@ class CookieTest(WebTestCase):
         header_expires = datetime.datetime(
             *email.utils.parsedate(match.groupdict()["expires"])[:6])
         self.assertTrue(abs(timedelta_to_seconds(expires - header_expires)) < 10)
-    
+
+    def test_set_cookie_false_flags(self):
+        response = self.fetch("/set_falsy_flags")
+        headers = sorted(response.headers.get_list("Set-Cookie"))
+        # The secure and httponly headers are capitalized in py35 and
+        # lowercase in older versions.
+        self.assertEqual(headers[0].lower(), 'a=1; path=/; secure')
+        self.assertEqual(headers[1].lower(), 'b=1; path=/')
+        self.assertEqual(headers[2].lower(), 'c=1; httponly; path=/')
+        self.assertEqual(headers[3].lower(), 'd=1; path=/')
+
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
@@ -1533,6 +1551,7 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
         def my_ui_method(handler, x):
             return "In my_ui_method(%s) with handler value %s." % (
                 x, handler.value())
+
         class MyModule(UIModule):
             def render(self, x):
                 return "In MyModule(%s) with handler value %s." % (
@@ -2151,6 +2170,7 @@ class SignedValueTest(unittest.TestCase):
     def test_payload_tampering(self):
         # These cookies are variants of the one in test_known_values.
         sig = "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"
+
         def validate(prefix):
             return (b'value' ==
                     decode_signed_value(SignedValueTest.SECRET, "key",
@@ -2165,6 +2185,7 @@ class SignedValueTest(unittest.TestCase):
 
     def test_signature_tampering(self):
         prefix = "2|1:0|10:1300000000|3:key|8:dmFsdWU=|"
+
         def validate(sig):
             return (b'value' ==
                     decode_signed_value(SignedValueTest.SECRET, "key",
@@ -2296,7 +2317,7 @@ class XSRFTest(SimpleHandlerTestCase):
         token2 = self.get_token()
         # Each token can be used to authenticate its own request.
         for token in (self.xsrf_token, token2):
-            response  = self.fetch(
+            response = self.fetch(
                 "/", method="POST",
                 body=urllib_parse.urlencode(dict(_xsrf=token)),
                 headers=self.cookie_headers(token))

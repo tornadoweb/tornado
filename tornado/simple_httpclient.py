@@ -7,7 +7,7 @@ from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.iostream import StreamClosedError
-from tornado.netutil import Resolver, OverrideResolver
+from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
 from tornado import stack_context
 from tornado.tcpclient import TCPClient
@@ -220,12 +220,24 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def _get_ssl_options(self, scheme):
         if scheme == "https":
+            if self.request.ssl_options is not None:
+                return self.request.ssl_options
+            # If we are using the defaults, don't construct a
+            # new SSLContext.
+            if (self.request.validate_cert and
+                    self.request.ca_certs is None and
+                    self.request.client_cert is None and
+                    self.request.client_key is None):
+                return _client_ssl_defaults
             ssl_options = {}
             if self.request.validate_cert:
                 ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
             if self.request.ca_certs is not None:
                 ssl_options["ca_certs"] = self.request.ca_certs
-            else:
+            elif not hasattr(ssl, 'create_default_context'):
+                # When create_default_context is present,
+                # we can omit the "ca_certs" parameter entirely,
+                # which avoids the dependency on "certifi" for py34.
                 ssl_options["ca_certs"] = _default_ca_certs()
             if self.request.client_key is not None:
                 ssl_options["keyfile"] = self.request.client_key
@@ -317,9 +329,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             body_present = (self.request.body is not None or
                             self.request.body_producer is not None)
             if ((body_expected and not body_present) or
-                (body_present and not body_expected)):
+                    (body_present and not body_expected)):
                 raise ValueError(
-                    'Body must %sbe None for method %s (unelss '
+                    'Body must %sbe None for method %s (unless '
                     'allow_nonstandard_methods is true)' %
                     ('not ' if body_expected else '', self.request.method))
         if self.request.expect_100_continue:

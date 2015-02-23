@@ -16,7 +16,8 @@ the protocol (known as "draft 76") and are not compatible with this module.
    Removed support for the draft 76 protocol version.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import (absolute_import, division,
+                        print_function, with_statement)
 # Author: Jacob Kristhammar, 2010
 
 import base64
@@ -39,9 +40,9 @@ from tornado.tcpclient import TCPClient
 from tornado.util import _websocket_mask
 
 try:
-    from urllib.parse import urlparse # py2
+    from urllib.parse import urlparse  # py2
 except ImportError:
-    from urlparse import urlparse # py3
+    from urlparse import urlparse  # py3
 
 try:
     xrange  # py2
@@ -74,17 +75,22 @@ class WebSocketHandler(tornado.web.RequestHandler):
     http://tools.ietf.org/html/rfc6455.
 
     Here is an example WebSocket handler that echos back all received messages
-    back to the client::
+    back to the client:
 
-      class EchoWebSocket(websocket.WebSocketHandler):
+    .. testcode::
+
+      class EchoWebSocket(tornado.websocket.WebSocketHandler):
           def open(self):
-              print "WebSocket opened"
+              print("WebSocket opened")
 
           def on_message(self, message):
               self.write_message(u"You said: " + message)
 
           def on_close(self):
-              print "WebSocket closed"
+              print("WebSocket closed")
+
+    .. testoutput::
+       :hide:
 
     WebSockets are not standard HTTP connections. The "handshake" is
     HTTP, but after the handshake, the protocol is
@@ -139,16 +145,22 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':
             self.set_status(400)
-            self.finish("Can \"Upgrade\" only to \"WebSocket\".")
+            log_msg = "Can \"Upgrade\" only to \"WebSocket\"."
+            self.finish(log_msg)
+            gen_log.debug(log_msg)
             return
 
-        # Connection header should be upgrade. Some proxy servers/load balancers
+        # Connection header should be upgrade.
+        # Some proxy servers/load balancers
         # might mess with it.
         headers = self.request.headers
-        connection = map(lambda s: s.strip().lower(), headers.get("Connection", "").split(","))
+        connection = map(lambda s: s.strip().lower(),
+                         headers.get("Connection", "").split(","))
         if 'upgrade' not in connection:
             self.set_status(400)
-            self.finish("\"Connection\" must be \"Upgrade\".")
+            log_msg = "\"Connection\" must be \"Upgrade\"."
+            self.finish(log_msg)
+            gen_log.debug(log_msg)
             return
 
         # Handle WebSocket Origin naming convention differences
@@ -160,13 +172,14 @@ class WebSocketHandler(tornado.web.RequestHandler):
         else:
             origin = self.request.headers.get("Sec-Websocket-Origin", None)
 
-
         # If there was an origin header, check to make sure it matches
         # according to check_origin. When the origin is None, we assume it
         # did not come from a browser and that it can be passed on.
         if origin is not None and not self.check_origin(origin):
             self.set_status(403)
-            self.finish("Cross origin websockets not allowed")
+            log_msg = "Cross origin websockets not allowed"
+            self.finish(log_msg)
+            gen_log.debug(log_msg)
             return
 
         self.stream = self.request.connection.detach()
@@ -350,7 +363,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
             self.ws_connection.on_connection_close()
             self.ws_connection = None
         if not self._on_close_called:
-            self._on_close_called
+            self._on_close_called = True
             self.on_close()
 
     def send_error(self, *args, **kwargs):
@@ -507,7 +520,8 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._handle_websocket_headers()
             self._accept_connection()
         except ValueError:
-            gen_log.debug("Malformed WebSocket request received", exc_info=True)
+            gen_log.debug("Malformed WebSocket request received",
+                          exc_info=True)
             self._abort()
             return
 
@@ -543,18 +557,19 @@ class WebSocketProtocol13(WebSocketProtocol):
             selected = self.handler.select_subprotocol(subprotocols)
             if selected:
                 assert selected in subprotocols
-                subprotocol_header = "Sec-WebSocket-Protocol: %s\r\n" % selected
+                subprotocol_header = ("Sec-WebSocket-Protocol: %s\r\n"
+                                      % selected)
 
         extension_header = ''
         extensions = self._parse_extensions_header(self.request.headers)
         for ext in extensions:
             if (ext[0] == 'permessage-deflate' and
-                self._compression_options is not None):
+                    self._compression_options is not None):
                 # TODO: negotiate parameters if compression_options
                 # specifies limits.
                 self._create_compressors('server', ext[1])
                 if ('client_max_window_bits' in ext[1] and
-                    ext[1]['client_max_window_bits'] is None):
+                        ext[1]['client_max_window_bits'] is None):
                     # Don't echo an offered client_max_window_bits
                     # parameter with no value.
                     del ext[1]['client_max_window_bits']
@@ -599,7 +614,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         extensions = self._parse_extensions_header(headers)
         for ext in extensions:
             if (ext[0] == 'permessage-deflate' and
-                self._compression_options is not None):
+                    self._compression_options is not None):
                 self._create_compressors('client', ext[1])
             else:
                 raise ValueError("unsupported extension %r", ext)
@@ -711,7 +726,8 @@ class WebSocketProtocol13(WebSocketProtocol):
                 if self._masked_frame:
                     self.stream.read_bytes(4, self._on_masking_key)
                 else:
-                    self.stream.read_bytes(self._frame_length, self._on_frame_data)
+                    self.stream.read_bytes(self._frame_length,
+                                           self._on_frame_data)
             elif payloadlen == 126:
                 self.stream.read_bytes(2, self._on_frame_length_16)
             elif payloadlen == 127:
@@ -745,7 +761,8 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in += len(data)
         self._frame_mask = data
         try:
-            self.stream.read_bytes(self._frame_length, self._on_masked_frame_data)
+            self.stream.read_bytes(self._frame_length,
+                                   self._on_masked_frame_data)
         except StreamClosedError:
             self._abort()
 

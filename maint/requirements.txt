@@ -7,28 +7,33 @@
 # Use virtualenv instead of venv; tox seems to get confused otherwise.
 
 # Tornado's required dependencies
-certifi==14.05.14
+certifi==14.5.14
 
 # Tornado's optional dependencies
-Twisted==14.0.2
+Twisted==15.0.0
 # pip on python 3.4 currently has trouble installing pycares.
 #pycares==0.6.1
-pycurl==7.19.5
+pycurl==7.19.5.1
 
 # Other useful tools
 Sphinx==1.2.3
-autopep8==1.0.4
+autopep8==1.1
 coverage==3.7.1
-pep8==1.5.7
+flake8==2.3.0
+pep8==1.6.0
 pyflakes==0.8.1
 sphinx-rtd-theme==0.1.6
-tox==1.8.0
-virtualenv==1.11.6
+tox==1.8.1
+twine==1.4.0
+virtualenv==12.0.7
 
 # Indirect dependencies
 Jinja2==2.7.3
 MarkupSafe==0.23
-Pygments==1.6
+Pygments==2.0.2
 docutils==0.12
-py==1.4.25
-zope.interface==4.1.1
+mccabe==0.3
+pkginfo==1.2.1
+py==1.4.26
+requests==2.5.1
+zope.interface==4.1.2

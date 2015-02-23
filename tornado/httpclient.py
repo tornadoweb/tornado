@@ -310,7 +310,8 @@ class HTTPRequest(object):
                  validate_cert=None, ca_certs=None,
                  allow_ipv6=None,
                  client_key=None, client_cert=None, body_producer=None,
-                 expect_100_continue=False, decompress_response=None):
+                 expect_100_continue=False, decompress_response=None,
+                 ssl_options=None):
         r"""All parameters except ``url`` are optional.
 
         :arg string url: URL to fetch
@@ -380,12 +381,15 @@ class HTTPRequest(object):
         :arg string ca_certs: filename of CA certificates in PEM format,
            or None to use defaults.  See note below when used with
            ``curl_httpclient``.
-        :arg bool allow_ipv6: Use IPv6 when available?  Default is false in
-           ``simple_httpclient`` and true in ``curl_httpclient``
         :arg string client_key: Filename for client SSL key, if any.  See
            note below when used with ``curl_httpclient``.
         :arg string client_cert: Filename for client SSL certificate, if any.
            See note below when used with ``curl_httpclient``.
+        :arg ssl.SSLContext ssl_options: `ssl.SSLContext` object for use in
+           ``simple_httpclient`` (unsupported by ``curl_httpclient``).
+           Overrides ``validate_cert``, ``ca_certs``, ``client_key``,
+           and ``client_cert``.
+        :arg bool allow_ipv6: Use IPv6 when available?  Default is true.
         :arg bool expect_100_continue: If true, send the
            ``Expect: 100-continue`` header and wait for a continue response
            before sending the request body.  Only supported with
@@ -408,6 +412,9 @@ class HTTPRequest(object):
 
         .. versionadded:: 4.0
            The ``body_producer`` and ``expect_100_continue`` arguments.
+
+        .. versionadded:: 4.2
+           The ``ssl_options`` argument.
         """
         # Note that some of these attributes go through property setters
         # defined below.
@@ -445,6 +452,7 @@ class HTTPRequest(object):
         self.allow_ipv6 = allow_ipv6
         self.client_key = client_key
         self.client_cert = client_cert
+        self.ssl_options = ssl_options
         self.expect_100_continue = expect_100_continue
         self.start_time = time.time()
 

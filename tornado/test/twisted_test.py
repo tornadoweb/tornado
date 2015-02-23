@@ -75,6 +75,7 @@ skipIfNoTwisted = unittest.skipUnless(have_twisted,
 skipIfNoSingleDispatch = unittest.skipIf(
     gen.singledispatch is None, "singledispatch module not present")
 
+
 def save_signal_handlers():
     saved = {}
     for sig in [signal.SIGINT, signal.SIGTERM, signal.SIGCHLD]:
@@ -452,6 +453,7 @@ class CompatibilityTests(unittest.TestCase):
 
     def twisted_coroutine_fetch(self, url, runner):
         body = [None]
+
         @gen.coroutine
         def f():
             # This is simpler than the non-coroutine version, but it cheats
@@ -552,7 +554,7 @@ if have_twisted:
             'test_changeUID',
         ],
         # Process tests appear to work on OSX 10.7, but not 10.6
-        #'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
+        # 'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
         #    'test_systemCallUninterruptedByChildExit',
         #    ],
         'twisted.internet.test.test_tcp.TCPClientTestsBuilder': [
@@ -571,7 +573,7 @@ if have_twisted:
         'twisted.internet.test.test_threads.ThreadTestsBuilder': [],
         'twisted.internet.test.test_time.TimeTestsBuilder': [],
         # Extra third-party dependencies (pyOpenSSL)
-        #'twisted.internet.test.test_tls.SSLClientTestsMixin': [],
+        # 'twisted.internet.test.test_tls.SSLClientTestsMixin': [],
         'twisted.internet.test.test_udp.UDPServerTestsBuilder': [],
         'twisted.internet.test.test_unix.UNIXTestsBuilder': [
             # Platform-specific.  These tests would be skipped automatically
