@@ -454,20 +454,20 @@ class GettextLocale(Locale):
             return self.gettext(message)
 
     def pgettext(self, context, message, plural_message=None, count=None):
-        """Allows to set context for translation, accept plural forms.
+        """Allows to set context for translation, accepts plural forms.
 
-        Usage example:
+        Usage example::
 
             pgettext("law", "right")
             pgettext("good", "right")
 
-        Plural message example:
+        Plural message example::
 
             pgettext("organization", "club", "clubs", len(clubs))
             pgettext("stick", "club", "clubs", len(clubs))
 
-        To generate POT file with context, add following option to step 1
-        of `load_gettext_translations` sequence:
+        To generate POT file with context, add following options to step 1
+        of `load_gettext_translations` sequence::
 
             xgettext [basic options] --keyword=pgettext:1c,2 --keyword=pgettext:1c,2,3
         """
