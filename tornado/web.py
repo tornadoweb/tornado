@@ -803,6 +803,7 @@ class RequestHandler(object):
             current_user=self.current_user,
             locale=self.locale,
             _=self.locale.translate,
+            pgettext=self.locale.pgettext,
             static_url=self.static_url,
             xsrf_form_html=self.xsrf_form_html,
             reverse_url=self.reverse_url
