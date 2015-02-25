@@ -232,13 +232,12 @@ class SemaphoreTest(AsyncTestCase):
 
     def test_acquire(self):
         sem = locks.Semaphore()
-        self.assertFalse(sem.locked())
         f0 = sem.acquire()
         self.assertTrue(f0.done())
-        self.assertTrue(sem.locked())
 
         # Wait for release().
         f1 = sem.acquire()
+        self.assertFalse(f1.done())
         f2 = sem.acquire()
         sem.release()
         self.assertTrue(f1.done())
@@ -267,7 +266,12 @@ class SemaphoreTest(AsyncTestCase):
         sem = locks.Semaphore()
         sem.release()
         sem.release()
-        self.assertEqual(3, sem.counter)
+
+        # Now the counter is 3. We can acquire three times before blocking.
+        self.assertTrue(sem.acquire().done())
+        self.assertTrue(sem.acquire().done())
+        self.assertTrue(sem.acquire().done())
+        self.assertFalse(sem.acquire().done())
 
 
 class SemaphoreContextManagerTest(AsyncTestCase):
@@ -275,10 +279,10 @@ class SemaphoreContextManagerTest(AsyncTestCase):
     def test_context_manager(self):
         sem = locks.Semaphore()
         with (yield sem.acquire()) as yielded:
-            self.assertTrue(sem.locked())
             self.assertTrue(yielded is None)
 
-        self.assertFalse(sem.locked())
+        # Semaphore was released and can be acquired again.
+        self.assertTrue(sem.acquire().done())
 
     @gen_test
     def test_context_manager_exception(self):
@@ -287,8 +291,8 @@ class SemaphoreContextManagerTest(AsyncTestCase):
             with (yield sem.acquire()):
                 1 / 0
 
-        # Context manager released semaphore.
-        self.assertFalse(sem.locked())
+        # Semaphore was released and can be acquired again.
+        self.assertTrue(sem.acquire().done())
 
     @gen_test
     def test_context_manager_timeout(self):
