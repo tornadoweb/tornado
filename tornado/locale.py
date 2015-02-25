@@ -427,7 +427,8 @@ class CSVLocale(Locale):
         return message_dict.get(message, message)
 
     def pgettext(self, context, message, plural_message=None, count=None):
-        gen_log.warning('pgettext is not supported by CSVLocale')
+        if self.translations:
+            gen_log.warning('pgettext is not supported by CSVLocale')
         return self.translate(message, plural_message, count)
 
 
