@@ -167,7 +167,6 @@ class Semaphore(object):
         if value < 0:
             raise ValueError('semaphore initial value must be >= 0')
 
-        self.io_loop = ioloop.IOLoop.current()
         self._value = value
         self._waiters = collections.deque()
 
@@ -209,7 +208,7 @@ class Semaphore(object):
             waiter = Future()
             self._waiters.append(waiter)
             if timeout:
-                future = gen.with_timeout(timeout, waiter, self.io_loop,
+                future = gen.with_timeout(timeout, waiter,
                                           quiet_exceptions=gen.TimeoutError)
 
                 # Set waiter's exception after the deadline.
