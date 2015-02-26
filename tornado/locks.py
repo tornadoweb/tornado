@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-__all__ = ['Condition', 'Event']
+__all__ = ['Condition', 'Event', 'Semaphore']
 
 import collections
 
@@ -123,3 +123,103 @@ class Event(object):
             return self._future
         else:
             return gen.with_timeout(timeout, self._future)
+
+
+class _ReleasingContextManager(object):
+    """Releases a Lock or Semaphore at the end of a "with" statement.
+
+        with (yield semaphore.acquire()):
+            pass
+
+        # Now semaphore.release() has been called.
+    """
+    def __init__(self, obj):
+        self._obj = obj
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._obj.release()
+
+
+class Semaphore(object):
+    """A lock that can be acquired a fixed number of times before blocking.
+
+    A Semaphore manages a counter representing the number of `.release` calls
+    minus the number of `.acquire` calls, plus an initial value. The `.acquire`
+    method blocks if necessary until it can return without making the counter
+    negative.
+
+    `.acquire` supports the context manager protocol:
+
+    >>> from tornado import gen, locks
+    >>> semaphore = locks.Semaphore()
+    >>> @gen.coroutine
+    ... def f():
+    ...    with (yield semaphore.acquire()):
+    ...        # Do something holding the semaphore.
+    ...        pass
+    ...
+    ...    # Now the semaphore is released.
+    """
+    def __init__(self, value=1):
+        if value < 0:
+            raise ValueError('semaphore initial value must be >= 0')
+
+        self._value = value
+        self._waiters = collections.deque()
+
+    def __repr__(self):
+        res = super(Semaphore, self).__repr__()
+        extra = 'locked' if self._value == 0 else 'unlocked,value:{0}'.format(
+            self._value)
+        if self._waiters:
+            extra = '{0},waiters:{1}'.format(extra, len(self._waiters))
+        return '<{0} [{1}]>'.format(res[1:-1], extra)
+
+    def release(self):
+        """Increment the counter and wake one waiter."""
+        self._value += 1
+        for waiter in self._waiters:
+            if not waiter.done():
+                self._value -= 1
+
+                # If the waiter is a coroutine paused at
+                #
+                #     with (yield semaphore.acquire()):
+                #
+                # then the context manager's __exit__ calls release() at the end
+                # of the "with" block.
+                waiter.set_result(_ReleasingContextManager(self))
+                break
+
+    def acquire(self, timeout=None):
+        """Decrement the counter. Returns a Future.
+
+        Block if the counter is zero and wait for a `.release`. The Future
+        raises `.TimeoutError` after the deadline.
+        """
+        if self._value > 0:
+            self._value -= 1
+            future = Future()
+            future.set_result(_ReleasingContextManager(self))
+        else:
+            waiter = Future()
+            self._waiters.append(waiter)
+            if timeout:
+                future = gen.with_timeout(timeout, waiter,
+                                          quiet_exceptions=gen.TimeoutError)
+
+                # Set waiter's exception after the deadline.
+                gen.chain_future(future, waiter)
+            else:
+                future = waiter
+        return future
+
+    def __enter__(self):
+        raise RuntimeError(
+            "Use Semaphore like 'with (yield semaphore.acquire())', not like"
+            " 'with semaphore'")
+
+    __exit__ = __enter__

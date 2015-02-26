@@ -216,5 +216,138 @@ class EventTest(AsyncTestCase):
         self.assertTrue(f1.done())
 
 
+class SemaphoreTest(AsyncTestCase):
+    def test_negative_value(self):
+        self.assertRaises(ValueError, locks.Semaphore, value=-1)
+
+    def test_str(self):
+        sem = locks.Semaphore()
+        self.assertIn('Semaphore', str(sem))
+        self.assertIn('unlocked,value:1', str(sem))
+        sem.acquire()
+        self.assertIn('locked', str(sem))
+        self.assertNotIn('waiters', str(sem))
+        sem.acquire()
+        self.assertIn('waiters', str(sem))
+
+    def test_acquire(self):
+        sem = locks.Semaphore()
+        f0 = sem.acquire()
+        self.assertTrue(f0.done())
+
+        # Wait for release().
+        f1 = sem.acquire()
+        self.assertFalse(f1.done())
+        f2 = sem.acquire()
+        sem.release()
+        self.assertTrue(f1.done())
+        self.assertFalse(f2.done())
+        sem.release()
+        self.assertTrue(f2.done())
+
+        sem.release()
+        # Now acquire() is instant.
+        self.assertTrue(sem.acquire().done())
+
+    @gen_test
+    def test_acquire_timeout(self):
+        sem = locks.Semaphore(2)
+        yield sem.acquire()
+        yield sem.acquire()
+        with self.assertRaises(gen.TimeoutError):
+            yield sem.acquire(timedelta(seconds=0.01))
+
+        f = sem.acquire()
+        sem.release()
+        self.assertTrue(f.done())
+
+    def test_release_unacquired(self):
+        # Unbounded releases are allowed, and increment the semaphore's value.
+        sem = locks.Semaphore()
+        sem.release()
+        sem.release()
+
+        # Now the counter is 3. We can acquire three times before blocking.
+        self.assertTrue(sem.acquire().done())
+        self.assertTrue(sem.acquire().done())
+        self.assertTrue(sem.acquire().done())
+        self.assertFalse(sem.acquire().done())
+
+
+class SemaphoreContextManagerTest(AsyncTestCase):
+    @gen_test
+    def test_context_manager(self):
+        sem = locks.Semaphore()
+        with (yield sem.acquire()) as yielded:
+            self.assertTrue(yielded is None)
+
+        # Semaphore was released and can be acquired again.
+        self.assertTrue(sem.acquire().done())
+
+    @gen_test
+    def test_context_manager_exception(self):
+        sem = locks.Semaphore()
+        with self.assertRaises(ZeroDivisionError):
+            with (yield sem.acquire()):
+                1 / 0
+
+        # Semaphore was released and can be acquired again.
+        self.assertTrue(sem.acquire().done())
+
+    @gen_test
+    def test_context_manager_timeout(self):
+        sem = locks.Semaphore()
+        with (yield sem.acquire(timedelta(seconds=0.01))):
+            pass
+
+        # Semaphore was released and can be acquired again.
+        self.assertTrue(sem.acquire().done())
+
+    @gen_test
+    def test_context_manager_timeout_error(self):
+        sem = locks.Semaphore(value=0)
+        with self.assertRaises(gen.TimeoutError):
+            with (yield sem.acquire(timedelta(seconds=0.01))):
+                pass
+
+        # Counter is still 0.
+        self.assertFalse(sem.acquire().done())
+
+    @gen_test
+    def test_context_manager_contended(self):
+        sem = locks.Semaphore()
+        history = []
+
+        @gen.coroutine
+        def f(index):
+            with (yield sem.acquire()):
+                history.append('acquired %d' % index)
+                yield gen.sleep(0.01)
+                history.append('release %d' % index)
+
+        yield [f(i) for i in range(2)]
+
+        expected_history = []
+        for i in range(2):
+            expected_history.extend(['acquired %d' % i, 'release %d' % i])
+
+        self.assertEqual(expected_history, history)
+
+    @gen_test
+    def test_yield_sem(self):
+        # Ensure we catch a "with (yield sem)", which should be
+        # "with (yield sem.acquire())".
+        with self.assertRaises(gen.BadYieldError):
+            with (yield locks.Semaphore()):
+                pass
+
+    def test_context_manager_misuse(self):
+        # Ensure we catch a "with sem", which should be
+        # "with (yield sem.acquire())".
+        with self.assertRaises(RuntimeError):
+            with locks.Semaphore():
+                pass
+
+
 if __name__ == '__main__':
     unittest.main()
