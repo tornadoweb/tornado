@@ -349,5 +349,20 @@ class SemaphoreContextManagerTest(AsyncTestCase):
                 pass
 
 
+class BoundedSemaphoreTest(AsyncTestCase):
+    def test_release_unacquired(self):
+        sem = locks.BoundedSemaphore()
+        self.assertRaises(ValueError, sem.release)
+        # Value is 0.
+        sem.acquire()
+        # Block on acquire().
+        future = sem.acquire()
+        self.assertFalse(future.done())
+        sem.release()
+        self.assertTrue(future.done())
+        # Value is 1.
+        sem.release()
+        self.assertRaises(ValueError, sem.release)
+
 if __name__ == '__main__':
     unittest.main()
