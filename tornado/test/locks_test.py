@@ -382,22 +382,20 @@ class LockTests(AsyncTestCase):
         self.assertTrue(future.done())
 
     @gen_test
-    def test_acquire_fifo(self):
+    def test_acquire_contended(self):
         lock = locks.Lock()
         self.assertTrue(lock.acquire().done())
         N = 5
-        history = []
 
         @gen.coroutine
-        def f(idx):
+        def f():
             with (yield lock.acquire()):
-                history.append(idx)
+                pass
 
-        futures = [f(i) for i in range(N)]
+        futures = [f() for _ in range(N)]
         self.assertFalse(any(future.done() for future in futures))
         lock.release()
         yield futures
-        self.assertEqual(range(N), history)
 
     @gen_test
     def test_acquire_timeout(self):

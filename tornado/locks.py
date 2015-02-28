@@ -264,9 +264,6 @@ class Lock(object):
     ...        pass
     ...
     ...    # Now the lock is released.
-
-    Coroutines waiting for `acquire` are granted the lock in first-in, first-out
-    order.
     """
     def __init__(self):
         self._block = BoundedSemaphore(value=1)
