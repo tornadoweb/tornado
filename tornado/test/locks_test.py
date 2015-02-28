@@ -33,12 +33,12 @@ class ConditionTest(AsyncTestCase):
                 self.history.append(key)
         future.add_done_callback(callback)
 
-    def test_str(self):
+    def test_repr(self):
         c = locks.Condition()
-        self.assertIn('Condition', str(c))
-        self.assertNotIn('waiters', str(c))
+        self.assertIn('Condition', repr(c))
+        self.assertNotIn('waiters', repr(c))
         c.wait()
-        self.assertIn('waiters', str(c))
+        self.assertIn('waiters', repr(c))
 
     @gen_test
     def test_notify(self):
@@ -170,7 +170,7 @@ class ConditionTest(AsyncTestCase):
 
 
 class EventTest(AsyncTestCase):
-    def test_str(self):
+    def test_repr(self):
         event = locks.Event()
         self.assertTrue('clear' in str(event))
         self.assertFalse('set' in str(event))
@@ -220,15 +220,15 @@ class SemaphoreTest(AsyncTestCase):
     def test_negative_value(self):
         self.assertRaises(ValueError, locks.Semaphore, value=-1)
 
-    def test_str(self):
+    def test_repr(self):
         sem = locks.Semaphore()
-        self.assertIn('Semaphore', str(sem))
-        self.assertIn('unlocked,value:1', str(sem))
+        self.assertIn('Semaphore', repr(sem))
+        self.assertIn('unlocked,value:1', repr(sem))
         sem.acquire()
-        self.assertIn('locked', str(sem))
-        self.assertNotIn('waiters', str(sem))
+        self.assertIn('locked', repr(sem))
+        self.assertNotIn('waiters', repr(sem))
         sem.acquire()
-        self.assertIn('waiters', str(sem))
+        self.assertIn('waiters', repr(sem))
 
     def test_acquire(self):
         sem = locks.Semaphore()
