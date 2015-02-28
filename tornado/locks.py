@@ -34,7 +34,7 @@ class Condition(object):
         self._waiters = collections.deque()  # Futures.
         self._timeouts = 0
 
-    def __str__(self):
+    def __repr__(self):
         result = '<%s' % (self.__class__.__name__, )
         if self._waiters:
             result += ' waiters[%s]' % len(self._waiters)
@@ -89,7 +89,7 @@ class Event(object):
     def __init__(self):
         self._future = Future()
 
-    def __str__(self):
+    def __repr__(self):
         return '<%s %s>' % (
             self.__class__.__name__, 'set' if self.is_set() else 'clear')
 
