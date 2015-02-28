@@ -181,7 +181,8 @@ class Semaphore(object):
     def release(self):
         """Increment the counter and wake one waiter."""
         self._value += 1
-        for waiter in self._waiters:
+        while self._waiters:
+            waiter = self._waiters.popleft()
             if not waiter.done():
                 self._value -= 1
 

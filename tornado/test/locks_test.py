@@ -248,6 +248,7 @@ class SemaphoreTest(AsyncTestCase):
         sem.release()
         # Now acquire() is instant.
         self.assertTrue(sem.acquire().done())
+        self.assertEqual(0, len(sem._waiters))
 
     @gen_test
     def test_acquire_timeout(self):
