@@ -238,6 +238,7 @@ class BoundedSemaphore(Semaphore):
         self._initial_value = value
 
     def release(self):
+        """Increment the counter and wake one waiter."""
         if self._value >= self._initial_value:
             raise ValueError("Semaphore released too many times")
         super(BoundedSemaphore, self).release()
