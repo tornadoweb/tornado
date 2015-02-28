@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-__all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore']
+__all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore', 'Lock']
 
 import collections
 
@@ -241,3 +241,63 @@ class BoundedSemaphore(Semaphore):
         if self._value >= self._initial_value:
             raise ValueError("Semaphore released too many times")
         super(BoundedSemaphore, self).release()
+
+
+class Lock(object):
+    """A lock for coroutines.
+
+    A Lock begins unlocked, and `acquire` locks it immediately. While it is
+    locked, a coroutine that yields `acquire` waits until another coroutine
+    calls `release`.
+
+    Releasing an unlocked lock raises `RuntimeError`.
+
+    `acquire` supports the context manager protocol:
+
+    >>> from tornado import gen, locks
+    >>> lock = locks.Lock()
+    >>>
+    >>> @gen.coroutine
+    ... def f():
+    ...    with (yield lock.acquire()):
+    ...        # Do something holding the lock.
+    ...        pass
+    ...
+    ...    # Now the lock is released.
+
+    Coroutines waiting for `acquire` are granted the lock in first-in, first-out
+    order.
+    """
+    def __init__(self):
+        self._block = BoundedSemaphore(value=1)
+
+    def __repr__(self):
+        return "<%s _block=%s>" % (
+            self.__class__.__name__,
+            self._block)
+
+    def acquire(self, deadline=None):
+        """Attempt to lock. Returns a Future.
+
+        Returns a Future, which raises `tornado.gen.TimeoutError` after a
+        timeout.
+        """
+        return self._block.acquire(deadline)
+
+    def release(self):
+        """Unlock.
+
+        The first coroutine in line waiting for `acquire` gets the lock.
+
+        If not locked, raise a `RuntimeError`.
+        """
+        try:
+            self._block.release()
+        except ValueError:
+            raise RuntimeError('release unlocked lock')
+
+    def __enter__(self):
+        raise RuntimeError(
+            "Use Lock like 'with (yield lock)', not like 'with lock'")
+
+    __exit__ = __enter__
