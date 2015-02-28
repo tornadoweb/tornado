@@ -364,5 +364,73 @@ class BoundedSemaphoreTest(AsyncTestCase):
         sem.release()
         self.assertRaises(ValueError, sem.release)
 
+
+class LockTests(AsyncTestCase):
+    def test_repr(self):
+        lock = locks.Lock()
+        # No errors.
+        repr(lock)
+        lock.acquire()
+        repr(lock)
+
+    def test_acquire_release(self):
+        lock = locks.Lock()
+        self.assertTrue(lock.acquire().done())
+        future = lock.acquire()
+        self.assertFalse(future.done())
+        lock.release()
+        self.assertTrue(future.done())
+
+    @gen_test
+    def test_acquire_fifo(self):
+        lock = locks.Lock()
+        self.assertTrue(lock.acquire().done())
+        N = 5
+        history = []
+
+        @gen.coroutine
+        def f(idx):
+            with (yield lock.acquire()):
+                history.append(idx)
+
+        futures = [f(i) for i in range(N)]
+        self.assertFalse(any(future.done() for future in futures))
+        lock.release()
+        yield futures
+        self.assertEqual(list(range(N)), history)
+
+    @gen_test
+    def test_acquire_timeout(self):
+        lock = locks.Lock()
+        lock.acquire()
+        with self.assertRaises(gen.TimeoutError):
+            yield lock.acquire(deadline=timedelta(seconds=0.01))
+
+        # Still locked.
+        self.assertFalse(lock.acquire().done())
+
+    def test_multi_release(self):
+        lock = locks.Lock()
+        self.assertRaises(RuntimeError, lock.release)
+        lock.acquire()
+        lock.release()
+        self.assertRaises(RuntimeError, lock.release)
+
+    @gen_test
+    def test_yield_lock(self):
+        # Ensure we catch a "with (yield lock)", which should be
+        # "with (yield lock.acquire())".
+        with self.assertRaises(gen.BadYieldError):
+            with (yield locks.Lock()):
+                pass
+
+    def test_context_manager_misuse(self):
+        # Ensure we catch a "with lock", which should be
+        # "with (yield lock.acquire())".
+        with self.assertRaises(RuntimeError):
+            with locks.Lock():
+                pass
+
+
 if __name__ == '__main__':
     unittest.main()
