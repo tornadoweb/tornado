@@ -665,9 +665,7 @@ class PollIOLoop(IOLoop):
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
         self._waker = Waker()
-        self.add_handler(self._waker.fileno(),
-                         lambda fd, events: self._waker.consume(),
-                         self.READ)
+        self.add_handler(self._waker.fileno(), self._handle_waker, self.READ)
 
     def close(self, all_fds=False):
         with self._callback_lock:
@@ -721,36 +719,8 @@ class PollIOLoop(IOLoop):
         self._thread_ident = thread.get_ident()
         self._running = True
 
-        # signal.set_wakeup_fd closes a race condition in event loops:
-        # a signal may arrive at the beginning of select/poll/etc
-        # before it goes into its interruptible sleep, so the signal
-        # will be consumed without waking the select.  The solution is
-        # for the (C, synchronous) signal handler to write to a pipe,
-        # which will then be seen by select.
-        #
-        # In python's signal handling semantics, this only matters on the
-        # main thread (fortunately, set_wakeup_fd only works on the main
-        # thread and will raise a ValueError otherwise).
-        #
-        # If someone has already set a wakeup fd, we don't want to
-        # disturb it.  This is an issue for twisted, which does its
-        # SIGCHLD processing in response to its own wakeup fd being
-        # written to.  As long as the wakeup fd is registered on the IOLoop,
-        # the loop will still wake up and everything should work.
-        old_wakeup_fd = None
-        if hasattr(signal, 'set_wakeup_fd') and os.name == 'posix':
-            # requires python 2.6+, unix.  set_wakeup_fd exists but crashes
-            # the python process on windows.
-            try:
-                old_wakeup_fd = signal.set_wakeup_fd(self._waker.write_fileno())
-                if old_wakeup_fd != -1:
-                    # Already set, restore previous value.  This is a little racy,
-                    # but there's no clean get_wakeup_fd and in real use the
-                    # IOLoop is just started once at the beginning.
-                    signal.set_wakeup_fd(old_wakeup_fd)
-                    old_wakeup_fd = None
-            except ValueError:  # non-main thread
-                pass
+        # Handles a race condition in event loops.
+        old_wakeup_fd = self._set_wakeup_fd_if_needed()
 
         try:
             while True:
@@ -926,6 +896,53 @@ class PollIOLoop(IOLoop):
                 # but either way will work.
                 self._callbacks.append(functools.partial(
                     stack_context.wrap(callback), *args, **kwargs))
+
+    def _handle_waker(fd, events):
+        try:
+            self._waker.consume()
+        except:
+            # If consume errors out, we want to reset our waker in case it is
+            # left in a bad state.
+            waker_writer_fileno = self._waker.write_fileno()
+            self.remove_handler(self._waker.fileno())
+            self._waker.close()
+            self._waker = Waker()
+            self.add_handler(self._waker.fileno(), self._handle_waker, self.READ)
+            if self.running:
+                self._set_wakeup_fd_if_needed(waker_writer_fileno)
+
+    def _set_wakeup_fd_if_needed(wakeup_fd_to_replace=None):
+        # signal.set_wakeup_fd closes a race condition in event loops:
+        # a signal may arrive at the beginning of select/poll/etc
+        # before it goes into its interruptible sleep, so the signal
+        # will be consumed without waking the select.  The solution is
+        # for the (C, synchronous) signal handler to write to a pipe,
+        # which will then be seen by select.
+        #
+        # In python's signal handling semantics, this only matters on the
+        # main thread (fortunately, set_wakeup_fd only works on the main
+        # thread and will raise a ValueError otherwise).
+        #
+        # If someone has already set a wakeup fd, we don't want to
+        # disturb it.  This is an issue for twisted, which does its
+        # SIGCHLD processing in response to its own wakeup fd being
+        # written to.  As long as the wakeup fd is registered on the IOLoop,
+        # the loop will still wake up and everything should work.
+        old_wakeup_fd = None
+        if hasattr(signal, 'set_wakeup_fd') and os.name == 'posix':
+            # requires python 2.6+, unix.  set_wakeup_fd exists but crashes
+            # the python process on windows.
+            try:
+                old_wakeup_fd = signal.set_wakeup_fd(self._waker.write_fileno())
+                if old_wakeup_fd != -1 and old_wakeup_fd != wakeup_fd_to_replace:
+                    # Already set, restore previous value.  This is a little racy,
+                    # but there's no clean get_wakeup_fd and in real use the
+                    # IOLoop is just started once at the beginning.
+                    signal.set_wakeup_fd(old_wakeup_fd)
+                    old_wakeup_fd = None
+            except ValueError:  # non-main thread
+                pass
+        return old_wakeup_fd
 
 
 class _Timeout(object):

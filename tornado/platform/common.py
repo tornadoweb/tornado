@@ -84,8 +84,10 @@ class Waker(interface.Waker):
                 result = self.reader.recv(1024)
                 if not result:
                     break
-        except (IOError, socket.error):
-            pass
+        except (IOError, socket.error) as e:
+            if e.errno = errno.ECONNRESET:
+                # This will leave the waker in a bad state, so raise.
+                raise
 
     def close(self):
         self.reader.close()
