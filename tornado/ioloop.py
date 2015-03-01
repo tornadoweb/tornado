@@ -877,11 +877,7 @@ class PollIOLoop(IOLoop):
             deadline,
             functools.partial(stack_context.wrap(callback), *args, **kwargs),
             self)
-        try:
-            heapq.heappush(self._timeouts, timeout)
-        except:
-            print(self._timeouts, timeout)
-            raise
+        heapq.heappush(self._timeouts, timeout)
         return timeout
 
     def remove_timeout(self, timeout):
