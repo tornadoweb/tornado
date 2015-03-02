@@ -34,6 +34,13 @@ class ChunkedHandler(RequestHandler):
         yield gen.Task(self.flush)
         self.finish()
 
+class CacheHandler(RequestHandler):
+    def get(self, computed_etag):
+        self.write(computed_etag)
+
+    def compute_etag(self):
+        return self._write_buffer[0]
+
 class TestMixin(object):
     def get_handlers(self):
         return [
@@ -41,6 +48,7 @@ class TestMixin(object):
             ('/redirect(/.*)', RedirectHandler),
             ('/post', PostHandler),
             ('/chunked', ChunkedHandler),
+            ('/cache/(.*)', CacheHandler),
             ]
 
     def get_app_kwargs(self):
@@ -70,7 +78,6 @@ class TestMixin(object):
                 raise red.response.http_error.res_error
             else:
                 raise Exception("unknown error; incomplete response")
-
         self.assertEqual(int(red.response.status_code), expected_status)
 
         allowed_warnings = (allowed_warnings or []) + self.get_allowed_warnings()
@@ -148,6 +155,79 @@ class TestMixin(object):
 
     def test_chunked(self):
         self.check_url('/chunked')
+
+    def test_strong_etag_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy"'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=304)
+
+    def test_multiple_strong_etag_match(self):
+        computed_etag = '"xyzzy1"'
+        etags = '"xyzzy1", "xyzzy2"'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=304)
+
+    def test_strong_etag_not_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy1"'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=200)
+
+    def test_multiple_strong_etag_not_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy1", "xyzzy2"'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=200)
+
+    def test_wildcard_etag(self):
+        computed_etag = '"xyzzy"'
+        etags = '*'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=304,
+            allowed_warnings=[rs.MISSING_HDRS_304])
+
+    def test_weak_etag_match(self):
+        computed_etag = '"xyzzy1"'
+        etags = 'W/"xyzzy1"'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=304)
+
+    def test_multiple_weak_etag_match(self):
+        computed_etag = '"xyzzy2"'
+        etags = 'W/"xyzzy1", W/"xyzzy2"'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=304)
+
+    def test_weak_etag_not_match(self):
+        computed_etag = '"xyzzy2"'
+        etags = 'W/"xyzzy1"'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=200)
+
+    def test_multiple_weak_etag_not_match(self):
+        computed_etag = '"xyzzy3"'
+        etags = 'W/"xyzzy1", W/"xyzzy2"'
+        self.check_url(
+            '/cache/' + computed_etag, method='GET',
+            headers=[('If-None-Match', etags)],
+            expected_status=200)
 
 class DefaultHTTPTest(AsyncHTTPTestCase, LogTrapTestCase, TestMixin):
     def get_app(self):
