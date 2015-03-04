@@ -274,6 +274,28 @@ class SemaphoreTest(AsyncTestCase):
         self.assertTrue(sem.acquire().done())
         self.assertFalse(sem.acquire().done())
 
+    @gen_test
+    def test_garbage_collection(self):
+        # Test that timed-out waiters are occasionally cleaned from the queue.
+        sem = locks.Semaphore(value=0)
+        futures = [sem.acquire(timedelta(seconds=0.01)) for _ in range(101)]
+
+        future = sem.acquire()
+        self.assertEqual(102, len(sem._waiters))
+
+        # Let first 101 waiters time out, triggering a collection.
+        yield gen.sleep(0.02)
+        self.assertEqual(1, len(sem._waiters))
+
+        # Final waiter is still active.
+        self.assertFalse(future.done())
+        sem.release()
+        self.assertTrue(future.done())
+
+        # Prevent "Future exception was never retrieved" messages.
+        for future in futures:
+            self.assertRaises(TimeoutError, future.result)
+
 
 class SemaphoreContextManagerTest(AsyncTestCase):
     @gen_test
