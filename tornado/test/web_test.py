@@ -2490,6 +2490,5 @@ class CacheTest(WebTestCase):
         response = self.fetch(
             '/etag/' + computed_etag,
             headers={'If-None-Match': etags}
-
         )
         self.assertEqual(response.code, status_code)
