@@ -1310,22 +1310,22 @@ class RequestHandler(object):
         before completing the request.  The ``Etag`` header should be set
         (perhaps with `set_etag_header`) before calling this method.
         """
-        computed_etag = self._headers.get("Etag")
+        computed_etag = utf8(self._headers.get("Etag", ""))
         # Find all weak and strong etag values from If-None-Match header
         # because RFC 7232 allows multiple etag values in a single header.
         etags = re.findall(
-            r'\*|(?:W/)?"[^"]*"',
+            br'\*|(?:W/)?"[^"]*"',
             utf8(self.request.headers.get("If-None-Match", ""))
         )
         if not computed_etag or not etags:
             return False
 
         match = False
-        if etags[0] == '*':
+        if etags[0] == b'*':
             match = True
         else:
             # Use a weak comparison when comparing entity-tags.
-            val = lambda x: x[2:] if x.startswith('W/') else x
+            val = lambda x: x[2:] if x.startswith(b'W/') else x
             for etag in etags:
                 if val(etag) == val(computed_etag):
                     match = True
