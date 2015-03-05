@@ -100,7 +100,6 @@ class HTTPClient(object):
         """
         response = self._io_loop.run_sync(functools.partial(
             self._async_client.fetch, request, **kwargs))
-        response.rethrow()
         return response
 
 
