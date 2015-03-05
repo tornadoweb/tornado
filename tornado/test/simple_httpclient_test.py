@@ -446,10 +446,6 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
                        required=False):
             resp = self.fetch(
                 "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
-            # On python 2.6, the server logs an exception a little after
-            # the client finishes ("unexpected EOF")
-            self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
-            self.wait()
         self.assertRaises(ssl.SSLError, resp.rethrow)
 
     @unittest.skipIf(not hasattr(ssl, 'SSLContext'),

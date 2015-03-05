@@ -438,8 +438,7 @@ class BaseIOStream(object):
                 futures.append(self._connect_future)
                 self._connect_future = None
             for future in futures:
-                if (isinstance(self.error, (socket.error, IOError)) and
-                        errno_from_exception(self.error) in _ERRNO_CONNRESET):
+                if self._is_connreset(self.error):
                     # Treat connection resets as closed connections so
                     # clients only have to catch one kind of exception
                     # to avoid logging.
@@ -719,7 +718,7 @@ class BaseIOStream(object):
             chunk = self.read_from_fd()
         except (socket.error, IOError, OSError) as e:
             # ssl.SSLError is a subclass of socket.error
-            if e.args[0] in _ERRNO_CONNRESET:
+            if self._is_connreset(e):
                 # Treat ECONNRESET as a connection close rather than
                 # an error to minimize log spam  (the exception will
                 # be available on self.error for apps that care).
@@ -841,7 +840,7 @@ class BaseIOStream(object):
                     self._write_buffer_frozen = True
                     break
                 else:
-                    if e.args[0] not in _ERRNO_CONNRESET:
+                    if not self._is_connreset(e):
                         # Broken pipe errors are usually caused by connection
                         # reset, and its better to not log EPIPE errors to
                         # minimize log spam
@@ -918,6 +917,14 @@ class BaseIOStream(object):
         elif not self._state & state:
             self._state = self._state | state
             self.io_loop.update_handler(self.fileno(), self._state)
+
+    def _is_connreset(self, exc):
+        """Return true if exc is ECONNRESET or equivalent.
+
+        May be overridden in subclasses.
+        """
+        return (isinstance(exc, (socket.error, IOError)) and
+                errno_from_exception(exc) in _ERRNO_CONNRESET)
 
 
 class IOStream(BaseIOStream):
@@ -1175,7 +1182,7 @@ class IOStream(BaseIOStream):
                 # Sometimes setsockopt will fail if the socket is closed
                 # at the wrong time.  This can happen with HTTPServer
                 # resetting the value to false between requests.
-                if e.errno not in (errno.EINVAL, errno.ECONNRESET):
+                if e.errno != errno.EINVAL and not self._is_connreset(e):
                     raise
 
 
@@ -1250,8 +1257,7 @@ class SSLIOStream(IOStream):
             # to cause do_handshake to raise EBADF, so make that error
             # quiet as well.
             # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
-            if (err.args[0] in _ERRNO_CONNRESET or
-                    err.args[0] == errno.EBADF):
+            if self._is_connreset(err) or err.args[0] == errno.EBADF:
                 return self.close(exc_info=True)
             raise
         except AttributeError:
@@ -1384,6 +1390,11 @@ class SSLIOStream(IOStream):
             self.close()
             return None
         return chunk
+
+    def _is_connreset(self, e):
+        if isinstance(e, ssl.SSLError) and e.args[0] == ssl.SSL_ERROR_EOF:
+            return True
+        return super(SSLIOStream, self)._is_connreset(e)
 
 
 class PipeIOStream(BaseIOStream):
