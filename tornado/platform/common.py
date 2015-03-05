@@ -85,7 +85,7 @@ class Waker(interface.Waker):
                 if not result:
                     break
         except (IOError, socket.error) as e:
-            if e.errno = errno.ECONNRESET:
+            if e.errno != errno.EWOULDBLOCK:
                 # This will leave the waker in a bad state, so raise.
                 raise
 

@@ -897,7 +897,7 @@ class PollIOLoop(IOLoop):
                 self._callbacks.append(functools.partial(
                     stack_context.wrap(callback), *args, **kwargs))
 
-    def _handle_waker(fd, events):
+    def _handle_waker(self, fd, events):
         try:
             self._waker.consume()
         except:
@@ -911,7 +911,7 @@ class PollIOLoop(IOLoop):
             if self.running:
                 self._set_wakeup_fd_if_needed(waker_writer_fileno)
 
-    def _set_wakeup_fd_if_needed(wakeup_fd_to_replace=None):
+    def _set_wakeup_fd_if_needed(self, wakeup_fd_to_replace=None):
         # signal.set_wakeup_fd closes a race condition in event loops:
         # a signal may arrive at the beginning of select/poll/etc
         # before it goes into its interruptible sleep, so the signal
