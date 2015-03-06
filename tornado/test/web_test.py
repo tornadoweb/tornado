@@ -2426,3 +2426,69 @@ class DecoratorTest(WebTestCase):
         response = self.fetch("/addslash?foo=bar", follow_redirects=False)
         self.assertEqual(response.code, 301)
         self.assertEqual(response.headers['Location'], "/addslash/?foo=bar")
+
+
+class CacheTest(WebTestCase):
+    def get_handlers(self):
+        class EtagHandler(RequestHandler):
+            def get(self, computed_etag):
+                self.write(computed_etag)
+
+            def compute_etag(self):
+                return self._write_buffer[0]
+
+        return [
+            ('/etag/(.*)', EtagHandler)
+        ]
+
+    def test_wildcard_etag(self):
+        computed_etag = '"xyzzy"'
+        etags = '*'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_strong_etag_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy"'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_multiple_strong_etag_match(self):
+        computed_etag = '"xyzzy1"'
+        etags = '"xyzzy1", "xyzzy2"'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_strong_etag_not_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy1"'
+        self._test_etag(computed_etag, etags, 200)
+
+    def test_multiple_strong_etag_not_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy1", "xyzzy2"'
+        self._test_etag(computed_etag, etags, 200)
+
+    def test_weak_etag_match(self):
+        computed_etag = '"xyzzy1"'
+        etags = 'W/"xyzzy1"'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_multiple_weak_etag_match(self):
+        computed_etag = '"xyzzy2"'
+        etags = 'W/"xyzzy1", W/"xyzzy2"'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_weak_etag_not_match(self):
+        computed_etag = '"xyzzy2"'
+        etags = 'W/"xyzzy1"'
+        self._test_etag(computed_etag, etags, 200)
+
+    def test_multiple_weak_etag_not_match(self):
+        computed_etag = '"xyzzy3"'
+        etags = 'W/"xyzzy1", W/"xyzzy2"'
+        self._test_etag(computed_etag, etags, 200)
+
+    def _test_etag(self, computed_etag, etags, status_code):
+        response = self.fetch(
+            '/etag/' + computed_etag,
+            headers={'If-None-Match': etags}
+        )
+        self.assertEqual(response.code, status_code)

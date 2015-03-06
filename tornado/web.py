@@ -1310,9 +1310,27 @@ class RequestHandler(object):
         before completing the request.  The ``Etag`` header should be set
         (perhaps with `set_etag_header`) before calling this method.
         """
-        etag = self._headers.get("Etag")
-        inm = utf8(self.request.headers.get("If-None-Match", ""))
-        return bool(etag and inm and inm.find(etag) >= 0)
+        computed_etag = utf8(self._headers.get("Etag", ""))
+        # Find all weak and strong etag values from If-None-Match header
+        # because RFC 7232 allows multiple etag values in a single header.
+        etags = re.findall(
+            br'\*|(?:W/)?"[^"]*"',
+            utf8(self.request.headers.get("If-None-Match", ""))
+        )
+        if not computed_etag or not etags:
+            return False
+
+        match = False
+        if etags[0] == b'*':
+            match = True
+        else:
+            # Use a weak comparison when comparing entity-tags.
+            val = lambda x: x[2:] if x.startswith(b'W/') else x
+            for etag in etags:
+                if val(etag) == val(computed_etag):
+                    match = True
+                    break
+        return match
 
     def _stack_context_handle_exception(self, type, value, traceback):
         try:
