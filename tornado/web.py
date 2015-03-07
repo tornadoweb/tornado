@@ -392,6 +392,12 @@ class RequestHandler(object):
 
         The returned values are always unicode.
         """
+
+        # Make sure `get_arguments` isn't accidentally being called with a
+        # positional argument that's assumed to be a default (like in
+        # `get_argument`.)
+        assert isinstance(strip, bool)
+
         return self._get_arguments(name, self.request.arguments, strip)
 
     def get_body_argument(self, name, default=_ARG_DEFAULT, strip=True):
