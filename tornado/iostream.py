@@ -169,6 +169,11 @@ class BaseIOStream(object):
         self._close_callback = None
         self._connect_callback = None
         self._connect_future = None
+        # _ssl_connect_future should be defined in SSLIOStream
+        # but it's here so we can clean it up in maybe_run_close_callback.
+        # TODO: refactor that so subclasses can add additional futures
+        # to be cancelled.
+        self._ssl_connect_future = None
         self._connecting = False
         self._state = None
         self._pending_callbacks = 0
@@ -437,6 +442,9 @@ class BaseIOStream(object):
             if self._connect_future is not None:
                 futures.append(self._connect_future)
                 self._connect_future = None
+            if self._ssl_connect_future is not None:
+                futures.append(self._ssl_connect_future)
+                self._ssl_connect_future = None
             for future in futures:
                 if self._is_connreset(self.error):
                     # Treat connection resets as closed connections so
@@ -1270,10 +1278,17 @@ class SSLIOStream(IOStream):
             if not self._verify_cert(self.socket.getpeercert()):
                 self.close()
                 return
-            if self._ssl_connect_callback is not None:
-                callback = self._ssl_connect_callback
-                self._ssl_connect_callback = None
-                self._run_callback(callback)
+            self._run_ssl_connect_callback()
+
+    def _run_ssl_connect_callback(self):
+        if self._ssl_connect_callback is not None:
+            callback = self._ssl_connect_callback
+            self._ssl_connect_callback = None
+            self._run_callback(callback)
+        if self._ssl_connect_future is not None:
+            future = self._ssl_connect_future
+            self._ssl_connect_future = None
+            future.set_result(self)
 
     def _verify_cert(self, peercert):
         """Returns True if peercert is valid according to the configured
@@ -1315,14 +1330,11 @@ class SSLIOStream(IOStream):
         super(SSLIOStream, self)._handle_write()
 
     def connect(self, address, callback=None, server_hostname=None):
-        # Save the user's callback and run it after the ssl handshake
-        # has completed.
-        self._ssl_connect_callback = stack_context.wrap(callback)
         self._server_hostname = server_hostname
-        # Note: Since we don't pass our callback argument along to
-        # super.connect(), this will always return a Future.
-        # This is harmless, but a bit less efficient than it could be.
-        return super(SSLIOStream, self).connect(address, callback=None)
+        # Pass a dummy callback to super.connect(), which is slightly
+        # more efficient than letting it return a Future we ignore.
+        super(SSLIOStream, self).connect(address, callback=lambda: None)
+        return self.wait_for_handshake(callback)
 
     def _handle_connect(self):
         # Call the superclass method to check for errors.
@@ -1346,6 +1358,37 @@ class SSLIOStream(IOStream):
                                       server_hostname=self._server_hostname,
                                       do_handshake_on_connect=False)
         self._add_io_state(old_state)
+
+    def wait_for_handshake(self, callback=None):
+        """Wait for the initial SSL handshake to complete.
+
+        If a ``callback`` is given, it will be called with no
+        arguments once the handshake is complete; otherwise this
+        method returns a `.Future` which will resolve to the
+        stream itself after the handshake is complete.
+
+        Once the handshake is complete, information such as
+        the peer's certificate and NPN/ALPN selections may be
+        accessed on ``self.socket``.
+
+        This method is intended for use on server-side streams
+        or after using `IOStream.start_tls`; it should not be used
+        with `IOStream.connect` (which already waits for the
+        handshake to complete). It may only be called once per stream.
+
+        .. versionadded:: 4.2
+        """
+        if (self._ssl_connect_callback is not None or
+                self._ssl_connect_future is not None):
+            raise RuntimeError("Already waiting")
+        if callback is not None:
+            self._ssl_connect_callback = stack_context.wrap(callback)
+            future = None
+        else:
+            future = self._ssl_connect_future = TracebackFuture()
+        if not self._ssl_accepting:
+            self._run_ssl_connect_callback()
+        return future
 
     def write_to_fd(self, data):
         try:

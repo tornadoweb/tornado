@@ -7,6 +7,7 @@ from tornado.httputil import HTTPHeaders
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket
 from tornado.stack_context import NullContext
+from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix, refusing_port
 from tornado.web import RequestHandler, Application
@@ -905,6 +906,98 @@ class TestIOStreamStartTLS(AsyncTestCase):
                 yield client_future
         with self.assertRaises((ssl.SSLError, socket.error)):
             yield server_future
+
+
+class WaitForHandshakeTest(AsyncTestCase):
+    @gen.coroutine
+    def connect_to_server(self, server_cls):
+        server = client = None
+        try:
+            sock, port = bind_unused_port()
+            server = server_cls(ssl_options=_server_ssl_options())
+            server.add_socket(sock)
+
+            client = SSLIOStream(socket.socket(),
+                                 ssl_options=dict(cert_reqs=ssl.CERT_NONE))
+            yield client.connect(('127.0.0.1', port))
+            self.assertIsNotNone(client.socket.cipher())
+        finally:
+            if server is not None:
+                server.stop()
+            if client is not None:
+                client.close()
+
+    @gen_test
+    def test_wait_for_handshake_callback(self):
+        test = self
+        handshake_future = Future()
+
+        class TestServer(TCPServer):
+            def handle_stream(self, stream, address):
+                # The handshake has not yet completed.
+                test.assertIsNone(stream.socket.cipher())
+                self.stream = stream
+                stream.wait_for_handshake(self.handshake_done)
+
+            def handshake_done(self):
+                # Now the handshake is done and ssl information is available.
+                test.assertIsNotNone(self.stream.socket.cipher())
+                handshake_future.set_result(None)
+
+        yield self.connect_to_server(TestServer)
+        yield handshake_future
+
+    @gen_test
+    def test_wait_for_handshake_future(self):
+        test = self
+        handshake_future = Future()
+
+        class TestServer(TCPServer):
+            def handle_stream(self, stream, address):
+                test.assertIsNone(stream.socket.cipher())
+                test.io_loop.spawn_callback(self.handle_connection, stream)
+
+            @gen.coroutine
+            def handle_connection(self, stream):
+                yield stream.wait_for_handshake()
+                handshake_future.set_result(None)
+
+        yield self.connect_to_server(TestServer)
+        yield handshake_future
+
+    @gen_test
+    def test_wait_for_handshake_already_waiting_error(self):
+        test = self
+        handshake_future = Future()
+
+        class TestServer(TCPServer):
+            def handle_stream(self, stream, address):
+                stream.wait_for_handshake(self.handshake_done)
+                test.assertRaises(RuntimeError, stream.wait_for_handshake)
+
+            def handshake_done(self):
+                handshake_future.set_result(None)
+
+        yield self.connect_to_server(TestServer)
+        yield handshake_future
+
+    @gen_test
+    def test_wait_for_handshake_already_connected(self):
+        handshake_future = Future()
+
+        class TestServer(TCPServer):
+            def handle_stream(self, stream, address):
+                self.stream = stream
+                stream.wait_for_handshake(self.handshake_done)
+
+            def handshake_done(self):
+                self.stream.wait_for_handshake(self.handshake2_done)
+
+            def handshake2_done(self):
+                handshake_future.set_result(None)
+
+        yield self.connect_to_server(TestServer)
+        yield handshake_future
 
 
 @skipIfNonUnix
