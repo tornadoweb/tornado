@@ -198,21 +198,21 @@ class Configurable(object):
     __impl_class = None
     __impl_kwargs = None
 
-    def __new__(cls, **kwargs):
+    def __new__(cls, *args, **kwargs):
         base = cls.configurable_base()
-        args = {}
+        init_kwargs = {}
         if cls is base:
             impl = cls.configured_class()
             if base.__impl_kwargs:
-                args.update(base.__impl_kwargs)
+                init_kwargs.update(base.__impl_kwargs)
         else:
             impl = cls
-        args.update(kwargs)
+        init_kwargs.update(kwargs)
         instance = super(Configurable, cls).__new__(impl)
         # initialize vs __init__ chosen for compatibility with AsyncHTTPClient
         # singleton magic.  If we get rid of that we can switch to __init__
         # here too.
-        instance.initialize(**args)
+        instance.initialize(*args, **init_kwargs)
         return instance
 
     @classmethod
@@ -233,6 +233,9 @@ class Configurable(object):
         """Initialize a `Configurable` subclass instance.
 
         Configurable classes should use `initialize` instead of ``__init__``.
+
+        .. versionchanged:: 4.2
+           Now accepts positional arguments in addition to keyword arguments.
         """
 
     @classmethod

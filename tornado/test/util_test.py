@@ -46,13 +46,15 @@ class TestConfigurable(Configurable):
 
 
 class TestConfig1(TestConfigurable):
-    def initialize(self, a=None):
+    def initialize(self, pos_arg=None, a=None):
         self.a = a
+        self.pos_arg = pos_arg
 
 
 class TestConfig2(TestConfigurable):
-    def initialize(self, b=None):
+    def initialize(self, pos_arg=None, b=None):
         self.b = b
+        self.pos_arg = pos_arg
 
 
 class ConfigurableTest(unittest.TestCase):
@@ -102,9 +104,10 @@ class ConfigurableTest(unittest.TestCase):
         self.assertIsInstance(obj, TestConfig1)
         self.assertEqual(obj.a, 3)
 
-        obj = TestConfigurable(a=4)
+        obj = TestConfigurable(42, a=4)
         self.assertIsInstance(obj, TestConfig1)
         self.assertEqual(obj.a, 4)
+        self.assertEqual(obj.pos_arg, 42)
 
         self.checkSubclasses()
         # args bound in configure don't apply when using the subclass directly
@@ -117,9 +120,10 @@ class ConfigurableTest(unittest.TestCase):
         self.assertIsInstance(obj, TestConfig2)
         self.assertEqual(obj.b, 5)
 
-        obj = TestConfigurable(b=6)
+        obj = TestConfigurable(42, b=6)
         self.assertIsInstance(obj, TestConfig2)
         self.assertEqual(obj.b, 6)
+        self.assertEqual(obj.pos_arg, 42)
 
         self.checkSubclasses()
         # args bound in configure don't apply when using the subclass directly
