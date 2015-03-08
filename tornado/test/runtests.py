@@ -8,6 +8,7 @@ import operator
 import textwrap
 import sys
 from tornado.httpclient import AsyncHTTPClient
+from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.netutil import Resolver
 from tornado.options import define, options, add_parse_callback
@@ -123,6 +124,8 @@ def main():
     define('httpclient', type=str, default=None,
            callback=lambda s: AsyncHTTPClient.configure(
                s, defaults=dict(allow_ipv6=False)))
+    define('httpserver', type=str, default=None,
+           callback=HTTPServer.configure)
     define('ioloop', type=str, default=None)
     define('ioloop_time_monotonic', default=False)
     define('resolver', type=str, default=None,

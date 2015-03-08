@@ -162,19 +162,22 @@ class BadSSLOptionsTest(unittest.TestCase):
         application = Application()
         module_dir = os.path.dirname(__file__)
         existing_certificate = os.path.join(module_dir, 'test.crt')
+        existing_key = os.path.join(module_dir, 'test.key')
 
-        self.assertRaises(ValueError, HTTPServer, application, ssl_options={
-                          "certfile": "/__mising__.crt",
+        self.assertRaises((ValueError, IOError),
+                          HTTPServer, application, ssl_options={
+                              "certfile": "/__mising__.crt",
                           })
-        self.assertRaises(ValueError, HTTPServer, application, ssl_options={
-                          "certfile": existing_certificate,
-                          "keyfile": "/__missing__.key"
+        self.assertRaises((ValueError, IOError),
+                          HTTPServer, application, ssl_options={
+                              "certfile": existing_certificate,
+                              "keyfile": "/__missing__.key"
                           })
 
         # This actually works because both files exist
         HTTPServer(application, ssl_options={
                    "certfile": existing_certificate,
-                   "keyfile": existing_certificate
+                   "keyfile": existing_key,
                    })
 
 
