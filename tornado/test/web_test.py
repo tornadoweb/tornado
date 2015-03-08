@@ -2393,6 +2393,7 @@ class FinishExceptionTest(SimpleHandlerTestCase):
         self.assertEqual(b'authentication required', response.body)
 
 
+@wsgi_safe
 class DecoratorTest(WebTestCase):
     def get_handlers(self):
         class RemoveSlashHandler(RequestHandler):
@@ -2428,6 +2429,7 @@ class DecoratorTest(WebTestCase):
         self.assertEqual(response.headers['Location'], "/addslash/?foo=bar")
 
 
+@wsgi_safe
 class CacheTest(WebTestCase):
     def get_handlers(self):
         class EtagHandler(RequestHandler):
