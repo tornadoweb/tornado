@@ -1432,8 +1432,8 @@ class RequestHandler(object):
         self.application.log_request(self)
 
     def _request_summary(self):
-        return self.request.method + " " + self.request.uri + \
-            " (" + self.request.remote_ip + ")"
+        return "%s %s (%s)" % (self.request.method, self.request.uri,
+                               self.request.remote_ip)
 
     def _handle_request_exception(self, e):
         if isinstance(e, Finish):

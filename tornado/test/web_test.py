@@ -2512,3 +2512,18 @@ class CacheTest(WebTestCase):
             headers={'If-None-Match': etags}
         )
         self.assertEqual(response.code, status_code)
+
+
+@wsgi_safe
+class RequestSummaryTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            # remote_ip is optional, although it's set by
+            # both HTTPServer and WSGIAdapter.
+            # Clobber it to make sure it doesn't break logging.
+            self.request.remote_ip = None
+            self.finish(self._request_summary())
+
+    def test_missing_remote_ip(self):
+        resp = self.fetch("/")
+        self.assertEqual(resp.body, b"GET / (None)")
