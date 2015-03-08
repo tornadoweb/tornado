@@ -213,7 +213,20 @@ class TCPServer(object):
             sock.close()
 
     def handle_stream(self, stream, address):
-        """Override to handle a new `.IOStream` from an incoming connection."""
+        """Override to handle a new `.IOStream` from an incoming connection.
+
+        This method may be a coroutine; if so any exceptions it raises
+        asynchronously will be logged. Accepting of incoming connections
+        will not be blocked by this coroutine.
+
+        If this `TCPServer` is configured for SSL, ``handle_stream``
+        may be called before the SSL handshake has completed. Use
+        `.SSLIOStream.wait_for_handshake` if you need to verify the client's
+        certificate or use NPN/ALPN.
+
+        .. versionchanged:: 4.2
+           Added the option for this method to be a coroutine.
+        """
         raise NotImplementedError()
 
     def _handle_connection(self, connection, address):
@@ -253,6 +266,8 @@ class TCPServer(object):
                 stream = IOStream(connection, io_loop=self.io_loop,
                                   max_buffer_size=self.max_buffer_size,
                                   read_chunk_size=self.read_chunk_size)
-            self.handle_stream(stream, address)
+            future = self.handle_stream(stream, address)
+            if future is not None:
+                self.io_loop.add_future(future, lambda f: f.result())
         except Exception:
             app_log.error("Error in connection callback", exc_info=True)
