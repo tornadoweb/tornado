@@ -940,7 +940,15 @@ class RequestHandler(object):
         if self._headers_written:
             gen_log.error("Cannot send error response after headers written")
             if not self._finished:
-                self.finish()
+                # If we get an error between writing headers and finishing,
+                # we are unlikely to be able to finish due to a
+                # Content-Length mismatch. Try anyway to release the
+                # socket.
+                try:
+                    self.finish()
+                except Exception:
+                    gen_log.error("Failed to flush partial response",
+                                  exc_info=True)
             return
         self.clear()
 
@@ -1396,7 +1404,10 @@ class RequestHandler(object):
             if self._auto_finish and not self._finished:
                 self.finish()
         except Exception as e:
-            self._handle_request_exception(e)
+            try:
+                self._handle_request_exception(e)
+            except Exception:
+                app_log.error("Exception in exception handler", exc_info=True)
             if (self._prepared_future is not None and
                     not self._prepared_future.done()):
                 # In case we failed before setting _prepared_future, do it
@@ -1430,7 +1441,12 @@ class RequestHandler(object):
             if not self._finished:
                 self.finish()
             return
-        self.log_exception(*sys.exc_info())
+        try:
+            self.log_exception(*sys.exc_info())
+        except Exception:
+            # An error here should still get a best-effort send_error()
+            # to avoid leaking the connection.
+            app_log.error("Error in exception logger", exc_info=True)
         if self._finished:
             # Extra errors after the request has been finished should
             # be logged, but there is no reason to continue to try and
@@ -1975,14 +1991,14 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         if self.stream_request_body:
             self.handler._prepared_future = Future()
         # Note that if an exception escapes handler._execute it will be
-        # trapped in the Future it returns (which we are ignoring here).
+        # trapped in the Future it returns (which we are ignoring here,
+        # leaving it to be logged when the Future is GC'd).
         # However, that shouldn't happen because _execute has a blanket
         # except handler, and we cannot easily access the IOLoop here to
         # call add_future (because of the requirement to remain compatible
         # with WSGI)
         f = self.handler._execute(transforms, *self.path_args,
                                   **self.path_kwargs)
-        f.add_done_callback(lambda f: f.exception())
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)

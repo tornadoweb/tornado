@@ -1536,6 +1536,22 @@ class ExceptionHandlerTest(SimpleHandlerTestCase):
 
 
 @wsgi_safe
+class BuggyLoggingTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            1/0
+
+        def log_exception(self, typ, value, tb):
+            1/0
+
+    def test_buggy_log_exception(self):
+        # Something gets logged even though the application's
+        # logger is broken.
+        with ExpectLog(app_log, '.*'):
+            self.fetch('/')
+
+
+@wsgi_safe
 class UIMethodUIModuleTest(SimpleHandlerTestCase):
     """Test that UI methods and modules are created correctly and
     associated with the handler.
@@ -2072,7 +2088,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         # the server.
         with ExpectLog(app_log, "Uncaught exception"):
             with ExpectLog(gen_log,
-                           "Cannot send error response after headers written"):
+                           "(Cannot send error response after headers written"
+                           "|Failed to flush partial response)"):
                 response = self.fetch("/high")
         self.assertEqual(response.code, 599)
         self.assertEqual(str(self.server_error),
@@ -2084,7 +2101,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         # complete (which would be a framing error).
         with ExpectLog(app_log, "Uncaught exception"):
             with ExpectLog(gen_log,
-                           "Cannot send error response after headers written"):
+                           "(Cannot send error response after headers written"
+                           "|Failed to flush partial response)"):
                 response = self.fetch("/low")
         self.assertEqual(response.code, 599)
         self.assertEqual(str(self.server_error),
