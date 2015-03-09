@@ -135,10 +135,14 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 release_callback = functools.partial(self._release_fetch, key)
                 self._handle_request(request, release_callback, callback)
 
+    def _connection_class(self):
+        return _HTTPConnection
+
     def _handle_request(self, request, release_callback, final_callback):
-        _HTTPConnection(self.io_loop, self, request, release_callback,
-                        final_callback, self.max_buffer_size, self.tcp_client,
-                        self.max_header_size)
+        self._connection_class()(
+            self.io_loop, self, request, release_callback,
+            final_callback, self.max_buffer_size, self.tcp_client,
+            self.max_header_size)
 
     def _release_fetch(self, key):
         del self.active[key]
@@ -348,14 +352,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
                     (('?' + self.parsed.query) if self.parsed.query else ''))
-        self.stream.set_nodelay(True)
-        self.connection = HTTP1Connection(
-            self.stream, True,
-            HTTP1ConnectionParameters(
-                no_keep_alive=True,
-                max_header_size=self.max_header_size,
-                decompress=self.request.decompress_response),
-            self._sockaddr)
+        self.connection = self._create_connection(stream)
         start_line = httputil.RequestStartLine(self.request.method,
                                                req_path, '')
         self.connection.write_headers(start_line, self.request.headers)
@@ -363,6 +360,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._read_response()
         else:
             self._write_body(True)
+
+    def _create_connection(self, stream):
+        stream.set_nodelay(True)
+        connection = HTTP1Connection(
+            stream, True,
+            HTTP1ConnectionParameters(
+                no_keep_alive=True,
+                max_header_size=self.max_header_size,
+                decompress=self.request.decompress_response),
+            self._sockaddr)
+        return connection
 
     def _write_body(self, start_read):
         if self.request.body is not None:
