@@ -417,10 +417,8 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
     Interface is generally the same as `AsyncHTTPTestCase`.
     """
     def get_http_client(self):
-        # Some versions of libcurl have deadlock bugs with ssl,
-        # so always run these tests with SimpleAsyncHTTPClient.
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, force_instance=True,
-                                     defaults=dict(validate_cert=False))
+        return AsyncHTTPClient(io_loop=self.io_loop, force_instance=True,
+                               defaults=dict(validate_cert=False))
 
     def get_httpserver_options(self):
         return dict(ssl_options=self.get_ssl_options())
