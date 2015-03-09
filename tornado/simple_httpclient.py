@@ -375,7 +375,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _write_body(self, start_read):
         if self.request.body is not None:
             self.connection.write(self.request.body)
-            self.connection.finish()
         elif self.request.body_producer is not None:
             fut = self.request.body_producer(self.connection.write)
             if is_future(fut):
@@ -386,7 +385,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                         self._read_response()
                 self.io_loop.add_future(fut, on_body_written)
                 return
-            self.connection.finish()
+        self.connection.finish()
         if start_read:
             self._read_response()
 
