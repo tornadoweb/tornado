@@ -597,6 +597,7 @@ class WSGISafeWebTest(WebTestCase):
             url("/redirect", RedirectHandler),
             url("/web_redirect_permanent", WebRedirectHandler, {"url": "/web_redirect_newpath"}),
             url("/web_redirect", WebRedirectHandler, {"url": "/web_redirect_newpath", "permanent": False}),
+            url("//web_redirect_double_slash", WebRedirectHandler, {"url": '/web_redirect_newpath'}),
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
@@ -728,6 +729,11 @@ js_embed()
         self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
         response = self.fetch("/web_redirect", follow_redirects=False)
         self.assertEqual(response.code, 302)
+        self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
+
+    def test_web_redirect_double_slash(self):
+        response = self.fetch("//web_redirect_double_slash", follow_redirects=False)
+        self.assertEqual(response.code, 301)
         self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
 
     def test_header_injection(self):

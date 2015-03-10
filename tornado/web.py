@@ -650,8 +650,7 @@ class RequestHandler(object):
         else:
             assert isinstance(status, int) and 300 <= status <= 399
         self.set_status(status)
-        self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
-                                                     utf8(url)))
+        self.set_header("Location", utf8(url))
         self.finish()
 
     def write(self, chunk):
