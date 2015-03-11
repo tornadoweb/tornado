@@ -175,7 +175,7 @@ necessary. On every request, the following sequence of calls takes
 place:
 
 1. A new `.RequestHandler` object is created on each request
-2. `~.RequestHandler.initialize()` is called with the initalization
+2. `~.RequestHandler.initialize()` is called with the initialization
    arguments from the `.Application` configuration. ``initialize``
    should typically just save the arguments passed into member
    variables; it may not produce any output or call methods like
