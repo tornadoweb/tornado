@@ -79,10 +79,15 @@ if hasattr(ssl, 'SSLContext'):
             _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
             _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
 
-else:
+elif ssl:
     # Python 2.6-2.7.8
     _client_ssl_defaults = dict(cert_reqs=ssl.CERT_REQUIRED,
                                 ca_certs=certifi.where())
+    _server_ssl_defaults = {}
+else:
+    # Google App Engine
+    _client_ssl_defaults = dict(cert_reqs=None,
+                                ca_certs=None)
     _server_ssl_defaults = {}
 
 # ThreadedResolver runs getaddrinfo on a thread. If the hostname is unicode,
