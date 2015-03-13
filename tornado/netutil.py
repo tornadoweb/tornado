@@ -39,9 +39,10 @@ try:
     import certifi
 except ImportError:
     # certifi is optional as long as we have ssl.create_default_context.
-    if not hasattr(ssl, 'create_default_context'):
+    if ssl is None or hasattr(ssl, 'create_default_context'):
+        certifi = None
+    else:
         raise
-    certifi = None
 
 try:
     xrange  # py2
