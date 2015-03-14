@@ -12,6 +12,7 @@ import datetime
 from io import BytesIO
 
 from tornado.escape import utf8
+from tornado import gen
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
@@ -52,9 +53,12 @@ class RedirectHandler(RequestHandler):
 
 
 class ChunkHandler(RequestHandler):
+    @gen.coroutine
     def get(self):
         self.write("asdf")
         self.flush()
+        # Wait a bit to ensure the chunks are sent and received separately.
+        yield gen.sleep(0.01)
         self.write("qwer")
 
 
@@ -302,23 +306,26 @@ Transfer-Encoding: chunked
         chunks = []
 
         def header_callback(header_line):
-            if header_line.startswith('HTTP/'):
+            if header_line.startswith('HTTP/1.1 101'):
+                # Upgrading to HTTP/2
+                pass
+            elif header_line.startswith('HTTP/'):
                 first_line.append(header_line)
             elif header_line != '\r\n':
                 k, v = header_line.split(':', 1)
-                headers[k] = v.strip()
+                headers[k.lower()] = v.strip()
 
         def streaming_callback(chunk):
             # All header callbacks are run before any streaming callbacks,
             # so the header data is available to process the data as it
             # comes in.
-            self.assertEqual(headers['Content-Type'], 'text/html; charset=UTF-8')
+            self.assertEqual(headers['content-type'], 'text/html; charset=UTF-8')
             chunks.append(chunk)
 
         self.fetch('/chunk', header_callback=header_callback,
                    streaming_callback=streaming_callback)
-        self.assertEqual(len(first_line), 1)
-        self.assertRegexpMatches(first_line[0], 'HTTP/[0-9]\\.[0-9] 200 OK\r\n')
+        self.assertEqual(len(first_line), 1, first_line)
+        self.assertRegexpMatches(first_line[0], 'HTTP/[0-9]\\.[0-9] 200.*\r\n')
         self.assertEqual(chunks, [b'asdf', b'qwer'])
 
     def test_header_callback_stack_context(self):
@@ -329,7 +336,7 @@ Transfer-Encoding: chunked
             return True
 
         def header_callback(header_line):
-            if header_line.startswith('Content-Type:'):
+            if header_line.lower().startswith('content-type:'):
                 1 / 0
 
         with ExceptionStackContext(error_handler):
