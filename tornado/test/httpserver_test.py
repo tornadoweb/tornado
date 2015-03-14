@@ -1058,6 +1058,7 @@ class LegacyInterfaceTest(AsyncHTTPTestCase):
         # delegate interface, and writes its response via request.write
         # instead of request.connection.write_headers.
         def handle_request(request):
+            self.http1 = request.version.startswith("HTTP/1.")
             message = b"Hello world"
             request.write(utf8("HTTP/1.1 200 OK\r\n"
                                "Content-Length: %d\r\n\r\n" % len(message)))
@@ -1067,4 +1068,6 @@ class LegacyInterfaceTest(AsyncHTTPTestCase):
 
     def test_legacy_interface(self):
         response = self.fetch('/')
+        if not self.http1:
+            self.skipTest("requires HTTP/1.x")
         self.assertEqual(response.body, b"Hello world")

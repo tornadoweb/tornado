@@ -178,6 +178,8 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         sock, port = bind_unused_port()
         with closing(sock):
             def write_response(stream, request_data):
+                if b"HTTP/1." not in request_data:
+                    self.skipTest("requires HTTP/1.x")
                 stream.write(b"""\
 HTTP/1.1 200 OK
 Transfer-Encoding: chunked
@@ -316,7 +318,7 @@ Transfer-Encoding: chunked
         self.fetch('/chunk', header_callback=header_callback,
                    streaming_callback=streaming_callback)
         self.assertEqual(len(first_line), 1)
-        self.assertRegexpMatches(first_line[0], 'HTTP/1.[01] 200 OK\r\n')
+        self.assertRegexpMatches(first_line[0], 'HTTP/[0-9]\\.[0-9] 200 OK\r\n')
         self.assertEqual(chunks, [b'asdf', b'qwer'])
 
     def test_header_callback_stack_context(self):

@@ -492,6 +492,7 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase):
 
 class HTTP100ContinueTestCase(AsyncHTTPTestCase):
     def respond_100(self, request):
+        self.http1 = request.version.startswith('HTTP/1.')
         self.request = request
         self.request.connection.stream.write(
             b"HTTP/1.1 100 CONTINUE\r\n\r\n",
@@ -508,11 +509,14 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
 
     def test_100_continue(self):
         res = self.fetch('/')
+        if not self.http1:
+            self.skipTest("requires HTTP/1.x")
         self.assertEqual(res.body, b'A')
 
 
 class HTTP204NoContentTestCase(AsyncHTTPTestCase):
     def respond_204(self, request):
+        self.http1 = request.version.startswith('HTTP/1.')
         # A 204 response never has a body, even if doesn't have a content-length
         # (which would otherwise mean read-until-close).  Tornado always
         # sends a content-length, so we simulate here a server that sends
@@ -528,6 +532,8 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
 
     def test_204_no_content(self):
         resp = self.fetch('/')
+        if not self.http1:
+            self.skipTest("requires HTTP/1.x")
         self.assertEqual(resp.code, 204)
         self.assertEqual(resp.body, b'')
 

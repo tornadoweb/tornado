@@ -385,6 +385,8 @@ class HTTPServerRequest(object):
            to write the response.
         """
         assert isinstance(chunk, bytes)
+        assert self.version.startswith("HTTP/1."), \
+            "deprecated interface ony supported in HTTP/1.x"
         self.connection.write(chunk, callback=callback)
 
     def finish(self):
