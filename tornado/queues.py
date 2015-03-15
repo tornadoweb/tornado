@@ -129,11 +129,7 @@ class Queue(object):
 
         if self.qsize():
             future = Future()
-            # Defer unblocking the getter, which might do task_done() without
-            # yielding first. We want putters to have a chance to run first and
-            # keep join() blocked. See test_producer_consumer().
-            ioloop.IOLoop.current().add_callback(
-                partial(future.set_result, self._get()))
+            future.set_result(self._get())
             return future
         else:
             future = Future()
