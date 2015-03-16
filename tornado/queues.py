@@ -17,7 +17,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 __all__ = ['Queue', 'QueueFull', 'QueueEmpty']
 
 import collections
-from functools import partial
 
 from tornado import gen, ioloop
 from tornado.concurrent import Future
