@@ -87,7 +87,10 @@ class ConditionTest(AsyncTestCase):
     @gen_test
     def test_wait_timeout(self):
         c = locks.Condition()
-        self.assertFalse((yield c.wait(timedelta(seconds=0.01))))
+        wait = c.wait(timedelta(seconds=0.01))
+        self.io_loop.call_later(0.02, c.notify)  # Too late.
+        yield gen.sleep(0.03)
+        self.assertFalse((yield wait))
 
     @gen_test
     def test_wait_timeout_preempted(self):
@@ -95,7 +98,9 @@ class ConditionTest(AsyncTestCase):
 
         # This fires before the wait times out.
         self.io_loop.call_later(0.01, c.notify)
-        yield c.wait(timedelta(seconds=1))
+        wait = c.wait(timedelta(seconds=0.02))
+        yield gen.sleep(0.03)
+        yield wait  # No TimeoutError.
 
     @gen_test
     def test_notify_n_with_timeout(self):
@@ -255,12 +260,28 @@ class SemaphoreTest(AsyncTestCase):
         sem = locks.Semaphore(2)
         yield sem.acquire()
         yield sem.acquire()
+        acquire = sem.acquire(timedelta(seconds=0.01))
+        self.io_loop.call_later(0.02, sem.release)  # Too late.
+        yield gen.sleep(0.3)
         with self.assertRaises(gen.TimeoutError):
-            yield sem.acquire(timedelta(seconds=0.01))
+            yield acquire
 
+        sem.acquire()
         f = sem.acquire()
+        self.assertFalse(f.done())
         sem.release()
         self.assertTrue(f.done())
+
+    @gen_test
+    def test_acquire_timeout_preempted(self):
+        sem = locks.Semaphore(1)
+        yield sem.acquire()
+
+        # This fires before the wait times out.
+        self.io_loop.call_later(0.01, sem.release)
+        acquire = sem.acquire(timedelta(seconds=0.02))
+        yield gen.sleep(0.03)
+        yield acquire  # No TimeoutError.
 
     def test_release_unacquired(self):
         # Unbounded releases are allowed, and increment the semaphore's value.
