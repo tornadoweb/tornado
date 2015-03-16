@@ -33,6 +33,16 @@ class QueueFull(Exception):
     pass
 
 
+def _set_timeout(future, timeout):
+    if timeout:
+        def on_timeout():
+            future.set_exception(gen.TimeoutError())
+        io_loop = ioloop.IOLoop.current()
+        timeout_handle = io_loop.add_timeout(timeout, on_timeout)
+        future.add_done_callback(
+            lambda _: io_loop.remove_timeout(timeout_handle))
+
+
 class Queue(object):
     """Coordinate producer and consumer coroutines.
 
@@ -82,10 +92,7 @@ class Queue(object):
         except QueueFull:
             future = Future()
             self._putters.append((item, future))
-            if timeout:
-                def on_timeout():
-                    future.set_exception(gen.TimeoutError())
-                ioloop.IOLoop.current().add_timeout(timeout, on_timeout)
+            _set_timeout(future, timeout)
             return future
         else:
             return gen._null_future
@@ -117,10 +124,7 @@ class Queue(object):
             future.set_result(self.get_nowait())
         except QueueEmpty:
             self._getters.append(future)
-            if timeout:
-                def on_timeout():
-                    future.set_exception(gen.TimeoutError())
-                ioloop.IOLoop.current().add_timeout(timeout, on_timeout)
+            _set_timeout(future, timeout)
         return future
 
     def get_nowait(self):

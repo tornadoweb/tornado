@@ -117,6 +117,14 @@ class QueueGetTest(AsyncTestCase):
         self.assertEqual(0, (yield get))
 
     @gen_test
+    def test_get_timeout_preempted(self):
+        q = queues.Queue()
+        get = q.get(timeout=timedelta(seconds=0.01))
+        q.put(0)
+        yield gen.sleep(0.02)
+        self.assertEqual(0, (yield get))
+
+    @gen_test
     def test_get_clears_timed_out_putters(self):
         q = queues.Queue(1)
         # First putter succeeds, remainder block.
@@ -207,6 +215,15 @@ class QueuePutTest(AsyncTestCase):
 
         # Final get() unblocked this putter.
         yield put
+
+    @gen_test
+    def test_put_timeout_preempted(self):
+        q = queues.Queue(1)
+        q.put_nowait(0)
+        put = q.put(1, timeout=timedelta(seconds=0.01))
+        q.get()
+        yield gen.sleep(0.02)
+        yield put  # No TimeoutError.
 
     @gen_test
     def test_put_clears_timed_out_putters(self):
