@@ -1,11 +1,17 @@
 Authentication and security
 ===========================
 
+.. testsetup::
+
+   import tornado.web
+
 Cookies and secure cookies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can set cookies in the user's browser with the ``set_cookie``
-method::
+method:
+
+.. testcode::
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):
@@ -15,6 +21,9 @@ method::
             else:
                 self.write("Your cookie was set!")
 
+.. testoutput::
+   :hide:
+
 Cookies are not secure and can easily be modified by clients.  If you
 need to set cookies to, e.g., identify the currently logged in user,
 you need to sign your cookies to prevent forgery. Tornado supports
@@ -22,17 +31,24 @@ signed cookies with the `~.RequestHandler.set_secure_cookie` and
 `~.RequestHandler.get_secure_cookie` methods. To use these methods,
 you need to specify a secret key named ``cookie_secret`` when you
 create your application. You can pass in application settings as
-keyword arguments to your application::
+keyword arguments to your application:
+
+.. testcode::
 
     application = tornado.web.Application([
         (r"/", MainHandler),
     ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
+.. testoutput::
+   :hide:
+
 Signed cookies contain the encoded value of the cookie in addition to a
 timestamp and an `HMAC <http://en.wikipedia.org/wiki/HMAC>`_ signature.
 If the cookie is old or if the signature doesn't match,
 ``get_secure_cookie`` will return ``None`` just as if the cookie isn't
-set. The secure version of the example above::
+set. The secure version of the example above:
+
+.. testcode::
 
     class MainHandler(tornado.web.RequestHandler):
         def get(self):
@@ -41,6 +57,9 @@ set. The secure version of the example above::
                 self.write("Your cookie was not set yet!")
             else:
                 self.write("Your cookie was set!")
+
+.. testoutput::
+   :hide:
 
 Tornado's secure cookies guarantee integrity but not confidentiality.
 That is, the cookie cannot be modified but its contents can be seen by the
@@ -69,7 +88,9 @@ To implement user authentication in your application, you need to
 override the ``get_current_user()`` method in your request handlers to
 determine the current user based on, e.g., the value of a cookie. Here
 is an example that lets users log into the application simply by
-specifying a nickname, which is then saved in a cookie::
+specifying a nickname, which is then saved in a cookie:
+
+.. testcode::
 
     class BaseHandler(tornado.web.RequestHandler):
         def get_current_user(self):
@@ -99,12 +120,17 @@ specifying a nickname, which is then saved in a cookie::
         (r"/login", LoginHandler),
     ], cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__")
 
+.. testoutput::
+   :hide:
+
 You can require that the user be logged in using the `Python
 decorator <http://www.python.org/dev/peps/pep-0318/>`_
 `tornado.web.authenticated`. If a request goes to a method with this
 decorator, and the user is not logged in, they will be redirected to
 ``login_url`` (another application setting). The example above could be
-rewritten::
+rewritten:
+
+.. testcode::
 
     class MainHandler(BaseHandler):
         @tornado.web.authenticated
@@ -120,6 +146,9 @@ rewritten::
         (r"/", MainHandler),
         (r"/login", LoginHandler),
     ], **settings)
+
+.. testoutput::
+   :hide:
 
 If you decorate ``post()`` methods with the ``authenticated``
 decorator, and the user is not logged in, the server will send a
@@ -144,7 +173,9 @@ download a user's address book or publish a Twitter message on their
 behalf.
 
 Here is an example handler that uses Google for authentication, saving
-the Google credentials in a cookie for later access::
+the Google credentials in a cookie for later access:
+
+.. testcode::
 
     class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
         @tornado.web.asynchronous
@@ -159,6 +190,9 @@ the Google credentials in a cookie for later access::
                 self.authenticate_redirect()
                 return
             # Save the user with, e.g., set_secure_cookie()
+
+.. testoutput::
+   :hide:
 
 See the `tornado.auth` module documentation for more details.
 
@@ -181,7 +215,9 @@ value in the form submission do not match, then the request is likely
 forged.
 
 Tornado comes with built-in XSRF protection. To include it in your site,
-include the application setting ``xsrf_cookies``::
+include the application setting ``xsrf_cookies``:
+
+.. testcode::
 
     settings = {
         "cookie_secret": "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
@@ -192,6 +228,9 @@ include the application setting ``xsrf_cookies``::
         (r"/", MainHandler),
         (r"/login", LoginHandler),
     ], **settings)
+
+.. testoutput::
+   :hide:
 
 If ``xsrf_cookies`` is set, the Tornado web application will set the
 ``_xsrf`` cookie for all users and reject all ``POST``, ``PUT``, and

@@ -14,6 +14,7 @@ version = release = tornado.version
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.coverage",
+    "sphinx.ext.doctest",
     "sphinx.ext.extlinks",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
@@ -95,7 +96,7 @@ extlinks = {
     }
 
 intersphinx_mapping = {
-    'python': ('http://python.readthedocs.org/en/latest/', None),
+    'python': ('https://docs.python.org/3.4/', None),
     }
 
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'

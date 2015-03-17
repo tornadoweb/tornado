@@ -171,6 +171,13 @@ class CookieTest(WebTestCase):
             def get(self):
                 self.set_cookie("foo", "bar", expires_days=10)
 
+        class SetCookieFalsyFlags(RequestHandler):
+            def get(self):
+                self.set_cookie("a", "1", secure=True)
+                self.set_cookie("b", "1", secure=False)
+                self.set_cookie("c", "1", httponly=True)
+                self.set_cookie("d", "1", httponly=False)
+
         return [("/set", SetCookieHandler),
                 ("/get", GetCookieHandler),
                 ("/set_domain", SetCookieDomainHandler),
@@ -178,6 +185,7 @@ class CookieTest(WebTestCase):
                 ("/set_overwrite", SetCookieOverwriteHandler),
                 ("/set_max_age", SetCookieMaxAgeHandler),
                 ("/set_expires_days", SetCookieExpiresDaysHandler),
+                ("/set_falsy_flags", SetCookieFalsyFlags)
                 ]
 
     def test_set_cookie(self):
@@ -237,7 +245,7 @@ class CookieTest(WebTestCase):
         headers = response.headers.get_list("Set-Cookie")
         self.assertEqual(sorted(headers),
                          ["foo=bar; Max-Age=10; Path=/"])
-    
+
     def test_set_cookie_expires_days(self):
         response = self.fetch("/set_expires_days")
         header = response.headers.get("Set-Cookie")
@@ -248,7 +256,17 @@ class CookieTest(WebTestCase):
         header_expires = datetime.datetime(
             *email.utils.parsedate(match.groupdict()["expires"])[:6])
         self.assertTrue(abs(timedelta_to_seconds(expires - header_expires)) < 10)
-    
+
+    def test_set_cookie_false_flags(self):
+        response = self.fetch("/set_falsy_flags")
+        headers = sorted(response.headers.get_list("Set-Cookie"))
+        # The secure and httponly headers are capitalized in py35 and
+        # lowercase in older versions.
+        self.assertEqual(headers[0].lower(), 'a=1; path=/; secure')
+        self.assertEqual(headers[1].lower(), 'b=1; path=/')
+        self.assertEqual(headers[2].lower(), 'c=1; httponly; path=/')
+        self.assertEqual(headers[3].lower(), 'd=1; path=/')
+
 
 class AuthRedirectRequestHandler(RequestHandler):
     def initialize(self, login_url):
@@ -305,7 +323,7 @@ class ConnectionCloseTest(WebTestCase):
 
     def test_connection_close(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
+        s.connect(("127.0.0.1", self.get_http_port()))
         self.stream = IOStream(s, io_loop=self.io_loop)
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
         self.wait()
@@ -579,6 +597,7 @@ class WSGISafeWebTest(WebTestCase):
             url("/redirect", RedirectHandler),
             url("/web_redirect_permanent", WebRedirectHandler, {"url": "/web_redirect_newpath"}),
             url("/web_redirect", WebRedirectHandler, {"url": "/web_redirect_newpath", "permanent": False}),
+            url("//web_redirect_double_slash", WebRedirectHandler, {"url": '/web_redirect_newpath'}),
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
@@ -710,6 +729,11 @@ js_embed()
         self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
         response = self.fetch("/web_redirect", follow_redirects=False)
         self.assertEqual(response.code, 302)
+        self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
+
+    def test_web_redirect_double_slash(self):
+        response = self.fetch("//web_redirect_double_slash", follow_redirects=False)
+        self.assertEqual(response.code, 301)
         self.assertEqual(response.headers['Location'], '/web_redirect_newpath')
 
     def test_header_injection(self):
@@ -1518,6 +1542,22 @@ class ExceptionHandlerTest(SimpleHandlerTestCase):
 
 
 @wsgi_safe
+class BuggyLoggingTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            1/0
+
+        def log_exception(self, typ, value, tb):
+            1/0
+
+    def test_buggy_log_exception(self):
+        # Something gets logged even though the application's
+        # logger is broken.
+        with ExpectLog(app_log, '.*'):
+            self.fetch('/')
+
+
+@wsgi_safe
 class UIMethodUIModuleTest(SimpleHandlerTestCase):
     """Test that UI methods and modules are created correctly and
     associated with the handler.
@@ -1533,6 +1573,7 @@ class UIMethodUIModuleTest(SimpleHandlerTestCase):
         def my_ui_method(handler, x):
             return "In my_ui_method(%s) with handler value %s." % (
                 x, handler.value())
+
         class MyModule(UIModule):
             def render(self, x):
                 return "In MyModule(%s) with handler value %s." % (
@@ -1907,7 +1948,7 @@ class StreamingRequestBodyTest(WebTestCase):
     def connect(self, url, connection_close):
         # Use a raw connection so we can control the sending of data.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        s.connect(("localhost", self.get_http_port()))
+        s.connect(("127.0.0.1", self.get_http_port()))
         stream = IOStream(s, io_loop=self.io_loop)
         stream.write(b"GET " + url + b" HTTP/1.1\r\n")
         if connection_close:
@@ -2053,7 +2094,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         # the server.
         with ExpectLog(app_log, "Uncaught exception"):
             with ExpectLog(gen_log,
-                           "Cannot send error response after headers written"):
+                           "(Cannot send error response after headers written"
+                           "|Failed to flush partial response)"):
                 response = self.fetch("/high")
         self.assertEqual(response.code, 599)
         self.assertEqual(str(self.server_error),
@@ -2065,7 +2107,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         # complete (which would be a framing error).
         with ExpectLog(app_log, "Uncaught exception"):
             with ExpectLog(gen_log,
-                           "Cannot send error response after headers written"):
+                           "(Cannot send error response after headers written"
+                           "|Failed to flush partial response)"):
                 response = self.fetch("/low")
         self.assertEqual(response.code, 599)
         self.assertEqual(str(self.server_error),
@@ -2151,6 +2194,7 @@ class SignedValueTest(unittest.TestCase):
     def test_payload_tampering(self):
         # These cookies are variants of the one in test_known_values.
         sig = "3d4e60b996ff9c5d5788e333a0cba6f238a22c6c0f94788870e1a9ecd482e152"
+
         def validate(prefix):
             return (b'value' ==
                     decode_signed_value(SignedValueTest.SECRET, "key",
@@ -2165,6 +2209,7 @@ class SignedValueTest(unittest.TestCase):
 
     def test_signature_tampering(self):
         prefix = "2|1:0|10:1300000000|3:key|8:dmFsdWU=|"
+
         def validate(sig):
             return (b'value' ==
                     decode_signed_value(SignedValueTest.SECRET, "key",
@@ -2296,7 +2341,7 @@ class XSRFTest(SimpleHandlerTestCase):
         token2 = self.get_token()
         # Each token can be used to authenticate its own request.
         for token in (self.xsrf_token, token2):
-            response  = self.fetch(
+            response = self.fetch(
                 "/", method="POST",
                 body=urllib_parse.urlencode(dict(_xsrf=token)),
                 headers=self.cookie_headers(token))
@@ -2372,6 +2417,7 @@ class FinishExceptionTest(SimpleHandlerTestCase):
         self.assertEqual(b'authentication required', response.body)
 
 
+@wsgi_safe
 class DecoratorTest(WebTestCase):
     def get_handlers(self):
         class RemoveSlashHandler(RequestHandler):
@@ -2405,3 +2451,85 @@ class DecoratorTest(WebTestCase):
         response = self.fetch("/addslash?foo=bar", follow_redirects=False)
         self.assertEqual(response.code, 301)
         self.assertEqual(response.headers['Location'], "/addslash/?foo=bar")
+
+
+@wsgi_safe
+class CacheTest(WebTestCase):
+    def get_handlers(self):
+        class EtagHandler(RequestHandler):
+            def get(self, computed_etag):
+                self.write(computed_etag)
+
+            def compute_etag(self):
+                return self._write_buffer[0]
+
+        return [
+            ('/etag/(.*)', EtagHandler)
+        ]
+
+    def test_wildcard_etag(self):
+        computed_etag = '"xyzzy"'
+        etags = '*'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_strong_etag_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy"'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_multiple_strong_etag_match(self):
+        computed_etag = '"xyzzy1"'
+        etags = '"xyzzy1", "xyzzy2"'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_strong_etag_not_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy1"'
+        self._test_etag(computed_etag, etags, 200)
+
+    def test_multiple_strong_etag_not_match(self):
+        computed_etag = '"xyzzy"'
+        etags = '"xyzzy1", "xyzzy2"'
+        self._test_etag(computed_etag, etags, 200)
+
+    def test_weak_etag_match(self):
+        computed_etag = '"xyzzy1"'
+        etags = 'W/"xyzzy1"'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_multiple_weak_etag_match(self):
+        computed_etag = '"xyzzy2"'
+        etags = 'W/"xyzzy1", W/"xyzzy2"'
+        self._test_etag(computed_etag, etags, 304)
+
+    def test_weak_etag_not_match(self):
+        computed_etag = '"xyzzy2"'
+        etags = 'W/"xyzzy1"'
+        self._test_etag(computed_etag, etags, 200)
+
+    def test_multiple_weak_etag_not_match(self):
+        computed_etag = '"xyzzy3"'
+        etags = 'W/"xyzzy1", W/"xyzzy2"'
+        self._test_etag(computed_etag, etags, 200)
+
+    def _test_etag(self, computed_etag, etags, status_code):
+        response = self.fetch(
+            '/etag/' + computed_etag,
+            headers={'If-None-Match': etags}
+        )
+        self.assertEqual(response.code, status_code)
+
+
+@wsgi_safe
+class RequestSummaryTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            # remote_ip is optional, although it's set by
+            # both HTTPServer and WSGIAdapter.
+            # Clobber it to make sure it doesn't break logging.
+            self.request.remote_ip = None
+            self.finish(self._request_summary())
+
+    def test_missing_remote_ip(self):
+        resp = self.fetch("/")
+        self.assertEqual(resp.body, b"GET / (None)")

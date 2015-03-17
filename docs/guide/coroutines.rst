@@ -1,6 +1,10 @@
 Coroutines
 ==========
 
+.. testsetup::
+
+   from tornado import gen
+
 **Coroutines** are the recommended way to write asynchronous code in
 Tornado.  Coroutines use the Python ``yield`` keyword to suspend and
 resume execution instead of a chain of callbacks (cooperative
@@ -65,7 +69,9 @@ Interaction with callbacks
 
 To interact with asynchronous code that uses callbacks instead of
 `.Future`, wrap the call in a `.Task`.  This will add the callback
-argument for you and return a `.Future` which you can yield::
+argument for you and return a `.Future` which you can yield:
+
+.. testcode::
 
     @gen.coroutine
     def call_task():
@@ -73,6 +79,9 @@ argument for you and return a `.Future` which you can yield::
         # This will be translated by Task into
         #   some_function(other_args, callback=callback)
         yield gen.Task(some_function, other_args)
+
+.. testoutput::
+   :hide:
 
 Calling blocking functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -91,7 +100,9 @@ Parallelism
 ^^^^^^^^^^^
 
 The coroutine decorator recognizes lists and dicts whose values are
-``Futures``, and waits for all of those ``Futures`` in parallel::
+``Futures``, and waits for all of those ``Futures`` in parallel:
+
+.. testcode::
 
     @gen.coroutine
     def parallel_fetch(url1, url2):
@@ -109,11 +120,16 @@ The coroutine decorator recognizes lists and dicts whose values are
                             for url in urls}
         # responses is a dict {url: HTTPResponse}
 
+.. testoutput::
+   :hide:
+
 Interleaving
 ^^^^^^^^^^^^
 
 Sometimes it is useful to save a `.Future` instead of yielding it
-immediately, so you can start another operation before waiting::
+immediately, so you can start another operation before waiting:
+
+.. testcode::
 
     @gen.coroutine
     def get(self):
@@ -124,6 +140,9 @@ immediately, so you can start another operation before waiting::
             self.write(chunk)
             fetch_future = self.fetch_next_chunk()
             yield self.flush()
+
+.. testoutput::
+   :hide:
 
 Looping
 ^^^^^^^
@@ -136,7 +155,7 @@ from `Motor <http://motor.readthedocs.org/en/stable/>`_::
 
     import motor
     db = motor.MotorClient().test
-    
+
     @gen.coroutine
     def loop_example(collection):
         cursor = db.collection.find()

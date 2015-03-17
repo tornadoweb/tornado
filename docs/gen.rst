@@ -1,6 +1,11 @@
 ``tornado.gen`` --- Simplify asynchronous code
 ==============================================
 
+.. testsetup::
+
+   from tornado.web import *
+   from tornado import gen
+
 .. automodule:: tornado.gen
 
    Decorators
@@ -20,10 +25,15 @@
 
    .. autofunction:: maybe_future
 
+   .. autofunction:: sleep
+
    .. autodata:: moment
       :annotation:
 
    .. autofunction:: Task
+
+   .. autoclass:: WaitIterator
+      :members:
 
    .. class:: Arguments
 

@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import socket
+import ssl
 import sys
 
 from tornado import gen
@@ -20,7 +21,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, unittest
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -191,9 +192,6 @@ class SimpleHTTPClientTestMixin(object):
             response = self.wait()
             response.rethrow()
 
-    def test_default_certificates_exist(self):
-        open(_default_ca_certs()).close()
-
     def test_gzip(self):
         # All the tests in this file should be using gzip, but this test
         # ensures that it is in fact getting compressed.
@@ -325,7 +323,7 @@ class SimpleHTTPClientTestMixin(object):
         cleanup_func, port = refusing_port()
         self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
-            self.http_client.fetch("http://localhost:%d/" % port, self.stop)
+            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
             response = self.wait()
         self.assertEqual(599, response.code)
 
@@ -432,6 +430,33 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
                                      defaults=dict(validate_cert=False),
                                      **kwargs)
 
+    def test_ssl_options(self):
+        resp = self.fetch("/hello", ssl_options={})
+        self.assertEqual(resp.body, b"Hello world!")
+
+    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
+                     'ssl.SSLContext not present')
+    def test_ssl_context(self):
+        resp = self.fetch("/hello",
+                          ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
+        self.assertEqual(resp.body, b"Hello world!")
+
+    def test_ssl_options_handshake_fail(self):
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception",
+                       required=False):
+            resp = self.fetch(
+                "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
+        self.assertRaises(ssl.SSLError, resp.rethrow)
+
+    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
+                     'ssl.SSLContext not present')
+    def test_ssl_context_handshake_fail(self):
+        with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
+            ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+            ctx.verify_mode = ssl.CERT_REQUIRED
+            resp = self.fetch("/hello", ssl_options=ctx)
+        self.assertRaises(ssl.SSLError, resp.rethrow)
+
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase):
     def setUp(self):
@@ -467,6 +492,7 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase):
 
 class HTTP100ContinueTestCase(AsyncHTTPTestCase):
     def respond_100(self, request):
+        self.http1 = request.version.startswith('HTTP/1.')
         self.request = request
         self.request.connection.stream.write(
             b"HTTP/1.1 100 CONTINUE\r\n\r\n",
@@ -483,11 +509,14 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
 
     def test_100_continue(self):
         res = self.fetch('/')
+        if not self.http1:
+            self.skipTest("requires HTTP/1.x")
         self.assertEqual(res.body, b'A')
 
 
 class HTTP204NoContentTestCase(AsyncHTTPTestCase):
     def respond_204(self, request):
+        self.http1 = request.version.startswith('HTTP/1.')
         # A 204 response never has a body, even if doesn't have a content-length
         # (which would otherwise mean read-until-close).  Tornado always
         # sends a content-length, so we simulate here a server that sends
@@ -503,6 +532,8 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
 
     def test_204_no_content(self):
         resp = self.fetch('/')
+        if not self.http1:
+            self.skipTest("requires HTTP/1.x")
         self.assertEqual(resp.code, 204)
         self.assertEqual(resp.body, b'')
 

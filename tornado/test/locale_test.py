@@ -41,6 +41,12 @@ class TranslationLoaderTest(unittest.TestCase):
         locale = tornado.locale.get("fr_FR")
         self.assertTrue(isinstance(locale, tornado.locale.GettextLocale))
         self.assertEqual(locale.translate("school"), u("\u00e9cole"))
+        self.assertEqual(locale.pgettext("law", "right"), u("le droit"))
+        self.assertEqual(locale.pgettext("good", "right"), u("le bien"))
+        self.assertEqual(locale.pgettext("organization", "club", "clubs", 1), u("le club"))
+        self.assertEqual(locale.pgettext("organization", "club", "clubs", 2), u("les clubs"))
+        self.assertEqual(locale.pgettext("stick", "club", "clubs", 1), u("le b\xe2ton"))
+        self.assertEqual(locale.pgettext("stick", "club", "clubs", 2), u("les b\xe2tons"))
 
 
 class LocaleDataTest(unittest.TestCase):
@@ -58,7 +64,7 @@ class EnglishTest(unittest.TestCase):
         self.assertEqual(locale.format_date(date, full_format=True),
                          'April 28, 2013 at 6:35 pm')
 
-        self.assertEqual(locale.format_date(datetime.datetime.utcnow() - datetime.timedelta(seconds=2), full_format=False), 
+        self.assertEqual(locale.format_date(datetime.datetime.utcnow() - datetime.timedelta(seconds=2), full_format=False),
                          '2 seconds ago')
         self.assertEqual(locale.format_date(datetime.datetime.utcnow() - datetime.timedelta(minutes=2), full_format=False),
                          '2 minutes ago')

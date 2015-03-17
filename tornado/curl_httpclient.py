@@ -28,11 +28,12 @@ from io import BytesIO
 
 from tornado import httputil
 from tornado import ioloop
-from tornado.log import gen_log
 from tornado import stack_context
 
 from tornado.escape import utf8, native_str
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main
+
+curl_log = logging.getLogger('tornado.curl_httpclient')
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
@@ -257,7 +258,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
     def _curl_create(self):
         curl = pycurl.Curl()
-        if gen_log.isEnabledFor(logging.DEBUG):
+        if curl_log.isEnabledFor(logging.DEBUG):
             curl.setopt(pycurl.VERBOSE, 1)
             curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
         return curl
@@ -286,10 +287,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
         curl.setopt(pycurl.HEADERFUNCTION,
                     functools.partial(self._curl_header_callback,
-                        headers, request.header_callback))
+                                      headers, request.header_callback))
         if request.streaming_callback:
-            write_function = lambda chunk: self.io_loop.add_callback(
-                request.streaming_callback, chunk)
+            def write_function(chunk):
+                self.io_loop.add_callback(request.streaming_callback, chunk)
         else:
             write_function = buffer.write
         if bytes is str:  # py2
@@ -381,6 +382,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                     % request.method)
 
             request_buffer = BytesIO(utf8(request.body))
+
             def ioctl(cmd):
                 if cmd == curl.IOCMD_RESTARTREAD:
                     request_buffer.seek(0)
@@ -403,17 +405,20 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 raise ValueError("Unsupported auth_mode %s" % request.auth_mode)
 
             curl.setopt(pycurl.USERPWD, native_str(userpwd))
-            gen_log.debug("%s %s (username: %r)", request.method, request.url,
-                          request.auth_username)
+            curl_log.debug("%s %s (username: %r)", request.method, request.url,
+                           request.auth_username)
         else:
             curl.unsetopt(pycurl.USERPWD)
-            gen_log.debug("%s %s", request.method, request.url)
+            curl_log.debug("%s %s", request.method, request.url)
 
         if request.client_cert is not None:
             curl.setopt(pycurl.SSLCERT, request.client_cert)
 
         if request.client_key is not None:
             curl.setopt(pycurl.SSLKEY, request.client_key)
+
+        if request.ssl_options is not None:
+            raise ValueError("ssl_options not supported in curl_httpclient")
 
         if threading.activeCount() > 1:
             # libcurl/pycurl is not thread-safe by default.  When multiple threads
@@ -448,12 +453,12 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def _curl_debug(self, debug_type, debug_msg):
         debug_types = ('I', '<', '>', '<', '>')
         if debug_type == 0:
-            gen_log.debug('%s', debug_msg.strip())
+            curl_log.debug('%s', debug_msg.strip())
         elif debug_type in (1, 2):
             for line in debug_msg.splitlines():
-                gen_log.debug('%s %s', debug_types[debug_type], line)
+                curl_log.debug('%s %s', debug_types[debug_type], line)
         elif debug_type == 4:
-            gen_log.debug('%s %r', debug_types[debug_type], debug_msg)
+            curl_log.debug('%s %r', debug_types[debug_type], debug_msg)
 
 
 class CurlError(HTTPError):

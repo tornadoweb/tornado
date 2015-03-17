@@ -19,7 +19,9 @@ features that allow it to scale to large numbers of open connections,
 making it ideal for `long polling
 <http://en.wikipedia.org/wiki/Push_technology#Long_polling>`_.
 
-Here is a simple "Hello, world" example app::
+Here is a simple "Hello, world" example app:
+
+.. testcode::
 
     import tornado.ioloop
     import tornado.web
@@ -34,6 +36,10 @@ Here is a simple "Hello, world" example app::
         ])
         application.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
+
+.. testoutput::
+   :hide:
+
 
 See the :doc:`guide` for additional information.
 
@@ -50,7 +56,8 @@ request.
 
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import (absolute_import, division,
+                        print_function, with_statement)
 
 
 import base64
@@ -84,7 +91,8 @@ from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import import_object, ObjectDict, raise_exc_info, unicode_type, _websocket_mask
+from tornado.util import (import_object, ObjectDict, raise_exc_info,
+                          unicode_type, _websocket_mask)
 from tornado.httputil import split_host_and_port
 
 
@@ -384,6 +392,12 @@ class RequestHandler(object):
 
         The returned values are always unicode.
         """
+
+        # Make sure `get_arguments` isn't accidentally being called with a
+        # positional argument that's assumed to be a default (like in
+        # `get_argument`.)
+        assert isinstance(strip, bool)
+
         return self._get_arguments(name, self.request.arguments, strip)
 
     def get_body_argument(self, name, default=_ARG_DEFAULT, strip=True):
@@ -400,7 +414,8 @@ class RequestHandler(object):
 
         .. versionadded:: 3.2
         """
-        return self._get_argument(name, default, self.request.body_arguments, strip)
+        return self._get_argument(name, default, self.request.body_arguments,
+                                  strip)
 
     def get_body_arguments(self, name, strip=True):
         """Returns a list of the body arguments with the given name.
@@ -427,7 +442,8 @@ class RequestHandler(object):
 
         .. versionadded:: 3.2
         """
-        return self._get_argument(name, default, self.request.query_arguments, strip)
+        return self._get_argument(name, default,
+                                  self.request.query_arguments, strip)
 
     def get_query_arguments(self, name, strip=True):
         """Returns a list of the query arguments with the given name.
@@ -482,7 +498,8 @@ class RequestHandler(object):
 
     @property
     def cookies(self):
-        """An alias for `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
+        """An alias for
+        `self.request.cookies <.httputil.HTTPServerRequest.cookies>`."""
         return self.request.cookies
 
     def get_cookie(self, name, default=None):
@@ -524,6 +541,12 @@ class RequestHandler(object):
         for k, v in kwargs.items():
             if k == 'max_age':
                 k = 'max-age'
+
+            # skip falsy values for httponly and secure flags because
+            # SimpleCookie sets them regardless
+            if k in ['httponly', 'secure'] and not v:
+                continue
+
             morsel[k] = v
 
     def clear_cookie(self, name, path="/", domain=None):
@@ -627,8 +650,7 @@ class RequestHandler(object):
         else:
             assert isinstance(status, int) and 300 <= status <= 399
         self.set_status(status)
-        self.set_header("Location", urlparse.urljoin(utf8(self.request.uri),
-                                                     utf8(url)))
+        self.set_header("Location", utf8(url))
         self.finish()
 
     def write(self, chunk):
@@ -652,7 +674,8 @@ class RequestHandler(object):
                                "by using async operations without the "
                                "@asynchronous decorator.")
         if not isinstance(chunk, (bytes, unicode_type, dict)):
-            raise TypeError("write() only accepts bytes, unicode, and dict objects")
+            raise TypeError(
+                "write() only accepts bytes, unicode, and dict objects")
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
@@ -785,6 +808,7 @@ class RequestHandler(object):
             current_user=self.current_user,
             locale=self.locale,
             _=self.locale.translate,
+            pgettext=self.locale.pgettext,
             static_url=self.static_url,
             xsrf_form_html=self.xsrf_form_html,
             reverse_url=self.reverse_url
@@ -829,7 +853,8 @@ class RequestHandler(object):
             for transform in self._transforms:
                 self._status_code, self._headers, chunk = \
                     transform.transform_first_chunk(
-                        self._status_code, self._headers, chunk, include_footers)
+                        self._status_code, self._headers,
+                        chunk, include_footers)
             # Ignore the chunk and only write the headers for HEAD requests
             if self.request.method == "HEAD":
                 chunk = None
@@ -914,7 +939,15 @@ class RequestHandler(object):
         if self._headers_written:
             gen_log.error("Cannot send error response after headers written")
             if not self._finished:
-                self.finish()
+                # If we get an error between writing headers and finishing,
+                # we are unlikely to be able to finish due to a
+                # Content-Length mismatch. Try anyway to release the
+                # socket.
+                try:
+                    self.finish()
+                except Exception:
+                    gen_log.error("Failed to flush partial response",
+                                  exc_info=True)
             return
         self.clear()
 
@@ -1149,7 +1182,8 @@ class RequestHandler(object):
                 return (version, token, timestamp)
         except Exception:
             # Catch exceptions and return nothing instead of failing.
-            gen_log.debug("Uncaught exception in _decode_xsrf_token", exc_info=True)
+            gen_log.debug("Uncaught exception in _decode_xsrf_token",
+                          exc_info=True)
             return None, None, None
 
     def check_xsrf_cookie(self):
@@ -1289,9 +1323,27 @@ class RequestHandler(object):
         before completing the request.  The ``Etag`` header should be set
         (perhaps with `set_etag_header`) before calling this method.
         """
-        etag = self._headers.get("Etag")
-        inm = utf8(self.request.headers.get("If-None-Match", ""))
-        return bool(etag and inm and inm.find(etag) >= 0)
+        computed_etag = utf8(self._headers.get("Etag", ""))
+        # Find all weak and strong etag values from If-None-Match header
+        # because RFC 7232 allows multiple etag values in a single header.
+        etags = re.findall(
+            br'\*|(?:W/)?"[^"]*"',
+            utf8(self.request.headers.get("If-None-Match", ""))
+        )
+        if not computed_etag or not etags:
+            return False
+
+        match = False
+        if etags[0] == b'*':
+            match = True
+        else:
+            # Use a weak comparison when comparing entity-tags.
+            val = lambda x: x[2:] if x.startswith(b'W/') else x
+            for etag in etags:
+                if val(etag) == val(computed_etag):
+                    match = True
+                    break
+        return match
 
     def _stack_context_handle_exception(self, type, value, traceback):
         try:
@@ -1351,7 +1403,10 @@ class RequestHandler(object):
             if self._auto_finish and not self._finished:
                 self.finish()
         except Exception as e:
-            self._handle_request_exception(e)
+            try:
+                self._handle_request_exception(e)
+            except Exception:
+                app_log.error("Exception in exception handler", exc_info=True)
             if (self._prepared_future is not None and
                     not self._prepared_future.done()):
                 # In case we failed before setting _prepared_future, do it
@@ -1376,8 +1431,8 @@ class RequestHandler(object):
         self.application.log_request(self)
 
     def _request_summary(self):
-        return self.request.method + " " + self.request.uri + \
-            " (" + self.request.remote_ip + ")"
+        return "%s %s (%s)" % (self.request.method, self.request.uri,
+                               self.request.remote_ip)
 
     def _handle_request_exception(self, e):
         if isinstance(e, Finish):
@@ -1385,7 +1440,12 @@ class RequestHandler(object):
             if not self._finished:
                 self.finish()
             return
-        self.log_exception(*sys.exc_info())
+        try:
+            self.log_exception(*sys.exc_info())
+        except Exception:
+            # An error here should still get a best-effort send_error()
+            # to avoid leaking the connection.
+            app_log.error("Error in exception logger", exc_info=True)
         if self._finished:
             # Extra errors after the request has been finished should
             # be logged, but there is no reason to continue to try and
@@ -1464,10 +1524,12 @@ def asynchronous(method):
     method returns. It is up to the request handler to call
     `self.finish() <RequestHandler.finish>` to finish the HTTP
     request. Without this decorator, the request is automatically
-    finished when the ``get()`` or ``post()`` method returns. Example::
+    finished when the ``get()`` or ``post()`` method returns. Example:
 
-       class MyRequestHandler(web.RequestHandler):
-           @web.asynchronous
+    .. testcode::
+
+       class MyRequestHandler(RequestHandler):
+           @asynchronous
            def get(self):
               http = httpclient.AsyncHTTPClient()
               http.fetch("http://friendfeed.com/", self._on_download)
@@ -1476,11 +1538,15 @@ def asynchronous(method):
               self.write("Downloaded!")
               self.finish()
 
+    .. testoutput::
+       :hide:
+
     .. versionadded:: 3.1
        The ability to use ``@gen.coroutine`` without ``@asynchronous``.
     """
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
+
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         self._auto_finish = False
@@ -1838,7 +1904,8 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
 
     def headers_received(self, start_line, headers):
         self.set_request(httputil.HTTPServerRequest(
-            connection=self.connection, start_line=start_line, headers=headers))
+            connection=self.connection, start_line=start_line,
+            headers=headers))
         if self.stream_request_body:
             self.request.body = Future()
             return self.execute()
@@ -1855,7 +1922,9 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         handlers = app._get_host_handlers(self.request)
         if not handlers:
             self.handler_class = RedirectHandler
-            self.handler_kwargs = dict(url="%s://%s/" % (self.request.protocol, app.default_host))
+            self.handler_kwargs = dict(url="%s://%s/"
+                                       % (self.request.protocol,
+                                          app.default_host))
             return
         for spec in handlers:
             match = spec.regex.match(self.request.path)
@@ -1921,13 +1990,14 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         if self.stream_request_body:
             self.handler._prepared_future = Future()
         # Note that if an exception escapes handler._execute it will be
-        # trapped in the Future it returns (which we are ignoring here).
+        # trapped in the Future it returns (which we are ignoring here,
+        # leaving it to be logged when the Future is GC'd).
         # However, that shouldn't happen because _execute has a blanket
         # except handler, and we cannot easily access the IOLoop here to
         # call add_future (because of the requirement to remain compatible
         # with WSGI)
-        f = self.handler._execute(transforms, *self.path_args, **self.path_kwargs)
-        f.add_done_callback(lambda f: f.exception())
+        f = self.handler._execute(transforms, *self.path_args,
+                                  **self.path_kwargs)
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)
@@ -2221,7 +2291,8 @@ class StaticFileHandler(RequestHandler):
         if content_type:
             self.set_header("Content-Type", content_type)
 
-        cache_time = self.get_cache_time(self.path, self.modified, content_type)
+        cache_time = self.get_cache_time(self.path, self.modified,
+                                         content_type)
         if cache_time > 0:
             self.set_header("Expires", datetime.datetime.utcnow() +
                             datetime.timedelta(seconds=cache_time))
@@ -2390,7 +2461,8 @@ class StaticFileHandler(RequestHandler):
         .. versionadded:: 3.1
         """
         stat_result = self._stat()
-        modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])
+        modified = datetime.datetime.utcfromtimestamp(
+            stat_result[stat.ST_MTIME])
         return modified
 
     def get_content_type(self):
@@ -2633,6 +2705,8 @@ class UIModule(object):
     UI modules often execute additional queries, and they can include
     additional CSS and JavaScript that will be included in the output
     page, which is automatically inserted on page render.
+
+    Subclasses of UIModule must override the `render` method.
     """
     def __init__(self, handler):
         self.handler = handler
@@ -2645,31 +2719,45 @@ class UIModule(object):
         return self.handler.current_user
 
     def render(self, *args, **kwargs):
-        """Overridden in subclasses to return this module's output."""
+        """Override in subclasses to return this module's output."""
         raise NotImplementedError()
 
     def embedded_javascript(self):
-        """Returns a JavaScript string that will be embedded in the page."""
+        """Override to return a JavaScript string
+        to be embedded in the page."""
         return None
 
     def javascript_files(self):
-        """Returns a list of JavaScript files required by this module."""
+        """Override to return a list of JavaScript files needed by this module.
+
+        If the return values are relative paths, they will be passed to
+        `RequestHandler.static_url`; otherwise they will be used as-is.
+        """
         return None
 
     def embedded_css(self):
-        """Returns a CSS string that will be embedded in the page."""
+        """Override to return a CSS string
+        that will be embedded in the page."""
         return None
 
     def css_files(self):
-        """Returns a list of CSS files required by this module."""
+        """Override to returns a list of CSS files required by this module.
+
+        If the return values are relative paths, they will be passed to
+        `RequestHandler.static_url`; otherwise they will be used as-is.
+        """
         return None
 
     def html_head(self):
-        """Returns a CSS string that will be put in the <head/> element"""
+        """Override to return an HTML string that will be put in the <head/>
+        element.
+        """
         return None
 
     def html_body(self):
-        """Returns an HTML string that will be put in the <body/> element"""
+        """Override to return an HTML string that will be put at the end of
+        the <body/> element.
+        """
         return None
 
     def render_string(self, path, **kwargs):
@@ -2892,7 +2980,8 @@ def create_signed_value(secret, name, value, version=None, clock=None):
         #
         # The fields are:
         # - format version (i.e. 2; no length prefix)
-        # - key version (currently 0; reserved for future key rotation features)
+        # - key version (currently 0; reserved for future
+        #       key rotation features)
         # - timestamp (integer seconds since epoch)
         # - name (not encoded; assumed to be ~alphanumeric)
         # - value (base64-encoded)
@@ -2910,11 +2999,13 @@ def create_signed_value(secret, name, value, version=None, clock=None):
     else:
         raise ValueError("Unsupported version %d" % version)
 
-# A leading version number in decimal with no leading zeros, followed by a pipe.
+# A leading version number in decimal
+# with no leading zeros, followed by a pipe.
 _signed_value_version_re = re.compile(br"^([1-9][0-9]*)\|(.*)$")
 
 
-def decode_signed_value(secret, name, value, max_age_days=31, clock=None, min_version=None):
+def decode_signed_value(secret, name, value, max_age_days=31,
+                        clock=None, min_version=None):
     if clock is None:
         clock = time.time
     if min_version is None:
@@ -2948,9 +3039,11 @@ def decode_signed_value(secret, name, value, max_age_days=31, clock=None, min_ve
     if version < min_version:
         return None
     if version == 1:
-        return _decode_signed_value_v1(secret, name, value, max_age_days, clock)
+        return _decode_signed_value_v1(secret, name, value,
+                                       max_age_days, clock)
     elif version == 2:
-        return _decode_signed_value_v2(secret, name, value, max_age_days, clock)
+        return _decode_signed_value_v2(secret, name, value,
+                                       max_age_days, clock)
     else:
         return None
 
@@ -2973,7 +3066,8 @@ def _decode_signed_value_v1(secret, name, value, max_age_days, clock):
         # digits from the payload to the timestamp without altering the
         # signature.  For backwards compatibility, sanity-check timestamp
         # here instead of modifying _cookie_signature.
-        gen_log.warning("Cookie timestamp in future; possible tampering %r", value)
+        gen_log.warning("Cookie timestamp in future; possible tampering %r",
+                        value)
         return None
     if parts[1].startswith(b"0"):
         gen_log.warning("Tampered cookie %r", value)

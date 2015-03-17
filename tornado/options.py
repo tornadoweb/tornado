@@ -256,7 +256,7 @@ class OptionParser(object):
             arg = args[i].lstrip("-")
             name, equals, value = arg.partition("=")
             name = name.replace('-', '_')
-            if not name in self._options:
+            if name not in self._options:
                 self.print_help()
                 raise Error('Unrecognized command line option: %r' % name)
             option = self._options[name]

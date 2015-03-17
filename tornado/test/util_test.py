@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function, with_statement
 import sys
 import datetime
 
+import tornado.escape
 from tornado.escape import utf8
-from tornado.util import raise_exc_info, Configurable, u, exec_in, ArgReplacer, timedelta_to_seconds
+from tornado.util import raise_exc_info, Configurable, u, exec_in, ArgReplacer, timedelta_to_seconds, import_object
 from tornado.test.util import unittest
 
 try:
@@ -45,13 +46,15 @@ class TestConfigurable(Configurable):
 
 
 class TestConfig1(TestConfigurable):
-    def initialize(self, a=None):
+    def initialize(self, pos_arg=None, a=None):
         self.a = a
+        self.pos_arg = pos_arg
 
 
 class TestConfig2(TestConfigurable):
-    def initialize(self, b=None):
+    def initialize(self, pos_arg=None, b=None):
         self.b = b
+        self.pos_arg = pos_arg
 
 
 class ConfigurableTest(unittest.TestCase):
@@ -101,9 +104,10 @@ class ConfigurableTest(unittest.TestCase):
         self.assertIsInstance(obj, TestConfig1)
         self.assertEqual(obj.a, 3)
 
-        obj = TestConfigurable(a=4)
+        obj = TestConfigurable(42, a=4)
         self.assertIsInstance(obj, TestConfig1)
         self.assertEqual(obj.a, 4)
+        self.assertEqual(obj.pos_arg, 42)
 
         self.checkSubclasses()
         # args bound in configure don't apply when using the subclass directly
@@ -116,9 +120,10 @@ class ConfigurableTest(unittest.TestCase):
         self.assertIsInstance(obj, TestConfig2)
         self.assertEqual(obj.b, 5)
 
-        obj = TestConfigurable(b=6)
+        obj = TestConfigurable(42, b=6)
         self.assertIsInstance(obj, TestConfig2)
         self.assertEqual(obj.b, 6)
+        self.assertEqual(obj.pos_arg, 42)
 
         self.checkSubclasses()
         # args bound in configure don't apply when using the subclass directly
@@ -177,3 +182,20 @@ class TimedeltaToSecondsTest(unittest.TestCase):
     def test_timedelta_to_seconds(self):
         time_delta = datetime.timedelta(hours=1)
         self.assertEqual(timedelta_to_seconds(time_delta), 3600.0)
+
+
+class ImportObjectTest(unittest.TestCase):
+    def test_import_member(self):
+        self.assertIs(import_object('tornado.escape.utf8'), utf8)
+
+    def test_import_member_unicode(self):
+        self.assertIs(import_object(u('tornado.escape.utf8')), utf8)
+
+    def test_import_module(self):
+        self.assertIs(import_object('tornado.escape'), tornado.escape)
+
+    def test_import_module_unicode(self):
+        # The internal implementation of __import__ differs depending on
+        # whether the thing being imported is a module or not.
+        # This variant requires a byte string in python 2.
+        self.assertIs(import_object(u('tornado.escape')), tornado.escape)

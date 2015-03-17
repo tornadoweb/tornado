@@ -284,7 +284,8 @@ class WSGIContainer(object):
         if not data:
             raise Exception("WSGI app did not call start_response")
 
-        status_code = int(data["status"].split()[0])
+        status_code, reason = data["status"].split(' ', 1)
+        status_code = int(status_code)
         headers = data["headers"]
         header_set = set(k.lower() for (k, v) in headers)
         body = escape.utf8(body)
@@ -296,13 +297,12 @@ class WSGIContainer(object):
         if "server" not in header_set:
             headers.append(("Server", "TornadoServer/%s" % tornado.version))
 
-        parts = [escape.utf8("HTTP/1.1 " + data["status"] + "\r\n")]
+        start_line = httputil.ResponseStartLine("HTTP/1.1", status_code, reason)
+        header_obj = httputil.HTTPHeaders()
         for key, value in headers:
-            parts.append(escape.utf8(key) + b": " + escape.utf8(value) + b"\r\n")
-        parts.append(b"\r\n")
-        parts.append(body)
-        request.write(b"".join(parts))
-        request.finish()
+            header_obj.add(key, value)
+        request.connection.write_headers(start_line, header_obj, chunk=body)
+        request.connection.finish()
         self._log(status_code, request)
 
     @staticmethod

@@ -30,7 +30,9 @@ Quick links
 Hello, world
 ------------
 
-Here is a simple "Hello, world" example web app for Tornado::
+Here is a simple "Hello, world" example web app for Tornado:
+    
+.. code-block:: python
 
     import tornado.ioloop
     import tornado.web

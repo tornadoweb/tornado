@@ -8,6 +8,7 @@ import operator
 import textwrap
 import sys
 from tornado.httpclient import AsyncHTTPClient
+from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.netutil import Resolver
 from tornado.options import define, options, add_parse_callback
@@ -35,13 +36,16 @@ TEST_MODULES = [
     'tornado.test.ioloop_test',
     'tornado.test.iostream_test',
     'tornado.test.locale_test',
+    'tornado.test.locks_test',
     'tornado.test.netutil_test',
     'tornado.test.log_test',
     'tornado.test.options_test',
     'tornado.test.process_test',
+    'tornado.test.queues_test',
     'tornado.test.simple_httpclient_test',
     'tornado.test.stack_context_test',
     'tornado.test.tcpclient_test',
+    'tornado.test.tcpserver_test',
     'tornado.test.template_test',
     'tornado.test.testing_test',
     'tornado.test.twisted_test',
@@ -112,12 +116,17 @@ def main():
     # instead of DeprecationWarnings.
     warnings.filterwarnings("ignore", category=PendingDeprecationWarning,
                             message="Please use assert.* instead")
+    # Twisted 15.0.0 triggers some warnings on py3 with -bb.
+    warnings.filterwarnings("ignore", category=BytesWarning,
+                            module=r"twisted\..*")
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
     define('httpclient', type=str, default=None,
            callback=lambda s: AsyncHTTPClient.configure(
                s, defaults=dict(allow_ipv6=False)))
+    define('httpserver', type=str, default=None,
+           callback=HTTPServer.configure)
     define('ioloop', type=str, default=None)
     define('ioloop_time_monotonic', default=False)
     define('resolver', type=str, default=None,

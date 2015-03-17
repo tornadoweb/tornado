@@ -217,9 +217,8 @@ class EscapeTestCase(unittest.TestCase):
             self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")
 
     def test_squeeze(self):
-        self.assertEqual(squeeze(u('sequences     of    whitespace   chars'))
-            , u('sequences of whitespace chars'))
-    
+        self.assertEqual(squeeze(u('sequences     of    whitespace   chars')), u('sequences of whitespace chars'))
+
     def test_recursive_unicode(self):
         tests = {
             'dict': {b"foo": b"bar"},

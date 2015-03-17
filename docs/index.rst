@@ -129,6 +129,7 @@ This documentation is also available in `PDF and Epub formats
    coroutine
    integration
    utilities
+   faq
    releases
 
 * :ref:`genindex`

@@ -1,5 +1,9 @@
 .. currentmodule:: tornado.web
 
+.. testsetup::
+
+   import tornado.web
+
 Structure of a Tornado web application
 ======================================
 
@@ -8,7 +12,9 @@ A Tornado web application generally consists of one or more
 routes incoming requests to handlers, and a ``main()`` function
 to start the server.
 
-A minimal "hello world" example looks something like this::
+A minimal "hello world" example looks something like this:
+
+.. testcode::
 
     from tornado.ioloop import IOLoop
     from tornado.web import RequestHandler, Application, url
@@ -26,6 +32,9 @@ A minimal "hello world" example looks something like this::
         app = make_app()
         app.listen(8888)
         IOLoop.current().start()
+
+.. testoutput::
+   :hide:
 
 The ``Application`` object
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -109,7 +118,7 @@ Request data in the formats used by HTML forms will be parsed for you
 and is made available in methods like `~.RequestHandler.get_query_argument`
 and `~.RequestHandler.get_body_argument`.
 
-::
+.. testcode::
 
     class MyFormHandler(RequestHandler):
         def get(self):
@@ -121,6 +130,9 @@ and `~.RequestHandler.get_body_argument`.
         def post(self):
             self.set_header("Content-Type", "text/plain")
             self.write("You wrote " + self.get_body_argument("message"))
+
+.. testoutput::
+   :hide:
 
 Since the HTML form encoding is ambiguous as to whether an argument is
 a single value or a list with one element, `.RequestHandler` has
@@ -163,7 +175,7 @@ necessary. On every request, the following sequence of calls takes
 place:
 
 1. A new `.RequestHandler` object is created on each request
-2. `~.RequestHandler.initialize()` is called with the initalization
+2. `~.RequestHandler.initialize()` is called with the initialization
    arguments from the `.Application` configuration. ``initialize``
    should typically just save the arguments passed into member
    variables; it may not produce any output or call methods like
@@ -302,7 +314,9 @@ to ensure that this method is called, or else the user's browser will
 simply hang.
 
 Here is an example that makes a call to the FriendFeed API using
-Tornado's built-in `.AsyncHTTPClient`::
+Tornado's built-in `.AsyncHTTPClient`:
+
+.. testcode::
 
     class MainHandler(tornado.web.RequestHandler):
         @tornado.web.asynchronous
@@ -318,12 +332,17 @@ Tornado's built-in `.AsyncHTTPClient`::
                        "from the FriendFeed API")
             self.finish()
 
+.. testoutput::
+   :hide:
+
 When ``get()`` returns, the request has not finished. When the HTTP
 client eventually calls ``on_response()``, the request is still open,
 and the response is finally flushed to the client with the call to
 ``self.finish()``.
 
-For comparison, here is the same example using a coroutine::
+For comparison, here is the same example using a coroutine:
+
+.. testcode::
 
     class MainHandler(tornado.web.RequestHandler):
         @tornado.gen.coroutine
@@ -333,6 +352,9 @@ For comparison, here is the same example using a coroutine::
             json = tornado.escape.json_decode(response.body)
             self.write("Fetched " + str(len(json["entries"])) + " entries "
                        "from the FriendFeed API")
+
+.. testoutput::
+   :hide:
 
 For a more advanced asynchronous example, take a look at the `chat
 example application

@@ -37,7 +37,7 @@ import re
 from tornado.concurrent import TracebackFuture
 from tornado import ioloop
 from tornado.log import gen_log, app_log
-from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError
+from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError, _client_ssl_defaults, _server_ssl_defaults
 from tornado import stack_context
 from tornado.util import errno_from_exception
 
@@ -82,7 +82,7 @@ _ERRNO_INPROGRESS = (errno.EINPROGRESS,)
 if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)
 
-#######################################################
+
 class StreamClosedError(IOError):
     """Exception raised by `IOStream` methods when the stream is closed.
 
@@ -169,6 +169,11 @@ class BaseIOStream(object):
         self._close_callback = None
         self._connect_callback = None
         self._connect_future = None
+        # _ssl_connect_future should be defined in SSLIOStream
+        # but it's here so we can clean it up in maybe_run_close_callback.
+        # TODO: refactor that so subclasses can add additional futures
+        # to be cancelled.
+        self._ssl_connect_future = None
         self._connecting = False
         self._state = None
         self._pending_callbacks = 0
@@ -317,9 +322,16 @@ class BaseIOStream(object):
         If a callback is given, it will be run with the data as an argument;
         if not, this method returns a `.Future`.
 
+        Note that if a ``streaming_callback`` is used, data will be
+        read from the socket as quickly as it becomes available; there
+        is no way to apply backpressure or cancel the reads. If flow
+        control or cancellation are desired, use a loop with
+        `read_bytes(partial=True) <.read_bytes>` instead.
+
         .. versionchanged:: 4.0
             The callback argument is now optional and a `.Future` will
             be returned if it is omitted.
+
         """
         future = self._set_read_callback(callback)
         self._streaming_callback = stack_context.wrap(streaming_callback)
@@ -430,9 +442,11 @@ class BaseIOStream(object):
             if self._connect_future is not None:
                 futures.append(self._connect_future)
                 self._connect_future = None
+            if self._ssl_connect_future is not None:
+                futures.append(self._ssl_connect_future)
+                self._ssl_connect_future = None
             for future in futures:
-                if (isinstance(self.error, (socket.error, IOError)) and
-                        errno_from_exception(self.error) in _ERRNO_CONNRESET):
+                if self._is_connreset(self.error):
                     # Treat connection resets as closed connections so
                     # clients only have to catch one kind of exception
                     # to avoid logging.
@@ -712,7 +726,7 @@ class BaseIOStream(object):
             chunk = self.read_from_fd()
         except (socket.error, IOError, OSError) as e:
             # ssl.SSLError is a subclass of socket.error
-            if e.args[0] in _ERRNO_CONNRESET:
+            if self._is_connreset(e):
                 # Treat ECONNRESET as a connection close rather than
                 # an error to minimize log spam  (the exception will
                 # be available on self.error for apps that care).
@@ -834,7 +848,7 @@ class BaseIOStream(object):
                     self._write_buffer_frozen = True
                     break
                 else:
-                    if e.args[0] not in _ERRNO_CONNRESET:
+                    if not self._is_connreset(e):
                         # Broken pipe errors are usually caused by connection
                         # reset, and its better to not log EPIPE errors to
                         # minimize log spam
@@ -912,6 +926,14 @@ class BaseIOStream(object):
             self._state = self._state | state
             self.io_loop.update_handler(self.fileno(), self._state)
 
+    def _is_connreset(self, exc):
+        """Return true if exc is ECONNRESET or equivalent.
+
+        May be overridden in subclasses.
+        """
+        return (isinstance(exc, (socket.error, IOError)) and
+                errno_from_exception(exc) in _ERRNO_CONNRESET)
+
 
 class IOStream(BaseIOStream):
     r"""Socket-based `IOStream` implementation.
@@ -926,7 +948,9 @@ class IOStream(BaseIOStream):
     connected before passing it to the `IOStream` or connected with
     `IOStream.connect`.
 
-    A very simple (and broken) HTTP client using this class::
+    A very simple (and broken) HTTP client using this class:
+
+    .. testcode::
 
         import tornado.ioloop
         import tornado.iostream
@@ -945,14 +969,19 @@ class IOStream(BaseIOStream):
             stream.read_bytes(int(headers[b"Content-Length"]), on_body)
 
         def on_body(data):
-            print data
+            print(data)
             stream.close()
             tornado.ioloop.IOLoop.instance().stop()
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        stream = tornado.iostream.IOStream(s)
-        stream.connect(("friendfeed.com", 80), send_request)
-        tornado.ioloop.IOLoop.instance().start()
+        if __name__ == '__main__':
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+            stream = tornado.iostream.IOStream(s)
+            stream.connect(("friendfeed.com", 80), send_request)
+            tornado.ioloop.IOLoop.instance().start()
+
+    .. testoutput::
+       :hide:
+
     """
     def __init__(self, socket, *args, **kwargs):
         self.socket = socket
@@ -1006,10 +1035,10 @@ class IOStream(BaseIOStream):
         returns a `.Future` (whose result after a successful
         connection will be the stream itself).
 
-        If specified, the ``server_hostname`` parameter will be used
-        in SSL connections for certificate validation (if requested in
-        the ``ssl_options``) and SNI (if supported; requires
-        Python 3.2+).
+        In SSL mode, the ``server_hostname`` parameter will be used
+        for certificate validation (unless disabled in the
+        ``ssl_options``) and SNI (if supported; requires Python
+        2.7.9+).
 
         Note that it is safe to call `IOStream.write
         <BaseIOStream.write>` while the connection is pending, in
@@ -1020,6 +1049,11 @@ class IOStream(BaseIOStream):
         .. versionchanged:: 4.0
             If no callback is given, returns a `.Future`.
 
+        .. versionchanged:: 4.2
+           SSL certificates are validated by default; pass
+           ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
+           suitably-configured `ssl.SSLContext` to the
+           `SSLIOStream` constructor to disable.
         """
         self._connecting = True
         if callback is not None:
@@ -1039,8 +1073,9 @@ class IOStream(BaseIOStream):
             # reported later in _handle_connect.
             if (errno_from_exception(e) not in _ERRNO_INPROGRESS and
                     errno_from_exception(e) not in _ERRNO_WOULDBLOCK):
-                gen_log.warning("Connect error on fd %s: %s",
-                                self.socket.fileno(), e)
+                if future is None:
+                    gen_log.warning("Connect error on fd %s: %s",
+                                    self.socket.fileno(), e)
                 self.close(exc_info=True)
                 return future
         self._add_io_state(self.io_loop.WRITE)
@@ -1061,10 +1096,11 @@ class IOStream(BaseIOStream):
         data.  It can also be used immediately after connecting,
         before any reads or writes.
 
-        The ``ssl_options`` argument may be either a dictionary
-        of options or an `ssl.SSLContext`.  If a ``server_hostname``
-        is given, it will be used for certificate verification
-        (as configured in the ``ssl_options``).
+        The ``ssl_options`` argument may be either an `ssl.SSLContext`
+        object or a dictionary of keyword arguments for the
+        `ssl.wrap_socket` function.  The ``server_hostname`` argument
+        will be used for certificate validation unless disabled
+        in the ``ssl_options``.
 
         This method returns a `.Future` whose result is the new
         `SSLIOStream`.  After this method has been called,
@@ -1074,6 +1110,11 @@ class IOStream(BaseIOStream):
         transferred to the new stream.
 
         .. versionadded:: 4.0
+
+        .. versionchanged:: 4.2
+           SSL certificates are validated by default; pass
+           ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
+           suitably-configured `ssl.SSLContext` to disable.
         """
         if (self._read_callback or self._read_future or
                 self._write_callback or self._write_future or
@@ -1082,7 +1123,10 @@ class IOStream(BaseIOStream):
                 self._read_buffer or self._write_buffer):
             raise ValueError("IOStream is not idle; cannot convert to SSL")
         if ssl_options is None:
-            ssl_options = {}
+            if server_side:
+                ssl_options = _server_ssl_defaults
+            else:
+                ssl_options = _client_ssl_defaults
 
         socket = self.socket
         self.io_loop.remove_handler(socket)
@@ -1101,6 +1145,7 @@ class IOStream(BaseIOStream):
         # If we had an "unwrap" counterpart to this method we would need
         # to restore the original callback after our Future resolves
         # so that repeated wrap/unwrap calls don't build up layers.
+
         def close_callback():
             if not future.done():
                 future.set_exception(ssl_stream.error or StreamClosedError())
@@ -1145,7 +1190,7 @@ class IOStream(BaseIOStream):
                 # Sometimes setsockopt will fail if the socket is closed
                 # at the wrong time.  This can happen with HTTPServer
                 # resetting the value to false between requests.
-                if e.errno not in (errno.EINVAL, errno.ECONNRESET):
+                if e.errno != errno.EINVAL and not self._is_connreset(e):
                     raise
 
 
@@ -1161,11 +1206,11 @@ class SSLIOStream(IOStream):
     wrapped when `IOStream.connect` is finished.
     """
     def __init__(self, *args, **kwargs):
-        """The ``ssl_options`` keyword argument may either be a dictionary
-        of keywords arguments for `ssl.wrap_socket`, or an `ssl.SSLContext`
-        object.
+        """The ``ssl_options`` keyword argument may either be an
+        `ssl.SSLContext` object or a dictionary of keywords arguments
+        for `ssl.wrap_socket`
         """
-        self._ssl_options = kwargs.pop('ssl_options', {})
+        self._ssl_options = kwargs.pop('ssl_options', _client_ssl_defaults)
         super(SSLIOStream, self).__init__(*args, **kwargs)
         self._ssl_accepting = True
         self._handshake_reading = False
@@ -1220,8 +1265,7 @@ class SSLIOStream(IOStream):
             # to cause do_handshake to raise EBADF, so make that error
             # quiet as well.
             # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
-            if (err.args[0] in _ERRNO_CONNRESET or
-                err.args[0] == errno.EBADF):
+            if self._is_connreset(err) or err.args[0] == errno.EBADF:
                 return self.close(exc_info=True)
             raise
         except AttributeError:
@@ -1234,10 +1278,17 @@ class SSLIOStream(IOStream):
             if not self._verify_cert(self.socket.getpeercert()):
                 self.close()
                 return
-            if self._ssl_connect_callback is not None:
-                callback = self._ssl_connect_callback
-                self._ssl_connect_callback = None
-                self._run_callback(callback)
+            self._run_ssl_connect_callback()
+
+    def _run_ssl_connect_callback(self):
+        if self._ssl_connect_callback is not None:
+            callback = self._ssl_connect_callback
+            self._ssl_connect_callback = None
+            self._run_callback(callback)
+        if self._ssl_connect_future is not None:
+            future = self._ssl_connect_future
+            self._ssl_connect_future = None
+            future.set_result(self)
 
     def _verify_cert(self, peercert):
         """Returns True if peercert is valid according to the configured
@@ -1279,14 +1330,11 @@ class SSLIOStream(IOStream):
         super(SSLIOStream, self)._handle_write()
 
     def connect(self, address, callback=None, server_hostname=None):
-        # Save the user's callback and run it after the ssl handshake
-        # has completed.
-        self._ssl_connect_callback = stack_context.wrap(callback)
         self._server_hostname = server_hostname
-        # Note: Since we don't pass our callback argument along to
-        # super.connect(), this will always return a Future.
-        # This is harmless, but a bit less efficient than it could be.
-        return super(SSLIOStream, self).connect(address, callback=None)
+        # Pass a dummy callback to super.connect(), which is slightly
+        # more efficient than letting it return a Future we ignore.
+        super(SSLIOStream, self).connect(address, callback=lambda: None)
+        return self.wait_for_handshake(callback)
 
     def _handle_connect(self):
         # Call the superclass method to check for errors.
@@ -1310,6 +1358,51 @@ class SSLIOStream(IOStream):
                                       server_hostname=self._server_hostname,
                                       do_handshake_on_connect=False)
         self._add_io_state(old_state)
+
+    def wait_for_handshake(self, callback=None):
+        """Wait for the initial SSL handshake to complete.
+
+        If a ``callback`` is given, it will be called with no
+        arguments once the handshake is complete; otherwise this
+        method returns a `.Future` which will resolve to the
+        stream itself after the handshake is complete.
+
+        Once the handshake is complete, information such as
+        the peer's certificate and NPN/ALPN selections may be
+        accessed on ``self.socket``.
+
+        This method is intended for use on server-side streams
+        or after using `IOStream.start_tls`; it should not be used
+        with `IOStream.connect` (which already waits for the
+        handshake to complete). It may only be called once per stream.
+
+        .. versionadded:: 4.2
+        """
+        if (self._ssl_connect_callback is not None or
+                self._ssl_connect_future is not None):
+            raise RuntimeError("Already waiting")
+        if callback is not None:
+            self._ssl_connect_callback = stack_context.wrap(callback)
+            future = None
+        else:
+            future = self._ssl_connect_future = TracebackFuture()
+        if not self._ssl_accepting:
+            self._run_ssl_connect_callback()
+        return future
+
+    def write_to_fd(self, data):
+        try:
+            return self.socket.send(data)
+        except ssl.SSLError as e:
+            if e.args[0] == ssl.SSL_ERROR_WANT_WRITE:
+                # In Python 3.5+, SSLSocket.send raises a WANT_WRITE error if
+                # the socket is not writeable; we need to transform this into
+                # an EWOULDBLOCK socket.error or a zero return value,
+                # either of which will be recognized by the caller of this
+                # method. Prior to Python 3.5, an unwriteable socket would
+                # simply return 0 bytes written.
+                return 0
+            raise
 
     def read_from_fd(self):
         if self._ssl_accepting:
@@ -1340,6 +1433,11 @@ class SSLIOStream(IOStream):
             self.close()
             return None
         return chunk
+
+    def _is_connreset(self, e):
+        if isinstance(e, ssl.SSLError) and e.args[0] == ssl.SSL_ERROR_EOF:
+            return True
+        return super(SSLIOStream, self)._is_connreset(e)
 
 
 class PipeIOStream(BaseIOStream):

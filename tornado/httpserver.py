@@ -37,9 +37,11 @@ from tornado import httputil
 from tornado import iostream
 from tornado import netutil
 from tornado.tcpserver import TCPServer
+from tornado.util import Configurable
 
 
-class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
+class HTTPServer(TCPServer, Configurable,
+                 httputil.HTTPServerConnectionDelegate):
     r"""A non-blocking, single-threaded HTTP server.
 
     A server is defined by a subclass of `.HTTPServerConnectionDelegate`,
@@ -60,15 +62,15 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
     if Tornado is run behind an SSL-decoding proxy that does not set one of
     the supported ``xheaders``.
 
-    To make this server serve SSL traffic, send the ``ssl_options`` dictionary
-    argument with the arguments required for the `ssl.wrap_socket` method,
-    including ``certfile`` and ``keyfile``.  (In Python 3.2+ you can pass
-    an `ssl.SSLContext` object instead of a dict)::
+    To make this server serve SSL traffic, send the ``ssl_options`` keyword
+    argument with an `ssl.SSLContext` object. For compatibility with older
+    versions of Python ``ssl_options`` may also be a dictionary of keyword
+    arguments for the `ssl.wrap_socket` method.::
 
-       HTTPServer(applicaton, ssl_options={
-           "certfile": os.path.join(data_dir, "mydomain.crt"),
-           "keyfile": os.path.join(data_dir, "mydomain.key"),
-       })
+       ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+       ssl_ctx.load_cert_chain(os.path.join(data_dir, "mydomain.crt"),
+                               os.path.join(data_dir, "mydomain.key"))
+       HTTPServer(applicaton, ssl_options=ssl_ctx)
 
     `HTTPServer` initialization follows one of three patterns (the
     initialization methods are defined on `tornado.tcpserver.TCPServer`):
@@ -120,12 +122,20 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
        two arguments ``(server_conn, request_conn)`` (in accordance with the
        documentation) instead of one ``(request_conn)``.
     """
-    def __init__(self, request_callback, no_keep_alive=False, io_loop=None,
-                 xheaders=False, ssl_options=None, protocol=None,
-                 decompress_request=False,
-                 chunk_size=None, max_header_size=None,
-                 idle_connection_timeout=None, body_timeout=None,
-                 max_body_size=None, max_buffer_size=None):
+    def __init__(self, *args, **kwargs):
+        # Ignore args to __init__; real initialization belongs in
+        # initialize since we're Configurable. (there's something
+        # weird in initialization order between this class,
+        # Configurable, and TCPServer so we can't leave __init__ out
+        # completely)
+        pass
+
+    def initialize(self, request_callback, no_keep_alive=False, io_loop=None,
+                   xheaders=False, ssl_options=None, protocol=None,
+                   decompress_request=False,
+                   chunk_size=None, max_header_size=None,
+                   idle_connection_timeout=None, body_timeout=None,
+                   max_body_size=None, max_buffer_size=None):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
@@ -141,6 +151,14 @@ class HTTPServer(TCPServer, httputil.HTTPServerConnectionDelegate):
                            max_buffer_size=max_buffer_size,
                            read_chunk_size=chunk_size)
         self._connections = set()
+
+    @classmethod
+    def configurable_base(cls):
+        return HTTPServer
+
+    @classmethod
+    def configurable_default(cls):
+        return HTTPServer
 
     @gen.coroutine
     def close_all_connections(self):
