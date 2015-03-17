@@ -27,14 +27,14 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import os
 
-if os.name == 'nt':
-    from tornado.platform.common import Waker
-    from tornado.platform.windows import set_close_exec
-elif 'APPENGINE_RUNTIME' in os.environ:
+if 'APPENGINE_RUNTIME' in os.environ:
     from tornado.platform.common import Waker
 
     def set_close_exec(fd):
         pass
+elif os.name == 'nt':
+    from tornado.platform.common import Waker
+    from tornado.platform.windows import set_close_exec
 else:
     from tornado.platform.posix import set_close_exec, Waker
 
