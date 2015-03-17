@@ -73,7 +73,10 @@ class Condition(_TimeoutGarbageCollector):
             def on_timeout():
                 waiter.set_result(False)
                 self._garbage_collect()
-            self.io_loop.add_timeout(timeout, on_timeout)
+            io_loop = ioloop.IOLoop.current()
+            timeout_handle = io_loop.add_timeout(timeout, on_timeout)
+            waiter.add_done_callback(
+                lambda _: io_loop.remove_timeout(timeout_handle))
         return waiter
 
     def notify(self, n=1):
@@ -223,7 +226,10 @@ class Semaphore(_TimeoutGarbageCollector):
                 def on_timeout():
                     waiter.set_exception(gen.TimeoutError())
                     self._garbage_collect()
-                ioloop.IOLoop.current().add_timeout(timeout, on_timeout)
+                io_loop = ioloop.IOLoop.current()
+                timeout_handle = io_loop.add_timeout(timeout, on_timeout)
+                waiter.add_done_callback(
+                    lambda _: io_loop.remove_timeout(timeout_handle))
         return waiter
 
     def __enter__(self):
