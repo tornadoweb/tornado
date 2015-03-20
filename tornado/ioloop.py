@@ -189,8 +189,8 @@ class IOLoop(Configurable):
         one.
 
         .. versionchanged:: 4.1
-           Added ``instance`` argument to control the
-
+           Added ``instance`` argument to control the fallback to
+           `IOLoop.instance()`.
         """
         current = getattr(IOLoop._current, "instance", None)
         if current is None and instance:
