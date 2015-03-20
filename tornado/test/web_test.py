@@ -397,6 +397,12 @@ class RequestEncodingTest(WebTestCase):
                               path_args=["a/b", "c/d"],
                               args={}))
 
+    def test_error(self):
+        # Percent signs (encoded as %25) should not mess up printf-style
+        # messages in logs
+        with ExpectLog(gen_log, ".*Invalid unicode"):
+            self.fetch("/group/?arg=%25%e9")
+
 
 class TypeCheckHandler(RequestHandler):
     def prepare(self):

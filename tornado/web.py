@@ -2031,6 +2031,8 @@ class HTTPError(Exception):
         self.log_message = log_message
         self.args = args
         self.reason = kwargs.get('reason', None)
+        if log_message and not args:
+            self.log_message = log_message.replace('%', '%%')
 
     def __str__(self):
         message = "HTTP %d: %s" % (
