@@ -164,7 +164,7 @@ class Queue(object):
             self._finished.set()
 
     def join(self, timeout=None):
-        """Block until all items in the queue are processed. Returns a Future.
+        """Block until all items in the queue are processed.
 
         Returns a Future, which raises `tornado.gen.TimeoutError` after a
         timeout.
