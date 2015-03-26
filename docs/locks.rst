@@ -23,7 +23,7 @@ notified by another. Take `~tornado.locks.Condition` as an example:
     from tornado import ioloop, gen, locks
 
 
-    loop = ioloop.IOLoop.current()
+    io_loop = ioloop.IOLoop.current()
     condition = locks.Condition()
 
 
@@ -46,7 +46,7 @@ notified by another. Take `~tornado.locks.Condition` as an example:
         # Yield two Futures; wait for waiter() and notifier() to finish.
         yield [waiter(), notifier()]
 
-    loop.run_sync(runner)
+    io_loop.run_sync(runner)
 
 .. testoutput::
 
@@ -58,10 +58,10 @@ notified by another. Take `~tornado.locks.Condition` as an example:
 Wait-methods take an optional ``timeout`` argument, which is either an
 absolute timestamp::
 
-    loop = ioloop.IOLoop.current()
+    io_loop = ioloop.IOLoop.current()
 
     # Wait up to 1 second for a notification.
-    yield condition.wait(deadline=loop.time() + 1)
+    yield condition.wait(deadline=io_loop.time() + 1)
 
 ...or a `datetime.timedelta` for a deadline relative to the current time::
 
