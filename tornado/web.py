@@ -670,12 +670,12 @@ class RequestHandler(object):
         https://github.com/facebook/tornado/issues/1009
         """
         if self._finished:
-            raise RuntimeError("Cannot write() after finish().  May be caused "
-                               "by using async operations without the "
-                               "@asynchronous decorator.")
+            raise RuntimeError("Cannot write() after finish()")
         if not isinstance(chunk, (bytes, unicode_type, dict)):
-            raise TypeError(
-                "write() only accepts bytes, unicode, and dict objects")
+            message = "write() only accepts bytes, unicode, and dict objects"
+            if isinstance(chunk, list):
+                message += ". Lists not accepted for security reasons; see http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"
+            raise TypeError(message)
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
@@ -885,9 +885,7 @@ class RequestHandler(object):
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
         if self._finished:
-            raise RuntimeError("finish() called twice.  May be caused "
-                               "by using async operations without the "
-                               "@asynchronous decorator.")
+            raise RuntimeError("finish() called twice")
 
         if chunk is not None:
             self.write(chunk)
@@ -1508,10 +1506,11 @@ class RequestHandler(object):
 def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.
 
-    This decorator is unnecessary if the method is also decorated with
-    ``@gen.coroutine`` (it is legal but unnecessary to use the two
-    decorators together, in which case ``@asynchronous`` must be
-    first).
+    This decorator is for callback-style asynchronous methods; for
+    coroutines, use the ``@gen.coroutine`` decorator without
+    ``@asynchronous``. (It is legal for legacy reasons to use the two
+    decorators together provided ``@asynchronous`` is first, but
+    ``@asynchronous`` will be ignored in this case)
 
     This decorator should only be applied to the :ref:`HTTP verb
     methods <verbs>`; its behavior is undefined for any other method.
@@ -1543,6 +1542,7 @@ def asynchronous(method):
 
     .. versionadded:: 3.1
        The ability to use ``@gen.coroutine`` without ``@asynchronous``.
+
     """
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
