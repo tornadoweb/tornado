@@ -13,7 +13,7 @@ from tornado.ioloop import IOLoop
 from tornado.log import gen_log
 from tornado.process import fork_processes, task_id, Subprocess
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase
+from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase, gen_test
 from tornado.test.util import unittest, skipIfNonUnix
 from tornado.web import RequestHandler, Application
 
@@ -197,6 +197,16 @@ class SubprocessTest(AsyncTestCase):
                              io_loop=self.io_loop)
         subproc.set_exit_callback(self.stop)
         ret = self.wait()
+        self.assertEqual(ret, 0)
+        self.assertEqual(subproc.returncode, ret)
+
+    @gen_test
+    def test_sigchild_future(self):
+        skip_if_twisted()
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, '-c', 'pass'])
+        ret = yield subproc.wait_for_exit()
         self.assertEqual(ret, 0)
         self.assertEqual(subproc.returncode, ret)
 

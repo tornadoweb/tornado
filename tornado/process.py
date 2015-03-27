@@ -29,6 +29,7 @@ import time
 
 from binascii import hexlify
 
+from tornado.concurrent import Future
 from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
@@ -257,6 +258,22 @@ class Subprocess(object):
         Subprocess.initialize(self.io_loop)
         Subprocess._waiting[self.pid] = self
         Subprocess._try_cleanup_process(self.pid)
+
+    def wait_for_exit(self):
+        """Returns a `.Future` which resolves when the process exits.
+
+        Usage::
+
+            ret = yield proc.wait_for_exit()
+
+        This is a coroutine-friendly alternative to `set_exit_callback`
+        (and a replacement for the blocking `subprocess.Popen.wait`).
+
+        .. versionadded:: 4.2
+        """
+        future = Future()
+        self.set_exit_callback(future.set_result)
+        return future
 
     @classmethod
     def initialize(cls, io_loop=None):
