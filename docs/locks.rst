@@ -72,3 +72,48 @@ multithreaded app.)*
 
     The method raises `tornado.gen.TimeoutError` if there's no notification
     before the deadline.
+
+   Event
+   -----
+   .. autoclass:: Event
+    :members:
+
+    A coroutine can wait for an event to be set. Once it is set, the coroutine
+    does not block on `wait` until the the event is unset again:
+
+    .. testcode::
+
+        from tornado import ioloop, gen, locks
+
+
+        io_loop = ioloop.IOLoop.current()
+        event = locks.Event()
+
+
+        @gen.coroutine
+        def waiter():
+            print("Waiting for event")
+            yield event.wait()
+            print("Not waiting this time")
+            yield event.wait()
+            print("Done")
+
+
+        @gen.coroutine
+        def setter():
+            print("About to set the event")
+            event.set()
+
+
+        @gen.coroutine
+        def runner():
+            yield [waiter(), setter()]
+
+        io_loop.run_sync(runner)
+
+    .. testoutput::
+
+        Waiting for event
+        About to set the event
+        Not waiting this time
+        Done
