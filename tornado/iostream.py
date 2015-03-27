@@ -669,13 +669,13 @@ class BaseIOStream(object):
         else:
             callback = self._read_callback
             self._read_callback = self._streaming_callback = None
-        if self._read_future is not None:
-            assert callback is None
-            future = self._read_future
-            self._read_future = None
-            future.set_result(self._consume(size))
+            if self._read_future is not None:
+                assert callback is None
+                future = self._read_future
+                self._read_future = None
+                future.set_result(self._consume(size))
         if callback is not None:
-            assert self._read_future is None
+            assert (self._read_future is None) or streaming
             self._run_callback(callback, self._consume(size))
         else:
             # If we scheduled a callback, we will add the error listener
