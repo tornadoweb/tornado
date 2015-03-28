@@ -76,8 +76,8 @@ multithreaded app.)*
    .. autoclass:: Event
     :members:
 
-    A coroutine can wait for an event to be set. Once it is set, the coroutine
-    does not block on `wait` until the the event is unset again:
+    A coroutine can wait for an event to be set. Once it is set, calls to
+    ``yield event.wait()`` will not block unless the event has been cleared:
 
     .. testcode::
 
