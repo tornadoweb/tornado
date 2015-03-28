@@ -14,9 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import MySQLdb
 import markdown
 import os.path
 import re
+import subprocess
 import torndb
 import tornado.auth
 import tornado.httpserver
@@ -61,6 +63,19 @@ class Application(tornado.web.Application):
         self.db = torndb.Connection(
             host=options.mysql_host, database=options.mysql_database,
             user=options.mysql_user, password=options.mysql_password)
+
+        self.maybe_create_tables()
+
+    def maybe_create_tables(self):
+        try:
+            self.db.get("SELECT COUNT(*) from entries;")
+        except MySQLdb.ProgrammingError:
+            subprocess.check_call(['mysql',
+                                   '--host=' + options.mysql_host,
+                                   '--database=' + options.mysql_database,
+                                   '--user=' + options.mysql_user,
+                                   '--password=' + options.mysql_password],
+                                  stdin=open('schema.sql'))
 
 
 class BaseHandler(tornado.web.RequestHandler):
