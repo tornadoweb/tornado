@@ -11,6 +11,11 @@ place of those from the standard library--they are meant to coordinate Tornado
 coroutines in a single-threaded app, not to protect shared objects in a
 multithreaded app.)*
 
+.. testsetup::
+
+    from tornado import ioloop, gen, locks
+    io_loop = ioloop.IOLoop.current()
+
 .. automodule:: tornado.locks
 
    Condition
@@ -22,12 +27,7 @@ multithreaded app.)*
 
     .. testcode::
 
-        from tornado import ioloop, gen, locks
-
-
-        io_loop = ioloop.IOLoop.current()
         condition = locks.Condition()
-
 
         @gen.coroutine
         def waiter():
@@ -35,13 +35,11 @@ multithreaded app.)*
             yield condition.wait()  # Yield a Future.
             print("I'm done waiting")
 
-
         @gen.coroutine
         def notifier():
             print("About to notify")
             condition.notify()
             print("Done notifying")
-
 
         @gen.coroutine
         def runner():
@@ -72,3 +70,41 @@ multithreaded app.)*
 
     The method raises `tornado.gen.TimeoutError` if there's no notification
     before the deadline.
+
+   Event
+   -----
+   .. autoclass:: Event
+    :members:
+
+    A coroutine can wait for an event to be set. Once it is set, calls to
+    ``yield event.wait()`` will not block unless the event has been cleared:
+
+    .. testcode::
+
+        event = locks.Event()
+
+        @gen.coroutine
+        def waiter():
+            print("Waiting for event")
+            yield event.wait()
+            print("Not waiting this time")
+            yield event.wait()
+            print("Done")
+
+        @gen.coroutine
+        def setter():
+            print("About to set the event")
+            event.set()
+
+        @gen.coroutine
+        def runner():
+            yield [waiter(), setter()]
+
+        io_loop.run_sync(runner)
+
+    .. testoutput::
+
+        Waiting for event
+        About to set the event
+        Not waiting this time
+        Done
