@@ -62,6 +62,11 @@ class GenEngineTest(AsyncTestCase):
     def async_future(self, result, callback):
         self.io_loop.add_callback(callback, result)
 
+    @gen.coroutine
+    def async_exception(self, e):
+        yield gen.moment
+        raise e
+
     def test_no_yield(self):
         @gen.engine
         def f():
@@ -389,6 +394,33 @@ class GenEngineTest(AsyncTestCase):
     def test_multi_dict_future(self):
         results = yield dict(foo=self.async_future(1), bar=self.async_future(2))
         self.assertEqual(results, dict(foo=1, bar=2))
+
+    @gen_test
+    def test_multi_exceptions(self):
+        with ExpectLog(app_log, "Multiple exceptions in yield list"):
+            with self.assertRaises(RuntimeError) as cm:
+                yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                                 self.async_exception(RuntimeError("error 2"))])
+        self.assertEqual(str(cm.exception), "error 1")
+
+        return
+        # With only one exception, no error is logged.
+        with self.assertRaises(RuntimeError):
+            yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                             self.async_future(2)])
+
+    @gen_test
+    def test_multi_future_exceptions(self):
+        with ExpectLog(app_log, "Multiple exceptions in yield list"):
+            with self.assertRaises(RuntimeError) as cm:
+                yield [self.async_exception(RuntimeError("error 1")),
+                       self.async_exception(RuntimeError("error 2"))]
+        self.assertEqual(str(cm.exception), "error 1")
+
+        # With only one exception, no error is logged.
+        with self.assertRaises(RuntimeError):
+            yield [self.async_exception(RuntimeError("error 1")),
+                   self.async_future(2)]
 
     def test_arguments(self):
         @gen.engine

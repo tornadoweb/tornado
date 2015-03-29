@@ -87,6 +87,7 @@ from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
+from tornado.util import raise_exc_info
 
 try:
     from functools import singledispatch  # py34+
@@ -528,7 +529,7 @@ class YieldFuture(YieldPoint):
             self.io_loop.add_future(self.future, runner.result_callback(self.key))
         else:
             self.runner = None
-            self.result = self.future.result()
+            self.result_fn = self.future.result
 
     def is_ready(self):
         if self.runner is not None:
@@ -540,7 +541,7 @@ class YieldFuture(YieldPoint):
         if self.runner is not None:
             return self.runner.pop_result(self.key).result()
         else:
-            return self.result
+            return self.result_fn()
 
 
 class Multi(YieldPoint):
@@ -554,6 +555,10 @@ class Multi(YieldPoint):
     Instead of a list, the argument may also be a dictionary whose values are
     Futures, in which case a parallel dictionary is returned mapping the same
     keys to their results.
+
+    .. versionchanged:: 4.2
+       If multiple ``YieldPoints`` fail, any exceptions after the first
+       (which is raised) will be logged.
     """
     def __init__(self, children):
         self.keys = None
@@ -579,11 +584,23 @@ class Multi(YieldPoint):
         return not self.unfinished_children
 
     def get_result(self):
-        result = (i.get_result() for i in self.children)
+        result_list = []
+        exc_info = None
+        for f in self.children:
+            try:
+                result_list.append(f.get_result())
+            except Exception:
+                if exc_info is None:
+                    exc_info = sys.exc_info()
+                else:
+                    app_log.error("Multiple exceptions in yield list",
+                                  exc_info=True)
+        if exc_info is not None:
+            raise_exc_info(exc_info)
         if self.keys is not None:
-            return dict(zip(self.keys, result))
+            return dict(zip(self.keys, result_list))
         else:
-            return list(result)
+            return list(result_list)
 
 
 def multi_future(children):
@@ -605,6 +622,10 @@ def multi_future(children):
     require the creation of a stack context.
 
     .. versionadded:: 4.0
+
+    .. versionchanged:: 4.2
+       If multiple ``Futures`` fail, any exceptions after the first (which is
+       raised) will be logged.
     """
     if isinstance(children, dict):
         keys = list(children.keys())
@@ -621,11 +642,17 @@ def multi_future(children):
     def callback(f):
         unfinished_children.remove(f)
         if not unfinished_children:
-            try:
-                result_list = [i.result() for i in children]
-            except Exception:
-                future.set_exc_info(sys.exc_info())
-            else:
+            result_list = []
+            for f in children:
+                try:
+                    result_list.append(f.result())
+                except Exception:
+                    if future.done():
+                        app_log.error("Multiple exceptions in yield list",
+                                      exc_info=True)
+                    else:
+                        future.set_exc_info(sys.exc_info())
+            if not future.done():
                 if keys is not None:
                     future.set_result(dict(zip(keys, result_list)))
                 else:
