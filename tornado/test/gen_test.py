@@ -403,11 +403,16 @@ class GenEngineTest(AsyncTestCase):
                                  self.async_exception(RuntimeError("error 2"))])
         self.assertEqual(str(cm.exception), "error 1")
 
-        return
         # With only one exception, no error is logged.
         with self.assertRaises(RuntimeError):
             yield gen.Multi([self.async_exception(RuntimeError("error 1")),
                              self.async_future(2)])
+
+        # Exception logging may be explicitly quieted.
+        with self.assertRaises(RuntimeError):
+                yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                                 self.async_exception(RuntimeError("error 2"))],
+                                quiet_exceptions=RuntimeError)
 
     @gen_test
     def test_multi_future_exceptions(self):
@@ -421,6 +426,13 @@ class GenEngineTest(AsyncTestCase):
         with self.assertRaises(RuntimeError):
             yield [self.async_exception(RuntimeError("error 1")),
                    self.async_future(2)]
+
+        # Exception logging may be explicitly quieted.
+        with self.assertRaises(RuntimeError):
+                yield gen.multi_future(
+                    [self.async_exception(RuntimeError("error 1")),
+                     self.async_exception(RuntimeError("error 2"))],
+                    quiet_exceptions=RuntimeError)
 
     def test_arguments(self):
         @gen.engine

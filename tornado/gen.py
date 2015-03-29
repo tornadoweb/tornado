@@ -556,11 +556,17 @@ class Multi(YieldPoint):
     Futures, in which case a parallel dictionary is returned mapping the same
     keys to their results.
 
+    It is not normally necessary to call this class directly, as it
+    will be created automatically as needed. However, calling it directly
+    allows you to use the ``quiet_exceptions`` argument to control
+    the logging of multiple exceptions.
+
     .. versionchanged:: 4.2
        If multiple ``YieldPoints`` fail, any exceptions after the first
-       (which is raised) will be logged.
+       (which is raised) will be logged. Added the ``quiet_exceptions``
+       argument to suppress this logging for selected exception types.
     """
-    def __init__(self, children):
+    def __init__(self, children, quiet_exceptions=()):
         self.keys = None
         if isinstance(children, dict):
             self.keys = list(children.keys())
@@ -572,6 +578,7 @@ class Multi(YieldPoint):
             self.children.append(i)
         assert all(isinstance(i, YieldPoint) for i in self.children)
         self.unfinished_children = set(self.children)
+        self.quiet_exceptions = quiet_exceptions
 
     def start(self, runner):
         for i in self.children:
@@ -589,12 +596,13 @@ class Multi(YieldPoint):
         for f in self.children:
             try:
                 result_list.append(f.get_result())
-            except Exception:
+            except Exception as e:
                 if exc_info is None:
                     exc_info = sys.exc_info()
                 else:
-                    app_log.error("Multiple exceptions in yield list",
-                                  exc_info=True)
+                    if not isinstance(e, self.quiet_exceptions):
+                        app_log.error("Multiple exceptions in yield list",
+                                      exc_info=True)
         if exc_info is not None:
             raise_exc_info(exc_info)
         if self.keys is not None:
@@ -603,7 +611,7 @@ class Multi(YieldPoint):
             return list(result_list)
 
 
-def multi_future(children):
+def multi_future(children, quiet_exceptions=()):
     """Wait for multiple asynchronous futures in parallel.
 
     Takes a list of ``Futures`` (but *not* other ``YieldPoints``) and returns
@@ -616,16 +624,21 @@ def multi_future(children):
     Futures, in which case a parallel dictionary is returned mapping the same
     keys to their results.
 
-    It is not necessary to call `multi_future` explcitly, since the engine will
-    do so automatically when the generator yields a list of `Futures`.
-    This function is faster than the `Multi` `YieldPoint` because it does not
-    require the creation of a stack context.
+    It is not normally necessary to call `multi_future` explcitly,
+    since the engine will do so automatically when the generator
+    yields a list of `Futures`. However, calling it directly
+    allows you to use the ``quiet_exceptions`` argument to control
+    the logging of multiple exceptions.
+
+    This function is faster than the `Multi` `YieldPoint` because it
+    does not require the creation of a stack context.
 
     .. versionadded:: 4.0
 
     .. versionchanged:: 4.2
        If multiple ``Futures`` fail, any exceptions after the first (which is
-       raised) will be logged.
+       raised) will be logged. Added the ``quiet_exceptions``
+       argument to suppress this logging for selected exception types.
     """
     if isinstance(children, dict):
         keys = list(children.keys())
@@ -646,10 +659,11 @@ def multi_future(children):
             for f in children:
                 try:
                     result_list.append(f.result())
-                except Exception:
+                except Exception as e:
                     if future.done():
-                        app_log.error("Multiple exceptions in yield list",
-                                      exc_info=True)
+                        if not isinstance(e, quiet_exceptions):
+                            app_log.error("Multiple exceptions in yield list",
+                                          exc_info=True)
                     else:
                         future.set_exc_info(sys.exc_info())
             if not future.done():
