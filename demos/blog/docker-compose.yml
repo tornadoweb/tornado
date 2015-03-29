@@ -5,6 +5,8 @@ mysql:
     MYSQL_USER: blog
     MYSQL_PASSWORD: blog
     MYSQL_DATABASE: blog
+  ports:
+    - "3306"
 blog:
   build: .
   links:
