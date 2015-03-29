@@ -104,7 +104,7 @@ class IOLoop(Configurable):
             sock.bind(("", port))
             sock.listen(128)
 
-            io_loop = tornado.ioloop.IOLoop.instance()
+            io_loop = tornado.ioloop.IOLoop.current()
             callback = functools.partial(connection_ready, sock)
             io_loop.add_handler(sock.fileno(), callback, io_loop.READ)
             io_loop.start()
@@ -112,6 +112,17 @@ class IOLoop(Configurable):
     .. testoutput::
        :hide:
 
+    By default, a newly-constructed `IOLoop` becomes the thread's current
+    `IOLoop`, unless there already is a current `IOLoop`. This behavior
+    can be controlled with the ``make_current`` argument to the `IOLoop`
+    constructor: if ``make_current=True``, the new `IOLoop` will always
+    try to become current and it raises an error if there is already a
+    current instance. If ``make_current=False``, the new `IOLoop` will
+    not try to become current.
+
+    .. versionchanged:: 4.2
+       Added the ``make_current`` keyword argument to the `IOLoop`
+       constructor.
     """
     # Constants from the epoll module
     _EPOLLIN = 0x001
@@ -140,7 +151,8 @@ class IOLoop(Configurable):
 
         Most applications have a single, global `IOLoop` running on the
         main thread.  Use this method to get this instance from
-        another thread.  To get the current thread's `IOLoop`, use `current()`.
+        another thread.  In most other cases, it is better to use `current()`
+        to get the current thread's `IOLoop`.
         """
         if not hasattr(IOLoop, "_instance"):
             with IOLoop._instance_lock:
@@ -232,8 +244,13 @@ class IOLoop(Configurable):
         from tornado.platform.select import SelectIOLoop
         return SelectIOLoop
 
-    def initialize(self):
-        if IOLoop.current(instance=False) is None:
+    def initialize(self, make_current=None):
+        if make_current is None:
+            if IOLoop.current(instance=False) is None:
+                self.make_current()
+        elif make_current:
+            if IOLoop.current(instance=False) is None:
+                raise RuntimeError("current IOLoop already exists")
             self.make_current()
 
     def close(self, all_fds=False):
@@ -400,7 +417,7 @@ class IOLoop(Configurable):
                 # do stuff...
 
             if __name__ == '__main__':
-                IOLoop.instance().run_sync(main)
+                IOLoop.current().run_sync(main)
         """
         future_cell = [None]
 
@@ -643,8 +660,8 @@ class PollIOLoop(IOLoop):
     (Linux), `tornado.platform.kqueue.KQueueIOLoop` (BSD and Mac), or
     `tornado.platform.select.SelectIOLoop` (all platforms).
     """
-    def initialize(self, impl, time_func=None):
-        super(PollIOLoop, self).initialize()
+    def initialize(self, impl, time_func=None, **kwargs):
+        super(PollIOLoop, self).initialize(**kwargs)
         self._impl = impl
         if hasattr(self._impl, 'fileno'):
             set_close_exec(self._impl.fileno())

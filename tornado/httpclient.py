@@ -72,7 +72,7 @@ class HTTPClient(object):
         http_client.close()
     """
     def __init__(self, async_client_class=None, **kwargs):
-        self._io_loop = IOLoop()
+        self._io_loop = IOLoop(make_current=False)
         if async_client_class is None:
             async_client_class = AsyncHTTPClient
         self._async_client = async_client_class(self._io_loop, **kwargs)

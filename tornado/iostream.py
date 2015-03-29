@@ -971,13 +971,13 @@ class IOStream(BaseIOStream):
         def on_body(data):
             print(data)
             stream.close()
-            tornado.ioloop.IOLoop.instance().stop()
+            tornado.ioloop.IOLoop.current().stop()
 
         if __name__ == '__main__':
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
             stream = tornado.iostream.IOStream(s)
             stream.connect(("friendfeed.com", 80), send_request)
-            tornado.ioloop.IOLoop.instance().start()
+            tornado.ioloop.IOLoop.current().start()
 
     .. testoutput::
        :hide:

@@ -87,7 +87,7 @@ def main():
     app.listen(options.port)
 
     logging.info('Listening on http://localhost:%d' % options.port)
-    IOLoop.instance().start()
+    IOLoop.current().start()
 
 if __name__ == '__main__':
     main()

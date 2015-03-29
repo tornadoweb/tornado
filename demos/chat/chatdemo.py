@@ -125,7 +125,7 @@ def main():
         debug=options.debug,
         )
     app.listen(options.port)
-    tornado.ioloop.IOLoop.instance().start()
+    tornado.ioloop.IOLoop.current().start()
 
 
 if __name__ == "__main__":

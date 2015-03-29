@@ -85,7 +85,7 @@ class ProcessTest(unittest.TestCase):
                     self.assertEqual(id, task_id())
                     server = HTTPServer(self.get_app())
                     server.add_sockets([sock])
-                    IOLoop.instance().start()
+                    IOLoop.current().start()
                 elif id == 2:
                     self.assertEqual(id, task_id())
                     sock.close()
