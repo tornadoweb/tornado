@@ -32,7 +32,7 @@ They all take slightly different arguments due to the fact all these
 services implement authentication and authorization slightly differently.
 See the individual service classes below for complete documentation.
 
-Example usage for Google OpenID:
+Example usage for Google OAuth:
 
 .. testcode::
 
