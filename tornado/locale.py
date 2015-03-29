@@ -471,6 +471,8 @@ class GettextLocale(Locale):
         of `load_gettext_translations` sequence::
 
             xgettext [basic options] --keyword=pgettext:1c,2 --keyword=pgettext:1c,2,3
+
+        .. versionadded:: 4.2
         """
         if plural_message is not None:
             assert count is not None
