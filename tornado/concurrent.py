@@ -291,7 +291,7 @@ class Future(object):
             try:
                 cb(self)
             except Exception:
-                app_log.exception('exception calling callback %r for %r',
+                app_log.exception('Exception in callback %r for %r',
                                   cb, self)
         self._callbacks = None
 
