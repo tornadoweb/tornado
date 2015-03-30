@@ -1059,6 +1059,14 @@ class LegacyInterfaceTest(AsyncHTTPTestCase):
         # instead of request.connection.write_headers.
         def handle_request(request):
             self.http1 = request.version.startswith("HTTP/1.")
+            if not self.http1:
+                # This test will be skipped if we're using HTTP/2,
+                # so just close it out cleanly using the modern interface.
+                request.connection.write_headers(
+                    ResponseStartLine('', 200, 'OK'),
+                    HTTPHeaders())
+                request.connection.finish()
+                return
             message = b"Hello world"
             request.write(utf8("HTTP/1.1 200 OK\r\n"
                                "Content-Length: %d\r\n\r\n" % len(message)))

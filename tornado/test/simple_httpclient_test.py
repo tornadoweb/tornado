@@ -13,7 +13,7 @@ import sys
 
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
-from tornado.httputil import HTTPHeaders
+from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
 from tornado.netutil import Resolver, bind_sockets
@@ -98,15 +98,18 @@ class HostEchoHandler(RequestHandler):
 
 
 class NoContentLengthHandler(RequestHandler):
-    @gen.coroutine
+    @asynchronous
     def get(self):
-        # Emulate the old HTTP/1.0 behavior of returning a body with no
-        # content-length.  Tornado handles content-length at the framework
-        # level so we have to go around it.
-        stream = self.request.connection.stream
-        yield stream.write(b"HTTP/1.0 200 OK\r\n\r\n"
-                           b"hello")
-        stream.close()
+        if self.request.version.startswith('HTTP/1'):
+            # Emulate the old HTTP/1.0 behavior of returning a body with no
+            # content-length.  Tornado handles content-length at the framework
+            # level so we have to go around it.
+            stream = self.request.connection.detach()
+            stream.write(b"HTTP/1.0 200 OK\r\n\r\n"
+                               b"hello")
+            stream.close()
+        else:
+            self.finish('HTTP/1 required')
 
 
 class EchoPostHandler(RequestHandler):
@@ -357,7 +360,10 @@ class SimpleHTTPClientTestMixin(object):
 
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
-        self.assertEquals(b"hello", response.body)
+        if response.body == b"HTTP/1 required":
+            self.skipTest("requires HTTP/1.x")
+        else:
+            self.assertEquals(b"hello", response.body)
 
     def sync_body_producer(self, write):
         write(b'1234')
@@ -493,6 +499,11 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase):
 class HTTP100ContinueTestCase(AsyncHTTPTestCase):
     def respond_100(self, request):
         self.http1 = request.version.startswith('HTTP/1.')
+        if not self.http1:
+            request.connection.write_headers(ResponseStartLine('', 200, 'OK'),
+                                             HTTPHeaders())
+            request.connection.finish()
+            return
         self.request = request
         self.request.connection.stream.write(
             b"HTTP/1.1 100 CONTINUE\r\n\r\n",
@@ -517,6 +528,12 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
 class HTTP204NoContentTestCase(AsyncHTTPTestCase):
     def respond_204(self, request):
         self.http1 = request.version.startswith('HTTP/1.')
+        if not self.http1:
+            # Close the request cleanly in HTTP/2; it will be skipped anyway.
+            request.connection.write_headers(ResponseStartLine('', 200, 'OK'),
+                                             HTTPHeaders())
+            request.connection.finish()
+            return
         # A 204 response never has a body, even if doesn't have a content-length
         # (which would otherwise mean read-until-close).  Tornado always
         # sends a content-length, so we simulate here a server that sends
@@ -524,8 +541,10 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
         #
         # Tests of a 204 response with a Content-Length header are included
         # in SimpleHTTPClientTestMixin.
-        request.connection.stream.write(
+        stream = request.connection.detach()
+        stream.write(
             b"HTTP/1.1 204 No content\r\n\r\n")
+        stream.close()
 
     def get_app(self):
         return self.respond_204
