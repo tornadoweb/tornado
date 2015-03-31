@@ -337,7 +337,7 @@ class DummyExecutor(object):
 dummy_executor = DummyExecutor()
 
 
-def run_on_executor(fn):
+def run_on_executor(*args, **kwargs):
     """Decorator to run a synchronous method asynchronously on an executor.
 
     The decorated method may be called with a ``callback`` keyword
@@ -346,15 +346,21 @@ def run_on_executor(fn):
     This decorator should be used only on methods of objects with attributes
     ``executor`` and ``io_loop``.
     """
-    @functools.wraps(fn)
-    def wrapper(self, *args, **kwargs):
-        callback = kwargs.pop("callback", None)
-        future = self.executor.submit(fn, self, *args, **kwargs)
-        if callback:
-            self.io_loop.add_future(future,
+    def run_on_executor_decorator(fn):
+        executor = kwargs.get("executor", "executor")
+        io_loop = kwargs.get("io_loop", "io_loop")
+        @functools.wraps(fn)
+        def wrapper(self, *args, **kwargs):
+            callback = kwargs.pop("callback", None)
+            future = getattr(self, executor).submit(fn, self, *args, **kwargs)
+            if callback:
+                getattr(self, io_loop).add_future(future,
                                     lambda future: callback(future.result()))
-        return future
-    return wrapper
+            return future
+        return wrapper
+    if len(args) == 1 and callable(args[0]):
+        return run_on_executor_decorator(args[0])
+    return run_on_executor_decorator
 
 
 _NO_RESULT = object()
