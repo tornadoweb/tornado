@@ -11,7 +11,7 @@ place of those from the standard library--they are meant to coordinate Tornado
 coroutines in a single-threaded app, not to protect shared objects in a
 multithreaded app.)*
 
-.. testsetup::
+.. testsetup:: *
 
     from tornado import ioloop, gen, locks
     io_loop = ioloop.IOLoop.current()
@@ -108,3 +108,66 @@ multithreaded app.)*
         About to set the event
         Not waiting this time
         Done
+
+   Semaphore
+   ---------
+   .. autoclass:: Semaphore
+    :members:
+
+    Semaphores limit access to a shared resource. To allow access for two
+    workers at a time:
+
+    .. testsetup:: semaphore
+
+       from tornado import gen
+
+       # Ensure reliable doctest output.
+       waits = [0.1, 0.2, 0.1]
+
+       @gen.coroutine
+       def use_some_resource():
+           yield gen.sleep(waits.pop())
+
+    .. testcode:: semaphore
+
+        sem = locks.Semaphore(2)
+
+        @gen.coroutine
+        def worker(worker_id):
+            yield sem.acquire()
+            try:
+                print("Worker %d is working" % worker_id)
+                yield use_some_resource()
+            finally:
+                print("Worker %d is done" % worker_id)
+                sem.release()
+
+        @gen.coroutine
+        def runner():
+            # Join all workers.
+            yield [worker(i) for i in range(3)]
+
+        io_loop.run_sync(runner)
+
+    .. testoutput:: semaphore
+
+        Worker 0 is working
+        Worker 1 is working
+        Worker 0 is done
+        Worker 2 is working
+        Worker 1 is done
+        Worker 2 is done
+
+    Workers 0 and 1 are allowed to run concurrently, but worker 2 waits until
+    the semaphore has been released once, by worker 0.
+
+    `.acquire` is a context manager, so ``worker`` could be written as::
+
+        @gen.coroutine
+        def worker(worker_id):
+            with (yield sem.acquire()):
+                print("Worker %d is working" % worker_id)
+                yield use_some_resource()
+
+            # Now the semaphore has been released.
+            print("Worker %d is done" % worker_id)

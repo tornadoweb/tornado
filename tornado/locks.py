@@ -165,18 +165,6 @@ class Semaphore(_TimeoutGarbageCollector):
     minus the number of `.acquire` calls, plus an initial value. The `.acquire`
     method blocks if necessary until it can return without making the counter
     negative.
-
-    `.acquire` supports the context manager protocol:
-
-    >>> from tornado import gen, locks
-    >>> semaphore = locks.Semaphore()
-    >>> @gen.coroutine
-    ... def f():
-    ...    with (yield semaphore.acquire()):
-    ...        # Do something holding the semaphore.
-    ...        pass
-    ...
-    ...    # Now the semaphore is released.
     """
     def __init__(self, value=1):
         super(Semaphore, self).__init__()
