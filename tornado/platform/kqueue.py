@@ -46,6 +46,8 @@ class _KQueue(object):
         self.register(fd, events)
 
     def unregister(self, fd):
+        if fd not int self._active.pop(fd):
+            return
         events = self._active.pop(fd)
         self._control(fd, events, select.KQ_EV_DELETE)
 
