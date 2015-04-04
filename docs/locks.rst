@@ -171,3 +171,22 @@ multithreaded app.)*
 
             # Now the semaphore has been released.
             print("Worker %d is done" % worker_id)
+
+   BoundedSemaphore
+   ----------------
+   .. autoclass:: BoundedSemaphore
+    :members:
+    :inherited-members:
+
+    .. testcode::
+
+        sem = locks.BoundedSemaphore()
+        sem.acquire()
+        sem.release()
+        sem.release()
+
+    .. testoutput::
+
+     Traceback (most recent call last):
+         ...
+     ValueError: Semaphore released too many times
