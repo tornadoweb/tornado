@@ -391,6 +391,12 @@ class GenEngineTest(AsyncTestCase):
         self.assertEqual(results, [1, 2])
 
     @gen_test
+    def test_multi_future_duplicate(self):
+        f = self.async_future(2)
+        results = yield [self.async_future(1), f, self.async_future(3), f]
+        self.assertEqual(results, [1, 2, 3, 2])
+
+    @gen_test
     def test_multi_dict_future(self):
         results = yield dict(foo=self.async_future(1), bar=self.async_future(2))
         self.assertEqual(results, dict(foo=1, bar=2))

@@ -671,8 +671,12 @@ def multi_future(children, quiet_exceptions=()):
                     future.set_result(dict(zip(keys, result_list)))
                 else:
                     future.set_result(result_list)
+
+    listening = set()
     for f in children:
-        f.add_done_callback(callback)
+        if f not in listening:
+            listening.add(f)
+            f.add_done_callback(callback)
     return future
 
 
