@@ -65,8 +65,7 @@ class Application(tornado.web.Application):
             login_url="/auth/login",
             debug=True,
         )
-        tornado.web.Application.__init__(self, handlers, **settings)
-
+        super(Application, self).__init__(handlers, **settings)
         # Have one global connection to the blog DB across all handlers
         self.db = torndb.Connection(
             host=options.mysql_host, database=options.mysql_database,
