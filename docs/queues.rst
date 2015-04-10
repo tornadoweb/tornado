@@ -107,8 +107,8 @@
 
    QueueEmpty
    ^^^^^^^^^^
-   .. autoclass:: QueueEmpty
+   .. autoexception:: QueueEmpty
 
    QueueFull
    ^^^^^^^^^
-   .. autoclass:: QueueFull
+   .. autoexception:: QueueFull
