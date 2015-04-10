@@ -64,6 +64,8 @@
 
    PriorityQueue
    ^^^^^^^^^^^^^
+   .. autoclass:: PriorityQueue
+    :members:
 
     .. testcode::
 
@@ -84,6 +86,8 @@
 
    LifoQueue
    ^^^^^^^^^
+   .. autoclass:: LifoQueue
+    :members:
 
     .. testcode::
 
