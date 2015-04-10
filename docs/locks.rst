@@ -171,3 +171,9 @@ multithreaded app.)*
 
             # Now the semaphore has been released.
             print("Worker %d is done" % worker_id)
+
+   BoundedSemaphore
+   ----------------
+   .. autoclass:: BoundedSemaphore
+    :members:
+    :inherited-members:
