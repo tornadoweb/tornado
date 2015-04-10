@@ -177,16 +177,3 @@ multithreaded app.)*
    .. autoclass:: BoundedSemaphore
     :members:
     :inherited-members:
-
-    .. testcode::
-
-        sem = locks.BoundedSemaphore()
-        sem.acquire()
-        sem.release()
-        sem.release()
-
-    .. testoutput::
-
-     Traceback (most recent call last):
-         ...
-     ValueError: Semaphore released too many times
