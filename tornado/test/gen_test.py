@@ -9,7 +9,6 @@ import time
 import platform
 import weakref
 
-from multiprocessing import cpu_count
 from multiprocessing.pool import ThreadPool
 
 from tornado.concurrent import return_future, Future
