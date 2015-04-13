@@ -9,6 +9,9 @@ import time
 import platform
 import weakref
 
+from multiprocessing import cpu_count
+from multiprocessing.pool import ThreadPool
+
 from tornado.concurrent import return_future, Future
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
@@ -1248,6 +1251,31 @@ class WaitIteratorTest(AsyncTestCase):
                     self.assertEqual(r, 84, 'iterator value incorrect')
                     self.assertEqual(g.current_index, 3, 'wrong index')
             i += 1
+
+
+class GenThreadedTest(AsyncTestCase):
+    @gen_test
+    def test_threaded_simple(self):
+        @gen.threaded(ThreadPool(1), io_loop=self.io_loop)
+        def in_thread_42(x):
+            time.sleep(x)
+            return 42
+
+        result = yield in_thread_42(0.3)
+
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @gen_test
+    def test_threaded_exception(self):
+        @gen.threaded(ThreadPool(1), io_loop=self.io_loop)
+        def in_thread_exc(x):
+            time.sleep(x)
+            raise StandardError("OK")
+
+        with self.assertRaises(StandardError):
+            result = yield in_thread_exc(0.3)
+
 
 if __name__ == '__main__':
     unittest.main()
