@@ -1251,6 +1251,9 @@ class WaitIteratorTest(AsyncTestCase):
                     self.assertEqual(g.current_index, 3, 'wrong index')
             i += 1
 
+class GenThreadedTestException(Exception):
+    pass
+
 
 class GenThreadedTest(AsyncTestCase):
     @gen_test
@@ -1270,9 +1273,9 @@ class GenThreadedTest(AsyncTestCase):
         @gen.threaded(ThreadPool(1), io_loop=self.io_loop)
         def in_thread_exc(x):
             time.sleep(x)
-            raise StandardError("OK")
+            raise GenThreadedTestException("OK")
 
-        with self.assertRaises(StandardError):
+        with self.assertRaises(GenThreadedTestException):
             result = yield in_thread_exc(0.3)
 
 
