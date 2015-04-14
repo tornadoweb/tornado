@@ -88,6 +88,7 @@ from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
 from tornado.util import raise_exc_info
+from multiprocessing.pool import ThreadPool
 
 try:
     from functools import singledispatch  # py34+
@@ -1029,6 +1030,59 @@ def convert_yielded(yielded):
         return yielded
     else:
         raise BadYieldError("yielded unknown object %r" % (yielded,))
+
+
+def threaded(thread_pool, io_loop=None):
+    """Run function in thread pool and returns the `.Future` object.
+    Useful if you want decorate method or function and wait the result.
+
+        from multiprocessing.pool import ThreadPool
+        from multiprocessing import cpu_count
+        from time import sleep
+
+        pool = ThreadPool(cpu_count())
+
+        @threaded(pool)
+        def blocking_function(t):
+            sleep(t)
+            return True
+
+        @tornado.gen.coroutine
+        def executor():
+            result = yield blocking_function(3)
+
+        IOLoop.instance().add_callback(executor)
+    """
+    assert isinstance(thread_pool, ThreadPool)
+
+    if io_loop is None:
+        io_loop = IOLoop.current()
+
+    def decorator(func):
+        def in_thread(partial):
+            try:
+                return partial()
+            except Exception as e:
+                return e
+
+        def wrap(*args, **kwargs):
+            f = Future()
+            partial = functools.partial(func, *args, **kwargs)
+
+            def _callback(result):
+                import sys
+                if isinstance(result, Exception):
+                    io_loop.add_callback(f.set_exception, result)
+                else:
+                    io_loop.add_callback(f.set_result, result)
+
+            thread_pool.apply_async(in_thread, args=[partial], callback=_callback)
+
+            return f
+
+        return wrap
+    return decorator
+
 
 if singledispatch is not None:
     convert_yielded = singledispatch(convert_yielded)
