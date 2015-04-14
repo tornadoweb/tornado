@@ -1263,7 +1263,7 @@ class GenThreadedTest(AsyncTestCase):
             time.sleep(x)
             return 42
 
-        result = yield in_thread_42(0.3)
+        result = yield in_thread_42(0.31)
 
         self.assertEqual(result, 42)
         self.finished = True
