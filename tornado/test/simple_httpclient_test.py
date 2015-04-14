@@ -652,7 +652,7 @@ class MaxBodySizeTest(AsyncHTTPTestCase):
     def test_small_body(self):
         response = self.fetch('/small')
         response.rethrow()
-        self.assertEqual(response.body, "a"*1024*64)
+        self.assertEqual(response.body, b'a'*1024*64)
 
     def test_large_body(self):
         with ExpectLog(gen_log, "Malformed HTTP message from None: Content-Length too long"):
@@ -676,4 +676,4 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
     def test_large_body(self):
         response = self.fetch('/large')
         response.rethrow()
-        self.assertEqual(response.body, "a"*1024*100)
+        self.assertEqual(response.body, b'a'*1024*100)
