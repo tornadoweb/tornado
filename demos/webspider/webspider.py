@@ -1,16 +1,3 @@
-"""A trivial web-spider that crawls all the pages in http://tornadoweb.org.
-
-``spider()`` downloads the page at `base_url` and any pages it links to,
-recursively. It ignores pages that are not beneath `base_url` hierarchically.
-
-This function demonstrates `queues.Queue`, especially its methods
-`~queues.Queue.join` and `~queues.Queue.task_done`.
-The queue begins containing only
-`base_url`, and each discovered URL is added to it. We wait for
-`~queues.Queue.join` to complete before exiting. This ensures that
-the function as a whole ends when all URLs have been downloaded.
-"""
-
 # start-file
 import HTMLParser
 import time

@@ -14,12 +14,13 @@ until there is room for another item.
 A `~Queue` maintains a count of unfinished tasks, which begins at zero.
 `~Queue.put` increments the count; `~Queue.task_done` decrements it.
 
-In the web-spider example here, when a worker fetches a page it parses the
-links and puts new ones in the queue, then calls `~Queue.task_done` to
-decrement the counter once. Eventually, a worker fetches a page whose URLs have
-all been seen before, and there is also no work left in the queue. Thus that
-worker's call to `~Queue.task_done` decrements the counter to zero. The main
-coroutine, which is waiting for `~Queue.join`, is unpaused and finishes.
+In the web-spider example here, the queue begins containing only base_url. When
+a worker fetches a page it parses the links and puts new ones in the queue,
+then calls `~Queue.task_done` to decrement the counter once. Eventually, a
+worker fetches a page whose URLs have all been seen before, and there is also
+no work left in the queue. Thus that worker's call to `~Queue.task_done`
+decrements the counter to zero. The main coroutine, which is waiting for
+`~Queue.join`, is unpaused and finishes.
 
 .. literalinclude:: ../../demos/webspider/webspider.py
     :start-after: # start-file
