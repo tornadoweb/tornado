@@ -23,4 +23,3 @@ decrements the counter to zero. The main coroutine, which is waiting for
 `~Queue.join`, is unpaused and finishes.
 
 .. literalinclude:: ../../demos/webspider/webspider.py
-    :start-after: # start-file

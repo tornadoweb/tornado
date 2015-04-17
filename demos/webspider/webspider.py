@@ -1,4 +1,3 @@
-# start-file
 import HTMLParser
 import time
 import urlparse
