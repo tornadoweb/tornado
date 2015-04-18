@@ -416,7 +416,8 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
     because the ``SIGCHLD`` handlers used by Tornado and Twisted conflict
     with each other.
     """
-    def initialize(self, reactor=None):
+    def initialize(self, reactor=None, **kwargs):
+        super(TwistedIOLoop, self).initialize(**kwargs)
         if reactor is None:
             import twisted.internet.reactor
             reactor = twisted.internet.reactor

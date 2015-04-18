@@ -340,7 +340,7 @@ class TestIOStreamMixin(object):
             @gen.coroutine
             def server_task():
                 yield server.write(b"1234")
-                yield gen.moment
+                yield gen.sleep(0.01)
                 yield server.write(b"5678")
                 server.close()
 
