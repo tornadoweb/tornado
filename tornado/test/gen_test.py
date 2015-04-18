@@ -1249,5 +1249,15 @@ class WaitIteratorTest(AsyncTestCase):
                     self.assertEqual(g.current_index, 3, 'wrong index')
             i += 1
 
+    @gen_test
+    def test_no_ref(self):
+        # In this usage, there is no direct hard reference to the
+        # WaitIterator itself, only the Future it returns. Since
+        # WaitIterator uses weak references internally to improve GC
+        # performance, this used to cause problems.
+        yield gen.with_timeout(datetime.timedelta(seconds=0.1),
+                               gen.WaitIterator(gen.sleep(0)).next())
+
+
 if __name__ == '__main__':
     unittest.main()
