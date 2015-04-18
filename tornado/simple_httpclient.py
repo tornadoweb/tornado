@@ -60,7 +60,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """
     def initialize(self, io_loop, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
-                   resolver=None, defaults=None, max_header_size=None):
+                   resolver=None, defaults=None, max_header_size=None,
+                   max_body_size=None):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -88,6 +89,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.waiting = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
+        self.max_body_size = max_body_size
         # TCPClient could create a Resolver for us, but we have to do it
         # ourselves to support hostname_mapping.
         if resolver:
@@ -142,7 +144,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self._connection_class()(
             self.io_loop, self, request, release_callback,
             final_callback, self.max_buffer_size, self.tcp_client,
-            self.max_header_size)
+            self.max_header_size, self.max_body_size)
 
     def _release_fetch(self, key):
         del self.active[key]
@@ -170,7 +172,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def __init__(self, io_loop, client, request, release_callback,
                  final_callback, max_buffer_size, tcp_client,
-                 max_header_size):
+                 max_header_size, max_body_size):
         self.start_time = io_loop.time()
         self.io_loop = io_loop
         self.client = client
@@ -180,6 +182,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.max_buffer_size = max_buffer_size
         self.tcp_client = tcp_client
         self.max_header_size = max_header_size
+        self.max_body_size = max_body_size
         self.code = None
         self.headers = None
         self.chunks = []
@@ -368,6 +371,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             HTTP1ConnectionParameters(
                 no_keep_alive=True,
                 max_header_size=self.max_header_size,
+                max_body_size=self.max_body_size,
                 decompress=self.request.decompress_response),
             self._sockaddr)
         return connection

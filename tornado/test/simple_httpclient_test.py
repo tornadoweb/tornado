@@ -631,3 +631,49 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
         with ExpectLog(gen_log, "Unsatisfiable read"):
             response = self.fetch('/large')
         self.assertEqual(response.code, 599)
+
+
+class MaxBodySizeTest(AsyncHTTPTestCase):
+    def get_app(self):
+        class SmallBody(RequestHandler):
+            def get(self):
+                self.write("a"*1024*64)
+
+        class LargeBody(RequestHandler):
+            def get(self):
+                self.write("a"*1024*100)
+
+        return Application([('/small', SmallBody),
+                            ('/large', LargeBody)])
+
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024*64)
+
+    def test_small_body(self):
+        response = self.fetch('/small')
+        response.rethrow()
+        self.assertEqual(response.body, b'a'*1024*64)
+
+    def test_large_body(self):
+        with ExpectLog(gen_log, "Malformed HTTP message from None: Content-Length too long"):
+            response = self.fetch('/large')
+        self.assertEqual(response.code, 599)
+
+
+class MaxBufferSizeTest(AsyncHTTPTestCase):
+    def get_app(self):
+
+        class LargeBody(RequestHandler):
+            def get(self):
+                self.write("a"*1024*100)
+
+        return Application([('/large', LargeBody)])
+
+    def get_http_client(self):
+        # 100KB body with 64KB buffer
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024*100, max_buffer_size=1024*64)
+
+    def test_large_body(self):
+        response = self.fetch('/large')
+        response.rethrow()
+        self.assertEqual(response.body, b'a'*1024*100)
