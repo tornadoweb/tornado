@@ -351,8 +351,8 @@ class RunOnExecutorTest(AsyncTestCase):
                 return 42
 
         o = Object(io_loop=self.io_loop)
-        anwser = yield o.f()
-        self.assertEqual(anwser, 42)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
 
     @gen_test
     def test_call_with_no_args(self):
@@ -366,8 +366,8 @@ class RunOnExecutorTest(AsyncTestCase):
                 return 42
 
         o = Object(io_loop=self.io_loop)
-        anwser = yield o.f()
-        self.assertEqual(anwser, 42)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
 
     @gen_test
     def test_call_with_io_loop(self):
@@ -381,8 +381,8 @@ class RunOnExecutorTest(AsyncTestCase):
                 return 42
 
         o = Object(io_loop=self.io_loop)
-        anwser = yield o.f()
-        self.assertEqual(anwser, 42)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
 
     @gen_test
     def test_call_with_executor(self):
@@ -396,8 +396,8 @@ class RunOnExecutorTest(AsyncTestCase):
                 return 42
 
         o = Object(io_loop=self.io_loop)
-        anwser = yield o.f()
-        self.assertEqual(anwser, 42)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
 
     @gen_test
     def test_call_with_both(self):
@@ -411,5 +411,5 @@ class RunOnExecutorTest(AsyncTestCase):
                 return 42
 
         o = Object(io_loop=self.io_loop)
-        anwser = yield o.f()
-        self.assertEqual(anwser, 42)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
