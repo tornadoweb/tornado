@@ -49,6 +49,10 @@ except NameError:
     long = int  # py3
 
 
+# Re-export this exception for convenience.
+CalledProcessError = subprocess.CalledProcessError
+
+
 def cpu_count():
     """Returns the number of processors on this machine."""
     if multiprocessing is None:
@@ -259,7 +263,7 @@ class Subprocess(object):
         Subprocess._waiting[self.pid] = self
         Subprocess._try_cleanup_process(self.pid)
 
-    def wait_for_exit(self):
+    def wait_for_exit(self, raise_error=True):
         """Returns a `.Future` which resolves when the process exits.
 
         Usage::
@@ -269,10 +273,21 @@ class Subprocess(object):
         This is a coroutine-friendly alternative to `set_exit_callback`
         (and a replacement for the blocking `subprocess.Popen.wait`).
 
+        By default, raises `subprocess.CalledProcessError` if the process
+        has a non-zero exit status. Use ``wait_for_exit(raise_error=False)``
+        to suppress this behavior and return the exit status without raising.
+
         .. versionadded:: 4.2
         """
         future = Future()
-        self.set_exit_callback(future.set_result)
+
+        def callback(ret):
+            if ret != 0 and raise_error:
+                # Unfortunately we don't have the original args any more.
+                future.set_exception(CalledProcessError(ret, None))
+            else:
+                future.set_result(ret)
+        self.set_exit_callback(callback)
         return future
 
     @classmethod
