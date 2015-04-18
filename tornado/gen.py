@@ -81,7 +81,6 @@ import functools
 import itertools
 import sys
 import types
-import weakref
 
 from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
@@ -336,10 +335,8 @@ class WaitIterator(object):
         self.current_index = self.current_future = None
         self._running_future = None
 
-        self_ref = weakref.ref(self)
         for future in futures:
-            future.add_done_callback(functools.partial(
-                self._done_callback, self_ref))
+            future.add_done_callback(self._done_callback)
 
     def done(self):
         """Returns True if this iterator has no more results."""
@@ -362,14 +359,11 @@ class WaitIterator(object):
 
         return self._running_future
 
-    @staticmethod
-    def _done_callback(self_ref, done):
-        self = self_ref()
-        if self is not None:
-            if self._running_future and not self._running_future.done():
-                self._return_result(done)
-            else:
-                self._finished.append(done)
+    def _done_callback(self, done):
+        if self._running_future and not self._running_future.done():
+            self._return_result(done)
+        else:
+            self._finished.append(done)
 
     def _return_result(self, done):
         """Called set the returned future's state that of the future
