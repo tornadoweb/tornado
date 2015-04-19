@@ -433,13 +433,13 @@ class Lock(object):
             self.__class__.__name__,
             self._block)
 
-    def acquire(self, deadline=None):
+    def acquire(self, timeout=None):
         """Attempt to lock. Returns a Future.
 
         Returns a Future, which raises `tornado.gen.TimeoutError` after a
         timeout.
         """
-        return self._block.acquire(deadline)
+        return self._block.acquire(timeout)
 
     def release(self):
         """Unlock.

@@ -448,7 +448,7 @@ class LockTests(AsyncTestCase):
         lock = locks.Lock()
         lock.acquire()
         with self.assertRaises(gen.TimeoutError):
-            yield lock.acquire(deadline=timedelta(seconds=0.01))
+            yield lock.acquire(timeout=timedelta(seconds=0.01))
 
         # Still locked.
         self.assertFalse(lock.acquire().done())
