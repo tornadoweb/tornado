@@ -144,15 +144,6 @@ May be overridden by passing a ``min_version`` keyword argument.
 .. versionadded:: 3.2.1
 """
 
-DEFAULT_SIGN_KEY_VERSION = 0
-"""The current key index used by `.RequestHandler.set_secure_cookie`.
-
-May be overridden by passing a ``key_version`` keyword argument.
-
-.. versionadded:: x.x.x
-"""
-
-
 class RequestHandler(object):
     """Subclass this class and define `get()` or `post()` to make a handler.
 
@@ -2994,11 +2985,6 @@ def create_signed_value(secret, name, value, version=None, clock=None,
     if clock is None:
         clock = time.time
 
-    if key_version is None:
-        key_version = DEFAULT_SIGN_KEY_VERSION
-    else:
-        assert version >= 2, 'Version must be at least 2 for key version support'
-
     timestamp = utf8(str(int(clock())))
     value = base64.b64encode(utf8(value))
     if version == 1:
@@ -3024,13 +3010,15 @@ def create_signed_value(secret, name, value, version=None, clock=None,
             return utf8("%d:" % len(s)) + utf8(s)
         to_sign = b"|".join([
             b"2",
-            format_field(str(key_version)),
+            format_field(str(key_version or 0)),
             format_field(timestamp),
             format_field(name),
             format_field(value),
             b''])
 
         if isinstance(secret, dict):
+            assert key_version is not None, 'Key version must be set when sign key dict is used'
+            assert version >= 2, 'Version must be at least 2 for key version support'
             secret = secret[key_version]
 
         signature = _create_signature_v2(secret, to_sign)

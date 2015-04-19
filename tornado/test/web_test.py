@@ -138,6 +138,7 @@ class SecureCookieV2Test(unittest.TestCase):
         0: 'ajklasdf0ojaisdf',
         1: 'aslkjasaolwkjsdf'
     }
+
     def test_round_trip(self):
         handler = CookieTestRequestHandler()
         handler.set_secure_cookie('foo', b'bar', version=2)
@@ -146,6 +147,12 @@ class SecureCookieV2Test(unittest.TestCase):
     def test_key_version_roundtrip(self):
         handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
                                            key_version=0)
+        handler.set_secure_cookie('foo', b'bar')
+        self.assertEqual(handler.get_secure_cookie('foo'), b'bar')
+
+    def test_key_version_roundtrip_differing_version(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=1)
         handler.set_secure_cookie('foo', b'bar')
         self.assertEqual(handler.get_secure_cookie('foo'), b'bar')
 
@@ -160,10 +167,10 @@ class SecureCookieV2Test(unittest.TestCase):
 
     def test_key_version_invalidate_version(self):
         handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
-                                           key_version=1)
+                                           key_version=0)
         handler.set_secure_cookie('foo', b'bar')
         new_key_versions = self.KEY_VERSIONS.copy()
-        new_key_versions.pop(1)
+        new_key_versions.pop(0)
         new_handler = CookieTestRequestHandler(cookie_secret=new_key_versions,
                                                key_version=1)
         new_handler._cookies = handler._cookies
@@ -2291,7 +2298,8 @@ class SignedValueTest(unittest.TestCase):
     def test_key_versioning_read_write_default_key(self):
         value = b"\xe9"
         signed = create_signed_value(SignedValueTest.SECRET_DICT,
-                                     "key", value, clock=self.present)
+                                     "key", value, clock=self.present,
+                                     key_version=0)
         decoded = decode_signed_value(SignedValueTest.SECRET_DICT,
                                       "key", signed, clock=self.present)
         self.assertEqual(value, decoded)
@@ -2308,14 +2316,15 @@ class SignedValueTest(unittest.TestCase):
     def test_key_versioning_invalid_key(self):
         value = b"\xe9"
         signed = create_signed_value(SignedValueTest.SECRET_DICT,
-                                     "key", value, clock=self.present)
+                                     "key", value, clock=self.present,
+                                     key_version=0)
         newkeys = SignedValueTest.SECRET_DICT.copy()
         newkeys.pop(0)
         decoded = decode_signed_value(newkeys,
                                       "key", signed, clock=self.present)
         self.assertEqual(None, decoded)
 
-    def test_key_version_retreival(self):
+    def test_key_version_retrieval(self):
         value = b"\xe9"
         signed = create_signed_value(SignedValueTest.SECRET_DICT,
                                      "key", value, clock=self.present,
