@@ -33,3 +33,9 @@ multithreaded app.)*
    .. autoclass:: BoundedSemaphore
     :members:
     :inherited-members:
+
+   Lock
+   ----
+   .. autoclass:: Lock
+    :members:
+    :inherited-members:
