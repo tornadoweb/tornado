@@ -99,12 +99,36 @@ Then the Tornado equivalent is::
 ~~~~~~~~~~~~~~~~~~~~
 
 * Improved compatibility with Windows.
+* Fixed a bug in Python 3 if a module was imported during a reload check.
+
+`tornado.concurrent`
+~~~~~~~~~~~~~~~~~~~~
+
+* `.run_on_executor` now accepts arguments to control which attributes
+  it uses to find the `.IOLoop` and executor.
+
+``tornado.curl_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Fixed a bug that would cause the client to stop processing requests
+  if an exception occurred in certain places while there is a queue.
 
 `tornado.gen`
 ~~~~~~~~~~~~~
 
 * On Python 3, catching an exception in a coroutine no longer leads to
   leaks via ``Exception.__context__``.
+* `tornado.gen.Multi` and `tornado.gen.multi_future` (which are used when
+  yielding a list or dict in a coroutine) now log any exceptions after the
+  first if more than one `.Future` fails (previously they would be logged
+  when the `.Future` was garbage-collected, but this is more reliable).
+  Both have a new keyword argument ``quiet_exceptions`` to suppress
+  logging of certain exception types; to use this argument you must
+  call ``Multi`` or ``multi_future`` directly instead of simply yielding
+  a list.
+* `.multi_future` now works when given multiple copies of the same `.Future`.
+* `.WaitIterator` now works even if no hard reference to the iterator itself
+  is kept.
 
 `tornado.httpclient`
 ~~~~~~~~~~~~~~~~~~~~
@@ -122,6 +146,11 @@ Then the Tornado equivalent is::
 
 * `.PeriodicCallback` is now more efficient when the clock jumps forward
   by a large amount.
+* The `.IOLoop` constructor now has a ``make_current`` keyword argument
+  to control whether the new `.IOLoop` becomes `.IOLoop.current()`.
+* Third-party implementations of `.IOLoop` should accept ``**kwargs``
+  in their `~.IOLoop.initialize` methods and pass them to the superclass
+  implementation.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -161,6 +190,9 @@ Then the Tornado equivalent is::
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Improved performance on Python 3 by reusing a single `ssl.SSLContext`.
+* New constructor argument ``max_body_size`` controls the maximum response
+  size the client is willing to accept. It may be bigger than
+  ``max_buffer_size`` if ``streaming_callback`` is used.
 
 `tornado.tcpserver`
 ~~~~~~~~~~~~~~~~~~~

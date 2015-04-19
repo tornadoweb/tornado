@@ -634,7 +634,7 @@ def multi_future(children, quiet_exceptions=()):
 
     It is not normally necessary to call `multi_future` explcitly,
     since the engine will do so automatically when the generator
-    yields a list of `Futures`. However, calling it directly
+    yields a list of ``Futures``. However, calling it directly
     allows you to use the ``quiet_exceptions`` argument to control
     the logging of multiple exceptions.
 
