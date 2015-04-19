@@ -17,6 +17,84 @@ Backwards-compatibility notes
 * The deprecated classes in the `tornado.auth` module, ``GoogleMixin``,
   ``FacebookMixin``, and ``FriendFeedMixin`` have been removed.
 
+New modules: `tornado.locks` and `tornado.queues`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These modules provide classes for coordinating coroutines, merged from
+`Toro <http://toro.readthedocs.org>`_.
+
+To port your code from Toro's queues to Tornado 4.2, import `.Queue`,
+`.PriorityQueue`, or `.LifoQueue` from `tornado.queues` instead of from
+``toro``.
+
+Use `.Queue` instead of Toro's ``JoinableQueue``. In Tornado the methods
+`~.Queue.join` and `~.Queue.task_done` are available on all queues, not on a
+special ``JoinableQueue``.
+
+Tornado queues raise exceptions specific to Tornado instead of reusing
+exceptions from the Python standard library.
+Therefore instead of catching the standard `queue.Empty` exception from
+`.Queue.get_nowait`, catch the special `tornado.queues.QueueEmpty` exception,
+and instead of catching the standard `queue.Full` from `.Queue.get_nowait`,
+catch `tornado.queues.QueueFull`.
+
+To port from Toro's locks to Tornado 4.2, import `.Condition`, `.Event`,
+`.Semaphore`, `.BoundedSemaphore`, or `.Lock` from `tornado.locks`
+instead of from ``toro``.
+
+Toro's ``Semaphore.wait`` allowed a coroutine to wait for the semaphore to
+be unlocked *without* acquiring it. This encouraged unorthodox patterns; in
+Tornado, just use `~.Semaphore.acquire`.
+
+Toro's ``Condition.wait`` raised a ``Timeout`` exception after a timeout. But in
+Tornado, the `.Future` returned by `.Condition.wait` resolves to False after a
+timeout::
+
+    @gen.coroutine
+    def await_notification():
+        if not (yield condition.wait(timeout=timedelta(seconds=1))):
+            print('timed out')
+        else:
+            print('condition is true')
+
+
+In lock and queue methods, wherever Toro accepted ``deadline`` as a keyword
+argument, Tornado names the argument ``timeout`` instead.
+
+Toro's ``AsyncResult`` is not merged into Tornado, nor its exceptions
+``NotReady`` and ``AlreadySet``. Use a `.Future` instead. If you wrote code like
+this::
+
+    from tornado import gen
+    import toro
+
+    result = toro.AsyncResult()
+
+    @gen.coroutine
+    def setter():
+        result.set(1)
+
+    @gen.coroutine
+    def getter():
+        value = yield result.get()
+        print(value)  # Prints "1".
+
+Then the Tornado equivalent is::
+
+    from tornado import gen
+    from tornado.concurrent import Future
+
+    result = Future()
+
+    @gen.coroutine
+    def setter():
+        result.set_result(1)
+
+    @gen.coroutine
+    def getter():
+        value = yield result
+        print(value)  # Prints "1".
+
 `tornado.autoreload`
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -67,12 +145,6 @@ Backwards-compatibility notes
 * New method `.GettextLocale.pgettext` allows additional context to be
   supplied for gettext translations.
 
-`tornado.locks`
-~~~~~~~~~~~~~~~
-
-* New module contains locking and synchronization functionality imported
-  from `Toro <http://toro.readthedocs.org>`_.
-
 `tornado.log`
 ~~~~~~~~~~~~~
 
@@ -89,12 +161,6 @@ Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Improved performance on Python 3 by reusing a single `ssl.SSLContext`.
-
-`tornado.queues`
-~~~~~~~~~~~~~~~~
-
-* New module contains queues imported from `Toro
-  <http://toro.readthedocs.org>`_.
 
 `tornado.tcpserver`
 ~~~~~~~~~~~~~~~~~~~
