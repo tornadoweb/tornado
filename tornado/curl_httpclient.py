@@ -208,9 +208,25 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                         "callback": callback,
                         "curl_start_time": time.time(),
                     }
-                    self._curl_setup_request(curl, request, curl.info["buffer"],
-                                             curl.info["headers"])
-                    self._multi.add_handle(curl)
+                    try:
+                        self._curl_setup_request(
+                            curl, request, curl.info["buffer"],
+                            curl.info["headers"])
+                    except Exception as e:
+                        # If there was an error in setup, pass it on
+                        # to the callback. Note that allowing the
+                        # error to escape here will appear to work
+                        # most of the time since we are still in the
+                        # caller's original stack frame, but when
+                        # _process_queue() is called from
+                        # _finish_pending_requests the exceptions have
+                        # nowhere to go.
+                        callback(HTTPResponse(
+                            request=request,
+                            code=599,
+                            error=e))
+                    else:
+                        self._multi.add_handle(curl)
 
                 if not started:
                     break

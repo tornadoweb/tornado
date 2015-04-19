@@ -2084,8 +2084,10 @@ class StreamingRequestFlowControlTest(WebTestCase):
 
             @gen.coroutine
             def prepare(self):
-                with self.in_method('prepare'):
-                    yield gen.Task(IOLoop.current().add_callback)
+                # Note that asynchronous prepare() does not block data_received,
+                # so we don't use in_method here.
+                self.methods.append('prepare')
+                yield gen.Task(IOLoop.current().add_callback)
 
             @gen.coroutine
             def data_received(self, data):
@@ -2147,7 +2149,7 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         # When the content-length is too high, the connection is simply
         # closed without completing the response.  An error is logged on
         # the server.
-        with ExpectLog(app_log, "Uncaught exception"):
+        with ExpectLog(app_log, "(Uncaught exception|Exception in callback)"):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
@@ -2160,7 +2162,7 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         # When the content-length is too low, the connection is closed
         # without writing the last chunk, so the client never sees the request
         # complete (which would be a framing error).
-        with ExpectLog(app_log, "Uncaught exception"):
+        with ExpectLog(app_log, "(Uncaught exception|Exception in callback)"):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
@@ -2173,16 +2175,22 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
 class ClientCloseTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
-            # Simulate a connection closed by the client during
-            # request processing.  The client will see an error, but the
-            # server should respond gracefully (without logging errors
-            # because we were unable to write out as many bytes as
-            # Content-Length said we would)
-            self.request.connection.stream.close()
-            self.write('hello')
+            if self.request.version.startswith('HTTP/1'):
+                # Simulate a connection closed by the client during
+                # request processing.  The client will see an error, but the
+                # server should respond gracefully (without logging errors
+                # because we were unable to write out as many bytes as
+                # Content-Length said we would)
+                self.request.connection.stream.close()
+                self.write('hello')
+            else:
+                # TODO: add a HTTP2-compatible version of this test.
+                self.write('requires HTTP/1.x')
 
     def test_client_close(self):
         response = self.fetch('/')
+        if response.body == b'requires HTTP/1.x':
+            self.skipTest('requires HTTP/1.x')
         self.assertEqual(response.code, 599)
 
 

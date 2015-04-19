@@ -22,7 +22,7 @@ Twisted on Tornado
         tornado.platform.twisted.install()
         from twisted.internet import reactor
 
-    When the app is ready to start, call ``IOLoop.instance().start()``
+    When the app is ready to start, call ``IOLoop.current().start()``
     instead of ``reactor.run()``.
 
     It is also possible to create a non-global reactor by calling

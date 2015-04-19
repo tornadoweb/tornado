@@ -186,19 +186,22 @@ the Google credentials in a cookie for later access:
 
 .. testcode::
 
-    class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
-        @tornado.web.asynchronous
+    class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
+                                   tornado.auth.GoogleOAuth2Mixin):
+        @tornado.gen.coroutine
         def get(self):
-            if self.get_argument("openid.mode", None):
-                self.get_authenticated_user(self._on_auth)
-                return
-            self.authenticate_redirect()
-
-        def _on_auth(self, user):
-            if not user:
-                self.authenticate_redirect()
-                return
-            # Save the user with, e.g., set_secure_cookie()
+            if self.get_argument('code', False):
+                user = yield self.get_authenticated_user(
+                    redirect_uri='http://your.site.com/auth/google',
+                    code=self.get_argument('code'))
+                # Save the user with e.g. set_secure_cookie
+            else:
+                yield self.authorize_redirect(
+                    redirect_uri='http://your.site.com/auth/google',
+                    client_id=self.settings['google_oauth']['key'],
+                    scope=['profile', 'email'],
+                    response_type='code',
+                    extra_params={'approval_prompt': 'auto'})
 
 .. testoutput::
    :hide:

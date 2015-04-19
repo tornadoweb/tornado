@@ -175,7 +175,7 @@ def _reload_on_update(modify_times):
         # processes restarted themselves, they'd all restart and then
         # all call fork_processes again.
         return
-    for module in sys.modules.values():
+    for module in list(sys.modules.values()):
         # Some modules play games with sys.modules (e.g. email/__init__.py
         # in the standard library), and occasionally this can cause strange
         # failures in getattr.  Just ignore anything that's not an ordinary

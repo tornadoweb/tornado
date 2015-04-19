@@ -659,13 +659,13 @@ if have_twisted:
         correctly.  In some tests another TornadoReactor is layered on top
         of the whole stack.
         """
-        def initialize(self):
+        def initialize(self, **kwargs):
             # When configured to use LayeredTwistedIOLoop we can't easily
             # get the next-best IOLoop implementation, so use the lowest common
             # denominator.
             self.real_io_loop = SelectIOLoop()
             reactor = TornadoReactor(io_loop=self.real_io_loop)
-            super(LayeredTwistedIOLoop, self).initialize(reactor=reactor)
+            super(LayeredTwistedIOLoop, self).initialize(reactor=reactor, **kwargs)
             self.add_callback(self.make_current)
 
         def close(self, all_fds=False):

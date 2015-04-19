@@ -21,13 +21,14 @@ import socket
 import sys
 import traceback
 
-from tornado.concurrent import Future, return_future, ReturnValueIgnoredError
+from tornado.concurrent import Future, return_future, ReturnValueIgnoredError, run_on_executor
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
 from tornado import stack_context
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, LogTrapTestCase, bind_unused_port, gen_test
+from tornado.test.util import unittest
 
 
 try:
@@ -334,3 +335,81 @@ class DecoratorClientTest(ClientTestMixin, AsyncTestCase, LogTrapTestCase):
 
 class GeneratorClientTest(ClientTestMixin, AsyncTestCase, LogTrapTestCase):
     client_class = GeneratorCapClient
+
+
+@unittest.skipIf(futures is None, "concurrent.futures module not present")
+class RunOnExecutorTest(AsyncTestCase):
+    @gen_test
+    def test_no_calling(self):
+        class Object(object):
+            def __init__(self, io_loop):
+                self.io_loop = io_loop
+                self.executor = futures.thread.ThreadPoolExecutor(1)
+
+            @run_on_executor
+            def f(self):
+                return 42
+
+        o = Object(io_loop=self.io_loop)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
+
+    @gen_test
+    def test_call_with_no_args(self):
+        class Object(object):
+            def __init__(self, io_loop):
+                self.io_loop = io_loop
+                self.executor = futures.thread.ThreadPoolExecutor(1)
+
+            @run_on_executor()
+            def f(self):
+                return 42
+
+        o = Object(io_loop=self.io_loop)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
+
+    @gen_test
+    def test_call_with_io_loop(self):
+        class Object(object):
+            def __init__(self, io_loop):
+                self._io_loop = io_loop
+                self.executor = futures.thread.ThreadPoolExecutor(1)
+
+            @run_on_executor(io_loop='_io_loop')
+            def f(self):
+                return 42
+
+        o = Object(io_loop=self.io_loop)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
+
+    @gen_test
+    def test_call_with_executor(self):
+        class Object(object):
+            def __init__(self, io_loop):
+                self.io_loop = io_loop
+                self.__executor = futures.thread.ThreadPoolExecutor(1)
+
+            @run_on_executor(executor='_Object__executor')
+            def f(self):
+                return 42
+
+        o = Object(io_loop=self.io_loop)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)
+
+    @gen_test
+    def test_call_with_both(self):
+        class Object(object):
+            def __init__(self, io_loop):
+                self._io_loop = io_loop
+                self.__executor = futures.thread.ThreadPoolExecutor(1)
+
+            @run_on_executor(io_loop='_io_loop', executor='_Object__executor')
+            def f(self):
+                return 42
+
+        o = Object(io_loop=self.io_loop)
+        answer = yield o.f()
+        self.assertEqual(answer, 42)

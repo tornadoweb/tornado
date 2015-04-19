@@ -35,7 +35,7 @@ Here is a simple "Hello, world" example app:
             (r"/", MainHandler),
         ])
         application.listen(8888)
-        tornado.ioloop.IOLoop.instance().start()
+        tornado.ioloop.IOLoop.current().start()
 
 .. testoutput::
    :hide:
@@ -1681,7 +1681,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         ])
         http_server = httpserver.HTTPServer(application)
         http_server.listen(8080)
-        ioloop.IOLoop.instance().start()
+        ioloop.IOLoop.current().start()
 
     The constructor for this class takes in a list of `URLSpec` objects
     or (regexp, request_class) tuples. When we receive requests, we
@@ -1779,7 +1779,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         `.TCPServer.bind`/`.TCPServer.start` methods directly.
 
         Note that after calling this method you still need to call
-        ``IOLoop.instance().start()`` to start the server.
+        ``IOLoop.current().start()`` to start the server.
         """
         # import is here rather than top level because HTTPServer
         # is not importable on appengine

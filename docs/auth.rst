@@ -33,9 +33,6 @@
    Google
    ------
 
-   .. autoclass:: GoogleMixin
-      :members:
-   
    .. autoclass:: GoogleOAuth2Mixin
       :members:
 
@@ -45,18 +42,8 @@
    .. autoclass:: FacebookGraphMixin
       :members:
 
-   .. autoclass:: FacebookMixin
-      :members:
-
    Twitter
    -------
 
    .. autoclass:: TwitterMixin
       :members:
-
-   FriendFeed
-   ----------
-
-   .. autoclass:: FriendFeedMixin
-      :members:
-

@@ -57,14 +57,14 @@ class TCPServer(object):
 
             server = TCPServer()
             server.listen(8888)
-            IOLoop.instance().start()
+            IOLoop.current().start()
 
     2. `bind`/`start`: simple multi-process::
 
             server = TCPServer()
             server.bind(8888)
             server.start(0)  # Forks multiple sub-processes
-            IOLoop.instance().start()
+            IOLoop.current().start()
 
        When using this interface, an `.IOLoop` must *not* be passed
        to the `TCPServer` constructor.  `start` will always start
@@ -76,7 +76,7 @@ class TCPServer(object):
             tornado.process.fork_processes(0)
             server = TCPServer()
             server.add_sockets(sockets)
-            IOLoop.instance().start()
+            IOLoop.current().start()
 
        The `add_sockets` interface is more complicated, but it can be
        used with `tornado.process.fork_processes` to give you more

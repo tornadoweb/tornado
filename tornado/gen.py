@@ -87,6 +87,7 @@ from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
+from tornado.util import raise_exc_info
 
 try:
     from functools import singledispatch  # py34+
@@ -335,6 +336,8 @@ class WaitIterator(object):
         self.current_index = self.current_future = None
         self._running_future = None
 
+        # Use a weak reference to self to avoid cycles that may delay
+        # garbage collection.
         self_ref = weakref.ref(self)
         for future in futures:
             future.add_done_callback(functools.partial(
@@ -355,6 +358,12 @@ class WaitIterator(object):
         the inputs.
         """
         self._running_future = TracebackFuture()
+        # As long as there is an active _running_future, we must
+        # ensure that the WaitIterator is not GC'd (due to the
+        # use of weak references in __init__). Add a callback that
+        # references self so there is a hard reference that will be
+        # cleared automatically when this Future finishes.
+        self._running_future.add_done_callback(lambda f: self)
 
         if self._finished:
             self._return_result(self._finished.popleft())
@@ -528,7 +537,7 @@ class YieldFuture(YieldPoint):
             self.io_loop.add_future(self.future, runner.result_callback(self.key))
         else:
             self.runner = None
-            self.result = self.future.result()
+            self.result_fn = self.future.result
 
     def is_ready(self):
         if self.runner is not None:
@@ -540,7 +549,7 @@ class YieldFuture(YieldPoint):
         if self.runner is not None:
             return self.runner.pop_result(self.key).result()
         else:
-            return self.result
+            return self.result_fn()
 
 
 class Multi(YieldPoint):
@@ -554,8 +563,18 @@ class Multi(YieldPoint):
     Instead of a list, the argument may also be a dictionary whose values are
     Futures, in which case a parallel dictionary is returned mapping the same
     keys to their results.
+
+    It is not normally necessary to call this class directly, as it
+    will be created automatically as needed. However, calling it directly
+    allows you to use the ``quiet_exceptions`` argument to control
+    the logging of multiple exceptions.
+
+    .. versionchanged:: 4.2
+       If multiple ``YieldPoints`` fail, any exceptions after the first
+       (which is raised) will be logged. Added the ``quiet_exceptions``
+       argument to suppress this logging for selected exception types.
     """
-    def __init__(self, children):
+    def __init__(self, children, quiet_exceptions=()):
         self.keys = None
         if isinstance(children, dict):
             self.keys = list(children.keys())
@@ -567,6 +586,7 @@ class Multi(YieldPoint):
             self.children.append(i)
         assert all(isinstance(i, YieldPoint) for i in self.children)
         self.unfinished_children = set(self.children)
+        self.quiet_exceptions = quiet_exceptions
 
     def start(self, runner):
         for i in self.children:
@@ -579,14 +599,27 @@ class Multi(YieldPoint):
         return not self.unfinished_children
 
     def get_result(self):
-        result = (i.get_result() for i in self.children)
+        result_list = []
+        exc_info = None
+        for f in self.children:
+            try:
+                result_list.append(f.get_result())
+            except Exception as e:
+                if exc_info is None:
+                    exc_info = sys.exc_info()
+                else:
+                    if not isinstance(e, self.quiet_exceptions):
+                        app_log.error("Multiple exceptions in yield list",
+                                      exc_info=True)
+        if exc_info is not None:
+            raise_exc_info(exc_info)
         if self.keys is not None:
-            return dict(zip(self.keys, result))
+            return dict(zip(self.keys, result_list))
         else:
-            return list(result)
+            return list(result_list)
 
 
-def multi_future(children):
+def multi_future(children, quiet_exceptions=()):
     """Wait for multiple asynchronous futures in parallel.
 
     Takes a list of ``Futures`` (but *not* other ``YieldPoints``) and returns
@@ -599,12 +632,21 @@ def multi_future(children):
     Futures, in which case a parallel dictionary is returned mapping the same
     keys to their results.
 
-    It is not necessary to call `multi_future` explcitly, since the engine will
-    do so automatically when the generator yields a list of `Futures`.
-    This function is faster than the `Multi` `YieldPoint` because it does not
-    require the creation of a stack context.
+    It is not normally necessary to call `multi_future` explcitly,
+    since the engine will do so automatically when the generator
+    yields a list of `Futures`. However, calling it directly
+    allows you to use the ``quiet_exceptions`` argument to control
+    the logging of multiple exceptions.
+
+    This function is faster than the `Multi` `YieldPoint` because it
+    does not require the creation of a stack context.
 
     .. versionadded:: 4.0
+
+    .. versionchanged:: 4.2
+       If multiple ``Futures`` fail, any exceptions after the first (which is
+       raised) will be logged. Added the ``quiet_exceptions``
+       argument to suppress this logging for selected exception types.
     """
     if isinstance(children, dict):
         keys = list(children.keys())
@@ -621,17 +663,28 @@ def multi_future(children):
     def callback(f):
         unfinished_children.remove(f)
         if not unfinished_children:
-            try:
-                result_list = [i.result() for i in children]
-            except Exception:
-                future.set_exc_info(sys.exc_info())
-            else:
+            result_list = []
+            for f in children:
+                try:
+                    result_list.append(f.result())
+                except Exception as e:
+                    if future.done():
+                        if not isinstance(e, quiet_exceptions):
+                            app_log.error("Multiple exceptions in yield list",
+                                          exc_info=True)
+                    else:
+                        future.set_exc_info(sys.exc_info())
+            if not future.done():
                 if keys is not None:
                     future.set_result(dict(zip(keys, result_list)))
                 else:
                     future.set_result(result_list)
+
+    listening = set()
     for f in children:
-        f.add_done_callback(callback)
+        if f not in listening:
+            listening.add(f)
+            f.add_done_callback(callback)
     return future
 
 

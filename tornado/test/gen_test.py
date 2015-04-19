@@ -62,6 +62,11 @@ class GenEngineTest(AsyncTestCase):
     def async_future(self, result, callback):
         self.io_loop.add_callback(callback, result)
 
+    @gen.coroutine
+    def async_exception(self, e):
+        yield gen.moment
+        raise e
+
     def test_no_yield(self):
         @gen.engine
         def f():
@@ -386,9 +391,54 @@ class GenEngineTest(AsyncTestCase):
         self.assertEqual(results, [1, 2])
 
     @gen_test
+    def test_multi_future_duplicate(self):
+        f = self.async_future(2)
+        results = yield [self.async_future(1), f, self.async_future(3), f]
+        self.assertEqual(results, [1, 2, 3, 2])
+
+    @gen_test
     def test_multi_dict_future(self):
         results = yield dict(foo=self.async_future(1), bar=self.async_future(2))
         self.assertEqual(results, dict(foo=1, bar=2))
+
+    @gen_test
+    def test_multi_exceptions(self):
+        with ExpectLog(app_log, "Multiple exceptions in yield list"):
+            with self.assertRaises(RuntimeError) as cm:
+                yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                                 self.async_exception(RuntimeError("error 2"))])
+        self.assertEqual(str(cm.exception), "error 1")
+
+        # With only one exception, no error is logged.
+        with self.assertRaises(RuntimeError):
+            yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                             self.async_future(2)])
+
+        # Exception logging may be explicitly quieted.
+        with self.assertRaises(RuntimeError):
+                yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                                 self.async_exception(RuntimeError("error 2"))],
+                                quiet_exceptions=RuntimeError)
+
+    @gen_test
+    def test_multi_future_exceptions(self):
+        with ExpectLog(app_log, "Multiple exceptions in yield list"):
+            with self.assertRaises(RuntimeError) as cm:
+                yield [self.async_exception(RuntimeError("error 1")),
+                       self.async_exception(RuntimeError("error 2"))]
+        self.assertEqual(str(cm.exception), "error 1")
+
+        # With only one exception, no error is logged.
+        with self.assertRaises(RuntimeError):
+            yield [self.async_exception(RuntimeError("error 1")),
+                   self.async_future(2)]
+
+        # Exception logging may be explicitly quieted.
+        with self.assertRaises(RuntimeError):
+                yield gen.multi_future(
+                    [self.async_exception(RuntimeError("error 1")),
+                     self.async_exception(RuntimeError("error 2"))],
+                    quiet_exceptions=RuntimeError)
 
     def test_arguments(self):
         @gen.engine
@@ -1198,6 +1248,16 @@ class WaitIteratorTest(AsyncTestCase):
                     self.assertEqual(r, 84, 'iterator value incorrect')
                     self.assertEqual(g.current_index, 3, 'wrong index')
             i += 1
+
+    @gen_test
+    def test_no_ref(self):
+        # In this usage, there is no direct hard reference to the
+        # WaitIterator itself, only the Future it returns. Since
+        # WaitIterator uses weak references internally to improve GC
+        # performance, this used to cause problems.
+        yield gen.with_timeout(datetime.timedelta(seconds=0.1),
+                               gen.WaitIterator(gen.sleep(0)).next())
+
 
 if __name__ == '__main__':
     unittest.main()
