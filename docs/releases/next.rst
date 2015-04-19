@@ -56,6 +56,9 @@ Backwards-compatibility notes
 * Passing ``secure=False`` or ``httponly=False`` to
   `.RequestHandler.set_cookie` now works as expected (previously only the
   presence of the argument was considered and its value was ignored).
+* Key versioning support for cookie signing. ``cookie_secret`` application
+  setting can now contain a dict of valid keys with version as key. The
+  current signing key then must be specified via ``key_version`` setting.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
