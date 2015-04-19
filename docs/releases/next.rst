@@ -107,8 +107,8 @@ Then the Tornado equivalent is::
 * `.run_on_executor` now accepts arguments to control which attributes
   it uses to find the `.IOLoop` and executor.
 
-``tornado.curl_httpclient``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+`tornado.curl_httpclient`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Fixed a bug that would cause the client to stop processing requests
   if an exception occurred in certain places while there is a queue.
@@ -186,8 +186,8 @@ Then the Tornado equivalent is::
 * New method `.Subprocess.wait_for_exit` is a coroutine-friendly
   version of `.Subprocess.set_exit_callback`.
 
-``tornado.simple_httpclient``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+`tornado.simple_httpclient`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Improved performance on Python 3 by reusing a single `ssl.SSLContext`.
 * New constructor argument ``max_body_size`` controls the maximum response

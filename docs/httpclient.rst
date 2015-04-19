@@ -38,3 +38,15 @@
 
       # Just print the headers
       python -m tornado.httpclient --print_headers --print_body=false http://www.google.com
+
+Implementations
+~~~~~~~~~~~~~~~
+
+.. automodule:: tornado.simple_httpclient
+   :members:
+
+.. module:: tornado.curl_httpclient
+
+.. class:: CurlAsyncHTTPClient(io_loop, max_clients=10, defaults=None)
+
+   ``libcurl``-based HTTP client.
