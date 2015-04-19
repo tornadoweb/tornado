@@ -222,6 +222,9 @@ Then the Tornado equivalent is::
   whose path begins with two slashes.
 * Passing messages containing ``%`` characters to `tornado.web.HTTPError`
   no longer causes broken error messages.
+* Key versioning support for cookie signing. ``cookie_secret`` application
+  setting can now contain a dict of valid keys with version as key. The
+  current signing key then must be specified via ``key_version`` setting.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~

@@ -11,7 +11,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.util import u, ObjectDict, unicode_type, timedelta_to_seconds
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version
 
 import binascii
 import contextlib
@@ -71,10 +71,14 @@ class HelloHandler(RequestHandler):
 
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
-    def __init__(self):
+    def __init__(self, cookie_secret='0123456789', key_version=None):
         # don't call super.__init__
         self._cookies = {}
-        self.application = ObjectDict(settings=dict(cookie_secret='0123456789'))
+        if key_version is None:
+            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret))
+        else:
+            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret,
+                                                        key_version=key_version))
 
     def get_cookie(self, name):
         return self._cookies.get(name)
@@ -126,6 +130,51 @@ class SecureCookieV1Test(unittest.TestCase):
         handler = CookieTestRequestHandler()
         handler.set_secure_cookie('foo', b'\xe9', version=1)
         self.assertEqual(handler.get_secure_cookie('foo', min_version=1), b'\xe9')
+
+
+# See SignedValueTest below for more.
+class SecureCookieV2Test(unittest.TestCase):
+    KEY_VERSIONS = {
+        0: 'ajklasdf0ojaisdf',
+        1: 'aslkjasaolwkjsdf'
+    }
+
+    def test_round_trip(self):
+        handler = CookieTestRequestHandler()
+        handler.set_secure_cookie('foo', b'bar', version=2)
+        self.assertEqual(handler.get_secure_cookie('foo', min_version=2), b'bar')
+
+    def test_key_version_roundtrip(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=0)
+        handler.set_secure_cookie('foo', b'bar')
+        self.assertEqual(handler.get_secure_cookie('foo'), b'bar')
+
+    def test_key_version_roundtrip_differing_version(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=1)
+        handler.set_secure_cookie('foo', b'bar')
+        self.assertEqual(handler.get_secure_cookie('foo'), b'bar')
+
+    def test_key_version_increment_version(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=0)
+        handler.set_secure_cookie('foo', b'bar')
+        new_handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                               key_version=1)
+        new_handler._cookies = handler._cookies
+        self.assertEqual(new_handler.get_secure_cookie('foo'), b'bar')
+
+    def test_key_version_invalidate_version(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=0)
+        handler.set_secure_cookie('foo', b'bar')
+        new_key_versions = self.KEY_VERSIONS.copy()
+        new_key_versions.pop(0)
+        new_handler = CookieTestRequestHandler(cookie_secret=new_key_versions,
+                                               key_version=1)
+        new_handler._cookies = handler._cookies
+        self.assertEqual(new_handler.get_secure_cookie('foo'), None)
 
 
 class CookieTest(WebTestCase):
@@ -2147,6 +2196,7 @@ class ClientCloseTest(SimpleHandlerTestCase):
 
 class SignedValueTest(unittest.TestCase):
     SECRET = "It's a secret to everybody"
+    SECRET_DICT = {0: "asdfbasdf", 1: "12312312", 2: "2342342"}
 
     def past(self):
         return self.present() - 86400 * 32
@@ -2252,6 +2302,43 @@ class SignedValueTest(unittest.TestCase):
         decoded = decode_signed_value(SignedValueTest.SECRET, "key", signed,
                                       clock=self.present)
         self.assertEqual(value, decoded)
+
+    def test_key_versioning_read_write_default_key(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET_DICT,
+                                     "key", value, clock=self.present,
+                                     key_version=0)
+        decoded = decode_signed_value(SignedValueTest.SECRET_DICT,
+                                      "key", signed, clock=self.present)
+        self.assertEqual(value, decoded)
+
+    def test_key_versioning_read_write_non_default_key(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET_DICT,
+                                     "key", value, clock=self.present,
+                                     key_version=1)
+        decoded = decode_signed_value(SignedValueTest.SECRET_DICT,
+                                      "key", signed, clock=self.present)
+        self.assertEqual(value, decoded)
+
+    def test_key_versioning_invalid_key(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET_DICT,
+                                     "key", value, clock=self.present,
+                                     key_version=0)
+        newkeys = SignedValueTest.SECRET_DICT.copy()
+        newkeys.pop(0)
+        decoded = decode_signed_value(newkeys,
+                                      "key", signed, clock=self.present)
+        self.assertEqual(None, decoded)
+
+    def test_key_version_retrieval(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET_DICT,
+                                     "key", value, clock=self.present,
+                                     key_version=1)
+        key_version = get_signature_key_version(signed)
+        self.assertEqual(1, key_version)
 
 
 @wsgi_safe
