@@ -95,12 +95,12 @@ class Condition(_TimeoutGarbageCollector):
         io_loop = ioloop.IOLoop.current()
 
         # Wait up to 1 second for a notification.
-        yield condition.wait(deadline=io_loop.time() + 1)
+        yield condition.wait(timeout=io_loop.time() + 1)
 
-    ...or a `datetime.timedelta` for a deadline relative to the current time::
+    ...or a `datetime.timedelta` for a timeout relative to the current time::
 
         # Wait up to 1 second.
-        yield condition.wait(deadline=datetime.timedelta(seconds=1))
+        yield condition.wait(timeout=datetime.timedelta(seconds=1))
 
     The method raises `tornado.gen.TimeoutError` if there's no notification
     before the deadline.
@@ -433,13 +433,13 @@ class Lock(object):
             self.__class__.__name__,
             self._block)
 
-    def acquire(self, deadline=None):
+    def acquire(self, timeout=None):
         """Attempt to lock. Returns a Future.
 
         Returns a Future, which raises `tornado.gen.TimeoutError` after a
         timeout.
         """
-        return self._block.acquire(deadline)
+        return self._block.acquire(timeout)
 
     def release(self):
         """Unlock.
