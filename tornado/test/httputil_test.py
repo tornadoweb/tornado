@@ -9,6 +9,7 @@ from tornado.testing import ExpectLog
 from tornado.test.util import unittest
 from tornado.util import u
 
+import copy
 import datetime
 import logging
 import time
@@ -279,6 +280,24 @@ Foo: even
                           ('Crlf', 'crlf'),
                           ('Lf', 'lf'),
                           ])
+
+    def test_copy(self):
+        all_pairs = [('A', '1'), ('A', '2'), ('B', 'c')]
+        h1 = HTTPHeaders()
+        for k, v in all_pairs:
+            h1.add(k, v)
+        h2 = h1.copy()
+        h3 = copy.copy(h1)
+        h4 = copy.deepcopy(h1)
+        for headers in [h1, h2, h3, h4]:
+            # All the copies are identical, no matter how they were
+            # constructed.
+            self.assertEqual(list(sorted(headers.get_all())), all_pairs)
+        for headers in [h2, h3, h4]:
+            # Neither the dict or its member lists are reused.
+            self.assertIsNot(headers, h1)
+            self.assertIsNot(headers.get_list('A'), h1.get_list('A'))
+
 
 
 class FormatTimestampTest(unittest.TestCase):
