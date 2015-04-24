@@ -46,9 +46,11 @@ Toro's ``Semaphore.wait`` allowed a coroutine to wait for the semaphore to
 be unlocked *without* acquiring it. This encouraged unorthodox patterns; in
 Tornado, just use `~.Semaphore.acquire`.
 
-Toro's ``Condition.wait`` raised a ``Timeout`` exception after a timeout. But in
-Tornado, the `.Future` returned by `.Condition.wait` resolves to False after a
-timeout::
+Toro's ``Event.wait`` raised a ``Timeout`` exception after a timeout. In
+Tornado, `.Event.wait` raises `tornado.gen.TimeoutError`.
+
+Toro's ``Condition.wait`` also raised ``Timeout``, but in Tornado, the `.Future`
+returned by `.Condition.wait` resolves to False after a timeout::
 
     @gen.coroutine
     def await_notification():
@@ -56,7 +58,6 @@ timeout::
             print('timed out')
         else:
             print('condition is true')
-
 
 In lock and queue methods, wherever Toro accepted ``deadline`` as a keyword
 argument, Tornado names the argument ``timeout`` instead.
