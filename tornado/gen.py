@@ -305,7 +305,7 @@ class WaitIterator(object):
           except Exception as e:
               print("Error {} from {}".format(e, wait_iterator.current_future))
           else:
-              print("Result {} recieved from {} at {}".format(
+              print("Result {} received from {} at {}".format(
                   result, wait_iterator.current_future,
                   wait_iterator.current_index))
 
