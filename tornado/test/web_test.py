@@ -277,6 +277,7 @@ class CookieTest(WebTestCase):
                 # ('foo=a\\073b', 'a;b'),  # even encoded, ";" is a delimiter
                 ('foo="a\\073b"', 'a;b'),
                 ('foo="a\\"b"', 'a"b'),
+                ('foo@bar=1; foo=1', '1')
                 ]
         for header, expected in data:
             logging.debug("trying %r", header)
