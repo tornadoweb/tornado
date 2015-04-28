@@ -194,8 +194,7 @@ class HTTPHeaders(dict):
     def parse(cls, headers):
         """Returns a dictionary from HTTP header text.
 
-        >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\n
-        ...    Content-Length: 42\\r\\n")
+        >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
         >>> sorted(h.items())
         [('Content-Length', '42'), ('Content-Type', 'text/html')]
         """
@@ -247,7 +246,7 @@ class HTTPHeaders(dict):
 
 _cookie_value_decode = Cookie.SimpleCookie().value_decode
 _cookie_attr_reserved = Cookie.Morsel._reserved
-_cookie_attr_flags = {"secure", "httponly"}
+_cookie_attr_flags = set(["secure", "httponly"])
 
 # part of Cookie library module
 # https://docs.python.org/2.7/library/cookie.html
