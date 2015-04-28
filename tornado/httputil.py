@@ -190,6 +190,21 @@ class HTTPHeaders(dict):
             name, value = line.split(":", 1)
             self.add(name, value.strip())
 
+    @classmethod
+    def parse(cls, headers):
+        """Returns a dictionary from HTTP header text.
+
+        >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\n
+        ...    Content-Length: 42\\r\\n")
+        >>> sorted(h.items())
+        [('Content-Length', '42'), ('Content-Type', 'text/html')]
+        """
+        h = cls()
+        for line in _CRLF_RE.split(headers):
+            if line:
+                h.parse_line(line)
+        return h
+
     # dict implementation overrides
 
     def __setitem__(self, name, value):
@@ -438,19 +453,6 @@ class HTTPServerRequest(object):
            the ``version`` attribute directly.
         """
         return self.version == "HTTP/1.1"
-
-    # @property
-    # def cookies(self):
-    #     """A dictionary of Cookie.Morsel objects."""
-    #     if not hasattr(self, "_cookies"):
-    #         self._cookies = Cookie.SimpleCookie()
-    #         if "Cookie" in self.headers:
-    #             try:
-    #                 self._cookies.load(
-    #                     native_str(self.headers["Cookie"]))
-    #             except Exception:
-    #                 self._cookies = {}
-    #     return self._cookies
 
     @property
     def cookies(self):
