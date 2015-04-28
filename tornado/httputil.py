@@ -190,20 +190,6 @@ class HTTPHeaders(dict):
             name, value = line.split(":", 1)
             self.add(name, value.strip())
 
-    @classmethod
-    def parse(cls, headers):
-        """Returns a dictionary from HTTP header text.
-
-        >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
-        >>> sorted(h.items())
-        [('Content-Length', '42'), ('Content-Type', 'text/html')]
-        """
-        h = cls()
-        for line in _CRLF_RE.split(headers):
-            if line:
-                h.parse_line(line)
-        return h
-
     # dict implementation overrides
 
     def __setitem__(self, name, value):
