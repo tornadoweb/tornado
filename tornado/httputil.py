@@ -20,8 +20,7 @@ This module also defines the `HTTPServerRequest` class which is exposed
 via `tornado.web.RequestHandler.request`.
 """
 
-from __future__ import (absolute_import, division, print_function,
-                        with_statement)
+from __future__ import absolute_import, division, print_function, with_statement
 
 import calendar
 import collections
@@ -244,12 +243,12 @@ class HTTPHeaders(dict):
         return self.copy()
 
 
+# part of Cookie library module (py>=2.6 and py<=3.4 have identical code)
+# and follow RFC 2109 and RFC 2068
 _cookie_value_decode = Cookie.SimpleCookie().value_decode
 _cookie_attr_reserved = Cookie.Morsel._reserved
+# py2.6 and some minor 2.7 hasn't Morsel._flags attribute
 _cookie_attr_flags = set(["secure", "httponly"])
-
-# part of Cookie library module
-# https://docs.python.org/2.7/library/cookie.html
 _re_cookie_lchars = r"[\w\d!#%&'~_`><@,:/\$\*\+\-\.\^\|\)\(\?\}\{\=]"
 _re_cookie = re.compile(
     r"(?x)"  # This is a Verbose pattern
@@ -322,6 +321,11 @@ def parse_cookies(cookie_str, cookies=None, errors="strict"):
             raise
 
     return cookies
+
+
+def _cookies_as_dict(c):
+    """Convert SimpleCookie to plain dict"""
+    return dict((k, m.value) for k, m in c.iteritems())
 
 
 class HTTPServerRequest(object):
@@ -717,8 +721,7 @@ def _parse_request_range(range_header):
 
     See [0] for the details of the range header.
 
-    [0]: http://greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest
-    ...    html#byte.ranges
+    [0]: http://greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#byte.ranges
     """
     unit, _, value = range_header.partition("=")
     unit, value = unit.strip(), value.strip()

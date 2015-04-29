@@ -3,6 +3,9 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp, HTTPServerRequest, parse_request_start_line
+from tornado.httputil import (
+    Cookie, _cookie_attr_reserved, _cookie_attr_flags, _cookies_as_dict,
+    cookie_pairs, parse_cookie_to, parse_cookies)
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
@@ -299,7 +302,6 @@ Foo: even
             self.assertIsNot(headers.get_list('A'), h1.get_list('A'))
 
 
-
 class FormatTimestampTest(unittest.TestCase):
     # Make sure that all the input types are supported.
     TIMESTAMP = 1359312200.503611
@@ -339,6 +341,31 @@ class HTTPServerRequestTest(unittest.TestCase):
         requets = HTTPServerRequest(uri='/')
         self.assertIsInstance(requets.body, bytes)
 
+    def test_cookies_ok(self):
+        request = HTTPServerRequest(uri="/",
+                                    headers={"Cookie": "foo=bar; baz=qux"})
+        self.assertEqual({"foo": "bar",
+                          "baz": "qux"},
+                         _cookies_as_dict(request.cookies))
+
+    def test_cookies_quoted(self):
+        request = HTTPServerRequest(uri="/",
+                                    headers={"Cookie": "foo=\"bar\""})
+        self.assertEqual({"foo": "bar"},
+                         _cookies_as_dict(request.cookies))
+
+        request = HTTPServerRequest(uri="/",
+                                    headers={"Cookie": 'foo="\\320\\277\\320\\270\\320\\262\\320\\276"'})
+        self.assertEqual({"foo": "\xd0\xbf\xd0\xb8\xd0\xb2\xd0\xbe"},
+                         _cookies_as_dict(request.cookies))
+
+    def test_cookies_fail(self):
+        request = HTTPServerRequest(uri="/",
+                                    headers={"Cookie": "foo=bar; fail@mail.ru=1; baz=qux"})
+        self.assertEqual({"foo": "bar",
+                          "baz": "qux"},
+                         _cookies_as_dict(request.cookies))
+
 
 class ParseRequestStartLineTest(unittest.TestCase):
     METHOD = "GET"
@@ -351,3 +378,136 @@ class ParseRequestStartLineTest(unittest.TestCase):
         self.assertEqual(parsed_start_line.method, self.METHOD)
         self.assertEqual(parsed_start_line.path, self.PATH)
         self.assertEqual(parsed_start_line.version, self.VERSION)
+
+
+class ParseCookieTest(unittest.TestCase):
+    def test_cookie_pairs(self):
+        self.assertEqual([], list(cookie_pairs("")))
+        self.assertEqual([("foo", "bar")],
+                         list(cookie_pairs("foo=bar")))
+        self.assertEqual([("foo", "bar")],
+                         list(cookie_pairs("foo=bar;")))
+        self.assertEqual([("foo", "bar")],
+                         list(cookie_pairs("foo=bar; ")))
+        self.assertEqual([("foo", "bar")],
+                         list(cookie_pairs(";foo=bar")))
+        self.assertEqual([("foo", "bar"), ("baz", None)],
+                         list(cookie_pairs("foo=bar; baz")))
+        self.assertEqual([("foo", "bar"), ("baz", "")],
+                         list(cookie_pairs("foo=bar; baz=")))
+        self.assertEqual([("foo", "bar"), ("baz", "qux")],
+                         list(cookie_pairs("foo=bar; baz=qux")))
+        self.assertEqual([("foo", "bar"), ("only_key", None), ("baz", "qux")],
+                         list(cookie_pairs("foo=bar;;only_key;; baz=qux;")))
+        self.assertEqual([("foo@bar", "baz:qux")],
+                         list(cookie_pairs("foo@bar=baz:qux")))
+
+        self.assertEqual([("foo", "a=b")],
+                         list(cookie_pairs("foo=a=b")))
+        self.assertEqual([("foo", '"a=b"')],
+                         list(cookie_pairs("foo=\"a=b\"")))
+        self.assertEqual([("foo", '"a;b"')],
+                         list(cookie_pairs("foo=\"a;b\"")))
+        self.assertEqual([("foo", '"a\\073b"')],
+                         list(cookie_pairs("foo=\"a\\073b\"")))
+        self.assertEqual([("foo", '"a\\"b"')],
+                         list(cookie_pairs('foo="a\\"b"')))
+
+    def test_parse_cookie_to_values(self):
+        morsel = parse_cookie_to("foo", None, {})
+        self.assertIsNone(morsel)
+
+        morsel = parse_cookie_to("foo", "", {})
+        self.assertEqual("", morsel.value)
+
+        morsel = parse_cookie_to("foo", "bar", {})
+        self.assertEqual("bar", morsel.value)
+
+        morsel = parse_cookie_to("foo", '"bar"', {})
+        self.assertEqual("bar", morsel.value)
+
+        morsel = parse_cookie_to("foo", 'a=b', {})
+        self.assertEqual("a=b", morsel.value)
+
+        morsel = parse_cookie_to("foo", '"a;b"', {})
+        self.assertEqual("a;b", morsel.value)
+
+        morsel = parse_cookie_to("foo", '"a\\073b"', {})
+        self.assertEqual("a;b", morsel.value)
+
+        morsel = parse_cookie_to("foo", '"a\\"b"', {})
+        self.assertEqual('a"b', morsel.value)
+
+    def test_parse_cookie_to_keys(self):
+        morsel = parse_cookie_to("foo", "", {})
+        self.assertEqual("foo", morsel.key)
+
+        with self.assertRaises(Cookie.CookieError):
+            parse_cookie_to("foo@bar", "baz", {})
+
+        with self.assertRaises(Cookie.CookieError):
+            parse_cookie_to("foo[bar]", "baz", {})
+
+    def test_parse_cookie_to_modify_cookies(self):
+        cookies = {}
+        parse_cookie_to("foo", None, cookies)
+        self.assertEqual(0, len(cookies))
+
+        morsel1 = parse_cookie_to("foo", "bar", cookies)
+        self.assertEqual(1, len(cookies))
+        self.assertIs(morsel1, cookies["foo"])
+
+        morsel2 = parse_cookie_to("foo", "baz", cookies)
+        self.assertEqual(1, len(cookies))
+        self.assertIs(morsel2, cookies["foo"])
+        self.assertIs(morsel2, morsel1)
+
+    def test_parse_cookie_to_attrs(self):
+        for attr in _cookie_attr_reserved:
+            morsel = parse_cookie_to(attr, "", {})
+            self.assertIsNone(morsel)
+
+        for attr in _cookie_attr_reserved:
+            morsel = Cookie.Morsel()
+            parse_cookie_to(attr, "test", {}, morsel)
+            self.assertEqual("test", morsel[attr])
+
+        for attr in _cookie_attr_flags:
+            morsel = Cookie.Morsel()
+            parse_cookie_to(attr, None, {}, morsel)
+            self.assertEqual(True, morsel[attr])
+
+    def test_parse_cookies(self):
+        cookies = parse_cookies((
+            'foo=1; bar=a=b; '
+            'baz="\\320\\277\\320\\270\\320\\262\\320\\276"; '
+            'qux="te;st"'))
+        self.assertEqual(
+            {"foo": "1",
+             "bar": "a=b",
+             "baz": "\xd0\xbf\xd0\xb8\xd0\xb2\xd0\xbe",
+             "qux": "te;st"},
+            _cookies_as_dict(cookies))
+
+        cookies = parse_cookies(('foo=1; Path=/test1; '
+                                 'bar=2; Path=/test2; httponly; '
+                                 'foo=2; Domain=go.mail.ru; '
+                                 'baz=; secure'))
+        self.assertEqual(3, len(cookies))
+        self.assertEqual("2", cookies["foo"].value)
+        self.assertEqual("/test1", cookies["foo"]["path"])
+        self.assertEqual("", cookies["foo"]["httponly"])
+        self.assertEqual("go.mail.ru", cookies["foo"]["domain"])
+        self.assertEqual("2", cookies["bar"].value)
+        self.assertEqual("/test2", cookies["bar"]["path"])
+        self.assertEqual(True, cookies["bar"]["httponly"])
+        self.assertEqual("", cookies["baz"].value)
+        self.assertEqual(True, cookies["baz"]["secure"])
+
+        with self.assertRaises(Cookie.CookieError):
+            parse_cookies('foo=1; bar@baz=qux')
+
+        self.assertEqual(
+            {"foo": "1"},
+            _cookies_as_dict(parse_cookies('foo=1; bar@baz=qux',
+                                           errors="ignore")))

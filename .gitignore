@@ -12,7 +12,5 @@ MANIFEST
 /.coverage
 /htmlcov/
 /env/
-*.sublime-project
-*.sublime-workspace
 # Used in demo apps
 secrets.cfg
