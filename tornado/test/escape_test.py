@@ -154,6 +154,19 @@ class EscapeTestCase(unittest.TestCase):
             self.assertEqual(utf8(xhtml_escape(unescaped)), utf8(escaped))
             self.assertEqual(utf8(unescaped), utf8(xhtml_unescape(escaped)))
 
+    def test_xhtml_unescape_numeric(self):
+        tests = [
+            ('foo&#32;bar', 'foo bar'),
+            ('foo&#x20;bar', 'foo bar'),
+            ('foo&#X20;bar', 'foo bar'),
+            ('foo&#xabc;bar', u('foo\u0abcbar')),
+            ('foo&#xyz;bar', 'foo&#xyz;bar'),  # invalid encoding
+            ('foo&#;bar', 'foo&#;bar'),        # invalid encoding
+            ('foo&#x;bar', 'foo&#x;bar'),      # invalid encoding
+        ]
+        for escaped, unescaped in tests:
+            self.assertEqual(unescaped, xhtml_unescape(escaped))
+
     def test_url_escape_unicode(self):
         tests = [
             # byte strings are passed through as-is
