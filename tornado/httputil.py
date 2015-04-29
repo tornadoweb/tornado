@@ -325,7 +325,7 @@ def parse_cookies(cookie_str, cookies=None, errors="strict"):
 
 def _cookies_as_dict(c):
     """Convert SimpleCookie to plain dict"""
-    return dict((k, m.value) for k, m in c.iteritems())
+    return dict((k, m.value) for k, m in c.items())
 
 
 class HTTPServerRequest(object):
