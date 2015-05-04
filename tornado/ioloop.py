@@ -80,7 +80,7 @@ class IOLoop(Configurable):
 
         import errno
         import functools
-        import ioloop
+        from tornado import ioloop
         import socket
 
         def connection_ready(sock, fd, events):
