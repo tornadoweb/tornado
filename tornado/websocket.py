@@ -835,7 +835,8 @@ class WebSocketProtocol13(WebSocketProtocol):
                 self.handler.close_code = struct.unpack('>H', data[:2])[0]
             if len(data) > 2:
                 self.handler.close_reason = to_unicode(data[2:])
-            self.close()
+            # Echo the received close code, if any (RFC 6455 section 5.5.1).
+            self.close(self.handler.close_code)
         elif opcode == 0x9:
             # Ping
             self._write_frame(True, 0xA, data)
@@ -886,6 +887,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.read_queue = collections.deque()
         self.key = base64.b64encode(os.urandom(16))
         self._on_message_callback = on_message_callback
+        self.close_code = self.close_reason = None
 
         scheme, sep, rest = request.url.partition(':')
         scheme = {'ws': 'http', 'wss': 'https'}[scheme]

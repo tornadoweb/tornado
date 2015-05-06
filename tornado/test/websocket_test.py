@@ -224,7 +224,11 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.assertEqual(ws.close_code, 1001)
         self.assertEqual(ws.close_reason, "goodbye")
         # The on_close callback is called no matter which side closed.
-        yield self.close_future
+        code, reason = yield self.close_future
+        # The client echoed the close code it received to the server,
+        # so the server's close code (returned via close_future) is
+        # the same.
+        self.assertEqual(code, 1001)
 
     @gen_test
     def test_client_close_reason(self):
