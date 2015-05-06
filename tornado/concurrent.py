@@ -203,6 +203,10 @@ class Future(object):
     def result(self, timeout=None):
         """If the operation succeeded, return its result.  If it failed,
         re-raise its exception.
+
+        This method takes a ``timeout`` argument for compatibility with
+        `concurrent.futures.Future` but it is an error to call it
+        before the `Future` is done, so the ``timeout`` is never used.
         """
         self._clear_tb_log()
         if self._result is not None:
@@ -215,6 +219,10 @@ class Future(object):
     def exception(self, timeout=None):
         """If the operation raised an exception, return the `Exception`
         object.  Otherwise returns None.
+
+        This method takes a ``timeout`` argument for compatibility with
+        `concurrent.futures.Future` but it is an error to call it
+        before the `Future` is done, so the ``timeout`` is never used.
         """
         self._clear_tb_log()
         if self._exc_info is not None:
