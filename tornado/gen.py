@@ -336,12 +336,8 @@ class WaitIterator(object):
         self.current_index = self.current_future = None
         self._running_future = None
 
-        # Use a weak reference to self to avoid cycles that may delay
-        # garbage collection.
-        self_ref = weakref.ref(self)
         for future in futures:
-            future.add_done_callback(functools.partial(
-                self._done_callback, self_ref))
+            future.add_done_callback(self._done_callback)
 
     def done(self):
         """Returns True if this iterator has no more results."""
@@ -358,26 +354,17 @@ class WaitIterator(object):
         the inputs.
         """
         self._running_future = TracebackFuture()
-        # As long as there is an active _running_future, we must
-        # ensure that the WaitIterator is not GC'd (due to the
-        # use of weak references in __init__). Add a callback that
-        # references self so there is a hard reference that will be
-        # cleared automatically when this Future finishes.
-        self._running_future.add_done_callback(lambda f: self)
 
         if self._finished:
             self._return_result(self._finished.popleft())
 
         return self._running_future
 
-    @staticmethod
-    def _done_callback(self_ref, done):
-        self = self_ref()
-        if self is not None:
-            if self._running_future and not self._running_future.done():
-                self._return_result(done)
-            else:
-                self._finished.append(done)
+    def _done_callback(self, done):
+        if self._running_future and not self._running_future.done():
+            self._return_result(done)
+        else:
+            self._finished.append(done)
 
     def _return_result(self, done):
         """Called set the returned future's state that of the future
