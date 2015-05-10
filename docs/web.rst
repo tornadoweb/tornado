@@ -25,11 +25,21 @@
    These methods can be made asynchronous with one of the following
    decorators: `.gen.coroutine`, `.return_future`, or `asynchronous`.
 
+   To support a method not on this list, override the class variable
+   ``SUPPORTED_METHODS``::
+
+     class WebDAVHandler(RequestHandler):
+         SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('PROPFIND',)
+
+         def propfind(self):
+             pass
+
    .. automethod:: RequestHandler.get
-   .. automethod:: RequestHandler.post
-   .. automethod:: RequestHandler.put
-   .. automethod:: RequestHandler.delete
    .. automethod:: RequestHandler.head
+   .. automethod:: RequestHandler.post
+   .. automethod:: RequestHandler.delete
+   .. automethod:: RequestHandler.patch
+   .. automethod:: RequestHandler.put
    .. automethod:: RequestHandler.options
 
    Input

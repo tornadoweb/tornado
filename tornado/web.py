@@ -144,12 +144,12 @@ May be overridden by passing a ``min_version`` keyword argument.
 .. versionadded:: 3.2.1
 """
 
-class RequestHandler(object):
-    """Subclass this class and define `get()` or `post()` to make a handler.
 
-    If you want to support more methods than the standard GET/HEAD/POST, you
-    should override the class variable ``SUPPORTED_METHODS`` in your
-    `RequestHandler` subclass.
+class RequestHandler(object):
+    """Base class for HTTP request handlers.
+
+    Subclasses must define at least one of the methods defined in the
+    "Entry points" section below.
     """
     SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PATCH", "PUT",
                          "OPTIONS")
