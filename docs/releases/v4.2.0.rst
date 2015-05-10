@@ -1,5 +1,5 @@
-What's new in the next version of Tornado
-=========================================
+What's new in Tornado 4.2
+=========================
 
 In Progress
 -----------
