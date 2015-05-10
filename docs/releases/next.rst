@@ -114,11 +114,17 @@ Then the Tornado equivalent is::
 * Fixed a bug that would cause the client to stop processing requests
   if an exception occurred in certain places while there is a queue.
 
+`tornado.escape`
+~~~~~~~~~~~~~~~~
+
+* `.xhtml_escape` now supports numeric character references in hex
+  format (``&#x20;``)
+
 `tornado.gen`
 ~~~~~~~~~~~~~
 
-* On Python 3, catching an exception in a coroutine no longer leads to
-  leaks via ``Exception.__context__``.
+* `.WaitIterator` no longer uses weak references, which fixes several
+  garbage-collection-related bugs.
 * `tornado.gen.Multi` and `tornado.gen.multi_future` (which are used when
   yielding a list or dict in a coroutine) now log any exceptions after the
   first if more than one `.Future` fails (previously they would be logged
@@ -128,30 +134,36 @@ Then the Tornado equivalent is::
   call ``Multi`` or ``multi_future`` directly instead of simply yielding
   a list.
 * `.multi_future` now works when given multiple copies of the same `.Future`.
-* `.WaitIterator` now works even if no hard reference to the iterator itself
-  is kept.
+* On Python 3, catching an exception in a coroutine no longer leads to
+  leaks via ``Exception.__context__``.
 
 `tornado.httpclient`
 ~~~~~~~~~~~~~~~~~~~~
 
 * The ``raise_error`` argument now works correctly with the synchronous
   `.HTTPClient`.
+* The synchronous `.HTTPClient` no longer interferes with `.IOLoop.current()`.
 
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
 
 * `.HTTPServer` is now a subclass of `tornado.util.Configurable`.
 
+`tornado.httputil`
+~~~~~~~~~~~~~~~~~~
+
+* `.HTTPHeaders` can now be copied with `copy.copy` and `copy.deepcopy`.
+
 `tornado.ioloop`
 ~~~~~~~~~~~~~~~~
 
-* `.PeriodicCallback` is now more efficient when the clock jumps forward
-  by a large amount.
 * The `.IOLoop` constructor now has a ``make_current`` keyword argument
   to control whether the new `.IOLoop` becomes `.IOLoop.current()`.
 * Third-party implementations of `.IOLoop` should accept ``**kwargs``
   in their `~.IOLoop.initialize` methods and pass them to the superclass
   implementation.
+* `.PeriodicCallback` is now more efficient when the clock jumps forward
+  by a large amount.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
@@ -210,11 +222,14 @@ Then the Tornado equivalent is::
 `tornado.web`
 ~~~~~~~~~~~~~
 
+* Key versioning support for cookie signing. ``cookie_secret`` application
+  setting can now contain a dict of valid keys with version as key. The
+  current signing key then must be specified via ``key_version`` setting.
+* Parsing of the ``If-None-Match`` header now follows the RFC and supports
+  weak validators.
 * Passing ``secure=False`` or ``httponly=False`` to
   `.RequestHandler.set_cookie` now works as expected (previously only the
   presence of the argument was considered and its value was ignored).
-* Parsing of the ``If-None-Match`` header now follows the RFC and supports
-  weak validators.
 * `.RequestHandler.get_arguments` now requires that its ``strip`` argument
   be of type bool. This helps prevent errors caused by the slightly dissimilar
   interfaces between the singular and plural methods.
@@ -223,11 +238,10 @@ Then the Tornado equivalent is::
   whose path begins with two slashes.
 * Passing messages containing ``%`` characters to `tornado.web.HTTPError`
   no longer causes broken error messages.
-* Key versioning support for cookie signing. ``cookie_secret`` application
-  setting can now contain a dict of valid keys with version as key. The
-  current signing key then must be specified via ``key_version`` setting.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
 
 * The ``on_close`` method will no longer be called more than once.
+* When the other side closes a connection, we now echo the received close
+  code back instead of sending an empty close frame.
