@@ -25,11 +25,21 @@
    These methods can be made asynchronous with one of the following
    decorators: `.gen.coroutine`, `.return_future`, or `asynchronous`.
 
+   To support a method not on this list, override the class variable
+   ``SUPPORTED_METHODS``::
+
+     class WebDAVHandler(RequestHandler):
+         SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + ('PROPFIND',)
+
+         def propfind(self):
+             pass
+
    .. automethod:: RequestHandler.get
-   .. automethod:: RequestHandler.post
-   .. automethod:: RequestHandler.put
-   .. automethod:: RequestHandler.delete
    .. automethod:: RequestHandler.head
+   .. automethod:: RequestHandler.post
+   .. automethod:: RequestHandler.delete
+   .. automethod:: RequestHandler.patch
+   .. automethod:: RequestHandler.put
    .. automethod:: RequestHandler.options
 
    Input
@@ -86,6 +96,7 @@
    .. automethod:: RequestHandler.clear_cookie
    .. automethod:: RequestHandler.clear_all_cookies
    .. automethod:: RequestHandler.get_secure_cookie
+   .. automethod:: RequestHandler.get_secure_cookie_key_version
    .. automethod:: RequestHandler.set_secure_cookie
    .. automethod:: RequestHandler.create_signed_value
    .. autodata:: MIN_SUPPORTED_SIGNED_VALUE_VERSION
@@ -177,6 +188,9 @@
 
          * ``cookie_secret``: Used by `RequestHandler.get_secure_cookie`
            and `.set_secure_cookie` to sign cookies.
+         * ``key_version``: Used by requestHandler `.set_secure_cookie`
+           to sign cookies with a specific key when ``cookie_secret``
+           is a key dictionary.
          * ``login_url``: The `authenticated` decorator will redirect
            to this url if the user is not logged in.  Can be further
            customized by overriding `RequestHandler.get_login_url`

@@ -378,7 +378,10 @@ def linkify(text, shorten=False, extra_params="",
 def _convert_entity(m):
     if m.group(1) == "#":
         try:
-            return unichr(int(m.group(2)))
+            if m.group(2)[:1].lower() == 'x':
+                return unichr(int(m.group(2)[1:], 16))
+            else:
+                return unichr(int(m.group(2)))
         except ValueError:
             return "&#%s;" % m.group(2)
     try:

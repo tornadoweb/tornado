@@ -669,13 +669,13 @@ class BaseIOStream(object):
         else:
             callback = self._read_callback
             self._read_callback = self._streaming_callback = None
-        if self._read_future is not None:
-            assert callback is None
-            future = self._read_future
-            self._read_future = None
-            future.set_result(self._consume(size))
+            if self._read_future is not None:
+                assert callback is None
+                future = self._read_future
+                self._read_future = None
+                future.set_result(self._consume(size))
         if callback is not None:
-            assert self._read_future is None
+            assert (self._read_future is None) or streaming
             self._run_callback(callback, self._consume(size))
         else:
             # If we scheduled a callback, we will add the error listener
@@ -971,13 +971,13 @@ class IOStream(BaseIOStream):
         def on_body(data):
             print(data)
             stream.close()
-            tornado.ioloop.IOLoop.instance().stop()
+            tornado.ioloop.IOLoop.current().stop()
 
         if __name__ == '__main__':
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
             stream = tornado.iostream.IOStream(s)
             stream.connect(("friendfeed.com", 80), send_request)
-            tornado.ioloop.IOLoop.instance().start()
+            tornado.ioloop.IOLoop.current().start()
 
     .. testoutput::
        :hide:

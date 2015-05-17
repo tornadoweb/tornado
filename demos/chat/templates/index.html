@@ -6,10 +6,6 @@
     <link rel="stylesheet" href="{{ static_url("chat.css") }}" type="text/css"/>
   </head>
   <body>
-    <div id="nav">
-      <b>{{ current_user["name"] }}</b> -
-      <a href="/auth/logout">{{ _("Sign out") }}</a>
-    </div>
     <div id="body">
       <div id="inbox">
         {% for message in messages %}

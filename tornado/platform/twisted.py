@@ -35,7 +35,7 @@ of the application::
     tornado.platform.twisted.install()
     from twisted.internet import reactor
 
-When the app is ready to start, call `IOLoop.instance().start()`
+When the app is ready to start, call `IOLoop.current().start()`
 instead of `reactor.run()`.
 
 It is also possible to create a non-global reactor by calling
@@ -416,7 +416,8 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
     because the ``SIGCHLD`` handlers used by Tornado and Twisted conflict
     with each other.
     """
-    def initialize(self, reactor=None):
+    def initialize(self, reactor=None, **kwargs):
+        super(TwistedIOLoop, self).initialize(**kwargs)
         if reactor is None:
             import twisted.internet.reactor
             reactor = twisted.internet.reactor

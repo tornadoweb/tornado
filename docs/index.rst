@@ -46,7 +46,7 @@ Here is a simple "Hello, world" example web app for Tornado::
 
     if __name__ == "__main__":
         application.listen(8888)
-        tornado.ioloop.IOLoop.instance().start()
+        tornado.ioloop.IOLoop.current().start()
 
 This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room

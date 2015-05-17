@@ -253,7 +253,7 @@ class WSGIContainer(object):
         container = tornado.wsgi.WSGIContainer(simple_app)
         http_server = tornado.httpserver.HTTPServer(container)
         http_server.listen(8888)
-        tornado.ioloop.IOLoop.instance().start()
+        tornado.ioloop.IOLoop.current().start()
 
     This class is intended to let other frameworks (Django, web.py, etc)
     run on the Tornado HTTP server and I/O loop.

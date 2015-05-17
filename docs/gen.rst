@@ -30,10 +30,12 @@
    .. autodata:: moment
       :annotation:
 
-   .. autofunction:: Task
-
    .. autoclass:: WaitIterator
       :members:
+
+   .. autofunction:: multi_future
+
+   .. autofunction:: Task
 
    .. class:: Arguments
 
@@ -62,3 +64,5 @@
    .. autoclass:: Wait
 
    .. autoclass:: WaitAll
+
+   .. autoclass:: Multi

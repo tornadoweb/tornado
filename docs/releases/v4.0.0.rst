@@ -66,7 +66,7 @@ Other notes
 `tornado.auth`
 ~~~~~~~~~~~~~~
 
-* Fixed a bug in `.FacebookMixin` on Python 3.
+* Fixed a bug in ``.FacebookMixin`` on Python 3.
 * When using the `.Future` interface, exceptions are more reliably delivered
   to the caller.
 

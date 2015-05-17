@@ -74,6 +74,15 @@ passed separately so that you may e.g. have a cookie that is valid for 30 days
 for most purposes, but for certain sensitive actions (such as changing billing
 information) you use a smaller ``max_age_days`` when reading the cookie.
 
+Tornado also supports multiple signing keys to enable signing key
+rotation. ``cookie_secret`` then must be a dict with integer key versions
+as keys and the corresponding secrets as values. The currently used
+signing key must then be set as ``key_version`` application setting
+but all other keys in the dict are allowed for cookie signature validation,
+if the correct key version is set in the cookie.
+To implement cookie updates, the current signing key version can be
+queried via `~.RequestHandler.get_secure_cookie_key_version`.
+
 .. _user-authentication:
 
 User authentication
@@ -177,19 +186,22 @@ the Google credentials in a cookie for later access:
 
 .. testcode::
 
-    class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
-        @tornado.web.asynchronous
+    class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
+                                   tornado.auth.GoogleOAuth2Mixin):
+        @tornado.gen.coroutine
         def get(self):
-            if self.get_argument("openid.mode", None):
-                self.get_authenticated_user(self._on_auth)
-                return
-            self.authenticate_redirect()
-
-        def _on_auth(self, user):
-            if not user:
-                self.authenticate_redirect()
-                return
-            # Save the user with, e.g., set_secure_cookie()
+            if self.get_argument('code', False):
+                user = yield self.get_authenticated_user(
+                    redirect_uri='http://your.site.com/auth/google',
+                    code=self.get_argument('code'))
+                # Save the user with e.g. set_secure_cookie
+            else:
+                yield self.authorize_redirect(
+                    redirect_uri='http://your.site.com/auth/google',
+                    client_id=self.settings['google_oauth']['key'],
+                    scope=['profile', 'email'],
+                    response_type='code',
+                    extra_params={'approval_prompt': 'auto'})
 
 .. testoutput::
    :hide:

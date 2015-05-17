@@ -79,7 +79,7 @@ class HTTPServer(TCPServer, Configurable,
 
             server = HTTPServer(app)
             server.listen(8888)
-            IOLoop.instance().start()
+            IOLoop.current().start()
 
        In many cases, `tornado.web.Application.listen` can be used to avoid
        the need to explicitly create the `HTTPServer`.
@@ -90,7 +90,7 @@ class HTTPServer(TCPServer, Configurable,
             server = HTTPServer(app)
             server.bind(8888)
             server.start(0)  # Forks multiple sub-processes
-            IOLoop.instance().start()
+            IOLoop.current().start()
 
        When using this interface, an `.IOLoop` must *not* be passed
        to the `HTTPServer` constructor.  `~.TCPServer.start` will always start
@@ -102,7 +102,7 @@ class HTTPServer(TCPServer, Configurable,
             tornado.process.fork_processes(0)
             server = HTTPServer(app)
             server.add_sockets(sockets)
-            IOLoop.instance().start()
+            IOLoop.current().start()
 
        The `~.TCPServer.add_sockets` interface is more complicated,
        but it can be used with `tornado.process.fork_processes` to
@@ -121,6 +121,9 @@ class HTTPServer(TCPServer, Configurable,
        `.HTTPServerConnectionDelegate.start_request` is now called with
        two arguments ``(server_conn, request_conn)`` (in accordance with the
        documentation) instead of one ``(request_conn)``.
+
+    .. versionchanged:: 4.2
+       `HTTPServer` is now a subclass of `tornado.util.Configurable`.
     """
     def __init__(self, *args, **kwargs):
         # Ignore args to __init__; real initialization belongs in

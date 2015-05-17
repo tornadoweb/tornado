@@ -1,0 +1,15 @@
+mysql:
+  image: mysql:5.6
+  environment:
+    MYSQL_ROOT_PASSWORD: its_a_secret_to_everybody
+    MYSQL_USER: blog
+    MYSQL_PASSWORD: blog
+    MYSQL_DATABASE: blog
+  ports:
+    - "3306"
+blog:
+  build: .
+  links:
+    - mysql
+  ports:
+    - "8888:8888"

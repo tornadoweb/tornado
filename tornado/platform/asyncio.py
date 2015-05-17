@@ -31,7 +31,8 @@ except ImportError as e:
 
 
 class BaseAsyncIOLoop(IOLoop):
-    def initialize(self, asyncio_loop, close_loop=False):
+    def initialize(self, asyncio_loop, close_loop=False, **kwargs):
+        super(BaseAsyncIOLoop, self).initialize(**kwargs)
         self.asyncio_loop = asyncio_loop
         self.close_loop = close_loop
         self.asyncio_loop.call_soon(self.make_current)
@@ -132,15 +133,15 @@ class BaseAsyncIOLoop(IOLoop):
 
 
 class AsyncIOMainLoop(BaseAsyncIOLoop):
-    def initialize(self):
+    def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
-                                                close_loop=False)
+                                                close_loop=False, **kwargs)
 
 
 class AsyncIOLoop(BaseAsyncIOLoop):
-    def initialize(self):
+    def initialize(self, **kwargs):
         super(AsyncIOLoop, self).initialize(asyncio.new_event_loop(),
-                                            close_loop=True)
+                                            close_loop=True, **kwargs)
 
 
 def to_tornado_future(asyncio_future):

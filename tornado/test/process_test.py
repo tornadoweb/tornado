@@ -13,7 +13,7 @@ from tornado.ioloop import IOLoop
 from tornado.log import gen_log
 from tornado.process import fork_processes, task_id, Subprocess
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase
+from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase, gen_test
 from tornado.test.util import unittest, skipIfNonUnix
 from tornado.web import RequestHandler, Application
 
@@ -85,7 +85,7 @@ class ProcessTest(unittest.TestCase):
                     self.assertEqual(id, task_id())
                     server = HTTPServer(self.get_app())
                     server.add_sockets([sock])
-                    IOLoop.instance().start()
+                    IOLoop.current().start()
                 elif id == 2:
                     self.assertEqual(id, task_id())
                     sock.close()
@@ -200,6 +200,16 @@ class SubprocessTest(AsyncTestCase):
         self.assertEqual(ret, 0)
         self.assertEqual(subproc.returncode, ret)
 
+    @gen_test
+    def test_sigchild_future(self):
+        skip_if_twisted()
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, '-c', 'pass'])
+        ret = yield subproc.wait_for_exit()
+        self.assertEqual(ret, 0)
+        self.assertEqual(subproc.returncode, ret)
+
     def test_sigchild_signal(self):
         skip_if_twisted()
         Subprocess.initialize(io_loop=self.io_loop)
@@ -212,3 +222,22 @@ class SubprocessTest(AsyncTestCase):
         ret = self.wait()
         self.assertEqual(subproc.returncode, ret)
         self.assertEqual(ret, -signal.SIGTERM)
+
+    @gen_test
+    def test_wait_for_exit_raise(self):
+        skip_if_twisted()
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, '-c', 'import sys; sys.exit(1)'])
+        with self.assertRaises(subprocess.CalledProcessError) as cm:
+            yield subproc.wait_for_exit()
+        self.assertEqual(cm.exception.returncode, 1)
+
+    @gen_test
+    def test_wait_for_exit_raise_disabled(self):
+        skip_if_twisted()
+        Subprocess.initialize()
+        self.addCleanup(Subprocess.uninitialize)
+        subproc = Subprocess([sys.executable, '-c', 'import sys; sys.exit(1)'])
+        ret = yield subproc.wait_for_exit(raise_error=False)
+        self.assertEqual(ret, 1)

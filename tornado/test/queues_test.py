@@ -280,13 +280,15 @@ class QueuePutTest(AsyncTestCase):
 
 
 class QueueJoinTest(AsyncTestCase):
+    queue_class = queues.Queue
+    
     def test_task_done_underflow(self):
-        q = queues.Queue()
+        q = self.queue_class()
         self.assertRaises(ValueError, q.task_done)
 
     @gen_test
     def test_task_done(self):
-        q = queues.Queue()
+        q = self.queue_class()
         for i in range(100):
             q.put_nowait(i)
 
@@ -309,7 +311,7 @@ class QueueJoinTest(AsyncTestCase):
     @gen_test
     def test_task_done_delay(self):
         # Verify it is task_done(), not get(), that unblocks join().
-        q = queues.Queue()
+        q = self.queue_class()
         q.put_nowait(0)
         join = q.join()
         self.assertFalse(join.done())
@@ -322,17 +324,55 @@ class QueueJoinTest(AsyncTestCase):
 
     @gen_test
     def test_join_empty_queue(self):
-        q = queues.Queue()
+        q = self.queue_class()
         yield q.join()
         yield q.join()
 
     @gen_test
     def test_join_timeout(self):
-        q = queues.Queue()
+        q = self.queue_class()
         q.put(0)
         with self.assertRaises(TimeoutError):
             yield q.join(timeout=timedelta(seconds=0.01))
 
+
+class PriorityQueueJoinTest(QueueJoinTest):
+    queue_class = queues.PriorityQueue
+    
+    @gen_test
+    def test_order(self):
+        q = self.queue_class(maxsize=2)
+        q.put_nowait((1, 'a'))
+        q.put_nowait((0, 'b'))
+        self.assertTrue(q.full())
+        q.put((3, 'c'))
+        q.put((2, 'd'))
+        self.assertEqual((0, 'b'), q.get_nowait())
+        self.assertEqual((1, 'a'), (yield q.get()))
+        self.assertEqual((2, 'd'), q.get_nowait())
+        self.assertEqual((3, 'c'), (yield q.get()))
+        self.assertTrue(q.empty())
+
+
+class LifoQueueJoinTest(QueueJoinTest):
+    queue_class = queues.LifoQueue
+
+    @gen_test
+    def test_order(self):
+        q = self.queue_class(maxsize=2)
+        q.put_nowait(1)
+        q.put_nowait(0)
+        self.assertTrue(q.full())
+        q.put(3)
+        q.put(2)
+        self.assertEqual(3, q.get_nowait())
+        self.assertEqual(2, (yield q.get()))
+        self.assertEqual(0, q.get_nowait())
+        self.assertEqual(1, (yield q.get()))
+        self.assertTrue(q.empty())
+
+
+class ProducerConsumerTest(AsyncTestCase):
     @gen_test
     def test_producer_consumer(self):
         q = queues.Queue(maxsize=3)

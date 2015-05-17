@@ -11,7 +11,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.util import u, ObjectDict, unicode_type, timedelta_to_seconds
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version
 
 import binascii
 import contextlib
@@ -71,10 +71,14 @@ class HelloHandler(RequestHandler):
 
 class CookieTestRequestHandler(RequestHandler):
     # stub out enough methods to make the secure_cookie functions work
-    def __init__(self):
+    def __init__(self, cookie_secret='0123456789', key_version=None):
         # don't call super.__init__
         self._cookies = {}
-        self.application = ObjectDict(settings=dict(cookie_secret='0123456789'))
+        if key_version is None:
+            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret))
+        else:
+            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret,
+                                                        key_version=key_version))
 
     def get_cookie(self, name):
         return self._cookies.get(name)
@@ -126,6 +130,51 @@ class SecureCookieV1Test(unittest.TestCase):
         handler = CookieTestRequestHandler()
         handler.set_secure_cookie('foo', b'\xe9', version=1)
         self.assertEqual(handler.get_secure_cookie('foo', min_version=1), b'\xe9')
+
+
+# See SignedValueTest below for more.
+class SecureCookieV2Test(unittest.TestCase):
+    KEY_VERSIONS = {
+        0: 'ajklasdf0ojaisdf',
+        1: 'aslkjasaolwkjsdf'
+    }
+
+    def test_round_trip(self):
+        handler = CookieTestRequestHandler()
+        handler.set_secure_cookie('foo', b'bar', version=2)
+        self.assertEqual(handler.get_secure_cookie('foo', min_version=2), b'bar')
+
+    def test_key_version_roundtrip(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=0)
+        handler.set_secure_cookie('foo', b'bar')
+        self.assertEqual(handler.get_secure_cookie('foo'), b'bar')
+
+    def test_key_version_roundtrip_differing_version(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=1)
+        handler.set_secure_cookie('foo', b'bar')
+        self.assertEqual(handler.get_secure_cookie('foo'), b'bar')
+
+    def test_key_version_increment_version(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=0)
+        handler.set_secure_cookie('foo', b'bar')
+        new_handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                               key_version=1)
+        new_handler._cookies = handler._cookies
+        self.assertEqual(new_handler.get_secure_cookie('foo'), b'bar')
+
+    def test_key_version_invalidate_version(self):
+        handler = CookieTestRequestHandler(cookie_secret=self.KEY_VERSIONS,
+                                           key_version=0)
+        handler.set_secure_cookie('foo', b'bar')
+        new_key_versions = self.KEY_VERSIONS.copy()
+        new_key_versions.pop(0)
+        new_handler = CookieTestRequestHandler(cookie_secret=new_key_versions,
+                                               key_version=1)
+        new_handler._cookies = handler._cookies
+        self.assertEqual(new_handler.get_secure_cookie('foo'), None)
 
 
 class CookieTest(WebTestCase):
@@ -396,6 +445,12 @@ class RequestEncodingTest(WebTestCase):
                          dict(path="/slashes/a%2Fb/c%2Fd",
                               path_args=["a/b", "c/d"],
                               args={}))
+
+    def test_error(self):
+        # Percent signs (encoded as %25) should not mess up printf-style
+        # messages in logs
+        with ExpectLog(gen_log, ".*Invalid unicode"):
+            self.fetch("/group/?arg=%25%e9")
 
 
 class TypeCheckHandler(RequestHandler):
@@ -2029,8 +2084,10 @@ class StreamingRequestFlowControlTest(WebTestCase):
 
             @gen.coroutine
             def prepare(self):
-                with self.in_method('prepare'):
-                    yield gen.Task(IOLoop.current().add_callback)
+                # Note that asynchronous prepare() does not block data_received,
+                # so we don't use in_method here.
+                self.methods.append('prepare')
+                yield gen.Task(IOLoop.current().add_callback)
 
             @gen.coroutine
             def data_received(self, data):
@@ -2092,7 +2149,7 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         # When the content-length is too high, the connection is simply
         # closed without completing the response.  An error is logged on
         # the server.
-        with ExpectLog(app_log, "Uncaught exception"):
+        with ExpectLog(app_log, "(Uncaught exception|Exception in callback)"):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
@@ -2105,7 +2162,7 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
         # When the content-length is too low, the connection is closed
         # without writing the last chunk, so the client never sees the request
         # complete (which would be a framing error).
-        with ExpectLog(app_log, "Uncaught exception"):
+        with ExpectLog(app_log, "(Uncaught exception|Exception in callback)"):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
@@ -2118,21 +2175,28 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
 class ClientCloseTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
-            # Simulate a connection closed by the client during
-            # request processing.  The client will see an error, but the
-            # server should respond gracefully (without logging errors
-            # because we were unable to write out as many bytes as
-            # Content-Length said we would)
-            self.request.connection.stream.close()
-            self.write('hello')
+            if self.request.version.startswith('HTTP/1'):
+                # Simulate a connection closed by the client during
+                # request processing.  The client will see an error, but the
+                # server should respond gracefully (without logging errors
+                # because we were unable to write out as many bytes as
+                # Content-Length said we would)
+                self.request.connection.stream.close()
+                self.write('hello')
+            else:
+                # TODO: add a HTTP2-compatible version of this test.
+                self.write('requires HTTP/1.x')
 
     def test_client_close(self):
         response = self.fetch('/')
+        if response.body == b'requires HTTP/1.x':
+            self.skipTest('requires HTTP/1.x')
         self.assertEqual(response.code, 599)
 
 
 class SignedValueTest(unittest.TestCase):
     SECRET = "It's a secret to everybody"
+    SECRET_DICT = {0: "asdfbasdf", 1: "12312312", 2: "2342342"}
 
     def past(self):
         return self.present() - 86400 * 32
@@ -2238,6 +2302,43 @@ class SignedValueTest(unittest.TestCase):
         decoded = decode_signed_value(SignedValueTest.SECRET, "key", signed,
                                       clock=self.present)
         self.assertEqual(value, decoded)
+
+    def test_key_versioning_read_write_default_key(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET_DICT,
+                                     "key", value, clock=self.present,
+                                     key_version=0)
+        decoded = decode_signed_value(SignedValueTest.SECRET_DICT,
+                                      "key", signed, clock=self.present)
+        self.assertEqual(value, decoded)
+
+    def test_key_versioning_read_write_non_default_key(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET_DICT,
+                                     "key", value, clock=self.present,
+                                     key_version=1)
+        decoded = decode_signed_value(SignedValueTest.SECRET_DICT,
+                                      "key", signed, clock=self.present)
+        self.assertEqual(value, decoded)
+
+    def test_key_versioning_invalid_key(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET_DICT,
+                                     "key", value, clock=self.present,
+                                     key_version=0)
+        newkeys = SignedValueTest.SECRET_DICT.copy()
+        newkeys.pop(0)
+        decoded = decode_signed_value(newkeys,
+                                      "key", signed, clock=self.present)
+        self.assertEqual(None, decoded)
+
+    def test_key_version_retrieval(self):
+        value = b"\xe9"
+        signed = create_signed_value(SignedValueTest.SECRET_DICT,
+                                     "key", value, clock=self.present,
+                                     key_version=1)
+        key_version = get_signature_key_version(signed)
+        self.assertEqual(1, key_version)
 
 
 @wsgi_safe

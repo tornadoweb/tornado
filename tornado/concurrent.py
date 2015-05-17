@@ -203,6 +203,10 @@ class Future(object):
     def result(self, timeout=None):
         """If the operation succeeded, return its result.  If it failed,
         re-raise its exception.
+
+        This method takes a ``timeout`` argument for compatibility with
+        `concurrent.futures.Future` but it is an error to call it
+        before the `Future` is done, so the ``timeout`` is never used.
         """
         self._clear_tb_log()
         if self._result is not None:
@@ -215,6 +219,10 @@ class Future(object):
     def exception(self, timeout=None):
         """If the operation raised an exception, return the `Exception`
         object.  Otherwise returns None.
+
+        This method takes a ``timeout`` argument for compatibility with
+        `concurrent.futures.Future` but it is an error to call it
+        before the `Future` is done, so the ``timeout`` is never used.
         """
         self._clear_tb_log()
         if self._exc_info is not None:
@@ -291,7 +299,7 @@ class Future(object):
             try:
                 cb(self)
             except Exception:
-                app_log.exception('exception calling callback %r for %r',
+                app_log.exception('Exception in callback %r for %r',
                                   cb, self)
         self._callbacks = None
 
@@ -337,24 +345,42 @@ class DummyExecutor(object):
 dummy_executor = DummyExecutor()
 
 
-def run_on_executor(fn):
+def run_on_executor(*args, **kwargs):
     """Decorator to run a synchronous method asynchronously on an executor.
 
     The decorated method may be called with a ``callback`` keyword
     argument and returns a future.
 
-    This decorator should be used only on methods of objects with attributes
-    ``executor`` and ``io_loop``.
+    The `.IOLoop` and executor to be used are determined by the ``io_loop``
+    and ``executor`` attributes of ``self``. To use different attributes,
+    pass keyword arguments to the decorator::
+
+        @run_on_executor(executor='_thread_pool')
+        def foo(self):
+            pass
+
+    .. versionchanged:: 4.2
+       Added keyword arguments to use alternative attributes.
     """
-    @functools.wraps(fn)
-    def wrapper(self, *args, **kwargs):
-        callback = kwargs.pop("callback", None)
-        future = self.executor.submit(fn, self, *args, **kwargs)
-        if callback:
-            self.io_loop.add_future(future,
-                                    lambda future: callback(future.result()))
-        return future
-    return wrapper
+    def run_on_executor_decorator(fn):
+        executor = kwargs.get("executor", "executor")
+        io_loop = kwargs.get("io_loop", "io_loop")
+        @functools.wraps(fn)
+        def wrapper(self, *args, **kwargs):
+            callback = kwargs.pop("callback", None)
+            future = getattr(self, executor).submit(fn, self, *args, **kwargs)
+            if callback:
+                getattr(self, io_loop).add_future(
+                    future, lambda future: callback(future.result()))
+            return future
+        return wrapper
+    if args and kwargs:
+        raise ValueError("cannot combine positional and keyword args")
+    if len(args) == 1:
+        return run_on_executor_decorator(args[0])
+    elif len(args) != 0:
+        raise ValueError("expected 1 argument, got %d", len(args))
+    return run_on_executor_decorator
 
 
 _NO_RESULT = object()

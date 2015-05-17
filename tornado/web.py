@@ -35,7 +35,7 @@ Here is a simple "Hello, world" example app:
             (r"/", MainHandler),
         ])
         application.listen(8888)
-        tornado.ioloop.IOLoop.instance().start()
+        tornado.ioloop.IOLoop.current().start()
 
 .. testoutput::
    :hide:
@@ -139,18 +139,17 @@ May be overridden by passing a ``version`` keyword argument.
 DEFAULT_SIGNED_VALUE_MIN_VERSION = 1
 """The oldest signed value accepted by `.RequestHandler.get_secure_cookie`.
 
-May be overrided by passing a ``min_version`` keyword argument.
+May be overridden by passing a ``min_version`` keyword argument.
 
 .. versionadded:: 3.2.1
 """
 
 
 class RequestHandler(object):
-    """Subclass this class and define `get()` or `post()` to make a handler.
+    """Base class for HTTP request handlers.
 
-    If you want to support more methods than the standard GET/HEAD/POST, you
-    should override the class variable ``SUPPORTED_METHODS`` in your
-    `RequestHandler` subclass.
+    Subclasses must define at least one of the methods defined in the
+    "Entry points" section below.
     """
     SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PATCH", "PUT",
                          "OPTIONS")
@@ -613,8 +612,15 @@ class RequestHandler(object):
            and made it the default.
         """
         self.require_setting("cookie_secret", "secure cookies")
-        return create_signed_value(self.application.settings["cookie_secret"],
-                                   name, value, version=version)
+        secret = self.application.settings["cookie_secret"]
+        key_version = None
+        if isinstance(secret, dict):
+            if self.application.settings.get("key_version") is None:
+                raise Exception("key_version setting must be used for secret_key dicts")
+            key_version = self.application.settings["key_version"]
+
+        return create_signed_value(secret, name, value, version=version,
+                                   key_version=key_version)
 
     def get_secure_cookie(self, name, value=None, max_age_days=31,
                           min_version=None):
@@ -634,6 +640,17 @@ class RequestHandler(object):
         return decode_signed_value(self.application.settings["cookie_secret"],
                                    name, value, max_age_days=max_age_days,
                                    min_version=min_version)
+
+    def get_secure_cookie_key_version(self, name, value=None):
+        """Returns the signing key version of the secure cookie.
+
+        The version is returned as int.
+        """
+        self.require_setting("cookie_secret", "secure cookies")
+        if value is None:
+            value = self.get_cookie(name)
+        return get_signature_key_version(value)
+
 
     def redirect(self, url, permanent=False, status=None):
         """Sends a redirect to the given (optionally relative) URL.
@@ -670,12 +687,12 @@ class RequestHandler(object):
         https://github.com/facebook/tornado/issues/1009
         """
         if self._finished:
-            raise RuntimeError("Cannot write() after finish().  May be caused "
-                               "by using async operations without the "
-                               "@asynchronous decorator.")
+            raise RuntimeError("Cannot write() after finish()")
         if not isinstance(chunk, (bytes, unicode_type, dict)):
-            raise TypeError(
-                "write() only accepts bytes, unicode, and dict objects")
+            message = "write() only accepts bytes, unicode, and dict objects"
+            if isinstance(chunk, list):
+                message += ". Lists not accepted for security reasons; see http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"
+            raise TypeError(message)
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
@@ -885,9 +902,7 @@ class RequestHandler(object):
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
         if self._finished:
-            raise RuntimeError("finish() called twice.  May be caused "
-                               "by using async operations without the "
-                               "@asynchronous decorator.")
+            raise RuntimeError("finish() called twice")
 
         if chunk is not None:
             self.write(chunk)
@@ -1508,10 +1523,11 @@ class RequestHandler(object):
 def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.
 
-    This decorator is unnecessary if the method is also decorated with
-    ``@gen.coroutine`` (it is legal but unnecessary to use the two
-    decorators together, in which case ``@asynchronous`` must be
-    first).
+    This decorator is for callback-style asynchronous methods; for
+    coroutines, use the ``@gen.coroutine`` decorator without
+    ``@asynchronous``. (It is legal for legacy reasons to use the two
+    decorators together provided ``@asynchronous`` is first, but
+    ``@asynchronous`` will be ignored in this case)
 
     This decorator should only be applied to the :ref:`HTTP verb
     methods <verbs>`; its behavior is undefined for any other method.
@@ -1543,6 +1559,7 @@ def asynchronous(method):
 
     .. versionadded:: 3.1
        The ability to use ``@gen.coroutine`` without ``@asynchronous``.
+
     """
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
@@ -1664,7 +1681,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         ])
         http_server = httpserver.HTTPServer(application)
         http_server.listen(8080)
-        ioloop.IOLoop.instance().start()
+        ioloop.IOLoop.current().start()
 
     The constructor for this class takes in a list of `URLSpec` objects
     or (regexp, request_class) tuples. When we receive requests, we
@@ -1762,7 +1779,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         `.TCPServer.bind`/`.TCPServer.start` methods directly.
 
         Note that after calling this method you still need to call
-        ``IOLoop.instance().start()`` to start the server.
+        ``IOLoop.current().start()`` to start the server.
         """
         # import is here rather than top level because HTTPServer
         # is not importable on appengine
@@ -2031,6 +2048,8 @@ class HTTPError(Exception):
         self.log_message = log_message
         self.args = args
         self.reason = kwargs.get('reason', None)
+        if log_message and not args:
+            self.log_message = log_message.replace('%', '%%')
 
     def __str__(self):
         message = "HTTP %d: %s" % (
@@ -2959,11 +2978,13 @@ else:
         return result == 0
 
 
-def create_signed_value(secret, name, value, version=None, clock=None):
+def create_signed_value(secret, name, value, version=None, clock=None,
+                        key_version=None):
     if version is None:
         version = DEFAULT_SIGNED_VALUE_VERSION
     if clock is None:
         clock = time.time
+
     timestamp = utf8(str(int(clock())))
     value = base64.b64encode(utf8(value))
     if version == 1:
@@ -2980,8 +3001,7 @@ def create_signed_value(secret, name, value, version=None, clock=None):
         #
         # The fields are:
         # - format version (i.e. 2; no length prefix)
-        # - key version (currently 0; reserved for future
-        #       key rotation features)
+        # - key version (integer, default is 0)
         # - timestamp (integer seconds since epoch)
         # - name (not encoded; assumed to be ~alphanumeric)
         # - value (base64-encoded)
@@ -2989,11 +3009,18 @@ def create_signed_value(secret, name, value, version=None, clock=None):
         def format_field(s):
             return utf8("%d:" % len(s)) + utf8(s)
         to_sign = b"|".join([
-            b"2|1:0",
+            b"2",
+            format_field(str(key_version or 0)),
             format_field(timestamp),
             format_field(name),
             format_field(value),
             b''])
+
+        if isinstance(secret, dict):
+            assert key_version is not None, 'Key version must be set when sign key dict is used'
+            assert version >= 2, 'Version must be at least 2 for key version support'
+            secret = secret[key_version]
+
         signature = _create_signature_v2(secret, to_sign)
         return to_sign + signature
     else:
@@ -3004,21 +3031,10 @@ def create_signed_value(secret, name, value, version=None, clock=None):
 _signed_value_version_re = re.compile(br"^([1-9][0-9]*)\|(.*)$")
 
 
-def decode_signed_value(secret, name, value, max_age_days=31,
-                        clock=None, min_version=None):
-    if clock is None:
-        clock = time.time
-    if min_version is None:
-        min_version = DEFAULT_SIGNED_VALUE_MIN_VERSION
-    if min_version > 2:
-        raise ValueError("Unsupported min_version %d" % min_version)
-    if not value:
-        return None
-
-    # Figure out what version this is.  Version 1 did not include an
+def _get_version(value):
+    # Figures out what version value is.  Version 1 did not include an
     # explicit version field and started with arbitrary base64 data,
     # which makes this tricky.
-    value = utf8(value)
     m = _signed_value_version_re.match(value)
     if m is None:
         version = 1
@@ -3035,6 +3051,22 @@ def decode_signed_value(secret, name, value, max_age_days=31,
                 version = 1
         except ValueError:
             version = 1
+    return version
+
+
+def decode_signed_value(secret, name, value, max_age_days=31,
+                        clock=None, min_version=None):
+    if clock is None:
+        clock = time.time
+    if min_version is None:
+        min_version = DEFAULT_SIGNED_VALUE_MIN_VERSION
+    if min_version > 2:
+        raise ValueError("Unsupported min_version %d" % min_version)
+    if not value:
+        return None
+
+    value = utf8(value)
+    version = _get_version(value)
 
     if version < min_version:
         return None
@@ -3078,7 +3110,7 @@ def _decode_signed_value_v1(secret, name, value, max_age_days, clock):
         return None
 
 
-def _decode_signed_value_v2(secret, name, value, max_age_days, clock):
+def _decode_fields_v2(value):
     def _consume_field(s):
         length, _, rest = s.partition(b':')
         n = int(length)
@@ -3089,16 +3121,28 @@ def _decode_signed_value_v2(secret, name, value, max_age_days, clock):
             raise ValueError("malformed v2 signed value field")
         rest = rest[n + 1:]
         return field_value, rest
+
     rest = value[2:]  # remove version number
+    key_version, rest = _consume_field(rest)
+    timestamp, rest = _consume_field(rest)
+    name_field, rest = _consume_field(rest)
+    value_field, passed_sig = _consume_field(rest)
+    return int(key_version), timestamp, name_field, value_field, passed_sig
+
+
+def _decode_signed_value_v2(secret, name, value, max_age_days, clock):
     try:
-        key_version, rest = _consume_field(rest)
-        timestamp, rest = _consume_field(rest)
-        name_field, rest = _consume_field(rest)
-        value_field, rest = _consume_field(rest)
+        key_version, timestamp, name_field, value_field, passed_sig = _decode_fields_v2(value)
     except ValueError:
         return None
-    passed_sig = rest
     signed_string = value[:-len(passed_sig)]
+
+    if isinstance(secret, dict):
+        try:
+            secret = secret[key_version]
+        except KeyError:
+            return None
+
     expected_sig = _create_signature_v2(secret, signed_string)
     if not _time_independent_equals(passed_sig, expected_sig):
         return None
@@ -3112,6 +3156,19 @@ def _decode_signed_value_v2(secret, name, value, max_age_days, clock):
         return base64.b64decode(value_field)
     except Exception:
         return None
+
+
+def get_signature_key_version(value):
+    value = utf8(value)
+    version = _get_version(value)
+    if version < 2:
+        return None
+    try:
+        key_version, _, _, _, _ = _decode_fields_v2(value)
+    except ValueError:
+        return None
+
+    return key_version
 
 
 def _create_signature_v1(secret, *parts):

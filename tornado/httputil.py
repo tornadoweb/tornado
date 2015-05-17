@@ -234,6 +234,14 @@ class HTTPHeaders(dict):
         # default implementation returns dict(self), not the subclass
         return HTTPHeaders(self)
 
+    # Use our overridden copy method for the copy.copy module.
+    __copy__ = copy
+
+    def __deepcopy__(self, memo_dict):
+        # Our values are immutable strings, so our standard copy is
+        # effectively a deep copy.
+        return self.copy()
+
 
 class HTTPServerRequest(object):
     """A single HTTP request.

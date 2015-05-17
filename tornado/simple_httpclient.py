@@ -50,9 +50,6 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
 
     This class implements an HTTP 1.1 client on top of Tornado's IOStreams.
-    It does not currently implement all applicable parts of the HTTP
-    specification, but it does enough to work with major web service APIs.
-
     Some features found in the curl-based AsyncHTTPClient are not yet
     supported.  In particular, proxies are not supported, connections
     are not reused, and callers cannot select the network interface to be
@@ -60,25 +57,39 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """
     def initialize(self, io_loop, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
-                   resolver=None, defaults=None, max_header_size=None):
+                   resolver=None, defaults=None, max_header_size=None,
+                   max_body_size=None):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
         in order to provide limitations on the number of pending connections.
-        force_instance=True may be used to suppress this behavior.
+        ``force_instance=True`` may be used to suppress this behavior.
 
-        max_clients is the number of concurrent requests that can be
-        in progress.  Note that this arguments are only used when the
-        client is first created, and will be ignored when an existing
-        client is reused.
+        Note that because of this implicit reuse, unless ``force_instance``
+        is used, only the first call to the constructor actually uses
+        its arguments. It is recommended to use the ``configure`` method
+        instead of the constructor to ensure that arguments take effect.
 
-        hostname_mapping is a dictionary mapping hostnames to IP addresses.
+        ``max_clients`` is the number of concurrent requests that can be
+        in progress; when this limit is reached additional requests will be
+        queued. Note that time spent waiting in this queue still counts
+        against the ``request_timeout``.
+
+        ``hostname_mapping`` is a dictionary mapping hostnames to IP addresses.
         It can be used to make local DNS changes when modifying system-wide
-        settings like /etc/hosts is not possible or desirable (e.g. in
+        settings like ``/etc/hosts`` is not possible or desirable (e.g. in
         unittests).
 
-        max_buffer_size is the number of bytes that can be read by IOStream. It
-        defaults to 100mb.
+        ``max_buffer_size`` (default 100MB) is the number of bytes
+        that can be read into memory at once. ``max_body_size``
+        (defaults to ``max_buffer_size``) is the largest response body
+        that the client will accept.  Without a
+        ``streaming_callback``, the smaller of these two limits
+        applies; with a ``streaming_callback`` only ``max_body_size``
+        does.
+
+        .. versionchanged:: 4.2
+           Added the ``max_body_size`` argument.
         """
         super(SimpleAsyncHTTPClient, self).initialize(io_loop,
                                                       defaults=defaults)
@@ -88,6 +99,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.waiting = {}
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
+        self.max_body_size = max_body_size
         # TCPClient could create a Resolver for us, but we have to do it
         # ourselves to support hostname_mapping.
         if resolver:
@@ -142,7 +154,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self._connection_class()(
             self.io_loop, self, request, release_callback,
             final_callback, self.max_buffer_size, self.tcp_client,
-            self.max_header_size)
+            self.max_header_size, self.max_body_size)
 
     def _release_fetch(self, key):
         del self.active[key]
@@ -170,7 +182,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def __init__(self, io_loop, client, request, release_callback,
                  final_callback, max_buffer_size, tcp_client,
-                 max_header_size):
+                 max_header_size, max_body_size):
         self.start_time = io_loop.time()
         self.io_loop = io_loop
         self.client = client
@@ -180,6 +192,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.max_buffer_size = max_buffer_size
         self.tcp_client = tcp_client
         self.max_header_size = max_header_size
+        self.max_body_size = max_body_size
         self.code = None
         self.headers = None
         self.chunks = []
@@ -368,6 +381,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             HTTP1ConnectionParameters(
                 no_keep_alive=True,
                 max_header_size=self.max_header_size,
+                max_body_size=self.max_body_size,
                 decompress=self.request.decompress_response),
             self._sockaddr)
         return connection
