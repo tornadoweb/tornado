@@ -394,7 +394,7 @@ class HTTPServerRequest(object):
         """
         assert isinstance(chunk, bytes)
         assert self.version.startswith("HTTP/1."), \
-            "deprecated interface ony supported in HTTP/1.x"
+            "deprecated interface only supported in HTTP/1.x"
         self.connection.write(chunk, callback=callback)
 
     def finish(self):
