@@ -13,7 +13,9 @@ Backwards-compatibility notes
   of ``certifi`` when possible (i.e. Python 2.7.9+ or 3.4+). This includes
   `.IOStream` and ``simple_httpclient``, but not ``curl_httpclient``.
 * The default SSL configuration has become stricter, using
-  `ssl.create_default_context` where available.
+  `ssl.create_default_context` where available on the client side.
+  (On the server side, applications are encouraged to migrate from the
+  ``ssl_options`` dict-based API to pass an `ssl.SSLContext` instead).
 * The deprecated classes in the `tornado.auth` module, ``GoogleMixin``,
   ``FacebookMixin``, and ``FriendFeedMixin`` have been removed.
 
