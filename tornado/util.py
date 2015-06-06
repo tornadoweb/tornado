@@ -13,7 +13,6 @@ and `.Resolver`.
 from __future__ import absolute_import, division, print_function, with_statement
 
 import array
-import inspect
 import os
 import sys
 import zlib
@@ -23,6 +22,13 @@ try:
     xrange  # py2
 except NameError:
     xrange = range  # py3
+
+# inspect.getargspec() raises DeprecationWarnings in Python 3.5.
+# The two functions have compatible interfaces for the parts we need.
+try:
+    from inspect import getfullargspec as getargspec  # py3
+except ImportError:
+    from inspect import getargspec  # py2
 
 
 class ObjectDict(dict):
@@ -284,7 +290,7 @@ class ArgReplacer(object):
     def __init__(self, func, name):
         self.name = name
         try:
-            self.arg_pos = inspect.getargspec(func).args.index(self.name)
+            self.arg_pos = getargspec(func).args.index(self.name)
         except ValueError:
             # Not a positional parameter
             self.arg_pos = None
