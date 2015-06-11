@@ -26,6 +26,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
 import platform
+import textwrap
 import traceback
 import sys
 
@@ -169,6 +170,14 @@ class Future(object):
         self._tb_logger = None        # Used for Python <= 3.3
 
         self._callbacks = []
+
+    # Implement the Python 3.5 Awaitable protocol if possible
+    # (we can't use return and yield together until py33).
+    if sys.version_info >= (3, 3):
+        exec(textwrap.dedent("""
+        def __await__(self):
+            return (yield self)
+        """))
 
     def cancel(self):
         """Cancel the operation, if possible.

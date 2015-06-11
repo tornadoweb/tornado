@@ -26,7 +26,8 @@ try:
 except ImportError:
     futures = None
 
-skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 not available')
+skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 (yield from) not available')
+skipBefore35 = unittest.skipIf(sys.version_info < (3, 5), 'PEP 492 (async/await) not available')
 skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
                                  'Not CPython implementation')
 
@@ -728,6 +729,23 @@ class GenCoroutineTest(AsyncTestCase):
         self.assertEqual(result, 42)
         self.finished = True
 
+    @skipBefore35
+    @gen_test
+    def test_async_await(self):
+        # This test verifies that an async function can await a
+        # yield-based gen.coroutine, and that a gen.coroutine
+        # (the test method itself) can yield an async function.
+        global_namespace = dict(globals(), **locals())
+        local_namespace = {}
+        exec(textwrap.dedent("""
+        async def f():
+            await gen.Task(self.io_loop.add_callback)
+            return 42
+        """), global_namespace, local_namespace)
+        result = yield local_namespace['f']()
+        self.assertEqual(result, 42)
+        self.finished = True
+
     @gen_test
     def test_sync_return_no_value(self):
         @gen.coroutine
@@ -1041,6 +1059,15 @@ class AsyncPrepareErrorHandler(RequestHandler):
         self.finish('ok')
 
 
+class NativeCoroutineHandler(RequestHandler):
+    if sys.version_info > (3, 5):
+        exec(textwrap.dedent("""
+        async def get(self):
+            await gen.Task(IOLoop.current().add_callback)
+            self.write("ok")
+        """))
+
+
 class GenWebTest(AsyncHTTPTestCase):
     def get_app(self):
         return Application([
@@ -1054,6 +1081,7 @@ class GenWebTest(AsyncHTTPTestCase):
             ('/yield_exception', GenYieldExceptionHandler),
             ('/undecorated_coroutine', UndecoratedCoroutinesHandler),
             ('/async_prepare_error', AsyncPrepareErrorHandler),
+            ('/native_coroutine', NativeCoroutineHandler),
         ])
 
     def test_sequence_handler(self):
@@ -1095,6 +1123,12 @@ class GenWebTest(AsyncHTTPTestCase):
     def test_async_prepare_error_handler(self):
         response = self.fetch('/async_prepare_error')
         self.assertEqual(response.code, 403)
+
+    @skipBefore35
+    def test_native_coroutine_handler(self):
+        response = self.fetch('/native_coroutine')
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b'ok')
 
 
 class WithTimeoutTest(AsyncTestCase):
