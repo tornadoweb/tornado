@@ -2825,8 +2825,15 @@ class TemplateModule(UIModule):
                     raise ValueError("set_resources called with different "
                                      "resources for the same template")
             return ""
-        return self.render_string(path, set_resources=set_resources,
-                                  **kwargs)
+
+        try:
+            return self.render_string(
+                path, set_resources=set_resources,
+                **kwargs
+            )
+        except template.ParseError as exc:
+            exc.args = ("%s in %s" % (exc.args[0], path), )
+            raise
 
     def _get_resources(self, key):
         return (r[key] for r in self._resource_list if key in r)
