@@ -621,46 +621,8 @@ class OAuth2Mixin(object):
             args.update(extra_params)
         return url_concat(url, args)
 
-    @_auth_return_future
-    def auth_request(self, path, callback, access_token=None,
+    def _auth_request(self, path, callback, access_token=None,
                      post_args=None, **args):
-        """Fetches the given relative API path, e.g., "/btaylor/picture"
-
-        If the request is a POST, ``post_args`` should be provided. Query
-        string arguments should be given as keyword arguments.
-
-        Many methods require an OAuth access token which you can
-        obtain through `~OAuth2Mixin.authorize_redirect` and
-        `get_authenticated_user`. The user returned through that
-        process includes an ``access_token`` attribute that can be
-        used to make authenticated requests via this method.
-
-        Example usage:
-
-        ..testcode::
-
-            class MainHandler(tornado.web.RequestHandler,
-                              tornado.auth.FacebookGraphMixin):
-                @tornado.web.authenticated
-                @tornado.gen.coroutine
-                def get(self):
-                    new_entry = yield self.facebook_request(
-                        "/me/feed",
-                        post_args={"message": "I am posting from my Tornado application!"},
-                        access_token=self.current_user["access_token"])
-
-                    if not new_entry:
-                        # Call failed; perhaps missing permission?
-                        yield self.authorize_redirect()
-                        return
-                    self.finish("Posted a message!")
-
-        .. testoutput::
-           :hide:
-
-        The given path is relative to ``self._OAUTH_BASE_URL``,
-        by default "https://graph.facebook.com".
-        """
         url = self._OAUTH_BASE_URL + path
         all_args = {}
         if access_token:
@@ -922,13 +884,18 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
            "expires": args.get("expires_in")
         }
 
-        self.auth_request(
+        self.google_request(
             path="/userinfo",
             callback=functools.partial(
                 self._on_get_user_info, future, session),
             access_token=session["access_token"],
             alt='json',
         )
+
+    @_auth_return_future
+    def google_request(self, path, callback, access_token=None,
+                       post_args=None, **args):
+        return self._auth_request(path, callback, access_token, post_args, **args)
 
     def _on_get_user_info(self, future, session, user):
         if user is None:
@@ -1067,13 +1034,13 @@ class FacebookGraphMixin(OAuth2Mixin):
         .. testoutput::
            :hide:
 
-        The given path is relative to ``self._FACEBOOK_BASE_URL``,
+        The given path is relative to ``self._OAUTH_BASE_URL``,
         by default "https://graph.facebook.com".
 
         .. versionchanged:: 3.1
-           Added the ability to override ``self._FACEBOOK_BASE_URL``.
+           Added the ability to override ``self._OAUTH_BASE_URL``.
         """
-        self.auth_request(path, callback, access_token, post_args, **args)
+        self._auth_request(path, callback, access_token, post_args, **args)
 
     def get_auth_http_client(self):
         """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
