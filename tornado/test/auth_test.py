@@ -417,7 +417,6 @@ class AuthTest(AsyncHTTPTestCase):
 
 
 class GoogleLoginHandler(RequestHandler, GoogleOAuth2Mixin):
-
     def initialize(self, test):
         self._OAUTH_REDIRECT_URI = test.get_url('/client/login')
         self._OAUTH_AUTHORIZE_URL = test.get_url('/google/oauth2/authorize')
@@ -431,8 +430,9 @@ class GoogleLoginHandler(RequestHandler, GoogleOAuth2Mixin):
 
             # retrieve authenticate google user
             user = yield self.get_authenticated_user(self._OAUTH_REDIRECT_URI, code)
-            self.write(user)
 
+            # return the user as json
+            self.write(user)
         else:
             yield self.authorize_redirect(
                 redirect_uri=self._OAUTH_REDIRECT_URI,
@@ -443,9 +443,7 @@ class GoogleLoginHandler(RequestHandler, GoogleOAuth2Mixin):
                 extra_params={'prompt': 'select_account'})
 
 
-
 class GoogleOAuth2AuthorizeHandler(RequestHandler):
-
     def get(self):
         # issue a fake auth code and redirect to redirect_uri
         code = 'fake-authorization-code'
@@ -454,7 +452,6 @@ class GoogleOAuth2AuthorizeHandler(RequestHandler):
 
 
 class GoogleOAuth2TokenHandler(RequestHandler):
-
     def post(self):
         assert self.get_argument('code') == 'fake-authorization-code'
         # issue a fake token
@@ -465,7 +462,6 @@ class GoogleOAuth2TokenHandler(RequestHandler):
 
 
 class GoogleOAuth2ProfileHandler(RequestHandler):
-
     def get(self):
         assert self.get_argument('access_token') == 'fake-access-token'
         # return the user "profile"
