@@ -201,7 +201,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         except KeyError:
             return
         if not self.idle[conn.base]:
-	    del self.idle[conn.base]
+            del self.idle[conn.base]
 
     def _remove_timeout(self, key):
         try:
