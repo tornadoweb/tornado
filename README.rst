@@ -41,13 +41,15 @@ Here is a simple "Hello, world" example web app for Tornado:
         def get(self):
             self.write("Hello, world")
 
-    application = tornado.web.Application([
-        (r"/", MainHandler),
-    ])
+    def make_app():
+        return tornado.web.Application([
+            (r"/", MainHandler),
+        ])
 
     if __name__ == "__main__":
-        application.listen(8888)
-        tornado.ioloop.IOLoop.instance().start()
+        app = make_app()
+        app.listen(8888)
+        tornado.ioloop.IOLoop.current().start()
 
 This example does not use any of Tornado's asynchronous features; for
 that see this `simple chat room
