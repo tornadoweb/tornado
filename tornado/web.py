@@ -2144,6 +2144,11 @@ class StaticFileHandler(RequestHandler):
     the ``path`` argument to the get() method (different than the constructor
     argument above); see `URLSpec` for details.
 
+    To serve a file like ``index.html`` automatically when a directory is
+    requested, set ``static_handler_args=dict(default_filename="index.html")``
+    in your application settings, or add ``default_filename`` as an initializer
+    argument for your ``StaticFileHandler``.
+
     To maximize the effectiveness of browser caching, this class supports
     versioned urls (by default using the argument ``?v=``).  If a version
     is given, we instruct the browser to cache this file indefinitely.
@@ -2155,8 +2160,7 @@ class StaticFileHandler(RequestHandler):
     a dedicated static file server (such as nginx or Apache).  We support
     the HTTP ``Accept-Ranges`` mechanism to return partial content (because
     some browsers require this functionality to be present to seek in
-    HTML5 audio or video), but this handler should not be used with
-    files that are too large to fit comfortably in memory.
+    HTML5 audio or video).
 
     **Subclassing notes**
 
