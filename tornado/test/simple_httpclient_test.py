@@ -716,10 +716,10 @@ class KeepAliveTest(AsyncHTTPTestCase):
         return client
 
     def test_keep_alive(self):
-        response1 = self.fetch('/keepalive', method='POST', body=u"foo")
-        self.assertEqual(response1.body, u'foo')
-        response2 = self.fetch('/keepalive', method='POST', body=u"bar")
-        self.assertEqual(response2.body, u'bar')
+        response1 = self.fetch('/keepalive', method='POST', body="foo")
+        self.assertEqual(response1.body, b'foo')
+        response2 = self.fetch('/keepalive', method='POST', body="bar")
+        self.assertEqual(response2.body, b'bar')
 
         # Confirm only a single stream was opened.
         app = self.get_app()
@@ -731,7 +731,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
             self.assertIs(base, stream)
 
     def test_keep_alive_closed(self):
-        response = self.fetch('/keepalive-closed', method='POST', body=u"foo")
+        response = self.fetch('/keepalive-closed', method='POST', body="foo")
         self.assertEquals(self.http_client.idle, {})
-        response = self.fetch('/keepalive', method='POST', body=u"foo")
-        self.assertEqual(response.body, u"foo")
+        response = self.fetch('/keepalive', method='POST', body="foo")
+        self.assertEqual(response.body, b"foo")
