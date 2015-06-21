@@ -47,6 +47,11 @@ try:
 except ImportError:
     from io import StringIO  # py3
 
+try:
+    from collections.abc import Generator as GeneratorType  # py35+
+except ImportError:
+    from types import GeneratorType
+
 # Tornado's own test suite requires the updated unittest module
 # (either py27+ or unittest2) so tornado.test.util enforces
 # this requirement, but for other users of tornado.testing we want
@@ -118,7 +123,7 @@ class _TestMethodWrapper(object):
 
     def __call__(self, *args, **kwargs):
         result = self.orig_method(*args, **kwargs)
-        if isinstance(result, types.GeneratorType):
+        if isinstance(result, GeneratorType):
             raise TypeError("Generator test methods should be decorated with "
                             "tornado.testing.gen_test")
         elif result is not None:
@@ -485,7 +490,7 @@ def gen_test(func=None, timeout=None):
         @functools.wraps(f)
         def pre_coroutine(self, *args, **kwargs):
             result = f(self, *args, **kwargs)
-            if isinstance(result, types.GeneratorType):
+            if isinstance(result, GeneratorType):
                 self._test_generator = result
             else:
                 self._test_generator = None

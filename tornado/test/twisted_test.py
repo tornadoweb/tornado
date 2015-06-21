@@ -593,6 +593,14 @@ if have_twisted:
         ],
         'twisted.internet.test.test_unix.UNIXPortTestsBuilder': [],
     }
+    if sys.version_info >= (3,):
+        # In Twisted 15.2.0 on Python 3.4, the process tests will try to run
+        # but fail, due in part to interactions between Tornado's strict
+        # warnings-as-errors policy and Twisted's own warning handling
+        # (it was not obvious how to configure the warnings module to
+        # reconcile the two), and partly due to what looks like a packaging
+        # error (process_cli.py missing). For now, just skip it.
+        del twisted_tests['twisted.internet.test.test_process.ProcessTestsBuilder']
     for test_name, blacklist in twisted_tests.items():
         try:
             test_class = import_object(test_name)

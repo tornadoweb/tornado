@@ -80,8 +80,8 @@ import collections
 import functools
 import itertools
 import sys
+import textwrap
 import types
-import weakref
 
 from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
@@ -96,6 +96,17 @@ except ImportError as e:
         from singledispatch import singledispatch  # backport
     except ImportError:
         singledispatch = None
+
+
+try:
+    from collections.abc import Generator as GeneratorType  # py35+
+except ImportError:
+    from types import GeneratorType
+
+try:
+    from inspect import isawaitable  # py35+
+except ImportError:
+    def isawaitable(x): return False
 
 
 class KeyReuseError(Exception):
@@ -202,6 +213,10 @@ def _make_coroutine_wrapper(func, replace_callback):
     argument, so we cannot simply implement ``@engine`` in terms of
     ``@coroutine``.
     """
+    # On Python 3.5, set the coroutine flag on our generator, to allow it
+    # to be used with 'await'.
+    if hasattr(types, 'coroutine'):
+        func = types.coroutine(func)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         future = TracebackFuture()
@@ -219,7 +234,7 @@ def _make_coroutine_wrapper(func, replace_callback):
             future.set_exc_info(sys.exc_info())
             return future
         else:
-            if isinstance(result, types.GeneratorType):
+            if isinstance(result, GeneratorType):
                 # Inline the first iteration of Runner.run.  This lets us
                 # avoid the cost of creating a Runner when the coroutine
                 # never actually yields, which in turn allows us to
@@ -1001,6 +1016,16 @@ def _argument_adapter(callback):
             callback(None)
     return wrapper
 
+if sys.version_info >= (3, 3):
+    exec(textwrap.dedent("""
+    @coroutine
+    def _wrap_awaitable(x):
+        return (yield from x)
+    """))
+else:
+    def _wrap_awaitable(x):
+        raise NotImplementedError()
+
 
 def convert_yielded(yielded):
     """Convert a yielded object into a `.Future`.
@@ -1022,6 +1047,8 @@ def convert_yielded(yielded):
         return multi_future(yielded)
     elif is_future(yielded):
         return yielded
+    elif isawaitable(yielded):
+        return _wrap_awaitable(yielded)
     else:
         raise BadYieldError("yielded unknown object %r" % (yielded,))
 
