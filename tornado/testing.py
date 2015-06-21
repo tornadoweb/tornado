@@ -338,13 +338,17 @@ class AsyncHTTPTestCase(AsyncTestCase):
                 return Application([('/', MyHandler)...])
 
             def test_homepage(self):
-                # The following two lines are equivalent to
-                #   response = self.fetch('/')
-                # but are shown in full here to demonstrate explicit use
-                # of self.stop and self.wait.
-                self.http_client.fetch(self.get_url('/'), self.stop)
-                response = self.wait()
-                # test contents of response
+                response = self.fetch('/')
+
+    That call to ``self.fetch()`` is equivalent to ::
+
+        self.http_client.fetch(self.get_url('/'), self.stop)
+        response = self.wait()
+
+    which illustrates how AsyncTestCase can turn an asynchronous operation,
+    like ``http_client.fetch()``, into a synchronous operation. If you need
+    to do other asynchronous operations in tests, you'll probably need to use
+    ``stop()`` and ``wait()`` yourself.
     """
     def setUp(self):
         super(AsyncHTTPTestCase, self).setUp()
