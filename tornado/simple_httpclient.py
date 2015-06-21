@@ -348,8 +348,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _on_timeout(self):
         self._timeout = None
         if self.keepalive:
-	    self.stream.close()
-	    self._release()
+            self.stream.close()
+            self._release()
         if self.final_callback is not None:
             raise HTTPError(599, "Timeout")
 
