@@ -252,7 +252,7 @@ class Template(object):
 
     def generate(self, **kwargs):
         """Generate this template as a string with the given arguments."""
-        return "".join(self.generate_iter(**kwargs))
+        return b"".join(self.generate_iter(**kwargs))
 
     def generate_iter(self, **kwargs):
         """Generate this template incrementally as an iterator with the given arguments."""
@@ -417,7 +417,7 @@ class _File(_Node):
         with writer.indent():
             self.body.generate(writer)
             if self.line == 0:
-                writer.write_line("yield ''", self.line)
+                writer.write_line("yield _tt_utf8('')", self.line)
 
 
     def each_child(self):
