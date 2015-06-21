@@ -331,14 +331,19 @@ class AsyncHTTPTestCase(AsyncTestCase):
     Tests will typically use the provided ``self.http_client`` to fetch
     URLs from this server.
 
-    Example::
+    Example, assuming the "Hello, world" example from the user guide is in
+    ``hello.py``::
 
-        class MyHTTPTest(AsyncHTTPTestCase):
+        import hello
+
+        class TestHelloApp(AsyncHTTPTestCase):
             def get_app(self):
-                return Application([('/', MyHandler)...])
+                return hello.make_app()
 
             def test_homepage(self):
                 response = self.fetch('/')
+                self.assertEqual(response.code, 200)
+                self.assertEqual(response.body, 'Hello, world')
 
     That call to ``self.fetch()`` is equivalent to ::
 
