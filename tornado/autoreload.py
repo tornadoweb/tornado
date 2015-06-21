@@ -289,11 +289,16 @@ def main():
             runpy.run_module(module, run_name="__main__", alter_sys=True)
         elif mode == "script":
             with open(script) as f:
+                # Execute the script in our namespace instead of creating
+                # a new one so that something that tries to import __main__
+                # (e.g. the unittest module) will see names defined in the
+                # script instead of just those defined in this module.
                 global __file__
                 __file__ = script
-                # Use globals as our "locals" dictionary so that
-                # something that tries to import __main__ (e.g. the unittest
-                # module) will see the right things.
+                # If __package__ is defined, imports may be incorrectly
+                # interpreted as relative to this module.
+                global __package__
+                del __package__
                 exec_in(f.read(), globals(), globals())
     except SystemExit as e:
         logging.basicConfig()
