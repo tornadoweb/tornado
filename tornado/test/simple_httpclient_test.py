@@ -702,7 +702,8 @@ class KeepAliveTest(AsyncHTTPTestCase):
 
     _state_app = KeepAliveApplication([
         ('/keepalive', EchoPostHandler),
-        ('/keepalive-closed', CloseHandler)
+        ('/keepalive-closed', CloseHandler),
+        ('/hang', HangHandler)
     ], gzip=True)
 
     def get_app(self):
@@ -735,3 +736,8 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.assertEquals(self.http_client.idle, {})
         response = self.fetch('/keepalive', method='POST', body="foo")
         self.assertEqual(response.body, b"foo")
+
+    def test_keep_alive_timeout(self):
+        response = self.fetch('/hang', request_timeout=.1)
+        self.assertEquals(response.error.code, 599)
+        self.assertEquals(self.http_client.idle, {})

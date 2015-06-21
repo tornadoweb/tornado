@@ -152,9 +152,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         with stack_context.NullContext():
             while self.queue and len(self.active) < self.max_clients:
                 key, request, callback = self.queue.popleft()
-                if key not in self.waiting:
+                if not self._remove_timeout(key):
                     continue
-                self._remove_timeout(key)
                 self.active[key] = (request, callback)
                 release_callback = functools.partial(self._release_fetch, key)
                 self._handle_request(request, release_callback, callback)
@@ -165,12 +164,16 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def _handle_request(self, request, release_callback, final_callback):
         cls = self._connection_class()
         base = cls.parse_connection_base(request)
-        if self.reuse_connections and base in self.idle and self.idle[base]:
-            conn = self.idle[base].popleft()
-            conn.release_callback = release_callback
-            conn.final_callback = final_callback
-            conn.send(request)
-            return
+        if self.reuse_connections:
+            try:
+                conn = self.idle[base].popleft()
+            except (KeyError, IndexError):
+                pass
+            else:
+                conn.release_callback = release_callback
+                conn.final_callback = final_callback
+                conn.send(request)
+                return
         cls(self.io_loop, self, request, release_callback, final_callback,
             self.max_buffer_size, self.tcp_client, self.max_header_size,
             self.max_body_size, self.reuse_connections, base)
@@ -187,23 +190,28 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self._process_queue()
 
     def _add_idle(self, conn):
-        if not conn.base in self.idle:
-            self.idle[conn.base] = collections.deque()
-        self.idle[conn.base].append(conn)
+        try:
+           self.idle[conn.base].append(conn)
+        except KeyError:
+           self.idle[conn.base] = collections.deque([conn])
 
     def _remove_idle(self, conn):
-        if not conn.base in self.idle:
+        try:
+            self.idle[conn.base].remove(conn)
+        except KeyError:
             return
-        self.idle[conn.base].remove(conn)
         if not self.idle[conn.base]:
-            del self.idle[conn.base]
+	    del self.idle[conn.base]
 
     def _remove_timeout(self, key):
-        if key in self.waiting:
+        try:
             request, callback, timeout_handle = self.waiting[key]
             if timeout_handle is not None:
                 self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
+        except KeyError:
+            return False
+        return True
 
     def _on_timeout(self, key):
         request, callback, timeout_handle = self.waiting[key]
@@ -339,6 +347,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def _on_timeout(self):
         self._timeout = None
+        if self.keepalive:
+	    self.stream.close()
+	    self._release()
         if self.final_callback is not None:
             raise HTTPError(599, "Timeout")
 
@@ -479,11 +490,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             release_callback(self)
 
     def _run_callback(self, response):
-        self._release()
         if self.final_callback is not None:
             final_callback = self.final_callback
             self.final_callback = None
             self.io_loop.add_callback(final_callback, response)
+        self._release()
 
     def _handle_exception(self, typ, value, tb):
         if self.final_callback:
