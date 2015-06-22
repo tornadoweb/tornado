@@ -621,6 +621,40 @@ class OAuth2Mixin(object):
             args.update(extra_params)
         return url_concat(url, args)
 
+    def _auth_request(self, path, callback, access_token=None,
+                     post_args=None, **args):
+        url = self._OAUTH_BASE_URL + path
+        all_args = {}
+        if access_token:
+            all_args["access_token"] = access_token
+            all_args.update(args)
+
+        if all_args:
+            url += "?" + urllib_parse.urlencode(all_args)
+        callback = functools.partial(self._on_auth_request, callback)
+        http = self.get_auth_http_client()
+        if post_args is not None:
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, callback=callback)
+
+    def _on_auth_request(self, future, response):
+        if response.error:
+            future.set_exception(AuthError("Error response %s fetching %s" %
+                                           (response.error, response.request.url)))
+            return
+
+        future.set_result(escape.json_decode(response.body))
+
+    def get_auth_http_client(self):
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+
+        May be overridden by subclasses to use an HTTP client other than
+        the default.
+        """
+        return httpclient.AsyncHTTPClient()
+
 
 class TwitterMixin(OAuthMixin):
     """Twitter OAuth authentication.
@@ -793,6 +827,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     _OAUTH_ACCESS_TOKEN_URL = "https://accounts.google.com/o/oauth2/token"
     _OAUTH_NO_CALLBACKS = False
     _OAUTH_SETTINGS_KEY = 'google_oauth'
+    _OAUTH_BASE_URL = "https://www.googleapis.com/oauth2/v2"
 
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, code, callback):
@@ -842,16 +877,35 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             future.set_exception(AuthError('Google auth error: %s' % str(response)))
             return
 
+        # extract access_token and expiration
         args = escape.json_decode(response.body)
-        future.set_result(args)
+        session = {
+           "access_token": args["access_token"],
+           "expires": args.get("expires_in")
+        }
 
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+        self.google_request(
+            path="/userinfo",
+            callback=functools.partial(
+                self._on_get_user_info, future, session),
+            access_token=session["access_token"],
+            alt='json',
+        )
 
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
+    @_auth_return_future
+    def google_request(self, path, callback, access_token=None,
+                       post_args=None, **args):
+        return self._auth_request(path, callback, access_token, post_args, **args)
+
+    def _on_get_user_info(self, future, session, user):
+        if user is None:
+            future.set_result(None)
+            return
+
+        # insert the access_token and expiration into the user object returned
+        user.update({"access_token": session["access_token"],
+                     "session_expires": session.get("expires")})
+        future.set_result(user)
 
 
 class FacebookGraphMixin(OAuth2Mixin):
@@ -859,7 +913,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     _OAUTH_ACCESS_TOKEN_URL = "https://graph.facebook.com/oauth/access_token?"
     _OAUTH_AUTHORIZE_URL = "https://www.facebook.com/dialog/oauth?"
     _OAUTH_NO_CALLBACKS = False
-    _FACEBOOK_BASE_URL = "https://graph.facebook.com"
+    _OAUTH_BASE_URL = "https://graph.facebook.com"
 
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
@@ -980,35 +1034,13 @@ class FacebookGraphMixin(OAuth2Mixin):
         .. testoutput::
            :hide:
 
-        The given path is relative to ``self._FACEBOOK_BASE_URL``,
+        The given path is relative to ``self._OAUTH_BASE_URL``,
         by default "https://graph.facebook.com".
 
         .. versionchanged:: 3.1
-           Added the ability to override ``self._FACEBOOK_BASE_URL``.
+           Added the ability to override ``self._OAUTH_BASE_URL``.
         """
-        url = self._FACEBOOK_BASE_URL + path
-        all_args = {}
-        if access_token:
-            all_args["access_token"] = access_token
-            all_args.update(args)
-
-        if all_args:
-            url += "?" + urllib_parse.urlencode(all_args)
-        callback = functools.partial(self._on_facebook_request, callback)
-        http = self.get_auth_http_client()
-        if post_args is not None:
-            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
-                       callback=callback)
-        else:
-            http.fetch(url, callback=callback)
-
-    def _on_facebook_request(self, future, response):
-        if response.error:
-            future.set_exception(AuthError("Error response %s fetching %s" %
-                                           (response.error, response.request.url)))
-            return
-
-        future.set_result(escape.json_decode(response.body))
+        self._auth_request(path, callback, access_token, post_args, **args)
 
     def get_auth_http_client(self):
         """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
