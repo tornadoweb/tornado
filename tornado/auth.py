@@ -621,6 +621,72 @@ class OAuth2Mixin(object):
             args.update(extra_params)
         return url_concat(url, args)
 
+    @_auth_return_future
+    def oauth2_request(self, url, callback, access_token=None,
+                       post_args=None, **args):
+        """Fetches the given URL auth an OAuth2 access token.
+
+        If the request is a POST, ``post_args`` should be provided. Query
+        string arguments should be given as keyword arguments.
+
+        Example usage:
+
+        ..testcode::
+
+            class MainHandler(tornado.web.RequestHandler,
+                              tornado.auth.FacebookGraphMixin):
+                @tornado.web.authenticated
+                @tornado.gen.coroutine
+                def get(self):
+                    new_entry = yield self.oauth2_request(
+                        "https://graph.facebook.com/me/feed",
+                        post_args={"message": "I am posting from my Tornado application!"},
+                        access_token=self.current_user["access_token"])
+
+                    if not new_entry:
+                        # Call failed; perhaps missing permission?
+                        yield self.authorize_redirect()
+                        return
+                    self.finish("Posted a message!")
+
+        .. testoutput::
+           :hide:
+
+        .. versionadded:: 4.3
+        """
+        all_args = {}
+        if access_token:
+            all_args["access_token"] = access_token
+            all_args.update(args)
+
+        if all_args:
+            url += "?" + urllib_parse.urlencode(all_args)
+        callback = functools.partial(self._on_facebook_request, callback)
+        http = self.get_auth_http_client()
+        if post_args is not None:
+            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
+                       callback=callback)
+        else:
+            http.fetch(url, callback=callback)
+
+    def _on_oauth2_request(self, future, response):
+        if response.error:
+            future.set_exception(AuthError("Error response %s fetching %s" %
+                                           (response.error, response.request.url)))
+            return
+
+        future.set_result(escape.json_decode(response.body))
+
+    def get_auth_http_client(self):
+        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
+
+        May be overridden by subclasses to use an HTTP client other than
+        the default.
+
+        .. versionadded:: 4.3
+        """
+        return httpclient.AsyncHTTPClient()
+
 
 class TwitterMixin(OAuthMixin):
     """Twitter OAuth authentication.
@@ -796,7 +862,15 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, code, callback):
-        """Handles the login for the Google user, returning a user object.
+        """Handles the login for the Google user, returning an access token.
+
+        The result is a dictionary containing an ``access_token`` field
+        ([among others](https://developers.google.com/identity/protocols/OAuth2WebServer#handlingtheresponse)).
+        Unlike other ``get_authenticated_user`` methods in this package,
+        this method does not return any additional information about the user.
+        The returned access token can be used with `OAuth2Mixin.oauth2_request`
+        to request additional information (perhaps from
+        ``https://www.googleapis.com/oauth2/v2/userinfo``)
 
         Example usage:
 
@@ -844,14 +918,6 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
         args = escape.json_decode(response.body)
         future.set_result(args)
-
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
-
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
 
 
 class FacebookGraphMixin(OAuth2Mixin):
@@ -983,40 +1049,16 @@ class FacebookGraphMixin(OAuth2Mixin):
         The given path is relative to ``self._FACEBOOK_BASE_URL``,
         by default "https://graph.facebook.com".
 
+        This method is a wrapper around `OAuth2Mixin.oauth2_request`;
+        the only difference is that this method takes a relative path,
+        while ``oauth2_request`` takes a complete url.
+
         .. versionchanged:: 3.1
            Added the ability to override ``self._FACEBOOK_BASE_URL``.
         """
         url = self._FACEBOOK_BASE_URL + path
-        all_args = {}
-        if access_token:
-            all_args["access_token"] = access_token
-            all_args.update(args)
-
-        if all_args:
-            url += "?" + urllib_parse.urlencode(all_args)
-        callback = functools.partial(self._on_facebook_request, callback)
-        http = self.get_auth_http_client()
-        if post_args is not None:
-            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
-                       callback=callback)
-        else:
-            http.fetch(url, callback=callback)
-
-    def _on_facebook_request(self, future, response):
-        if response.error:
-            future.set_exception(AuthError("Error response %s fetching %s" %
-                                           (response.error, response.request.url)))
-            return
-
-        future.set_result(escape.json_decode(response.body))
-
-    def get_auth_http_client(self):
-        """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
-
-        May be overridden by subclasses to use an HTTP client other than
-        the default.
-        """
-        return httpclient.AsyncHTTPClient()
+        return self.oauth2_request(url, callback, access_token,
+                                   post_args, **args)
 
 
 def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
