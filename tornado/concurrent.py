@@ -16,11 +16,10 @@
 """Utilities for working with threads and ``Futures``.
 
 ``Futures`` are a pattern for concurrent programming introduced in
-Python 3.2 in the `concurrent.futures` package (this package has also
-been backported to older versions of Python and can be installed with
-``pip install futures``).  Tornado will use `concurrent.futures.Future` if
-it is available; otherwise it will use a compatible class defined in this
-module.
+Python 3.2 in the `concurrent.futures` package. This package defines
+a mostly-compatible `Future` class designed for use from coroutines,
+as well as some utility functions for interacting with the
+`concurrent.futures` package.
 """
 from __future__ import absolute_import, division, print_function, with_statement
 
