@@ -661,7 +661,7 @@ class OAuth2Mixin(object):
 
         if all_args:
             url += "?" + urllib_parse.urlencode(all_args)
-        callback = functools.partial(self._on_facebook_request, callback)
+        callback = functools.partial(self._on_oauth2_request, callback)
         http = self.get_auth_http_client()
         if post_args is not None:
             http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
@@ -857,6 +857,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
     """
     _OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
     _OAUTH_ACCESS_TOKEN_URL = "https://accounts.google.com/o/oauth2/token"
+    _OAUTH_USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
     _OAUTH_NO_CALLBACKS = False
     _OAUTH_SETTINGS_KEY = 'google_oauth'
 
@@ -881,9 +882,12 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                 @tornado.gen.coroutine
                 def get(self):
                     if self.get_argument('code', False):
-                        user = yield self.get_authenticated_user(
+                        access = yield self.get_authenticated_user(
                             redirect_uri='http://your.site.com/auth/google',
                             code=self.get_argument('code'))
+                        args = dict(access_token=access["access_token"])
+                        url = self._OAUTH_USERINFO_URL + "?" + urllib_parse.urlencode(args)
+                        user = yield self.oauth2_request(url)
                         # Save the user with e.g. set_secure_cookie
                     else:
                         yield self.authorize_redirect(

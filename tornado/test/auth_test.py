@@ -421,14 +421,17 @@ class GoogleLoginHandler(RequestHandler, GoogleOAuth2Mixin):
         self._OAUTH_REDIRECT_URI = test.get_url('/client/login')
         self._OAUTH_AUTHORIZE_URL = test.get_url('/google/oauth2/authorize')
         self._OAUTH_ACCESS_TOKEN_URL = test.get_url('/google/oauth2/token')
+        self._OAUTH_USERINFO_URL = test.get_url('/google/oauth2/userinfo')
 
     @gen.coroutine
     def get(self):
         code = self.get_argument('code', None)
         if code is not None:
             # retrieve authenticate google user
-            user = yield self.get_authenticated_user(self._OAUTH_REDIRECT_URI,
-                                                     code)
+            access = yield self.get_authenticated_user(self._OAUTH_REDIRECT_URI,
+                                                       code)
+            url = self._OAUTH_USERINFO_URL + "?access_token=" + access["access_token"]
+            user = yield self.oauth2_request(url)
             # return the user as json
             self.write(user)
         else:
@@ -459,6 +462,16 @@ class GoogleOAuth2TokenHandler(RequestHandler):
         })
 
 
+class GoogleOAuth2UserinfoHandler(RequestHandler):
+    def get(self):
+        assert self.get_argument('access_token') == 'fake-access-token'
+        # return a fake user
+        self.finish({
+                u'name': u'Foo',
+                u'email': u'foo@example.com'
+                })
+
+
 class GoogleOAuth2Test(AsyncHTTPTestCase):
     def get_app(self):
         return Application(
@@ -469,6 +482,7 @@ class GoogleOAuth2Test(AsyncHTTPTestCase):
                 # simulated google authorization server endpoints
                 ('/google/oauth2/authorize', GoogleOAuth2AuthorizeHandler),
                 ('/google/oauth2/token', GoogleOAuth2TokenHandler),
+                ('/google/oauth2/userinfo', GoogleOAuth2UserinfoHandler),
             ],
             google_oauth={
                 "key": 'fake_google_client_id',
@@ -478,6 +492,6 @@ class GoogleOAuth2Test(AsyncHTTPTestCase):
     def test_google_login(self):
         response = self.fetch('/client/login')
         self.assertDictEqual({
-            u('access_token'): u('fake-access-token'),
-            u('expires_in'): u('never-expires'),
+            u('name'): u('Foo'),
+            u('email'): u('foo@example.com'),
         }, json_decode(response.body))
