@@ -467,8 +467,8 @@ class GoogleOAuth2UserinfoHandler(RequestHandler):
         assert self.get_argument('access_token') == 'fake-access-token'
         # return a fake user
         self.finish({
-                u'name': u'Foo',
-                u'email': u'foo@example.com'
+                'name': 'Foo',
+                'email': 'foo@example.com'
                 })
 
 
