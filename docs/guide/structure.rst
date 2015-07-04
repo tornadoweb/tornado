@@ -120,7 +120,7 @@ and `~.RequestHandler.get_body_argument`.
 
 .. testcode::
 
-    class MyFormHandler(RequestHandler):
+    class MyFormHandler(tornado.web.RequestHandler):
         def get(self):
             self.write('<html><body><form action="/myform" method="POST">'
                        '<input type="text" name="message">'
