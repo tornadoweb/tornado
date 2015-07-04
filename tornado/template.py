@@ -577,8 +577,23 @@ class _Text(_Node):
 
 
 class ParseError(Exception):
-    """Raised for template syntax errors."""
-    pass
+    """Raised for template syntax errors.
+
+    ``ParseError`` instances have ``filename`` and ``lineno`` attributes
+    indicating the position of the error.
+
+    .. versionchanged:: 4.3
+       Added ``filename`` and ``lineno`` attributes.
+    """
+    def __init__(self, message, filename, lineno):
+        self.message = message
+        # The names "filename" and "lineno" are chosen for consistency
+        # with python SyntaxError.
+        self.filename = filename
+        self.lineno = lineno
+
+    def __str__(self):
+        return '%s at %s:%d' % (self.message, self.filename, self.lineno)
 
 
 class _CodeWriter(object):
@@ -687,6 +702,9 @@ class _TemplateReader(object):
     def __str__(self):
         return self.text[self.pos:]
 
+    def raise_parse_error(self, msg):
+        raise ParseError(msg, self.name, self.line)
+
 
 def _format_code(code):
     lines = code.splitlines()
@@ -704,8 +722,8 @@ def _parse(reader, template, in_block=None, in_loop=None):
             if curly == -1 or curly + 1 == reader.remaining():
                 # EOF
                 if in_block:
-                    raise ParseError("Missing {%% end %%} block for %s" %
-                                     in_block)
+                    reader.raise_parse_error(
+                        "Missing {%% end %%} block for %s" % in_block)
                 body.chunks.append(_Text(reader.consume(), reader.line))
                 return body
             # If the first curly brace is not the start of a special token,
@@ -743,7 +761,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
         if start_brace == "{#":
             end = reader.find("#}")
             if end == -1:
-                raise ParseError("Missing end expression #} on line %d" % line)
+                reader.raise_parse_error("Missing end comment #}")
             contents = reader.consume(end).strip()
             reader.consume(2)
             continue
@@ -752,11 +770,11 @@ def _parse(reader, template, in_block=None, in_loop=None):
         if start_brace == "{{":
             end = reader.find("}}")
             if end == -1:
-                raise ParseError("Missing end expression }} on line %d" % line)
+                reader.raise_parse_error("Missing end expression }}")
             contents = reader.consume(end).strip()
             reader.consume(2)
             if not contents:
-                raise ParseError("Empty expression on line %d" % line)
+                reader.raise_parse_error("Empty expression")
             body.chunks.append(_Expression(contents, line))
             continue
 
@@ -764,11 +782,11 @@ def _parse(reader, template, in_block=None, in_loop=None):
         assert start_brace == "{%", start_brace
         end = reader.find("%}")
         if end == -1:
-            raise ParseError("Missing end block %%} on line %d" % line)
+            reader.raise_parse_error("Missing end block %}")
         contents = reader.consume(end).strip()
         reader.consume(2)
         if not contents:
-            raise ParseError("Empty block tag ({%% %%}) on line %d" % line)
+            reader.raise_parse_error("Empty block tag ({% %})")
 
         operator, space, suffix = contents.partition(" ")
         suffix = suffix.strip()
@@ -783,17 +801,19 @@ def _parse(reader, template, in_block=None, in_loop=None):
         allowed_parents = intermediate_blocks.get(operator)
         if allowed_parents is not None:
             if not in_block:
-                raise ParseError("%s outside %s block" %
-                                 (operator, allowed_parents))
+                reader.raise_parse_error("%s outside %s block" %
+                                         (operator, allowed_parents))
             if in_block not in allowed_parents:
-                raise ParseError("%s block cannot be attached to %s block" % (operator, in_block))
+                reader.raise_parse_error(
+                    "%s block cannot be attached to %s block" %
+                    (operator, in_block))
             body.chunks.append(_IntermediateControlBlock(contents, line))
             continue
 
         # End tag
         elif operator == "end":
             if not in_block:
-                raise ParseError("Extra {%% end %%} block on line %d" % line)
+                reader.raise_parse_error("Extra {% end %} block")
             return body
 
         elif operator in ("extends", "include", "set", "import", "from",
@@ -803,20 +823,20 @@ def _parse(reader, template, in_block=None, in_loop=None):
             if operator == "extends":
                 suffix = suffix.strip('"').strip("'")
                 if not suffix:
-                    raise ParseError("extends missing file path on line %d" % line)
+                    reader.raise_parse_error("extends missing file path")
                 block = _ExtendsBlock(suffix)
             elif operator in ("import", "from"):
                 if not suffix:
-                    raise ParseError("import missing statement on line %d" % line)
+                    reader.raise_parse_error("import missing statement")
                 block = _Statement(contents, line)
             elif operator == "include":
                 suffix = suffix.strip('"').strip("'")
                 if not suffix:
-                    raise ParseError("include missing file path on line %d" % line)
+                    reader.raise_parse_error("include missing file path")
                 block = _IncludeBlock(suffix, reader, line)
             elif operator == "set":
                 if not suffix:
-                    raise ParseError("set missing statement on line %d" % line)
+                    reader.raise_parse_error("set missing statement")
                 block = _Statement(suffix, line)
             elif operator == "autoescape":
                 fn = suffix.strip()
@@ -844,11 +864,11 @@ def _parse(reader, template, in_block=None, in_loop=None):
 
             if operator == "apply":
                 if not suffix:
-                    raise ParseError("apply missing method name on line %d" % line)
+                    reader.raise_parse_error("apply missing method name")
                 block = _ApplyBlock(suffix, line, block_body)
             elif operator == "block":
                 if not suffix:
-                    raise ParseError("block missing name on line %d" % line)
+                    reader.raise_parse_error("block missing name")
                 block = _NamedBlock(suffix, block_body, template, line)
             else:
                 block = _ControlBlock(contents, line, block_body)
@@ -857,9 +877,10 @@ def _parse(reader, template, in_block=None, in_loop=None):
 
         elif operator in ("break", "continue"):
             if not in_loop:
-                raise ParseError("%s outside %s block" % (operator, set(["for", "while"])))
+                reader.raise_parse_error("%s outside %s block" %
+                                         (operator, set(["for", "while"])))
             body.chunks.append(_Statement(contents, line))
             continue
 
         else:
-            raise ParseError("unknown operator: %r" % operator)
+            reader.raise_parse_error("unknown operator: %r" % operator)

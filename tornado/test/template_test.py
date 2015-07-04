@@ -264,6 +264,19 @@ three{%end%}
                             traceback.format_exc())
 
 
+class ParseErrorDetailTest(unittest.TestCase):
+    def test_details(self):
+        loader = DictLoader({
+            "foo.html": "\n\n{{",
+            })
+        with self.assertRaises(ParseError) as cm:
+            loader.load("foo.html")
+        self.assertEqual("Missing end expression }} at foo.html:3",
+                         str(cm.exception))
+        self.assertEqual("foo.html", cm.exception.filename)
+        self.assertEqual(3, cm.exception.lineno)
+
+
 class AutoEscapeTest(unittest.TestCase):
     def setUp(self):
         self.templates = {
