@@ -242,6 +242,15 @@ class HTTPHeaders(dict):
         # effectively a deep copy.
         return self.copy()
 
+    def __reduce_ex__(self, v):
+        # We must override dict.__reduce_ex__ to pickle ourselves
+        # correctly.
+        return HTTPHeaders, (), list(self.get_all())
+
+    def __setstate__(self, state):
+        for k, v in state:
+            self.add(k, v)
+
 
 class HTTPServerRequest(object):
     """A single HTTP request.
