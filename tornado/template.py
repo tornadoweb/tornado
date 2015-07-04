@@ -137,11 +137,24 @@ with ``{# ... #}``.
     there is no ``{% end %}`` tag; the comment goes from the word ``comment``
     to the closing ``%}`` tag.
 
-``{% extends *filename* %}``
+``{% extends *filename* [with *expr*] %}``
     Inherit from another template.  Templates that use ``extends`` should
     contain one or more ``block`` tags to replace content from the parent
     template.  Anything in the child template not contained in a ``block``
     tag will be ignored.  For an example, see the ``{% block %}`` tag.
+    The ``with`` version allows one to pass values to the inherited template,
+    similiar to calling the constructor of a super class in a OOP language.
+    Semicolons can be used to pass multiple values. The values are only available
+    to ``block`` tags inside the extended template. This implicates that passed
+    values can not be forwarded at the moment. Passed values will shadow any global
+    variables::
+    
+        <!-- base.html -->
+        <body style="width: {{width}}; color: {{color}};">{% block content %}Default{% end %}</body>
+        
+        <!-- mypage.html -->
+        {% extends "base.html" with width = "60%"; color = "red" %}
+        {% block content %}Custom content{% end %}
 
 ``{% for *var* in *expr* %}...{% end %}``
     Same as the python ``for`` statement.  ``{% break %}`` and
@@ -179,6 +192,18 @@ with ``{# ... #}``.
 
 ``{% set *x* = *y* %}``
     Sets a local variable.
+    
+``{% default *x* to *y* %}``
+    Defines a default value for a global variable. Can be used in
+    conjuction with ``extends``.::
+    
+        <!-- base.html -->
+        {% default width to "100%" %}
+        <body style="width: {{width}}; color: {{color}};">{% block content %}Default{% end %}</body>
+        
+        <!-- mypage.html -->
+        {% extends "base.html" with color = "red" %}
+        {% block content %}Custom content{% end %}
 
 ``{% try %}...{% except %}...{% else %}...{% finally %}...{% end %}``
     Same as the python ``try`` statement.
@@ -282,11 +307,14 @@ class Template(object):
         try:
             # named_blocks maps from names to _NamedBlock objects
             named_blocks = {}
+            # stores certain preset variables for each template
+            declarations = {}
             ancestors = self._get_ancestors(loader)
             ancestors.reverse()
             for ancestor in ancestors:
                 ancestor.find_named_blocks(loader, named_blocks)
-            writer = _CodeWriter(buffer, named_blocks, loader, ancestors[0].template,
+                ancestor.find_declarations(loader, declarations)
+            writer = _CodeWriter(buffer, named_blocks, declarations, loader, ancestors[0].template,
                                  compress_whitespace)
             ancestors[0].generate(writer)
             return buffer.getvalue()
@@ -401,6 +429,10 @@ class _Node(object):
         for child in self.each_child():
             child.find_named_blocks(loader, named_blocks)
 
+    def find_declarations(self, loader, declarations):
+        for child in self.each_child():
+            child.find_declarations(loader, declarations)
+
 
 class _File(_Node):
     def __init__(self, template, body):
@@ -413,6 +445,9 @@ class _File(_Node):
         with writer.indent():
             writer.write_line("_tt_buffer = []", self.line)
             writer.write_line("_tt_append = _tt_buffer.append", self.line)
+            declaration = writer.declarations.get(self.template.name)
+            if declaration:
+                writer.write_line(declaration, self.line)
             self.body.generate(writer)
             writer.write_line("return _tt_utf8('').join(_tt_buffer)", self.line)
 
@@ -444,8 +479,16 @@ class _NamedBlock(_Node):
 
     def generate(self, writer):
         block = writer.named_blocks[self.name]
-        with writer.include(block.template, self.line):
-            block.body.generate(writer)
+        funcName = "_tt_block_%s()" % abs(hash(self.name))
+        writer.write_line("def %s:" % funcName, self.line)
+        with writer.indent():
+            declaration = writer.declarations.get(block.template.name)
+            if declaration:
+                writer.write_line(declaration, self.line)
+            with writer.include(block.template, self.line):
+                block.body.generate(writer)
+            writer.write_line("pass", self.line)
+        writer.write_line(funcName, self.line)
 
     def find_named_blocks(self, loader, named_blocks):
         named_blocks[self.name] = self
@@ -453,8 +496,18 @@ class _NamedBlock(_Node):
 
 
 class _ExtendsBlock(_Node):
-    def __init__(self, name):
+    def __init__(self, reader, name, declaration = None):
+        self.template_name = reader.name
         self.name = name
+        self.declaration = declaration
+        
+    def find_declarations(self, loader, declarations):
+        if self.declaration:
+            toExtend = loader.resolve_path(self.name, self.template_name)
+            if toExtend in declarations:
+                declarations[toExtend] += "; {}".format(self.declaration)
+            else:
+                declarations[toExtend] = self.declaration
 
 
 class _IncludeBlock(_Node):
@@ -531,6 +584,23 @@ class _Statement(_Node):
     def generate(self, writer):
         writer.write_line(self.statement, self.line)
 
+class _Default(_Node):
+    def __init__(self, reader, varName, varValue, line):
+        self.template_name = reader.name
+        self.varName = varName
+        self.varValue = varValue
+        self.line = line
+        
+    def generate(self, writer):
+        pass
+        
+    def find_declarations(self, loader, declarations):
+        declaration =  declarations.get(self.template_name)
+        statement = '{name}={value} if "{name}" not in globals() else {name}'.format(name = self.varName, value = self.varValue)
+        if declaration:
+            declarations[self.template_name] =  statement + "; " + delcaration
+        else:
+            declarations[self.template_name] = statement
 
 class _Expression(_Node):
     def __init__(self, expression, line, raw=False):
@@ -582,10 +652,11 @@ class ParseError(Exception):
 
 
 class _CodeWriter(object):
-    def __init__(self, file, named_blocks, loader, current_template,
+    def __init__(self, file, named_blocks, declarations, loader, current_template,
                  compress_whitespace):
         self.file = file
         self.named_blocks = named_blocks
+        self.declarations = declarations
         self.loader = loader
         self.current_template = current_template
         self.compress_whitespace = compress_whitespace
@@ -796,15 +867,19 @@ def _parse(reader, template, in_block=None, in_loop=None):
                 raise ParseError("Extra {%% end %%} block on line %d" % line)
             return body
 
-        elif operator in ("extends", "include", "set", "import", "from",
+        elif operator in ("extends", "include", "set", "default", "import", "from",
                           "comment", "autoescape", "raw", "module"):
             if operator == "comment":
                 continue
             if operator == "extends":
-                suffix = suffix.strip('"').strip("'")
-                if not suffix:
+                path, separator, declaration = suffix.partition("with")
+                path = path.strip('\"\' ')
+                declaration = declaration.strip('; ')
+                if not path:
                     raise ParseError("extends missing file path on line %d" % line)
-                block = _ExtendsBlock(suffix)
+                if separator and not declaration:
+                    raise ParseError("extends missing variable declarations after with on line %d" % line)
+                block = _ExtendsBlock(reader, path, declaration)
             elif operator in ("import", "from"):
                 if not suffix:
                     raise ParseError("import missing statement on line %d" % line)
@@ -818,6 +893,13 @@ def _parse(reader, template, in_block=None, in_loop=None):
                 if not suffix:
                     raise ParseError("set missing statement on line %d" % line)
                 block = _Statement(suffix, line)
+            elif operator == "default":
+                name, separator, value = suffix.partition("to")
+                if not suffix:
+                    raise ParseError("default missing statement on line %d" % line)
+                if not value:
+                    raise ParseError("default missing value on line %d" % line)
+                block = _Default(reader, name, value, line)
             elif operator == "autoescape":
                 fn = suffix.strip()
                 if fn == "None":
