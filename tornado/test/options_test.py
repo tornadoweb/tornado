@@ -221,3 +221,45 @@ class OptionsTest(unittest.TestCase):
             options.define('foo')
         self.assertRegexpMatches(str(cm.exception),
                                  'Option.*foo.*already defined')
+
+    def test_dash_underscore_cli(self):
+        # Dashes and underscores should be interchangeable.
+        for defined_name in ['foo-bar', 'foo_bar']:
+            for flag in ['--foo-bar=a', '--foo_bar=a']:
+                options = OptionParser()
+                options.define(defined_name)
+                options.parse_command_line(['main.py', flag])
+                # Attr-style access always uses underscores.
+                self.assertEqual(options.foo_bar, 'a')
+                # Dict-style access allows both.
+                self.assertEqual(options['foo-bar'], 'a')
+                self.assertEqual(options['foo_bar'], 'a')
+
+    def test_dash_underscore_file(self):
+        # No matter how an option was defined, it can be set with underscores
+        # in a config file.
+        for defined_name in ['foo-bar', 'foo_bar']:
+            options = OptionParser()
+            options.define(defined_name)
+            options.parse_config_file(os.path.join(os.path.dirname(__file__),
+                                                   "options_test.cfg"))
+            self.assertEqual(options.foo_bar, 'a')
+
+    def test_dash_underscore_introspection(self):
+        # Original names are preserved in introspection APIs.
+        options = OptionParser()
+        options.define('with-dash', group='g')
+        options.define('with_underscore', group='g')
+        all_options = ['help', 'with-dash', 'with_underscore']
+        self.assertEqual(sorted(options), all_options)
+        self.assertEqual(sorted(k for (k, v) in options.items()), all_options)
+        self.assertEqual(sorted(options.as_dict().keys()), all_options)
+
+        self.assertEqual(sorted(options.group_dict('g')),
+                         ['with-dash', 'with_underscore'])
+
+        # --help shows CLI-style names with dashes.
+        buf = StringIO()
+        options.print_help(buf)
+        self.assertIn('--with-dash', buf.getvalue())
+        self.assertIn('--with-underscore', buf.getvalue())
