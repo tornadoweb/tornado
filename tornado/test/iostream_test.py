@@ -19,6 +19,14 @@ import socket
 import ssl
 import sys
 
+try:
+    from unittest import mock  # python 3.3
+except ImportError:
+    try:
+        import mock  # third-party mock package
+    except ImportError:
+        mock = None
+
 
 def _server_ssl_options():
     return dict(
@@ -239,19 +247,22 @@ class TestIOStreamMixin(object):
             # cygwin's errnos don't match those used on native windows python
             self.assertTrue(stream.error.args[0] in _ERRNO_CONNREFUSED)
 
+    @unittest.skipIf(mock is None, 'mock package not present')
     def test_gaierror(self):
-        # Test that IOStream sets its exc_info on getaddrinfo error
+        # Test that IOStream sets its exc_info on getaddrinfo error.
+        # It's difficult to reliably trigger a getaddrinfo error;
+        # some resolvers own't even return errors for malformed names,
+        # so we mock it instead. If IOStream changes to call a Resolver
+        # before sock.connect, the mock target will need to change too.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         stream = IOStream(s, io_loop=self.io_loop)
         stream.set_close_callback(self.stop)
-        # To reliably generate a gaierror we use a malformed domain name
-        # instead of a name that's simply unlikely to exist (since
-        # opendns and some ISPs return bogus addresses for nonexistent
-        # domains instead of the proper error codes).
-        with ExpectLog(gen_log, "Connect error"):
-            stream.connect(('an invalid domain', 54321), callback=self.stop)
-            self.wait()
-            self.assertTrue(isinstance(stream.error, socket.gaierror), stream.error)
+        with mock.patch('socket.socket.connect',
+                        side_effect=socket.gaierror('boom')):
+            with ExpectLog(gen_log, "Connect error"):
+                stream.connect(('localhost', 80), callback=self.stop)
+                self.wait()
+                self.assertIsInstance(stream.error, socket.gaierror)
 
     def test_read_callback_error(self):
         # Test that IOStream sets its exc_info when a read callback throws
