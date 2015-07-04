@@ -418,10 +418,10 @@ class AuthTest(AsyncHTTPTestCase):
 
 class GoogleLoginHandler(RequestHandler, GoogleOAuth2Mixin):
     def initialize(self, test):
+        self.test = test
         self._OAUTH_REDIRECT_URI = test.get_url('/client/login')
         self._OAUTH_AUTHORIZE_URL = test.get_url('/google/oauth2/authorize')
         self._OAUTH_ACCESS_TOKEN_URL = test.get_url('/google/oauth2/token')
-        self._OAUTH_USERINFO_URL = test.get_url('/google/oauth2/userinfo')
 
     @gen.coroutine
     def get(self):
@@ -430,9 +430,11 @@ class GoogleLoginHandler(RequestHandler, GoogleOAuth2Mixin):
             # retrieve authenticate google user
             access = yield self.get_authenticated_user(self._OAUTH_REDIRECT_URI,
                                                        code)
-            url = self._OAUTH_USERINFO_URL + "?access_token=" + access["access_token"]
-            user = yield self.oauth2_request(url)
-            # return the user as json
+            user = yield self.oauth2_request(
+                self.test.get_url("/google/oauth2/userinfo"),
+                access_token=access["access_token"])
+            # return the user and access token as json
+            user["access_token"] = access["access_token"]
             self.write(user)
         else:
             yield self.authorize_redirect(
@@ -494,4 +496,5 @@ class GoogleOAuth2Test(AsyncHTTPTestCase):
         self.assertDictEqual({
             u('name'): u('Foo'),
             u('email'): u('foo@example.com'),
+            u('access_token'): u('fake-access-token'),
         }, json_decode(response.body))

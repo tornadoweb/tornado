@@ -885,10 +885,11 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
                         access = yield self.get_authenticated_user(
                             redirect_uri='http://your.site.com/auth/google',
                             code=self.get_argument('code'))
-                        args = dict(access_token=access["access_token"])
-                        url = self._OAUTH_USERINFO_URL + "?" + urllib_parse.urlencode(args)
-                        user = yield self.oauth2_request(url)
-                        # Save the user with e.g. set_secure_cookie
+                        user = yield self.oauth2_request(
+                            "https://www.googleapis.com/oauth2/v1/userinfo",
+                            access_token=access["access_token"])
+                        # Save the user and access token with
+                        # e.g. set_secure_cookie.
                     else:
                         yield self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
