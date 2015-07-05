@@ -2,8 +2,11 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import datetime
 import os
+import shutil
+import tempfile
+
 import tornado.locale
-from tornado.escape import utf8
+from tornado.escape import utf8, to_unicode
 from tornado.test.util import unittest
 from tornado.util import u, unicode_type
 
@@ -33,6 +36,26 @@ class TranslationLoaderTest(unittest.TestCase):
         locale = tornado.locale.get("fr_FR")
         self.assertTrue(isinstance(locale, tornado.locale.CSVLocale))
         self.assertEqual(locale.translate("school"), u("\u00e9cole"))
+
+    def test_csv_bom(self):
+        with open(os.path.join(os.path.dirname(__file__), 'csv_translations',
+                               'fr_FR.csv'), 'rb') as f:
+            char_data = to_unicode(f.read())
+        # Re-encode our input data (which is utf-8 without BOM) in
+        # encodings that use the BOM and ensure that we can still load
+        # it. Note that utf-16-le and utf-16-be do not write a BOM,
+        # so we only test whichver variant is native to our platform.
+        for encoding in ['utf-8-sig', 'utf-16']:
+            tmpdir = tempfile.mkdtemp()
+            try:
+                with open(os.path.join(tmpdir, 'fr_FR.csv'), 'wb') as f:
+                    f.write(char_data.encode(encoding))
+                tornado.locale.load_translations(tmpdir)
+                locale = tornado.locale.get('fr_FR')
+                self.assertIsInstance(locale, tornado.locale.CSVLocale)
+                self.assertEqual(locale.translate("school"), u("\u00e9cole"))
+            finally:
+                shutil.rmtree(tmpdir)
 
     def test_gettext(self):
         tornado.locale.load_gettext_translations(

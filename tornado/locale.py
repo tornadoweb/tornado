@@ -41,8 +41,10 @@ the `Locale.translate` method will simply return the original string.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
+import codecs
 import csv
 import datetime
+from io import BytesIO
 import numbers
 import os
 import re
@@ -86,7 +88,7 @@ def set_default_locale(code):
     _supported_locales = frozenset(list(_translations.keys()) + [_default_locale])
 
 
-def load_translations(directory):
+def load_translations(directory, encoding=None):
     """Loads translations from CSV files in a directory.
 
     Translations are strings with optional Python-style named placeholders
@@ -106,12 +108,20 @@ def load_translations(directory):
     The file is read using the `csv` module in the default "excel" dialect.
     In this format there should not be spaces after the commas.
 
+    If no ``encoding`` parameter is given, the encoding will be
+    detected automatically (among UTF-8 and UTF-16) if the file
+    contains a byte-order marker (BOM), defaulting to UTF-8 if no BOM
+    is present.
+
     Example translation ``es_LA.csv``::
 
         "I love you","Te amo"
         "%(name)s liked this","A %(name)s les gustó esto","plural"
         "%(name)s liked this","A %(name)s le gustó esto","singular"
 
+    .. versionchanged:: 4.3
+       Added ``encoding`` parameter. Added support for BOM-based encoding
+       detection, UTF-16, and UTF-8-with-BOM.
     """
     global _translations
     global _supported_locales
@@ -125,13 +135,29 @@ def load_translations(directory):
                           os.path.join(directory, path))
             continue
         full_path = os.path.join(directory, path)
+        if encoding is None:
+            # Try to autodetect encoding based on the BOM.
+            with open(full_path, 'rb') as f:
+                data = f.read(len(codecs.BOM_UTF16_LE))
+            if data in (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE):
+                encoding = 'utf-16'
+            else:
+                # utf-8-sig is "utf-8 with optional BOM". It's discouraged
+                # in most cases but is common with CSV files because Excel
+                # cannot read utf-8 files without a BOM.
+                encoding = 'utf-8-sig'
         try:
             # python 3: csv.reader requires a file open in text mode.
             # Force utf8 to avoid dependence on $LANG environment variable.
-            f = open(full_path, "r", encoding="utf-8")
+            f = open(full_path, "r", encoding=encoding)
         except TypeError:
-            # python 2: files return byte strings, which are decoded below.
-            f = open(full_path, "r")
+            # python 2: csv can only handle byte strings (in ascii-compatible
+            # encodings), which we decode below. Transcode everything into
+            # utf8 before passing it to csv.reader.
+            f = BytesIO()
+            with codecs.open(full_path, "r", encoding=encoding) as infile:
+                f.write(escape.utf8(infile.read()))
+            f.seek(0)
         _translations[locale] = {}
         for i, row in enumerate(csv.reader(f)):
             if not row or len(row) < 2:
