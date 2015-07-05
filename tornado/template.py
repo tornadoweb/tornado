@@ -232,9 +232,10 @@ class Template(object):
         else:
             self.autoescape = _DEFAULT_AUTOESCAPE
         self.namespace = loader.namespace if loader else {}
-        reader = _TemplateReader(name, escape.native_str(template_string))
+        reader = _TemplateReader(name, escape.native_str(template_string),
+                                 compress_whitespace)
         self.file = _File(self, _parse(reader, self))
-        self.code = self._generate_python(loader, compress_whitespace)
+        self.code = self._generate_python(loader)
         self.loader = loader
         try:
             # Under python2.5, the fake filename used here must match
@@ -277,7 +278,7 @@ class Template(object):
         linecache.clearcache()
         return execute()
 
-    def _generate_python(self, loader, compress_whitespace):
+    def _generate_python(self, loader):
         buffer = StringIO()
         try:
             # named_blocks maps from names to _NamedBlock objects
@@ -286,8 +287,8 @@ class Template(object):
             ancestors.reverse()
             for ancestor in ancestors:
                 ancestor.find_named_blocks(loader, named_blocks)
-            writer = _CodeWriter(buffer, named_blocks, loader, ancestors[0].template,
-                                 compress_whitespace)
+            writer = _CodeWriter(buffer, named_blocks, loader,
+                                 ancestors[0].template)
             ancestors[0].generate(writer)
             return buffer.getvalue()
         finally:
@@ -558,9 +559,10 @@ class _Module(_Expression):
 
 
 class _Text(_Node):
-    def __init__(self, value, line):
+    def __init__(self, value, line, compress_whitespace):
         self.value = value
         self.line = line
+        self.compress_whitespace = compress_whitespace
 
     def generate(self, writer):
         value = self.value
@@ -568,7 +570,7 @@ class _Text(_Node):
         # Compress lots of white space to a single character. If the whitespace
         # breaks a line, have it continue to break a line, but just with a
         # single \n character
-        if writer.compress_whitespace and "<pre>" not in value:
+        if self.compress_whitespace and "<pre>" not in value:
             value = re.sub(r"([\t ]+)", " ", value)
             value = re.sub(r"(\s*\n\s*)", "\n", value)
 
@@ -597,13 +599,11 @@ class ParseError(Exception):
 
 
 class _CodeWriter(object):
-    def __init__(self, file, named_blocks, loader, current_template,
-                 compress_whitespace):
+    def __init__(self, file, named_blocks, loader, current_template):
         self.file = file
         self.named_blocks = named_blocks
         self.loader = loader
         self.current_template = current_template
-        self.compress_whitespace = compress_whitespace
         self.apply_counter = 0
         self.include_stack = []
         self._indent = 0
@@ -648,9 +648,10 @@ class _CodeWriter(object):
 
 
 class _TemplateReader(object):
-    def __init__(self, name, text):
+    def __init__(self, name, text, compress_whitespace):
         self.name = name
         self.text = text
+        self.compress_whitespace = compress_whitespace
         self.line = 1
         self.pos = 0
 
@@ -724,7 +725,8 @@ def _parse(reader, template, in_block=None, in_loop=None):
                 if in_block:
                     reader.raise_parse_error(
                         "Missing {%% end %%} block for %s" % in_block)
-                body.chunks.append(_Text(reader.consume(), reader.line))
+                body.chunks.append(_Text(reader.consume(), reader.line,
+                                         reader.compress_whitespace))
                 return body
             # If the first curly brace is not the start of a special token,
             # start searching from the character after it
@@ -743,7 +745,8 @@ def _parse(reader, template, in_block=None, in_loop=None):
         # Append any text before the special token
         if curly > 0:
             cons = reader.consume(curly)
-            body.chunks.append(_Text(cons, reader.line))
+            body.chunks.append(_Text(cons, reader.line,
+                                     reader.compress_whitespace))
 
         start_brace = reader.consume(2)
         line = reader.line
@@ -754,7 +757,8 @@ def _parse(reader, template, in_block=None, in_loop=None):
         # which also use double braces.
         if reader.remaining() and reader[0] == "!":
             reader.consume(1)
-            body.chunks.append(_Text(start_brace, line))
+            body.chunks.append(_Text(start_brace, line,
+                                     reader.compress_whitespace))
             continue
 
         # Comment

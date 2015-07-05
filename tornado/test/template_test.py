@@ -400,7 +400,7 @@ raw: {% raw name %}""",
         self.assertEqual(render("foo.py", ["not a string"]),
                          b"""s = "['not a string']"\n""")
 
-    def test_minimize_whitespace(self):
+    def test_manual_minimize_whitespace(self):
         # Whitespace including newlines is allowed within template tags
         # and directives, and this is one way to avoid long lines while
         # keeping extra whitespace out of the rendered output.
@@ -413,6 +413,32 @@ raw: {% raw name %}""",
                              })
         self.assertEqual(loader.load("foo.txt").generate(items=range(5)),
                          b"0, 1, 2, 3, 4")
+
+    def test_whitespace_by_filename(self):
+        # Default whitespace handling depends on the template filename.
+        loader = DictLoader({
+            "foo.html": "   \n\t\n asdf\t   ",
+            "bar.js": " \n\n\n\t qwer     ",
+            "baz.txt": "\t    zxcv\n\n",
+            "include.html": "  {% include baz.txt %} \n ",
+            "include.txt": "\t\t{% include foo.html %}    ",
+        })
+
+        # HTML and JS files have whitespace compressed by default.
+        self.assertEqual(loader.load("foo.html").generate(),
+                         b"\nasdf ")
+        self.assertEqual(loader.load("bar.js").generate(),
+                         b"\nqwer ")
+        # TXT files do not.
+        self.assertEqual(loader.load("baz.txt").generate(),
+                         b"\t    zxcv\n\n")
+
+        # Each file maintains its own status even when included in
+        # a file of the other type.
+        self.assertEqual(loader.load("include.html").generate(),
+                         b" \t    zxcv\n\n\n")
+        self.assertEqual(loader.load("include.txt").generate(),
+                         b"\t\t\nasdf     ")
 
 
 class TemplateLoaderTest(unittest.TestCase):
