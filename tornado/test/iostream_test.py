@@ -939,8 +939,10 @@ class TestIOStreamStartTLS(AsyncTestCase):
             server_hostname=b'127.0.0.1')
         with ExpectLog(gen_log, "SSL Error"):
             with self.assertRaises(ssl.SSLError):
+                # The client fails to connect with an SSL error.
                 yield client_future
-        with self.assertRaises(ssl.SSLError):
+        with self.assertRaises(Exception):
+            # The server fails to connect, but the exact error is unspecified.
             yield server_future
 
 
