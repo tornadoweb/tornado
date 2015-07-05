@@ -457,6 +457,19 @@ raw: {% raw name %}""",
         self.assertEqual(loader.load("foo.html").generate(), b" foo ")
         self.assertEqual(loader.load("bar.txt").generate(), b" bar ")
 
+    def test_whitespace_directive(self):
+        loader = DictLoader({
+            "foo.html": """\
+{% whitespace oneline %}
+    {% for i in range(3) %}
+        {{ i }}
+    {% end %}
+{% whitespace all %}
+    pre\tformatted
+"""})
+        self.assertEqual(loader.load("foo.html").generate(),
+                         b"  0  1  2  \n    pre\tformatted\n")
+
 
 class TemplateLoaderTest(unittest.TestCase):
     def setUp(self):

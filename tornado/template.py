@@ -186,6 +186,11 @@ with ``{# ... #}``.
 ``{% while *condition* %}... {% end %}``
     Same as the python ``while`` statement.  ``{% break %}`` and
     ``{% continue %}`` may be used inside the loop.
+
+``{% whitespace *mode* %}``
+    Sets the whitespace mode for the remainder of the current file
+    (or until the next ``{% whitespace %}`` directive). See
+    `filter_whitespace` for available options. New in Tornado 4.3.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -894,7 +899,8 @@ def _parse(reader, template, in_block=None, in_loop=None):
             return body
 
         elif operator in ("extends", "include", "set", "import", "from",
-                          "comment", "autoescape", "raw", "module"):
+                          "comment", "autoescape", "whitespace", "raw",
+                          "module"):
             if operator == "comment":
                 continue
             if operator == "extends":
@@ -920,6 +926,12 @@ def _parse(reader, template, in_block=None, in_loop=None):
                 if fn == "None":
                     fn = None
                 template.autoescape = fn
+                continue
+            elif operator == "whitespace":
+                mode = suffix.strip()
+                # Validate the selected mode
+                filter_whitespace(mode, '')
+                reader.whitespace = mode
                 continue
             elif operator == "raw":
                 block = _Expression(suffix, line, raw=True)
