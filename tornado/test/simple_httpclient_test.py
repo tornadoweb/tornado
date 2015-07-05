@@ -463,6 +463,16 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
             resp = self.fetch("/hello", ssl_options=ctx)
         self.assertRaises(ssl.SSLError, resp.rethrow)
 
+    def test_error_logging(self):
+        # No stack traces are logged for SSL errors (in this case,
+        # failure to validate the testing self-signed cert).
+        # The SSLError is exposed through ssl.SSLError.
+        with ExpectLog(gen_log, '.*') as expect_log:
+            response = self.fetch("/", validate_cert=True)
+            self.assertEqual(response.code, 599)
+            self.assertIsInstance(response.error, ssl.SSLError)
+        self.assertFalse(expect_log.logged_stack)
+
 
 class CreateAsyncHTTPClientTestCase(AsyncTestCase):
     def setUp(self):

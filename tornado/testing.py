@@ -589,10 +589,16 @@ class ExpectLog(logging.Filter):
     Useful to make tests of error conditions less noisy, while still
     leaving unexpected log entries visible.  *Not thread safe.*
 
+    The attribute ``logged_stack`` is set to true if any exception
+    stack trace was logged.
+
     Usage::
 
         with ExpectLog('tornado.application', "Uncaught exception"):
             error_response = self.fetch("/some_page")
+
+    .. versionchanged:: 4.3
+       Added the ``logged_stack`` attribute.
     """
     def __init__(self, logger, regex, required=True):
         """Constructs an ExpectLog context manager.
@@ -610,8 +616,11 @@ class ExpectLog(logging.Filter):
         self.regex = re.compile(regex)
         self.required = required
         self.matched = False
+        self.logged_stack = False
 
     def filter(self, record):
+        if record.exc_info:
+            self.logged_stack = True
         message = record.getMessage()
         if self.regex.match(message):
             self.matched = True
@@ -620,6 +629,7 @@ class ExpectLog(logging.Filter):
 
     def __enter__(self):
         self.logger.addFilter(self)
+        return self
 
     def __exit__(self, typ, value, tb):
         self.logger.removeFilter(self)

@@ -427,7 +427,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.final_callback:
             self._remove_timeout()
             if isinstance(value, StreamClosedError):
-                value = HTTPError(599, "Stream closed")
+                if value.real_error is None:
+                    value = HTTPError(599, "Stream closed")
+                else:
+                    value = value.real_error
             self._run_callback(HTTPResponse(self.request, 599, error=value,
                                             request_time=self.io_loop.time() - self.start_time,
                                             ))
