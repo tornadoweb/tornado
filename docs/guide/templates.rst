@@ -106,6 +106,9 @@ of these entries are not present).
 - Any keyword arguments passed to `~.RequestHandler.render` or
   `~.RequestHandler.render_string`
 
+Additionally, if you are using `gen.coroutine` support, `gen.coroutine` and
+`gen.Return` are exposed as `coroutine` and `Return`, respectively.
+
 When you are building a real application, you are going to want to use
 all of the features of Tornado templates, especially template
 inheritance. Read all about those features in the `tornado.template`

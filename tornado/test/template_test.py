@@ -4,6 +4,7 @@ import os
 import sys
 import traceback
 
+from tornado import gen
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
 from tornado.test.util import unittest
@@ -173,6 +174,23 @@ try{% set y = 1/x %}
         template = Template('{{ 1 / 2 }}')
         self.assertEqual(template.generate(), '0')
 
+    @gen.coroutine
+    def test_coroutine_template(self):
+        @gen.coroutine
+        def value():
+            raise gen.Return('Hello, Ben')
+        template = Template(utf8("{{ yield value() }}"), coroutine=True)
+        result = yield template.generate(value=value)
+        self.assertEqual(result, b'Hello, Ben')
+
+    @gen.coroutine
+    def test_coroutine_template_exception(self):
+        @gen.coroutine
+        def value():
+            raise Exception('Hello, Ben')
+        template = Template(utf8("{{ yield value() }}"), coroutine=True)
+        with self.assertRaises(Exception):
+            result = yield template.generate(value=value)
 
 class StackTraceTest(unittest.TestCase):
     def test_error_line_number_expression(self):
