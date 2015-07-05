@@ -225,6 +225,9 @@
            If this setting is used the ``template_path`` and ``autoescape``
            settings are ignored.  Can be further customized by overriding
            `RequestHandler.create_template_loader`.
+         * ``template_whitespace``: Controls handling of whitespace in
+           templates; see `tornado.template.filter_whitespace` for allowed
+           values. New in Tornado 4.3.
 
          Static file settings:
 

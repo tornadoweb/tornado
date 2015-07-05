@@ -210,6 +210,27 @@ _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()
 
 
+def filter_whitespace(mode, text):
+    """Transform whitespace in ``text`` according to ``mode``.
+
+    Available modes are:
+
+    * ``all``: Return all whitespace unmodified.
+    * ``single``: Collapse consecutive whitespace with a single whitespace
+      character, preserving newlines.
+
+    .. versionadded:: 4.3
+    """
+    if mode == 'all':
+        return text
+    elif mode == 'single':
+        text = re.sub(r"([\t ]+)", " ", text)
+        text = re.sub(r"(\s*\n\s*)", "\n", text)
+        return text
+    else:
+        raise Exception("invalid whitespace mode %s" % mode)
+
+
 class Template(object):
     """A compiled template.
 
@@ -220,20 +241,56 @@ class Template(object):
     # autodoc because _UNSET looks like garbage.  When changing
     # this signature update website/sphinx/template.rst too.
     def __init__(self, template_string, name="<string>", loader=None,
-                 compress_whitespace=None, autoescape=_UNSET):
+                 compress_whitespace=_UNSET, autoescape=_UNSET,
+                 whitespace=None):
+        """Construct a Template.
+
+        :arg str template_string: the contents of the template file.
+        :arg str name: the filename from which the template was loaded
+            (used for error message).
+        :arg tornado.template.BaseLoader loader: the `~tornado.template.BaseLoader` responsible for this template,
+            used to resolve ``{% include %}`` and ``{% extend %}``
+            directives.
+        :arg bool compress_whitespace: Deprecated since Tornado 4.3.
+            Equivalent to ``whitespace="single"`` if true and
+            ``whitespace="all"`` if false.
+        :arg str autoescape: The name of a function in the template
+            namespace, or ``None`` to disable escaping by default.
+        :arg str whitespace: A string specifying treatment of whitespace;
+            see `filter_whitespace` for options.
+
+        .. versionchanged:: 4.3
+           Added ``whitespace`` parameter; deprecated ``compress_whitespace``.
+        """
         self.name = name
-        if compress_whitespace is None:
-            compress_whitespace = name.endswith(".html") or \
-                name.endswith(".js")
+
+        if compress_whitespace is not _UNSET:
+            # Convert deprecated compress_whitespace (bool) to whitespace (str).
+            if whitespace is not None:
+                raise Exception("cannot set both whitespace and compress_whitespace")
+            whitespace = "single" if compress_whitespace else "all"
+        if whitespace is None:
+            if loader and loader.whitespace:
+                whitespace = loader.whitespace
+            else:
+                # Whitespace defaults by filename.
+                if name.endswith(".html") or name.endswith(".js"):
+                    whitespace = "single"
+                else:
+                    whitespace = "all"
+        # Validate the whitespace setting.
+        filter_whitespace(whitespace, '')
+
         if autoescape is not _UNSET:
             self.autoescape = autoescape
         elif loader:
             self.autoescape = loader.autoescape
         else:
             self.autoescape = _DEFAULT_AUTOESCAPE
+
         self.namespace = loader.namespace if loader else {}
         reader = _TemplateReader(name, escape.native_str(template_string),
-                                 compress_whitespace)
+                                 whitespace)
         self.file = _File(self, _parse(reader, self))
         self.code = self._generate_python(loader)
         self.loader = loader
@@ -313,12 +370,26 @@ class BaseLoader(object):
     ``{% extends %}`` and ``{% include %}``. The loader caches all
     templates after they are loaded the first time.
     """
-    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None):
-        """``autoescape`` must be either None or a string naming a function
-        in the template namespace, such as "xhtml_escape".
+    def __init__(self, autoescape=_DEFAULT_AUTOESCAPE, namespace=None,
+                 whitespace=None):
+        """Construct a template loader.
+
+        :arg str autoescape: The name of a function in the template
+            namespace, such as "xhtml_escape", or ``None`` to disable
+            autoescaping by default.
+        :arg dict namespace: A dictionary to be added to the default template
+            namespace, or ``None``.
+        :arg str whitespace: A string specifying default behavior for
+            whitespace in templates; see `filter_whitespace` for options.
+            Default is "single" for files ending in ".html" and ".js" and
+            "all" for other files.
+
+        .. versionchanged:: 4.3
+           Added ``whitespace`` parameter.
         """
         self.autoescape = autoescape
         self.namespace = namespace or {}
+        self.whitespace = whitespace
         self.templates = {}
         # self.lock protects self.templates.  It's a reentrant lock
         # because templates may load other templates via `include` or
@@ -559,20 +630,18 @@ class _Module(_Expression):
 
 
 class _Text(_Node):
-    def __init__(self, value, line, compress_whitespace):
+    def __init__(self, value, line, whitespace):
         self.value = value
         self.line = line
-        self.compress_whitespace = compress_whitespace
+        self.whitespace = whitespace
 
     def generate(self, writer):
         value = self.value
 
-        # Compress lots of white space to a single character. If the whitespace
-        # breaks a line, have it continue to break a line, but just with a
-        # single \n character
-        if self.compress_whitespace and "<pre>" not in value:
-            value = re.sub(r"([\t ]+)", " ", value)
-            value = re.sub(r"(\s*\n\s*)", "\n", value)
+        # Compress whitespace if requested, with a crude heuristic to avoid
+        # altering preformatted whitespace.
+        if "<pre>" not in value:
+            value = filter_whitespace(self.whitespace, value)
 
         if value:
             writer.write_line('_tt_append(%r)' % escape.utf8(value), self.line)
@@ -648,10 +717,10 @@ class _CodeWriter(object):
 
 
 class _TemplateReader(object):
-    def __init__(self, name, text, compress_whitespace):
+    def __init__(self, name, text, whitespace):
         self.name = name
         self.text = text
-        self.compress_whitespace = compress_whitespace
+        self.whitespace = whitespace
         self.line = 1
         self.pos = 0
 
@@ -726,7 +795,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
                     reader.raise_parse_error(
                         "Missing {%% end %%} block for %s" % in_block)
                 body.chunks.append(_Text(reader.consume(), reader.line,
-                                         reader.compress_whitespace))
+                                         reader.whitespace))
                 return body
             # If the first curly brace is not the start of a special token,
             # start searching from the character after it
@@ -746,7 +815,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
         if curly > 0:
             cons = reader.consume(curly)
             body.chunks.append(_Text(cons, reader.line,
-                                     reader.compress_whitespace))
+                                     reader.whitespace))
 
         start_brace = reader.consume(2)
         line = reader.line
@@ -758,7 +827,7 @@ def _parse(reader, template, in_block=None, in_loop=None):
         if reader.remaining() and reader[0] == "!":
             reader.consume(1)
             body.chunks.append(_Text(start_brace, line,
-                                     reader.compress_whitespace))
+                                     reader.whitespace))
             continue
 
         # Comment
