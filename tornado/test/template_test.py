@@ -442,15 +442,20 @@ raw: {% raw name %}""",
 
     def test_whitespace_by_loader(self):
         templates = {
-            "foo.html": "\t\tfoo",
-            "bar.txt": "\t\tbar",
+            "foo.html": "\t\tfoo\n\n",
+            "bar.txt": "\t\tbar\n\n",
             }
         loader = DictLoader(templates, whitespace='all')
-        self.assertEqual(loader.load("foo.html").generate(), b"\t\tfoo")
-        self.assertEqual(loader.load("bar.txt").generate(), b"\t\tbar")
+        self.assertEqual(loader.load("foo.html").generate(), b"\t\tfoo\n\n")
+        self.assertEqual(loader.load("bar.txt").generate(), b"\t\tbar\n\n")
+
         loader = DictLoader(templates, whitespace='single')
-        self.assertEqual(loader.load("foo.html").generate(), b" foo")
-        self.assertEqual(loader.load("bar.txt").generate(), b" bar")
+        self.assertEqual(loader.load("foo.html").generate(), b" foo\n")
+        self.assertEqual(loader.load("bar.txt").generate(), b" bar\n")
+
+        loader = DictLoader(templates, whitespace='oneline')
+        self.assertEqual(loader.load("foo.html").generate(), b" foo ")
+        self.assertEqual(loader.load("bar.txt").generate(), b" bar ")
 
 
 class TemplateLoaderTest(unittest.TestCase):

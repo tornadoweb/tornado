@@ -218,6 +218,8 @@ def filter_whitespace(mode, text):
     * ``all``: Return all whitespace unmodified.
     * ``single``: Collapse consecutive whitespace with a single whitespace
       character, preserving newlines.
+    * ``oneline``: Collapse all runs of whitespace into a single space
+      character, removing all newlines in the process.
 
     .. versionadded:: 4.3
     """
@@ -227,6 +229,8 @@ def filter_whitespace(mode, text):
         text = re.sub(r"([\t ]+)", " ", text)
         text = re.sub(r"(\s*\n\s*)", "\n", text)
         return text
+    elif mode == 'oneline':
+        return re.sub(r"(\s+)", " ", text)
     else:
         raise Exception("invalid whitespace mode %s" % mode)
 
