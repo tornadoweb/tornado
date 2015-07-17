@@ -1181,6 +1181,15 @@ class StaticFileTest(WebTestCase):
         response = self.get_and_head('/static/blarg')
         self.assertEqual(response.code, 404)
 
+    def test_path_traversal_protection(self):
+        with ExpectLog(gen_log, ".*not in root static directory"):
+            response = self.get_and_head('/static/../static_foo.txt')
+        # Attempted path traversal should result in 403, not 200
+        # (which means the check failed and the file was served)
+        # or 404 (which means that the file didn't exist and
+        # is probably a packaging error).
+        self.assertEqual(response.code, 403)
+
 
 @wsgi_safe
 class StaticDefaultFilenameTest(WebTestCase):

@@ -147,6 +147,7 @@ setup(
             "options_test.cfg",
             "static/robots.txt",
             "static/dir/index.html",
+            "static_foo.txt",
             "templates/utf8.html",
             "test.crt",
             "test.key",
