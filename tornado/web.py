@@ -2313,6 +2313,10 @@ class StaticFileHandler(RequestHandler):
         if content_type:
             self.set_header("Content-Type", content_type)
 
+        encoding = mimetypes.guess_type(self.absolute_path)[1]
+        if encoding == "gzip":
+            self.set_header("Content-Encoding", "x-gzip")
+
         cache_time = self.get_cache_time(self.path, self.modified,
                                          content_type)
         if cache_time > 0:
