@@ -328,7 +328,7 @@ class RequestHandler(object):
         HTTP specification. If the value is not a string, we convert it to
         a string. All header values are then encoded as UTF-8.
         """
-        self._headers[name] = self._convert_header_value(value)
+        self._headers[name] = self._convert_header_value(name, value)
 
     def add_header(self, name, value):
         """Adds the given response header and value.
@@ -336,7 +336,7 @@ class RequestHandler(object):
         Unlike `set_header`, `add_header` may be called multiple times
         to return multiple values for the same header.
         """
-        self._headers.add(name, self._convert_header_value(value))
+        self._headers.add(name, self._convert_header_value(name, value))
 
     def clear_header(self, name):
         """Clears an outgoing header, undoing a previous `set_header` call.
@@ -347,9 +347,13 @@ class RequestHandler(object):
         if name in self._headers:
             del self._headers[name]
 
+    # Headers we don't check for a max size; values in this set should be
+    # lowercase.
+    _LONG_HEADERS = frozenset(['location'])
+
     _INVALID_HEADER_CHAR_RE = re.compile(br"[\x00-\x1f]")
 
-    def _convert_header_value(self, value):
+    def _convert_header_value(self, name, value):
         if isinstance(value, bytes):
             pass
         elif isinstance(value, unicode_type):
@@ -361,6 +365,14 @@ class RequestHandler(object):
             return httputil.format_timestamp(value)
         else:
             raise TypeError("Unsupported header value %r" % value)
+
+        # Ensure that the header is not too longer since this is probably
+        # erroneous. We make an exception for headers like Location that can
+        # legitimately have long values.
+        if name.lower() not in self._LONG_HEADERS and len(value) > 4000:
+            raise ValueError(
+                "Header value exceeds max size %d: %r" % (max_length, value))
+
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request.
         if RequestHandler._INVALID_HEADER_CHAR_RE.search(value):
