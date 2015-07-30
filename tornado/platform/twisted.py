@@ -477,8 +477,15 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         del self.fds[fd]
 
     def start(self):
-        self._setup_logging()
-        self.reactor.run()
+        old_current = IOLoop.current(instance=False)
+        try:
+            self._setup_logging()
+            self.reactor.run()
+        finally:
+            if old_current is None:
+                IOLoop.clear_current()
+            else:
+                old_current.make_current()
 
     def stop(self):
         self.reactor.crash()
