@@ -35,7 +35,6 @@ class BaseAsyncIOLoop(IOLoop):
         super(BaseAsyncIOLoop, self).initialize(**kwargs)
         self.asyncio_loop = asyncio_loop
         self.close_loop = close_loop
-        self.asyncio_loop.call_soon(self.make_current)
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
         self.handlers = {}
         # Set of fds listening for reads/writes
@@ -105,8 +104,16 @@ class BaseAsyncIOLoop(IOLoop):
         handler_func(fileobj, events)
 
     def start(self):
-        self._setup_logging()
-        self.asyncio_loop.run_forever()
+        old_current = IOLoop.current(instance=False)
+        try:
+            self._setup_logging()
+            self.make_current()
+            self.asyncio_loop.run_forever()
+        finally:
+            if old_current is None:
+                IOLoop.clear_current()
+            else:
+                old_current.make_current()
 
     def stop(self):
         self.asyncio_loop.stop()
@@ -140,8 +147,14 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
 
 class AsyncIOLoop(BaseAsyncIOLoop):
     def initialize(self, **kwargs):
-        super(AsyncIOLoop, self).initialize(asyncio.new_event_loop(),
-                                            close_loop=True, **kwargs)
+        loop = asyncio.new_event_loop()
+        try:
+            super(AsyncIOLoop, self).initialize(loop, close_loop=True, **kwargs)
+        except Exception:
+            # If initialize() does not succeed (taking ownership of the loop),
+            # we have to close it.
+            loop.close()
+            raise
 
 
 def to_tornado_future(asyncio_future):

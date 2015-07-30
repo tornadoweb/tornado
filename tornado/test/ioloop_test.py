@@ -429,15 +429,18 @@ class TestIOLoopCurrent(unittest.TestCase):
         self.io_loop = IOLoop(make_current=False)
         # The new IOLoop is not initially made current.
         self.assertIsNone(IOLoop.current(instance=False))
-        def f():
-            # But it is current after it is started.
-            self.current_io_loop = IOLoop.current()
-            self.io_loop.stop()
-        self.io_loop.add_callback(f)
-        self.io_loop.start()
-        self.assertIs(self.current_io_loop, self.io_loop)
-        # Now that the loop is stopped, it is no longer current.
-        self.assertIsNone(IOLoop.current(instance=False))
+        # Starting the IOLoop makes it current, and stopping the loop
+        # makes it non-current. This process is repeatable.
+        for i in range(3):
+            def f():
+                self.current_io_loop = IOLoop.current()
+                self.io_loop.stop()
+            self.io_loop.add_callback(f)
+            self.io_loop.start()
+            self.assertIs(self.current_io_loop, self.io_loop)
+            # Now that the loop is stopped, it is no longer current.
+            self.assertIsNone(IOLoop.current(instance=False))
+
 
     def test_force_current(self):
         self.io_loop = IOLoop(make_current=True)

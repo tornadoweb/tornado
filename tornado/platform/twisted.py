@@ -423,7 +423,6 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
             reactor = twisted.internet.reactor
         self.reactor = reactor
         self.fds = {}
-        self.reactor.callWhenRunning(self.make_current)
 
     def close(self, all_fds=False):
         fds = self.fds
@@ -480,6 +479,7 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
         old_current = IOLoop.current(instance=False)
         try:
             self._setup_logging()
+            self.make_current()
             self.reactor.run()
         finally:
             if old_current is None:
