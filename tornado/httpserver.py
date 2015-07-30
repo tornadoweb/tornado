@@ -188,7 +188,6 @@ class HTTPServer(TCPServer, Configurable,
 class _HTTPRequestContext(object):
     def __init__(self, stream, address, protocol):
         self.address = address
-        self.protocol = protocol
         # Save the socket's address family now so we know how to
         # interpret self.address even after the stream is closed
         # and its socket attribute replaced with None.
