@@ -249,7 +249,7 @@ class IOLoop(Configurable):
             if IOLoop.current(instance=False) is None:
                 self.make_current()
         elif make_current:
-            if IOLoop.current(instance=False) is None:
+            if IOLoop.current(instance=False) is not None:
                 raise RuntimeError("current IOLoop already exists")
             self.make_current()
 
