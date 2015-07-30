@@ -978,6 +978,19 @@ class StaticFileTest(WebTestCase):
 
         response = self.fetch('/static/robots.txt')
         self.assertTrue(b"Disallow: /" in response.body)
+        self.assertEqual(response.headers.get("Content-Type"), "text/plain")
+
+    def test_static_compressed_files(self):
+        response = self.fetch("/static/sample.xml.gz")
+        self.assertEqual(response.headers.get("Content-Type"),
+                         "application/gzip")
+        response = self.fetch("/static/sample.xml.bz2")
+        self.assertEqual(response.headers.get("Content-Type"),
+                         "application/octet-stream")
+        # make sure the uncompressed file still has the correct type
+        response = self.fetch("/static/sample.xml")
+        self.assertTrue(response.headers.get("Content-Type")
+                        in set(("text/xml", "application/xml")))
 
     def test_static_url(self):
         response = self.fetch("/static_url/robots.txt")
