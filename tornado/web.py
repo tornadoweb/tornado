@@ -2495,7 +2495,19 @@ class StaticFileHandler(RequestHandler):
         .. versionadded:: 3.1
         """
         mime_type, encoding = mimetypes.guess_type(self.absolute_path)
-        return mime_type
+        # per RFC 6713, use the appropriate type for a gzip compressed file
+        if encoding == "gzip":
+            return "application/gzip"
+        # As of 2015-07-21 there is no bzip2 encoding defined at
+        # http://www.iana.org/assignments/media-types/media-types.xhtml
+        # So for that (and any other encoding), use octet-stream.
+        elif encoding is not None:
+            return "application/octet-stream"
+        elif mime_type is not None:
+            return mime_type
+        # if mime_type not detected, use application/octet-stream
+        else:
+            return "application/octet-stream"
 
     def set_extra_headers(self, path):
         """For subclass to add extra headers to the response"""
