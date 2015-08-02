@@ -33,6 +33,22 @@ Example::
         # instead.
         return response.body
 
+Python 3.5: ``async`` and ``await``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Python 3.5 introduces the ``async`` and ``await`` keywords. Starting in
+Tornado 4.3, you can use them in place of ``yield``-based coroutines.
+Simply use ``async def foo()`` in place of a function definition with the
+``@gen.coroutine`` decorator, and ``await`` in place of yield. The rest of
+this document still uses the ``yield`` style for compatibility with older
+versions of Python, but ``async`` and ``await`` will run faster when they
+are available::
+
+    async def fetch_coroutine(url):
+        http_client = AsyncHTTPClient()
+        response = await http_client.fetch(url)
+        return response.body
+
 How it works
 ~~~~~~~~~~~~
 
