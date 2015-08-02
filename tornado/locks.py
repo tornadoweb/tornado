@@ -327,6 +327,17 @@ class Semaphore(_TimeoutGarbageCollector):
 
             # Now the semaphore has been released.
             print("Worker %d is done" % worker_id)
+
+    In Python 3.5, the semaphore itself can be used as an async context
+    manager::
+
+        async def worker(worker_id):
+            async with sem:
+                print("Worker %d is working" % worker_id)
+                await use_some_resource()
+
+            # Now the semaphore has been released.
+            print("Worker %d is done" % worker_id)
     """
     def __init__(self, value=1):
         super(Semaphore, self).__init__()
@@ -389,6 +400,14 @@ class Semaphore(_TimeoutGarbageCollector):
 
     __exit__ = __enter__
 
+    @gen.coroutine
+    def __aenter__(self):
+        yield self.acquire()
+
+    @gen.coroutine
+    def __aexit__(self, typ, value, tb):
+        self.release()
+
 
 class BoundedSemaphore(Semaphore):
     """A semaphore that prevents release() being called too many times.
@@ -418,7 +437,7 @@ class Lock(object):
 
     Releasing an unlocked lock raises `RuntimeError`.
 
-    `acquire` supports the context manager protocol:
+    `acquire` supports the context manager protocol in all Python versions:
 
     >>> from tornado import gen, locks
     >>> lock = locks.Lock()
@@ -426,6 +445,16 @@ class Lock(object):
     >>> @gen.coroutine
     ... def f():
     ...    with (yield lock.acquire()):
+    ...        # Do something holding the lock.
+    ...        pass
+    ...
+    ...    # Now the lock is released.
+
+    In Python 3.5, `Lock` also supports the async context manager protocol.
+    Note that in this case there is no `acquire`:
+
+    >>> async def f():  # doctest: +SKIP
+    ...    async with lock:
     ...        # Do something holding the lock.
     ...        pass
     ...
@@ -464,3 +493,11 @@ class Lock(object):
             "Use Lock like 'with (yield lock)', not like 'with lock'")
 
     __exit__ = __enter__
+
+    @gen.coroutine
+    def __aenter__(self):
+        yield self.acquire()
+
+    @gen.coroutine
+    def __aexit__(self, typ, value, tb):
+        self.release()
