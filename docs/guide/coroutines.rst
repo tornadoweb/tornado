@@ -61,6 +61,55 @@ and sends the result back into the generator as the result of the
 class directly except to immediately pass the `.Future` returned by
 an asynchronous function to a ``yield`` expression.
 
+How to call a coroutine
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Coroutines do not raise exceptions in the normal way: any exception
+they raise will be trapped in the `.Future` until it is yielded. This
+means it is important to call coroutines in the right way, or you may
+have errors that go unnoticed::
+
+    @gen.coroutine
+    def divide(x, y):
+        return x / y
+
+    def bad_call():
+        # This should raise a ZeroDivisionError, but it won't because
+        # the coroutine is called incorrectly.
+        divide(1, 0)
+
+In nearly all cases, any function that calls a coroutine must be a
+coroutine itself, and use the ``yield`` keyword in the call. When you
+are overriding a method defined in a superclass, consult the
+documentation to see if coroutines are allowed (the documentation
+should say that the method "may be a coroutine" or "may return a
+`.Future`")::
+
+    @gen.coroutine
+    def good_call():
+        # yield will unwrap the Future returned by divide() and raise
+        # the exception.
+        yield divide(1, 0)
+
+Sometimes you may want to "fire and forget" a coroutine without waiting
+for its result. In this case it is recommended to use `.IOLoop.spawn_callback`,
+which makes the `.IOLoop` responsible for the call. If it fails,
+the `.IOLoop` will log a stack trace::
+
+    # The IOLoop will catch the exception and print a stack trace in
+    # the logs. Note that this doesn't look like a normal call, since
+    # we pass the function object to be called by the IOLoop.
+    IOLoop.current().spawn_callback(divide, 1, 0)
+
+Finally, at the top level of a program, *if the `.IOLoop` is not yet
+running,* you can start the `.IOLoop`, run the coroutine, and then
+stop the `.IOLoop` with the `.IOLoop.run_sync` method. This is often
+used to start the ``main`` function of a batch-oriented program::
+
+    # run_sync() doesn't take arguments, so we must wrap the
+    # call in a lambda.
+    IOLoop.current().run_sync(lambda: divide(1, 0))
+
 Coroutine patterns
 ~~~~~~~~~~~~~~~~~~
 
@@ -161,3 +210,32 @@ from `Motor <http://motor.readthedocs.org/en/stable/>`_::
         cursor = db.collection.find()
         while (yield cursor.fetch_next):
             doc = cursor.next_object()
+
+Running in the background
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+`.PeriodicCallback` is not normally used with coroutines. Instead, a
+coroutine can contain a ``while True:`` loop and use
+`tornado.gen.sleep`::
+
+    @gen.coroutine
+    def minute_loop():
+        while True:
+            yield do_something()
+            yield gen.sleep(60)
+
+    # Coroutines that loop forever are generally started with
+    # spawn_callback().
+    IOLoop.current().spawn_callback(minute_loop)
+
+Sometimes a more complicated loop may be desirable. For example, the
+previous loop runs every ``60+N`` seconds, where ``N`` is the running
+time of ``do_something()``. To run exactly every 60 seconds, use the
+interleaving pattern from above::
+
+    @gen.coroutine
+    def minute_loop2():
+        while True:
+            nxt = gen.sleep(60)   # Start the clock.
+            yield do_something()  # Run while the clock is ticking.
+            yield nxt             # Wait for the timer to run out.
