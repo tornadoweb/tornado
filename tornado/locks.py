@@ -12,13 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""
-.. testsetup:: *
-
-    from tornado import ioloop, gen, locks
-    io_loop = ioloop.IOLoop.current()
-"""
-
 from __future__ import absolute_import, division, print_function, with_statement
 
 __all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore', 'Lock']
@@ -61,7 +54,11 @@ class Condition(_TimeoutGarbageCollector):
 
     .. testcode::
 
-        condition = locks.Condition()
+        from tornado import gen
+        from tornado.ioloop import IOLoop
+        from tornado.locks import Condition
+
+        condition = Condition()
 
         @gen.coroutine
         def waiter():
@@ -80,7 +77,7 @@ class Condition(_TimeoutGarbageCollector):
             # Yield two Futures; wait for waiter() and notifier() to finish.
             yield [waiter(), notifier()]
 
-        io_loop.run_sync(runner)
+        IOLoop.current().run_sync(runner)
 
     .. testoutput::
 
@@ -92,7 +89,7 @@ class Condition(_TimeoutGarbageCollector):
     `wait` takes an optional ``timeout`` argument, which is either an absolute
     timestamp::
 
-        io_loop = ioloop.IOLoop.current()
+        io_loop = IOLoop.current()
 
         # Wait up to 1 second for a notification.
         yield condition.wait(timeout=io_loop.time() + 1)
@@ -161,7 +158,11 @@ class Event(object):
 
     .. testcode::
 
-        event = locks.Event()
+        from tornado import gen
+        from tornado.ioloop import IOLoop
+        from tornado.locks import Event
+
+        event = Event()
 
         @gen.coroutine
         def waiter():
@@ -180,7 +181,7 @@ class Event(object):
         def runner():
             yield [waiter(), setter()]
 
-        io_loop.run_sync(runner)
+        IOLoop.current().run_sync(runner)
 
     .. testoutput::
 
@@ -210,7 +211,7 @@ class Event(object):
 
     def clear(self):
         """Reset the internal flag to ``False``.
-        
+
         Calls to `.wait` will block until `.set` is called.
         """
         if self._future.done():
@@ -261,7 +262,8 @@ class Semaphore(_TimeoutGarbageCollector):
 
        from collections import deque
 
-       from tornado import gen, ioloop
+       from tornado import gen
+       from tornado.ioloop import IOLoop
        from tornado.concurrent import Future
 
        # Ensure reliable doctest output: resolve Futures one at a time.
@@ -273,14 +275,18 @@ class Semaphore(_TimeoutGarbageCollector):
                yield gen.moment
                f.set_result(None)
 
-       ioloop.IOLoop.current().add_callback(simulator, list(futures_q))
+       IOLoop.current().add_callback(simulator, list(futures_q))
 
        def use_some_resource():
            return futures_q.popleft()
 
     .. testcode:: semaphore
 
-        sem = locks.Semaphore(2)
+        from tornado import gen
+        from tornado.ioloop import IOLoop
+        from tornado.locks import Semaphore
+
+        sem = Semaphore(2)
 
         @gen.coroutine
         def worker(worker_id):
@@ -297,7 +303,7 @@ class Semaphore(_TimeoutGarbageCollector):
             # Join all workers.
             yield [worker(i) for i in range(3)]
 
-        io_loop.run_sync(runner)
+        IOLoop.current().run_sync(runner)
 
     .. testoutput:: semaphore
 

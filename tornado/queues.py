@@ -51,7 +51,11 @@ class Queue(object):
 
     .. testcode::
 
-        q = queues.Queue(maxsize=2)
+        from tornado import gen
+        from tornado.ioloop import IOLoop
+        from tornado.queues import Queue
+
+        q = Queue(maxsize=2)
 
         @gen.coroutine
         def consumer():
@@ -71,19 +75,20 @@ class Queue(object):
 
         @gen.coroutine
         def main():
-            consumer()           # Start consumer.
+            # Start consumer without waiting (since it never finishes).
+            IOLoop.current().spawn_callback(consumer)
             yield producer()     # Wait for producer to put all tasks.
             yield q.join()       # Wait for consumer to finish all tasks.
             print('Done')
 
-        io_loop.run_sync(main)
+        IOLoop.current().run_sync(main)
 
     .. testoutput::
 
         Put 0
         Put 1
-        Put 2
         Doing work on 0
+        Put 2
         Doing work on 1
         Put 3
         Doing work on 2
@@ -266,7 +271,9 @@ class PriorityQueue(Queue):
 
     .. testcode::
 
-        q = queues.PriorityQueue()
+        from tornado.queues import PriorityQueue
+
+        q = PriorityQueue()
         q.put((1, 'medium-priority item'))
         q.put((0, 'high-priority item'))
         q.put((10, 'low-priority item'))
@@ -296,7 +303,9 @@ class LifoQueue(Queue):
 
     .. testcode::
 
-        q = queues.LifoQueue()
+        from tornado.queues import LifoQueue
+
+        q = LifoQueue()
         q.put(3)
         q.put(2)
         q.put(1)
