@@ -624,11 +624,12 @@ class Multi(YieldPoint):
 def multi_future(children, quiet_exceptions=()):
     """Wait for multiple asynchronous futures in parallel.
 
-    Takes a list of ``Futures`` (but *not* other ``YieldPoints``) and returns
-    a new Future that resolves when all the other Futures are done.
-    If all the ``Futures`` succeeded, the returned Future's result is a list
-    of their results.  If any failed, the returned Future raises the exception
-    of the first one to fail.
+    Takes a list of ``Futures`` or other yieldable objects (with the
+    exception of the legacy `.YieldPoint` interfaces) and returns a
+    new Future that resolves when all the other Futures are done. If
+    all the ``Futures`` succeeded, the returned Future's result is a
+    list of their results. If any failed, the returned Future raises
+    the exception of the first one to fail.
 
     Instead of a list, the argument may also be a dictionary whose values are
     Futures, in which case a parallel dictionary is returned mapping the same
@@ -649,12 +650,16 @@ def multi_future(children, quiet_exceptions=()):
        If multiple ``Futures`` fail, any exceptions after the first (which is
        raised) will be logged. Added the ``quiet_exceptions``
        argument to suppress this logging for selected exception types.
+
+    .. versionchanged:: 4.3
+       Added support for other yieldable objects.
     """
     if isinstance(children, dict):
         keys = list(children.keys())
         children = children.values()
     else:
         keys = None
+    children = list(map(convert_yielded, children))
     assert all(is_future(i) for i in children)
     unfinished_children = set(children)
 

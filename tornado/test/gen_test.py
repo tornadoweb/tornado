@@ -746,6 +746,26 @@ class GenCoroutineTest(AsyncTestCase):
         self.assertEqual(result, 42)
         self.finished = True
 
+    @skipBefore35
+    @gen_test
+    def test_async_await_mixed_multi(self):
+        global_namespace = dict(globals(), **locals())
+        local_namespace = {}
+        exec(textwrap.dedent("""
+        async def f1():
+            await gen.Task(self.io_loop.add_callback)
+            return 42
+        """), global_namespace, local_namespace)
+
+        @gen.coroutine
+        def f2():
+            yield gen.Task(self.io_loop.add_callback)
+            raise gen.Return(43)
+
+        results = yield [local_namespace['f1'](), f2()]
+        self.assertEqual(results, [42, 43])
+        self.finished = True
+
     @gen_test
     def test_sync_return_no_value(self):
         @gen.coroutine
