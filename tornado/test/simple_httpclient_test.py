@@ -205,6 +205,7 @@ class SimpleHTTPClientTestMixin(object):
         self.assertEqual(response.headers["Content-Encoding"], "gzip")
         self.assertNotEqual(response.body, b"asdfqwer")
         # Our test data gets bigger when gzipped.  Oops.  :)
+        # Chunked encoding bypasses the MIN_LENGTH check.
         self.assertEqual(len(response.body), 34)
         f = gzip.GzipFile(mode="r", fileobj=response.buffer)
         self.assertEqual(f.read(), b"asdfqwer")

@@ -444,7 +444,8 @@ class _PerMessageDeflateCompressor(object):
             self._compressor = None
 
     def _create_compressor(self):
-        return zlib.compressobj(-1, zlib.DEFLATED, -self._max_wbits)
+        return zlib.compressobj(tornado.web.GZipContentEncoding.GZIP_LEVEL,
+                                zlib.DEFLATED, -self._max_wbits)
 
     def compress(self, data):
         compressor = self._compressor or self._create_compressor()

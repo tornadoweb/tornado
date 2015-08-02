@@ -11,7 +11,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest
 from tornado.util import u, ObjectDict, unicode_type, timedelta_to_seconds
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version, GZipContentEncoding
 
 import binascii
 import contextlib
@@ -1483,7 +1483,8 @@ class GzipTestCase(SimpleHandlerTestCase):
         def get(self):
             if self.get_argument('vary', None):
                 self.set_header('Vary', self.get_argument('vary'))
-            self.write('hello world')
+            # Must write at least MIN_LENGTH bytes to activate compression.
+            self.write('hello world' + ('!' * GZipContentEncoding.MIN_LENGTH))
 
     def get_app_kwargs(self):
         return dict(

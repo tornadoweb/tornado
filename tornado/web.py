@@ -2658,7 +2658,16 @@ class GZipContentEncoding(OutputTransform):
     CONTENT_TYPES = set(["application/javascript", "application/x-javascript",
                          "application/xml", "application/atom+xml",
                          "application/json", "application/xhtml+xml"])
-    MIN_LENGTH = 5
+    # Python's GzipFile defaults to level 9, while most other gzip
+    # tools (including gzip itself) default to 6, which is probably a
+    # better CPU/size tradeoff.
+    GZIP_LEVEL = 6
+    # Responses that are too short are unlikely to benefit from gzipping
+    # after considering the "Content-Encoding: gzip" header and the header
+    # inside the gzip encoding.
+    # Note that responses written in multiple chunks will be compressed
+    # regardless of size.
+    MIN_LENGTH = 1024
 
     def __init__(self, request):
         self._gzipping = "gzip" in request.headers.get("Accept-Encoding", "")
@@ -2679,7 +2688,8 @@ class GZipContentEncoding(OutputTransform):
         if self._gzipping:
             headers["Content-Encoding"] = "gzip"
             self._gzip_value = BytesIO()
-            self._gzip_file = gzip.GzipFile(mode="w", fileobj=self._gzip_value)
+            self._gzip_file = gzip.GzipFile(mode="w", fileobj=self._gzip_value,
+                                            compresslevel=self.GZIP_LEVEL)
             chunk = self.transform_chunk(chunk, finishing)
             if "Content-Length" in headers:
                 # The original content length is no longer correct.
