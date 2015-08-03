@@ -137,6 +137,11 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.stream = None
         self._on_close_called = False
 
+    def set_write_callback(self, callback):
+        if self.ws_connection is None:
+            raise WebSocketClosedError()
+        self.ws_connection.write_callback = callback
+
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         self.open_args = args
@@ -515,6 +520,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         # the effect of compression, frame overhead, and control frames.
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
+        self.write_callback = None
 
     def accept_connection(self):
         try:
@@ -671,7 +677,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         frame += data
         self._wire_bytes_out += len(frame)
         try:
-            self.stream.write(frame)
+            self.stream.write(frame, self.write_callback)
         except StreamClosedError:
             self._abort()
 
