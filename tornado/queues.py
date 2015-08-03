@@ -44,6 +44,14 @@ def _set_timeout(future, timeout):
             lambda _: io_loop.remove_timeout(timeout_handle))
 
 
+class _QueueIterator(object):
+    def __init__(self, q):
+        self.q = q
+
+    def __anext__(self):
+        return self.q.get()
+
+
 class Queue(object):
     """Coordinate producer and consumer coroutines.
 
@@ -96,6 +104,18 @@ class Queue(object):
         Doing work on 3
         Doing work on 4
         Done
+
+    In Python 3.5, `Queue` implements the async iterator protocol, so
+    ``consumer()`` could be rewritten as::
+
+        async def consumer():
+            async for item in q:
+                try:
+                    print('Doing work on %s' % item)
+                    yield gen.sleep(0.01)
+                finally:
+                    q.task_done()
+
     """
     def __init__(self, maxsize=0):
         if maxsize is None:
@@ -219,6 +239,10 @@ class Queue(object):
         timeout.
         """
         return self._finished.wait(timeout)
+
+    @gen.coroutine
+    def __aiter__(self):
+        return _QueueIterator(self)
 
     # These three are overridable in subclasses.
     def _init(self):

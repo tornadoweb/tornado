@@ -12,11 +12,13 @@
 
 from datetime import timedelta
 from random import random
+import sys
+import textwrap
 
 from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.testing import gen_test, AsyncTestCase
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipBefore35, exec_test
 
 
 class QueueBasicTest(AsyncTestCase):
@@ -112,7 +114,7 @@ class QueueGetTest(AsyncTestCase):
         get = q.get()
         with self.assertRaises(TimeoutError):
             yield get_timeout
-        
+
         q.put_nowait(0)
         self.assertEqual(0, (yield get))
 
@@ -154,6 +156,24 @@ class QueueGetTest(AsyncTestCase):
         for getter in getters:
             self.assertRaises(TimeoutError, getter.result)
 
+    @skipBefore35
+    @gen_test
+    def test_async_for(self):
+        q = queues.Queue()
+        for i in range(5):
+            q.put(i)
+
+        namespace = exec_test(globals(), locals(), """
+        async def f():
+            results = []
+            async for i in q:
+                results.append(i)
+                if i == 4:
+                    return results
+        """)
+        results = yield namespace['f']()
+        self.assertEqual(results, list(range(5)))
+
 
 class QueuePutTest(AsyncTestCase):
     @gen_test
@@ -176,7 +196,7 @@ class QueuePutTest(AsyncTestCase):
         self.assertEqual(0, (yield get0))
         yield q.put(1)
         self.assertEqual(1, (yield get1))
-        
+
     @gen_test
     def test_nonblocking_put_with_getters(self):
         q = queues.Queue()
@@ -208,7 +228,7 @@ class QueuePutTest(AsyncTestCase):
         put = q.put(2)
         with self.assertRaises(TimeoutError):
             yield put_timeout
-        
+
         self.assertEqual(0, q.get_nowait())
         # 1 was never put in the queue.
         self.assertEqual(2, (yield q.get()))
@@ -281,7 +301,7 @@ class QueuePutTest(AsyncTestCase):
 
 class QueueJoinTest(AsyncTestCase):
     queue_class = queues.Queue
-    
+
     def test_task_done_underflow(self):
         q = self.queue_class()
         self.assertRaises(ValueError, q.task_done)
@@ -338,7 +358,7 @@ class QueueJoinTest(AsyncTestCase):
 
 class PriorityQueueJoinTest(QueueJoinTest):
     queue_class = queues.PriorityQueue
-    
+
     @gen_test
     def test_order(self):
         q = self.queue_class(maxsize=2)
