@@ -79,16 +79,13 @@ copy of the source tarball as well.
 The Tornado source code is `hosted on GitHub
 <https://github.com/tornadoweb/tornado>`_.
 
-**Prerequisites**: Tornado 4.3 runs on Python 2.6, 2.7, and 3.2+
-(support for Python 2.6 and 3.2 is deprecated and will be removed in
+**Prerequisites**: Tornado 4.3 runs on Python 2.7, and 3.2+
+(support for Python 3.2 is deprecated and will be removed in
 the next release). For Python 2, version 2.7.9 or newer is *strongly*
 recommended for the improved SSL support. In addition to the requirements
 which will be installed automatically by ``pip`` or ``setup.py install``,
 the following optional packages may be useful:
 
-* `unittest2 <https://pypi.python.org/pypi/unittest2>`_ is needed to run
-  Tornado's test suite on Python 2.6 (it is unnecessary on more recent
-  versions of Python)
 * `concurrent.futures <https://pypi.python.org/pypi/futures>`_ is the
   recommended thread pool for use with Tornado and enables the use of
   `~tornado.netutil.ThreadedResolver`.  It is needed only on Python 2;
