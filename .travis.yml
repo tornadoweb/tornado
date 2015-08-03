@@ -7,6 +7,7 @@ python:
     - 3.2
     - 3.3
     - 3.4
+    - nightly
     - pypy3
 
 env:
@@ -47,7 +48,9 @@ script:
     # We use "python -m coverage" instead of the "bin/coverage" script
     # so we can pass additional arguments to python.  However, this doesn't
     # work on 2.6, so skip coverage on that version.
-    - if [[ $TRAVIS_PYTHON_VERSION != 2.6 ]]; then export TARGET="-m coverage run $TARGET"; fi
+    # coverage needs a function that was removed in python 3.6 so we can't
+    # run it with nightly cpython.
+    - if [[ $TRAVIS_PYTHON_VERSION != 2.6 && $TRAVIS_PYTHON_VERSION != nightly ]]; then export TARGET="-m coverage run $TARGET"; fi
     - python $TARGET
     - python $TARGET --ioloop=tornado.platform.select.SelectIOLoop
     - python -O $TARGET
