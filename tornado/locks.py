@@ -453,8 +453,10 @@ class Lock(object):
     ...
     ...    # Now the lock is released.
 
-    In Python 3.5, `Lock` also supports the async context manager protocol.
-    Note that in this case there is no `acquire`:
+    In Python 3.5, `Lock` also supports the async context manager
+    protocol. Note that in this case there is no `acquire`, because
+    ``async with`` includes both the ``yield`` and the ``acquire``
+    (just as it does with `threading.Lock`):
 
     >>> async def f():  # doctest: +SKIP
     ...    async with lock:
@@ -465,6 +467,7 @@ class Lock(object):
 
     .. versionchanged:: 3.5
        Added ``async with`` support in Python 3.5.
+
     """
     def __init__(self):
         self._block = BoundedSemaphore(value=1)
