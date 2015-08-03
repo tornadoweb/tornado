@@ -116,6 +116,9 @@ class Queue(object):
                 finally:
                     q.task_done()
 
+    .. versionchanged:: 4.3
+       Added ``async for`` support in Python 3.5.
+
     """
     def __init__(self, maxsize=0):
         if maxsize is None:

@@ -338,6 +338,9 @@ class Semaphore(_TimeoutGarbageCollector):
 
             # Now the semaphore has been released.
             print("Worker %d is done" % worker_id)
+
+    .. versionchanged:: 4.3
+       Added ``async with`` support in Python 3.5.
     """
     def __init__(self, value=1):
         super(Semaphore, self).__init__()
@@ -459,6 +462,9 @@ class Lock(object):
     ...        pass
     ...
     ...    # Now the lock is released.
+
+    .. versionchanged:: 3.5
+       Added ``async with`` support in Python 3.5.
     """
     def __init__(self):
         self._block = BoundedSemaphore(value=1)

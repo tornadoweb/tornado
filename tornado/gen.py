@@ -346,6 +346,9 @@ class WaitIterator(object):
 
     .. versionadded:: 4.1
 
+    .. versionchanged:: 4.3
+       Added ``async for`` support in Python 3.5.
+
     """
     def __init__(self, *args, **kwargs):
         if args and kwargs:
