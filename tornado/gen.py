@@ -333,7 +333,19 @@ class WaitIterator(object):
     arguments were used in the construction of the `WaitIterator`,
     ``current_index`` will use the corresponding keyword).
 
+    On Python 3.5, `WaitIterator` implements the async iterator
+    protocol, so it can be used with the ``async for`` statement (note
+    that in this version the entire iteration is aborted if any value
+    raises an exception, while the previous example can continue past
+    individual errors)::
+
+      async for result in gen.WaitIterator(future1, future2):
+          print("Result {} received from {} at {}".format(
+              result, wait_iterator.current_future,
+              wait_iterator.current_index))
+
     .. versionadded:: 4.1
+
     """
     def __init__(self, *args, **kwargs):
         if args and kwargs:
@@ -389,6 +401,16 @@ class WaitIterator(object):
 
         self.current_future = done
         self.current_index = self._unfinished.pop(done)
+
+    @coroutine
+    def __aiter__(self):
+        raise Return(self)
+
+    def __anext__(self):
+        if self.done():
+            # Lookup by name to silence pyflakes on older versions.
+            raise globals()['StopAsyncIteration']()
+        return self.next()
 
 
 class YieldPoint(object):

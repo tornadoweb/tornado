@@ -1285,6 +1285,46 @@ class WaitIteratorTest(AsyncTestCase):
                     self.assertEqual(g.current_index, 3, 'wrong index')
             i += 1
 
+    @skipBefore35
+    @gen_test
+    def test_iterator_async_await(self):
+        # Recreate the previous test with py35 syntax. It's a little clunky
+        # because of the way the previous test handles an exception on
+        # a single iteration.
+        futures = [Future(), Future(), Future(), Future()]
+        self.finish_coroutines(0, futures)
+        self.finished = False
+
+        namespace = exec_test(globals(), locals(), """
+        async def f():
+            i = 0
+            g = gen.WaitIterator(*futures)
+            try:
+                async for r in g:
+                    if i == 0:
+                        self.assertEqual(r, 24, 'iterator value incorrect')
+                        self.assertEqual(g.current_index, 2, 'wrong index')
+                    else:
+                        raise Exception("expected exception on iteration 1")
+                    i += 1
+            except ZeroDivisionError:
+                i += 1
+            async for r in g:
+                if i == 2:
+                    self.assertEqual(r, 42, 'iterator value incorrect')
+                    self.assertEqual(g.current_index, 1, 'wrong index')
+                elif i == 3:
+                    self.assertEqual(r, 84, 'iterator value incorrect')
+                    self.assertEqual(g.current_index, 3, 'wrong index')
+                else:
+                    raise Exception("didn't expect iteration %d" % i)
+                i += 1
+            self.finished = True
+        """)
+        yield namespace['f']()
+        self.assertTrue(self.finished)
+
+
     @gen_test
     def test_no_ref(self):
         # In this usage, there is no direct hard reference to the
