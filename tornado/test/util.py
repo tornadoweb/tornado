@@ -1,8 +1,10 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import os
+import platform
 import socket
 import sys
+import textwrap
 
 from tornado.testing import bind_unused_port
 
@@ -32,6 +34,12 @@ skipIfNoNetwork = unittest.skipIf('NO_NETWORK' in os.environ,
 skipIfNoIPv6 = unittest.skipIf(not socket.has_ipv6, 'ipv6 support not present')
 
 
+skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 (yield from) not available')
+skipBefore35 = unittest.skipIf(sys.version_info < (3, 5), 'PEP 492 (async/await) not available')
+skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
+                                 'Not CPython implementation')
+
+
 def refusing_port():
     """Returns a local port number that will refuse all connections.
 
@@ -50,3 +58,18 @@ def refusing_port():
     conn.close()
     server_socket.close()
     return (client_socket.close, client_addr[1])
+
+
+def exec_test(caller_globals, caller_locals, s):
+    """Execute ``s`` in a given context and return the result namespace.
+
+    Used to define functions for tests in particular python
+    versions that would be syntax errors in older versions.
+    """
+    # Flatten the real global and local namespace into our fake
+    # globals: it's all global from the perspective of code defined
+    # in s.
+    global_namespace = dict(caller_globals, **caller_locals)
+    local_namespace = {}
+    exec(textwrap.dedent(s), global_namespace, local_namespace)
+    return local_namespace

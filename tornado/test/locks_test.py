@@ -11,15 +11,11 @@
 # under the License.
 
 from datetime import timedelta
-import sys
-import textwrap
 
 from tornado import gen, locks
 from tornado.gen import TimeoutError
 from tornado.testing import gen_test, AsyncTestCase
-from tornado.test.util import unittest
-
-skipBefore35 = unittest.skipIf(sys.version_info < (3, 5), 'PEP 492 (async/await) not available')
+from tornado.test.util import unittest, skipBefore35, exec_test
 
 
 class ConditionTest(AsyncTestCase):
@@ -338,14 +334,12 @@ class SemaphoreContextManagerTest(AsyncTestCase):
         # Repeat the above test using 'async with'.
         sem = locks.Semaphore()
 
-        global_namespace = dict(globals(), **locals())
-        local_namespace = {}
-        exec(textwrap.dedent("""
+        namespace = exec_test(globals(), locals(), """
         async def f():
             async with sem as yielded:
                 self.assertTrue(yielded is None)
-        """), global_namespace, local_namespace)
-        yield local_namespace['f']()
+        """)
+        yield namespace['f']()
 
         # Semaphore was released and can be acquired again.
         self.assertTrue(sem.acquire().done())
@@ -475,14 +469,12 @@ class LockTests(AsyncTestCase):
         N = 5
         history = []
 
-        global_namespace = dict(globals(), **locals())
-        local_namespace = {}
-        exec(textwrap.dedent("""
+        namespace = exec_test(globals(), locals(), """
         async def f(idx):
             async with lock:
                 history.append(idx)
-        """), global_namespace, local_namespace)
-        futures = [local_namespace['f'](i) for i in range(N)]
+        """)
+        futures = [namespace['f'](i) for i in range(N)]
         lock.release()
         yield futures
         self.assertEqual(list(range(N)), history)
