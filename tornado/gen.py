@@ -108,6 +108,11 @@ try:
 except ImportError:
     def isawaitable(x): return False
 
+try:
+    import builtins  # py3
+except ImportError:
+    import __builtin__ as builtins
+
 
 class KeyReuseError(Exception):
     pass
@@ -412,7 +417,7 @@ class WaitIterator(object):
     def __anext__(self):
         if self.done():
             # Lookup by name to silence pyflakes on older versions.
-            raise globals()['StopAsyncIteration']()
+            raise getattr(builtins, 'StopAsyncIteration')()
         return self.next()
 
 
