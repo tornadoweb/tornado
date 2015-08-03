@@ -212,7 +212,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         if self.ws_connection is None:
             raise WebSocketClosedError()
         if isinstance(message, dict):
-            message = tornado.escape.json_encode(message)
+            message = self.json_encode(message)
         self.ws_connection.write_message(message, binary=binary)
 
     def select_subprotocol(self, subprotocols):

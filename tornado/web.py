@@ -299,6 +299,10 @@ class RequestHandler(object):
         """
         pass
 
+    def json_encode(self, value):
+        """Override this to change the default json encoder"""
+        return escape.json_encode(value)
+
     def set_status(self, status_code, reason=None):
         """Sets the status code for our response.
 
@@ -692,7 +696,7 @@ class RequestHandler(object):
                 message += ". Lists not accepted for security reasons; see http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"
             raise TypeError(message)
         if isinstance(chunk, dict):
-            chunk = escape.json_encode(chunk)
+            chunk = self.json_encode(chunk)
             self.set_header("Content-Type", "application/json; charset=UTF-8")
         chunk = utf8(chunk)
         self._write_buffer.append(chunk)
