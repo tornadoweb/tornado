@@ -190,10 +190,19 @@ def enable_pretty_logging(options=None, logger=None):
         logger = logging.getLogger()
     logger.setLevel(getattr(logging, options.logging.upper()))
     if options.log_file_prefix:
-        channel = logging.handlers.RotatingFileHandler(
-            filename=options.log_file_prefix,
-            maxBytes=options.log_file_max_size,
-            backupCount=options.log_file_num_backups)
+        if options.rotating_mode == 'sized':
+            channel = logging.handlers.RotatingFileHandler(
+                filename=options.log_file_prefix,
+                maxBytes=options.log_file_max_size,
+                backupCount=options.log_file_num_backups)
+        elif options.rotating_mode == 'timed':
+            channel = logging.handlers.TimedRotatingFileHandler(
+                filename=options.log_file_prefix,
+                when=options.log_file_rotating_when,
+                interval=options.log_file_rotating_interval,
+                backupCount=options.log_file_num_backups)
+        else:
+            channel = logging.NullHandler()
         channel.setFormatter(LogFormatter(color=False))
         logger.addHandler(channel)
 
@@ -234,5 +243,14 @@ def define_logging_options(options=None):
                    help="max size of log files before rollover")
     options.define("log_file_num_backups", type=int, default=10,
                    help="number of log files to keep")
+
+    options.define("log_file_rotating_when", type=str, default='midnight',
+                   help=("specify the type of TimedRotatingFileHandler interval "
+                         "other options:('S', 'M', 'H', 'D', 'W0'-'W6')"))
+    options.define("log_file_rotating_interval", type=int, default=1,
+                   help="The interval value of timed rotating")
+
+    options.define("rotating_mode", type=str, default='sized',
+                   help="The mode of rotating files(timed or sized)")
 
     options.add_parse_callback(lambda: enable_pretty_logging(options))
