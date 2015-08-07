@@ -630,6 +630,24 @@ if have_twisted:
                     os.chdir(self.__curdir)
                     shutil.rmtree(self.__tempdir)
 
+                def flushWarnings(self, *args, **kwargs):
+                    # This is a hack because Twisted and Tornado have
+                    # differing approaches to warnings in tests.
+                    # Tornado sets up a global set of warnings filters
+                    # in runtests.py, while Twisted patches the filter
+                    # list in each test. The net effect is that
+                    # Twisted's tests run with Tornado's increased
+                    # strictness (BytesWarning and ResourceWarning are
+                    # enabled) but without our filter rules to ignore those
+                    # warnings from Twisted code.
+                    filtered = []
+                    for w in super(TornadoTest, self).flushWarnings(
+                            *args, **kwargs):
+                        if w['category'] in (BytesWarning, ResourceWarning):
+                            continue
+                        filtered.append(w)
+                    return filtered
+
                 def buildReactor(self):
                     self.__saved_signals = save_signal_handlers()
                     return test_class.buildReactor(self)
