@@ -352,7 +352,8 @@ class BaseIOStream(object):
         try:
             self._try_inline_read()
         except:
-            future.add_done_callback(lambda f: f.exception())
+            if future is not None:
+                future.add_done_callback(lambda f: f.exception())
             raise
         return future
 
