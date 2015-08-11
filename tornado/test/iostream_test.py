@@ -457,6 +457,18 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_read_until_close_with_error(self):
+        server, client = self.make_iostream_pair()
+        try:
+            with mock.patch('tornado.iostream.BaseIOStream._try_inline_read',
+                            side_effect=IOError('boom')):
+                with self.assertRaisesRegexp(IOError, 'boom'):
+                    client.read_until_close(self.stop)
+        finally:
+            server.close()
+            client.close()
+
     def test_streaming_read_until_close_after_close(self):
         # Same as the preceding test but with a streaming_callback.
         # All data should go through the streaming callback,
