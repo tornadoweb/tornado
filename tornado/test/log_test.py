@@ -165,25 +165,16 @@ class EnablePrettyLoggingTest(unittest.TestCase):
         tmpdir = tempfile.mkdtemp()
         try:
             self.options.log_file_prefix = tmpdir + '/test_log'
-            self.options.rotating_mode = 'timed'
-            self.options.log_file_rotating_when = 'S'
-            self.options.log_file_rotating_interval = 1
+            self.options.log_rotate_mode = 'time'
             enable_pretty_logging(options=self.options, logger=self.logger)
-            self.logger.error('hello1 from TimedRotatingFileHandler')
-            time.sleep(1.01)
-            self.logger.error('hello2 from TimedRotatingFileHandler')
+            self.logger.error('hello')
+            self.logger.handlers[0].flush()
             filenames = glob.glob(tmpdir + '/test_log*')
-            self.assertEqual(2, len(filenames))
-            new_file = tmpdir + '/test_log'
-            old_file = glob.glob(tmpdir + '/test_log.*')[0]
-            with open(old_file) as f:
+            self.assertEqual(1, len(filenames))
+            with open(filenames[0]) as f:
                 self.assertRegexpMatches(
                     f.read(),
-                    r'^\[E [^]]*\] hello1 from TimedRotatingFileHandler$')
-            with open(new_file) as f:
-                self.assertRegexpMatches(
-                    f.read(),
-                    r'^\[E [^]]*\] hello2 from TimedRotatingFileHandler$')
+                    r'^\[E [^]]*\] hello$')
         finally:
             for handler in self.logger.handlers:
                 handler.flush()
