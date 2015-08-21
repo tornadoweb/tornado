@@ -454,7 +454,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if header_callback is not None:
             self.io_loop.add_callback(header_callback, header_line)
         # header_line as returned by curl includes the end-of-line characters.
-        header_line = header_line.strip()
+        # whitespace at the start should be preserved to allow multi-line headers
+        header_line = header_line.rstrip()
         if header_line.startswith("HTTP/"):
             headers.clear()
             try:
