@@ -31,14 +31,14 @@ install:
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
-    - travis_retry pip install coveralls
+    - travis_retry pip install codecov
 
 script:
     # Get out of the source directory before running tests to avoid PYTHONPATH
     # confusion.  This is necessary to ensure that the speedups module can
     # be found in the installation directory.
     - cd maint
-    # Copy the coveragerc down so coveralls can find it.
+    # Copy the coveragerc down so codecov can find it.
     - cp ../.coveragerc .
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - export TARGET="-m tornado.test.runtests"
@@ -73,7 +73,7 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
 
 after_success:
-    coveralls
+    codecov -e DEPS
 
 # This reportedly works around an issue downloading packages from pypi on
 # travis.  Consider removing this after the underlying issue is fixed.
