@@ -73,7 +73,10 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
 
 after_success:
-    codecov -e DEPS
+    - echo $PWD
+    - ls -al
+    - coverage xml
+    - codecov -e DEPS
 
 # This reportedly works around an issue downloading packages from pypi on
 # travis.  Consider removing this after the underlying issue is fixed.
