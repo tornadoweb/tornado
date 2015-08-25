@@ -392,7 +392,7 @@ X-XSS-Protection: 1;
             self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
             resp = self.wait()
             resp.rethrow()
-            self.assertEqual(resp.headers['X-XSS-Protection'], b"1; mode=block")
+            self.assertEqual(resp.headers['X-XSS-Protection'], "1; mode=block")
             self.io_loop.remove_handler(sock.fileno())
 
     def test_304_with_content_length(self):
