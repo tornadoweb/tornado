@@ -76,7 +76,7 @@ coverage_ignore_functions = [
 html_favicon = 'favicon.ico'
 
 latex_documents = [
-    ('documentation', 'tornado.tex', 'Tornado Documentation', 'Facebook', 'manual', False),
+    ('index', 'tornado.tex', 'Tornado Documentation', 'The Tornado Authors', 'manual', False),
     ]
 
 # HACK: sphinx has limited support for substitutions with the |version|
