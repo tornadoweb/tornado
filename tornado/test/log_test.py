@@ -183,6 +183,28 @@ class EnablePrettyLoggingTest(unittest.TestCase):
                 os.unlink(filename)
             os.rmdir(tmpdir)
 
+    def test_wrong_rotate_mode_value(self):
+        try:
+            self.options.log_file_prefix = 'some_path'
+            self.options.log_rotate_mode = 'wrong_mode'
+            self.assertRaises(ValueError, enable_pretty_logging,
+                              options=self.options, logger=self.logger)
+        finally:
+            for handler in self.logger.handlers:
+                handler.flush()
+                handler.close()
+
+    def test_wrong_rotate_mode_type(self):
+        try:
+            self.options.log_file_prefix = 'some_path'
+            self.options.log_rotate_mode = None
+            self.assertRaises(TypeError, enable_pretty_logging,
+                              options=self.options, logger=self.logger)
+        finally:
+            for handler in self.logger.handlers:
+                handler.flush()
+                handler.close()
+
 
 class LoggingOptionTest(unittest.TestCase):
     """Test the ability to enable and disable Tornado's logging hooks."""

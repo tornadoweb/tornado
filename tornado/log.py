@@ -190,19 +190,27 @@ def enable_pretty_logging(options=None, logger=None):
         logger = logging.getLogger()
     logger.setLevel(getattr(logging, options.logging.upper()))
     if options.log_file_prefix:
-        if options.log_rotate_mode == 'size':
+        rotate_mode = options.log_rotate_mode
+        if rotate_mode == 'size':
             channel = logging.handlers.RotatingFileHandler(
                 filename=options.log_file_prefix,
                 maxBytes=options.log_file_max_size,
                 backupCount=options.log_file_num_backups)
-        elif options.log_rotate_mode == 'time':
+        elif rotate_mode == 'time':
             channel = logging.handlers.TimedRotatingFileHandler(
                 filename=options.log_file_prefix,
                 when=options.log_rotate_when,
                 interval=options.log_rotate_interval,
                 backupCount=options.log_file_num_backups)
         else:
-            channel = logging.NullHandler()
+            if not isinstance(rotate_mode, str):
+                error_message = 'The type of log_rotate_mode option should be ' +\
+                                'str, not {}.'.format(str(type(rotate_mode)))
+                raise TypeError(error_message)
+            else:
+                error_message = 'The value of log_rotate_mode option should be ' +\
+                                '"size" or "time", not "{}".'.format(rotate_mode)
+                raise ValueError(error_message)
         channel.setFormatter(LogFormatter(color=False))
         logger.addHandler(channel)
 
