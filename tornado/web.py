@@ -649,7 +649,6 @@ class RequestHandler(object):
             value = self.get_cookie(name)
         return get_signature_key_version(value)
 
-
     def redirect(self, url, permanent=False, status=None):
         """Sends a redirect to the given (optionally relative) URL.
 
@@ -2010,8 +2009,8 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         # except handler, and we cannot easily access the IOLoop here to
         # call add_future (because of the requirement to remain compatible
         # with WSGI)
-        f = self.handler._execute(transforms, *self.path_args,
-                                  **self.path_kwargs)
+        self.handler._execute(transforms, *self.path_args,
+                              **self.path_kwargs)
         # If we are streaming the request body, then execute() is finished
         # when the handler has prepared to receive the body.  If not,
         # it doesn't matter when execute() finishes (so we return None)
