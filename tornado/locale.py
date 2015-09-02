@@ -61,6 +61,7 @@ _supported_locales = frozenset([_default_locale])
 _use_gettext = False
 CONTEXT_SEPARATOR = "\x04"
 
+
 def get(*locale_codes):
     """Returns the closest match for the given locale codes.
 
@@ -504,8 +505,8 @@ class GettextLocale(Locale):
         if plural_message is not None:
             assert count is not None
             msgs_with_ctxt = ("%s%s%s" % (context, CONTEXT_SEPARATOR, message),
-                          "%s%s%s" % (context, CONTEXT_SEPARATOR, plural_message),
-                          count)
+                              "%s%s%s" % (context, CONTEXT_SEPARATOR, plural_message),
+                              count)
             result = self.ngettext(*msgs_with_ctxt)
             if CONTEXT_SEPARATOR in result:
                 # Translation not found

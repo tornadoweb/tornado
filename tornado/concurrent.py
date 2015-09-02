@@ -373,6 +373,7 @@ def run_on_executor(*args, **kwargs):
     def run_on_executor_decorator(fn):
         executor = kwargs.get("executor", "executor")
         io_loop = kwargs.get("io_loop", "io_loop")
+
         @functools.wraps(fn)
         def wrapper(self, *args, **kwargs):
             callback = kwargs.pop("callback", None)
