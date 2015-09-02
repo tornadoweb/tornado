@@ -912,12 +912,12 @@ class PollIOLoop(IOLoop):
         # The check doesn't need to be guarded by the callback lock,
         # since the GIL makes all access to it atomic, and it can
         # only ever transition to True
-        if self._closing:
-            raise RuntimeError("IOLoop is closing")
         if thread.get_ident() != self._thread_ident:
             # If we're not on the IOLoop's thread, we need to synchronize
             # with other threads, or waking logic will induce a race.
             with self._callback_lock:
+                if self._closing:
+                    raise RuntimeError("IOLoop is closing")
                 list_empty = not self._callbacks
                 self._callbacks.append(functools.partial(
                     stack_context.wrap(callback), *args, **kwargs))
@@ -929,6 +929,8 @@ class PollIOLoop(IOLoop):
                     # relatively expensive, so we try to avoid it when we can.
                     self._waker.wake()
         else:
+            if self._closing:
+                raise RuntimeError("IOLoop is closing")
             # If we're on the IOLoop's thread, we don't need the lock,
             # since we don't need to wake anyone, just add the callback.
             # Blindly insert into self._callbacks.
