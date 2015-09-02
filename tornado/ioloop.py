@@ -909,9 +909,6 @@ class PollIOLoop(IOLoop):
         self._cancellations += 1
 
     def add_callback(self, callback, *args, **kwargs):
-        # The check doesn't need to be guarded by the callback lock,
-        # since the GIL makes all access to it atomic, and it can
-        # only ever transition to True
         if thread.get_ident() != self._thread_ident:
             # If we're not on the IOLoop's thread, we need to synchronize
             # with other threads, or waking logic will induce a race.
