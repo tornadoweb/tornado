@@ -40,7 +40,6 @@ import re
 import signal
 import socket
 import sys
-import types
 
 try:
     from cStringIO import StringIO  # py2

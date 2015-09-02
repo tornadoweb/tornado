@@ -106,7 +106,8 @@ except ImportError:
 try:
     from inspect import isawaitable  # py35+
 except ImportError:
-    def isawaitable(x): return False
+    def isawaitable(x):
+        return False
 
 try:
     import builtins  # py3
@@ -222,6 +223,7 @@ def _make_coroutine_wrapper(func, replace_callback):
     # to be used with 'await'.
     if hasattr(types, 'coroutine'):
         func = types.coroutine(func)
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         future = TracebackFuture()
