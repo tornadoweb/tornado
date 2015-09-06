@@ -203,14 +203,9 @@ def enable_pretty_logging(options=None, logger=None):
                 interval=options.log_rotate_interval,
                 backupCount=options.log_file_num_backups)
         else:
-            if not isinstance(rotate_mode, str):
-                error_message = 'The type of log_rotate_mode option should be ' +\
-                                'str, not {}.'.format(str(type(rotate_mode)))
-                raise TypeError(error_message)
-            else:
-                error_message = 'The value of log_rotate_mode option should be ' +\
-                                '"size" or "time", not "{}".'.format(rotate_mode)
-                raise ValueError(error_message)
+            error_message = 'The value of log_rotate_mode option should be ' +\
+                            '"size" or "time", not "%s".' % rotate_mode
+            raise ValueError(error_message)
         channel.setFormatter(LogFormatter(color=False))
         logger.addHandler(channel)
 
