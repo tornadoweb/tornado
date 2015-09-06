@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import warnings
+import time
 
 from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging
@@ -159,6 +160,39 @@ class EnablePrettyLoggingTest(unittest.TestCase):
             for filename in glob.glob(tmpdir + '/test_log*'):
                 os.unlink(filename)
             os.rmdir(tmpdir)
+
+    def test_log_file_with_timed_rotating(self):
+        tmpdir = tempfile.mkdtemp()
+        try:
+            self.options.log_file_prefix = tmpdir + '/test_log'
+            self.options.log_rotate_mode = 'time'
+            enable_pretty_logging(options=self.options, logger=self.logger)
+            self.logger.error('hello')
+            self.logger.handlers[0].flush()
+            filenames = glob.glob(tmpdir + '/test_log*')
+            self.assertEqual(1, len(filenames))
+            with open(filenames[0]) as f:
+                self.assertRegexpMatches(
+                    f.read(),
+                    r'^\[E [^]]*\] hello$')
+        finally:
+            for handler in self.logger.handlers:
+                handler.flush()
+                handler.close()
+            for filename in glob.glob(tmpdir + '/test_log*'):
+                os.unlink(filename)
+            os.rmdir(tmpdir)
+
+    def test_wrong_rotate_mode_value(self):
+        try:
+            self.options.log_file_prefix = 'some_path'
+            self.options.log_rotate_mode = 'wrong_mode'
+            self.assertRaises(ValueError, enable_pretty_logging,
+                              options=self.options, logger=self.logger)
+        finally:
+            for handler in self.logger.handlers:
+                handler.flush()
+                handler.close()
 
 
 class LoggingOptionTest(unittest.TestCase):

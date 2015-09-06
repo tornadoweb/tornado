@@ -190,10 +190,22 @@ def enable_pretty_logging(options=None, logger=None):
         logger = logging.getLogger()
     logger.setLevel(getattr(logging, options.logging.upper()))
     if options.log_file_prefix:
-        channel = logging.handlers.RotatingFileHandler(
-            filename=options.log_file_prefix,
-            maxBytes=options.log_file_max_size,
-            backupCount=options.log_file_num_backups)
+        rotate_mode = options.log_rotate_mode
+        if rotate_mode == 'size':
+            channel = logging.handlers.RotatingFileHandler(
+                filename=options.log_file_prefix,
+                maxBytes=options.log_file_max_size,
+                backupCount=options.log_file_num_backups)
+        elif rotate_mode == 'time':
+            channel = logging.handlers.TimedRotatingFileHandler(
+                filename=options.log_file_prefix,
+                when=options.log_rotate_when,
+                interval=options.log_rotate_interval,
+                backupCount=options.log_file_num_backups)
+        else:
+            error_message = 'The value of log_rotate_mode option should be ' +\
+                            '"size" or "time", not "%s".' % rotate_mode
+            raise ValueError(error_message)
         channel.setFormatter(LogFormatter(color=False))
         logger.addHandler(channel)
 
@@ -234,5 +246,14 @@ def define_logging_options(options=None):
                    help="max size of log files before rollover")
     options.define("log_file_num_backups", type=int, default=10,
                    help="number of log files to keep")
+
+    options.define("log_rotate_when", type=str, default='midnight',
+                   help=("specify the type of TimedRotatingFileHandler interval "
+                         "other options:('S', 'M', 'H', 'D', 'W0'-'W6')"))
+    options.define("log_rotate_interval", type=int, default=1,
+                   help="The interval value of timed rotating")
+
+    options.define("log_rotate_mode", type=str, default='size',
+                   help="The mode of rotating files(time or size)")
 
     options.add_parse_callback(lambda: enable_pretty_logging(options))
