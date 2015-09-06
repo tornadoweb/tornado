@@ -181,6 +181,8 @@ def enable_pretty_logging(options=None, logger=None):
 
     This is called automatically by `tornado.options.parse_command_line`
     and `tornado.options.parse_config_file`.
+
+    .. note:: Will not result in duplicate logging if called more than once.
     """
     if options is None:
         from tornado.options import options
@@ -190,19 +192,33 @@ def enable_pretty_logging(options=None, logger=None):
         logger = logging.getLogger()
     logger.setLevel(getattr(logging, options.logging.upper()))
     if options.log_file_prefix:
-        channel = logging.handlers.RotatingFileHandler(
-            filename=options.log_file_prefix,
-            maxBytes=options.log_file_max_size,
-            backupCount=options.log_file_num_backups)
-        channel.setFormatter(LogFormatter(color=False))
-        logger.addHandler(channel)
+        existing_file_handler = False
+        for handler in logger.handlers:
+            if isinstance(handler, logging.handlers.RotatingFileHandler):
+                existing_file_handler = True
+                if not isinstance(handler.formatter, LogFormatter):
+                    handler.setFormatter(LogFormatter(color=False))
+        if not existing_file_handler:
+            channel = logging.handlers.RotatingFileHandler(
+                filename=options.log_file_prefix,
+                maxBytes=options.log_file_max_size,
+                backupCount=options.log_file_num_backups)
+            channel.setFormatter(LogFormatter(color=False))
+            logger.addHandler(channel)
 
     if (options.log_to_stderr or
             (options.log_to_stderr is None and not logger.handlers)):
-        # Set up color if we are in a tty and curses is installed
-        channel = logging.StreamHandler()
-        channel.setFormatter(LogFormatter())
-        logger.addHandler(channel)
+        existing_stream_handler = False
+        for handler in logger.handlers:
+            if isinstance(handler, logging.handlers.StreamHandler):
+                existing_stream_handler = True
+                if not isinstance(handler.formatter, LogFormatter):
+                    handler.setFormatter(LogFormatter(color=False))
+        if not existing_stream_handler:
+            # Set up color if we are in a tty and curses is installed
+            channel = logging.StreamHandler()
+            channel.setFormatter(LogFormatter())
+            logger.addHandler(channel)
 
 
 def define_logging_options(options=None):
