@@ -9,7 +9,7 @@ import time
 
 from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip, bind_sockets
 from tornado.stack_context import ExceptionStackContext
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.testing import AsyncTestCase, gen_test, bind_unused_port
 from tornado.test.util import unittest, skipIfNoNetwork
 
 try:
@@ -198,5 +198,16 @@ class TestPortAllocation(unittest.TestCase):
             self.assertTrue(all(s.getsockname()[1] == port
                                 for s in sockets[1:]))
         finally:
+            for sock in sockets:
+                sock.close()
+
+    @unittest.skipIf(not hasattr(socket, "SO_REUSEPORT"), "SO_REUSEPORT is not supported")
+    def test_reuse_port(self):
+        socket, port = bind_unused_port(reuse_port=True)
+        try:
+            sockets = bind_sockets(port, 'localhost', reuse_port=True)
+            self.assertTrue(all(s.getsockname()[1] == port for s in sockets))
+        finally:
+            socket.close()
             for sock in sockets:
                 sock.close()

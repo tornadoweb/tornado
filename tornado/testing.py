@@ -85,12 +85,13 @@ def get_unused_port():
     return port
 
 
-def bind_unused_port():
+def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.
 
     Returns a tuple (socket, port).
     """
-    [sock] = netutil.bind_sockets(None, 'localhost', family=socket.AF_INET)
+    [sock] = netutil.bind_sockets(None, 'localhost', family=socket.AF_INET,
+                                  reuse_port=reuse_port)
     port = sock.getsockname()[1]
     return sock, port
 

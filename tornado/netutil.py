@@ -111,7 +111,7 @@ _DEFAULT_BACKLOG = 128
 
 
 def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
-                 backlog=_DEFAULT_BACKLOG, flags=None):
+                 backlog=_DEFAULT_BACKLOG, flags=None, reuse_port=False):
     """Creates listening sockets bound to the given port and address.
 
     Returns a list of socket objects (multiple sockets are returned if
@@ -130,7 +130,14 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
 
     ``flags`` is a bitmask of AI_* flags to `~socket.getaddrinfo`, like
     ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
+
+    ``resuse_port`` option sets ``SO_REUSEPORT`` option for every socket
+    in the list. If your platform doesn't support this option ValueError will
+    be raised.
     """
+    if reuse_port and not hasattr(socket, "SO_REUSEPORT"):
+        raise ValueError("the platform doesn't support SO_REUSEPORT")
+
     sockets = []
     if address == "":
         address = None
@@ -165,6 +172,8 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
         set_close_exec(sock.fileno())
         if os.name != 'nt':
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if reuse_port:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         if af == socket.AF_INET6:
             # On linux, ipv6 sockets accept ipv4 too by default,
             # but this makes it impossible to bind to both
