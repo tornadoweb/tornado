@@ -98,7 +98,7 @@ class _NormalizedHeaderCache(dict):
 _normalized_headers = _NormalizedHeaderCache(1000)
 
 
-class HTTPHeaders(dict):
+class HTTPHeaders(collections.MutableMapping):
     """A dictionary that maintains ``Http-Header-Case`` for all keys.
 
     Supports multiple values per key via a pair of new methods,
@@ -127,9 +127,7 @@ class HTTPHeaders(dict):
     Set-Cookie: C=D
     """
     def __init__(self, *args, **kwargs):
-        # Don't pass args or kwargs to dict.__init__, as it will bypass
-        # our __setitem__
-        dict.__init__(self)
+        self._dict = {}
         self._as_list = {}
         self._last_key = None
         if (len(args) == 1 and len(kwargs) == 0 and
@@ -148,10 +146,8 @@ class HTTPHeaders(dict):
         norm_name = _normalized_headers[name]
         self._last_key = norm_name
         if norm_name in self:
-            # bypass our override of __setitem__ since it modifies _as_list
-            dict.__setitem__(self, norm_name,
-                             native_str(self[norm_name]) + ',' +
-                             native_str(value))
+            self._dict[norm_name] = (native_str(self[norm_name]) + ',' +
+                                     native_str(value))
             self._as_list[norm_name].append(value)
         else:
             self[norm_name] = value
@@ -183,8 +179,7 @@ class HTTPHeaders(dict):
             # continuation of a multi-line header
             new_part = ' ' + line.lstrip()
             self._as_list[self._last_key][-1] += new_part
-            dict.__setitem__(self, self._last_key,
-                             self[self._last_key] + new_part)
+            self._dict[self._last_key] += new_part
         else:
             name, value = line.split(":", 1)
             self.add(name, value.strip())
@@ -203,53 +198,35 @@ class HTTPHeaders(dict):
                 h.parse_line(line)
         return h
 
-    # dict implementation overrides
+    # MutableMapping abstract method implementations.
 
     def __setitem__(self, name, value):
         norm_name = _normalized_headers[name]
-        dict.__setitem__(self, norm_name, value)
+        self._dict[norm_name] = value
         self._as_list[norm_name] = [value]
 
     def __getitem__(self, name):
-        return dict.__getitem__(self, _normalized_headers[name])
+        return self._dict[_normalized_headers[name]]
 
     def __delitem__(self, name):
         norm_name = _normalized_headers[name]
-        dict.__delitem__(self, norm_name)
+        del self._dict[norm_name]
         del self._as_list[norm_name]
 
-    def __contains__(self, name):
-        norm_name = _normalized_headers[name]
-        return dict.__contains__(self, norm_name)
+    def __len__(self):
+        return len(self._dict)
 
-    def get(self, name, default=None):
-        return dict.get(self, _normalized_headers[name], default)
-
-    def update(self, *args, **kwargs):
-        # dict.update bypasses our __setitem__
-        for k, v in dict(*args, **kwargs).items():
-            self[k] = v
+    def __iter__(self):
+        return iter(self._dict)
 
     def copy(self):
-        # default implementation returns dict(self), not the subclass
+        # defined in dict but not in MutableMapping.
         return HTTPHeaders(self)
 
     # Use our overridden copy method for the copy.copy module.
+    # This makes shallow copies one level deeper, but preserves
+    # the appearance that HTTPHeaders is a single container.
     __copy__ = copy
-
-    def __deepcopy__(self, memo_dict):
-        # Our values are immutable strings, so our standard copy is
-        # effectively a deep copy.
-        return self.copy()
-
-    def __reduce_ex__(self, v):
-        # We must override dict.__reduce_ex__ to pickle ourselves
-        # correctly.
-        return HTTPHeaders, (), list(self.get_all())
-
-    def __setstate__(self, state):
-        for k, v in state:
-            self.add(k, v)
 
 
 class HTTPServerRequest(object):

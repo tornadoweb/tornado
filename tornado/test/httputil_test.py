@@ -308,6 +308,16 @@ Foo: even
         self.assertEqual(sorted(headers.get_all()), sorted(unpickled.get_all()))
         self.assertEqual(sorted(headers.items()), sorted(unpickled.items()))
 
+    def test_setdefault(self):
+        headers = HTTPHeaders()
+        headers['foo'] = 'bar'
+        # If a value is present, setdefault returns it without changes.
+        self.assertEqual(headers.setdefault('foo', 'baz'), 'bar')
+        self.assertEqual(headers['foo'], 'bar')
+        # If a value is not present, setdefault sets it for future use.
+        self.assertEqual(headers.setdefault('quux', 'xyzzy'), 'xyzzy')
+        self.assertEqual(headers['quux'], 'xyzzy')
+        self.assertEqual(sorted(headers.get_all()), [('Foo', 'bar'), ('Quux', 'xyzzy')])
 
 class FormatTimestampTest(unittest.TestCase):
     # Make sure that all the input types are supported.
