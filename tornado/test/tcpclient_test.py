@@ -19,12 +19,13 @@ from __future__ import absolute_import, division, print_function, with_statement
 from contextlib import closing
 import os
 import socket
+import time
 
 from tornado.concurrent import Future
 from tornado.netutil import bind_sockets, Resolver
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.testing import AsyncTestCase, gen_test, get_unused_port
 from tornado.test.util import skipIfNoIPv6, unittest, refusing_port
 
 # Fake address families for testing.  Used in place of AF_INET
@@ -124,6 +125,12 @@ class TCPClientTest(AsyncTestCase):
         self.addCleanup(cleanup_func)
         with self.assertRaises(IOError):
             yield self.client.connect('127.0.0.1', port)
+
+    @gen_test
+    def test_timeout_ipv4(self):
+        # connect to non-routable IP
+        with self.assertRaises(IOError):
+            yield self.client.connect('10.255.255', get_unused_port(), timeout=time.time() + 0.1)
 
 
 class TestConnectorSplit(unittest.TestCase):
