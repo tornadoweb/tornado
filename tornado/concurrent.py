@@ -177,6 +177,16 @@ class Future(object):
         def __await__(self):
             return (yield self)
         """))
+    else:
+        # Py2-compatible version for use with cython.
+        # Late import of gen.Return to avoid cycles.
+        def __await__(self):
+            result = yield self
+            # StopIteration doesn't take args before py33,
+            # but Cython recognizes the args tuple.
+            e = StopIteration()
+            e.args = (result,)
+            raise e
 
     def cancel(self):
         """Cancel the operation, if possible.

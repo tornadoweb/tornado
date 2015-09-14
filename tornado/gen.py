@@ -101,7 +101,10 @@ except ImportError as e:
 try:
     from collections.abc import Generator as GeneratorType  # py35+
 except ImportError:
-    from types import GeneratorType
+    try:
+        from collections import Generator as GeneratorType  # py2 with backports_abc
+    except ImportError:
+        from types import GeneratorType
 
 try:
     from inspect import isawaitable  # py35+
@@ -137,6 +140,21 @@ class ReturnValueIgnoredError(Exception):
 
 class TimeoutError(Exception):
     """Exception raised by ``with_timeout``."""
+
+
+def _value_from_stopiteration(e):
+    try:
+        # StopIteration has a value attribute beginning in py33.
+        # So does our Return class.
+        return e.value
+    except AttributeError:
+        pass
+    try:
+        # Cython backports coroutine functionality by putting the value in
+        # e.args[0].
+        return e.args[0]
+    except (AttributeError, IndexError):
+        return None
 
 
 def engine(func):
@@ -236,7 +254,7 @@ def _make_coroutine_wrapper(func, replace_callback):
         try:
             result = func(*args, **kwargs)
         except (Return, StopIteration) as e:
-            result = getattr(e, 'value', None)
+            result = _value_from_stopiteration(e)
         except Exception:
             future.set_exc_info(sys.exc_info())
             return future
@@ -257,7 +275,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                                 'stack_context inconsistency (probably caused '
                                 'by yield within a "with StackContext" block)'))
                 except (StopIteration, Return) as e:
-                    future.set_result(getattr(e, 'value', None))
+                    future.set_result(_value_from_stopiteration(e))
                 except Exception:
                     future.set_exc_info(sys.exc_info())
                 else:
@@ -302,6 +320,8 @@ class Return(Exception):
     def __init__(self, value=None):
         super(Return, self).__init__()
         self.value = value
+        # Cython recognizes subclasses of StopIteration with a .args tuple.
+        self.args = (value,)
 
 
 class WaitIterator(object):
@@ -946,7 +966,7 @@ class Runner(object):
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
-                    self.result_future.set_result(getattr(e, 'value', None))
+                    self.result_future.set_result(_value_from_stopiteration(e))
                     self.result_future = None
                     self._deactivate_stack_context()
                     return
@@ -1057,11 +1077,57 @@ if sys.version_info >= (3, 3):
     exec(textwrap.dedent("""
     @coroutine
     def _wrap_awaitable(x):
+        if hasattr(x, '__await__'):
+            x = x.__await__()
         return (yield from x)
     """))
 else:
+    # Py2-compatible version for use with Cython.
+    # Copied from PEP 380.
+    @coroutine
     def _wrap_awaitable(x):
-        raise NotImplementedError()
+        if hasattr(x, '__await__'):
+            _i = x.__await__()
+        else:
+            _i = iter(x)
+        try:
+            _y = next(_i)
+        except StopIteration as _e:
+            _r = _value_from_stopiteration(_e)
+        else:
+            while 1:
+                try:
+                    _s = yield _y
+                except GeneratorExit as _e:
+                    try:
+                        _m = _i.close
+                    except AttributeError:
+                        pass
+                    else:
+                        _m()
+                    raise _e
+                except BaseException as _e:
+                    _x = sys.exc_info()
+                    try:
+                        _m = _i.throw
+                    except AttributeError:
+                        raise _e
+                    else:
+                        try:
+                            _y = _m(*_x)
+                        except StopIteration as _e:
+                            _r = _value_from_stopiteration(_e)
+                            break
+                else:
+                    try:
+                        if _s is None:
+                            _y = next(_i)
+                        else:
+                            _y = _i.send(_s)
+                    except StopIteration as _e:
+                        _r = _value_from_stopiteration(_e)
+                        break
+        raise Return(_r)
 
 
 def convert_yielded(yielded):
