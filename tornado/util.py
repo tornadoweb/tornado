@@ -290,10 +290,24 @@ class ArgReplacer(object):
     def __init__(self, func, name):
         self.name = name
         try:
-            self.arg_pos = getargspec(func).args.index(self.name)
+            self.arg_pos = self._getargnames(func).index(name)
         except ValueError:
             # Not a positional parameter
             self.arg_pos = None
+
+    def _getargnames(self, func):
+        try:
+            return getargspec(func).args
+        except TypeError:
+            if hasattr(func, 'func_code'):
+                # Cython-generated code has all the attributes needed
+                # by inspect.getargspec (when the
+                # @cython.binding(True) directive is used), but the
+                # inspect module only works with ordinary functions.
+                # Inline the portion of getargspec that we need here.
+                code = func.func_code
+                return code.co_varnames[:code.co_argcount]
+            raise
 
     def get_old_value(self, args, kwargs, default=None):
         """Returns the old value of the named argument without replacing it.

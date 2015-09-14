@@ -1,3 +1,4 @@
+import cython
 from tornado import gen
 import pythonmodule
 
@@ -13,3 +14,9 @@ def decorated_coroutine():
     if x != "hello":
         raise ValueError("expected hello, got %r" % x)
     return "goodbye"
+
+# The binding directive is necessary for compatibility with
+# ArgReplacer (and therefore return_future).
+@cython.binding(True)
+def function_with_args(one, two, three):
+    return (one, two, three)
