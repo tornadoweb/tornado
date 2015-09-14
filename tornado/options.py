@@ -487,19 +487,17 @@ class _Option(object):
                 pass
         raise Error('Unrecognized date/time format: %r' % value)
 
-    _TIMEDELTA_ABBREVS = [
-        ('hours', ['h']),
-        ('minutes', ['m', 'min']),
-        ('seconds', ['s', 'sec']),
-        ('milliseconds', ['ms']),
-        ('microseconds', ['us']),
-        ('days', ['d']),
-        ('weeks', ['w']),
-    ]
-
-    _TIMEDELTA_ABBREV_DICT = dict(
-        (abbrev, full) for full, abbrevs in _TIMEDELTA_ABBREVS
-        for abbrev in abbrevs)
+    _TIMEDELTA_ABBREV_DICT = {
+        'h': 'hours',
+        'm': 'minutes',
+        'min': 'minutes',
+        's': 'seconds',
+        'sec': 'seconds',
+        'ms': 'milliseconds',
+        'us': 'microseconds',
+        'd': 'days',
+        'w': 'weeks',
+    }
 
     _FLOAT_PATTERN = r'[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?'
 
