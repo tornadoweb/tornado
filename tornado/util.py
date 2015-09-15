@@ -301,10 +301,11 @@ class ArgReplacer(object):
         except TypeError:
             if hasattr(func, 'func_code'):
                 # Cython-generated code has all the attributes needed
-                # by inspect.getargspec (when the
-                # @cython.binding(True) directive is used), but the
-                # inspect module only works with ordinary functions.
-                # Inline the portion of getargspec that we need here.
+                # by inspect.getargspec, but the inspect module only
+                # works with ordinary functions. Inline the portion of
+                # getargspec that we need here. Note that for static
+                # functions the @cython.binding(True) decorator must
+                # be used (for methods it works out of the box).
                 code = func.func_code
                 return code.co_varnames[:code.co_argcount]
             raise

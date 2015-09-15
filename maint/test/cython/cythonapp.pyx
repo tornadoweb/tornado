@@ -16,7 +16,14 @@ def decorated_coroutine():
     return "goodbye"
 
 # The binding directive is necessary for compatibility with
-# ArgReplacer (and therefore return_future).
+# ArgReplacer (and therefore return_future), but only because
+# this is a static function.
 @cython.binding(True)
 def function_with_args(one, two, three):
     return (one, two, three)
+
+
+class AClass:
+    # methods don't need the binding directive.
+    def method_with_args(one, two, three):
+        return (one, two, three)
