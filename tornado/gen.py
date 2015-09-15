@@ -1073,6 +1073,11 @@ def _argument_adapter(callback):
             callback(None)
     return wrapper
 
+# Convert Awaitables into Futures. It is unfortunately possible
+# to have infinite recursion here if those Awaitables assume that
+# we're using a different coroutine runner and yield objects
+# we don't understand. If that happens, the solution is to
+# register that runner's yieldable objects with convert_yielded.
 if sys.version_info >= (3, 3):
     exec(textwrap.dedent("""
     @coroutine
@@ -1157,3 +1162,19 @@ def convert_yielded(yielded):
 
 if singledispatch is not None:
     convert_yielded = singledispatch(convert_yielded)
+
+    try:
+        # If we can import t.p.asyncio, do it for its side effect
+        # (registering asyncio.Future with convert_yielded).
+        # It's ugly to do this here, but it prevents a cryptic
+        # infinite recursion in _wrap_awaitable.
+        # Note that even with this, asyncio integration is unlikely
+        # to work unless the application also configures AsyncIOLoop,
+        # but at least the error messages in that case are more
+        # comprehensible than a stack overflow.
+        import tornado.platform.asyncio
+    except ImportError:
+        pass
+    else:
+        # Reference the imported module to make pyflakes happy.
+        tornado
