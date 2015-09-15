@@ -179,7 +179,6 @@ class Future(object):
         """))
     else:
         # Py2-compatible version for use with cython.
-        # Late import of gen.Return to avoid cycles.
         def __await__(self):
             result = yield self
             # StopIteration doesn't take args before py33,
