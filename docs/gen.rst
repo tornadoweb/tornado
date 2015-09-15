@@ -33,6 +33,8 @@
    .. autoclass:: WaitIterator
       :members:
 
+   .. autofunction:: multi
+
    .. autofunction:: multi_future
 
    .. autofunction:: Task
@@ -54,7 +56,8 @@
    Before support for `Futures <.Future>` was introduced in Tornado 3.0,
    coroutines used subclasses of `YieldPoint` in their ``yield`` expressions.
    These classes are still supported but should generally not be used
-   except for compatibility with older interfaces.
+   except for compatibility with older interfaces. None of these classes
+   are compatible with native (``await``-based) coroutines.
 
    .. autoclass:: YieldPoint
       :members:
@@ -65,4 +68,4 @@
 
    .. autoclass:: WaitAll
 
-   .. autoclass:: Multi
+   .. autoclass:: MultiYieldPoint

@@ -127,7 +127,7 @@ Then the Tornado equivalent is::
 
 * `.WaitIterator` no longer uses weak references, which fixes several
   garbage-collection-related bugs.
-* `tornado.gen.Multi` and `tornado.gen.multi_future` (which are used when
+* ``tornado.gen.Multi`` and `tornado.gen.multi_future` (which are used when
   yielding a list or dict in a coroutine) now log any exceptions after the
   first if more than one `.Future` fails (previously they would be logged
   when the `.Future` was garbage-collected, but this is more reliable).

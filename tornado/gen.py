@@ -606,27 +606,91 @@ class YieldFuture(YieldPoint):
             return self.result_fn()
 
 
-class Multi(YieldPoint):
+def _contains_yieldpoint(children):
+    """Returns True if ``children`` contains any YieldPoints.
+
+    ``children`` may be a dict or a list, as used by `MultiYieldPoint`
+    and `multi_future`.
+    """
+    if isinstance(children, dict):
+        return any(isinstance(i, YieldPoint) for i in children.values())
+    if isinstance(children, list):
+        return any(isinstance(i, YieldPoint) for i in children)
+    return False
+
+
+def multi(children, quiet_exceptions=()):
     """Runs multiple asynchronous operations in parallel.
 
-    Takes a list of ``YieldPoints`` or ``Futures`` and returns a list of
-    their responses.  It is not necessary to call `Multi` explicitly,
-    since the engine will do so automatically when the generator yields
-    a list of ``YieldPoints`` or a mixture of ``YieldPoints`` and ``Futures``.
+    ``children`` may either be a list or a dict whose values are
+    yieldable objects. ``multi()`` returns a new yieldable
+    object that resolves to a parallel structure containing their
+    results. If ``children`` is a list, the result is a list of
+    results in the same order; if it is a dict, the result is a dict
+    with the same keys.
 
-    Instead of a list, the argument may also be a dictionary whose values are
-    Futures, in which case a parallel dictionary is returned mapping the same
-    keys to their results.
+    That is, ``results = yield multi(list_of_futures)`` is equivalent
+    to::
 
-    It is not normally necessary to call this class directly, as it
-    will be created automatically as needed. However, calling it directly
-    allows you to use the ``quiet_exceptions`` argument to control
-    the logging of multiple exceptions.
+        results = []
+        for future in list_of_futures:
+            results.append(yield future)
+
+    If any children raise exceptions, ``multi()`` will raise the first
+    one. All others will be logged, unless they are of types
+    contained in the ``quiet_exceptions`` argument.
+
+    If any of the inputs are `YieldPoints <YieldPoint>`, the returned
+    yieldable object is a `YieldPoint`. Otherwise, returns a `.Future`.
+    This means that the result of `multi` can be used in a native
+    coroutine if and only if all of its children can be.
+
+    In a ``yield``-based coroutine, it is not normally necessary to
+    call this function directly, since the coroutine runner will
+    do it automatically when a list or dict is yielded. However,
+    it is necessary in ``await``-based coroutines, or to pass
+    the ``quiet_exceptions`` argument.
+
+    This function is available under the names ``multi()`` and ``Multi()``
+    for historical reasons.
+
+    .. versionchanged:: 4.2
+       If multiple yieldables fail, any exceptions after the first
+       (which is raised) will be logged. Added the ``quiet_exceptions``
+       argument to suppress this logging for selected exception types.
+
+    .. versionchanged:: 4.3
+       Replaced the class ``Multi`` and the function ``multi_future``
+       with a unified function ``multi``. Added support for yieldables
+       other than `YieldPoint` and `.Future`.
+
+    """
+    if _contains_yieldpoint(children):
+        return MultiYieldPoint(children, quiet_exceptions=quiet_exceptions)
+    else:
+        return multi_future(children, quiet_exceptions=quiet_exceptions)
+
+Multi = multi
+
+
+class MultiYieldPoint(YieldPoint):
+    """Runs multiple asynchronous operations in parallel.
+
+    This class is similar to `multi`, but it always creates a stack
+    context even when no children require it. It is not compatible with
+    native coroutines.
 
     .. versionchanged:: 4.2
        If multiple ``YieldPoints`` fail, any exceptions after the first
        (which is raised) will be logged. Added the ``quiet_exceptions``
        argument to suppress this logging for selected exception types.
+
+    .. versionchanged:: 4.3
+       Renamed from ``Multi`` to ``MultiYieldPoint``. The name ``Multi``
+       remains as an alias for the equivalent `multi` function.
+
+    .. deprecated:: 4.3
+       Use `multi` instead.
     """
     def __init__(self, children, quiet_exceptions=()):
         self.keys = None
@@ -676,25 +740,8 @@ class Multi(YieldPoint):
 def multi_future(children, quiet_exceptions=()):
     """Wait for multiple asynchronous futures in parallel.
 
-    Takes a list of ``Futures`` or other yieldable objects (with the
-    exception of the legacy `.YieldPoint` interfaces) and returns a
-    new Future that resolves when all the other Futures are done. If
-    all the ``Futures`` succeeded, the returned Future's result is a
-    list of their results. If any failed, the returned Future raises
-    the exception of the first one to fail.
-
-    Instead of a list, the argument may also be a dictionary whose values are
-    Futures, in which case a parallel dictionary is returned mapping the same
-    keys to their results.
-
-    It is not normally necessary to call `multi_future` explcitly,
-    since the engine will do so automatically when the generator
-    yields a list of ``Futures``. However, calling it directly
-    allows you to use the ``quiet_exceptions`` argument to control
-    the logging of multiple exceptions.
-
-    This function is faster than the `Multi` `YieldPoint` because it
-    does not require the creation of a stack context.
+    This function is similar to `multi`, but does not support
+    `YieldPoints <YieldPoint>`.
 
     .. versionadded:: 4.0
 
@@ -703,8 +750,8 @@ def multi_future(children, quiet_exceptions=()):
        raised) will be logged. Added the ``quiet_exceptions``
        argument to suppress this logging for selected exception types.
 
-    .. versionchanged:: 4.3
-       Added support for other yieldable objects.
+    .. deprecated:: 4.3
+       Use `multi` instead.
     """
     if isinstance(children, dict):
         keys = list(children.keys())
@@ -984,13 +1031,9 @@ class Runner(object):
 
     def handle_yield(self, yielded):
         # Lists containing YieldPoints require stack contexts;
-        # other lists are handled via multi_future in convert_yielded.
-        if (isinstance(yielded, list) and
-                any(isinstance(f, YieldPoint) for f in yielded)):
-            yielded = Multi(yielded)
-        elif (isinstance(yielded, dict) and
-              any(isinstance(f, YieldPoint) for f in yielded.values())):
-            yielded = Multi(yielded)
+        # other lists are handled in convert_yielded.
+        if _contains_yieldpoint(yielded):
+            yielded = multi(yielded)
 
         if isinstance(yielded, YieldPoint):
             # YieldPoints are too closely coupled to the Runner to go
@@ -1149,10 +1192,9 @@ def convert_yielded(yielded):
 
     .. versionadded:: 4.1
     """
-    # Lists and dicts containing YieldPoints were handled separately
-    # via Multi().
+    # Lists and dicts containing YieldPoints were handled earlier.
     if isinstance(yielded, (list, dict)):
-        return multi_future(yielded)
+        return multi(yielded)
     elif is_future(yielded):
         return yielded
     elif isawaitable(yielded):
