@@ -1687,7 +1687,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
     (fully-qualified) name.
 
     Each tuple can contain additional elements, which correspond to the
-    arguments to the `URLSpec` constructor.  (Prior to Tornado 3.2, this
+    arguments to the `URLSpec` constructor.  (Prior to Tornado 3.2,
     only tuples of two or three elements were allowed).
 
     A dictionary may be passed as the third element of the tuple,
