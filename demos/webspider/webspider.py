@@ -3,10 +3,10 @@ from datetime import timedelta
 
 try:
     from HTMLParser import HTMLParser
-    from urlparse import urljoin, urlparse, urlunparse
+    from urlparse import urljoin, urldefrag
 except ImportError:
     from html.parser import HTMLParser
-    from urllib.parse import urljoin, urlparse, urlunparse
+    from urllib.parse import urljoin, urldefrag
 
 from tornado import httpclient, gen, ioloop, queues
 
@@ -38,8 +38,8 @@ def get_links_from_url(url):
 
 
 def remove_fragment(url):
-    scheme, netloc, url, params, query, fragment = urlparse(url)
-    return urlunparse((scheme, netloc, url, params, query, ''))
+    pure_url, frag = urldefrag(url)
+    return pure_url
 
 
 def get_links(html):
