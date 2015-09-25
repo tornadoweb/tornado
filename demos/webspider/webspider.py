@@ -30,8 +30,8 @@ def get_links_from_url(url):
 
 
 def remove_fragment(url):
-    scheme, netloc, url, params, query, fragment = urlparse.urlparse(url)
-    return urlparse.urlunparse((scheme, netloc, url, params, query, ''))
+    pure_url, frag = urlparse.urldefrag(url)
+    return pure_url
 
 
 def get_links(html):
