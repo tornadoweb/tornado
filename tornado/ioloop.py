@@ -919,43 +919,30 @@ class PollIOLoop(IOLoop):
                 self._callbacks.append(functools.partial(
                     stack_context.wrap(callback), *args, **kwargs))
                 if list_empty:
-                    # If we're not in the IOLoop's thread, and we added the 
-                    # first callback to an empty list, we may need to wake it 
-                    # up (it may wake up on its own, but an occasional extra 
-                    # wake is harmless).  Waking up a polling IOLoop is 
+                    # If we're not in the IOLoop's thread, and we added the
+                    # first callback to an empty list, we may need to wake it
+                    # up (it may wake up on its own, but an occasional extra
+                    # wake is harmless).  Waking up a polling IOLoop is
                     # relatively expensive, so we try to avoid it when we can.
                     self._waker.wake()
         else:
             if self._closing:
                 raise RuntimeError("IOLoop is closing")
             # If we're on the IOLoop's thread, we don't need the lock,
-            # since we don't need to wake anyone, just add the callback.
-            # Blindly insert into self._callbacks.
-            # This is safe because the GIL makes list.append atomic.
-            # One subtlety is that if the thread is interrupting another
-            # thread holding the _callback_lock block in IOLoop.start, 
-            # we may modify either the old or new version of self._callbacks,
-            # but either way will work.
+            # since we don't need to wake anyone, just add the
+            # callback. Blindly insert into self._callbacks. This is
+            # safe even from signal handlers because the GIL makes
+            # list.append atomic. One subtlety is that if the signal
+            # is interrupting another thread holding the
+            # _callback_lock block in IOLoop.start, we may modify
+            # either the old or new version of self._callbacks, but
+            # either way will work.
             self._callbacks.append(functools.partial(
                 stack_context.wrap(callback), *args, **kwargs))
 
     def add_callback_from_signal(self, callback, *args, **kwargs):
         with stack_context.NullContext():
-            if thread.get_ident() != self._thread_ident:
-                # if the signal is handled on another thread, we can add
-                # it normally (modulo the NullContext)
-                self.add_callback(callback, *args, **kwargs)
-            else:
-                # If we're on the IOLoop's thread, we cannot use
-                # the regular add_callback because it may deadlock on
-                # _callback_lock.  Blindly insert into self._callbacks.
-                # This is safe because the GIL makes list.append atomic.
-                # One subtlety is that if the signal interrupted the
-                # _callback_lock block in IOLoop.start, we may modify
-                # either the old or new version of self._callbacks,
-                # but either way will work.
-                self._callbacks.append(functools.partial(
-                    stack_context.wrap(callback), *args, **kwargs))
+            self.add_callback(callback, *args, **kwargs)
 
 
 class _Timeout(object):
