@@ -1,12 +1,22 @@
 """Bridges between the `asyncio` module and Tornado IOLoop.
 
-This is a work in progress and interfaces are subject to change.
+.. versionadded:: 3.2
 
-To test:
-python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOLoop
-python3.4 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOMainLoop
-(the tests log a few warnings with AsyncIOMainLoop because they leave some
-unfinished callbacks on the event loop that fail when it resumes)
+This module integrates Tornado with the ``asyncio`` module introduced
+in Python 3.4 (and available `as a separate download
+<https://pypi.python.org/pypi/asyncio>`_ for Python 3.3).  This makes
+it possible to combine the two libraries on the same event loop.
+
+Most applications should use `AsyncIOMainLoop` to run Tornado on the
+default ``asyncio`` event loop.  Applications that need to run event
+loops on multiple threads may use `AsyncIOLoop` to create multiple
+loops.
+
+.. note::
+
+   Tornado requires the `~asyncio.BaseEventLoop.add_reader` family of methods,
+   so it is not compatible with the `~asyncio.ProactorEventLoop` on Windows.
+   Use the `~asyncio.SelectorEventLoop` instead.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -140,12 +150,33 @@ class BaseAsyncIOLoop(IOLoop):
 
 
 class AsyncIOMainLoop(BaseAsyncIOLoop):
+    """``AsyncIOMainLoop`` creates an `.IOLoop` that corresponds to the
+    current ``asyncio`` event loop (i.e. the one returned by
+    ``asyncio.get_event_loop()``).  Recommended usage::
+
+        from tornado.platform.asyncio import AsyncIOMainLoop
+        import asyncio
+        AsyncIOMainLoop().install()
+        asyncio.get_event_loop().run_forever()
+    """
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
                                                 close_loop=False, **kwargs)
 
 
 class AsyncIOLoop(BaseAsyncIOLoop):
+    """``AsyncIOLoop`` is an `.IOLoop` that runs on an ``asyncio`` event loop.
+    This class follows the usual Tornado semantics for creating new
+    ``IOLoops``; these loops are not necessarily related to the
+    ``asyncio`` default event loop.  Recommended usage::
+
+        from tornado.ioloop import IOLoop
+        IOLoop.configure('tornado.platform.asyncio.AsyncIOLoop')
+        IOLoop.current().start()
+
+    Each ``AsyncIOLoop`` creates a new ``asyncio.EventLoop``; this object
+    can be accessed with the ``asyncio_loop`` attribute.
+    """
     def initialize(self, **kwargs):
         loop = asyncio.new_event_loop()
         try:
@@ -158,14 +189,20 @@ class AsyncIOLoop(BaseAsyncIOLoop):
 
 
 def to_tornado_future(asyncio_future):
-    """Convert an ``asyncio.Future`` to a `tornado.concurrent.Future`."""
+    """Convert an `asyncio.Future` to a `tornado.concurrent.Future`.
+
+    .. versionadded:: 4.1
+    """
     tf = tornado.concurrent.Future()
     tornado.concurrent.chain_future(asyncio_future, tf)
     return tf
 
 
 def to_asyncio_future(tornado_future):
-    """Convert a `tornado.concurrent.Future` to an ``asyncio.Future``."""
+    """Convert a `tornado.concurrent.Future` to an `asyncio.Future`.
+
+    .. versionadded:: 4.1
+    """
     af = asyncio.Future()
     tornado.concurrent.chain_future(tornado_future, af)
     return af
