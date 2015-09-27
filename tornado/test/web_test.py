@@ -1204,6 +1204,7 @@ class StaticFileTest(WebTestCase):
         # is probably a packaging error).
         self.assertEqual(response.code, 403)
 
+    @unittest.skipIf(os.name != 'posix', 'non-posix OS')
     def test_root_static_path(self):
         # Sometimes people set the StaticFileHandler's path to '/'
         # to disable Tornado's path validation (in conjunction with
