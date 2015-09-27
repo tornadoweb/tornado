@@ -339,8 +339,17 @@ class _TestReactor(TornadoReactor):
 def install(io_loop=None):
     """Install this package as the default Twisted reactor.
 
+    ``install()`` must be called very early in the startup process,
+    before most other twisted-related imports. Conversely, because it
+    initializes the `.IOLoop`, it cannot be called before
+    `.fork_processes` or multi-process `~.TCPServer.start`. These
+    conflicting requirements make it difficult to use `.TornadoReactor`
+    in multi-process mode, and an external process manager such as
+    ``supervisord`` is recommended instead.
+
     .. versionchanged:: 4.1
        The ``io_loop`` argument is deprecated.
+
     """
     if not io_loop:
         io_loop = tornado.ioloop.IOLoop.current()
