@@ -1024,7 +1024,7 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
     style, the application typically calls
     `~.WebSocketClientConnection.read_message` in a loop::
 
-        conn = yield websocket_connection(loop)
+        conn = yield websocket_connect(url)
         while True:
             msg = yield conn.read_message()
             if msg is None: break
