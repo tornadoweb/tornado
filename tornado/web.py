@@ -1065,12 +1065,33 @@ class RequestHandler(object):
     def current_user(self):
         """The authenticated user for this request.
 
-        This is a cached version of `get_current_user`, which you can
-        override to set the user based on, e.g., a cookie. If that
-        method is not overridden, this method always returns None.
+        This is set in one of two ways:
 
-        We lazy-load the current user the first time this method is called
-        and cache the result after that.
+        * A subclass may override `get_current_user()`, which will be called
+          automatically the first time ``self.current_user`` is accessed.
+          `get_current_user()` will only be called once per request,
+          and is cached for future access::
+
+              def get_current_user(self):
+                  user_cookie = self.get_secure_cookie("user")
+                      if user_cookie:
+                          return json.loads(user_cookie)
+                  return None
+
+        * It may be set as a normal variable, typically from an overridden
+          `prepare()`::
+
+              @gen.coroutine
+              def prepare(self):
+                  user_id_cookie = self.get_secure_cookie("user_id")
+                  if user_id_cookie:
+                      self.current_user = yield load_user(user_id_cookie)
+
+        Note that `prepare()` may be a coroutine while `get_current_user()`
+        may not, so the latter form is necessary if loading the user requires
+        asynchronous operations.
+
+        The user object may any type of the application's choosing.
         """
         if not hasattr(self, "_current_user"):
             self._current_user = self.get_current_user()
@@ -1081,7 +1102,10 @@ class RequestHandler(object):
         self._current_user = value
 
     def get_current_user(self):
-        """Override to determine the current user from, e.g., a cookie."""
+        """Override to determine the current user from, e.g., a cookie.
+
+        This method may not be a coroutine.
+        """
         return None
 
     def get_login_url(self):
