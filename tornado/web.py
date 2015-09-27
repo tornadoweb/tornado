@@ -2404,7 +2404,14 @@ class StaticFileHandler(RequestHandler):
         # We must add it back to `root` so that we only match files
         # in a directory named `root` instead of files starting with
         # that prefix.
-        root = os.path.abspath(root) + os.path.sep
+        root = os.path.abspath(root)
+        if not root.endswith(os.path.sep):
+            # abspath always removes a trailing slash, except when
+            # root is '/'. This is an unusual case, but several projects
+            # have independently discovered this technique to disable
+            # Tornado's path validation and (hopefully) do their own,
+            # so we need to support it.
+            root += os.path.sep
         # The trailing slash also needs to be temporarily added back
         # the requested path so a request to root/ will match.
         if not (absolute_path + os.path.sep).startswith(root):

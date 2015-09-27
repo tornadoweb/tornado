@@ -967,7 +967,8 @@ class StaticFileTest(WebTestCase):
 
         return [('/static_url/(.*)', StaticUrlHandler),
                 ('/abs_static_url/(.*)', AbsoluteStaticUrlHandler),
-                ('/override_static_url/(.*)', OverrideStaticUrlHandler)]
+                ('/override_static_url/(.*)', OverrideStaticUrlHandler),
+                ('/root_static/(.*)', StaticFileHandler, dict(path='/'))]
 
     def get_app_kwargs(self):
         return dict(static_path=relpath('static'))
@@ -1202,6 +1203,15 @@ class StaticFileTest(WebTestCase):
         # or 404 (which means that the file didn't exist and
         # is probably a packaging error).
         self.assertEqual(response.code, 403)
+
+    def test_root_static_path(self):
+        # Sometimes people set the StaticFileHandler's path to '/'
+        # to disable Tornado's path validation (in conjunction with
+        # their own validation in get_absolute_path). Make sure
+        # that the stricter validation in 4.2.1 doesn't break them.
+        path = os.path.join(os.path.dirname(__file__), 'static/robots.txt')
+        response = self.get_and_head('/root_static' + path)
+        self.assertEqual(response.code, 200)
 
 
 @wsgi_safe
