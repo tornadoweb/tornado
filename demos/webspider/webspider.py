@@ -1,7 +1,12 @@
-import HTMLParser
 import time
-import urlparse
 from datetime import timedelta
+
+try:
+    from HTMLParser import HTMLParser
+    from urlparse import urljoin, urlparse, urlunparse
+except ImportError:
+    from html.parser import HTMLParser
+    from urllib.parse import urljoin, urlparse, urlunparse
 
 from tornado import httpclient, gen, ioloop, queues
 
@@ -20,8 +25,11 @@ def get_links_from_url(url):
     try:
         response = yield httpclient.AsyncHTTPClient().fetch(url)
         print('fetched %s' % url)
-        urls = [urlparse.urljoin(url, remove_fragment(new_url))
-                for new_url in get_links(response.body)]
+
+        html = response.body if isinstance(response.body, str) \
+            else response.body.decode()
+        urls = [urljoin(url, remove_fragment(new_url))
+                for new_url in get_links(html)]
     except Exception as e:
         print('Exception: %s %s' % (e, url))
         raise gen.Return([])
@@ -30,14 +38,14 @@ def get_links_from_url(url):
 
 
 def remove_fragment(url):
-    scheme, netloc, url, params, query, fragment = urlparse.urlparse(url)
-    return urlparse.urlunparse((scheme, netloc, url, params, query, ''))
+    scheme, netloc, url, params, query, fragment = urlparse(url)
+    return urlunparse((scheme, netloc, url, params, query, ''))
 
 
 def get_links(html):
-    class URLSeeker(HTMLParser.HTMLParser):
+    class URLSeeker(HTMLParser):
         def __init__(self):
-            HTMLParser.HTMLParser.__init__(self)
+            HTMLParser.__init__(self)
             self.urls = []
 
         def handle_starttag(self, tag, attrs):
