@@ -173,6 +173,10 @@ try{% set y = 1/x %}
         template = Template('{{ 1 / 2 }}')
         self.assertEqual(template.generate(), '0')
 
+    def test_non_ascii_name(self):
+        loader = DictLoader({u("t\u00e9st.html"): "hello"})
+        self.assertEqual(loader.load(u("t\u00e9st.html")).generate(), b"hello")
+
 
 class StackTraceTest(unittest.TestCase):
     def test_error_line_number_expression(self):

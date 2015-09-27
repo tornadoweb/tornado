@@ -271,7 +271,7 @@ class Template(object):
         .. versionchanged:: 4.3
            Added ``whitespace`` parameter; deprecated ``compress_whitespace``.
         """
-        self.name = name
+        self.name = escape.native_str(name)
 
         if compress_whitespace is not _UNSET:
             # Convert deprecated compress_whitespace (bool) to whitespace (str).
