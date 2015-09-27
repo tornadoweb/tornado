@@ -11,7 +11,7 @@ import threading
 import datetime
 from io import BytesIO
 
-from tornado.escape import utf8
+from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
 from tornado.httpserver import HTTPServer
@@ -48,6 +48,7 @@ class PutHandler(RequestHandler):
 
 class RedirectHandler(RequestHandler):
     def prepare(self):
+        self.write('redirects can have bodies too')
         self.redirect(self.get_argument("url"),
                       status=int(self.get_argument("status", "302")))
 
@@ -478,6 +479,21 @@ Transfer-Encoding: chunked
                               method="PUT", body=b"hello")
         response.rethrow()
         self.assertEqual(response.body, b"Put body: hello")
+
+    def test_streaming_follow_redirects(self):
+        # When following redirects, header and streaming callbacks
+        # should only be called for the final result.
+        headers = []
+        chunks = []
+        self.fetch("/redirect?url=/hello",
+                   header_callback=headers.append,
+                   streaming_callback=chunks.append)
+        chunks = list(map(to_unicode, chunks))
+        self.assertEqual(chunks, ['Hello world!'])
+        # Make sure we only got one set of headers.
+        num_start_lines = len([h for h in headers if h.startswith("HTTP/")])
+        self.assertEqual(num_start_lines, 1)
+
 
 
 class RequestProxyTest(unittest.TestCase):

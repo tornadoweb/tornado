@@ -462,9 +462,12 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.request.expect_100_continue and first_line.code == 100:
             self._write_body(False)
             return
-        self.headers = headers
         self.code = first_line.code
         self.reason = first_line.reason
+        self.headers = headers
+
+        if self._should_follow_redirect():
+            return
 
         if self.request.header_callback is not None:
             # Reassemble the start line.
@@ -473,14 +476,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 self.request.header_callback("%s: %s\r\n" % (k, v))
             self.request.header_callback('\r\n')
 
+    def _should_follow_redirect(self):
+        return (self.request.follow_redirects and
+                self.request.max_redirects > 0 and
+                self.code in (301, 302, 303, 307))
+
     def finish(self):
         data = b''.join(self.chunks)
         self._remove_timeout()
         original_request = getattr(self.request, "original_request",
                                    self.request)
-        if (self.request.follow_redirects and
-            self.request.max_redirects > 0 and
-                self.code in (301, 302, 303, 307)):
+        if self._should_follow_redirect():
             assert isinstance(self.request, _RequestProxy)
             new_request = copy.copy(self.request.request)
             new_request.url = urlparse.urljoin(self.request.url,
@@ -527,6 +533,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.stream.close()
 
     def data_received(self, chunk):
+        if self._should_follow_redirect():
+            # We're going to follow a redirect so just discard the body.
+            return
         if self.request.streaming_callback is not None:
             self.request.streaming_callback(chunk)
         else:
