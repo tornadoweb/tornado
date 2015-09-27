@@ -1274,10 +1274,11 @@ class SSLIOStream(IOStream):
             raise
         except socket.error as err:
             # Some port scans (e.g. nmap in -sT mode) have been known
-            # to cause do_handshake to raise EBADF, so make that error
-            # quiet as well.
+            # to cause do_handshake to raise EBADF and ENOTCONN, so make
+            # those errors quiet as well.
             # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
-            if self._is_connreset(err) or err.args[0] == errno.EBADF:
+            if (self._is_connreset(err) or
+                err.args[0] in (errno.EBADF, errno.ENOTCONN)):
                 return self.close(exc_info=True)
             raise
         except AttributeError:
