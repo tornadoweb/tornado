@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import base64
 import binascii
 from contextlib import closing
+import copy
 import functools
 import sys
 import threading
@@ -629,3 +630,15 @@ class HTTPRequestTestCase(unittest.TestCase):
         request = HTTPRequest('http://example.com', if_modified_since=http_date)
         self.assertEqual(request.headers,
                          {'If-Modified-Since': format_timestamp(http_date)})
+
+
+class HTTPErrorTestCase(unittest.TestCase):
+    def test_copy(self):
+        e = HTTPError(403)
+        e2 = copy.copy(e)
+        self.assertIsNot(e, e2)
+        self.assertEqual(e.code, e2.code)
+
+    def test_str(self):
+        e = HTTPError(403)
+        self.assertEqual(str(e), "HTTP 403: Forbidden")

@@ -725,18 +725,22 @@ class BaseIOStream(object):
         to read (i.e. the read returns EWOULDBLOCK or equivalent).  On
         error closes the socket and raises an exception.
         """
-        try:
-            chunk = self.read_from_fd()
-        except (socket.error, IOError, OSError) as e:
-            # ssl.SSLError is a subclass of socket.error
-            if self._is_connreset(e):
-                # Treat ECONNRESET as a connection close rather than
-                # an error to minimize log spam  (the exception will
-                # be available on self.error for apps that care).
+        while True:
+            try:
+                chunk = self.read_from_fd()
+            except (socket.error, IOError, OSError) as e:
+                if errno_from_exception(e) == errno.EINTR:
+                    continue
+                # ssl.SSLError is a subclass of socket.error
+                if self._is_connreset(e):
+                    # Treat ECONNRESET as a connection close rather than
+                    # an error to minimize log spam  (the exception will
+                    # be available on self.error for apps that care).
+                    self.close(exc_info=True)
+                    return
                 self.close(exc_info=True)
-                return
-            self.close(exc_info=True)
-            raise
+                raise
+            break
         if chunk is None:
             return 0
         self._read_buffer.append(chunk)

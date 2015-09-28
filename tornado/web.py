@@ -1473,7 +1473,7 @@ class RequestHandler(object):
         if isinstance(e, Finish):
             # Not an error; just finish the request without logging.
             if not self._finished:
-                self.finish()
+                self.finish(*e.args)
             return
         try:
             self.log_exception(*sys.exc_info())
@@ -2063,7 +2063,7 @@ class HTTPError(Exception):
         determined automatically from ``status_code``, but can be used
         to use a non-standard numeric code.
     """
-    def __init__(self, status_code, log_message=None, *args, **kwargs):
+    def __init__(self, status_code=500, log_message=None, *args, **kwargs):
         self.status_code = status_code
         self.log_message = log_message
         self.args = args
@@ -2084,10 +2084,14 @@ class HTTPError(Exception):
 class Finish(Exception):
     """An exception that ends the request without producing an error response.
 
-    When `Finish` is raised in a `RequestHandler`, the request will end
-    (calling `RequestHandler.finish` if it hasn't already been called),
-    but the outgoing response will not be modified and the error-handling
-    methods (including `RequestHandler.write_error`) will not be called.
+    When `Finish` is raised in a `RequestHandler`, the request will
+    end (calling `RequestHandler.finish` if it hasn't already been
+    called), but the error-handling methods (including
+    `RequestHandler.write_error`) will not be called.
+
+    If `Finish()` was created with no arguments, the pending response
+    will be sent as-is. If `Finish()` was given an argument, that
+    argument will be passed to `RequestHandler.finish()`.
 
     This can be a more convenient way to implement custom error pages
     than overriding ``write_error`` (especially in library code)::
@@ -2096,6 +2100,10 @@ class Finish(Exception):
             self.set_status(401)
             self.set_header('WWW-Authenticate', 'Basic realm="something"')
             raise Finish()
+
+    .. versionchanged:: 4.3
+       Arguments passed to ``Finish()`` will be passed on to
+       `RequestHandler.finish`.
     """
     pass
 
