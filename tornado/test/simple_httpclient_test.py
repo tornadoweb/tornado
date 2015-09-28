@@ -123,7 +123,6 @@ class RespondInPrepareHandler(RequestHandler):
         self.set_status(403)
         self.finish("forbidden")
 
-
 class SimpleHTTPClientTestMixin(object):
     def get_app(self):
         # callable objects to finish pending /trigger requests
@@ -688,3 +687,68 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
         response = self.fetch('/large')
         response.rethrow()
         self.assertEqual(response.body, b'a'*1024*100)
+
+
+class KeepAliveTest(AsyncHTTPTestCase):
+
+    class KeepAliveApplication(Application):
+
+        def __init__(self, *args, **kwargs):
+            self.request_streams = []
+            self.server_streams = []
+            Application.__init__(self, *args, **kwargs)
+
+        def start_request(self, serv_conn, req_conn):
+            self.request_streams.append(req_conn.stream)
+            self.server_streams.append(serv_conn.stream)
+            return Application.start_request(self, serv_conn, req_conn)
+
+    class CloseHandler(RequestHandler):
+
+        @asynchronous
+        def post(self):
+            self.write(b'')
+            self.flush()
+            self.request.connection.close()
+
+    _state_app = KeepAliveApplication([
+        ('/keepalive', EchoPostHandler),
+        ('/keepalive-closed', CloseHandler),
+        ('/hang', HangHandler)
+    ], gzip=True)
+
+    def get_app(self):
+        return self._state_app
+
+    def get_http_client(self):
+        # 100KB body with 64KB buffer
+        client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
+                                       force_instance=True)
+        client.initialize(self.io_loop, max_clients=1, reuse_connections=True)
+        return client
+
+    def test_keep_alive(self):
+        response1 = self.fetch('/keepalive', method='POST', body="foo")
+        self.assertEqual(response1.body, b'foo')
+        response2 = self.fetch('/keepalive', method='POST', body="bar")
+        self.assertEqual(response2.body, b'bar')
+
+        # Confirm only a single stream was opened.
+        app = self.get_app()
+        base = app.request_streams[0]
+        for stream in app.request_streams:
+            self.assertIs(base, stream)
+
+        for stream in app.server_streams:
+            self.assertIs(base, stream)
+
+    def test_keep_alive_closed(self):
+        response = self.fetch('/keepalive-closed', method='POST', body="foo")
+        self.assertEquals(self.http_client.idle, {})
+        response = self.fetch('/keepalive', method='POST', body="foo")
+        self.assertEqual(response.body, b"foo")
+
+    def test_keep_alive_timeout(self):
+        response = self.fetch('/hang', request_timeout=.1)
+        self.assertEquals(response.error.code, 599)
+        self.assertEquals(self.http_client.idle, {})
