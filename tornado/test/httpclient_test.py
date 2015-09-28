@@ -483,6 +483,24 @@ X-XSS-Protection: 1;
 
         self.assertTrue('must not be None' in str(context.exception))
 
+    @gen_test
+    def test_ignore_body_sanity_checks_when_allow_nonstandard_methods(self):
+        all_methods_url = self.get_url('/all_methods')
+        for method in ('POST', 'PUT'):
+            response = yield self.http_client.fetch(
+                all_methods_url, method=method, body=None,
+                allow_nonstandard_methods=True)
+            self.assertEqual(response.code, 200)
+            self.assertIsNone(response.request.body)
+
+        # Don't test for GET with a body. Curl client does not allow it.
+        for method in ('PATCH', 'DELETE', 'OPTIONS'):
+            response = yield self.http_client.fetch(
+                all_methods_url, method=method, body=utf8(method),
+                allow_nonstandard_methods=True)
+            self.assertEqual(response.code, 200)
+            self.assertEqual(response.body, utf8(method))
+
     # This test causes odd failures with the combination of
     # curl_httpclient (at least with the version of libcurl available
     # on ubuntu 12.04), TwistedIOLoop, and epoll.  For POST (but not PUT),

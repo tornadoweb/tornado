@@ -121,3 +121,4 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def test_fail_custom_reason(self):
         response = self.fetch('/custom_fail_reason')
         self.assertEqual(str(response.error), "HTTP 400: Custom reason")
+
