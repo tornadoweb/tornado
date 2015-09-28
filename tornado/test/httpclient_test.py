@@ -371,6 +371,30 @@ Transfer-Encoding: chunked
                     "response=%r, value=%r, container=%r" %
                     (resp.body, value, container))
 
+    def test_multi_line_headers(self):
+        # Multi-line http headers are rare but rfc-allowed
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
+        sock, port = bind_unused_port()
+        with closing(sock):
+            def write_response(stream, request_data):
+                stream.write(b"""\
+HTTP/1.1 200 OK
+X-XSS-Protection: 1;
+\tmode=block
+
+""".replace(b"\n", b"\r\n"), callback=stream.close)
+
+            def accept_callback(conn, address):
+                stream = IOStream(conn, io_loop=self.io_loop)
+                stream.read_until(b"\r\n\r\n",
+                                  functools.partial(write_response, stream))
+            netutil.add_accept_handler(sock, accept_callback, self.io_loop)
+            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
+            resp = self.wait()
+            resp.rethrow()
+            self.assertEqual(resp.headers['X-XSS-Protection'], "1; mode=block")
+            self.io_loop.remove_handler(sock.fileno())
+
     def test_304_with_content_length(self):
         # According to the spec 304 responses SHOULD NOT include
         # Content-Length or other entity headers, but some servers do it
