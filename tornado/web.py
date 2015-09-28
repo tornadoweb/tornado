@@ -2063,7 +2063,7 @@ class HTTPError(Exception):
         determined automatically from ``status_code``, but can be used
         to use a non-standard numeric code.
     """
-    def __init__(self, status_code, log_message=None, *args, **kwargs):
+    def __init__(self, status_code=500, log_message=None, *args, **kwargs):
         self.status_code = status_code
         self.log_message = log_message
         self.args = args

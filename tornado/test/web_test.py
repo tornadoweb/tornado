@@ -15,6 +15,7 @@ from tornado.web import RequestHandler, authenticated, Application, asynchronous
 
 import binascii
 import contextlib
+import copy
 import datetime
 import email.utils
 import itertools
@@ -2670,3 +2671,12 @@ class RequestSummaryTest(SimpleHandlerTestCase):
     def test_missing_remote_ip(self):
         resp = self.fetch("/")
         self.assertEqual(resp.body, b"GET / (None)")
+
+
+class HTTPErrorTest(unittest.TestCase):
+    def test_copy(self):
+        e = HTTPError(403, reason="Go away")
+        e2 = copy.copy(e)
+        self.assertIsNot(e, e2)
+        self.assertEqual(e.status_code, e2.status_code)
+        self.assertEqual(e.reason, e2.reason)

@@ -603,9 +603,12 @@ class HTTPError(Exception):
     """
     def __init__(self, code, message=None, response=None):
         self.code = code
-        message = message or httputil.responses.get(code, "Unknown")
+        self.message = message or httputil.responses.get(code, "Unknown")
         self.response = response
-        Exception.__init__(self, "HTTP %d: %s" % (self.code, message))
+        super(HTTPError, self).__init__(code, message, response)
+
+    def __str__(self):
+        return "HTTP %d: %s" % (self.code, self.message)
 
 
 class _RequestProxy(object):
