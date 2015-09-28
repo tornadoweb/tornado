@@ -914,7 +914,7 @@ class PollIOLoop(IOLoop):
             # with other threads, or waking logic will induce a race.
             with self._callback_lock:
                 if self._closing:
-                    raise RuntimeError("IOLoop is closing")
+                    return
                 list_empty = not self._callbacks
                 self._callbacks.append(functools.partial(
                     stack_context.wrap(callback), *args, **kwargs))
@@ -927,7 +927,7 @@ class PollIOLoop(IOLoop):
                     self._waker.wake()
         else:
             if self._closing:
-                raise RuntimeError("IOLoop is closing")
+                return
             # If we're on the IOLoop's thread, we don't need the lock,
             # since we don't need to wake anyone, just add the
             # callback. Blindly insert into self._callbacks. This is
