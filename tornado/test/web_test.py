@@ -2544,15 +2544,19 @@ class FinishExceptionTest(SimpleHandlerTestCase):
         def get(self):
             self.set_status(401)
             self.set_header('WWW-Authenticate', 'Basic realm="something"')
-            self.write('authentication required')
-            raise Finish()
+            if self.get_argument('finish_value', ''):
+                raise Finish('authentication required')
+            else:
+                self.write('authentication required')
+                raise Finish()
 
     def test_finish_exception(self):
-        response = self.fetch('/')
-        self.assertEqual(response.code, 401)
-        self.assertEqual('Basic realm="something"',
-                         response.headers.get('WWW-Authenticate'))
-        self.assertEqual(b'authentication required', response.body)
+        for url in ['/', '/?finish_value=1']:
+            response = self.fetch(url)
+            self.assertEqual(response.code, 401)
+            self.assertEqual('Basic realm="something"',
+                             response.headers.get('WWW-Authenticate'))
+            self.assertEqual(b'authentication required', response.body)
 
 
 @wsgi_safe
