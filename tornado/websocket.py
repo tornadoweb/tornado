@@ -711,7 +711,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         reserved_bits = header & self.RSV_MASK
         self._frame_opcode = header & self.OPCODE_MASK
         self._frame_opcode_is_control = self._frame_opcode & 0x8
-        if self._decompressor is not None:
+        if self._decompressor is not None and self._frame_opcode != 0:
             self._frame_compressed = bool(reserved_bits & self.RSV1)
             reserved_bits &= ~self.RSV1
         if reserved_bits:
