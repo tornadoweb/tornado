@@ -49,6 +49,7 @@ class PutHandler(RequestHandler):
 
 class RedirectHandler(RequestHandler):
     def prepare(self):
+        self.write('redirects can have bodies too')
         self.redirect(self.get_argument("url"),
                       status=int(self.get_argument("status", "302")))
 

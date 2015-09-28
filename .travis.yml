@@ -35,6 +35,7 @@ install:
     # codecov tries to install the latest.
     - if [[ $TRAVIS_PYTHON_VERSION == '3.2' ]]; then travis_retry pip install 'coverage<4.0'; fi
     - travis_retry pip install codecov
+    - curl-config --version; pip freeze
 
 script:
     # Get out of the source directory before running tests to avoid PYTHONPATH

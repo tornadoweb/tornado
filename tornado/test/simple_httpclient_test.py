@@ -11,14 +11,15 @@ import socket
 import ssl
 import sys
 
+from tornado.escape import to_unicode
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
 from tornado.netutil import Resolver, bind_sockets
-from tornado.simple_httpclient import SimpleAsyncHTTPClient, _default_ca_certs
-from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
 from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, unittest
@@ -145,6 +146,7 @@ class SimpleHTTPClientTestMixin(object):
             url("/no_content_length", NoContentLengthHandler),
             url("/echo_post", EchoPostHandler),
             url("/respond_in_prepare", RespondInPrepareHandler),
+            url("/redirect", RedirectHandler),
         ], gzip=True)
 
     def test_singleton(self):
@@ -415,6 +417,24 @@ class SimpleHTTPClientTestMixin(object):
                               body_producer=body_producer,
                               expect_100_continue=True)
         self.assertEqual(response.code, 403)
+
+    def test_streaming_follow_redirects(self):
+        # When following redirects, header and streaming callbacks
+        # should only be called for the final result.
+        # TODO(bdarnell): this test belongs in httpclient_test instead of
+        # simple_httpclient_test, but it fails with the version of libcurl
+        # available on travis-ci. Move it when that has been upgraded
+        # or we have a better framework to skip tests based on curl version.
+        headers = []
+        chunks = []
+        self.fetch("/redirect?url=/hello",
+                   header_callback=headers.append,
+                   streaming_callback=chunks.append)
+        chunks = list(map(to_unicode, chunks))
+        self.assertEqual(chunks, ['Hello world!'])
+        # Make sure we only got one set of headers.
+        num_start_lines = len([h for h in headers if h.startswith("HTTP/")])
+        self.assertEqual(num_start_lines, 1)
 
 
 class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
