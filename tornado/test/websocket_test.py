@@ -130,7 +130,7 @@ class WebSocketTest(WebSocketBaseTestCase):
     @gen_test
     def test_websocket_gen(self):
         ws = yield self.ws_connect('/echo')
-        ws.write_message('hello')
+        yield ws.write_message('hello')
         response = yield ws.read_message()
         self.assertEqual(response, 'hello')
         yield self.close(ws)

@@ -208,12 +208,15 @@ class WebSocketHandler(tornado.web.RequestHandler):
         .. versionchanged:: 3.2
            `WebSocketClosedError` was added (previously a closed connection
            would raise an `AttributeError`)
+
+        .. versionchanged:: 4.3
+           Returns a `.Future` which can be used for flow control.
         """
         if self.ws_connection is None:
             raise WebSocketClosedError()
         if isinstance(message, dict):
             message = tornado.escape.json_encode(message)
-        self.ws_connection.write_message(message, binary=binary)
+        return self.ws_connection.write_message(message, binary=binary)
 
     def select_subprotocol(self, subprotocols):
         """Invoked when a new WebSocket requests specific subprotocols.
@@ -671,7 +674,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         frame += data
         self._wire_bytes_out += len(frame)
         try:
-            self.stream.write(frame)
+            return self.stream.write(frame)
         except StreamClosedError:
             self._abort()
 
@@ -688,7 +691,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         if self._compressor:
             message = self._compressor.compress(message)
             flags |= self.RSV1
-        self._write_frame(True, opcode, message, flags=flags)
+        return self._write_frame(True, opcode, message, flags=flags)
 
     def write_ping(self, data):
         """Send ping frame."""
@@ -970,7 +973,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
     def write_message(self, message, binary=False):
         """Sends a message to the WebSocket server."""
-        self.protocol.write_message(message, binary)
+        return self.protocol.write_message(message, binary)
 
     def read_message(self, callback=None):
         """Reads a message from the WebSocket server.
