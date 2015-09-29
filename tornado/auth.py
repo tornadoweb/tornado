@@ -75,7 +75,7 @@ import hmac
 import time
 import uuid
 
-from tornado.concurrent import TracebackFuture, return_future
+from tornado.concurrent import TracebackFuture, return_future, chain_future
 from tornado import gen
 from tornado import httpclient
 from tornado import escape
@@ -985,7 +985,7 @@ class FacebookGraphMixin(OAuth2Mixin):
             future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
             return
 
-        args = escape.parse_qs_bytes(escape.native_str(response.body))
+        args = urlparse.parse_qs(escape.native_str(response.body))
         session = {
             "access_token": args["access_token"][-1],
             "expires": args.get("expires")
@@ -1062,8 +1062,13 @@ class FacebookGraphMixin(OAuth2Mixin):
            Added the ability to override ``self._FACEBOOK_BASE_URL``.
         """
         url = self._FACEBOOK_BASE_URL + path
-        return self.oauth2_request(url, callback, access_token,
-                                   post_args, **args)
+        # Thanks to the _auth_return_future decorator, our "callback"
+        # argument is a Future, which we cannot pass as a callback to
+        # oauth2_request. Instead, have oauth2_request return a
+        # future and chain them together.
+        oauth_future = self.oauth2_request(url, access_token=access_token,
+                                           post_args=post_args, **args)
+        chain_future(oauth_future, callback)
 
 
 def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
