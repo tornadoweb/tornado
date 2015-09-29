@@ -5,7 +5,7 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
-from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin, AuthError, GoogleOAuth2Mixin
+from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin, AuthError, GoogleOAuth2Mixin, FacebookGraphMixin
 from tornado.concurrent import Future
 from tornado.escape import json_decode
 from tornado import gen
@@ -124,6 +124,38 @@ class OAuth2ClientLoginHandler(RequestHandler, OAuth2Mixin):
         res = self.authorize_redirect()
         assert isinstance(res, Future)
         assert res.done()
+
+
+class FacebookClientLoginHandler(RequestHandler, FacebookGraphMixin):
+    def initialize(self, test):
+        self._OAUTH_AUTHORIZE_URL = test.get_url('/facebook/server/authorize')
+        self._OAUTH_ACCESS_TOKEN_URL = test.get_url('/facebook/server/access_token')
+        self._FACEBOOK_BASE_URL = test.get_url('/facebook/server')
+
+    @gen.coroutine
+    def get(self):
+        if self.get_argument("code", None):
+            user = yield self.get_authenticated_user(
+                redirect_uri=self.request.full_url(),
+                client_id=self.settings["facebook_api_key"],
+                client_secret=self.settings["facebook_secret"],
+                code=self.get_argument("code"))
+            self.write(user)
+        else:
+                yield self.authorize_redirect(
+                    redirect_uri=self.request.full_url(),
+                    client_id=self.settings["facebook_api_key"],
+                    extra_params={"scope": "read_stream,offline_access"})
+
+
+class FacebookServerAccessTokenHandler(RequestHandler):
+    def get(self):
+        self.write('access_token=asdf')
+
+
+class FacebookServerMeHandler(RequestHandler):
+    def get(self):
+        self.write('{}')
 
 
 class TwitterClientHandler(RequestHandler, TwitterMixin):
@@ -260,6 +292,8 @@ class AuthTest(AsyncHTTPTestCase):
                  dict(version='1.0a')),
                 ('/oauth2/client/login', OAuth2ClientLoginHandler, dict(test=self)),
 
+                ('/facebook/client/login', FacebookClientLoginHandler, dict(test=self)),
+
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
                 ('/twitter/client/login_gen_engine', TwitterClientLoginGenEngineHandler, dict(test=self)),
                 ('/twitter/client/login_gen_coroutine', TwitterClientLoginGenCoroutineHandler, dict(test=self)),
@@ -271,13 +305,17 @@ class AuthTest(AsyncHTTPTestCase):
                 ('/oauth1/server/request_token', OAuth1ServerRequestTokenHandler),
                 ('/oauth1/server/access_token', OAuth1ServerAccessTokenHandler),
 
+                ('/facebook/server/access_token', FacebookServerAccessTokenHandler),
+                ('/facebook/server/me', FacebookServerMeHandler),
                 ('/twitter/server/access_token', TwitterServerAccessTokenHandler),
                 (r'/twitter/api/users/show/(.*)\.json', TwitterServerShowUserHandler),
                 (r'/twitter/api/account/verify_credentials\.json', TwitterServerVerifyCredentialsHandler),
             ],
             http_client=self.http_client,
             twitter_consumer_key='test_twitter_consumer_key',
-            twitter_consumer_secret='test_twitter_consumer_secret')
+            twitter_consumer_secret='test_twitter_consumer_secret',
+            facebook_api_key='test_facebook_api_key',
+            facebook_secret='test_facebook_secret')
 
     def test_openid_redirect(self):
         response = self.fetch('/openid/client/login', follow_redirects=False)
@@ -357,6 +395,13 @@ class AuthTest(AsyncHTTPTestCase):
         response = self.fetch('/oauth2/client/login', follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertTrue('/oauth2/server/authorize?' in response.headers['Location'])
+
+    def test_facebook_login(self):
+        response = self.fetch('/facebook/client/login', follow_redirects=False)
+        self.assertEqual(response.code, 302)
+        self.assertTrue('/facebook/server/authorize?' in response.headers['Location'])
+        response = self.fetch('/facebook/client/login?code=1234', follow_redirects=False)
+        self.assertEqual(response.code, 200)
 
     def base_twitter_redirect(self, url):
         # Same as test_oauth10a_redirect
