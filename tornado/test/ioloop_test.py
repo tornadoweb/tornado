@@ -441,7 +441,6 @@ class TestIOLoopCurrent(unittest.TestCase):
             # Now that the loop is stopped, it is no longer current.
             self.assertIsNone(IOLoop.current(instance=False))
 
-
     def test_force_current(self):
         self.io_loop = IOLoop(make_current=True)
         self.assertIs(self.io_loop, IOLoop.current())

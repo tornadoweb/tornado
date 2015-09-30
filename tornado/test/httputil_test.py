@@ -319,6 +319,7 @@ Foo: even
         self.assertEqual(headers['quux'], 'xyzzy')
         self.assertEqual(sorted(headers.get_all()), [('Foo', 'bar'), ('Quux', 'xyzzy')])
 
+
 class FormatTimestampTest(unittest.TestCase):
     # Make sure that all the input types are supported.
     TIMESTAMP = 1359312200.503611

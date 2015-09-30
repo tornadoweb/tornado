@@ -1282,7 +1282,7 @@ class SSLIOStream(IOStream):
             # those errors quiet as well.
             # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
             if (self._is_connreset(err) or
-                err.args[0] in (errno.EBADF, errno.ENOTCONN)):
+                    err.args[0] in (errno.EBADF, errno.ENOTCONN)):
                 return self.close(exc_info=True)
             raise
         except AttributeError:

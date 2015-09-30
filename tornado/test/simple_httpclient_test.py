@@ -107,7 +107,7 @@ class NoContentLengthHandler(RequestHandler):
             # level so we have to go around it.
             stream = self.request.connection.detach()
             stream.write(b"HTTP/1.0 200 OK\r\n\r\n"
-                               b"hello")
+                         b"hello")
             stream.close()
         else:
             self.finish('HTTP/1 required')
@@ -668,22 +668,22 @@ class MaxBodySizeTest(AsyncHTTPTestCase):
     def get_app(self):
         class SmallBody(RequestHandler):
             def get(self):
-                self.write("a"*1024*64)
+                self.write("a" * 1024 * 64)
 
         class LargeBody(RequestHandler):
             def get(self):
-                self.write("a"*1024*100)
+                self.write("a" * 1024 * 100)
 
         return Application([('/small', SmallBody),
                             ('/large', LargeBody)])
 
     def get_http_client(self):
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024*64)
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024 * 64)
 
     def test_small_body(self):
         response = self.fetch('/small')
         response.rethrow()
-        self.assertEqual(response.body, b'a'*1024*64)
+        self.assertEqual(response.body, b'a' * 1024 * 64)
 
     def test_large_body(self):
         with ExpectLog(gen_log, "Malformed HTTP message from None: Content-Length too long"):
@@ -696,15 +696,15 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
 
         class LargeBody(RequestHandler):
             def get(self):
-                self.write("a"*1024*100)
+                self.write("a" * 1024 * 100)
 
         return Application([('/large', LargeBody)])
 
     def get_http_client(self):
         # 100KB body with 64KB buffer
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024*100, max_buffer_size=1024*64)
+        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024 * 100, max_buffer_size=1024 * 64)
 
     def test_large_body(self):
         response = self.fetch('/large')
         response.rethrow()
-        self.assertEqual(response.body, b'a'*1024*100)
+        self.assertEqual(response.body, b'a' * 1024 * 100)

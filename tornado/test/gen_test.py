@@ -411,9 +411,9 @@ class GenEngineTest(AsyncTestCase):
 
         # Exception logging may be explicitly quieted.
         with self.assertRaises(RuntimeError):
-                yield gen.Multi([self.async_exception(RuntimeError("error 1")),
-                                 self.async_exception(RuntimeError("error 2"))],
-                                quiet_exceptions=RuntimeError)
+            yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                             self.async_exception(RuntimeError("error 2"))],
+                            quiet_exceptions=RuntimeError)
 
     @gen_test
     def test_multi_future_exceptions(self):
@@ -430,10 +430,10 @@ class GenEngineTest(AsyncTestCase):
 
         # Exception logging may be explicitly quieted.
         with self.assertRaises(RuntimeError):
-                yield gen.multi_future(
-                    [self.async_exception(RuntimeError("error 1")),
-                     self.async_exception(RuntimeError("error 2"))],
-                    quiet_exceptions=RuntimeError)
+            yield gen.multi_future(
+                [self.async_exception(RuntimeError("error 1")),
+                 self.async_exception(RuntimeError("error 2"))],
+                quiet_exceptions=RuntimeError)
 
     def test_arguments(self):
         @gen.engine
@@ -938,6 +938,7 @@ class GenCoroutineTest(AsyncTestCase):
 
         self.finished = True
 
+
 class GenSequenceHandler(RequestHandler):
     @asynchronous
     @gen.engine
@@ -1323,7 +1324,6 @@ class WaitIteratorTest(AsyncTestCase):
         """)
         yield namespace['f']()
         self.assertTrue(self.finished)
-
 
     @gen_test
     def test_no_ref(self):

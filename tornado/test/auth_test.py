@@ -142,10 +142,10 @@ class FacebookClientLoginHandler(RequestHandler, FacebookGraphMixin):
                 code=self.get_argument("code"))
             self.write(user)
         else:
-                yield self.authorize_redirect(
-                    redirect_uri=self.request.full_url(),
-                    client_id=self.settings["facebook_api_key"],
-                    extra_params={"scope": "read_stream,offline_access"})
+            yield self.authorize_redirect(
+                redirect_uri=self.request.full_url(),
+                client_id=self.settings["facebook_api_key"],
+                extra_params={"scope": "read_stream,offline_access"})
 
 
 class FacebookServerAccessTokenHandler(RequestHandler):
@@ -514,9 +514,9 @@ class GoogleOAuth2UserinfoHandler(RequestHandler):
         assert self.get_argument('access_token') == 'fake-access-token'
         # return a fake user
         self.finish({
-                'name': 'Foo',
-                'email': 'foo@example.com'
-                })
+            'name': 'Foo',
+            'email': 'foo@example.com'
+        })
 
 
 class GoogleOAuth2Test(AsyncHTTPTestCase):

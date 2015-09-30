@@ -272,7 +272,7 @@ class ParseErrorDetailTest(unittest.TestCase):
     def test_details(self):
         loader = DictLoader({
             "foo.html": "\n\n{{",
-            })
+        })
         with self.assertRaises(ParseError) as cm:
             loader.load("foo.html")
         self.assertEqual("Missing end expression }} at foo.html:3",
@@ -448,7 +448,7 @@ raw: {% raw name %}""",
         templates = {
             "foo.html": "\t\tfoo\n\n",
             "bar.txt": "\t\tbar\n\n",
-            }
+        }
         loader = DictLoader(templates, whitespace='all')
         self.assertEqual(loader.load("foo.html").generate(), b"\t\tfoo\n\n")
         self.assertEqual(loader.load("bar.txt").generate(), b"\t\tbar\n\n")

@@ -18,7 +18,7 @@ class TCPServerTest(AsyncTestCase):
             def handle_stream(self, stream, address):
                 yield gen.moment
                 stream.close()
-                1/0
+                1 / 0
 
         server = client = None
         try:

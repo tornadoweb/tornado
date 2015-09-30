@@ -1638,10 +1638,10 @@ class ExceptionHandlerTest(SimpleHandlerTestCase):
 class BuggyLoggingTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
-            1/0
+            1 / 0
 
         def log_exception(self, typ, value, tb):
-            1/0
+            1 / 0
 
     def test_buggy_log_exception(self):
         # Something gets logged even though the application's

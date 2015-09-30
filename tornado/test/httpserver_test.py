@@ -177,12 +177,12 @@ class BadSSLOptionsTest(unittest.TestCase):
         self.assertRaises((ValueError, IOError),
                           HTTPServer, application, ssl_options={
                               "certfile": "/__mising__.crt",
-                          })
+        })
         self.assertRaises((ValueError, IOError),
                           HTTPServer, application, ssl_options={
                               "certfile": existing_certificate,
                               "keyfile": "/__missing__.key"
-                          })
+        })
 
         # This actually works because both files exist
         HTTPServer(application, ssl_options={
