@@ -1,5 +1,8 @@
 # Appveyor is Windows CI: https://ci.appveyor.com/project/bdarnell/tornado
 environment:
+  global:
+    TORNADO_EXTENSION: "1"
+
   # We only build with 3.5 because it works out of the box, while other
   # versions require lots of machinery.
   matrix:
