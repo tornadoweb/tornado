@@ -24,7 +24,6 @@ import subprocess
 import sys
 import tempfile
 import warnings
-import time
 
 from tornado.escape import utf8
 from tornado.log import LogFormatter, define_logging_options, enable_pretty_logging

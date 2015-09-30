@@ -12,8 +12,6 @@
 
 from datetime import timedelta
 from random import random
-import sys
-import textwrap
 
 from tornado import gen, queues
 from tornado.gen import TimeoutError
