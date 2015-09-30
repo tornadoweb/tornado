@@ -1,10 +1,3 @@
-try:
-    import backports_abc
-except ImportError:
-    raise
-else:
-    backports_abc.patch()
-
 from tornado.testing import AsyncTestCase, gen_test
 from tornado.util import ArgReplacer
 import unittest

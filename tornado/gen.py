@@ -102,15 +102,18 @@ try:
     from collections.abc import Generator as GeneratorType  # py35+
 except ImportError:
     try:
-        from collections import Generator as GeneratorType  # py2 with backports_abc
+        from backports_abc import Generator as GeneratorType
     except ImportError:
         from types import GeneratorType
 
 try:
     from inspect import isawaitable  # py35+
 except ImportError:
-    def isawaitable(x):
-        return False
+    try:
+        from backports_abc import isawaitable
+    except ImportError:
+        def isawaitable(x):
+            return False
 
 try:
     import builtins  # py3
