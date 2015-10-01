@@ -131,7 +131,7 @@ announced on the `announcements mailing list
 
 
 Tornado is one of `Facebook's open source technologies
-<http://developers.facebook.com/opensource/>`_. It is available under
+<https://code.facebook.com/opensource/>`_. It is available under
 the `Apache License, Version 2.0
 <http://www.apache.org/licenses/LICENSE-2.0.html>`_.
 
