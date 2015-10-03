@@ -7,6 +7,7 @@ python:
     - 3.2
     - 3.3
     - 3.4
+    - 3.5
     - nightly
     - pypy3
 
@@ -17,7 +18,7 @@ env:
 install:
     # always install unittest2 on py26 even if $DEPS is unset
     - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then travis_retry pip install unittest2; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then travis_retry pip install futures mock Monotime==1.0 trollius; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then travis_retry pip install futures mock Monotime trollius; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then travis_retry pip install singledispatch; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' && $DEPS == true ]]; then travis_retry pip install futures mock singledispatch; fi
     # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
@@ -26,8 +27,8 @@ install:
     - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then travis_retry pip install mock singledispatch; fi
     # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
     - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry travis_retry pip install Twisted; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then travis_retry travis_retry pip install sphinx==1.2.2 sphinx_rtd_theme; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then travis_retry travis_retry pip install sphinx==1.2.2 sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then travis_retry travis_retry pip install sphinx sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' && $DEPS == true ]]; then travis_retry travis_retry pip install sphinx sphinx_rtd_theme; fi
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
@@ -65,18 +66,17 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --ioloop_time_monotonic; fi
     - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 3.4 || $TRAVIS_PYTHON_VERSION == 3.5 ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
     #- if [[ $TRAVIS_PYTHON_VERSION != pypy* && $DEPS == true ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.3' ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then python $TARGET --ioloop_time_monotonic; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 3* && $TRAVIS_PYTHON_VERSION != '3.2' ]]; then python $TARGET --ioloop_time_monotonic; fi
     # make coverage reports for Codecov to find
     - if [[ $TRAVIS_PYTHON_VERSION != 2.6 && $TRAVIS_PYTHON_VERSION != nightly ]]; then coverage xml; fi
     - export TORNADO_EXTENSION=0
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
 
 after_success:
     # call codecov from project root
