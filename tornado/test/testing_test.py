@@ -58,7 +58,7 @@ class AsyncTestCaseTest(AsyncTestCase):
         This test makes sure that a second call to wait()
         clears the first timeout.
         """
-        self.io_loop.add_timeout(self.io_loop.time() + 0.01, self.stop)
+        self.io_loop.add_timeout(self.io_loop.time() + 0.00, self.stop)
         self.wait(timeout=0.02)
         self.io_loop.add_timeout(self.io_loop.time() + 0.03, self.stop)
         self.wait(timeout=0.15)
