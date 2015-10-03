@@ -389,15 +389,22 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
         # Handle curl's cryptic options for every individual HTTP method
         if request.method == "GET":
+            # Even with `allow_nonstandard_methods` we disallow GET with a
+            # body. While the spec doesn't forbid clients from sending a body,
+            # it arguably disallows the server from doing anything with them.
             if request.body is not None:
                 raise ValueError('Body must be None for GET request')
-        elif request.method in ("POST", "PUT") or request.body:
-            if request.body is None:
+        if request.method in ("POST", "PUT") or request.body:
+            # Fail in case POST or PUT method has no body, unless the user has
+            # opted out of sanity checks with allow_nonstandard_methods.
+            if request.body is not None:
+                request_buffer = BytesIO(utf8(request.body))
+            elif not request.allow_nonstandard_methods:
                 raise ValueError(
-                    'Body must not be None for "%s" request'
-                    % request.method)
-
-            request_buffer = BytesIO(utf8(request.body))
+                    'Body must not be None for method %s (unless '
+                    'allow_nonstandard_methods is true)' % request.method)
+            else:
+                request_buffer = BytesIO()
 
             def ioctl(cmd):
                 if cmd == curl.IOCMD_RESTARTREAD:
@@ -405,10 +412,10 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.READFUNCTION, request_buffer.read)
             curl.setopt(pycurl.IOCTLFUNCTION, ioctl)
             if request.method == "POST":
-                curl.setopt(pycurl.POSTFIELDSIZE, len(request.body))
+                curl.setopt(pycurl.POSTFIELDSIZE, len(request.body or ''))
             else:
                 curl.setopt(pycurl.UPLOAD, True)
-                curl.setopt(pycurl.INFILESIZE, len(request.body))
+                curl.setopt(pycurl.INFILESIZE, len(request.body or ''))
 
         if request.auth_username is not None:
             userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
