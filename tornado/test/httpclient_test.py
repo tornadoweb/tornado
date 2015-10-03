@@ -470,36 +470,32 @@ X-XSS-Protection: 1;
                               allow_nonstandard_methods=True)
         self.assertEqual(response.body, b'OTHER')
 
-    @gen_test
     def test_body_sanity_checks(self):
-        hello_url = self.get_url('/hello')
-        with self.assertRaises(ValueError) as context:
-            yield self.http_client.fetch(hello_url, body='data')
+        # These methods require a body.
+        for method in ('POST', 'PUT', 'PATCH'):
+            with self.assertRaises(ValueError) as context:
+                resp = self.fetch('/all_methods', method=method)
+                resp.rethrow()
+            self.assertIn('must not be None', str(context.exception))
 
-        self.assertTrue('must be None' in str(context.exception))
+            resp = self.fetch('/all_methods', method=method,
+                              allow_nonstandard_methods=True)
+            self.assertEqual(resp.code, 200)
 
-        with self.assertRaises(ValueError) as context:
-            yield self.http_client.fetch(hello_url, method='POST')
+        # These methods don't allow a body.
+        for method in ('GET', 'DELETE', 'OPTIONS'):
+            with self.assertRaises(ValueError) as context:
+                resp = self.fetch('/all_methods', method=method, body=b'asdf')
+                resp.rethrow()
+            self.assertIn('must be None', str(context.exception))
 
-        self.assertTrue('must not be None' in str(context.exception))
-
-    @gen_test
-    def test_ignore_body_sanity_checks_when_allow_nonstandard_methods(self):
-        all_methods_url = self.get_url('/all_methods')
-        for method in ('POST', 'PUT'):
-            response = yield self.http_client.fetch(
-                all_methods_url, method=method, body=None,
-                allow_nonstandard_methods=True)
-            self.assertEqual(response.code, 200)
-            self.assertIsNone(response.request.body)
-
-        # Don't test for GET with a body. Curl client does not allow it.
-        for method in ('PATCH', 'DELETE', 'OPTIONS'):
-            response = yield self.http_client.fetch(
-                all_methods_url, method=method, body=utf8(method),
-                allow_nonstandard_methods=True)
-            self.assertEqual(response.code, 200)
-            self.assertEqual(response.body, utf8(method))
+            # In most cases this can be overridden, but curl_httpclient
+            # does not allow body with a GET at all.
+            if method != 'GET':
+                resp = self.fetch('/all_methods', method=method, body=b'asdf',
+                                  allow_nonstandard_methods=True)
+                resp.rethrow()
+                self.assertEqual(resp.code, 200)
 
     # This test causes odd failures with the combination of
     # curl_httpclient (at least with the version of libcurl available
