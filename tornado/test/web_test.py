@@ -1197,6 +1197,10 @@ class StaticFileTest(WebTestCase):
         self.assertEqual(response.code, 404)
 
     def test_path_traversal_protection(self):
+        # curl_httpclient processes ".." on the client side, so we
+        # must test this with simple_httpclient.
+        self.http_client.close()
+        self.http_client = SimpleAsyncHTTPClient()
         with ExpectLog(gen_log, ".*not in root static directory"):
             response = self.get_and_head('/static/../static_foo.txt')
         # Attempted path traversal should result in 403, not 200
