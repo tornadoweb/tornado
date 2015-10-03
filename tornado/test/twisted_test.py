@@ -552,6 +552,10 @@ if have_twisted:
             # with py27+, but not unittest2 on py26.
             'test_changeGID',
             'test_changeUID',
+            # This test sometimes fails with EPIPE on a call to
+            # kqueue.control. Happens consistently for me with
+            # trollius but not asyncio or other IOLoops.
+            'test_childConnectionLost',
         ],
         # Process tests appear to work on OSX 10.7, but not 10.6
         # 'twisted.internet.test.test_process.PTYProcessTestsBuilder': [
@@ -676,6 +680,14 @@ if have_twisted:
     # log.startLoggingWithObserver(log.PythonLoggingObserver().emit, setStdout=0)
     # import logging; logging.getLogger('twisted').setLevel(logging.WARNING)
 
+    # Twisted recently introduced a new logger; disable that one too.
+    try:
+        from twisted.logger import globalLogBeginner
+    except ImportError:
+        pass
+    else:
+        globalLogBeginner.beginLoggingTo([])
+
 if have_twisted:
     class LayeredTwistedIOLoop(TwistedIOLoop):
         """Layers a TwistedIOLoop on top of a TornadoReactor on a SelectIOLoop.
@@ -689,7 +701,7 @@ if have_twisted:
             # When configured to use LayeredTwistedIOLoop we can't easily
             # get the next-best IOLoop implementation, so use the lowest common
             # denominator.
-            self.real_io_loop = SelectIOLoop()
+            self.real_io_loop = SelectIOLoop(make_current=False)
             reactor = TornadoReactor(io_loop=self.real_io_loop)
             super(LayeredTwistedIOLoop, self).initialize(reactor=reactor, **kwargs)
             self.add_callback(self.make_current)
@@ -709,7 +721,12 @@ if have_twisted:
             # tornado-on-twisted-on-tornado.  I'm clearly missing something
             # about the startup/crash semantics, but since stop and crash
             # are really only used in tests it doesn't really matter.
-            self.reactor.callWhenRunning(self.reactor.crash)
+            def f():
+                self.reactor.crash()
+                # Become current again on restart. This is needed to
+                # override real_io_loop's claim to being the current loop.
+                self.add_callback(self.make_current)
+            self.reactor.callWhenRunning(f)
 
 if __name__ == "__main__":
     unittest.main()
