@@ -732,7 +732,7 @@ class GenCoroutineTest(AsyncTestCase):
 
     @skipBefore35
     @gen_test
-    def test_async_await_mixed_multi(self):
+    def test_async_await_mixed_multi_native_future(self):
         namespace = exec_test(globals(), locals(), """
         async def f1():
             await gen.Task(self.io_loop.add_callback)
@@ -745,6 +745,25 @@ class GenCoroutineTest(AsyncTestCase):
             raise gen.Return(43)
 
         results = yield [namespace['f1'](), f2()]
+        self.assertEqual(results, [42, 43])
+        self.finished = True
+
+    @skipBefore35
+    @gen_test
+    def test_async_await_mixed_multi_native_yieldpoint(self):
+        namespace = exec_test(globals(), locals(), """
+        async def f1():
+            await gen.Task(self.io_loop.add_callback)
+            return 42
+        """)
+
+        @gen.coroutine
+        def f2():
+            yield gen.Task(self.io_loop.add_callback)
+            raise gen.Return(43)
+
+        f2(callback=(yield gen.Callback('cb')))
+        results = yield [namespace['f1'](), gen.Wait('cb')]
         self.assertEqual(results, [42, 43])
         self.finished = True
 
@@ -1036,6 +1055,7 @@ class GenYieldExceptionHandler(RequestHandler):
             self.finish('ok')
 
 
+# "Undecorated" here refers to the absence of @asynchronous.
 class UndecoratedCoroutinesHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):

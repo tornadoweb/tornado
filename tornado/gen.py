@@ -702,6 +702,8 @@ class MultiYieldPoint(YieldPoint):
             children = children.values()
         self.children = []
         for i in children:
+            if not isinstance(i, YieldPoint):
+                i = convert_yielded(i)
             if is_future(i):
                 i = YieldFuture(i)
             self.children.append(i)
