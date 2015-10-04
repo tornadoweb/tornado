@@ -81,7 +81,7 @@ import traceback
 import types
 from io import BytesIO
 
-from tornado.concurrent import Future, is_future
+from tornado.concurrent import Future
 from tornado import escape
 from tornado import gen
 from tornado import httputil
@@ -1577,9 +1577,12 @@ def asynchronous(method):
     .. testoutput::
        :hide:
 
-    .. versionadded:: 3.1
+    .. versionchanged:: 3.1
        The ability to use ``@gen.coroutine`` without ``@asynchronous``.
 
+    .. versionchanged:: 4.3 Returning anything but ``None`` or a
+       yieldable object from a method decorated with ``@asynchronous``
+       is an error. Such return values were previously ignored silently.
     """
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
@@ -1590,7 +1593,8 @@ def asynchronous(method):
         with stack_context.ExceptionStackContext(
                 self._stack_context_handle_exception):
             result = method(self, *args, **kwargs)
-            if is_future(result):
+            if result is not None:
+                result = gen.convert_yielded(result)
                 # If @asynchronous is used with @gen.coroutine, (but
                 # not @gen.engine), we can automatically finish the
                 # request when the future resolves.  Additionally,

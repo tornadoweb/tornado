@@ -23,8 +23,6 @@
    .. autofunction:: with_timeout
    .. autoexception:: TimeoutError
 
-   .. autofunction:: maybe_future
-
    .. autofunction:: sleep
 
    .. autodata:: moment
@@ -49,6 +47,8 @@
       ``args`` and ``kwargs``.
 
    .. autofunction:: convert_yielded
+
+   .. autofunction:: maybe_future
 
    Legacy interface
    ----------------

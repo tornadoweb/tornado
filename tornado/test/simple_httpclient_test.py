@@ -22,7 +22,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, unittest
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, unittest, skipBefore35, exec_test
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -400,6 +400,33 @@ class SimpleHTTPClientTestMixin(object):
     def test_async_body_producer_content_length(self):
         response = self.fetch("/echo_post", method="POST",
                               body_producer=self.async_body_producer,
+                              headers={'Content-Length': '8'})
+        response.rethrow()
+        self.assertEqual(response.body, b"12345678")
+
+    @skipBefore35
+    def test_native_body_producer_chunked(self):
+        namespace = exec_test(globals(), locals(), """
+        async def body_producer(write):
+            await write(b'1234')
+            await gen.Task(IOLoop.current().add_callback)
+            await write(b'5678')
+        """)
+        response = self.fetch("/echo_post", method="POST",
+                              body_producer=namespace["body_producer"])
+        response.rethrow()
+        self.assertEqual(response.body, b"12345678")
+
+    @skipBefore35
+    def test_native_body_producer_content_length(self):
+        namespace = exec_test(globals(), locals(), """
+        async def body_producer(write):
+            await write(b'1234')
+            await gen.Task(IOLoop.current().add_callback)
+            await write(b'5678')
+        """)
+        response = self.fetch("/echo_post", method="POST",
+                              body_producer=namespace["body_producer"],
                               headers={'Content-Length': '8'})
         response.rethrow()
         self.assertEqual(response.body, b"12345678")

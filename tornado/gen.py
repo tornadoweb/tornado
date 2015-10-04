@@ -702,6 +702,8 @@ class MultiYieldPoint(YieldPoint):
             children = children.values()
         self.children = []
         for i in children:
+            if not isinstance(i, YieldPoint):
+                i = convert_yielded(i)
             if is_future(i):
                 i = YieldFuture(i)
             self.children.append(i)
@@ -804,6 +806,11 @@ def maybe_future(x):
     it is wrapped in a new `.Future`.  This is suitable for use as
     ``result = yield gen.maybe_future(f())`` when you don't know whether
     ``f()`` returns a `.Future` or not.
+
+    .. deprecated:: 4.3
+       This function only handles ``Futures``, not other yieldable objects.
+       Instead of `maybe_future`, check for the non-future result types
+       you expect (often just ``None``), and ``yield`` anything unknown.
     """
     if is_future(x):
         return x
