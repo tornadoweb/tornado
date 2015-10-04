@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, print_function, with_statement
 
-from tornado.concurrent import is_future
 from tornado.escape import utf8, _unicode
+from tornado import gen
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
@@ -391,7 +391,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.connection.write(self.request.body)
         elif self.request.body_producer is not None:
             fut = self.request.body_producer(self.connection.write)
-            if is_future(fut):
+            if fut is not None:
+                fut = gen.convert_yielded(fut)
+
                 def on_body_written(fut):
                     fut.result()
                     self.connection.finish()
