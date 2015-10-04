@@ -598,12 +598,21 @@ class IOLoop(Configurable):
         """
         try:
             ret = callback()
-            if ret is not None and is_future(ret):
+            if ret is not None:
+                from tornado import gen
                 # Functions that return Futures typically swallow all
                 # exceptions and store them in the Future.  If a Future
                 # makes it out to the IOLoop, ensure its exception (if any)
                 # gets logged too.
-                self.add_future(ret, lambda f: f.result())
+                try:
+                    ret = gen.convert_yielded(ret)
+                except gen.BadYieldError:
+                    # It's not unusual for add_callback to be used with
+                    # methods returning a non-None and non-yieldable
+                    # result, which should just be ignored.
+                    pass
+                else:
+                    self.add_future(ret, lambda f: f.result())
         except Exception:
             self.handle_callback_exception(callback)
 

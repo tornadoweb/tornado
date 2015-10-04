@@ -363,6 +363,18 @@ class TestIOLoop(AsyncTestCase):
             with ExpectLog(app_log, "Exception in callback"):
                 self.wait()
 
+    @skipBefore35
+    def test_exception_logging_native_coro(self):
+        """The IOLoop examines exceptions from awaitables and logs them."""
+        namespace = exec_test(globals(), locals(), """
+        async def callback():
+            self.io_loop.add_callback(self.stop)
+            1 / 0
+        """)
+        with NullContext():
+            self.io_loop.add_callback(namespace["callback"])
+            with ExpectLog(app_log, "Exception in callback"):
+                self.wait()
     def test_spawn_callback(self):
         # An added callback runs in the test's stack_context, so will be
         # re-arised in wait().
