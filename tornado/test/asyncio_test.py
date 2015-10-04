@@ -12,12 +12,9 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import sys
-import textwrap
-
 from tornado import gen
 from tornado.testing import AsyncTestCase, gen_test
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipBefore33, exec_test
 
 try:
     from tornado.platform.asyncio import asyncio, AsyncIOLoop
@@ -49,21 +46,18 @@ class AsyncIOLoopTest(AsyncTestCase):
             asyncio.get_event_loop().run_in_executor(None, lambda: 42))
         self.assertEqual(x, 42)
 
-    @unittest.skipIf(sys.version_info < (3, 3),
-                     'PEP 380 not available')
+    @skipBefore33
     @skipIfNoSingleDispatch
     @gen_test
     def test_asyncio_yield_from(self):
         # Test that we can use asyncio coroutines with 'yield from'
         # instead of asyncio.async(). This requires python 3.3 syntax.
-        global_namespace = dict(globals(), **locals())
-        local_namespace = {}
-        exec(textwrap.dedent("""
+        namespace = exec_test(globals(), locals(), """
         @gen.coroutine
         def f():
             event_loop = asyncio.get_event_loop()
             x = yield from event_loop.run_in_executor(None, lambda: 42)
             return x
-        """), global_namespace, local_namespace)
-        result = yield local_namespace['f']()
+        """)
+        result = yield namespace['f']()
         self.assertEqual(result, 42)
