@@ -16,7 +16,7 @@ from tornado.log import app_log
 from tornado.platform.select import _Select
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog
-from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis
+from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis, skipBefore35, exec_test
 
 try:
     from concurrent import futures
@@ -558,7 +558,8 @@ class TestIOLoopRunSync(unittest.TestCase):
         self.io_loop.close()
 
     def test_sync_result(self):
-        self.assertEqual(self.io_loop.run_sync(lambda: 42), 42)
+        with self.assertRaises(gen.BadYieldError):
+            self.io_loop.run_sync(lambda: 42)
 
     def test_sync_exception(self):
         with self.assertRaises(ZeroDivisionError):
@@ -589,6 +590,14 @@ class TestIOLoopRunSync(unittest.TestCase):
         def f():
             yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)
         self.assertRaises(TimeoutError, self.io_loop.run_sync, f, timeout=0.01)
+
+    @skipBefore35
+    def test_native_coroutine(self):
+        namespace = exec_test(globals(), locals(), """
+        async def f():
+            await gen.Task(self.io_loop.add_callback)
+        """)
+        self.io_loop.run_sync(namespace['f'])
 
 
 class TestPeriodicCallback(unittest.TestCase):

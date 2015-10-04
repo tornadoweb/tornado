@@ -400,10 +400,12 @@ class IOLoop(Configurable):
     def run_sync(self, func, timeout=None):
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
-        If the function returns a `.Future`, the `IOLoop` will run
-        until the future is resolved.  If it raises an exception, the
-        `IOLoop` will stop and the exception will be re-raised to the
-        caller.
+        The function must return either a yieldable object or
+        ``None``. If the function returns a yieldable object, the
+        `IOLoop` will run until the yieldable is resolved (and
+        `run_sync()` will return the yieldable's result). If it raises
+        an exception, the `IOLoop` will stop and the exception will be
+        re-raised to the caller.
 
         The keyword-only argument ``timeout`` may be used to set
         a maximum duration for the function.  If the timeout expires,
@@ -418,12 +420,18 @@ class IOLoop(Configurable):
 
             if __name__ == '__main__':
                 IOLoop.current().run_sync(main)
+
+        .. versionchanged:: 4.3
+           Returning a non-``None``, non-yieldable value is now an error.
         """
         future_cell = [None]
 
         def run():
             try:
                 result = func()
+                if result is not None:
+                    from tornado.gen import convert_yielded
+                    result = convert_yielded(result)
             except Exception:
                 future_cell[0] = TracebackFuture()
                 future_cell[0].set_exc_info(sys.exc_info())
