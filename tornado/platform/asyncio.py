@@ -199,10 +199,15 @@ def to_tornado_future(asyncio_future):
 
 
 def to_asyncio_future(tornado_future):
-    """Convert a `tornado.concurrent.Future` to an `asyncio.Future`.
+    """Convert a Tornado yieldable object to an `asyncio.Future`.
 
     .. versionadded:: 4.1
+
+    .. versionchanged:: 4.3
+       Now accepts any yieldable object, not just
+       `tornado.concurrent.Future`.
     """
+    tornado_future = convert_yielded(tornado_future)
     af = asyncio.Future()
     tornado.concurrent.chain_future(tornado_future, af)
     return af
