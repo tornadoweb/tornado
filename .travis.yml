@@ -26,9 +26,9 @@ install:
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry pip install pycurl; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then travis_retry pip install mock singledispatch; fi
     # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry travis_retry pip install Twisted; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then travis_retry travis_retry pip install sphinx sphinx_rtd_theme; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' && $DEPS == true ]]; then travis_retry travis_retry pip install sphinx sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry pip install Twisted; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' && $DEPS == true ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
