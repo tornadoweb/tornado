@@ -36,18 +36,42 @@ Example::
 Python 3.5: ``async`` and ``await``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Python 3.5 introduces the ``async`` and ``await`` keywords. Starting in
+Python 3.5 introduces the ``async`` and ``await`` keywords (functions
+using these keywords are also called "native coroutines"). Starting in
 Tornado 4.3, you can use them in place of ``yield``-based coroutines.
-Simply use ``async def foo()`` in place of a function definition with the
-``@gen.coroutine`` decorator, and ``await`` in place of yield. The rest of
-this document still uses the ``yield`` style for compatibility with older
-versions of Python, but ``async`` and ``await`` will run faster when they
-are available::
+Simply use ``async def foo()`` in place of a function definition with
+the ``@gen.coroutine`` decorator, and ``await`` in place of yield. The
+rest of this document still uses the ``yield`` style for compatibility
+with older versions of Python, but ``async`` and ``await`` will run
+faster when they are available::
 
     async def fetch_coroutine(url):
         http_client = AsyncHTTPClient()
         response = await http_client.fetch(url)
         return response.body
+
+The ``await`` keyword is less versatile than the ``yield`` keyword.
+For example, in a ``yield``-based coroutine you can yield a list of
+``Futures``, while in a native coroutine you must wrap the list in
+`tornado.gen.multi`. You can also use `tornado.gen.convert_yielded`
+to convert anything that would work with ``yield`` into a form that
+will work with ``await``.
+
+While native coroutines are not visibly tied to a particular framework
+(i.e. they do not use a decorator like `tornado.gen.coroutine` or
+`asyncio.coroutine`), not all coroutines are compatible with each
+other. There is a *coroutine runner* which is selected by the first
+coroutine to be called, and then shared by all coroutines which are
+called directly with ``await``. The Tornado coroutine runner is
+designed to be versatile and accept awaitable objects from any
+framework; other coroutine runners may be more limited (for example,
+the ``asyncio`` coroutine runner does not accept coroutines from other
+frameworks). For this reason, it is recommended to use the Tornado
+coroutine runner for any application which combines multiple
+frameworks. To call a coroutine using the Tornado runner from within a
+coroutine that is already using the asyncio runner, use the
+`tornado.platform.asyncio.to_asyncio_future` adapter.
+
 
 How it works
 ~~~~~~~~~~~~
