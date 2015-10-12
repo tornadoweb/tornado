@@ -34,6 +34,7 @@ from tornado.log import gen_log, app_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type
 import functools
+import inspect
 import logging
 import os
 import re
@@ -50,6 +51,12 @@ try:
     from collections.abc import Generator as GeneratorType  # py35+
 except ImportError:
     from types import GeneratorType
+
+if sys.version_info >= (3, 5):
+    iscoroutine = inspect.iscoroutine
+    iscoroutinefunction = inspect.iscoroutinefunction
+else:
+    iscoroutine = iscoroutinefunction = lambda f: False
 
 # Tornado's own test suite requires the updated unittest module
 # (either py27+ or unittest2) so tornado.test.util enforces
@@ -123,9 +130,9 @@ class _TestMethodWrapper(object):
 
     def __call__(self, *args, **kwargs):
         result = self.orig_method(*args, **kwargs)
-        if isinstance(result, GeneratorType):
-            raise TypeError("Generator test methods should be decorated with "
-                            "tornado.testing.gen_test")
+        if isinstance(result, GeneratorType) or iscoroutine(result):
+            raise TypeError("Generator and coroutine test methods should be"
+                            " decorated with tornado.testing.gen_test")
         elif result is not None:
             raise ValueError("Return value from test method ignored: %r" %
                              result)
@@ -499,13 +506,16 @@ def gen_test(func=None, timeout=None):
         @functools.wraps(f)
         def pre_coroutine(self, *args, **kwargs):
             result = f(self, *args, **kwargs)
-            if isinstance(result, GeneratorType):
+            if isinstance(result, GeneratorType) or iscoroutine(result):
                 self._test_generator = result
             else:
                 self._test_generator = None
             return result
 
-        coro = gen.coroutine(pre_coroutine)
+        if iscoroutinefunction(f):
+            coro = pre_coroutine
+        else:
+            coro = gen.coroutine(pre_coroutine)
 
         @functools.wraps(coro)
         def post_coroutine(self, *args, **kwargs):
@@ -515,8 +525,8 @@ def gen_test(func=None, timeout=None):
                     timeout=timeout)
             except TimeoutError as e:
                 # run_sync raises an error with an unhelpful traceback.
-                # If we throw it back into the generator the stack trace
-                # will be replaced by the point where the test is stopped.
+                # Throw it back into the generator or coroutine so the stack
+                # trace is replaced by the point where the test is stopped.
                 self._test_generator.throw(e)
                 # In case the test contains an overly broad except clause,
                 # we may get back here.  In this case re-raise the original
