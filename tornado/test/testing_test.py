@@ -5,11 +5,11 @@ from __future__ import absolute_import, division, print_function, with_statement
 from tornado import gen, ioloop
 from tornado.log import app_log
 from tornado.testing import AsyncTestCase, gen_test, ExpectLog
-from tornado.test.util import unittest
-
+from tornado.test.util import unittest, skipBefore35, exec_test
 import contextlib
 import os
 import traceback
+import warnings
 
 
 @contextlib.contextmanager
@@ -83,6 +83,26 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         test = Test('test_gen')
         result = unittest.TestResult()
         test.run(result)
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("should be decorated", result.errors[0][1])
+
+    @skipBefore35
+    def test_undecorated_coroutine(self):
+        namespace = exec_test(globals(), locals(), """
+        class Test(AsyncTestCase):
+            async def test_coro(self):
+                pass
+        """)
+
+        test_class = namespace['Test']
+        test = test_class('test_coro')
+        result = unittest.TestResult()
+
+        # Silence "RuntimeWarning: coroutine 'test_coro' was never awaited".
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            test.run(result)
+
         self.assertEqual(len(result.errors), 1)
         self.assertIn("should be decorated", result.errors[0][1])
 
@@ -227,6 +247,32 @@ class GenTest(AsyncTestCase):
 
         test_with_kwargs(self, test='test')
         self.finished = True
+
+    @skipBefore35
+    def test_native_coroutine(self):
+        namespace = exec_test(globals(), locals(), """
+        @gen_test
+        async def test(self):
+            self.finished = True
+        """)
+
+        namespace['test'](self)
+
+    @skipBefore35
+    def test_native_coroutine_timeout(self):
+        # Set a short timeout and exceed it.
+        namespace = exec_test(globals(), locals(), """
+        @gen_test(timeout=0.1)
+        async def test(self):
+            await gen.sleep(1)
+        """)
+
+        try:
+            namespace['test'](self)
+            self.fail("did not get expected exception")
+        except ioloop.TimeoutError:
+            self.finished = True
+
 
 if __name__ == '__main__':
     unittest.main()
