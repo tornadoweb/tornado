@@ -41,12 +41,12 @@ static struct PyModuleDef speedupsmodule = {
 };
 
 PyMODINIT_FUNC
-PyInit_speedups() {
+PyInit_speedups(void) {
     return PyModule_Create(&speedupsmodule);
 }
 #else  // Python 2.x
 PyMODINIT_FUNC
-initspeedups() {
+initspeedups(void) {
     Py_InitModule("tornado.speedups", methods);
 }
 #endif
