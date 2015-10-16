@@ -24,6 +24,7 @@ import base64
 import collections
 import hashlib
 import os
+import sys
 import struct
 import tornado.escape
 import tornado.web
@@ -417,6 +418,12 @@ class WebSocketProtocol(object):
         try:
             callback(*args, **kwargs)
         except Exception:
+            type, value, tb = sys.exc_info()
+            tb = tb.tb_next  # Skip *this* frame
+            sys.last_type = type
+            sys.last_value = value
+            sys.last_traceback = tb
+            del tb  # Get rid of it in this namespace
             app_log.error("Uncaught exception in %s",
                           self.request.path, exc_info=True)
             self._abort()
