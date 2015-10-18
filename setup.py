@@ -125,10 +125,13 @@ if setuptools is not None:
     if sys.version_info < (3, 2):
         install_requires.append('backports.ssl_match_hostname')
     if sys.version_info < (3, 4):
+        install_requires.append('singledispatch')
         # Certifi is also optional on 2.7.9+, although making our dependencies
         # conditional on micro version numbers seems like a bad idea
         # until we have more declarative metadata.
         install_requires.append('certifi')
+    if sys.version_info < (3, 5):
+        install_requires.append('backports_abc>=0.4')
     kwargs['install_requires'] = install_requires
 
 setup(

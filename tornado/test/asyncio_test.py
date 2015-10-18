@@ -25,9 +25,6 @@ else:
     # This is used in dynamically-evaluated code, so silence pyflakes.
     to_asyncio_future
 
-skipIfNoSingleDispatch = unittest.skipIf(
-    gen.singledispatch is None, "singledispatch module not present")
-
 
 @unittest.skipIf(asyncio is None, "asyncio module not present")
 class AsyncIOLoopTest(AsyncTestCase):
@@ -41,7 +38,6 @@ class AsyncIOLoopTest(AsyncTestCase):
         asyncio.get_event_loop().call_soon(self.stop)
         self.wait()
 
-    @skipIfNoSingleDispatch
     @gen_test
     def test_asyncio_future(self):
         # Test that we can yield an asyncio future from a tornado coroutine.
@@ -51,7 +47,6 @@ class AsyncIOLoopTest(AsyncTestCase):
         self.assertEqual(x, 42)
 
     @skipBefore33
-    @skipIfNoSingleDispatch
     @gen_test
     def test_asyncio_yield_from(self):
         # Test that we can use asyncio coroutines with 'yield from'
