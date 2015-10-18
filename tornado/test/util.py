@@ -26,6 +26,9 @@ skipIfNonUnix = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
 skipOnTravis = unittest.skipIf('TRAVIS' in os.environ,
                                'timing tests unreliable on travis')
 
+skipOnAppEngine = unittest.skipIf('APPENGINE_RUNTIME' in os.environ,
+                                  'not available on Google App Engine')
+
 # Set the environment variable NO_NETWORK=1 to disable any tests that
 # depend on an external network.
 skipIfNoNetwork = unittest.skipIf('NO_NETWORK' in os.environ,
