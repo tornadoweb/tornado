@@ -20,7 +20,7 @@ install:
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' && $DEPS == true ]]; then pip install pycares pycurl; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then pip install mock; fi
     # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy' && $DEPS == true ]]; then pip install Twisted<15; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy' && $DEPS == true ]]; then pip install 'Twisted<15'; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '3.4' && $DEPS == true ]]; then pip install sphinx==1.2.2 sphinx_rtd_theme; fi
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' ]]; then export TORNADO_EXTENSION=1; fi
