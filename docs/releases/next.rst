@@ -15,8 +15,25 @@ Highlights
   ``yield``, but do not support some features including `.Callback`/`.Wait` or
   the ability to yield a Twisted ``Deferred``.
 * The async/await keywords are also available when compiling with Cython in
-  older versions of Python, as long as the ``backports_abc`` package is
-  installed.
+  older versions of Python.
+
+Deprecation notice
+~~~~~~~~~~~~~~~~~~
+
+* This will be the last release of Tornado to support Python 2.6 or 3.2.
+  Note that PyPy3 will continue to be supported even though it implements
+  a mix of Python 3.2 and 3.3 features.
+
+Installation
+~~~~~~~~~~~~
+
+* Tornado has several new dependencies: ``ordereddict`` on Python 2.6,
+  ``singledispatch`` on all Python versions prior to 3.4 (This was an
+  optional dependency in prior versions of Tornado, and is now
+  mandatory), and ``backports_abc>=0.4`` on all versions prior to
+  3.5. These dependencies will be installed automatically when installing
+  with ``pip`` or ``setup.py install``. These dependencies will not
+  be required when running on Google App Engine.
 
 `tornado.auth`
 ~~~~~~~~~~~~~~
@@ -35,6 +52,10 @@ Highlights
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Fixed parsing of multi-line headers.
+* ``allow_nonstandard_methods=True`` now bypasses body sanity checks,
+  in the same way as in ``simple_httpclient``.
+* The ``PATCH`` method now allows a body without
+  ``allow_nonstandard_methods=True``.
 
 `tornado.gen`
 ~~~~~~~~~~~~~

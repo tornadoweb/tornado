@@ -79,6 +79,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import collections
 import functools
 import itertools
+import os
 import sys
 import textwrap
 import types
@@ -90,30 +91,38 @@ from tornado import stack_context
 from tornado.util import raise_exc_info
 
 try:
-    from functools import singledispatch  # py34+
-except ImportError as e:
     try:
+        from functools import singledispatch  # py34+
+    except ImportError:
         from singledispatch import singledispatch  # backport
-    except ImportError:
-        singledispatch = None
-
+except ImportError:
+    # In most cases, singledispatch is required (to avoid
+    # difficult-to-diagnose problems in which the functionality
+    # available differs depending on which invisble packages are
+    # installed). However, in Google App Engine third-party
+    # dependencies are more trouble so we allow this module to be
+    # imported without it.
+    if 'APPENGINE_RUNTIME' not in os.environ:
+        raise
+    singledispatch = None
 
 try:
-    from collections.abc import Generator as GeneratorType  # py35+
-except ImportError:
     try:
+        from collections.abc import Generator as GeneratorType  # py35+
+    except ImportError:
         from backports_abc import Generator as GeneratorType
-    except ImportError:
-        from types import GeneratorType
 
-try:
-    from inspect import isawaitable  # py35+
-except ImportError:
     try:
-        from backports_abc import isawaitable
+        from inspect import isawaitable  # py35+
     except ImportError:
-        def isawaitable(x):
-            return False
+        from backports_abc import isawaitable
+except ImportError:
+    if 'APPENGINE_RUNTIME' not in os.environ:
+        raise
+    from types import GeneratorType
+
+    def isawaitable(x):
+        return False
 
 try:
     import builtins  # py3

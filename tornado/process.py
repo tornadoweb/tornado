@@ -50,7 +50,14 @@ except NameError:
 
 
 # Re-export this exception for convenience.
-CalledProcessError = subprocess.CalledProcessError
+try:
+    CalledProcessError = subprocess.CalledProcessError
+except AttributeError:
+    # The subprocess module exists in Google App Engine, but is empty.
+    # This module isn't very useful in that case, but it should
+    # at least be importable.
+    if 'APPENGINE_RUNTIME' not in os.environ:
+        raise
 
 
 def cpu_count():
