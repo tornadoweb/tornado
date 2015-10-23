@@ -515,6 +515,12 @@ class HTTP1Connection(httputil.HTTPConnection):
 
     def _read_body(self, code, headers, delegate):
         if "Content-Length" in headers:
+            if "Transfer-Encoding" in headers:
+                # Response cannot contain both Content-Length and
+                # Transfer-Encoding headers.
+                # http://tools.ietf.org/html/rfc7230#section-3.3.3
+                raise httputil.HTTPInputError(
+                    "Response with both Transfer-Encoding and Content-Length")
             if "," in headers["Content-Length"]:
                 # Proxies sometimes cause Content-Length headers to get
                 # duplicated.  If all the values are identical then we can

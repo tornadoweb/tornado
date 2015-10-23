@@ -735,3 +735,22 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
         response = self.fetch('/large')
         response.rethrow()
         self.assertEqual(response.body, b'a' * 1024 * 100)
+
+
+class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
+    def get_app(self):
+
+        class ChunkedWithContentLength(RequestHandler):
+            def get(self):
+                # Add an invalid Transfer-Encoding to the response
+                self.set_header('Transfer-Encoding', 'chunked')
+                self.write("Hello world")
+
+        return Application([('/chunkwithcl', ChunkedWithContentLength)])
+
+    def test_chunked_with_content_length(self):
+        # Make sure the invalid headers are detected
+        with ExpectLog(gen_log, ("Malformed HTTP message from None: Response "
+                       "with both Transfer-Encoding and Content-Length")):
+            response = self.fetch('/chunkwithcl')
+        self.assertEqual(response.code, 599)
