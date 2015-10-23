@@ -1147,8 +1147,7 @@ class RequestHandler(object):
         if not hasattr(self, "_xsrf_token"):
             version, token, timestamp = self._get_raw_xsrf_token()
             output_version = self.settings.get("xsrf_cookie_version", 2)
-            secure_output = self.settings.get("xsrf_cookie_secure", False)
-            httponly_output = self.settings.get("xsrf_cookie_httponly", False)
+            cookie_kwargs = self.settings.get("xsrf_cookie_kwargs", {})
             if output_version == 1:
                 self._xsrf_token = binascii.b2a_hex(token)
             elif output_version == 2:
@@ -1165,7 +1164,7 @@ class RequestHandler(object):
                 expires_days = 30 if self.current_user else None
                 self.set_cookie("_xsrf", self._xsrf_token,
                                 expires_days=expires_days,
-                                secure=secure_output, httponly=httponly_output)
+                                **cookie_kwargs)
         return self._xsrf_token
 
     def _get_raw_xsrf_token(self):
