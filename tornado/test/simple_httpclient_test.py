@@ -748,6 +748,9 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
 
         return Application([('/chunkwithcl', ChunkedWithContentLength)])
 
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient()
+
     def test_chunked_with_content_length(self):
         # Make sure the invalid headers are detected
         with ExpectLog(gen_log, ("Malformed HTTP message from None: Response "
