@@ -1810,6 +1810,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         from tornado.httpserver import HTTPServer
         server = HTTPServer(self, **kwargs)
         server.listen(port, address)
+        return server
 
     def add_handlers(self, host_pattern, host_handlers):
         """Appends the given handlers to our handler list.
