@@ -1218,8 +1218,9 @@ class StaticFileTest(WebTestCase):
         # to disable Tornado's path validation (in conjunction with
         # their own validation in get_absolute_path). Make sure
         # that the stricter validation in 4.2.1 doesn't break them.
-        path = os.path.join(os.path.dirname(__file__), 'static/robots.txt')
-        response = self.get_and_head('/root_static' + path)
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            'static/robots.txt')
+        response = self.get_and_head('/root_static' + urllib_parse.quote(path))
         self.assertEqual(response.code, 200)
 
 
