@@ -1143,6 +1143,14 @@ class RequestHandler(object):
            cookies will be converted to version 2 when this method is called
            unless the ``xsrf_cookie_version`` `Application` setting is
            set to 1.
+
+        .. versionchanged:: 4.3
+           The ``xsrf_cookie_kwargs`` `Application` setting may be
+           used to supply additional cookie options (which will be
+           passed directly to `set_cookie`). For example,
+           ``xsrf_cookie_kwargs=dict(httponly=True, secure=True)``
+           will set the ``secure`` and ``httponly`` flags on the
+           ``_xsrf`` cookie.
         """
         if not hasattr(self, "_xsrf_token"):
             version, token, timestamp = self._get_raw_xsrf_token()
@@ -1806,6 +1814,11 @@ class Application(httputil.HTTPServerConnectionDelegate):
 
         Note that after calling this method you still need to call
         ``IOLoop.current().start()`` to start the server.
+
+        Returns the `.HTTPServer` object.
+
+        .. versionchanged:: 4.3
+           Now returns the `.HTTPServer` object.
         """
         # import is here rather than top level because HTTPServer
         # is not importable on appengine

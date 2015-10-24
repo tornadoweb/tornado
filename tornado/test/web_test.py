@@ -9,7 +9,7 @@ from tornado import locale
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
-from tornado.testing import AsyncHTTPTestCase, ExpectLog, gen_test
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipBefore35, exec_test
 from tornado.util import u, ObjectDict, unicode_type, timedelta_to_seconds
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version, GZipContentEncoding
@@ -2596,6 +2596,21 @@ class XSRFTest(SimpleHandlerTestCase):
 
 
 @wsgi_safe
+class XSRFCookieKwargsTest(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.write(self.xsrf_token)
+
+    def get_app_kwargs(self):
+        return dict(xsrf_cookies=True,
+                    xsrf_cookie_kwargs=dict(httponly=True))
+
+    def test_xsrf_httponly(self):
+        response = self.fetch("/")
+        self.assertIn('HttpOnly;', response.headers['Set-Cookie'])
+
+
+@wsgi_safe
 class FinishExceptionTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
@@ -2741,3 +2756,10 @@ class HTTPErrorTest(unittest.TestCase):
         self.assertIsNot(e, e2)
         self.assertEqual(e.status_code, e2.status_code)
         self.assertEqual(e.reason, e2.reason)
+
+
+class ApplicationTest(AsyncTestCase):
+    def test_listen(self):
+        app = Application([])
+        server = app.listen(0)
+        server.stop()

@@ -201,6 +201,9 @@
            version), but may be set to a lower value temporarily
            during version transitions.  New in Tornado 3.2.2, which
            introduced XSRF cookie version 2.
+         * ``xsrf_cookie_kwargs``: May be set to a dictionary of
+           additional arguments to be passed to `.RequestHandler.set_cookie`
+           for the XSRF cookie.
          * ``twitter_consumer_key``, ``twitter_consumer_secret``,
            ``friendfeed_consumer_key``, ``friendfeed_consumer_secret``,
            ``google_consumer_key``, ``google_consumer_secret``,

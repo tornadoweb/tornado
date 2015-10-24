@@ -34,6 +34,7 @@ Installation
   3.5. These dependencies will be installed automatically when installing
   with ``pip`` or ``setup.py install``. These dependencies will not
   be required when running on Google App Engine.
+* Binary wheels are provided for Python 3.5 on Windows (32 and 64 bit).
 
 `tornado.auth`
 ~~~~~~~~~~~~~~
@@ -71,6 +72,12 @@ Installation
 ~~~~~~~~~~~~~~~~~~~~
 
 * `tornado.httpclient.HTTPError` is now copyable with the `copy` module.
+
+`tornado.httpserver`
+~~~~~~~~~~~~~~~~~~~~
+
+* Requests containing both ``Content-Length`` and ``Transfer-Encoding``
+  will be treated as an error.
 
 `tornado.httputil`
 ~~~~~~~~~~~~~~~~~~
@@ -145,6 +152,8 @@ Installation
 * When following redirects, ``streaming_callback`` and
   ``header_callback`` will no longer be run on the redirect responses
   (only the final non-redirect).
+* Responses containing both ``Content-Length`` and ``Transfer-Encoding``
+  will be treated as an error.
 
 `tornado.template`
 ~~~~~~~~~~~~~~~~~~
@@ -179,6 +188,10 @@ Installation
 * `tornado.web.HTTPError` is now copyable with the `copy` module.
 * The exception `.Finish` now accepts an argument which will be passed to
   the method `.RequestHandler.finish`.
+* New `.Application` setting ``xsrf_cookie_kwargs`` can be used to set
+  additional attributes such as ``secure`` or ``httponly`` on the
+  XSRF cookie.
+* `.Application.listen` now returns the `.HTTPServer` it created.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
