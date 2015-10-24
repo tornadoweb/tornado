@@ -5,7 +5,7 @@
    "servers": [
        {"agent": "Tornado/py27", "url": "ws://localhost:9001",
         "options": {"version": 18}},
-       {"agent": "Tornado/py34", "url": "ws://localhost:9002",
+       {"agent": "Tornado/py35", "url": "ws://localhost:9002",
         "options": {"version": 18}},
        {"agent": "Tornado/pypy", "url": "ws://localhost:9003",
         "options": {"version": 18}}

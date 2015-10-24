@@ -26,8 +26,6 @@ apt-get update
 DEADSNAKES_PACKAGES="
 python2.7
 python2.7-dev
-python3.2
-python3.2-dev
 "
 apt-get -y install $DEADSNAKES_PACKAGES
 
