@@ -79,13 +79,12 @@ copy of the source tarball as well.
 The Tornado source code is `hosted on GitHub
 <https://github.com/tornadoweb/tornado>`_.
 
-**Prerequisites**: Tornado runs on Python 2.6, 2.7, 3.2, 3.3, and 3.4.  It
-requires the `certifi <https://pypi.python.org/pypi/certifi>`_ package
-on all Python versions, and the `backports.ssl_match_hostname
-<https://pypi.python.org/pypi/backports.ssl_match_hostname>`_ package
-on Python 2.  These will be installed automatically when using
-``pip`` or ``easy_install``).  Some Tornado features may
-require one of the following optional libraries:
+**Prerequisites**: Tornado 4.3 runs on Python 2.6, 2.7, and 3.2+
+(support for Python 2.6 and 3.2 is deprecated and will be removed in
+the next release). For Python 2, version 2.7.9 or newer is *strongly*
+recommended for the improved SSL support. In addition to the requirements
+which will be installed automatically by ``pip`` or ``setup.py install``,
+the following optional packages may be useful:
 
 * `unittest2 <https://pypi.python.org/pypi/unittest2>`_ is needed to run
   Tornado's test suite on Python 2.6 (it is unnecessary on more recent
@@ -95,7 +94,7 @@ require one of the following optional libraries:
   `~tornado.netutil.ThreadedResolver`.  It is needed only on Python 2;
   Python 3 includes this package in the standard library.
 * `pycurl <http://pycurl.sourceforge.net>`_ is used by the optional
-  ``tornado.curl_httpclient``.  Libcurl version 7.18.2 or higher is required;
+  ``tornado.curl_httpclient``.  Libcurl version 7.19.3.1 or higher is required;
   version 7.21.1 or higher is recommended.
 * `Twisted <http://www.twistedmatrix.com>`_ may be used with the classes in
   `tornado.platform.twisted`.
