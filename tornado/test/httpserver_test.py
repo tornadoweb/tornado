@@ -2,6 +2,7 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
+import tornado
 from tornado import netutil
 from tornado.escape import json_decode, json_encode, utf8, _unicode, recursive_unicode, native_str
 from tornado import gen
@@ -1089,3 +1090,19 @@ class LegacyInterfaceTest(AsyncHTTPTestCase):
         if not self.http1:
             self.skipTest("requires HTTP/1.x")
         self.assertEqual(response.body, b"Hello world")
+
+
+class ServerTokensTest(AsyncHTTPTestCase):
+
+    def get_app(self):
+        return Application([('/', HelloWorldRequestHandler)])
+
+    def test_server_tokens_enabled(self):
+        response = self.fetch('/', method='HEAD')
+        self.assertEqual(response.headers.get('Server'),
+                         'TornadoServer/%s' % tornado.version)
+
+    def test_server_tokens_disabled(self):
+        self._app.settings.update({'server_tokens': False})
+        response = self.fetch('/', method='HEAD')
+        self.assertIsNone(response.headers.get('Server'))
