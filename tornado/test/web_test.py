@@ -2607,7 +2607,7 @@ class XSRFCookieKwargsTest(SimpleHandlerTestCase):
 
     def test_xsrf_httponly(self):
         response = self.fetch("/")
-        self.assertIn('HttpOnly;', response.headers['Set-Cookie'])
+        self.assertIn('httponly;', response.headers['Set-Cookie'].lower())
 
 
 @wsgi_safe
