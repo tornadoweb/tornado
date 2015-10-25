@@ -3,7 +3,8 @@ from lib2to3.pgen2 import token
 from lib2to3 import fixer_base
 from lib2to3.fixer_util import Name, Call
 
-_literal_re = re.compile(ur"[uU][rR]?[\'\"]")
+_literal_re = re.compile(r"[uU][rR]?[\'\"]")
+
 
 class FixUnicodeLiteral(fixer_base.BaseFix):
     BM_compatible = True

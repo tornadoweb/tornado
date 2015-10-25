@@ -17,6 +17,8 @@
 
 """Data used by the tornado.locale module."""
 
+from __future__ import absolute_import, division, print_function, with_statement
+
 # NOTE: This file is supposed to contain unicode strings, which is
 # exactly what you'd get with e.g. u"Español" in most python versions.
 # However, Python 3.2 doesn't support the u"" syntax, so we use a u()
