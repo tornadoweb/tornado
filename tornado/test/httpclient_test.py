@@ -379,6 +379,8 @@ Transfer-Encoding: chunked
         sock, port = bind_unused_port()
         with closing(sock):
             def write_response(stream, request_data):
+                if b"HTTP/1." not in request_data:
+                    self.skipTest("requires HTTP/1.x")
                 stream.write(b"""\
 HTTP/1.1 200 OK
 X-XSS-Protection: 1;
