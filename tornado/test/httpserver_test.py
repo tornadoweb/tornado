@@ -899,9 +899,12 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"Hello world")
 
     def test_large_headers(self):
-        with ExpectLog(gen_log, "Unsatisfiable read"):
+        with ExpectLog(gen_log, "Unsatisfiable read", required=False):
             response = self.fetch("/", headers={'X-Filler': 'a' * 1000})
-        self.assertEqual(response.code, 599)
+        # 431 is "Request Header Fields Too Large", defined in RFC
+        # 6585. However, many implementations just close the
+        # connection in this case, resulting in a 599.
+        self.assertIn(response.code, (431, 599))
 
 
 @skipOnTravis
