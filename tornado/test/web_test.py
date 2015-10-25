@@ -2761,5 +2761,5 @@ class HTTPErrorTest(unittest.TestCase):
 class ApplicationTest(AsyncTestCase):
     def test_listen(self):
         app = Application([])
-        server = app.listen(0)
+        server = app.listen(0, address='127.0.0.1')
         server.stop()
