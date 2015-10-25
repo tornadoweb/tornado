@@ -12,7 +12,6 @@ from tornado import gen
 from tornado.httputil import url_concat
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
-from tornado.util import u
 from tornado.web import RequestHandler, Application, asynchronous, HTTPError
 
 

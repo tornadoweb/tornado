@@ -14,7 +14,6 @@ from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipOnTravis
-from tornado.util import u
 from tornado.web import Application, RequestHandler, asynchronous, stream_request_body
 from contextlib import closing
 import datetime
@@ -232,11 +231,11 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
             b"\r\n".join([
                 b"Content-Disposition: form-data; name=argument",
                 b"",
-                u("\u00e1").encode("utf-8"),
+                u"\u00e1".encode("utf-8"),
                 b"--1234567890",
-                u('Content-Disposition: form-data; name="files"; filename="\u00f3"').encode("utf8"),
+                u'Content-Disposition: form-data; name="files"; filename="\u00f3"'.encode("utf8"),
                 b"",
-                u("\u00fa").encode("utf-8"),
+                u"\u00fa".encode("utf-8"),
                 b"--1234567890--",
                 b"",
             ]))

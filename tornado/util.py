@@ -84,19 +84,10 @@ class GzipDecompressor(object):
         return self.decompressobj.flush()
 
 
-# Fake unicode literal support:  Python 3.2 doesn't have the u'' marker for
-# literal strings, and alternative solutions like "from __future__ import
-# unicode_literals" have other problems (see PEP 414).  u() can be applied
-# to ascii strings that include \u escapes (but they must not contain
-# literal non-ascii characters).
 if not isinstance(b'', type('')):
-    def u(s):
-        return s
     unicode_type = str
     basestring_type = str
 else:
-    def u(s):
-        return s.decode('unicode_escape')
     # These names don't exist in py3, so use noqa comments to disable
     # warnings in flake8.
     unicode_type = unicode  # noqa

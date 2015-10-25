@@ -5,7 +5,7 @@ import datetime
 
 import tornado.escape
 from tornado.escape import utf8
-from tornado.util import raise_exc_info, Configurable, u, exec_in, ArgReplacer, timedelta_to_seconds, import_object
+from tornado.util import raise_exc_info, Configurable, exec_in, ArgReplacer, timedelta_to_seconds, import_object
 from tornado.test.util import unittest
 
 try:

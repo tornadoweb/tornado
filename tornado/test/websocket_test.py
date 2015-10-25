@@ -9,7 +9,6 @@ from tornado.log import gen_log, app_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.test.util import unittest
 from tornado.web import Application, RequestHandler
-from tornado.util import u
 
 try:
     import tornado.websocket  # noqa

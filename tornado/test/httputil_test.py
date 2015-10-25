@@ -7,7 +7,6 @@ from tornado.escape import utf8, native_str
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
 from tornado.test.util import unittest
-from tornado.util import u
 
 import copy
 import datetime

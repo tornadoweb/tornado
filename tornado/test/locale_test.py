@@ -8,7 +8,7 @@ import tempfile
 import tornado.locale
 from tornado.escape import utf8, to_unicode
 from tornado.test.util import unittest, skipOnAppEngine
-from tornado.util import u, unicode_type
+from tornado.util import unicode_type
 
 
 class TranslationLoaderTest(unittest.TestCase):

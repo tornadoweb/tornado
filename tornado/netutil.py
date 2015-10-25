@@ -27,7 +27,7 @@ import stat
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.util import u, Configurable, errno_from_exception
+from tornado.util import Configurable, errno_from_exception
 
 try:
     import ssl
@@ -96,7 +96,7 @@ else:
 # module-import time, the import lock is already held by the main thread,
 # leading to deadlock. Avoid it by caching the idna encoder on the main
 # thread now.
-u('foo').encode('idna')
+u'foo'.encode('idna')
 
 # These errnos indicate that a non-blocking operation must be retried
 # at a later time.  On most platforms they're the same value, but on

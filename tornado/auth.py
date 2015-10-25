@@ -82,7 +82,7 @@ from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import u, unicode_type, ArgReplacer
+from tornado.util import unicode_type, ArgReplacer
 
 try:
     import urlparse  # py2

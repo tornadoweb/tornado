@@ -5,7 +5,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import tornado.escape
 
 from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode, squeeze, recursive_unicode
-from tornado.util import u, unicode_type
+from tornado.util import unicode_type
 from tornado.test.util import unittest
 
 linkify_tests = [
@@ -170,8 +170,8 @@ class EscapeTestCase(unittest.TestCase):
     def test_url_escape_unicode(self):
         tests = [
             # byte strings are passed through as-is
-            (u('\u00e9').encode('utf8'), '%C3%A9'),
-            (u('\u00e9').encode('latin1'), '%E9'),
+            (u'\u00e9'.encode('utf8'), '%C3%A9'),
+            (u'\u00e9'.encode('latin1'), '%E9'),
 
             # unicode strings become utf8
             (u'\u00e9', '%C3%A9'),
