@@ -159,9 +159,9 @@ class WebSocketTest(WebSocketBaseTestCase):
     @gen_test
     def test_unicode_message(self):
         ws = yield self.ws_connect('/echo')
-        ws.write_message(u('hello \u00e9'))
+        ws.write_message(u'hello \u00e9')
         response = yield ws.read_message()
-        self.assertEqual(response, u('hello \u00e9'))
+        self.assertEqual(response, u'hello \u00e9')
         yield self.close(ws)
 
     @gen_test

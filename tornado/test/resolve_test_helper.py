@@ -9,4 +9,4 @@ from tornado.util import u
 # this deadlock.
 
 resolver = ThreadedResolver()
-IOLoop.current().run_sync(lambda: resolver.resolve(u('localhost'), 80))
+IOLoop.current().run_sync(lambda: resolver.resolve(u'localhost', 80))

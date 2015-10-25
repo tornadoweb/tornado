@@ -188,7 +188,7 @@ class OpenIdMixin(object):
         """
         # Verify the OpenID response via direct request to the OP
         args = dict((k, v[-1]) for k, v in self.request.arguments.items())
-        args["openid.mode"] = u("check_authentication")
+        args["openid.mode"] = u"check_authentication"
         url = self._OPENID_ENDPOINT
         if http_client is None:
             http_client = self.get_auth_http_client()
@@ -255,13 +255,13 @@ class OpenIdMixin(object):
         ax_ns = None
         for name in self.request.arguments:
             if name.startswith("openid.ns.") and \
-                    self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
+                    self.get_argument(name) == u"http://openid.net/srv/ax/1.0":
                 ax_ns = name[10:]
                 break
 
         def get_ax_arg(uri):
             if not ax_ns:
-                return u("")
+                return u""
             prefix = "openid." + ax_ns + ".type."
             ax_name = None
             for name in self.request.arguments.keys():
@@ -270,8 +270,8 @@ class OpenIdMixin(object):
                     ax_name = "openid." + ax_ns + ".value." + part
                     break
             if not ax_name:
-                return u("")
-            return self.get_argument(ax_name, u(""))
+                return u""
+            return self.get_argument(ax_name, u"")
 
         email = get_ax_arg("http://axschema.org/contact/email")
         name = get_ax_arg("http://axschema.org/namePerson")

@@ -430,12 +430,12 @@ class AuthTest(AsyncHTTPTestCase):
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed,
-                         {u('access_token'): {u('key'): u('hjkl'),
-                                              u('screen_name'): u('foo'),
-                                              u('secret'): u('vbnm')},
-                          u('name'): u('Foo'),
-                          u('screen_name'): u('foo'),
-                          u('username'): u('foo')})
+                         {u'access_token': {u'key': u'hjkl',
+                                              u'screen_name': u'foo',
+                                              u'secret': u'vbnm'},
+                          u'name': u'Foo',
+                          u'screen_name': u'foo',
+                          u'username': u'foo'})
 
     def test_twitter_show_user(self):
         response = self.fetch('/twitter/client/show_user?name=somebody')
@@ -539,7 +539,7 @@ class GoogleOAuth2Test(AsyncHTTPTestCase):
     def test_google_login(self):
         response = self.fetch('/client/login')
         self.assertDictEqual({
-            u('name'): u('Foo'),
-            u('email'): u('foo@example.com'),
-            u('access_token'): u('fake-access-token'),
+            u'name': u'Foo',
+            u'email': u'foo@example.com',
+            u'access_token': u'fake-access-token',
         }, json_decode(response.body))

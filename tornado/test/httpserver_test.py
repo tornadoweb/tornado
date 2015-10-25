@@ -241,10 +241,10 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                 b"",
             ]))
         data = json_decode(response)
-        self.assertEqual(u("\u00e9"), data["header"])
-        self.assertEqual(u("\u00e1"), data["argument"])
-        self.assertEqual(u("\u00f3"), data["filename"])
-        self.assertEqual(u("\u00fa"), data["filebody"])
+        self.assertEqual(u"\u00e9", data["header"])
+        self.assertEqual(u"\u00e1", data["argument"])
+        self.assertEqual(u"\u00f3", data["filename"])
+        self.assertEqual(u"\u00fa", data["filebody"])
 
     def test_newlines(self):
         # We support both CRLF and bare LF as line separators.
@@ -340,17 +340,17 @@ class HTTPServerTest(AsyncHTTPTestCase):
     def test_query_string_encoding(self):
         response = self.fetch("/echo?foo=%C3%A9")
         data = json_decode(response.body)
-        self.assertEqual(data, {u("foo"): [u("\u00e9")]})
+        self.assertEqual(data, {u"foo": [u"\u00e9"]})
 
     def test_empty_query_string(self):
         response = self.fetch("/echo?foo=&foo=")
         data = json_decode(response.body)
-        self.assertEqual(data, {u("foo"): [u(""), u("")]})
+        self.assertEqual(data, {u"foo": [u"", u""]})
 
     def test_empty_post_parameters(self):
         response = self.fetch("/echo", method="POST", body="foo=&bar=")
         data = json_decode(response.body)
-        self.assertEqual(data, {u("foo"): [u("")], u("bar"): [u("")]})
+        self.assertEqual(data, {u"foo": [u""], u"bar": [u""]})
 
     def test_types(self):
         headers = {"Cookie": "foo=bar"}
@@ -440,7 +440,7 @@ bar
 """.replace(b"\n", b"\r\n"))
         read_stream_body(self.stream, self.stop)
         headers, response = self.wait()
-        self.assertEqual(json_decode(response), {u('foo'): [u('bar')]})
+        self.assertEqual(json_decode(response), {u'foo': [u'bar']})
 
 
 class XHeaderTest(HandlerBaseTestCase):
@@ -775,7 +775,7 @@ class GzipBaseTest(object):
 
     def test_uncompressed(self):
         response = self.fetch('/', method='POST', body='foo=bar')
-        self.assertEquals(json_decode(response.body), {u('foo'): [u('bar')]})
+        self.assertEquals(json_decode(response.body), {u'foo': [u'bar']})
 
 
 class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
@@ -784,7 +784,7 @@ class GzipTest(GzipBaseTest, AsyncHTTPTestCase):
 
     def test_gzip(self):
         response = self.post_gzip('foo=bar')
-        self.assertEquals(json_decode(response.body), {u('foo'): [u('bar')]})
+        self.assertEquals(json_decode(response.body), {u'foo': [u'bar']})
 
 
 class GzipUnsupportedTest(GzipBaseTest, AsyncHTTPTestCase):

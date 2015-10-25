@@ -71,8 +71,8 @@ class TemplateTest(unittest.TestCase):
                          b"expr {{jquery expr}}")
 
     def test_unicode_template(self):
-        template = Template(utf8(u("\u00e9")))
-        self.assertEqual(template.generate(), utf8(u("\u00e9")))
+        template = Template(utf8(u"\u00e9"))
+        self.assertEqual(template.generate(), utf8(u"\u00e9"))
 
     def test_unicode_literal_expression(self):
         # Unicode literals should be usable in templates.  Note that this
@@ -82,10 +82,10 @@ class TemplateTest(unittest.TestCase):
         if str is unicode_type:
             # python 3 needs a different version of this test since
             # 2to3 doesn't run on template internals
-            template = Template(utf8(u('{{ "\u00e9" }}')))
+            template = Template(utf8(u'{{ "\u00e9" }}'))
         else:
-            template = Template(utf8(u('{{ u"\u00e9" }}')))
-        self.assertEqual(template.generate(), utf8(u("\u00e9")))
+            template = Template(utf8(u'{{ u"\u00e9" }}'))
+        self.assertEqual(template.generate(), utf8(u"\u00e9"))
 
     def test_custom_namespace(self):
         loader = DictLoader({"test.html": "{{ inc(5) }}"}, namespace={"inc": lambda x: x + 1})
@@ -100,14 +100,14 @@ class TemplateTest(unittest.TestCase):
     def test_unicode_apply(self):
         def upper(s):
             return to_unicode(s).upper()
-        template = Template(utf8(u("{% apply upper %}foo \u00e9{% end %}")))
-        self.assertEqual(template.generate(upper=upper), utf8(u("FOO \u00c9")))
+        template = Template(utf8(u"{% apply upper %}foo \u00e9{% end %}"))
+        self.assertEqual(template.generate(upper=upper), utf8(u"FOO \u00c9"))
 
     def test_bytes_apply(self):
         def upper(s):
             return utf8(to_unicode(s).upper())
-        template = Template(utf8(u("{% apply upper %}foo \u00e9{% end %}")))
-        self.assertEqual(template.generate(upper=upper), utf8(u("FOO \u00c9")))
+        template = Template(utf8(u"{% apply upper %}foo \u00e9{% end %}"))
+        self.assertEqual(template.generate(upper=upper), utf8(u"FOO \u00c9"))
 
     def test_if(self):
         template = Template(utf8("{% if x > 4 %}yes{% else %}no{% end %}"))
@@ -174,8 +174,8 @@ try{% set y = 1/x %}
         self.assertEqual(template.generate(), '0')
 
     def test_non_ascii_name(self):
-        loader = DictLoader({u("t\u00e9st.html"): "hello"})
-        self.assertEqual(loader.load(u("t\u00e9st.html")).generate(), b"hello")
+        loader = DictLoader({u"t\u00e9st.html": "hello"})
+        self.assertEqual(loader.load(u"t\u00e9st.html").generate(), b"hello")
 
 
 class StackTraceTest(unittest.TestCase):
@@ -482,4 +482,4 @@ class TemplateLoaderTest(unittest.TestCase):
     def test_utf8_in_file(self):
         tmpl = self.loader.load("utf8.html")
         result = tmpl.generate()
-        self.assertEqual(to_unicode(result).strip(), u("H\u00e9llo"))
+        self.assertEqual(to_unicode(result).strip(), u"H\u00e9llo")
