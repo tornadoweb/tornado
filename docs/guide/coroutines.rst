@@ -43,7 +43,9 @@ Simply use ``async def foo()`` in place of a function definition with
 the ``@gen.coroutine`` decorator, and ``await`` in place of yield. The
 rest of this document still uses the ``yield`` style for compatibility
 with older versions of Python, but ``async`` and ``await`` will run
-faster when they are available::
+faster when they are available.
+
+::
 
     async def fetch_coroutine(url):
         http_client = AsyncHTTPClient()
