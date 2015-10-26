@@ -342,7 +342,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 'Transfer-Encoding' not in headers)
         else:
             self._response_start_line = start_line
-            lines.append(utf8('HTTP/1.1 %s %s' % (start_line[1], start_line[2])))
+            lines.append(utf8('HTTP/1.1 %d %s' % (start_line[1], start_line[2])))
             self._chunking_output = (
                 # TODO: should this use
                 # self._request_start_line.version or
