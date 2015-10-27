@@ -209,7 +209,10 @@ def _reload():
     global _reload_attempted
     _reload_attempted = True
     for fn in _reload_hooks:
-        fn()
+        try:
+            fn()
+        except Exception as e:
+            gen_log.warning("Error occured on reload: %s" % e)
     if hasattr(signal, "setitimer"):
         # Clear the alarm signal set by
         # ioloop.set_blocking_log_threshold so it doesn't fire
