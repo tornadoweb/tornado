@@ -132,8 +132,10 @@ class OptionParser(object):
         return name in self._options
 
     def __getitem__(self, name):
-        name = self._normalize_name(name)
-        return self._options[name].value()
+        return self.__getattr__(name)
+
+    def __setitem__(self, name, value):
+        return self.__setattr__(name, value)
 
     def items(self):
         """A sequence of (name, value) pairs.
