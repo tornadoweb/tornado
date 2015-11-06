@@ -33,6 +33,8 @@ Example::
         # instead.
         return response.body
 
+.. _native_coroutines:
+
 Python 3.5: ``async`` and ``await``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

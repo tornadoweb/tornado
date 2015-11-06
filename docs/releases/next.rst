@@ -13,7 +13,8 @@ Highlights
   ``yield`` to wait on an asynchronous operation. Coroutines defined with
   async/await will be faster than those defined with ``@gen.coroutine`` and
   ``yield``, but do not support some features including `.Callback`/`.Wait` or
-  the ability to yield a Twisted ``Deferred``.
+  the ability to yield a Twisted ``Deferred``. See :ref:`the users'
+  guide <native_coroutines>` for more.
 * The async/await keywords are also available when compiling with Cython in
   older versions of Python.
 
@@ -144,7 +145,7 @@ Installation
 `tornado.queues`
 ~~~~~~~~~~~~~~~~
 
-* `.Queue` now supports the ``async with`` statement on Python 3.5.
+* `.Queue` now supports the ``async for`` statement on Python 3.5.
 
 `tornado.simple_httpclient`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
