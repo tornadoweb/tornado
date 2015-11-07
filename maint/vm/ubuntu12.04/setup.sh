@@ -24,8 +24,8 @@ add-apt-repository ppa:fkrull/deadsnakes
 apt-get update
 
 DEADSNAKES_PACKAGES="
-python3.2
-python3.2-dev
+python3.5
+python3.5-dev
 "
 apt-get -y install $DEADSNAKES_PACKAGES
 

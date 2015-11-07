@@ -28,9 +28,7 @@ import urllib
 TMPDIR = r'c:\tornado_bootstrap'
 
 PYTHON_VERSIONS = [
-    (r'c:\python26\python.exe', 'http://www.python.org/ftp/python/2.6.6/python-2.6.6.msi'),
     (r'c:\python27\python.exe', 'http://www.python.org/ftp/python/2.7.3/python-2.7.3.msi'),
-    (r'c:\python32\python.exe', 'http://www.python.org/ftp/python/3.2.3/python-3.2.3.msi'),
     (r'c:\python33\python.exe', 'http://www.python.org/ftp/python/3.3.0/python-3.3.0.msi'),
     ]
 

@@ -25,7 +25,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import re
 import sys
 
-from tornado.util import unicode_type, basestring_type, u
+from tornado.util import unicode_type, basestring_type
 
 try:
     from urllib.parse import parse_qs as _parse_qs  # py3
@@ -366,7 +366,7 @@ def linkify(text, shorten=False, extra_params="",
                     # have a status bar, such as Safari by default)
                     params += ' title="%s"' % href
 
-        return u('<a href="%s"%s>%s</a>') % (href, params, url)
+        return u'<a href="%s"%s>%s</a>' % (href, params, url)
 
     # First HTML-escape so that our strings are all safe.
     # The regex is modified to avoid character entites other than &amp; so

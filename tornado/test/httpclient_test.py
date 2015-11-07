@@ -23,7 +23,6 @@ from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
 from tornado.test.util import unittest, skipOnTravis
-from tornado.util import u
 from tornado.web import Application, RequestHandler, url
 from tornado.httputil import format_timestamp, HTTPHeaders
 
@@ -271,7 +270,7 @@ Transfer-Encoding: chunked
                          response.body)
 
     def test_body_encoding(self):
-        unicode_body = u("\xe9")
+        unicode_body = u"\xe9"
         byte_body = binascii.a2b_hex(b"e9")
 
         # unicode string in body gets converted to utf8
@@ -291,7 +290,7 @@ Transfer-Encoding: chunked
         # break anything
         response = self.fetch("/echopost", method="POST", body=byte_body,
                               headers={"Content-Type": "application/blah"},
-                              user_agent=u("foo"))
+                              user_agent=u"foo")
         self.assertEqual(response.headers["Content-Length"], "1")
         self.assertEqual(response.body, byte_body)
 
@@ -363,7 +362,7 @@ Transfer-Encoding: chunked
         # in a plain dictionary or an HTTPHeaders object.
         # Keys must always be the native str type.
         # All combinations should have the same results on the wire.
-        for value in [u("MyUserAgent"), b"MyUserAgent"]:
+        for value in [u"MyUserAgent", b"MyUserAgent"]:
             for container in [dict, HTTPHeaders]:
                 headers = container()
                 headers['User-Agent'] = value

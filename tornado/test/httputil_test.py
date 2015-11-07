@@ -7,7 +7,6 @@ from tornado.escape import utf8, native_str
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
 from tornado.test.util import unittest
-from tornado.util import u
 
 import copy
 import datetime
@@ -238,13 +237,13 @@ Foo: even
         # and cpython's unicodeobject.c (which defines the implementation
         # of unicode_type.splitlines(), and uses a different list than TR13).
         newlines = [
-            u('\u001b'),  # VERTICAL TAB
-            u('\u001c'),  # FILE SEPARATOR
-            u('\u001d'),  # GROUP SEPARATOR
-            u('\u001e'),  # RECORD SEPARATOR
-            u('\u0085'),  # NEXT LINE
-            u('\u2028'),  # LINE SEPARATOR
-            u('\u2029'),  # PARAGRAPH SEPARATOR
+            u'\u001b',  # VERTICAL TAB
+            u'\u001c',  # FILE SEPARATOR
+            u'\u001d',  # GROUP SEPARATOR
+            u'\u001e',  # RECORD SEPARATOR
+            u'\u0085',  # NEXT LINE
+            u'\u2028',  # LINE SEPARATOR
+            u'\u2029',  # PARAGRAPH SEPARATOR
         ]
         for newline in newlines:
             # Try the utf8 and latin1 representations of each newline
