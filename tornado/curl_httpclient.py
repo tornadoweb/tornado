@@ -221,6 +221,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                         # _process_queue() is called from
                         # _finish_pending_requests the exceptions have
                         # nowhere to go.
+                        self._free_list.append(curl)
                         callback(HTTPResponse(
                             request=request,
                             code=599,
