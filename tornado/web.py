@@ -183,8 +183,8 @@ class RequestHandler(object):
         self.initialize(**kwargs)
 
     def initialize(self):
-        """Hook for subclass initialization.
-
+        """Hook for subclass initialization. Called for each request.
+          
         A dictionary passed as the third argument of a url spec will be
         supplied as keyword arguments to initialize().
 
