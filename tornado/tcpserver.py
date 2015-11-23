@@ -147,7 +147,7 @@ class TCPServer(object):
         """Singular version of `add_sockets`.  Takes a single socket object."""
         self.add_sockets([socket])
 
-    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128):
+    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128, reuse_port=False):
         """Binds this server to the given port on the given address.
 
         To start the server, call `start`. If you want to run this server
@@ -168,7 +168,7 @@ class TCPServer(object):
         on multiple ports or interfaces.
         """
         sockets = bind_sockets(port, address=address, family=family,
-                               backlog=backlog)
+                               backlog=backlog, reuse_port=reuse_port)
         if self._started:
             self.add_sockets(sockets)
         else:
