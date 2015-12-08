@@ -43,10 +43,9 @@ either::
 
 .. note:
 
-   When using tornado.options.parse_config_file, the only options that are set
-   are ones that were previously defined with either tornado.options.parse_command_line
-   or tornado.options.define. tornado.options.parse_config_file is used mainly as a 
-   means to offer overriding settings for different environments.
+   When using tornado.options.parse_command_line or 
+   tornado.options.parse_config_file, the only options that are set are 
+   ones that were previously defined with tornado.options.define.
 
 Command line formats are what you would expect (``--myoption=myvalue``).
 Config files are just Python files. Global names become options, e.g.::
