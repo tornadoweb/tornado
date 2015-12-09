@@ -3005,7 +3005,7 @@ class URLSpec(object):
              self.handler_class, self.kwargs, self.name)
 
     def _find_groups(self):
-        paths = django.utils.regex_helper.normalize(tornado.escape.utf8(self.regex.pattern)) 
+        paths = django.utils.regex_helper.normalize(self.regex.pattern) 
         lengths = [len(x[1]) for x in paths]
         return paths, lengths
 
