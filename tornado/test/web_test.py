@@ -660,6 +660,7 @@ class WSGISafeWebTest(WebTestCase):
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
+            url("/decode_optional_kw(?:/arg1/(?P<arg1>\d+))?(?:/arg2/(?P<arg2>\w+))?$", DecodeArgHandler, name="decode_optional_kw"),
         ]
         return urls
 
@@ -732,6 +733,12 @@ class WSGISafeWebTest(WebTestCase):
                          '/decode_arg/%C3%A9')
         self.assertEqual(self.app.reverse_url('decode_arg', '1 + 1'),
                          '/decode_arg/1%20%2B%201')
+
+    def test_reverse_url_optional_kw(self):
+        self.assertEqual(self.app.reverse_url('decode_optional_kw'), '/decode_optional_kw')
+        self.assertEqual(self.app.reverse_url('decode_optional_kw', arg1=1), '/decode_optional_kw/arg1/1')
+        self.assertEqual(self.app.reverse_url('decode_optional_kw', arg1=1, arg2='a'), '/decode_optional_kw/arg1/1/arg2/a')
+        self.assertEqual(self.app.reverse_url('decode_optional_kw', arg2='a'), '/decode_optional_kw/arg2/a')
 
     def test_uimodule_unescaped(self):
         response = self.fetch("/linkify")
