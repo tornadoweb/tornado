@@ -3023,7 +3023,7 @@ class URLSpec(object):
                 s = str(s)
             return tornado.escape.url_escape(tornado.escape.utf8(s), plus=False)
 
-        kwargs = dict((_escape(k), _escape(v)) for k, v in kwargs.iteritems())
+        kwargs = dict((_escape(k), _escape(v)) for k, v in kwargs.items())
 
         for path, expected_args in self._path:
             if all(key in expected_args for key in kwargs):
@@ -3031,7 +3031,7 @@ class URLSpec(object):
         if args: 
             str_args = [str(x) for x in args]
         else:
-            str_args = ['{}={}'.format(k, v) for k, v in kwargs.iteritems()]
+            str_args = ['{}={}'.format(k, v) for k, v in kwargs.items()]
         raise NoReverseMatch('No reverse match for pattern "{}" with arguments {}'.format(
             self.regex.pattern, ', '.join(str_args)))
 
