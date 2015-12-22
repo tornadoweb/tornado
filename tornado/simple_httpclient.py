@@ -323,7 +323,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
-                stack_context.wrap(functools.partial(self._on_timeout, "while interacting")))
+                stack_context.wrap(functools.partial(self._on_timeout, "during request")))
         if (self.request.method not in self._SUPPORTED_METHODS and
                 not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)

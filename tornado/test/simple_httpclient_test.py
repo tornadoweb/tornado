@@ -10,7 +10,6 @@ import re
 import socket
 import ssl
 import sys
-import time
 
 from tornado.escape import to_unicode
 from tornado import gen
@@ -18,8 +17,9 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
+from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets, BlockingResolver
-from tornado.simple_httpclient import SimpleAsyncHTTPClient, _HTTPConnection
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
@@ -241,90 +241,19 @@ class SimpleHTTPClientTestMixin(object):
     @skipOnTravis
     def test_connect_timeout(self):
         # 0.1 and 0.5(nt) is copied from `self.test_request_timeout`
-        # `timeout_max` is raised up compare to `self.test_request_timeout`.
-        #
-        # Because at windows system, in `TimeoutResolver.resolve` call, if
-        # `time.sleep's parameter` is the same as the `connect_timeout` value,
-        # maybe no error occurs and everything works well(and we get response
-        # 200 instead of 599). So `time.sleep's parameter` should be bigger
-        # than the `connect_timeout`(add 0.2), that's why the `timeout_max` is
-        # raised up(add 0.4).
-        connect_timeout = 0.1
-        timeout_min, timeout_max = 0.099, 0.5
+        timeout = 0.1
+        timeout_min, timeout_max = 0.099, 0.15
         if os.name == 'nt':
-            connect_timeout = 0.5
-            timeout_min, timeout_max = 0.4, 0.9
-        sleep_seconds = connect_timeout + 0.2
-
-        class patching(object):
-            # In `simple_httpclient._HTTPConnection.__init__`:
-            # We add a connect timeout to io_loop and then begin our
-            # `self.tcp_connect.connect` step.
-            #
-            # If connect timeout is triggered, but `self.tcp_client.connect`
-            # call is still in progress, at this moment: an error may occur
-            # while connecting(yield from `self.tcp_client.connect` at
-            # `stream.start_tls`, which is mostly caused by
-            # `SSLIOStream._do_ssl_handshake` call), since connection is not
-            # finished because of the exception, the self._on_connect will not
-            # be called. The exception(`ssl.SSL_ERROR_EOF`,
-            # `errno.ECONNRESET`, `errno.WSAECONNABORTED`) will be handled by
-            # the stack_context's exception handler.
-            #
-            # `_HTTPConnection` has add exception handler
-            # `_HTTPConnection._handle_exception` to stack_context.
-            # And in `simple_httpclient.SimpleAsyncHTTPClient`, we cleaned all
-            # context in
-            # `simple_httpclient.SimpleAsyncHTTPClient._process_queue` before
-            # handling any request. So, if we want to handle the exception
-            # raised by `self.tcp_client.connect`(connection is not finished),
-            # we have to add a context(or patch a context) after
-            # `simple_httpclient.SimpleAsyncHTTPClient._process_queue` call
-            # and before `self.tcp_client.connect` call.
-
-            def __init__(self, client):
-                self.client = client
-
-            def __enter__(self):
-                def _patched_handle_exception(instance, typ, value, tb):
-                    """Handle extra exception while connection failed.
-
-                    `ssl.SSL_ERROR_EOF`, `errno.ECONNRESET` and
-                    `errno.WSAECONNABORTED`(windows) may occur if connection
-                    failed(mostly in `SSLIOStream._do_ssl_handshake`), just
-                    ignore them. Other logic is the same as
-                    `_HTTPConnection._handle_exception`
-                    """
-                    result = self._origin_handle_exception(instance, typ, value, tb)
-                    if result is False:
-                        if isinstance(value, ssl.SSLError) \
-                                and value.args[0] == ssl.SSL_ERROR_EOF:
-                            return True
-
-                        ignored_io_error = [errno.ECONNRESET]
-                        if hasattr(errno, "WSAECONNRESET"):
-                            ignored_io_error.append(errno.WSAECONNABORTED)
-                        if isinstance(value, IOError) \
-                                and value.args[0] in ignored_io_error:
-                            return True
-                    return result
-
-                self._origin_handle_exception = _HTTPConnection._handle_exception
-                _HTTPConnection._handle_exception = _patched_handle_exception
-                return self.client
-
-            def __exit__(self, *exc_info):
-                _HTTPConnection._handle_exception = self._origin_handle_exception
-                self.client.close()
+            timeout = 0.5
+            timeout_min, timeout_max = 0.4, 0.6
 
         class TimeoutResolver(BlockingResolver):
             def resolve(self, *args, **kwargs):
-                time.sleep(sleep_seconds)
-                return super(TimeoutResolver, self).resolve(*args, **kwargs)
+                return Future()
 
-        with patching(self.create_client(resolver=TimeoutResolver())) as client:
+        with closing(self.create_client(resolver=TimeoutResolver())) as client:
             client.fetch(self.get_url('/hello'), self.stop,
-                         connect_timeout=connect_timeout)
+                         connect_timeout=timeout)
             response = self.wait()
             self.assertEqual(response.code, 599)
             self.assertTrue(timeout_min < response.request_time < timeout_max,
@@ -343,7 +272,7 @@ class SimpleHTTPClientTestMixin(object):
         self.assertEqual(response.code, 599)
         self.assertTrue(timeout_min < response.request_time < timeout_max,
                         response.request_time)
-        self.assertEqual(str(response.error), "HTTP 599: Timeout while interacting")
+        self.assertEqual(str(response.error), "HTTP 599: Timeout during request")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
