@@ -18,7 +18,7 @@ from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
 from tornado.concurrent import Future
-from tornado.netutil import Resolver, bind_sockets, BlockingResolver
+from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler
 from tornado.test import httpclient_test
@@ -240,16 +240,12 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipOnTravis
     def test_connect_timeout(self):
-        # 0.1 and 0.5(nt) is copied from `self.test_request_timeout`
         timeout = 0.1
-        timeout_min, timeout_max = 0.099, 0.15
-        if os.name == 'nt':
-            timeout = 0.5
-            timeout_min, timeout_max = 0.4, 0.6
+        timeout_min, timeout_max = 0.099, 1.0
 
-        class TimeoutResolver(BlockingResolver):
+        class TimeoutResolver(Resolver):
             def resolve(self, *args, **kwargs):
-                return Future()
+                return Future()  # never completes
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
             client.fetch(self.get_url('/hello'), self.stop,
