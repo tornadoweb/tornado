@@ -1327,7 +1327,7 @@ class RequestHandler(object):
 
     def reverse_url(self, name, *args):
         """Alias for `Application.reverse_url`."""
-        return self.application.reverse_url(name, *args)
+        return self.application.reverse_url(name.replace("\\", r"\\"), *args)
 
     def compute_etag(self):
         """Computes the etag header to be used for this request.
