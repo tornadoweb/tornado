@@ -313,7 +313,7 @@ class StackContextTest(AsyncTestCase):
 
             def run(self):
                 try:
-                    for _ in xrange(0, num_iterations):
+                    for _ in range(0, num_iterations):
                         self.fn()
                 except Exception as e:
                     exception[0] = e
@@ -321,7 +321,7 @@ class StackContextTest(AsyncTestCase):
 
         with StackContext(Context):
             workers = []
-            for i in xrange(0, num_workers):
+            for i in range(0, num_workers):
                 worker = Worker(wrap(async_task))
                 workers.append(worker)
 
