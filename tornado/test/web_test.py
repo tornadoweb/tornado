@@ -2763,3 +2763,8 @@ class ApplicationTest(AsyncTestCase):
         app = Application([])
         server = app.listen(0, address='127.0.0.1')
         server.stop()
+
+
+class URLSpecReverseTest(unittest.TestCase):
+    def test_reverse(self):
+        self.assertEqual('/favicon.ico', url(r'/favicon\.ico', None).reverse())

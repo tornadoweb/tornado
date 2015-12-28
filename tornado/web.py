@@ -90,7 +90,7 @@ from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.util import (import_object, ObjectDict, raise_exc_info,
-                          unicode_type, _websocket_mask)
+                          unicode_type, _websocket_mask, re_unescape)
 from tornado.httputil import split_host_and_port
 
 
@@ -184,7 +184,7 @@ class RequestHandler(object):
 
     def initialize(self):
         """Hook for subclass initialization. Called for each request.
-          
+
         A dictionary passed as the third argument of a url spec will be
         supplied as keyword arguments to initialize().
 
@@ -3024,7 +3024,7 @@ class URLSpec(object):
                 if paren_loc >= 0:
                     pieces.append('%s' + fragment[paren_loc + 1:])
             else:
-                pieces.append(fragment)
+                pieces.append(re_unescape(fragment))
 
         return (''.join(pieces), self.regex.groups)
 

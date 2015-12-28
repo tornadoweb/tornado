@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import array
 import os
+import re
 import sys
 import zlib
 
@@ -170,6 +171,22 @@ def errno_from_exception(e):
         return e.args[0]
     else:
         return None
+
+
+_re_unescape_split_pattern = re.compile(r'(\\[^0])')
+# re.escape('\x00') is a special case
+
+def re_unescape(s):
+    '''
+    unescape a string escaped by ``re.escape()``
+    '''
+    parts = []
+    for i, splited in enumerate(_re_unescape_split_pattern.split(s)):
+        if i % 2:
+            parts.append(splited[1])
+        else:
+            parts.append(splited.replace(r'\000', '\000'))
+    return ''.join(parts)
 
 
 class Configurable(object):
