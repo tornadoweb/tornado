@@ -227,6 +227,9 @@ class AsyncHTTPClient(Configurable):
             raise RuntimeError("fetch() called on closed AsyncHTTPClient")
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
+        else:
+            if kwargs:
+                raise ValueError("kwargs can't be used if request is an HTTPRequest object")
         # We may modify this (to add Host, Accept-Encoding, etc),
         # so make sure we don't modify the caller's object.  This is also
         # where normal dicts get converted to HTTPHeaders objects.
