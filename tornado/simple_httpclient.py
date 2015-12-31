@@ -126,7 +126,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             timeout_handle = self.io_loop.add_timeout(
                 self.io_loop.time() + min(request.connect_timeout,
                                           request.request_timeout),
-                functools.partial(self._on_timeout, key))
+                functools.partial(self._on_timeout, key, "in request queue"))
         else:
             timeout_handle = None
         self.waiting[key] = (request, callback, timeout_handle)
@@ -167,11 +167,20 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
 
-    def _on_timeout(self, key):
+    def _on_timeout(self, key, info=None):
+        """Timeout callback of request.
+
+        Construct a timeout HTTPResponse when a timeout occurs.
+
+        :arg object key: A simple object to mark the request.
+        :info string key: More detailed timeout information.
+        """
         request, callback, timeout_handle = self.waiting[key]
         self.queue.remove((key, request, callback))
+
+        error_message = "Timeout {0}".format(info) if info else "Timeout"
         timeout_response = HTTPResponse(
-            request, 599, error=HTTPError(599, "Timeout"),
+            request, 599, error=HTTPError(599, error_message),
             request_time=self.io_loop.time() - request.start_time)
         self.io_loop.add_callback(callback, timeout_response)
         del self.waiting[key]
@@ -229,7 +238,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
-                    stack_context.wrap(self._on_timeout))
+                    stack_context.wrap(functools.partial(self._on_timeout, "while connecting")))
             self.tcp_client.connect(host, port, af=af,
                                     ssl_options=ssl_options,
                                     max_buffer_size=self.max_buffer_size,
@@ -284,10 +293,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             return ssl_options
         return None
 
-    def _on_timeout(self):
+    def _on_timeout(self, info=None):
+        """Timeout callback of _HTTPConnection instance.
+
+        Raise a timeout HTTPError when a timeout occurs.
+
+        :info string key: More detailed timeout information.
+        """
         self._timeout = None
+        error_message = "Timeout {0}".format(info) if info else "Timeout"
         if self.final_callback is not None:
-            raise HTTPError(599, "Timeout")
+            raise HTTPError(599, error_message)
 
     def _remove_timeout(self):
         if self._timeout is not None:
@@ -307,7 +323,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
-                stack_context.wrap(self._on_timeout))
+                stack_context.wrap(functools.partial(self._on_timeout, "during request")))
         if (self.request.method not in self._SUPPORTED_METHODS and
                 not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
