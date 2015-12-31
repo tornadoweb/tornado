@@ -60,9 +60,13 @@ Debian and Ubuntu users should issue the following command:
 
     $ sudo apt-get install build-essential python-dev
 
-RedHat, CentOS, and Fedora users should issue the following command:
+RedHat and CentOS users should issue the following command:
 
     $ sudo yum install gcc python-devel
+
+Fedora users should issue the following command:
+
+    $ sudo dnf install gcc python-devel
 
 If you are seeing this message on OSX please read the documentation
 here:
