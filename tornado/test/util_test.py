@@ -207,9 +207,16 @@ class ReUnescapeTest(unittest.TestCase):
         test_strings = (
             '/favicon.ico',
             'index.html',
-            '\x00\x01\\000',
             'Hello, World!',
             '!$@#%;',
         )
         for string in test_strings:
             self.assertEqual(string, re_unescape(re.escape(string)))
+
+    def test_re_unescape_raises_error_on_invalid_input(self):
+        with self.assertRaises(ValueError):
+            re_unescape('\\d')
+        with self.assertRaises(ValueError):
+            re_unescape('\\b')
+        with self.assertRaises(ValueError):
+            re_unescape('\\Z')

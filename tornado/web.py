@@ -3024,6 +3024,10 @@ class URLSpec(object):
                 if paren_loc >= 0:
                     pieces.append('%s' + fragment[paren_loc + 1:])
             else:
+                try:
+                    unescaped_fragment = re_unescape(fragment)
+                except ValueError as exc:
+                    raise ValueError(exc.args[0] + '; invalid url: %r' % pattern)
                 pieces.append(re_unescape(fragment))
 
         return (''.join(pieces), self.regex.groups)
