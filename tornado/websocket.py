@@ -911,7 +911,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
         self.tcp_client = TCPClient(io_loop=io_loop)
         super(WebSocketClientConnection, self).__init__(
-            io_loop, None, request, lambda: None, self._on_http_response,
+            io_loop, None, request, lambda x: None, self._on_http_response,
             104857600, self.tcp_client, 65536, 104857600)
 
     def close(self, code=None, reason=None):
