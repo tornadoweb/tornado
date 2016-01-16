@@ -27,7 +27,7 @@ import stat
 from tornado.concurrent import dummy_executor, run_on_executor
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.util import Configurable, errno_from_exception
+from tornado.util import PY3, Configurable, errno_from_exception
 
 try:
     import ssl
@@ -44,10 +44,8 @@ except ImportError:
     else:
         raise
 
-try:
-    xrange  # py2
-except NameError:
-    xrange = range  # py3
+if PY3:
+    xrange = range
 
 if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
     ssl_match_hostname = ssl.match_hostname

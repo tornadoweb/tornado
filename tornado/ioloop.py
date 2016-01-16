@@ -45,20 +45,20 @@ import math
 
 from tornado.concurrent import TracebackFuture, is_future
 from tornado.log import app_log, gen_log
+from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
-from tornado.util import Configurable, errno_from_exception, timedelta_to_seconds
+from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds
 
 try:
     import signal
 except ImportError:
     signal = None
 
-try:
-    import thread  # py2
-except ImportError:
-    import _thread as thread  # py3
 
-from tornado.platform.auto import set_close_exec, Waker
+if PY3:
+    import _thread as thread
+else:
+    import thread
 
 
 _POLL_TIMEOUT = 3600.0
