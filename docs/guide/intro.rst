@@ -16,7 +16,7 @@ Tornado can be roughly divided into four major components:
 * Client- and server-side implementions of HTTP (`.HTTPServer` and
   `.AsyncHTTPClient`).
 * An asynchronous networking library (`.IOLoop` and `.IOStream`),
-  which serve as the building blocks for the HTTP components and can
+  which serves as the building blocks for the HTTP components and can
   also be used to implement other protocols.
 * A coroutine library (`tornado.gen`) which allows asynchronous
   code to be written in a more straightforward way than chaining
