@@ -2713,7 +2713,8 @@ class GZipContentEncoding(OutputTransform):
     # beginning with "text/").
     CONTENT_TYPES = set(["application/javascript", "application/x-javascript",
                          "application/xml", "application/atom+xml",
-                         "application/json", "application/xhtml+xml"])
+                         "application/json", "application/xhtml+xml",
+                         "image/svg+xml"])
     # Python's GzipFile defaults to level 9, while most other gzip
     # tools (including gzip itself) default to 6, which is probably a
     # better CPU/size tradeoff.
