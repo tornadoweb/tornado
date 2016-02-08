@@ -87,6 +87,11 @@ class AsyncPrepareHandler(TestWebSocketHandler):
         self.write_message(message)
 
 
+class PathArgsHandler(TestWebSocketHandler):
+    def open(self, arg):
+        self.write_message(arg)
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, compression_options=None):
@@ -118,6 +123,8 @@ class WebSocketTest(WebSocketBaseTestCase):
             ('/error_in_on_message', ErrorInOnMessageHandler,
              dict(close_future=self.close_future)),
             ('/async_prepare', AsyncPrepareHandler,
+             dict(close_future=self.close_future)),
+            ('/path_args/(.*)', PathArgsHandler,
              dict(close_future=self.close_future)),
         ])
 
@@ -243,6 +250,12 @@ class WebSocketTest(WebSocketBaseTestCase):
         # result in a timeout on test shutdown (and a memory leak).
         ws = yield self.ws_connect('/async_prepare')
         ws.write_message('hello')
+        res = yield ws.read_message()
+        self.assertEqual(res, 'hello')
+
+    @gen_test
+    def test_path_args(self):
+        ws = yield self.ws_connect('/path_args/hello')
         res = yield ws.read_message()
         self.assertEqual(res, 'hello')
 
