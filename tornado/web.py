@@ -2967,9 +2967,11 @@ class URLSpec(object):
     def __init__(self, pattern, handler, kwargs=None, name=None):
         """Parameters:
 
-        * ``pattern``: Regular expression to be matched.  Any groups
-          in the regex will be passed in to the handler's get/post/etc
-          methods as arguments.
+        * ``pattern``: Regular expression to be matched. Any capturing
+          groups in the regex will be passed in to the handler's
+          get/post/etc methods as arguments (by keyword if named, by
+          position if unnamed. Named and unnamed capturing groups may
+          may not be mixed in the same rule).
 
         * ``handler``: `RequestHandler` subclass to be invoked.
 
@@ -2978,6 +2980,7 @@ class URLSpec(object):
 
         * ``name`` (optional): A name for this handler.  Used by
           `Application.reverse_url`.
+
         """
         if not pattern.endswith('$'):
             pattern += '$'

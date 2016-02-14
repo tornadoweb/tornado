@@ -25,6 +25,11 @@
    These methods can be made asynchronous with one of the following
    decorators: `.gen.coroutine`, `.return_future`, or `asynchronous`.
 
+   The arguments to these methods come from the `.URLSpec`: Any
+   capturing groups in the regular expression become arguments to the
+   HTTP verb methods (keyword arguments if the group is named,
+   positional arguments if its unnamed).
+
    To support a method not on this list, override the class variable
    ``SUPPORTED_METHODS``::
 
