@@ -67,6 +67,7 @@ class TemplateTest(unittest.TestCase):
         self.assertRaises(ParseError, lambda: Template("{%"))
         self.assertEqual(Template("{{!").generate(), b"{{")
         self.assertEqual(Template("{%!").generate(), b"{%")
+        self.assertEqual(Template("{#!").generate(), b"{#")
         self.assertEqual(Template("{{ 'expr' }} {{!jquery expr}}").generate(),
                          b"expr {{jquery expr}}")
 

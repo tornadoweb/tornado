@@ -94,11 +94,14 @@ Syntax Reference
 Template expressions are surrounded by double curly braces: ``{{ ... }}``.
 The contents may be any python expression, which will be escaped according
 to the current autoescape setting and inserted into the output.  Other
-template directives use ``{% %}``.  These tags may be escaped as ``{{!``
-and ``{%!`` if you need to include a literal ``{{`` or ``{%`` in the output.
+template directives use ``{% %}``.
 
 To comment out a section so that it is omitted from the output, surround it
 with ``{# ... #}``.
+
+These tags may be escaped as ``{{!``, ``{%!``, and ``{#!``
+if you need to include a literal ``{{``, ``{%``, or ``{#`` in the output.
+
 
 ``{% apply *function* %}...{% end %}``
     Applies a function to the output of all template code between ``apply``
