@@ -462,7 +462,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             request.prepare_curl_callback(curl)
 
     def _curl_header_callback(self, headers, header_callback, header_line):
-        header_line = native_str(header_line)
+        header_line = native_str(header_line.decode('latin1'))
         if header_callback is not None:
             self.io_loop.add_callback(header_callback, header_line)
         # header_line as returned by curl includes the end-of-line characters.

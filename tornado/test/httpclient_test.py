@@ -12,7 +12,7 @@ import threading
 import datetime
 from io import BytesIO
 
-from tornado.escape import utf8
+from tornado.escape import utf8, native_str
 from tornado import gen
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
 from tornado.httpserver import HTTPServer
@@ -113,6 +113,15 @@ class AllMethodsHandler(RequestHandler):
 
     get = post = put = delete = options = patch = other = method
 
+
+class SetHeaderHandler(RequestHandler):
+    def get(self):
+        # Use get_arguments for keys to get strings, but
+        # request.arguments for values to get bytes.
+        for k, v in zip(self.get_arguments('k'),
+                        self.request.arguments['v']):
+            self.set_header(k, v)
+
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
@@ -133,6 +142,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/304_with_content_length", ContentLength304Handler),
             url("/all_methods", AllMethodsHandler),
             url('/patch', PatchHandler),
+            url('/set_header', SetHeaderHandler),
         ], gzip=True)
 
     def test_patch_receives_payload(self):
@@ -519,6 +529,12 @@ X-XSS-Protection: 1;
                               method="PUT", body=b"hello")
         response.rethrow()
         self.assertEqual(response.body, b"Put body: hello")
+
+    def test_non_ascii_header(self):
+        # Non-ascii headers are sent as latin1.
+        response = self.fetch("/set_header?k=foo&v=%E9")
+        response.rethrow()
+        self.assertEqual(response.headers["Foo"], native_str(u"\u00e9"))
 
 
 class RequestProxyTest(unittest.TestCase):
