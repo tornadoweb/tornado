@@ -12,7 +12,7 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipBefore35, exec_test
 from tornado.util import ObjectDict, unicode_type, timedelta_to_seconds
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version, GZipContentEncoding
+from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version, GZipContentEncoding, NoReverseMatch
 
 import binascii
 import contextlib
@@ -648,7 +648,7 @@ class WSGISafeWebTest(WebTestCase):
         urls = [
             url("/typecheck/(.*)", TypeCheckHandler, name='typecheck'),
             url("/decode_arg/(.*)", DecodeArgHandler, name='decode_arg'),
-            url("/decode_arg_kw/(?P<arg>.*)", DecodeArgHandler),
+            url("/decode_arg_kw/(?P<arg>.*)", DecodeArgHandler, name="decode_arg_kw"),
             url("/linkify", LinkifyHandler),
             url("/uimodule_resources", UIModuleResourceHandler),
             url("/optional_path/(.+)?", OptionalPathHandler),
@@ -660,6 +660,7 @@ class WSGISafeWebTest(WebTestCase):
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
+            url("/decode_optional_kw(?:/arg1/(?P<arg1>\d+))?(?:/arg2/(?P<arg2>\w+))?$", DecodeArgHandler, name="decode_optional_kw"),
         ]
         return urls
 
@@ -732,6 +733,14 @@ class WSGISafeWebTest(WebTestCase):
                          '/decode_arg/%C3%A9')
         self.assertEqual(self.app.reverse_url('decode_arg', '1 + 1'),
                          '/decode_arg/1%20%2B%201')
+
+    def test_reverse_url_optional_kw(self):
+        self.assertEqual(self.app.reverse_url('decode_optional_kw'), '/decode_optional_kw')
+        self.assertEqual(self.app.reverse_url('decode_optional_kw', arg1=1), '/decode_optional_kw/arg1/1')
+        self.assertEqual(self.app.reverse_url('decode_optional_kw', arg1=1, arg2='a'), '/decode_optional_kw/arg1/1/arg2/a')
+        self.assertEqual(self.app.reverse_url('decode_optional_kw', arg2='a'), '/decode_optional_kw/arg2/a')
+        with self.assertRaises(NoReverseMatch):
+            self.app.reverse_url('decode_arg_kw', not_an_argname='a')
 
     def test_uimodule_unescaped(self):
         response = self.fetch("/linkify")

@@ -92,6 +92,10 @@ from tornado.escape import utf8, _unicode
 from tornado.util import (import_object, ObjectDict, raise_exc_info,
                           unicode_type, _websocket_mask)
 from tornado.httputil import split_host_and_port
+import django.utils.regex_helper
+
+class NoReverseMatch(Exception):
+    pass
 
 
 try:
@@ -1325,9 +1329,9 @@ class RequestHandler(object):
             raise Exception("You must define the '%s' setting in your "
                             "application to use %s" % (name, feature))
 
-    def reverse_url(self, name, *args):
+    def reverse_url(self, name, *args, **kwargs):
         """Alias for `Application.reverse_url`."""
-        return self.application.reverse_url(name, *args)
+        return self.application.reverse_url(name, *args, **kwargs)
 
     def compute_etag(self):
         """Computes the etag header to be used for this request.
@@ -1911,7 +1915,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         dispatcher.set_request(request)
         return dispatcher.execute()
 
-    def reverse_url(self, name, *args):
+    def reverse_url(self, name, *args, **kwargs):
         """Returns a URL path for handler named ``name``
 
         The handler must be added to the application as a named `URLSpec`.
@@ -1921,7 +1925,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         and url-escaped.
         """
         if name in self.named_handlers:
-            return self.named_handlers[name].reverse(*args)
+            return self.named_handlers[name].reverse(*args, **kwargs)
         raise KeyError("%s not found in named urls" % name)
 
     def log_request(self, handler):
@@ -3005,46 +3009,35 @@ class URLSpec(object):
              self.handler_class, self.kwargs, self.name)
 
     def _find_groups(self):
-        """Returns a tuple (reverse string, group count) for a url.
+        paths = django.utils.regex_helper.normalize(self.regex.pattern) 
+        lengths = [len(x[1]) for x in paths]
+        return paths, lengths
 
-        For example: Given the url pattern /([0-9]{4})/([a-z-]+)/, this method
-        would return ('/%s/%s/', 2).
-        """
-        pattern = self.regex.pattern
-        if pattern.startswith('^'):
-            pattern = pattern[1:]
-        if pattern.endswith('$'):
-            pattern = pattern[:-1]
+    def reverse(self, *args, **kwargs):
+        if args and kwargs:
+            raise ValueError("Don't mix *args and **kwargs in call to reverse!")
 
-        if self.regex.groups != pattern.count('('):
-            # The pattern is too complicated for our simplistic matching,
-            # so we can't support reversing it.
-            return (None, None)
+        #convert args to kwargs 
+        if args: 
+            kwargs = dict(('_{}'.format(k), v) for k, v in zip(range(len(args)), args))
 
-        pieces = []
-        for fragment in pattern.split('('):
-            if ')' in fragment:
-                paren_loc = fragment.index(')')
-                if paren_loc >= 0:
-                    pieces.append('%s' + fragment[paren_loc + 1:])
-            else:
-                pieces.append(fragment)
+        #escape everything
+        def _escape(s):
+            if not isinstance(s, (unicode_type, bytes)):
+                s = str(s)
+            return tornado.escape.url_escape(tornado.escape.utf8(s), plus=False)
 
-        return (''.join(pieces), self.regex.groups)
+        kwargs = dict((_escape(k), _escape(v)) for k, v in kwargs.items())
 
-    def reverse(self, *args):
-        assert self._path is not None, \
-            "Cannot reverse url regex " + self.regex.pattern
-        assert len(args) == self._group_count, "required number of arguments "\
-            "not found"
-        if not len(args):
-            return self._path
-        converted_args = []
-        for a in args:
-            if not isinstance(a, (unicode_type, bytes)):
-                a = str(a)
-            converted_args.append(escape.url_escape(utf8(a), plus=False))
-        return self._path % tuple(converted_args)
+        for path, expected_args in self._path:
+            if all(key in expected_args for key in kwargs):
+                return str(path % kwargs)
+        if args: 
+            str_args = [str(x) for x in args]
+        else:
+            str_args = ['{}={}'.format(k, v) for k, v in kwargs.items()]
+        raise NoReverseMatch('No reverse match for pattern "{}" with arguments {}'.format(
+            self.regex.pattern, ', '.join(str_args)))
 
 url = URLSpec
 
