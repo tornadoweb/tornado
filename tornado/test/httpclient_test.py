@@ -655,6 +655,15 @@ class HTTPErrorTestCase(unittest.TestCase):
         self.assertIsNot(e, e2)
         self.assertEqual(e.code, e2.code)
 
-    def test_str(self):
+    def test_plain_error(self):
         e = HTTPError(403)
         self.assertEqual(str(e), "HTTP 403: Forbidden")
+        self.assertEqual(repr(e), "HTTP 403: Forbidden")
+
+    def test_error_with_response(self):
+        resp = HTTPResponse(HTTPRequest('http://example.com/'), 403)
+        with self.assertRaises(HTTPError) as cm:
+            resp.rethrow()
+        e = cm.exception
+        self.assertEqual(str(e), "HTTP 403: Forbidden")
+        self.assertEqual(repr(e), "HTTP 403: Forbidden")

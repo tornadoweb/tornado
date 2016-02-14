@@ -615,6 +615,12 @@ class HTTPError(Exception):
     def __str__(self):
         return "HTTP %d: %s" % (self.code, self.message)
 
+    # There is a cyclic reference between self and self.response,
+    # which breaks the default __repr__ implementation.
+    # (especially on pypy, which doesn't have the same recursion
+    # detection as cpython).
+    __repr__ = __str__
+
 
 class _RequestProxy(object):
     """Combines an object with a dictionary of defaults.
