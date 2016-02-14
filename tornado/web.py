@@ -3032,7 +3032,7 @@ class URLSpec(object):
                     unescaped_fragment = re_unescape(fragment)
                 except ValueError as exc:
                     raise ValueError(exc.args[0] + '; invalid url: %r' % pattern)
-                pieces.append(re_unescape(fragment))
+                pieces.append(unescaped_fragment)
 
         return (''.join(pieces), self.regex.groups)
 

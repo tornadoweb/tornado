@@ -181,6 +181,7 @@ def errno_from_exception(e):
 _alphanum = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
+
 def _re_unescape_replacement(match):
     group = match.group(1)
     if group[0] in _alphanum:
@@ -189,10 +190,16 @@ def _re_unescape_replacement(match):
 
 _re_unescape_pattern = re.compile(r'\\(.)', re.DOTALL)
 
+
 def re_unescape(s):
-    '''
-    unescape a string escaped by ``re.escape()``
-    '''
+    """Unescape a string escaped by `re.escape`.
+
+    May raise ``ValueError`` for regular expressions which could not
+    have been produced by `re.escape` (for example, strings containing
+    ``\d`` cannot be unescaped).
+
+    .. versionadded:: 4.4
+    """
     return _re_unescape_pattern.sub(_re_unescape_replacement, s)
 
 
