@@ -280,6 +280,11 @@ class ParseErrorDetailTest(unittest.TestCase):
         self.assertEqual("foo.html", cm.exception.filename)
         self.assertEqual(3, cm.exception.lineno)
 
+    def test_custom_parse_error(self):
+        # Make sure that ParseErrors remain compatible with their
+        # pre-4.3 signature.
+        self.assertEqual("asdf at None:0", str(ParseError("asdf")))
+
 
 class AutoEscapeTest(unittest.TestCase):
     def setUp(self):

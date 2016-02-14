@@ -665,7 +665,7 @@ class ParseError(Exception):
     .. versionchanged:: 4.3
        Added ``filename`` and ``lineno`` attributes.
     """
-    def __init__(self, message, filename, lineno):
+    def __init__(self, message, filename=None, lineno=0):
         self.message = message
         # The names "filename" and "lineno" are chosen for consistency
         # with python SyntaxError.
