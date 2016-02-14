@@ -7,7 +7,7 @@ from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
 from tornado.iostream import StreamClosedError
-from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
+from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults, _default_ca_certs
 from tornado.log import gen_log
 from tornado import stack_context
 from tornado.tcpclient import TCPClient
@@ -37,13 +37,6 @@ try:
     import certifi
 except ImportError:
     certifi = None
-
-
-def _default_ca_certs():
-    if certifi is None:
-        raise Exception("The 'certifi' package is required to use https "
-                        "in simple_httpclient")
-    return certifi.where()
 
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
