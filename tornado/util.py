@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import array
 import os
+import re
 import sys
 import zlib
 
@@ -175,6 +176,24 @@ def errno_from_exception(e):
         return e.args[0]
     else:
         return None
+
+
+_alphanum = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+def _re_unescape_replacement(match):
+    group = match.group(1)
+    if group[0] in _alphanum:
+        raise ValueError("cannot unescape '\\\\%s'" % group[0])
+    return group
+
+_re_unescape_pattern = re.compile(r'\\(.)', re.DOTALL)
+
+def re_unescape(s):
+    '''
+    unescape a string escaped by ``re.escape()``
+    '''
+    return _re_unescape_pattern.sub(_re_unescape_replacement, s)
 
 
 class Configurable(object):
