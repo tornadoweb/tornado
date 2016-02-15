@@ -29,6 +29,7 @@ TEST_MODULES = [
     'tornado.test.curl_httpclient_test',
     'tornado.test.escape_test',
     'tornado.test.gen_test',
+    'tornado.test.http1connection_test',
     'tornado.test.httpclient_test',
     'tornado.test.httpserver_test',
     'tornado.test.httputil_test',
