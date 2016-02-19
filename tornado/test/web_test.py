@@ -1476,6 +1476,8 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
     def test_httperror_str(self):
         self.assertEqual(str(HTTPError(682, reason="Foo")), "HTTP 682: Foo")
 
+    def test_httperror_str_from_httputil(self):
+        self.assertEqual(str(HTTPError(682)), "HTTP 682: Unknown")
 
 @wsgi_safe
 class ErrorHandlerXSRFTest(WebTestCase):
