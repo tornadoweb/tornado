@@ -110,7 +110,9 @@ and BSD (with ``kqueue``) are recommended for production deployment
 networking performance is generally poor so it is recommended only for
 development use).  Tornado will also run on Windows, although this
 configuration is not officially supported and is recommended only for
-development use.
+development use. Without reworking Tornado IOLoop interface, it's not
+possible to add a native Tornado Windows IOLoop implementation or
+leverage Windows' IOCP support from frameworks like AsyncIO or Twisted.
 
 Documentation
 -------------
