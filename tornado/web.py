@@ -1072,8 +1072,8 @@ class RequestHandler(object):
 
               def get_current_user(self):
                   user_cookie = self.get_secure_cookie("user")
-                      if user_cookie:
-                          return json.loads(user_cookie)
+                  if user_cookie:
+                      return json.loads(user_cookie)
                   return None
 
         * It may be set as a normal variable, typically from an overridden
