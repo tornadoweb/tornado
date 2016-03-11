@@ -998,7 +998,7 @@ class FacebookGraphMixin(OAuth2Mixin):
             access_token=session["access_token"],
             appsecret_proof=hmac.new(key=client_secret.encode('utf8'),
                 msg=session["access_token"].encode('utf8'),
-                digestmod=hashlib.sha256).hexdigest()
+                digestmod=hashlib.sha256).hexdigest(),
             fields=",".join(fields)
         )
 
