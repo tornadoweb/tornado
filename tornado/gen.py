@@ -185,6 +185,45 @@ def coroutine(func):
     From the caller's perspective, ``@gen.coroutine`` is similar to
     the combination of ``@return_future`` and ``@gen.engine``.
     """
+    return _make_coroutine_wrapper(func)
+
+def cython_coroutine(func, replace_callback=True):
+    """Decorator for asynchronous generators.
+
+    Any generator that yields objects from this module must be wrapped
+    in either this decorator or `engine`.
+
+    Coroutines may "return" by raising the special exception
+    `Return(value) <Return>`.  In Python 3.3+, it is also possible for
+    the function to simply use the ``return value`` statement (prior to
+    Python 3.3 generators were not allowed to also return values).
+    In all versions of Python a coroutine that simply wishes to exit
+    early may use the ``return`` statement without a value.
+
+    Functions with this decorator return a `.Future`.  Additionally,
+    they may be called with a ``callback`` keyword argument, which
+    will be invoked with the future's result when it resolves.  If the
+    coroutine fails, the callback will not be run and an exception
+    will be raised into the surrounding `.StackContext`.  The
+    ``callback`` argument is not visible inside the decorated
+    function; it is handled by the decorator itself.
+
+    From the caller's perspective, ``@gen.coroutine`` is similar to
+    the combination of ``@return_future`` and ``@gen.engine``.
+
+    This version works with cythonized coroutines by assuming the
+    decorated function is a generator (instead of checking).
+    Use reuglar @gen.coroutine unless necessary.
+    """
+    return _make_coroutine_wrapper(func, assume_generator=True)
+
+def _make_coroutine_wrapper(func, assume_generator=False):
+    """The inner workings of ``@gen.coroutine`` and ``@gen.engine``.
+
+    The two decorators differ in their treatment of the ``callback``
+    argument, so we cannot simply implement ``@engine`` in terms of
+    ``@coroutine``.
+    """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         runner = None
@@ -213,7 +252,7 @@ def coroutine(func):
                 future.set_exc_info(sys.exc_info())
                 return future
             else:
-                if isinstance(result, types.GeneratorType):
+                if isinstance(result, types.GeneratorType) or assume_generator:
                     def final_callback(value):
                         deactivate()
                         future.set_result(value)
