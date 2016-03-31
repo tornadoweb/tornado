@@ -313,7 +313,7 @@ class RequestHandler(object):
             try:
                 self._reason = httputil.responses[status_code]
             except KeyError:
-                raise ValueError("unknown status code %d", status_code)
+                raise ValueError("unknown status code %d" % status_code)
 
     def get_status(self):
         """Returns the status code for our response."""
