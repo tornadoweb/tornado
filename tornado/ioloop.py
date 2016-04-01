@@ -874,7 +874,7 @@ class PollIOLoop(IOLoop):
                 # Pop one fd at a time from the set of pending fds and run
                 # its handler. Since that handler may perform actions on
                 # other file descriptors, there may be reentrant calls to
-                # this IOLoop that update self._events
+                # this IOLoop that modify self._events
                 self._events.update(event_pairs)
                 while self._events:
                     fd, events = self._events.popitem()
