@@ -308,8 +308,12 @@ class OptionParser(object):
         .. versionchanged:: 4.1
            Config files are now always interpreted as utf-8 instead of
            the system default encoding.
+
+        .. versionchanged:: 4.4
+           The special variable ``__file__`` is available inside config
+           files, specifying the absolute path to the config file itself.
         """
-        config = {}
+        config = {'__file__': os.path.abspath(path)}
         with open(path, 'rb') as f:
             exec_in(native_str(f.read()), config, config)
         for name in config:
