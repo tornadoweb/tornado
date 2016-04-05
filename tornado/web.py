@@ -2252,8 +2252,9 @@ class StaticFileHandler(RequestHandler):
         with cls._lock:
             cls._static_hashes = {}
 
+    @gen.coroutine
     def head(self, path):
-        return self.get(path, include_body=False)
+        yield self.get(path, include_body=False)
 
     @gen.coroutine
     def get(self, path, include_body=True):
