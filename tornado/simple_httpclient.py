@@ -1,6 +1,5 @@
-#!/usr/bin/env python
+# !/usr/bin/env python
 from __future__ import absolute_import, division, print_function, with_statement
-
 from tornado.escape import utf8, _unicode
 from tornado import gen
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
@@ -11,7 +10,6 @@ from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
 from tornado import stack_context
 from tornado.tcpclient import TCPClient
-
 import base64
 import collections
 import copy
@@ -20,8 +18,7 @@ import re
 import socket
 import sys
 from io import BytesIO
-
-
+import logging
 try:
     import urlparse  # py2
 except ImportError:
@@ -45,6 +42,11 @@ def _default_ca_certs():
                         "in simple_httpclient")
     return certifi.where()
 
+simple_log = logging.getLogger("tornado.simple_httpclient")
+
+_ConnectionBase = collections.namedtuple('_ConnectionBase', ('scheme', 'host',
+                                                             'port', 'path', 'parsed'))
+
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -55,10 +57,11 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     are not reused, and callers cannot select the network interface to be
     used.
     """
+
     def initialize(self, io_loop, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
                    resolver=None, defaults=None, max_header_size=None,
-                   max_body_size=None):
+                   max_body_size=None, reuse_connections=False, keepalive_timeout=15, max_routealive_size=100, retry=1):
         """Creates a AsyncHTTPClient.
 
         Only a single AsyncHTTPClient instance exists per IOLoop
@@ -88,6 +91,20 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         applies; with a ``streaming_callback`` only ``max_body_size``
         does.
 
+        ``reuse_connections`` will pool clients processing requests with the
+        "Connection: Keep-Alive" header. Future requests matching host, port,
+        and scheme with an idle connection in the pool will be first dispatched
+        from an available connection. If no connection is available, typical
+        procedure is followed.  Defaults to False.
+
+        ``keepalive_timeout`` is the number of timeout seconds.
+        if ``reuse_connections`` is True, when the request is completed,
+        the connection will be destroyed in ``keepalive_timeout`` seconds.
+
+        ``max_routealive_size`` (default 100) is the number of route keep-alive pool max size.
+
+        ``retry`` (default 1) is the number of retries times after the current request failed.
+
         .. versionchanged:: 4.2
            Added the ``max_body_size`` argument.
         """
@@ -97,9 +114,14 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         self.queue = collections.deque()
         self.active = {}
         self.waiting = {}
+        self.idle = {}
+        self.retry = retry
         self.max_buffer_size = max_buffer_size
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
+        self.reuse_connections = reuse_connections
+        self.keepalive_timeout = keepalive_timeout
+        self.max_routealive_size = max_routealive_size
         # TCPClient could create a Resolver for us, but we have to do it
         # ourselves to support hostname_mapping.
         if resolver:
@@ -121,6 +143,8 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     def fetch_impl(self, request, callback):
         key = object()
+        if not hasattr(request, 'retry'):
+            request.retry = self.retry
         self.queue.append((key, request, callback))
         if not len(self.active) < self.max_clients:
             timeout_handle = self.io_loop.add_timeout(
@@ -150,15 +174,77 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     def _connection_class(self):
         return _HTTPConnection
 
-    def _handle_request(self, request, release_callback, final_callback):
-        self._connection_class()(
-            self.io_loop, self, request, release_callback,
-            final_callback, self.max_buffer_size, self.tcp_client,
-            self.max_header_size, self.max_body_size)
+    def _connection_key(self, base):
+        return base.scheme, base.host, base.port, base.path
 
-    def _release_fetch(self, key):
+    def _handle_request(self, request, release_callback, final_callback):
+        cls = self._connection_class()
+        base = cls.parse_connection_base(request)
+        if self.reuse_connections:
+            key = self._connection_key(base)
+
+            if key in self.idle and len(self.idle[key]):
+                conn = self.idle[key].popleft()
+                if not (conn.stream.reading() or conn.stream.writing()):
+                    conn.check_keepalive_expire()
+                    if not conn.stream.closed():
+                        simple_log.debug("reuse connection:%s" % (key,))
+                        conn.release_callback = release_callback
+                        conn.final_callback = functools.partial(self._retry_wrapper, request, conn,
+                                                                final_callback)
+                        conn.send_alive(request)
+                        return
+
+        cls(self.io_loop, self, request, release_callback, final_callback,
+            self.max_buffer_size, self.tcp_client, self.max_header_size,
+            self.max_body_size, self.reuse_connections, base, self.keepalive_timeout)
+
+    def _retry_wrapper(self, request, conn, final_callback, response):
+        if response.error and response.code == 599 and request.retry:
+            request.retry -= 1
+            self._remove_all_conn_idle(conn)
+            conn.stream.close()
+            simple_log.debug("%s,retry #%s." % (response.error, self.retry - request.retry))
+            self.fetch_impl(request, final_callback)
+        else:
+            final_callback(response)
+
+    def _remove_all_conn_idle(self, current_conn):
+        key = self._connection_key(current_conn.base)
+        if key in self.idle:
+            conns = self.idle.pop(key)
+            for conn in conns:
+                conn.stream.close()
+
+    def _release_fetch(self, key, conn):
         del self.active[key]
+        if self.reuse_connections:
+            if hasattr(conn, 'stream') and not conn.stream.closed():
+                self._add_idle(conn)
+            else:
+                self._remove_idle(conn)
+
         self._process_queue()
+
+    def _add_idle(self, conn):
+        key = self._connection_key(conn.base)
+        if key in self.idle:
+            if len(self.idle[key]) >= self.max_routealive_size:
+                conn.stream.close()
+            else:
+                self.idle[key].append(conn)
+        else:
+            self.idle[key] = collections.deque([conn])
+
+    def _remove_idle(self, conn):
+        key = self._connection_key(conn.base)
+        if key in self.idle:
+            try:
+                self.idle[key].remove(conn)
+            except Exception:
+                return
+            if not self.idle[key]:
+                del self.idle[key]
 
     def _remove_timeout(self, key):
         if key in self.waiting:
@@ -191,8 +277,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
 
     def __init__(self, io_loop, client, request, release_callback,
                  final_callback, max_buffer_size, tcp_client,
-                 max_header_size, max_body_size):
-        self.start_time = io_loop.time()
+                 max_header_size, max_body_size, keepalive=False, base=None, keepalive_timeout=15):
+        request.start_time = io_loop.time()
+        self.keepalive_timeout = io_loop.time() + keepalive_timeout
         self.io_loop = io_loop
         self.client = client
         self.request = request
@@ -202,6 +289,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self.tcp_client = tcp_client
         self.max_header_size = max_header_size
         self.max_body_size = max_body_size
+        self.keepalive = keepalive
+        self.base = base
         self.code = None
         self.headers = None
         self.chunks = []
@@ -210,65 +299,77 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         self._timeout = None
         self._sockaddr = None
         with stack_context.ExceptionStackContext(self._handle_exception):
-            self.parsed = urlparse.urlsplit(_unicode(self.request.url))
-            if self.parsed.scheme not in ("http", "https"):
-                raise ValueError("Unsupported url scheme: %s" %
-                                 self.request.url)
-            # urlsplit results have hostname and port results, but they
-            # didn't support ipv6 literals until python 2.7.
-            netloc = self.parsed.netloc
-            if "@" in netloc:
-                userpass, _, netloc = netloc.rpartition("@")
-            host, port = httputil.split_host_and_port(netloc)
-            if port is None:
-                port = 443 if self.parsed.scheme == "https" else 80
-            if re.match(r'^\[.*\]$', host):
-                # raw ipv6 addresses in urls are enclosed in brackets
-                host = host[1:-1]
-            self.parsed_hostname = host  # save final host for _on_connect
+            if not self.base:
+                self.base = self.parse_connection_base(self.request)
 
-            if request.allow_ipv6 is False:
+            # Store .parsed values for backward compatibility
+            self.parsed = self.base.parsed
+            self.parsed_hostname = self.base.host
+
+            if self.request.allow_ipv6 is False:
                 af = socket.AF_INET
             else:
                 af = socket.AF_UNSPEC
 
-            ssl_options = self._get_ssl_options(self.parsed.scheme)
+            ssl_options = self._get_ssl_options(self.base.scheme,
+                                                self.request)
 
-            timeout = min(self.request.connect_timeout, self.request.request_timeout)
+            timeout = min(self.request.connect_timeout,
+                          self.request.request_timeout)
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
-                    self.start_time + timeout,
+                    request.start_time + timeout,
                     stack_context.wrap(functools.partial(self._on_timeout, "while connecting")))
-            self.tcp_client.connect(host, port, af=af,
+
+            self.tcp_client.connect(self.base.host, self.base.port, af=af,
                                     ssl_options=ssl_options,
                                     max_buffer_size=self.max_buffer_size,
                                     callback=self._on_connect)
 
-    def _get_ssl_options(self, scheme):
+    @classmethod
+    def parse_connection_base(cls, request):
+        parsed = urlparse.urlsplit(_unicode(request.url))
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("Unsupported url scheme: %s" % request.url)
+        # urlsplit results have hostname and port results, but they
+        # didn't support ipv6 literals until python 2.7.
+        netloc = parsed.netloc
+        if "@" in netloc:
+            userpass, _, netloc = parsed.netloc.rpartition("@")
+        host, port = httputil.split_host_and_port(netloc)
+        if port is None:
+            port = 443 if parsed.scheme == "https" else 80
+        if re.match(r'^\[.*\]$', host):
+            # raw ipv6 addresses in urls are enclosed in brackets
+            host = host[1:-1]
+        return _ConnectionBase(parsed.scheme, host, port, parsed.path, parsed)
+
+    @classmethod
+    def _get_ssl_options(cls, scheme, request):
         if scheme == "https":
-            if self.request.ssl_options is not None:
-                return self.request.ssl_options
+            if request.ssl_options is not None:
+                return request.ssl_options
             # If we are using the defaults, don't construct a
             # new SSLContext.
-            if (self.request.validate_cert and
-                    self.request.ca_certs is None and
-                    self.request.client_cert is None and
-                    self.request.client_key is None):
+            if (request.validate_cert and
+                        request.ca_certs is None and
+                        request.client_cert is None and
+                        request.client_key is None):
                 return _client_ssl_defaults
             ssl_options = {}
-            if self.request.validate_cert:
+            if request.validate_cert:
                 ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
-            if self.request.ca_certs is not None:
-                ssl_options["ca_certs"] = self.request.ca_certs
+            if request.ca_certs is not None:
+                ssl_options["ca_certs"] = request.ca_certs
             elif not hasattr(ssl, 'create_default_context'):
                 # When create_default_context is present,
                 # we can omit the "ca_certs" parameter entirely,
                 # which avoids the dependency on "certifi" for py34.
                 ssl_options["ca_certs"] = _default_ca_certs()
-            if self.request.client_key is not None:
-                ssl_options["keyfile"] = self.request.client_key
-            if self.request.client_cert is not None:
-                ssl_options["certfile"] = self.request.client_cert
+            if request.client_key is not None:
+                ssl_options["keyfile"] = request.client_key
+            if request.client_cert is not None:
+                ssl_options["certfile"] = request.client_cert
 
             # SSL interoperability is tricky.  We want to disable
             # SSLv2 for security reasons; it wasn't disabled by default
@@ -310,19 +411,22 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
-    def _on_connect(self, stream):
+    def _on_connect(self, stream=None):
+        if stream:
+            self.stream = stream
+
         if self.final_callback is None:
             # final_callback is cleared if we've hit our timeout.
-            stream.close()
+            self.stream.close()
             return
-        self.stream = stream
         self.stream.set_close_callback(self.on_connection_close)
         self._remove_timeout()
         if self.final_callback is None:
             return
+
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
-                self.start_time + self.request.request_timeout,
+                self.request.start_time + self.request.request_timeout,
                 stack_context.wrap(functools.partial(self._on_timeout, "during request")))
         if (self.request.method not in self._SUPPORTED_METHODS and
                 not self.request.allow_nonstandard_methods):
@@ -333,7 +437,11 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if getattr(self.request, key, None):
                 raise NotImplementedError('%s not supported' % key)
         if "Connection" not in self.request.headers:
-            self.request.headers["Connection"] = "close"
+            if not self.keepalive:
+                self.request.headers["Connection"] = "close"
+            else:
+                self.request.headers["Connection"] = "Keep-Alive"  # for 1.0
+
         if "Host" not in self.request.headers:
             if '@' in self.parsed.netloc:
                 self.request.headers["Host"] = self.parsed.netloc.rpartition('@')[-1]
@@ -375,13 +483,14 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.request.headers["Content-Length"] = str(len(
                 self.request.body))
         if (self.request.method == "POST" and
-                "Content-Type" not in self.request.headers):
+                    "Content-Type" not in self.request.headers):
             self.request.headers["Content-Type"] = "application/x-www-form-urlencoded"
         if self.request.decompress_response:
             self.request.headers["Accept-Encoding"] = "gzip"
         req_path = ((self.parsed.path or '/') +
                     (('?' + self.parsed.query) if self.parsed.query else ''))
-        self.connection = self._create_connection(stream)
+        if not hasattr(self, 'connection') or not self.connection:
+            self.connection = self._create_connection(self.stream)
         start_line = httputil.RequestStartLine(self.request.method,
                                                req_path, '')
         self.connection.write_headers(start_line, self.request.headers)
@@ -390,12 +499,18 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         else:
             self._write_body(True)
 
+    def send_alive(self, request):
+        with stack_context.ExceptionStackContext(self._handle_exception):
+            request.start_time = self.io_loop.time()
+            self.request = request
+            self._on_connect()
+
     def _create_connection(self, stream):
         stream.set_nodelay(True)
         connection = HTTP1Connection(
             stream, True,
             HTTP1ConnectionParameters(
-                no_keep_alive=True,
+                no_keep_alive=not self.keepalive,
                 max_header_size=self.max_header_size,
                 max_body_size=self.max_body_size,
                 decompress=self.request.decompress_response),
@@ -415,6 +530,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     self.connection.finish()
                     if start_read:
                         self._read_response()
+
                 self.io_loop.add_future(fut, on_body_written)
                 return
         self.connection.finish()
@@ -432,14 +548,14 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.release_callback is not None:
             release_callback = self.release_callback
             self.release_callback = None
-            release_callback()
+            release_callback(self)
 
     def _run_callback(self, response):
-        self._release()
         if self.final_callback is not None:
             final_callback = self.final_callback
             self.final_callback = None
             self.io_loop.add_callback(final_callback, response)
+        self._release()
 
     def _handle_exception(self, typ, value, tb):
         if self.final_callback:
@@ -450,7 +566,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 else:
                     value = value.real_error
             self._run_callback(HTTPResponse(self.request, 599, error=value,
-                                            request_time=self.io_loop.time() - self.start_time,
+                                            request_time=self.io_loop.time() - self.request.start_time,
                                             ))
 
             if hasattr(self, "stream"):
@@ -475,6 +591,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 raise HTTPError(599, message)
             except HTTPError:
                 self._handle_exception(*sys.exc_info())
+
+        if self.keepalive:
+            self._release()
 
     def headers_received(self, first_line, headers):
         if self.request.expect_100_continue and first_line.code == 100:
@@ -541,14 +660,22 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         response = HTTPResponse(original_request,
                                 self.code, reason=getattr(self, 'reason', None),
                                 headers=self.headers,
-                                request_time=self.io_loop.time() - self.start_time,
+                                request_time=self.io_loop.time() - self.request.start_time,
                                 buffer=buffer,
                                 effective_url=self.request.url)
         self._run_callback(response)
         self._on_end_request()
 
     def _on_end_request(self):
-        self.stream.close()
+        if not self.keepalive:
+            self.stream.close()
+        else:
+            self.chunks = collections.deque()
+
+    def check_keepalive_expire(self):
+        if self.keepalive_timeout and self.io_loop.time() > self.keepalive_timeout:
+            self.stream.close()
+            self._release()
 
     def data_received(self, chunk):
         if self._should_follow_redirect():
