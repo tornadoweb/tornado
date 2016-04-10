@@ -1479,6 +1479,7 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
     def test_httperror_str_from_httputil(self):
         self.assertEqual(str(HTTPError(682)), "HTTP 682: Unknown")
 
+
 @wsgi_safe
 class ErrorHandlerXSRFTest(WebTestCase):
     def get_handlers(self):
@@ -2186,6 +2187,7 @@ class BaseStreamingRequestFlowControlTest(object):
                          dict(methods=['prepare', 'data_received',
                                        'data_received', 'data_received',
                                        'post']))
+
 
 class DecoratedStreamingRequestFlowControlTest(
         BaseStreamingRequestFlowControlTest,

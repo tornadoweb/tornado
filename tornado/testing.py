@@ -98,7 +98,7 @@ def bind_unused_port(reuse_port=False):
     Returns a tuple (socket, port).
     """
     sock = netutil.bind_sockets(None, '127.0.0.1', family=socket.AF_INET,
-                                  reuse_port=reuse_port)[0]
+                                reuse_port=reuse_port)[0]
     port = sock.getsockname()[1]
     return sock, port
 
