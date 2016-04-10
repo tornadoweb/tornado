@@ -82,17 +82,15 @@ from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import unicode_type, ArgReplacer
+from tornado.util import unicode_type, ArgReplacer, PY3
 
-try:
-    import urlparse  # py2
-except ImportError:
-    import urllib.parse as urlparse  # py3
-
-try:
-    import urllib.parse as urllib_parse  # py3
-except ImportError:
-    import urllib as urllib_parse  # py2
+if PY3:
+    import urllib.parse as urlparse
+    import urllib.parse as urllib_parse
+    long = int
+else:
+    import urlparse
+    import urllib as urllib_parse
 
 try:
     long  # py2

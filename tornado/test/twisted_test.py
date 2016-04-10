@@ -28,6 +28,8 @@ import tempfile
 import threading
 import warnings
 
+from tornado.util import PY3
+
 try:
     import fcntl
     from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
@@ -52,10 +54,10 @@ try:
 except ImportError:
     have_twisted_web = False
 
-try:
-    import thread  # py2
-except ImportError:
-    import _thread as thread  # py3
+if PY3:
+    import _thread as thread
+else:
+    import thread
 
 from tornado.escape import utf8
 from tornado import gen

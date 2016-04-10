@@ -35,7 +35,7 @@ from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
 from tornado import stack_context
-from tornado.util import errno_from_exception
+from tornado.util import errno_from_exception, PY3
 
 try:
     import multiprocessing
@@ -43,11 +43,8 @@ except ImportError:
     # Multiprocessing is not available on Google App Engine.
     multiprocessing = None
 
-try:
-    long  # py2
-except NameError:
-    long = int  # py3
-
+if PY3:
+    long = int
 
 # Re-export this exception for convenience.
 try:

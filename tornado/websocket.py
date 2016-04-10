@@ -36,17 +36,13 @@ from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
 from tornado import simple_httpclient
 from tornado.tcpclient import TCPClient
-from tornado.util import _websocket_mask
+from tornado.util import _websocket_mask, PY3
 
-try:
+if PY3:
     from urllib.parse import urlparse  # py2
-except ImportError:
+    xrange = range
+else:
     from urlparse import urlparse  # py3
-
-try:
-    xrange  # py2
-except NameError:
-    xrange = range  # py3
 
 
 class WebSocketError(Exception):

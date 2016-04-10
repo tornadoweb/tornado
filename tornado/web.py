@@ -90,24 +90,17 @@ from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
 from tornado.util import (import_object, ObjectDict, raise_exc_info,
-                          unicode_type, _websocket_mask, re_unescape)
+                          unicode_type, _websocket_mask, re_unescape, PY3)
 from tornado.httputil import split_host_and_port
 
-
-try:
-    import Cookie  # py2
-except ImportError:
-    import http.cookies as Cookie  # py3
-
-try:
-    import urlparse  # py2
-except ImportError:
-    import urllib.parse as urlparse  # py3
-
-try:
-    from urllib import urlencode  # py2
-except ImportError:
-    from urllib.parse import urlencode  # py3
+if PY3:
+    import http.cookies as Cookie
+    import urllib.parse as urlparse
+    from urllib.parse import urlencode
+else:
+    import Cookie
+    import urlparse
+    from urllib import urlencode
 
 
 MIN_SUPPORTED_SIGNED_VALUE_VERSION = 1

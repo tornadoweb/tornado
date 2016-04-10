@@ -11,6 +11,7 @@ from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
 from tornado import stack_context
 from tornado.tcpclient import TCPClient
+from tornado.util import PY3
 
 import base64
 import collections
@@ -22,10 +23,10 @@ import sys
 from io import BytesIO
 
 
-try:
-    import urlparse  # py2
-except ImportError:
-    import urllib.parse as urlparse  # py3
+if PY3:
+    import urllib.parse as urlparse
+else:
+    import urlparse
 
 try:
     import ssl

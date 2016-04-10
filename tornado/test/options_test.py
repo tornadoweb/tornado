@@ -6,13 +6,13 @@ import os
 import sys
 
 from tornado.options import OptionParser, Error
-from tornado.util import basestring_type
+from tornado.util import basestring_type, PY3
 from tornado.test.util import unittest
 
-try:
-    from cStringIO import StringIO  # python 2
-except ImportError:
-    from io import StringIO  # python 3
+if PY3:
+    from io import StringIO
+else:
+    from cStringIO import StringIO
 
 try:
     from unittest import mock  # python 3.3

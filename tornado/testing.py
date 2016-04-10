@@ -32,7 +32,7 @@ except ImportError:
     Subprocess = None
 from tornado.log import gen_log, app_log
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import raise_exc_info, basestring_type
+from tornado.util import raise_exc_info, basestring_type, PY3
 import functools
 import inspect
 import logging
@@ -42,10 +42,10 @@ import signal
 import socket
 import sys
 
-try:
-    from cStringIO import StringIO  # py2
-except ImportError:
-    from io import StringIO  # py3
+if PY3:
+    from io import StringIO
+else:
+    from cStringIO import StringIO
 
 try:
     from collections.abc import Generator as GeneratorType  # py35+
@@ -62,7 +62,7 @@ else:
 # (either py27+ or unittest2) so tornado.test.util enforces
 # this requirement, but for other users of tornado.testing we want
 # to allow the older version if unitest2 is not available.
-if sys.version_info >= (3,):
+if PY3:
     # On python 3, mixing unittest2 and unittest (including doctest)
     # doesn't seem to work, so always use unittest.
     import unittest
