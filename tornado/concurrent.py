@@ -505,8 +505,9 @@ def chain_future(a, b):
         assert future is a
         if b.done():
             return
-        if (isinstance(a, TracebackFuture) and isinstance(b, TracebackFuture)
-                and a.exc_info() is not None):
+        if (isinstance(a, TracebackFuture) and
+                isinstance(b, TracebackFuture) and
+                a.exc_info() is not None):
             b.set_exc_info(a.exc_info())
         elif a.exception() is not None:
             b.set_exception(a.exception())

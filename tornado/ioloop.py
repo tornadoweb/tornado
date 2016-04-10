@@ -814,8 +814,8 @@ class PollIOLoop(IOLoop):
                             due_timeouts.append(heapq.heappop(self._timeouts))
                         else:
                             break
-                    if (self._cancellations > 512
-                            and self._cancellations > (len(self._timeouts) >> 1)):
+                    if (self._cancellations > 512 and
+                            self._cancellations > (len(self._timeouts) >> 1)):
                         # Clean up the timeout queue when it gets large and it's
                         # more than half cancellations.
                         self._cancellations = 0

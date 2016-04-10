@@ -24,7 +24,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import json
 import re
-import sys
 
 from tornado.util import PY3, unicode_type, basestring_type
 

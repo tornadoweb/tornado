@@ -43,8 +43,8 @@ either::
 
 .. note:
 
-   When using tornado.options.parse_command_line or 
-   tornado.options.parse_config_file, the only options that are set are 
+   When using tornado.options.parse_command_line or
+   tornado.options.parse_config_file, the only options that are set are
    ones that were previously defined with tornado.options.define.
 
 Command line formats are what you would expect (``--myoption=myvalue``).

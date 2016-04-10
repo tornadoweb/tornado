@@ -375,6 +375,7 @@ class TestIOLoop(AsyncTestCase):
             self.io_loop.add_callback(namespace["callback"])
             with ExpectLog(app_log, "Exception in callback"):
                 self.wait()
+
     def test_spawn_callback(self):
         # An added callback runs in the test's stack_context, so will be
         # re-arised in wait().

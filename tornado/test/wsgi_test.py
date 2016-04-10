@@ -7,6 +7,9 @@ from tornado.testing import AsyncHTTPTestCase
 from tornado.web import RequestHandler, Application
 from tornado.wsgi import WSGIApplication, WSGIContainer, WSGIAdapter
 
+from tornado.test import httpserver_test
+from tornado.test import web_test
+
 
 class WSGIContainerTest(AsyncHTTPTestCase):
     def wsgi_app(self, environ, start_response):
@@ -61,13 +64,10 @@ class WSGIApplicationTest(AsyncHTTPTestCase):
         data = json_decode(response.body)
         self.assertEqual(data, {})
 
-# This is kind of hacky, but run some of the HTTPServer tests through
-# WSGIContainer and WSGIApplication to make sure everything survives
-# repeated disassembly and reassembly.
-from tornado.test import httpserver_test
-from tornado.test import web_test
 
-
+# This is kind of hacky, but run some of the HTTPServer and web tests
+# through WSGIContainer and WSGIApplication to make sure everything
+# survives repeated disassembly and reassembly.
 class WSGIConnectionTest(httpserver_test.HTTPConnectionTest):
     def get_app(self):
         return WSGIContainer(validator(WSGIApplication(self.get_handlers())))

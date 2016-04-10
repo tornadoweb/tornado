@@ -1380,7 +1380,9 @@ class RequestHandler(object):
             match = True
         else:
             # Use a weak comparison when comparing entity-tags.
-            val = lambda x: x[2:] if x.startswith(b'W/') else x
+            def val(x):
+                return x[2:] if x.startswith(b'W/') else x
+
             for etag in etags:
                 if val(etag) == val(computed_etag):
                     match = True
@@ -1598,6 +1600,7 @@ def asynchronous(method):
             result = method(self, *args, **kwargs)
             if result is not None:
                 result = gen.convert_yielded(result)
+
                 # If @asynchronous is used with @gen.coroutine, (but
                 # not @gen.engine), we can automatically finish the
                 # request when the future resolves.  Additionally,

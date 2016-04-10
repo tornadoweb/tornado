@@ -34,7 +34,9 @@ else:
 
 wsgi_safe_tests = []
 
-relpath = lambda *a: os.path.join(os.path.dirname(__file__), *a)
+
+def relpath(*a):
+    return os.path.join(os.path.dirname(__file__), *a)
 
 
 def wsgi_safe(cls):
@@ -2163,6 +2165,7 @@ class BaseStreamingRequestFlowControlTest(object):
 
     def test_flow_control_chunked_body(self):
         chunks = [b'abcd', b'efgh', b'ijkl']
+
         @gen.coroutine
         def body_producer(write):
             for i in chunks:
@@ -2627,8 +2630,8 @@ class FinishExceptionTest(SimpleHandlerTestCase):
                 raise Finish()
 
     def test_finish_exception(self):
-        for url in ['/', '/?finish_value=1']:
-            response = self.fetch(url)
+        for u in ['/', '/?finish_value=1']:
+            response = self.fetch(u)
             self.assertEqual(response.code, 401)
             self.assertEqual('Basic realm="something"',
                              response.headers.get('WWW-Authenticate'))

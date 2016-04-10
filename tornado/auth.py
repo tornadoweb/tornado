@@ -288,7 +288,7 @@ class OpenIdMixin(object):
         if name:
             user["name"] = name
         elif name_parts:
-            user["name"] = u(" ").join(name_parts)
+            user["name"] = u" ".join(name_parts)
         elif email:
             user["name"] = email.split("@")[0]
         if email:

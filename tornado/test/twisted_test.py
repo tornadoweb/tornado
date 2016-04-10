@@ -28,7 +28,17 @@ import tempfile
 import threading
 import warnings
 
-from tornado.util import PY3
+from tornado.escape import utf8
+from tornado import gen
+from tornado.httpclient import AsyncHTTPClient
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop
+from tornado.platform.auto import set_close_exec
+from tornado.platform.select import SelectIOLoop
+from tornado.testing import bind_unused_port
+from tornado.test.util import unittest
+from tornado.util import import_object, PY3
+from tornado.web import RequestHandler, Application
 
 try:
     import fcntl
@@ -59,17 +69,6 @@ if PY3:
 else:
     import thread
 
-from tornado.escape import utf8
-from tornado import gen
-from tornado.httpclient import AsyncHTTPClient
-from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop
-from tornado.platform.auto import set_close_exec
-from tornado.platform.select import SelectIOLoop
-from tornado.testing import bind_unused_port
-from tornado.test.util import unittest
-from tornado.util import import_object
-from tornado.web import RequestHandler, Application
 
 skipIfNoTwisted = unittest.skipUnless(have_twisted,
                                       "twisted module not present")
