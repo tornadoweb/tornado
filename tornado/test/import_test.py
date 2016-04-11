@@ -40,7 +40,7 @@ class ImportTest(unittest.TestCase):
 
     def test_import_pycurl(self):
         try:
-            import pycurl
+            import pycurl  # type: ignore
         except ImportError:
             pass
         else:

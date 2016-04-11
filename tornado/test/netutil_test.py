@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import errno
 import os
 import signal
 import socket
@@ -18,15 +19,15 @@ except ImportError:
     futures = None
 
 try:
-    import pycares
+    import pycares  # type: ignore
 except ImportError:
     pycares = None
 else:
     from tornado.platform.caresresolver import CaresResolver
 
 try:
-    import twisted
-    import twisted.names
+    import twisted  # type: ignore
+    import twisted.names  # type: ignore
 except ImportError:
     twisted = None
 else:
@@ -70,7 +71,7 @@ class _ResolverErrorTestMixin(object):
 
 def _failing_getaddrinfo(*args):
     """Dummy implementation of getaddrinfo for use in mocks"""
-    raise socket.gaierror("mock: lookup failed")
+    raise socket.gaierror(errno.EIO, "mock: lookup failed")
 
 
 @skipIfNoNetwork

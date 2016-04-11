@@ -81,9 +81,9 @@ class CookieTestRequestHandler(RequestHandler):
         # don't call super.__init__
         self._cookies = {}
         if key_version is None:
-            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret))
+            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret))  # type: ignore
         else:
-            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret,
+            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret,  # type: ignore
                                                         key_version=key_version))
 
     def get_cookie(self, name):
@@ -2527,7 +2527,7 @@ class XSRFTest(SimpleHandlerTestCase):
 
     def test_xsrf_success_header(self):
         response = self.fetch("/", method="POST", body=b"",
-                              headers=dict({"X-Xsrftoken": self.xsrf_token},
+                              headers=dict({"X-Xsrftoken": self.xsrf_token},  # type: ignore
                                            **self.cookie_headers()))
         self.assertEqual(response.code, 200)
 

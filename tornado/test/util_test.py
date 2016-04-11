@@ -6,13 +6,13 @@ import datetime
 
 import tornado.escape
 from tornado.escape import utf8
-from tornado.util import raise_exc_info, Configurable, exec_in, ArgReplacer, timedelta_to_seconds, import_object, re_unescape
+from tornado.util import raise_exc_info, Configurable, exec_in, ArgReplacer, timedelta_to_seconds, import_object, re_unescape, PY3
 from tornado.test.util import unittest
 
-try:
-    from cStringIO import StringIO  # py2
-except ImportError:
-    from io import StringIO  # py3
+if PY3:
+    from io import StringIO
+else:
+    from cStringIO import StringIO
 
 
 class RaiseExcInfoTest(unittest.TestCase):

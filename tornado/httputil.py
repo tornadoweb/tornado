@@ -53,9 +53,11 @@ try:
     from ssl import SSLError
 except ImportError:
     # ssl is unavailable on app engine.
-    class SSLError(Exception):
+    class _SSLError(Exception):
         pass
-
+    # Hack around a mypy limitation. We can't simply put "type: ignore"
+    # on the class definition itself; must go through an assignment.
+    SSLError = _SSLError  # type: ignore
 
 # RFC 7230 section 3.5: a recipient MAY recognize a single LF as a line
 # terminator and ignore any preceding CR.
@@ -738,7 +740,7 @@ def parse_multipart_form_data(boundary, data, arguments, files):
         name = disp_params["name"]
         if disp_params.get("filename"):
             ctype = headers.get("Content-Type", "application/unknown")
-            files.setdefault(name, []).append(HTTPFile(
+            files.setdefault(name, []).append(HTTPFile(  # type: ignore
                 filename=disp_params["filename"], body=value,
                 content_type=ctype))
         else:

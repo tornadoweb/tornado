@@ -15,10 +15,11 @@ else:
     from cStringIO import StringIO
 
 try:
-    from unittest import mock  # python 3.3
+    # py33+
+    from unittest import mock  # type: ignore
 except ImportError:
     try:
-        import mock  # third-party mock package
+        import mock  # type: ignore
     except ImportError:
         mock = None
 

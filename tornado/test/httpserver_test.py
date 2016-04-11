@@ -86,7 +86,7 @@ class BaseSSLTest(AsyncHTTPSTestCase):
 
 class SSLTestMixin(object):
     def get_ssl_options(self):
-        return dict(ssl_version=self.get_ssl_version(),
+        return dict(ssl_version=self.get_ssl_version(),  # type: ignore
                     **AsyncHTTPSTestCase.get_ssl_options())
 
     def get_ssl_version(self):

@@ -23,13 +23,13 @@ try:
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
     # won't work, but e.g. LogTrapTestCase and main() will.
-    AsyncHTTPClient = None
-    gen = None
-    HTTPServer = None
-    IOLoop = None
-    netutil = None
-    SimpleAsyncHTTPClient = None
-    Subprocess = None
+    AsyncHTTPClient = None  # type: ignore
+    gen = None  # type: ignore
+    HTTPServer = None  # type: ignore
+    IOLoop = None  # type: ignore
+    netutil = None  # type: ignore
+    SimpleAsyncHTTPClient = None  # type: ignore
+    Subprocess = None  # type: ignore
 from tornado.log import gen_log, app_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type, PY3
@@ -48,9 +48,9 @@ else:
     from cStringIO import StringIO
 
 try:
-    from collections.abc import Generator as GeneratorType  # py35+
+    from collections.abc import Generator as GeneratorType  # type: ignore
 except ImportError:
-    from types import GeneratorType
+    from types import GeneratorType  # type: ignore
 
 if sys.version_info >= (3, 5):
     iscoroutine = inspect.iscoroutine
@@ -208,8 +208,8 @@ class AsyncTestCase(unittest.TestCase):
                 self.assertIn("FriendFeed", response.body)
                 self.stop()
     """
-    def __init__(self, methodName='runTest', **kwargs):
-        super(AsyncTestCase, self).__init__(methodName, **kwargs)
+    def __init__(self, methodName='runTest'):
+        super(AsyncTestCase, self).__init__(methodName)
         self.__stopped = False
         self.__running = False
         self.__failure = None
@@ -547,7 +547,7 @@ def gen_test(func=None, timeout=None):
 
 # Without this attribute, nosetests will try to run gen_test as a test
 # anywhere it is imported.
-gen_test.__test__ = False
+gen_test.__test__ = False  # type: ignore
 
 
 class LogTrapTestCase(unittest.TestCase):

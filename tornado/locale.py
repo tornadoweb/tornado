@@ -55,7 +55,7 @@ from tornado.log import gen_log
 from tornado._locale_data import LOCALE_NAMES
 
 _default_locale = "en_US"
-_translations = {}
+_translations = {}  # type: dict
 _supported_locales = frozenset([_default_locale])
 _use_gettext = False
 CONTEXT_SEPARATOR = "\x04"

@@ -51,11 +51,11 @@ if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # pytho
     ssl_match_hostname = ssl.match_hostname
     SSLCertificateError = ssl.CertificateError
 elif ssl is None:
-    ssl_match_hostname = SSLCertificateError = None
+    ssl_match_hostname = SSLCertificateError = None  # type: ignore
 else:
     import backports.ssl_match_hostname
     ssl_match_hostname = backports.ssl_match_hostname.match_hostname
-    SSLCertificateError = backports.ssl_match_hostname.CertificateError
+    SSLCertificateError = backports.ssl_match_hostname.CertificateError  # type: ignore
 
 if hasattr(ssl, 'SSLContext'):
     if hasattr(ssl, 'create_default_context'):
@@ -102,7 +102,7 @@ u'foo'.encode('idna')
 _ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
 
 if hasattr(errno, "WSAEWOULDBLOCK"):
-    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)
+    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)  # type: ignore
 
 # Default backlog used when calling sock.listen()
 _DEFAULT_BACKLOG = 128
@@ -411,8 +411,8 @@ class ThreadedResolver(ExecutorResolver):
        All ``ThreadedResolvers`` share a single thread pool, whose
        size is set by the first one to be created.
     """
-    _threadpool = None
-    _threadpool_pid = None
+    _threadpool = None  # type: ignore
+    _threadpool_pid = None  # type: int
 
     def initialize(self, io_loop=None, num_threads=10):
         threadpool = ThreadedResolver._create_threadpool(num_threads)
@@ -516,4 +516,4 @@ def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
         else:
             return context.wrap_socket(socket, **kwargs)
     else:
-        return ssl.wrap_socket(socket, **dict(context, **kwargs))
+        return ssl.wrap_socket(socket, **dict(context, **kwargs))  # type: ignore

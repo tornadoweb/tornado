@@ -76,7 +76,7 @@ class WSGIConnectionTest(httpserver_test.HTTPConnectionTest):
 def wrap_web_tests_application():
     result = {}
     for cls in web_test.wsgi_safe_tests:
-        class WSGIApplicationWrappedTest(cls):
+        class WSGIApplicationWrappedTest(cls):  # type: ignore
             def get_app(self):
                 self.app = WSGIApplication(self.get_handlers(),
                                            **self.get_app_kwargs())
@@ -89,7 +89,7 @@ globals().update(wrap_web_tests_application())
 def wrap_web_tests_adapter():
     result = {}
     for cls in web_test.wsgi_safe_tests:
-        class WSGIAdapterWrappedTest(cls):
+        class WSGIAdapterWrappedTest(cls):  # type: ignore
             def get_app(self):
                 self.app = Application(self.get_handlers(),
                                        **self.get_app_kwargs())

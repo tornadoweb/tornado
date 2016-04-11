@@ -21,7 +21,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import collections
 import functools
 import logging
-import pycurl
+import pycurl  # type: ignore
 import threading
 import time
 from io import BytesIO

@@ -572,15 +572,14 @@ class HTTPResponse(object):
         self.request_time = request_time
         self.time_info = time_info or {}
 
-    def _get_body(self):
+    @property
+    def body(self):
         if self.buffer is None:
             return None
         elif self._body is None:
             self._body = self.buffer.getvalue()
 
         return self._body
-
-    body = property(_get_body)
 
     def rethrow(self):
         """If there was an error on the request, raise an `HTTPError`."""

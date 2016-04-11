@@ -275,7 +275,7 @@ class GeneratorCapClient(BaseCapClient):
 
 class ClientTestMixin(object):
     def setUp(self):
-        super(ClientTestMixin, self).setUp()
+        super(ClientTestMixin, self).setUp()  # type: ignore
         self.server = CapServer(io_loop=self.io_loop)
         sock, port = bind_unused_port()
         self.server.add_sockets([sock])
@@ -283,7 +283,7 @@ class ClientTestMixin(object):
 
     def tearDown(self):
         self.server.stop()
-        super(ClientTestMixin, self).tearDown()
+        super(ClientTestMixin, self).tearDown()  # type: ignore
 
     def test_callback(self):
         self.client.capitalize("hello", callback=self.stop)

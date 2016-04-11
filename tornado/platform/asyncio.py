@@ -34,7 +34,7 @@ try:
 except ImportError as e:
     # Asyncio itself isn't available; see if trollius is (backport to py26+).
     try:
-        import trollius as asyncio
+        import trollius as asyncio  # type: ignore
     except ImportError:
         # Re-raise the original asyncio error, not the trollius one.
         raise e
@@ -213,4 +213,4 @@ def to_asyncio_future(tornado_future):
     return af
 
 if hasattr(convert_yielded, 'register'):
-    convert_yielded.register(asyncio.Future, to_tornado_future)
+    convert_yielded.register(asyncio.Future, to_tornado_future)  # type: ignore

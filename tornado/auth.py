@@ -92,11 +92,6 @@ else:
     import urlparse
     import urllib as urllib_parse
 
-try:
-    long  # py2
-except NameError:
-    long = int  # py3
-
 
 class AuthError(Exception):
     pass

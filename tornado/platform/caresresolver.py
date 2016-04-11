@@ -1,5 +1,5 @@
 from __future__ import absolute_import, division, print_function, with_statement
-import pycares
+import pycares  # type: ignore
 import socket
 
 from tornado import gen

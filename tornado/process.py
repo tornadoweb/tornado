@@ -207,7 +207,7 @@ class Subprocess(object):
     STREAM = object()
 
     _initialized = False
-    _waiting = {}
+    _waiting = {}  # type: ignore
 
     def __init__(self, *args, **kwargs):
         self.io_loop = kwargs.pop('io_loop', None) or ioloop.IOLoop.current()

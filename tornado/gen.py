@@ -92,7 +92,8 @@ from tornado.util import PY3, raise_exc_info
 
 try:
     try:
-        from functools import singledispatch  # py34+
+        # py34+
+        from functools import singledispatch  # type: ignore
     except ImportError:
         from singledispatch import singledispatch  # backport
 except ImportError:
@@ -108,9 +109,10 @@ except ImportError:
 
 try:
     try:
-        from collections.abc import Generator as GeneratorType  # py35+
+        # py35+
+        from collections.abc import Generator as GeneratorType  # type: ignore
     except ImportError:
-        from backports_abc import Generator as GeneratorType
+        from backports_abc import Generator as GeneratorType  # type: ignore
 
     try:
         from inspect import isawaitable  # py35+
@@ -121,7 +123,7 @@ except ImportError:
         raise
     from types import GeneratorType
 
-    def isawaitable(x):
+    def isawaitable(x):  # type: ignore
         return False
 
 if PY3:

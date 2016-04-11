@@ -102,6 +102,11 @@ else:
     import urlparse
     from urllib import urlencode
 
+try:
+    import typing  # noqa
+except ImportError:
+    pass
+
 
 MIN_SUPPORTED_SIGNED_VALUE_VERSION = 1
 """The oldest signed value version supported by this version of Tornado.
@@ -145,7 +150,7 @@ class RequestHandler(object):
     SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PATCH", "PUT",
                          "OPTIONS")
 
-    _template_loaders = {}  # {path: template.BaseLoader}
+    _template_loaders = {}  # type: typing.Dict[str, template.BaseLoader]
     _template_loader_lock = threading.Lock()
     _remove_control_chars_regex = re.compile(r"[\x00-\x08\x0e-\x1f]")
 
@@ -358,7 +363,7 @@ class RequestHandler(object):
             raise ValueError("Unsafe header value %r", value)
         return value
 
-    _ARG_DEFAULT = []
+    _ARG_DEFAULT = object()
 
     def get_argument(self, name, default=_ARG_DEFAULT, strip=True):
         """Returns the value of the argument with the given name.
@@ -2238,7 +2243,7 @@ class StaticFileHandler(RequestHandler):
     """
     CACHE_MAX_AGE = 86400 * 365 * 10  # 10 years
 
-    _static_hashes = {}
+    _static_hashes = {}  # type: typing.Dict
     _lock = threading.Lock()  # protects _static_hashes
 
     def initialize(self, path, default_filename=None):
