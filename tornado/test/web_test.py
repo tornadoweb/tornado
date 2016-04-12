@@ -2490,6 +2490,22 @@ class XSRFTest(SimpleHandlerTestCase):
                 body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)))
         self.assertEqual(response.code, 403)
 
+    def test_xsrf_fail_argument_invalid_format(self):
+        with ExpectLog(gen_log, ".*'_xsrf' argument has invalid format"):
+            response = self.fetch(
+                "/", method="POST",
+                headers=self.cookie_headers(),
+                body=urllib_parse.urlencode(dict(_xsrf='3|')))
+        self.assertEqual(response.code, 403)
+
+    def test_xsrf_fail_cookie_invalid_format(self):
+        with ExpectLog(gen_log, ".*XSRF cookie does not match POST"):
+            response = self.fetch(
+                "/", method="POST",
+                headers=self.cookie_headers(token='3|'),
+                body=urllib_parse.urlencode(dict(_xsrf=self.xsrf_token)))
+        self.assertEqual(response.code, 403)
+
     def test_xsrf_fail_cookie_no_body(self):
         with ExpectLog(gen_log, ".*'_xsrf' argument missing"):
             response = self.fetch(
