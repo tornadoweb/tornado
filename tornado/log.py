@@ -38,7 +38,7 @@ from tornado.escape import _unicode
 from tornado.util import unicode_type, basestring_type
 
 try:
-    import curses
+    import curses  # type: ignore
 except ImportError:
     curses = None
 

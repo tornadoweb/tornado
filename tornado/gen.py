@@ -115,7 +115,8 @@ try:
         from backports_abc import Generator as GeneratorType  # type: ignore
 
     try:
-        from inspect import isawaitable  # py35+
+        # py35+
+        from inspect import isawaitable  # type: ignore
     except ImportError:
         from backports_abc import isawaitable
 except ImportError:

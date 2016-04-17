@@ -53,8 +53,8 @@ except ImportError:
     from types import GeneratorType  # type: ignore
 
 if sys.version_info >= (3, 5):
-    iscoroutine = inspect.iscoroutine
-    iscoroutinefunction = inspect.iscoroutinefunction
+    iscoroutine = inspect.iscoroutine  # type: ignore
+    iscoroutinefunction = inspect.iscoroutinefunction  # type: ignore
 else:
     iscoroutine = iscoroutinefunction = lambda f: False
 
@@ -69,9 +69,9 @@ if PY3:
 else:
     # On python 2, prefer unittest2 when available.
     try:
-        import unittest2 as unittest
+        import unittest2 as unittest  # type: ignore
     except ImportError:
-        import unittest
+        import unittest  # type: ignore
 
 _next_port = 10000
 
