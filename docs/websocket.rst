@@ -29,6 +29,7 @@
    .. automethod:: WebSocketHandler.check_origin
    .. automethod:: WebSocketHandler.get_compression_options
    .. automethod:: WebSocketHandler.set_nodelay
+   .. automethod:: WebSocketHandler.get_handshake_response_headers
 
    Other
    -----

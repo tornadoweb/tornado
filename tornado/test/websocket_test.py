@@ -92,6 +92,11 @@ class PathArgsHandler(TestWebSocketHandler):
         self.write_message(arg)
 
 
+class HandshakeResponseHeadersHandler(TestWebSocketHandler):
+    def get_handshake_response_headers(self):
+        return [('Set-Cookie', 'hello=1')]
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, compression_options=None):
@@ -125,6 +130,8 @@ class WebSocketTest(WebSocketBaseTestCase):
             ('/async_prepare', AsyncPrepareHandler,
              dict(close_future=self.close_future)),
             ('/path_args/(.*)', PathArgsHandler,
+             dict(close_future=self.close_future)),
+            ('/handshake_response_headers', HandshakeResponseHeadersHandler,
              dict(close_future=self.close_future)),
         ])
 
@@ -328,6 +335,13 @@ class WebSocketTest(WebSocketBaseTestCase):
                                     io_loop=self.io_loop)
 
         self.assertEqual(cm.exception.code, 403)
+
+    @gen_test
+    def test_handshake_response_headers(self):
+        ws = yield self.ws_connect('/handshake_response_headers')
+
+        self.assertEqual(ws.headers.get('Set-Cookie'), 'hello=1')
+
 
 
 class CompressionTestMixin(object):

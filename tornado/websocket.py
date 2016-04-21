@@ -238,6 +238,16 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         return None
 
+    def get_handshake_response_headers(self):
+        """Override to return extra headers in handshake HTTP response
+
+        If this method returns None (the default), no extra headers will
+        be added. If it returns list of headers name-value pairs - those
+        headers will be added to handshake HTTP response.
+
+        """
+        return None
+
     def open(self, *args, **kwargs):
         """Invoked when a new WebSocket is opened.
 
@@ -377,7 +387,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         websocket_version = self.request.headers.get("Sec-WebSocket-Version")
         if websocket_version in ("7", "8", "13"):
             return WebSocketProtocol13(
-                self, compression_options=self.get_compression_options())
+                self, compression_options=self.get_compression_options(),
+                response_headers=self.get_handshake_response_headers())
 
 
 def _wrap_method(method):
@@ -488,8 +499,9 @@ class WebSocketProtocol13(WebSocketProtocol):
     OPCODE_MASK = 0x0f
 
     def __init__(self, handler, mask_outgoing=False,
-                 compression_options=None):
+                 compression_options=None, response_headers=None):
         WebSocketProtocol.__init__(self, handler)
+        self._response_headers = response_headers
         self.mask_outgoing = mask_outgoing
         self._final_frame = False
         self._frame_opcode = None
@@ -576,6 +588,11 @@ class WebSocketProtocol13(WebSocketProtocol):
                                         'permessage-deflate', ext[1]))
                 break
 
+        response_headers = ''
+        if self._response_headers is not None:
+            for header_name, header_value in self._response_headers:
+                response_headers += '%s: %s\r\n' % (header_name, header_value)
+
         if self.stream.closed():
             self._abort()
             return
@@ -584,9 +601,9 @@ class WebSocketProtocol13(WebSocketProtocol):
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
             "Sec-WebSocket-Accept: %s\r\n"
-            "%s%s"
-            "\r\n" % (self._challenge_response(),
-                      subprotocol_header, extension_header)))
+            "%s%s%s"
+            "\r\n" % (self._challenge_response(), subprotocol_header,
+                      extension_header, response_headers)))
 
         self._run_callback(self.handler.open, *self.handler.open_args,
                            **self.handler.open_kwargs)
