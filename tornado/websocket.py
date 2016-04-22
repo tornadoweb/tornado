@@ -131,6 +131,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.stream = None
         self._on_close_called = False
 
+    def clear(self):
+        """Resets all headers and content for this response."""
+        self._headers = httputil.HTTPHeaders({})
+        self.set_default_headers()
+        self._write_buffer = []
+
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         self.open_args = args
@@ -235,16 +241,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         but no such options are currently implemented.
 
         .. versionadded:: 4.1
-        """
-        return None
-
-    def get_handshake_response_headers(self):
-        """Override to return extra headers in handshake HTTP response
-
-        If this method returns None (the default), no extra headers will
-        be added. If it returns list of headers name-value pairs - those
-        headers will be added to handshake HTTP response.
-
         """
         return None
 
@@ -388,7 +384,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         if websocket_version in ("7", "8", "13"):
             return WebSocketProtocol13(
                 self, compression_options=self.get_compression_options(),
-                response_headers=self.get_handshake_response_headers())
+                response_headers=self._headers)
 
 
 def _wrap_method(method):
@@ -590,7 +586,7 @@ class WebSocketProtocol13(WebSocketProtocol):
 
         response_headers = ''
         if self._response_headers is not None:
-            for header_name, header_value in self._response_headers:
+            for header_name, header_value in self._response_headers.get_all():
                 response_headers += '%s: %s\r\n' % (header_name, header_value)
 
         if self.stream.closed():
