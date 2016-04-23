@@ -1506,8 +1506,8 @@ class ErrorHandlerXSRFTest(WebTestCase):
 class GzipTestCase(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         def get(self):
-            if self.get_argument('vary', None):
-                self.set_header('Vary', self.get_argument('vary'))
+            for v in self.get_arguments('vary'):
+                self.add_header('Vary', v)
             # Must write at least MIN_LENGTH bytes to activate compression.
             self.write('hello world' + ('!' * GZipContentEncoding.MIN_LENGTH))
 
@@ -1516,8 +1516,7 @@ class GzipTestCase(SimpleHandlerTestCase):
             gzip=True,
             static_path=os.path.join(os.path.dirname(__file__), 'static'))
 
-    def test_gzip(self):
-        response = self.fetch('/')
+    def assert_compressed(self, response):
         # simple_httpclient renames the content-encoding header;
         # curl_httpclient doesn't.
         self.assertEqual(
@@ -1525,17 +1524,18 @@ class GzipTestCase(SimpleHandlerTestCase):
                 'Content-Encoding',
                 response.headers.get('X-Consumed-Content-Encoding')),
             'gzip')
+
+
+    def test_gzip(self):
+        response = self.fetch('/')
+        self.assert_compressed(response)
         self.assertEqual(response.headers['Vary'], 'Accept-Encoding')
 
     def test_gzip_static(self):
         # The streaming responses in StaticFileHandler have subtle
         # interactions with the gzip output so test this case separately.
         response = self.fetch('/robots.txt')
-        self.assertEqual(
-            response.headers.get(
-                'Content-Encoding',
-                response.headers.get('X-Consumed-Content-Encoding')),
-            'gzip')
+        self.assert_compressed(response)
         self.assertEqual(response.headers['Vary'], 'Accept-Encoding')
 
     def test_gzip_not_requested(self):
@@ -1545,9 +1545,16 @@ class GzipTestCase(SimpleHandlerTestCase):
 
     def test_vary_already_present(self):
         response = self.fetch('/?vary=Accept-Language')
-        self.assertEqual(response.headers['Vary'],
-                         'Accept-Language, Accept-Encoding')
+        self.assert_compressed(response)
+        self.assertEqual([s.strip() for s in response.headers['Vary'].split(',')],
+                         ['Accept-Language', 'Accept-Encoding'])
 
+    def test_vary_already_present_multiple(self):
+        # Regression test for https://github.com/tornadoweb/tornado/issues/1670
+        response = self.fetch('/?vary=Accept-Language&vary=Cookie')
+        self.assert_compressed(response)
+        self.assertEqual([s.strip() for s in response.headers['Vary'].split(',')],
+                         ['Accept-Language', 'Cookie', 'Accept-Encoding'])
 
 @wsgi_safe
 class PathArgsInPrepareTest(WebTestCase):
