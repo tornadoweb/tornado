@@ -335,7 +335,7 @@ class Template(object):
             # __name__ and __loader__ allow the traceback mechanism to find
             # the generated source code.
             "__name__": self.name.replace('.', '_'),
-            "__loader__": ObjectDict(get_source=lambda name: self.code),  # type: ignore
+            "__loader__": ObjectDict(get_source=lambda name: self.code),
         }
         namespace.update(self.namespace)
         namespace.update(kwargs)

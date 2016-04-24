@@ -81,9 +81,9 @@ class CookieTestRequestHandler(RequestHandler):
         # don't call super.__init__
         self._cookies = {}
         if key_version is None:
-            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret))  # type: ignore
+            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret))
         else:
-            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret,  # type: ignore
+            self.application = ObjectDict(settings=dict(cookie_secret=cookie_secret,
                                                         key_version=key_version))
 
     def get_cookie(self, name):
