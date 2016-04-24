@@ -30,7 +30,7 @@ from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log, app_log
 from tornado import stack_context
-from tornado.util import GzipDecompressor
+from tornado.util import GzipDecompressor, PY3
 
 
 class _QuietException(Exception):
@@ -372,7 +372,14 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._expected_content_remaining = int(headers['Content-Length'])
         else:
             self._expected_content_remaining = None
-        lines.extend([utf8(n) + b": " + utf8(v) for n, v in headers.get_all()])
+        # TODO: headers are supposed to be of type str, but we still have some
+        # cases that let bytes slip through. Remove these native_str calls when those
+        # are fixed.
+        header_lines = (native_str(n) + ": " + native_str(v) for n, v in headers.get_all())
+        if PY3:
+            lines.extend(l.encode('latin1') for l in header_lines)
+        else:
+            lines.extend(header_lines)
         for line in lines:
             if b'\n' in line:
                 raise ValueError('Newline in header: ' + repr(line))

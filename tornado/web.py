@@ -104,6 +104,11 @@ else:
 
 try:
     import typing  # noqa
+
+    # The following types are accepted by RequestHandler.set_header
+    # and related methods.
+    _HeaderTypes = typing.Union[bytes, unicode_type,
+                                numbers.Integral, datetime.datetime]
 except ImportError:
     pass
 
@@ -164,6 +169,7 @@ class RequestHandler(object):
         self._auto_finish = True
         self._transforms = None  # will be set in _execute
         self._prepared_future = None
+        self._headers = None  # type: httputil.HTTPHeaders
         self.path_args = None
         self.path_kwargs = None
         self.ui = ObjectDict((n, self._ui_method(m)) for n, m in
@@ -318,6 +324,7 @@ class RequestHandler(object):
         return self._status_code
 
     def set_header(self, name, value):
+        # type: (str, _HeaderTypes) -> None
         """Sets the given response header name and value.
 
         If a datetime is given, we automatically format it according to the
@@ -327,6 +334,7 @@ class RequestHandler(object):
         self._headers[name] = self._convert_header_value(value)
 
     def add_header(self, name, value):
+        # type: (str, _HeaderTypes) -> None
         """Adds the given response header and value.
 
         Unlike `set_header`, `add_header` may be called multiple times
@@ -343,13 +351,25 @@ class RequestHandler(object):
         if name in self._headers:
             del self._headers[name]
 
-    _INVALID_HEADER_CHAR_RE = re.compile(br"[\x00-\x1f]")
+    _INVALID_HEADER_CHAR_RE = re.compile(r"[\x00-\x1f]")
 
     def _convert_header_value(self, value):
-        if isinstance(value, bytes):
-            pass
-        elif isinstance(value, unicode_type):
-            value = value.encode('utf-8')
+        # type: (_HeaderTypes) -> str
+
+        # Convert the input value to a str. This type check is a bit
+        # subtle: The bytes case only executes on python 3, and the
+        # unicode case only executes on python 2, because the other
+        # cases are covered by the first match for str.
+        if isinstance(value, str):
+            retval = value
+        elif isinstance(value, bytes):  # py3
+            # Non-ascii characters in headers are not well supported,
+            # but if you pass bytes, use latin1 so they pass through as-is.
+            retval = value.decode('latin1')
+        elif isinstance(value, unicode_type):  # py2
+            # TODO: This is inconsistent with the use of latin1 above,
+            # but it's been that way for a long time. Should it change?
+            retval = escape.utf8(value)
         elif isinstance(value, numbers.Integral):
             # return immediately since we know the converted value will be safe
             return str(value)
@@ -359,9 +379,9 @@ class RequestHandler(object):
             raise TypeError("Unsupported header value %r" % value)
         # If \n is allowed into the header, it is possible to inject
         # additional headers or split the request.
-        if RequestHandler._INVALID_HEADER_CHAR_RE.search(value):
-            raise ValueError("Unsafe header value %r", value)
-        return value
+        if RequestHandler._INVALID_HEADER_CHAR_RE.search(retval):
+            raise ValueError("Unsafe header value %r", retval)
+        return retval
 
     _ARG_DEFAULT = object()
 
@@ -2696,6 +2716,7 @@ class OutputTransform(object):
         pass
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
+        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes]
         return status_code, headers, chunk
 
     def transform_chunk(self, chunk, finishing):
@@ -2736,10 +2757,12 @@ class GZipContentEncoding(OutputTransform):
         return ctype.startswith('text/') or ctype in self.CONTENT_TYPES
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
+        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes]
+        # TODO: can/should this type be inherited from the superclass?
         if 'Vary' in headers:
-            headers['Vary'] += b', Accept-Encoding'
+            headers['Vary'] += ', Accept-Encoding'
         else:
-            headers['Vary'] = b'Accept-Encoding'
+            headers['Vary'] = 'Accept-Encoding'
         if self._gzipping:
             ctype = _unicode(headers.get("Content-Type", "")).split(";")[0]
             self._gzipping = self._compressible_type(ctype) and \

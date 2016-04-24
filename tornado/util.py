@@ -33,12 +33,13 @@ else:
 # Aliases for types that are spelled differently in different Python
 # versions. bytes_type is deprecated and no longer used in Tornado
 # itself but is left in case anyone outside Tornado is using it.
-unicode_type = type(u'')
 bytes_type = bytes
 if PY3:
+    unicode_type = str
     basestring_type = str
 else:
-    # The name basestring doesn't exist in py3 so silence flake8.
+    # The names unicode and basestring don't exist in py3 so silence flake8.
+    unicode_type = unicode  # noqa
     basestring_type = basestring  # noqa
 
 

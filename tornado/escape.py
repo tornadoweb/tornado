@@ -37,6 +37,11 @@ else:
     import htmlentitydefs
     import urllib as urllib_parse
 
+try:
+    import typing  # noqa
+except ImportError:
+    pass
+
 
 _XHTML_ESCAPE_RE = re.compile('[&<>"\']')
 _XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
@@ -180,6 +185,7 @@ _UTF8_TYPES = (bytes, type(None))
 
 
 def utf8(value):
+    # type: (typing.Union[bytes,unicode_type,None])->typing.Union[bytes,None]
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
