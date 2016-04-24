@@ -1285,6 +1285,8 @@ class RequestHandler(object):
             raise HTTPError(403, "'_xsrf' argument missing from POST")
         _, token, _ = self._decode_xsrf_token(token)
         _, expected_token, _ = self._get_raw_xsrf_token()
+        if not token:
+            raise HTTPError(403, "'_xsrf' argument has invalid format")
         if not _time_independent_equals(utf8(token), utf8(expected_token)):
             raise HTTPError(403, "XSRF cookie does not match POST argument")
 
