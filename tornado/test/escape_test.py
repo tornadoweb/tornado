@@ -233,10 +233,6 @@ class EscapeTestCase(unittest.TestCase):
             self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")
 
     def test_json_encode_custom_encoder(self):
-        def custom_encoder(obj):
-            if isinstance(obj, (datetime, date)):
-                return str(obj.strftime('%Y-%m-%d'))
-            return str(obj)
         payload = datetime(2008, 5, 5, 11, 30)
         self.assertEqual(json_encode(payload, custom_encoder), u'"2008-05-05"')
 
@@ -254,3 +250,11 @@ class EscapeTestCase(unittest.TestCase):
         self.assertEqual(recursive_unicode(tests['list']), [u"foo", u"bar"])
         self.assertEqual(recursive_unicode(tests['tuple']), (u"foo", u"bar"))
         self.assertEqual(recursive_unicode(tests['bytes']), u"foo")
+
+
+# helpers
+
+def custom_encoder(obj):
+    if isinstance(obj, (datetime, date)):
+        return str(obj.strftime('%Y-%m-%d'))
+    return str(obj)
