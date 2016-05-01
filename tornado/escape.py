@@ -71,20 +71,28 @@ def xhtml_unescape(value):
 # The fact that json_encode wraps json.dumps is an implementation detail.
 # Please see https://github.com/tornadoweb/tornado/pull/706
 # before sending a pull request that adds **kwargs to this function.
-def json_encode(value):
-    """JSON-encodes the given Python object."""
+def json_encode(value, custom=None):
+    """JSON-encodes the given Python object.
+
+    Optionally accepts a `custom` argument which is a callable with one argument,
+    returning a string representation of any values not supported by default.
+    """
     # JSON permits but does not require forward slashes to be escaped.
     # This is useful when json data is emitted in a <script> tag
     # in HTML, as it prevents </script> tags from prematurely terminating
     # the javascript.  Some json libraries do this escaping by default,
     # although python's standard library does not, so we do it here.
     # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
-    return json.dumps(value).replace("</", "<\\/")
+    return json.dumps(value, default=custom).replace("</", "<\\/")
 
 
-def json_decode(value):
-    """Returns Python objects for the given JSON string."""
-    return json.loads(to_basestring(value))
+def json_decode(value, cls=None):
+    """Returns Python objects for the given JSON string.
+
+    Optionally accepts a `cls` argument which can be a JSONDecoder subclass instance,
+    customising the behaviour of data types not supported by json.dumps by default.
+    """
+    return json.loads(to_basestring(value), cls=cls)
 
 
 def squeeze(value):

@@ -2,6 +2,9 @@
 
 
 from __future__ import absolute_import, division, print_function, with_statement
+import json
+from datetime import datetime, date
+
 import tornado.escape
 
 from tornado.escape import utf8, xhtml_escape, xhtml_unescape, url_escape, url_unescape, to_unicode, json_decode, json_encode, squeeze, recursive_unicode
@@ -228,6 +231,14 @@ class EscapeTestCase(unittest.TestCase):
         if bytes is str:
             self.assertEqual(json_decode(json_encode(utf8(u"\u00e9"))), u"\u00e9")
             self.assertRaises(UnicodeDecodeError, json_encode, b"\xe9")
+
+    def test_json_encode_custom_encoder(self):
+        def custom_encoder(obj):
+            if isinstance(obj, (datetime, date)):
+                return str(obj.strftime('%Y-%m-%d'))
+            return str(obj)
+        payload = datetime(2008, 5, 5, 11, 30)
+        self.assertEqual(json_encode(payload, custom_encoder), u'"2008-05-05"')
 
     def test_squeeze(self):
         self.assertEqual(squeeze(u'sequences     of    whitespace   chars'), u'sequences of whitespace chars')
