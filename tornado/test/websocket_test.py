@@ -94,7 +94,7 @@ class PathArgsHandler(TestWebSocketHandler):
 
 class HandshakeResponseHeadersHandler(TestWebSocketHandler):
 
-    def set_default_headers(self):
+    def prepare(self):
         self._headers['Set-Cookie'] = 'hello=1'
 
 

@@ -131,12 +131,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.stream = None
         self._on_close_called = False
 
-    def clear(self):
-        """Resets all headers and content for this response."""
-        self._headers = httputil.HTTPHeaders({})
-        self.set_default_headers()
-        self._write_buffer = []
-
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         self.open_args = args
@@ -144,6 +138,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':
+            self.clear()
             self.set_status(400)
             log_msg = "Can \"Upgrade\" only to \"WebSocket\"."
             self.finish(log_msg)
@@ -157,6 +152,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         connection = map(lambda s: s.strip().lower(),
                          headers.get("Connection", "").split(","))
         if 'upgrade' not in connection:
+            self.clear()
             self.set_status(400)
             log_msg = "\"Connection\" must be \"Upgrade\"."
             self.finish(log_msg)
@@ -176,6 +172,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # according to check_origin. When the origin is None, we assume it
         # did not come from a browser and that it can be passed on.
         if origin is not None and not self.check_origin(origin):
+            self.clear()
             self.set_status(403)
             log_msg = "Cross origin websockets not allowed"
             self.finish(log_msg)
@@ -187,6 +184,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         self.ws_connection = self.get_websocket_protocol()
         if self.ws_connection:
+            self.clear_header('Content-Type')
             self.ws_connection.accept_connection()
         else:
             if not self.stream.closed():
