@@ -74,7 +74,7 @@ def xhtml_unescape(value):
 def json_encode(value, custom=None):
     """JSON-encodes the given Python object.
 
-    Optionally accepts a `custom` argument which is a callable with one argument,
+    Optionally accepts a ``custom`` argument which is a callable with one argument,
     returning a string representation of any values not supported by default.
     """
     # JSON permits but does not require forward slashes to be escaped.
@@ -86,13 +86,9 @@ def json_encode(value, custom=None):
     return json.dumps(value, default=custom).replace("</", "<\\/")
 
 
-def json_decode(value, cls=None):
-    """Returns Python objects for the given JSON string.
-
-    Optionally accepts a `cls` argument which can be a JSONDecoder subclass instance,
-    customising the behaviour of data types not supported by json.dumps by default.
-    """
-    return json.loads(to_basestring(value), cls=cls)
+def json_decode(value):
+    """Returns Python objects for the given JSON string."""
+    return json.loads(to_basestring(value))
 
 
 def squeeze(value):

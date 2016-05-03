@@ -190,7 +190,7 @@
            and/or dicts.  See :ref:`ui-modules` for more details.
          * ``json_custom_encoder``: May be set to a function with a
            single argument, which returns a textual format for a type
-           not supported by `json_encode` by default. It will be passed to
+           not supported by ``json_encode`` by default. It will be passed to
            that method when `RequestHandler.write` is called with a dict
            as the only argument.
 
