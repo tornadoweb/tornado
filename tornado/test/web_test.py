@@ -2039,7 +2039,7 @@ class CustomEncoderTest(WebTestCase):
 
     def test_handler_by_name(self):
         resp = self.fetch('/custom_encoder')
-        self.assertEqual(resp.body, '{"datetime": "2008-05-05"}')
+        self.assertEqual(json_decode(resp.body), {"datetime": "2008-05-05"})
 
 
 class StreamingRequestBodyTest(WebTestCase):
