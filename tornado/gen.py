@@ -242,7 +242,7 @@ def coroutine(func, replace_callback=True):
        to `.IOLoop.add_future`.
 
     """
-    return _make_coroutine_wrapper(func, replace_callback=True)
+    return _make_coroutine_wrapper(func, replace_callback=replace_callback)
 
 
 def _make_coroutine_wrapper(func, replace_callback):
