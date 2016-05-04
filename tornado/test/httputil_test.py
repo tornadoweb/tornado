@@ -318,6 +318,34 @@ Foo: even
         self.assertEqual(headers['quux'], 'xyzzy')
         self.assertEqual(sorted(headers.get_all()), [('Foo', 'bar'), ('Quux', 'xyzzy')])
 
+    def test_string(self):
+        headers = HTTPHeaders()
+        headers.add("Foo", "1")
+        headers.add("Foo", "2")
+        headers.add("Foo", "3")
+        self.assertTrue(str(headers).startswith("HTTPHeaders"))
+        self.assertIn("Foo: 1", str(headers))
+        self.assertIn("Foo: 2", str(headers))
+        self.assertIn("Foo: 3", str(headers))
+
+        headers = HTTPHeaders()
+        headers.add('Set-Cookie', 'a=b')
+        headers.add('Set-Cookie', 'c=d')
+        headers.add('Content-Type', 'text/html')
+        self.assertTrue(str(headers).startswith("HTTPHeaders"))
+        self.assertIn("Set-Cookie: a=b", str(headers))
+        self.assertIn("Set-Cookie: c=d", str(headers))
+        self.assertIn("Content-Type: text/html", str(headers))
+
+    def test_repr(self):
+        headers = HTTPHeaders()
+        headers.add("Foo", "1")
+        headers.add("Foo", "2")
+        headers.add("Foo", "3")
+
+        headers2 = HTTPHeaders.parse(repr(headers))
+        self.assertEquals(headers, headers2)
+
 
 class FormatTimestampTest(unittest.TestCase):
     # Make sure that all the input types are supported.

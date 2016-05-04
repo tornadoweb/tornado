@@ -234,6 +234,19 @@ class HTTPHeaders(collections.MutableMapping):
     # the appearance that HTTPHeaders is a single container.
     __copy__ = copy
 
+    def __str__(self):
+        lines = []
+        for name, value in self.get_all():
+            lines.append("%s: %s" % (name, value))
+        return "HTTPHeaders(\n%s\n)" % ("\n".join(lines))
+    __unicode__ = __str__
+
+    def __repr__(self):
+        lines = []
+        for name, value in self.get_all():
+            lines.append("%s: %s" % (name, value))
+        return "\n%s\n" % ("\n".join(lines))
+
 
 class HTTPServerRequest(object):
     """A single HTTP request.
