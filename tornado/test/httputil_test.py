@@ -318,6 +318,14 @@ Foo: even
         self.assertEqual(headers['quux'], 'xyzzy')
         self.assertEqual(sorted(headers.get_all()), [('Foo', 'bar'), ('Quux', 'xyzzy')])
 
+    def test_string(self):
+        headers = HTTPHeaders()
+        headers.add("Foo", "1")
+        headers.add("Foo", "2")
+        headers.add("Foo", "3")
+        headers2 = HTTPHeaders.parse(str(headers))
+        self.assertEquals(headers, headers2)
+
 
 class FormatTimestampTest(unittest.TestCase):
     # Make sure that all the input types are supported.
