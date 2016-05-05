@@ -626,12 +626,12 @@ class RequestHandler(object):
            and made it the default.
         """
         self.require_setting("cookie_secret", "secure cookies")
-        secret = self.application.settings["cookie_secret"]
+        secret = self.settings["cookie_secret"]
         key_version = None
         if isinstance(secret, dict):
-            if self.application.settings.get("key_version") is None:
+            if self.settings.get("key_version") is None:
                 raise Exception("key_version setting must be used for secret_key dicts")
-            key_version = self.application.settings["key_version"]
+            key_version = self.settings["key_version"]
 
         return create_signed_value(secret, name, value, version=version,
                                    key_version=key_version)
@@ -651,7 +651,7 @@ class RequestHandler(object):
         self.require_setting("cookie_secret", "secure cookies")
         if value is None:
             value = self.get_cookie(name)
-        return decode_signed_value(self.application.settings["cookie_secret"],
+        return decode_signed_value(self.settings["cookie_secret"],
                                    name, value, max_age_days=max_age_days,
                                    min_version=min_version)
 
@@ -857,16 +857,15 @@ class RequestHandler(object):
         settings.  If a ``template_loader`` application setting is
         supplied, uses that instead.
         """
-        settings = self.application.settings
-        if "template_loader" in settings:
-            return settings["template_loader"]
+        if "template_loader" in self.settings:
+            return self.settings["template_loader"]
         kwargs = {}
-        if "autoescape" in settings:
+        if "autoescape" in self.settings:
             # autoescape=None means "no escaping", so we have to be sure
             # to only pass this kwarg if the user asked for it.
-            kwargs["autoescape"] = settings["autoescape"]
-        if "template_whitespace" in settings:
-            kwargs["whitespace"] = settings["template_whitespace"]
+            kwargs["autoescape"] = self.settings["autoescape"]
+        if "template_whitespace" in self.settings:
+            kwargs["whitespace"] = self.settings["template_whitespace"]
         return template.Loader(template_path, **kwargs)
 
     def flush(self, include_footers=False, callback=None):
@@ -1132,7 +1131,7 @@ class RequestHandler(object):
         By default, we use the ``login_url`` application setting.
         """
         self.require_setting("login_url", "@tornado.web.authenticated")
-        return self.application.settings["login_url"]
+        return self.settings["login_url"]
 
     def get_template_path(self):
         """Override to customize template path for each handler.
@@ -1140,7 +1139,7 @@ class RequestHandler(object):
         By default, we use the ``template_path`` application setting.
         Return None to load templates relative to the calling file.
         """
-        return self.application.settings.get("template_path")
+        return self.settings.get("template_path")
 
     @property
     def xsrf_token(self):
@@ -1343,7 +1342,7 @@ class RequestHandler(object):
 
     def require_setting(self, name, feature="this feature"):
         """Raises an exception if the given app setting is not defined."""
-        if not self.application.settings.get(name):
+        if not self.settings.get(name):
             raise Exception("You must define the '%s' setting in your "
                             "application to use %s" % (name, feature))
 
@@ -1440,7 +1439,7 @@ class RequestHandler(object):
             # If XSRF cookies are turned on, reject form submissions without
             # the proper cookie
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
-                    self.application.settings.get("xsrf_cookies"):
+                    self.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
 
             result = self.prepare()
