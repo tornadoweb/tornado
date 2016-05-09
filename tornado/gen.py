@@ -1215,7 +1215,9 @@ def convert_yielded(yielded):
     .. versionadded:: 4.1
     """
     # Lists and dicts containing YieldPoints were handled earlier.
-    if isinstance(yielded, (list, dict)):
+    if yielded is None:
+        return moment
+    elif isinstance(yielded, (list, dict)):
         return multi(yielded)
     elif is_future(yielded):
         return yielded
