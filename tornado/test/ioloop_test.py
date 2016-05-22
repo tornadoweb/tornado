@@ -140,6 +140,8 @@ class TestIOLoop(AsyncTestCase):
     def test_add_callback_while_closing(self):
         # Issue #635: add_callback() should raise a clean exception
         # if called while another thread is closing the IOLoop.
+        if IOLoop.configured_class().__name__.endswith('AsyncIOLoop'):
+            raise unittest.SkipTest("AsyncIOMainLoop shutdown not thread safe")
         closing = threading.Event()
 
         def target():

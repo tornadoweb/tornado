@@ -141,6 +141,8 @@ class BaseAsyncIOLoop(IOLoop):
 
     def add_callback(self, callback, *args, **kwargs):
         if self.closing:
+            # TODO: this is racy; we need a lock to ensure that the
+            # loop isn't closed during call_soon_threadsafe.
             raise RuntimeError("IOLoop is closing")
         self.asyncio_loop.call_soon_threadsafe(
             self._run_callback,
