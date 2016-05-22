@@ -450,7 +450,7 @@ Content-Length: foo
 bar
 
 """.replace(b"\n", b"\r\n"))
-            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01), self.stop)
+            self.stream.read_until_close(self.stop)
             self.wait()
 
 
