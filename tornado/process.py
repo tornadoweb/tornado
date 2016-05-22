@@ -201,8 +201,14 @@ class Subprocess(object):
       attribute of the resulting Subprocess a `.PipeIOStream`.
     * A new keyword argument ``io_loop`` may be used to pass in an IOLoop.
 
+    The ``Subprocess.STREAM`` option and the ``set_exit_callback`` and
+    ``wait_for_exit`` methods do not work on Windows. There is
+    therefore no reason to use this class instead of
+    ``subprocess.Popen`` on that platform.
+
     .. versionchanged:: 4.1
        The ``io_loop`` argument is deprecated.
+
     """
     STREAM = object()
 
