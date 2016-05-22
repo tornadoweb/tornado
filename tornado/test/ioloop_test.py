@@ -408,7 +408,7 @@ class TestIOLoop(AsyncTestCase):
                     self.io_loop.remove_handler(client)
             self.io_loop.add_handler(client, handle_read, self.io_loop.READ)
             self.io_loop.add_handler(server, handle_read, self.io_loop.READ)
-            self.io_loop.call_later(0.03, self.stop)
+            self.io_loop.call_later(0.1, self.stop)
             self.wait()
 
             # Only one fd was read; the other was cleanly removed.
