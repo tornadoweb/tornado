@@ -204,6 +204,7 @@ class TestPortAllocation(unittest.TestCase):
 
     @unittest.skipIf(not hasattr(socket, "SO_REUSEPORT"), "SO_REUSEPORT is not supported")
     def test_reuse_port(self):
+        sockets = []
         socket, port = bind_unused_port(reuse_port=True)
         try:
             sockets = bind_sockets(port, 'localhost', reuse_port=True)
