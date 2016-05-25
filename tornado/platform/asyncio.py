@@ -160,6 +160,10 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
         import asyncio
         AsyncIOMainLoop().install()
         asyncio.get_event_loop().run_forever()
+
+    Note that the ``AsyncIOMainLoop`` must be installed prior to
+    creating any objects that implicitly create their own ``IOLoop``
+    (e.g., :class:`tornado.httpclient.AsyncHTTPClient`).
     """
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
