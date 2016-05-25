@@ -324,7 +324,12 @@ class OptionParser(object):
                     if not isinstance(config[name], list):
                         raise Error("Option %r is required to be a list of %s" %
                                     (option.name, option.type.__name__))
-                option.parse(config[name])
+
+                if type(config[name]) == str and option.type != str:
+                    option.parse(config[name])
+                else:
+                    option.set(config[name])
+
 
         if final:
             self.run_parse_callbacks()
