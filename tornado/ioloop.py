@@ -172,6 +172,10 @@ class IOLoop(Configurable):
         This is normally not necessary as `instance()` will create
         an `IOLoop` on demand, but you may want to call `install` to use
         a custom subclass of `IOLoop`.
+
+        When using an `IOLoop` subclass, `install` must be called prior
+        to creating any objects that implicitly create their own
+        `IOLoop` (e.g., :class:`tornado.httpclient.AsyncHTTPClient`).
         """
         assert not IOLoop.initialized()
         IOLoop._instance = self
