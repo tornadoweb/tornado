@@ -144,6 +144,7 @@ def fork_processes(num_processes, max_restarts=100):
         else:
             children[pid] = i
             return None
+
     for i in range(num_processes):
         id = start_child(i)
         if id is not None:
