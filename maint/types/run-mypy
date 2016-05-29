@@ -51,7 +51,8 @@ else:
 # run mypy
 if python_files:
     # TODO --fast-import
-    rc = subprocess.call([mypy_command, "--silent-imports", "--py2", "--check-untyped-defs"] + python_files)
+    # TODO --check-untyped-defs
+    rc = subprocess.call([mypy_command, "--silent-imports", "--py2"] + python_files)
     sys.exit(rc)
 else:
     print("There are no files to run mypy on.")
