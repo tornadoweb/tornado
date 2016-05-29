@@ -13,8 +13,12 @@ import six
 import lister
 
 exclude = """
+tornado/platform/auto.py
+tornado/test/gettext_translations/extract_me.py
 demos/
 maint/test/
+docs/conf.py
+setup.py
 """.split()
 
 parser = argparse.ArgumentParser(description="Run mypy on files tracked by git.")
