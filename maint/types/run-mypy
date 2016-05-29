@@ -1,0 +1,57 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import argparse
+import os
+from os.path import dirname, abspath
+import subprocess
+import sys
+
+import six
+
+import lister
+
+exclude = """
+demos/
+maint/test/
+""".split()
+
+parser = argparse.ArgumentParser(description="Run mypy on files tracked by git.")
+parser.add_argument('targets', nargs='*', default=[],
+                    help="""files and directories to include in the result.
+                    If this is not specified, the current directory is used""")
+parser.add_argument('-m', '--modified', action='store_true', default=False, help='list only modified files')
+parser.add_argument('-a', '--all', dest='all', action='store_true', default=False,
+                    help="""run mypy on all python files, ignoring the exclude list.
+                    This is useful if you have to find out which files fail mypy check.""")
+args = parser.parse_args()
+if args.all:
+    exclude = []
+
+# find all non-excluded files in current directory
+BASE_DIR = dirname(dirname(dirname(abspath(__file__))))
+exclude = [os.path.join(BASE_DIR, fpath) for fpath in exclude]
+python_files = lister.list_files(targets=args.targets, ftypes=['py'], use_shebang=False,
+                                 modified_only=args.modified, exclude=exclude)
+
+if False:
+    # TODO
+    # Use zulip-py3-venv's mypy if it's available and we're on python 2
+    PY3_VENV_DIR = "/srv/zulip-py3-venv"
+    MYPY_VENV_PATH = os.path.join(PY3_VENV_DIR, "bin", "mypy")
+    if six.PY2 and os.path.exists(MYPY_VENV_PATH):
+        mypy_command = MYPY_VENV_PATH
+        print("Using mypy from", mypy_command)
+    else:
+        mypy_command = "mypy"
+else:
+    mypy_command = "mypy"
+
+# run mypy
+if python_files:
+    # TODO --fast-import
+    rc = subprocess.call([mypy_command, "--silent-imports", "--py2", "--check-untyped-defs"] + python_files)
+    sys.exit(rc)
+else:
+    print("There are no files to run mypy on.")
