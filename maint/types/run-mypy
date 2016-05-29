@@ -38,24 +38,18 @@ exclude = [os.path.join(BASE_DIR, fpath) for fpath in exclude]
 python_files = lister.list_files(targets=args.targets, ftypes=['py'], use_shebang=False,
                                  modified_only=args.modified, exclude=exclude)
 
-if False:
-    # TODO
-    # Use zulip-py3-venv's mypy if it's available and we're on python 2
-    PY3_VENV_DIR = "/srv/zulip-py3-venv"
-    MYPY_VENV_PATH = os.path.join(PY3_VENV_DIR, "bin", "mypy")
-    if six.PY2 and os.path.exists(MYPY_VENV_PATH):
-        mypy_command = MYPY_VENV_PATH
-        print("Using mypy from", mypy_command)
-    else:
-        mypy_command = "mypy"
-else:
-    mypy_command = "mypy"
+# TODO provide a handy way to install mypy, and use the result here if present
+mypy_command = "mypy"
 
 # run mypy
 if python_files:
-    # TODO --fast-import
-    # TODO --check-untyped-defs
-    rc = subprocess.call([mypy_command, "--silent-imports", "--py2"] + python_files)
+    try:
+        # TODO --fast-import
+        # TODO --check-untyped-defs
+        rc = subprocess.call([mypy_command, "--silent-imports", "--py2"] + python_files)
+    except OSError:
+        print("Failed to start mypy -- do you have it installed?")
+        sys.exit(2)
     sys.exit(rc)
 else:
     print("There are no files to run mypy on.")
