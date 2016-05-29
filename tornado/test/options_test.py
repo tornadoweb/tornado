@@ -24,11 +24,16 @@ except ImportError:
         mock = None
 
 
-class email(str):
-   def __new__(cls, value):
-        if '@' not in value:
+class Email(object):
+   def __init__(self, value):
+        if isinstance(value, str) and '@' in value:
+            self._value = value
+        else:
             raise ValueError()
-        return str.__new__(cls, value)
+
+   @property
+   def value(self):
+        return self._value
 
 
 class OptionsTest(unittest.TestCase):
@@ -204,9 +209,21 @@ class OptionsTest(unittest.TestCase):
         options.define('float', type=float)
         options.define('datetime', type=datetime.datetime)
         options.define('timedelta', type=datetime.timedelta)
-        options.define('email', type=email)
+        options.define('email', type=Email)
         options.define('list-of-int', type=int, multiple=True)
         return options
+
+    def _check_options_values(self, options):
+        self.assertEqual(options.str, 'asdf')
+        self.assertEqual(options.basestring, 'qwer')
+        self.assertEqual(options.int, 42)
+        self.assertEqual(options.float, 1.5)
+        self.assertEqual(options.datetime,
+                         datetime.datetime(2013, 4, 28, 5, 16))
+        self.assertEqual(options.timedelta, datetime.timedelta(seconds=45))
+        self.assertEqual(options.email.value, 'tornado@web.com')
+        self.assertTrue(isinstance(options.email, Email))
+        self.assertEqual(options.list_of_int, [1, 2, 3])
 
     def test_types(self):
         options = self._define_options()
@@ -219,34 +236,15 @@ class OptionsTest(unittest.TestCase):
                                     '--timedelta=45s',
                                     '--email=tornado@web.com',
                                     '--list-of-int=1,2,3'])
-
-        self.assertEqual(options.str, 'asdf')
-        self.assertEqual(options.basestring, 'qwer')
-        self.assertEqual(options.int, 42)
-        self.assertEqual(options.float, 1.5)
-        self.assertEqual(options.datetime,
-                         datetime.datetime(2013, 4, 28, 5, 16))
-        self.assertEqual(options.timedelta, datetime.timedelta(seconds=45))
-        self.assertEqual(options.email, 'tornado@web.com')
-        self.assertTrue(isinstance(options.email, email))
-        self.assertEqual(options.list_of_int, [1, 2, 3])
+        self._check_options_values(options)
 
     def test_types_with_conf_file(self):
-        options = self._define_options()
         for config_file_name in ("options_test_types.cfg",
                                  "options_test_types_str.cfg"):
+            options = self._define_options()
             options.parse_config_file(os.path.join(os.path.dirname(__file__),
                                       config_file_name))
-            self.assertEqual(options.str, 'asdf')
-            self.assertEqual(options.basestring, 'qwer')
-            self.assertEqual(options.int, 42)
-            self.assertEqual(options.float, 1.5)
-            self.assertEqual(options.datetime,
-                             datetime.datetime(2013, 4, 28, 5, 16))
-            self.assertEqual(options.timedelta, datetime.timedelta(seconds=45))
-            self.assertEqual(options.email, 'tornado@web.com')
-            self.assertTrue(isinstance(options.email, email))
-            self.assertEqual(options.list_of_int, [1, 2, 3])
+            self._check_options_values(options)
 
     def test_multiple_string(self):
         options = OptionParser()
