@@ -1,22 +1,27 @@
 # https://travis-ci.org/tornadoweb/tornado
 language: python
-python:
-    - 2.7.8
-    - 2.7
-    - pypy
-    - 3.3
-    - 3.4
-    - 3.5
-    - nightly
-    - pypy3
-env:
-    - TEST_SUITE=main
 
 matrix:
     fast_finish: true
     include:
-      - python: "3.5"
+      - python: 3.5
         env: TEST_SUITE=mypy
+      - python: 2.7.8
+        env: TEST_SUITE=main
+      - python: 2.7
+        env: TEST_SUITE=main
+      - python: pypy
+        env: TEST_SUITE=main
+      - python: 3.3
+        env: TEST_SUITE=main
+      - python: 3.4
+        env: TEST_SUITE=main
+      - python: 3.5
+        env: TEST_SUITE=main
+      - python: nightly
+        env: TEST_SUITE=main
+      - python: pypy3
+        env: TEST_SUITE=main
 
 install: travis_retry ./maint/travis/setup-$TEST_SUITE
 
