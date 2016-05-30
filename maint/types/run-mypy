@@ -38,8 +38,13 @@ exclude = [os.path.join(BASE_DIR, fpath) for fpath in exclude]
 python_files = lister.list_files(targets=args.targets, ftypes=['py'], use_shebang=False,
                                  modified_only=args.modified, exclude=exclude)
 
-# TODO provide a handy way to install mypy, and use the result here if present
-mypy_command = "mypy"
+project_name = os.path.basename(BASE_DIR)
+mypy_venv_path = "/srv/{}-mypy-venv/bin/mypy".format(project_name)
+if os.path.exists(mypy_venv_path):
+    mypy_command = mypy_venv_path
+    print("Using mypy from", mypy_command)
+else:
+    mypy_command = "mypy"
 
 # run mypy
 if python_files:
