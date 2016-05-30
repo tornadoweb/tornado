@@ -1,0 +1,15 @@
+#!/bin/bash
+# no `set -ex`; this script is all about doing a more verbose version by hand
+
+echo '+ ./maint/types/run-mypy'
+./maint/types/run-mypy
+retcode="$?"
+
+if [ "$retcode" == "0" ]; then
+    echo "The mypy static type checker for Python detected no errors!"
+else
+    echo
+    echo "The mypy static type checker for Python threw some errors,"
+    echo "which indicates either a bug in your code or incorrect type annotations."
+    exit "$retcode"
+fi

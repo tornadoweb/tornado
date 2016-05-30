@@ -1,0 +1,6 @@
+#!/bin/bash
+set -ex
+
+travis_retry pip install -r maint/types/requirements.in
+
+pip freeze

@@ -11,8 +11,12 @@ python:
     - pypy3
 env:
     - TEST_SUITE=main
+
 matrix:
     fast_finish: true
+    include:
+      - python: "3.5"
+        env: TEST_SUITE=mypy
 
 install: ./maint/travis/setup-$TEST_SUITE
 
