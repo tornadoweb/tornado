@@ -18,7 +18,7 @@ matrix:
       - python: "3.5"
         env: TEST_SUITE=mypy
 
-install: ./maint/travis/setup-$TEST_SUITE
+install: travis_retry ./maint/travis/setup-$TEST_SUITE
 
 script: ./maint/travis/$TEST_SUITE
 
