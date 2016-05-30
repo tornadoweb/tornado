@@ -1,0 +1,45 @@
+#!/bin/bash
+set -ex
+
+if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then
+    travis_retry pip install futures mock monotonic trollius
+fi
+
+if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then
+    travis_retry pip install futures mock
+fi
+
+# TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
+# if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then
+#     travis_retry pip install pycares
+# fi
+
+if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then
+    travis_retry pip install pycurl
+fi
+
+# Twisted runs on 2.x and 3.3+, but is flaky on pypy.
+if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then
+    travis_retry pip install Twisted
+fi
+
+if [[ $TRAVIS_PYTHON_VERSION == '2.7' || $TRAVIS_PYTHON_VERSION == '3.5' ]]; then
+    travis_retry pip install sphinx sphinx_rtd_theme
+fi
+
+# On travis the extension should always be built
+if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then
+    export TORNADO_EXTENSION=1
+fi
+
+travis_retry python setup.py install
+
+travis_retry pip install codecov
+
+# Create a separate no-dependencies virtualenv to make sure all imports
+# of optional-dependencies are guarded.
+virtualenv ./nodeps
+./nodeps/bin/python setup.py install
+
+curl-config --version
+pip freeze
