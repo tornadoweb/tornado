@@ -9,10 +9,14 @@ python:
     - 3.5
     - nightly
     - pypy3
+env:
+    - TEST_SUITE=main
+matrix:
+    fast_finish: true
 
-install: ./maint/travis/setup-main
+install: ./maint/travis/setup-$TEST_SUITE
 
-script: ./maint/travis/main
+script: ./maint/travis/$TEST_SUITE
 
 after_success:
     # call codecov from project root
@@ -22,6 +26,3 @@ after_success:
 # travis.  Consider removing this after the underlying issue is fixed.
 # https://github.com/travis-ci/travis-ci/issues/2389
 sudo: false
-
-matrix:
-    fast_finish: true
