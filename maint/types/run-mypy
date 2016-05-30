@@ -44,7 +44,7 @@ mypy_command = "mypy"
 # run mypy
 if python_files:
     try:
-        # TODO --fast-import
+        # TODO --fast-parser
         # TODO --check-untyped-defs
         rc = subprocess.call([mypy_command, "--silent-imports", "--py2"] + python_files)
     except OSError:
