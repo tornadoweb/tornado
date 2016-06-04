@@ -23,7 +23,7 @@ New modules: `tornado.locks` and `tornado.queues`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 These modules provide classes for coordinating coroutines, merged from
-`Toro <http://toro.readthedocs.org>`_.
+`Toro <https://toro.readthedocs.io>`_.
 
 To port your code from Toro's queues to Tornado 4.2, import `.Queue`,
 `.PriorityQueue`, or `.LifoQueue` from `tornado.queues` instead of from
