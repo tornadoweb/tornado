@@ -33,10 +33,10 @@ if 'APPENGINE_RUNTIME' in os.environ:
     def set_close_exec(fd):
         pass
 elif os.name == 'nt':
-    from tornado.platform.common import Waker
+    from tornado.platform.common import Waker  # type: ignore
     from tornado.platform.windows import set_close_exec
 else:
-    from tornado.platform.posix import set_close_exec, Waker
+    from tornado.platform.posix import set_close_exec, Waker  # type: ignore
 
 try:
     # monotime monkey-patches the time module to have a monotonic function
@@ -52,7 +52,7 @@ try:
     from monotonic import monotonic as monotonic_time
 except ImportError:
     try:
-        from time import monotonic as monotonic_time
+        from time import monotonic as monotonic_time  # type: ignore
     except ImportError:
         monotonic_time = None
 
