@@ -160,6 +160,9 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
         import asyncio
         AsyncIOMainLoop().install()
         asyncio.get_event_loop().run_forever()
+
+    See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
+    installing alternative IOLoops.
     """
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
