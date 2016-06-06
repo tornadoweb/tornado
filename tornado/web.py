@@ -2579,6 +2579,9 @@ class StaticFileHandler(RequestHandler):
         # per RFC 6713, use the appropriate type for a gzip compressed file
         if encoding == "gzip":
             return "application/gzip"
+        # Bugfix recognition svg file
+        if self.absolute_path.endswith(".svg"):
+            return "image/svg+xml"
         # As of 2015-07-21 there is no bzip2 encoding defined at
         # http://www.iana.org/assignments/media-types/media-types.xhtml
         # So for that (and any other encoding), use octet-stream.
