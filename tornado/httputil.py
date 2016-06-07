@@ -129,6 +129,9 @@ class HTTPHeaders(collections.MutableMapping):
     Set-Cookie: A=B
     Set-Cookie: C=D
     """
+
+    __slots__ = ("_dict", "_as_list", "_last_key")
+
     def __init__(self, *args, **kwargs):
         self._dict = {}  # type: typing.Dict[str, str]
         self._as_list = {}  # type: typing.Dict[str, typing.List[str]]
