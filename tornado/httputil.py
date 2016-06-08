@@ -228,6 +228,19 @@ class HTTPHeaders(collections.MutableMapping):
     def __iter__(self):
         return iter(self._dict)
 
+    # required for pickle: becaused __slots__ defined
+    def __getstate__(self):
+        return {
+            slot: getattr(self, slot)
+            for slot in self.__slots__
+            if hasattr(self, slot)
+        }
+
+    # required for pickle: becaused __slots__ defined
+    def __setstate__(self, state):
+        for slot, value in state.items():
+            setattr(self, slot, value)
+
     def copy(self):
         # defined in dict but not in MutableMapping.
         return HTTPHeaders(self)
