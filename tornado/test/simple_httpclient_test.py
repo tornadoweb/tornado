@@ -73,10 +73,18 @@ class OptionsHandler(RequestHandler):
 
 class NoContentHandler(RequestHandler):
     def get(self):
+        start_line = ResponseStartLine("HTTP/1.1", 204, "No Content")
+        headers = HTTPHeaders()
+        chunk = None
+
         if self.get_argument("error", None):
-            self.set_header("Content-Length", "5")
-            self.write("hello")
-        self.set_status(204)
+            headers['Content-Length'] = "5"
+            chunk = b"hello"
+
+        # write directly to the connection because .write() and .finish() won't
+        # allow us to generate malformed responses
+        self.request.connection.write_headers(start_line, headers, chunk)
+        self.request.finish()
 
 
 class SeeOtherPostHandler(RequestHandler):
@@ -322,12 +330,11 @@ class SimpleHTTPClientTestMixin(object):
     def test_no_content(self):
         response = self.fetch("/no_content")
         self.assertEqual(response.code, 204)
-        # 204 status doesn't need a content-length, but tornado will
-        # add a zero content-length anyway.
+        # 204 status shouldn't have a content-length
         #
         # A test without a content-length header is included below
         # in HTTP204NoContentTestCase.
-        self.assertEqual(response.headers["Content-length"], "0")
+        self.assertNotIn("Content-Length", response.headers)
 
         # 204 status with non-zero content length is malformed
         with ExpectLog(gen_log, "Malformed HTTP message"):

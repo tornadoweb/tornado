@@ -1397,6 +1397,19 @@ class ClearHeaderTest(SimpleHandlerTestCase):
         self.assertEqual(response.headers["h2"], "bar")
 
 
+class Header204Test(SimpleHandlerTestCase):
+    class Handler(RequestHandler):
+        def get(self):
+            self.set_status(204)
+            self.finish()
+
+    def test_204_headers(self):
+        response = self.fetch('/')
+        self.assertEqual(response.code, 204)
+        self.assertNotIn("Content-Length", response.headers)
+        self.assertNotIn("Transfer-Encoding", response.headers)
+
+
 @wsgi_safe
 class Header304Test(SimpleHandlerTestCase):
     class Handler(RequestHandler):
