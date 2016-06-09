@@ -141,6 +141,8 @@ class BaseAsyncIOLoop(IOLoop):
 
     def add_callback(self, callback, *args, **kwargs):
         if self.closing:
+            # TODO: this is racy; we need a lock to ensure that the
+            # loop isn't closed during call_soon_threadsafe.
             raise RuntimeError("IOLoop is closing")
         self.asyncio_loop.call_soon_threadsafe(
             self._run_callback,
@@ -158,6 +160,9 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
         import asyncio
         AsyncIOMainLoop().install()
         asyncio.get_event_loop().run_forever()
+
+    See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
+    installing alternative IOLoops.
     """
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),

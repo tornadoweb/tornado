@@ -407,6 +407,9 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
     Not compatible with `tornado.process.Subprocess.set_exit_callback`
     because the ``SIGCHLD`` handlers used by Tornado and Twisted conflict
     with each other.
+
+    See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
+    installing alternative IOLoops.
     """
     def initialize(self, reactor=None, **kwargs):
         super(TwistedIOLoop, self).initialize(**kwargs)

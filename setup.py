@@ -129,7 +129,7 @@ if setuptools is not None:
     if sys.version_info < (2, 7):
         # Only needed indirectly, for singledispatch.
         install_requires.append('ordereddict')
-    if sys.version_info < (3, 2):
+    if sys.version_info < (2, 7, 9):
         install_requires.append('backports.ssl_match_hostname')
     if sys.version_info < (3, 4):
         install_requires.append('singledispatch')

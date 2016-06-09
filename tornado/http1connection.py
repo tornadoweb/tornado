@@ -540,7 +540,13 @@ class HTTP1Connection(httputil.HTTPConnection):
                         "Multiple unequal Content-Lengths: %r" %
                         headers["Content-Length"])
                 headers["Content-Length"] = pieces[0]
-            content_length = int(headers["Content-Length"])
+
+            try:
+                content_length = int(headers["Content-Length"])
+            except ValueError:
+                # Handles non-integer Content-Length value.
+                raise httputil.HTTPInputError(
+                    "Only integer Content-Length is allowed: %s" % headers["Content-Length"])
 
             if content_length > self._max_body_size:
                 raise httputil.HTTPInputError("Content-Length too long")

@@ -441,6 +441,18 @@ bar
         headers, response = self.wait()
         self.assertEqual(json_decode(response), {u'foo': [u'bar']})
 
+    def test_invalid_content_length(self):
+        with ExpectLog(gen_log, '.*Only integer Content-Length is allowed'):
+            self.stream.write(b"""\
+POST /echo HTTP/1.1
+Content-Length: foo
+
+bar
+
+""".replace(b"\n", b"\r\n"))
+            self.stream.read_until_close(self.stop)
+            self.wait()
+
 
 class XHeaderTest(HandlerBaseTestCase):
     class Handler(RequestHandler):

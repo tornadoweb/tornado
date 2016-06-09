@@ -242,7 +242,7 @@ Looping is tricky with coroutines since there is no way in Python
 to ``yield`` on every iteration of a ``for`` or ``while`` loop and
 capture the result of the yield.  Instead, you'll need to separate
 the loop condition from accessing the results, as in this example
-from `Motor <http://motor.readthedocs.org/en/stable/>`_::
+from `Motor <https://motor.readthedocs.io/en/stable/>`_::
 
     import motor
     db = motor.MotorClient().test
