@@ -281,8 +281,6 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         return curl
 
     def _curl_setup_request(self, curl, request, buffer, headers):
-        curl.setopt(pycurl.URL, native_str(request.url))
-
         # libcurl's magic "Expect: 100-continue" behavior causes delays
         # with servers that don't support it (which include, among others,
         # Google's OpenID endpoint).  Additionally, this behavior has
@@ -311,6 +309,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         else:
             write_function = buffer.write
         if bytes is str:  # py2
+            curl.setopt(pycurl.URL, native_str(request.url))
             curl.setopt(pycurl.WRITEFUNCTION, write_function)
         else:  # py3
             # Upstream pycurl doesn't support py3, but ubuntu 12.10 includes
@@ -320,6 +319,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             # download arbitrary binary data.  This needs to be fixed in the
             # ported pycurl package, but in the meantime this lambda will
             # make it work for downloading (utf8) text.
+            curl.setopt(pycurl.URL, native_str(request.url).encode())
             curl.setopt(pycurl.WRITEFUNCTION, lambda s: write_function(utf8(s)))
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
