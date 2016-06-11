@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # flake8: noqa
 # Dummy source file to allow creation of the initial .po file in the
 # same way as a real project.  I'm not entirely sure about the real

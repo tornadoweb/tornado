@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 # Usage is like 2to3:
 # $ maint/scripts/run_fixers.py -wn --no-diffs tornado
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # These tests do not currently do much to verify the correct implementation
 # of the openid/oauth protocols, they just exercise the major code paths
 # and ensure that it doesn't blow up (e.g. with unicode/bytes issues in
