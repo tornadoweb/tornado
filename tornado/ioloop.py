@@ -1050,6 +1050,7 @@ class PeriodicCallback(object):
 
             if self._next_timeout <= current_time:
                 callback_time_sec = self.callback_time / 1000.0
-                self._next_timeout += (math.floor((current_time - self._next_timeout) / callback_time_sec) + 1) * callback_time_sec
+                self._next_timeout += (math.floor((current_time - self._next_timeout) /
+                                                  callback_time_sec) + 1) * callback_time_sec
 
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
