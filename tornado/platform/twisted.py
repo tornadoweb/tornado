@@ -556,7 +556,10 @@ class TwistedResolver(Resolver):
             deferred = self.resolver.getHostByName(utf8(host))
             resolved = yield gen.Task(deferred.addBoth)
             if isinstance(resolved, failure.Failure):
-                resolved.raiseException()
+                try:
+                    resolved.raiseException()
+                except twisted.names.error.DomainError as e:
+                    raise IOError(e)
             elif twisted.internet.abstract.isIPAddress(resolved):
                 resolved_family = socket.AF_INET
             elif twisted.internet.abstract.isIPv6Address(resolved):

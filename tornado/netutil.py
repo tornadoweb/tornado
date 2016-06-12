@@ -332,6 +332,11 @@ class Resolver(Configurable):
         port)`` pair for IPv4; additional fields may be present for
         IPv6). If a ``callback`` is passed, it will be run with the
         result as an argument when it is complete.
+
+        :raises IOError: if the address cannot be resolved.
+
+        .. versionchanged:: 4.4
+           Standardized all implementations to raise `IOError`.
         """
         raise NotImplementedError()
 

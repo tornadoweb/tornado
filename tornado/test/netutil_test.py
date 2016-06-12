@@ -64,7 +64,7 @@ class _ResolverErrorTestMixin(object):
 
     @gen_test
     def test_future_interface_bad_host(self):
-        with self.assertRaises(Exception):
+        with self.assertRaises(IOError):
             yield self.resolver.resolve('an invalid domain', 80,
                                         socket.AF_UNSPEC)
 
