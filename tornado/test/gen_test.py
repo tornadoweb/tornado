@@ -767,6 +767,19 @@ class GenCoroutineTest(AsyncTestCase):
         self.assertEqual(results, [42, 43])
         self.finished = True
 
+    @skipBefore35
+    @gen_test
+    def test_async_with_timeout(self):
+        namespace = exec_test(globals(), locals(), """
+        async def f1():
+            return 42
+        """)
+
+        result = yield gen.with_timeout(datetime.timedelta(hours=1),
+                                        namespace['f1']())
+        self.assertEqual(result, 42)
+        self.finished = True
+
     @gen_test
     def test_sync_return_no_value(self):
         @gen.coroutine

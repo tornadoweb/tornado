@@ -852,7 +852,7 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
        Added the ``quiet_exceptions`` argument and the logging of unhandled
        exceptions.
     """
-    # TODO: allow yield points in addition to futures?
+    # TODO: allow YieldPoints in addition to other yieldables?
     # Tricky to do with stack_context semantics.
     #
     # It's tempting to optimize this by cancelling the input future on timeout
@@ -860,6 +860,7 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
     # one waiting on the input future, so cancelling it might disrupt other
     # callers and B) concurrent futures can only be cancelled while they are
     # in the queue, so cancellation cannot reliably bound our waiting time.
+    future = convert_yielded(future)
     result = Future()
     chain_future(future, result)
     if io_loop is None:
