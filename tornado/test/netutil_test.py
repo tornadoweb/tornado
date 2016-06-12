@@ -207,7 +207,7 @@ class TestPortAllocation(unittest.TestCase):
         sockets = []
         socket, port = bind_unused_port(reuse_port=True)
         try:
-            sockets = bind_sockets(port, 'localhost', reuse_port=True)
+            sockets = bind_sockets(port, '127.0.0.1', reuse_port=True)
             self.assertTrue(all(s.getsockname()[1] == port for s in sockets))
         finally:
             socket.close()
