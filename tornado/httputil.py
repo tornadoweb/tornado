@@ -237,8 +237,8 @@ class HTTPHeaders(collections.MutableMapping):
     def __str__(self):
         lines = []
         for name, value in self.get_all():
-            lines.append("%s: %s" % (name, value))
-        return "\n%s\n" % ("\n".join(lines))
+            lines.append("%s: %s\n" % (name, value))
+        return "".join(lines)
 
     __unicode__ = __str__
 
