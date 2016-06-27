@@ -8,4 +8,5 @@ Utilities
    options
    stack_context
    testing
+   mock
    util
