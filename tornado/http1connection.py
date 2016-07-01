@@ -351,7 +351,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # 304 responses have no body (not even a zero-length body), and so
                 # should not have either Content-Length or Transfer-Encoding.
                 # headers.
-                start_line.code != 304 and
+                start_line.code not in (204, 304) and
                 # No need to chunk the output if a Content-Length is specified.
                 'Content-Length' not in headers and
                 # Applications are discouraged from touching Transfer-Encoding,
