@@ -147,7 +147,8 @@ class TCPServer(object):
         """Singular version of `add_sockets`.  Takes a single socket object."""
         self.add_sockets([socket])
 
-    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128, reuse_port=False):
+    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128,
+             reuse_port=False):
         """Binds this server to the given port on the given address.
 
         To start the server, call `start`. If you want to run this server
@@ -162,10 +163,14 @@ class TCPServer(object):
         both will be used if available.
 
         The ``backlog`` argument has the same meaning as for
-        `socket.listen <socket.socket.listen>`.
+        `socket.listen <socket.socket.listen>`. The ``reuse_port`` argument
+        has the same meaning as for `.bind_sockets`.
 
         This method may be called multiple times prior to `start` to listen
         on multiple ports or interfaces.
+
+        .. versionchanged:: 4.4
+           Added the ``reuse_port`` argument.
         """
         sockets = bind_sockets(port, address=address, family=family,
                                backlog=backlog, reuse_port=reuse_port)

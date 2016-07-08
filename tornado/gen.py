@@ -833,7 +833,7 @@ def maybe_future(x):
 
 
 def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
-    """Wraps a `.Future` in a timeout.
+    """Wraps a `.Future` (or other yieldable object) in a timeout.
 
     Raises `TimeoutError` if the input future does not complete before
     ``timeout``, which may be specified in any form allowed by
@@ -844,13 +844,16 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
     will be logged unless it is of a type contained in ``quiet_exceptions``
     (which may be an exception type or a sequence of types).
 
-    Currently only supports Futures, not other `YieldPoint` classes.
+    Does not support `YieldPoint` subclasses.
 
     .. versionadded:: 4.0
 
     .. versionchanged:: 4.1
        Added the ``quiet_exceptions`` argument and the logging of unhandled
        exceptions.
+
+    .. versionchanged:: 4.4
+       Added support for yieldable objects other than `.Future`.
     """
     # TODO: allow YieldPoints in addition to other yieldables?
     # Tricky to do with stack_context semantics.

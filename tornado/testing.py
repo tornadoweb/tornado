@@ -96,6 +96,10 @@ def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.
 
     Returns a tuple (socket, port).
+
+    .. versionchanged:: 4.4
+       Always binds to ``127.0.0.1`` without resolving the name
+       ``localhost``.
     """
     sock = netutil.bind_sockets(None, '127.0.0.1', family=socket.AF_INET,
                                 reuse_port=reuse_port)[0]

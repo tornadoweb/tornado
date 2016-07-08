@@ -97,11 +97,10 @@ the following optional packages may be useful:
 * `pycares <https://pypi.python.org/pypi/pycares>`_ is an alternative
   non-blocking DNS resolver that can be used when threads are not
   appropriate.
-* `Monotime <https://pypi.python.org/pypi/Monotime>`_ adds support for
-  a monotonic clock, which improves reliability in environments
-  where clock adjustments are frequent.  No longer needed in Python 3.3.
-* `monotonic <https://pypi.python.org/pypi/monotonic>`_ adds support for
-  a monotonic clock. Alternative to Monotime.  No longer needed in Python 3.3.
+* `monotonic <https://pypi.python.org/pypi/monotonic>`_ or `Monotime
+  <https://pypi.python.org/pypi/Monotime>`_ add support for a
+  monotonic clock, which improves reliability in environments where
+  clock adjustements are frequent. No longer needed in Python 3.3.
 
 **Platforms**: Tornado should run on any Unix-like platform, although
 for the best performance and scalability only Linux (with ``epoll``)
