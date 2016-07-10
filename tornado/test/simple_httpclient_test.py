@@ -631,12 +631,13 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
 
     def test_204_invalid_content_length(self):
         # 204 status with non-zero content length is malformed
-        response = self.fetch("/?error=1")
-        if not self.http1:
-            self.skipTest("requires HTTP/1.x")
-        if self.http_client.configured_class != SimpleAsyncHTTPClient:
-            self.skipTest("curl client accepts invalid headers")
-        self.assertEqual(response.code, 599)
+        with ExpectLog(gen_log, ".*Response with code 204 should not have body"):
+            response = self.fetch("/?error=1")
+            if not self.http1:
+                self.skipTest("requires HTTP/1.x")
+            if self.http_client.configured_class != SimpleAsyncHTTPClient:
+                self.skipTest("curl client accepts invalid headers")
+            self.assertEqual(response.code, 599)
 
 
 class HostnameMappingTestCase(AsyncHTTPTestCase):
