@@ -54,7 +54,7 @@ class RootHandler(RequestHandler):
         pass
 
 def handle_sigchld(sig, frame):
-    IOLoop.instance().add_callback_from_signal(IOLoop.instance().stop)
+    IOLoop.current().add_callback_from_signal(IOLoop.current().stop)
 
 def main():
     parse_command_line()
@@ -64,6 +64,7 @@ def main():
         run()
 
 def run():
+    io_loop = IOLoop(make_current=True)
     app = Application([("/", RootHandler)])
     port = random.randrange(options.min_port, options.max_port)
     app.listen(port, address='127.0.0.1')
@@ -78,10 +79,9 @@ def run():
         args.append("-q")
     args.append("http://127.0.0.1:%d/" % port)
     subprocess.Popen(args)
-    IOLoop.instance().start()
-    IOLoop.instance().close()
-    del IOLoop._instance
-    assert not IOLoop.initialized()
+    io_loop.start()
+    io_loop.close()
+    io_loop.clear_current()
 
 if __name__ == '__main__':
     main()
