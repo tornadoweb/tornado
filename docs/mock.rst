@@ -3,6 +3,4 @@
 
 .. automodule:: tornado.mock
 
-   .. autoclass:: TaskMock
-
-   .. autoclass:: FutureMock
+   .. autoclass:: AsyncMock

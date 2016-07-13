@@ -1,27 +1,42 @@
 from __future__ import absolute_import
 
 try:
-    from unittest import mock
+    # py33+
+    from unittest import mock  # type: ignore
 except ImportError:
-    import mock
+    try:
+        import mock  # type: ignore
+    except ImportError:
+        mock = None
 
 from tornado.test.util import unittest
-from tornado.mock import FutureMock, TaskMock
+from tornado.mock import AsyncMock
 from tornado import gen
 
 
-class TaskMockTest(unittest.TestCase):
-    def test_called_callback(self):
+class AsyncMockTest(unittest.TestCase):
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_callback_called(self):
         callback = mock.Mock()
-        task_mock = TaskMock(return_value=42)
-        result = task_mock(callback=callback)
-        self.assertEqual(result, 42)
+        async_mock = AsyncMock(return_value=42)
+        async_mock(callback=callback)
         callback.assert_called_once_with(42)
 
-
-class FutureMockTest(unittest.TestCase):
+    @unittest.skipIf(mock is None, 'mock package not present')
     def test_returns_future(self):
-        future_mock = FutureMock(return_value=42)
-        result = future_mock()
+        async_mock = AsyncMock(return_value=42)
+        result = async_mock()
         self.assertIsInstance(result, gen.Future)
         self.assertEqual(result.result(), 42)
+
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_side_effect(self):
+        async_mock = AsyncMock(side_effect=[1, 2])
+        self._test_side_effect(async_mock, 1)
+        self._test_side_effect(async_mock, 2)
+
+    def _test_side_effect(self, async_mock, number):
+        callback = mock.Mock()
+        result = async_mock(callback=callback)
+        self.assertEqual(result.result(), number)
+        callback.assert_called_once_with(number)

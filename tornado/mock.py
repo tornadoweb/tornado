@@ -15,52 +15,47 @@ except ImportError:
 from tornado import gen
 
 
-class TaskMock(mock.Mock):
+class AsyncMock(mock.Mock):
     """
-    Mock allowing to mock-out code wrapped in `tornado.gen.Task`. Function
-    ``Task`` passes param ``callback`` which has to be called to resolve
-    `Future <tornado.concurrent.Future>` instance.
+    Mock allowing to mock-out code returning `tornado.concurrent.Future`
+    instance. For example functions decorated by `tornado.gen.coroutine`
+    or by `tornado.gen.Task`.
 
-    Suitable for mocking ``call_some_sync_api`` from following example:
+    Note you can use everything as with standard ``mock.Mock``.
+
+    Example usage:
 
     .. code-block:: python
 
-        @tornado.gen.coroutine
-        def post():
-            value = yield self.method()
+        class Handler(tornado.web.RequestHandler):
+            @tornado.gen.coroutine
+            def post(self):
+                value = yield self.method()
 
-        @tornado.gen.coroutine
-        def method():
-            yield tornado.gen.Task(call_some_sync_api)
+            @tornado.gen.coroutine
+            def method(self):
+                yield tornado.gen.Task(self.inner_method)
+
+            def inner_method(self):
+                return 'whatever'
+
+        def test_method():
+            with mock.patch.object(Handler, 'method', AsyncMock(return_value=42)):
+                assert 42 == Handler().method()
+
+        def test_inner_method():
+            with mock.patch.object(Handler, 'inner_method', AsyncMock(return_value=42)):
+                assert 42 == Handler().method()
     """
-    def _mock_call(self, *args, **kwds):
-        res = super(TaskMock, self)._mock_call(*args, **kwds)
-        callback = kwds.get('callback')
-        if callback:
-            callback(res)
-        return res
-
-
-class FutureMock(mock.Mock):
-    """
-    Mock allowing to mock-out code which should return
-    `Future <tornado.concurrent.Future>` instance. For example
-    code decorated by `tornado.gen.coroutine`.
-
-    Suitable for mocking ``method`` from following example:
-
-    .. code-block:: python
-
-        @tornado.gen.coroutine
-        def post():
-            value = yield self.method()
-
-        @tornado.gen.coroutine
-        def method():
-            yield tornado.gen.Task(call_some_sync_api)
-    """
-    def _mock_call(self, *args, **kwds):
-        res = super(FutureMock, self)._mock_call(*args, **kwds)
+    def __call__(self, *args, **kwds):
         future = gen.Future()
-        future.set_result(res)
+        callback = kwds.get('callback', lambda val: None)
+        try:
+            res = super(AsyncMock, self).__call__(*args, **kwds)
+        except Exception as exc:
+            future.set_exception(exc)
+            callback(exc)
+        else:
+            future.set_result(res)
+            callback(res)
         return future
