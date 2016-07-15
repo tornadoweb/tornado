@@ -1,8 +1,8 @@
 What's new in Tornado 4.4
 =========================
 
-In progress
------------
+Jul 15, 2016
+------------
 
 General
 ~~~~~~~
