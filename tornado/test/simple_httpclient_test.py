@@ -782,3 +782,21 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
                                  "with both Transfer-Encoding and Content-Length")):
             response = self.fetch('/chunkwithcl')
         self.assertEqual(response.code, 599)
+
+
+class RawStringRegexTest(AsyncHTTPTestCase):
+
+    def get_http_client(self):
+        return SimpleAsyncHTTPClient()
+
+    def get_app(self):
+        class RawStringRegex(RequestHandler):
+            def get(self, bar):
+                self.write(bar)
+
+        return Application([(r'^/api/v\d+/foo/(\w+)$', RawStringRegex)])
+
+    def test_raw_string_regex(self):
+        response = self.fetch('/api/v1/foo/bar')
+        response.rethrow()
+        self.assertEqual(response.body, b'bar')
