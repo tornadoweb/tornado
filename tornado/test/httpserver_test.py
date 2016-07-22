@@ -441,6 +441,25 @@ bar
         headers, response = self.wait()
         self.assertEqual(json_decode(response), {u'foo': [u'bar']})
 
+    def test_chunked_request_uppercase(self):
+        # As per RFC 2616 section 3.6, "Transfer-Encoding" header's value is
+        # case-insensitive.
+        self.stream.write(b"""\
+POST /echo HTTP/1.1
+Transfer-Encoding: Chunked
+Content-Type: application/x-www-form-urlencoded
+
+4
+foo=
+3
+bar
+0
+
+""".replace(b"\n", b"\r\n"))
+        read_stream_body(self.stream, self.stop)
+        headers, response = self.wait()
+        self.assertEqual(json_decode(response), {u'foo': [u'bar']})
+
     def test_invalid_content_length(self):
         with ExpectLog(gen_log, '.*Only integer Content-Length is allowed'):
             self.stream.write(b"""\
