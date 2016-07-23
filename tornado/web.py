@@ -3059,14 +3059,16 @@ class URLSpec(object):
                 try:
                     unescaped_fragment = re_unescape(fragment)
                 except ValueError as exc:
-                    raise ValueError(exc.args[0] + '; invalid url: %r' % pattern)
+                    # If we can't unescape part of it, we can't
+                    # reverse this url.
+                    return (None, None)
                 pieces.append(unescaped_fragment)
 
         return (''.join(pieces), self.regex.groups)
 
     def reverse(self, *args):
-        assert self._path is not None, \
-            "Cannot reverse url regex " + self.regex.pattern
+        if self._path is None:
+            raise ValueError("Cannot reverse url regex " + self.regex.pattern)
         assert len(args) == self._group_count, "required number of arguments "\
             "not found"
         if not len(args):

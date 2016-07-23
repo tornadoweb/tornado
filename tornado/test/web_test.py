@@ -2811,3 +2811,26 @@ class ApplicationTest(AsyncTestCase):
 class URLSpecReverseTest(unittest.TestCase):
     def test_reverse(self):
         self.assertEqual('/favicon.ico', url(r'/favicon\.ico', None).reverse())
+        self.assertEqual('/favicon.ico', url(r'^/favicon\.ico$', None).reverse())
+
+    def test_non_reversible(self):
+        # URLSpecs are non-reversible if they include non-constant
+        # regex features outside capturing groups. Currently, this is
+        # only strictly enforced for backslash-escaped character
+        # classes.
+        paths = [
+            r'^/api/v\d+/foo/(\w+)$',
+        ]
+        for path in paths:
+            # A URLSpec can still be created even if it cannot be reversed.
+            url_spec = url(path, None)
+            try:
+                result = url_spec.reverse()
+                self.fail("did not get expected exception when reversing %s. "
+                          "result: %s" % (path, result))
+            except ValueError:
+                pass
+
+    def test_reverse_arguments(self):
+        self.assertEqual('/api/v1/foo/bar',
+                         url(r'^/api/v1/foo/(\w+)$', None).reverse('bar'))
