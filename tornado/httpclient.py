@@ -530,7 +530,7 @@ class HTTPResponse(object):
 
     * buffer: ``cStringIO`` object for response body
 
-    * body: response body as string (created on demand from ``self.buffer``)
+    * body: response body as bytes (created on demand from ``self.buffer``)
 
     * error: Exception object, if any
 
