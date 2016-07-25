@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# This script installs a python3 virtualenv in a shared directory.
+# It then installs mypy and some other development-time dependencies
+# into that virtualenv.  This script has been written for Ubuntu.
+# If you want to install on some other distro, replace these
+# commands with the corresponding commands for your distro.
+# (e.g., on Fedora, replace apt-get with yum or dnf.)
+
+THIS_DIR=$(dirname "$0")
+PROJECT_NAME=$(basename "$(git rev-parse --show-toplevel)")
+VENV_PATH="/srv/$PROJECT_NAME-mypy-venv"
+
+if ! which python3 >/dev/null || ! which virtualenv >/dev/null; then
+    if which apt-get; then
+        sudo apt-get install -y python3 python-virtualenv
+    else
+        echo "Please install python3 and python-virtualenv."
+        exit 1
+    fi
+fi
+
+# create venv if required
+if [ -d "$VENV_PATH" ]; then
+    echo "found virtualenv $VENV_PATH"
+else
+    echo "creating virtualenv $VENV_PATH"
+    sudo virtualenv -p python3 "$VENV_PATH"
+fi
+source "$VENV_PATH/bin/activate"
+
+# install mypy
+sudo "$VENV_PATH/bin/pip" install --upgrade pip
+sudo "$VENV_PATH/bin/pip" install --no-deps -r "$THIS_DIR/requirements.in"

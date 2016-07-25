@@ -1,0 +1,2 @@
+six
+git+https://github.com/python/mypy.git@e45ac1085

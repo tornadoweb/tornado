@@ -1,0 +1,6 @@
+#!/bin/bash
+set -ex
+
+pip install -r maint/types/requirements.in
+
+pip freeze
