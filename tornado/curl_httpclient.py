@@ -278,6 +278,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if curl_log.isEnabledFor(logging.DEBUG):
             curl.setopt(pycurl.VERBOSE, 1)
             curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
+        if hasattr(pycurl,'PROTOCOLS'): # PROTOCOLS first appeared in pycurl 7.19.5 (2014-07-12)
+            curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP|pycurl.PROTO_HTTPS)
+            curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP|pycurl.PROTO_HTTPS)
         return curl
 
     def _curl_setup_request(self, curl, request, buffer, headers):
