@@ -30,9 +30,13 @@ install:
     - curl-config --version; pip freeze
 
 script:
-    # Get out of the source directory before running tests to avoid PYTHONPATH
-    # confusion.  This is necessary to ensure that the speedups module can
-    # be found in the installation directory.
+    # Run the tests once from the source directory to detect issues
+    # involving relative __file__ paths; see
+    # https://github.com/tornadoweb/tornado/issues/1780
+    - unset TORNADO_EXTENSION && python -m tornado.test
+    # For all other test variants, get out of the source directory before
+    # running tests to ensure that we get the installed speedups module
+    # instead of the source directory which doesn't have it.
     - cd maint
     # Copy the coveragerc down so coverage.py can find it.
     - cp ../.coveragerc .

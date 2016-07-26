@@ -36,7 +36,7 @@ class OptionsTest(unittest.TestCase):
         options.define("port", default=80)
         options.define("username", default='foo')
         options.define("my_path")
-        config_path = os.path.join(os.path.dirname(__file__),
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "options_test.cfg")
         options.parse_config_file(config_path)
         self.assertEqual(options.port, 443)
