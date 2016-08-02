@@ -527,7 +527,7 @@ class RequestHandler(object):
 
         Additional keyword arguments are set on the Cookie.Morsel
         directly.
-        See http://docs.python.org/library/cookie.html#morsel-objects
+        See https://docs.python.org/2/library/cookie.html#Cookie.Morsel
         for available attributes.
         """
         # The cookie library only accepts type str, in both python 2 and 3
