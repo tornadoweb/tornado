@@ -39,7 +39,21 @@ class TCPServer(object):
     r"""A non-blocking, single-threaded TCP server.
 
     To use `TCPServer`, define a subclass which overrides the `handle_stream`
-    method.
+    method. For example, a simple echo server could be defined like this::
+
+      from tornado.tcpserver import TCPServer
+      from tornado.iostream import StreamClosedError
+      from tornado import gen
+
+      class EchoServer(TCPServer):
+          @gen.coroutine
+          def handle_stream(self, stream, address):
+              while True:
+                  try:
+                      data = yield stream.read_until(b"\n")
+                      yield stream.write(data)
+                  except StreamClosedError:
+                      break
 
     To make this server serve SSL traffic, send the ``ssl_options`` keyword
     argument with an `ssl.SSLContext` object. For compatibility with older
