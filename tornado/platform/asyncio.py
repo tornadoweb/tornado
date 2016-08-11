@@ -14,9 +14,9 @@ loops.
 
 .. note::
 
-   Tornado requires the `~asyncio.BaseEventLoop.add_reader` family of methods,
-   so it is not compatible with the `~asyncio.ProactorEventLoop` on Windows.
-   Use the `~asyncio.SelectorEventLoop` instead.
+   Tornado requires the `~asyncio.AbstractEventLoop.add_reader` family of
+   methods, so it is not compatible with the `~asyncio.ProactorEventLoop` on
+   Windows. Use the `~asyncio.SelectorEventLoop` instead.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
