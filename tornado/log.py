@@ -32,10 +32,17 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import logging
 import logging.handlers
+import os
 import sys
 
 from tornado.escape import _unicode
 from tornado.util import unicode_type, basestring_type
+
+try:
+    import colorama
+    colorama.init()
+except ImportError:
+    colorama = None
 
 try:
     import curses  # type: ignore
@@ -57,6 +64,8 @@ def _stderr_supports_color():
                 color = True
         except Exception:
             pass
+    elif colorama and os.isatty(sys.stderr.fileno()):
+        color = True
     return color
 
 
@@ -110,7 +119,7 @@ class LogFormatter(logging.Formatter):
         self._fmt = fmt
 
         self._colors = {}
-        if color and _stderr_supports_color():
+        if color and _stderr_supports_color() and not colorama:
             # The curses module has some str/bytes confusion in
             # python3.  Until version 3.2.3, most methods return
             # bytes, but only accept strings.  In addition, we want to
@@ -126,6 +135,10 @@ class LogFormatter(logging.Formatter):
             for levelno, code in colors.items():
                 self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
             self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
+        elif colorama:
+            for levelno, code in colors.items():
+                self._colors[levelno] = '\033[3{}m'.format(code)
+            self._normal = '\033[0m'
         else:
             self._normal = ''
 
