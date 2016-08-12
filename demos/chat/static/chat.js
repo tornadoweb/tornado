@@ -25,6 +25,7 @@ $(document).ready(function() {
             newMessage($(this));
             return false;
         }
+        return true;
     });
     $("#message").select();
     updater.poll();
@@ -56,13 +57,13 @@ jQuery.postJSON = function(url, args, callback) {
             success: function(response) {
         if (callback) callback(eval("(" + response + ")"));
     }, error: function(response) {
-        console.log("ERROR:", response)
+        console.log("ERROR:", response);
     }});
 };
 
 jQuery.fn.formToDict = function() {
     var fields = this.serializeArray();
-    var json = {}
+    var json = {};
     for (var i = 0; i < fields.length; i++) {
         json[fields[i].name] = fields[i].value;
     }
