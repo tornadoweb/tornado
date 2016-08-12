@@ -6,14 +6,12 @@ from tornado.tcpserver import TCPServer
 from tornado.options import options, define
 
 define("port", default=9888, help="TCP port to listen on")
-clients = set()
 logger = logging.getLogger(__name__)
 
 
 class EchoServer(TCPServer):
     @gen.coroutine
     def handle_stream(self, stream, address):
-        clients.add(address)
         while True:
             try:
                 data = yield stream.read_until(b"\n")
@@ -22,7 +20,6 @@ class EchoServer(TCPServer):
                     data = data + b"\n"
                 yield stream.write(data)
             except StreamClosedError:
-                clients.remove(address)
                 logger.warning("Lost client at host %s", address[0])
                 break
             except Exception as e:
