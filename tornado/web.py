@@ -1858,7 +1858,6 @@ class Application(httputil.HTTPServerConnectionDelegate):
         """
         if not host_pattern.endswith("$"):
             host_pattern += "$"
-        handlers = []
         # The handlers with the wildcard host_pattern are a special
         # case - they're added in the constructor but should have lower
         # precedence than the more-precise handlers added later.
@@ -1873,7 +1872,6 @@ class Application(httputil.HTTPServerConnectionDelegate):
             if isinstance(spec, (tuple, list)):
                 assert len(spec) in (2, 3, 4)
                 spec = URLSpec(*spec)
-            handlers.append(spec)
             if spec.name:
                 if spec.name in self.named_handlers:
                     app_log.warning(
