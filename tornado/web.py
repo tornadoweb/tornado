@@ -1109,7 +1109,7 @@ class RequestHandler(object):
         may not, so the latter form is necessary if loading the user requires
         asynchronous operations.
 
-        The user object may any type of the application's choosing.
+        The user object may be any type of the application's choosing.
         """
         if not hasattr(self, "_current_user"):
             self._current_user = self.get_current_user()
@@ -3304,7 +3304,7 @@ def _create_signature_v2(secret, s):
 
 
 def _unquote_or_none(s):
-    """None-safe wrapper around url_unescape to handle unamteched optional
+    """None-safe wrapper around url_unescape to handle unmatched optional
     groups correctly.
 
     Note that args are passed as bytes so the handler can decide what
