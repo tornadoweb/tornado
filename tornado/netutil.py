@@ -129,7 +129,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
     ``flags`` is a bitmask of AI_* flags to `~socket.getaddrinfo`, like
     ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
 
-    ``resuse_port`` option sets ``SO_REUSEPORT`` option for every socket
+    ``reuse_port`` option sets ``SO_REUSEPORT`` option for every socket
     in the list. If your platform doesn't support this option ValueError will
     be raised.
     """
