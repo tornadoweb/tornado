@@ -119,7 +119,7 @@ class LogFormatter(logging.Formatter):
         self._fmt = fmt
 
         self._colors = {}
-        if color and _stderr_supports_color() and not colorama:
+        if color and _stderr_supports_color() and curses is not None:
             # The curses module has some str/bytes confusion in
             # python3.  Until version 3.2.3, most methods return
             # bytes, but only accept strings.  In addition, we want to
@@ -135,9 +135,9 @@ class LogFormatter(logging.Formatter):
             for levelno, code in colors.items():
                 self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
             self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
-        elif colorama:
+        elif colorama is not None:
             for levelno, code in colors.items():
-                self._colors[levelno] = '\033[3{}m'.format(code)
+                self._colors[levelno] = '\033[2;3%dm' % code
             self._normal = '\033[0m'
         else:
             self._normal = ''
