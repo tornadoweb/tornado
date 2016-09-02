@@ -345,6 +345,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 credentials = '%s:%s' % (request.proxy_username,
                                          request.proxy_password)
                 curl.setopt(pycurl.PROXYUSERPWD, credentials)
+
+            if (request.proxy_auth_mode is None or
+                    request.proxy_auth_mode == "basic"):
+                curl.setopt(pycurl.PROXYAUTH, pycurl.HTTPAUTH_BASIC)
+            elif request.proxy_auth_mode == "digest":
+                curl.setopt(pycurl.PROXYAUTH, pycurl.HTTPAUTH_DIGEST)
+            else:
+                raise ValueError(
+                    "Unsupported proxy_auth_mode %s" % request.proxy_auth_mode)
         else:
             curl.setopt(pycurl.PROXY, '')
             curl.unsetopt(pycurl.PROXYUSERPWD)
