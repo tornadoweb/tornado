@@ -19,13 +19,13 @@
 Basic usage looks like::
 
     t = template.Template("<html>{{ myvalue }}</html>")
-    print t.generate(myvalue="XXX")
+    print(t.generate(myvalue="XXX"))
 
 `Loader` is a class that loads templates from a root directory and caches
 the compiled templates::
 
     loader = template.Loader("/home/btaylor")
-    print loader.load("test.html").generate(myvalue="XXX")
+    print(loader.load("test.html").generate(myvalue="XXX"))
 
 We compile all templates to raw Python. Error-reporting is currently... uh,
 interesting. Syntax for the templates::

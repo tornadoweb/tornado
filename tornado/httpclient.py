@@ -61,7 +61,7 @@ class HTTPClient(object):
         http_client = httpclient.HTTPClient()
         try:
             response = http_client.fetch("http://www.google.com/")
-            print response.body
+            print(response.body)
         except httpclient.HTTPError as e:
             # HTTPError is raised for non-200 responses; the response
             # can be found in e.response.
@@ -110,9 +110,9 @@ class AsyncHTTPClient(Configurable):
 
         def handle_response(response):
             if response.error:
-                print "Error:", response.error
+                print("Error:", response.error)
             else:
-                print response.body
+                print(response.body)
 
         http_client = AsyncHTTPClient()
         http_client.fetch("http://www.google.com/", handle_response)

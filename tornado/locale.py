@@ -19,7 +19,7 @@
 To load a locale and generate a translated string::
 
     user_locale = tornado.locale.get("es_LA")
-    print user_locale.translate("Sign out")
+    print(user_locale.translate("Sign out"))
 
 `tornado.locale.get()` returns the closest matching locale, not necessarily the
 specific locale you requested. You can support pluralization with
@@ -28,7 +28,7 @@ additional arguments to `~Locale.translate()`, e.g.::
     people = [...]
     message = user_locale.translate(
         "%(list)s is online", "%(list)s are online", len(people))
-    print message % {"list": user_locale.list(people)}
+    print(message % {"list": user_locale.list(people)})
 
 The first string is chosen if ``len(people) == 1``, otherwise the second
 string is chosen.
