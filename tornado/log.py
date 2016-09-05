@@ -119,26 +119,29 @@ class LogFormatter(logging.Formatter):
         self._fmt = fmt
 
         self._colors = {}
-        if color and _stderr_supports_color() and curses is not None:
-            # The curses module has some str/bytes confusion in
-            # python3.  Until version 3.2.3, most methods return
-            # bytes, but only accept strings.  In addition, we want to
-            # output these strings with the logging module, which
-            # works with unicode strings.  The explicit calls to
-            # unicode() below are harmless in python2 but will do the
-            # right conversion in python 3.
-            fg_color = (curses.tigetstr("setaf") or
-                        curses.tigetstr("setf") or "")
-            if (3, 0) < sys.version_info < (3, 2, 3):
-                fg_color = unicode_type(fg_color, "ascii")
+        if color and _stderr_supports_color():
+            if curses is not None:
+                # The curses module has some str/bytes confusion in
+                # python3.  Until version 3.2.3, most methods return
+                # bytes, but only accept strings.  In addition, we want to
+                # output these strings with the logging module, which
+                # works with unicode strings.  The explicit calls to
+                # unicode() below are harmless in python2 but will do the
+                # right conversion in python 3.
+                fg_color = (curses.tigetstr("setaf") or
+                            curses.tigetstr("setf") or "")
+                if (3, 0) < sys.version_info < (3, 2, 3):
+                    fg_color = unicode_type(fg_color, "ascii")
 
-            for levelno, code in colors.items():
-                self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
-            self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
-        elif colorama is not None:
-            for levelno, code in colors.items():
-                self._colors[levelno] = '\033[2;3%dm' % code
-            self._normal = '\033[0m'
+                for levelno, code in colors.items():
+                    self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
+                self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
+            elif colorama is not None:
+                for levelno, code in colors.items():
+                    self._colors[levelno] = '\033[2;3%dm' % code
+                self._normal = '\033[0m'
+            else:
+                raise RuntimeError("No supported color terminal library")
         else:
             self._normal = ''
 
