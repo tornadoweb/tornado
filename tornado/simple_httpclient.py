@@ -330,7 +330,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             raise KeyError("unknown method %s" % self.request.method)
         for key in ('network_interface',
                     'proxy_host', 'proxy_port',
-                    'proxy_username', 'proxy_password'):
+                    'proxy_username', 'proxy_password',
+                    'proxy_auth_mode'):
             if getattr(self.request, key, None):
                 raise NotImplementedError('%s not supported' % key)
         if "Connection" not in self.request.headers:

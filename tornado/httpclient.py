@@ -310,10 +310,10 @@ class HTTPRequest(object):
                  network_interface=None, streaming_callback=None,
                  header_callback=None, prepare_curl_callback=None,
                  proxy_host=None, proxy_port=None, proxy_username=None,
-                 proxy_password=None, allow_nonstandard_methods=None,
-                 validate_cert=None, ca_certs=None,
-                 allow_ipv6=None,
-                 client_key=None, client_cert=None, body_producer=None,
+                 proxy_password=None, proxy_auth_mode=None,
+                 allow_nonstandard_methods=None, validate_cert=None,
+                 ca_certs=None, allow_ipv6=None, client_key=None,
+                 client_cert=None, body_producer=None,
                  expect_100_continue=False, decompress_response=None,
                  ssl_options=None):
         r"""All parameters except ``url`` are optional.
@@ -372,12 +372,14 @@ class HTTPRequest(object):
            a ``pycurl.Curl`` object to allow the application to make additional
            ``setopt`` calls.
         :arg string proxy_host: HTTP proxy hostname.  To use proxies,
-           ``proxy_host`` and ``proxy_port`` must be set; ``proxy_username`` and
-           ``proxy_pass`` are optional.  Proxies are currently only supported
-           with ``curl_httpclient``.
+           ``proxy_host`` and ``proxy_port`` must be set; ``proxy_username``,
+           ``proxy_pass`` and ``proxy_auth_mode`` are optional.  Proxies are
+           currently only supported with ``curl_httpclient``.
         :arg int proxy_port: HTTP proxy port
         :arg string proxy_username: HTTP proxy username
         :arg string proxy_password: HTTP proxy password
+        :arg string proxy_auth_mode: HTTP proxy Authentication mode;
+           default is "basic". supports "basic" and "digest"
         :arg bool allow_nonstandard_methods: Allow unknown values for ``method``
            argument?
         :arg bool validate_cert: For HTTPS requests, validate the server's
@@ -430,6 +432,7 @@ class HTTPRequest(object):
         self.proxy_port = proxy_port
         self.proxy_username = proxy_username
         self.proxy_password = proxy_password
+        self.proxy_auth_mode = proxy_auth_mode
         self.url = url
         self.method = method
         self.body = body
