@@ -411,14 +411,14 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.stream.write(b'asdf\r\n\r\n')
             # TODO: need an async version of ExpectLog so we don't need
             # hard-coded timeouts here.
-            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.05),
                                      self.stop)
             self.wait()
 
     def test_malformed_headers(self):
         with ExpectLog(gen_log, '.*Malformed HTTP headers'):
             self.stream.write(b'GET / HTTP/1.0\r\nasdf\r\n\r\n')
-            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.05),
                                      self.stop)
             self.wait()
 
