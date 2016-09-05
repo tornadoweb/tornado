@@ -110,7 +110,7 @@ class AsyncHTTPClient(Configurable):
 
         def handle_response(response):
             if response.error:
-                print("Error:", response.error)
+                print("Error: %s" % response.error)
             else:
                 print(response.body)
 
