@@ -315,6 +315,19 @@ class WebSocketHandler(tornado.web.RequestHandler):
         browsers, since WebSockets are allowed to bypass the usual same-origin
         policies and don't use CORS headers.
 
+        .. warning::
+
+           This is an important security measure; don't disable it
+           without understanding the security implications. In
+           particular, if your authenticatino is cookie-based, you
+           must either restrict the origins allowed by
+           ``check_origin()`` or implement your own XSRF-like
+           protection for websocket connections. See `these
+           <https://www.christian-schneider.net/CrossSiteWebSocketHijacking.html>`_
+           `articles
+           <https://devcenter.heroku.com/articles/websocket-security>`_
+           for more.
+
         To accept all cross-origin traffic (which was the default prior to
         Tornado 4.0), simply override this method to always return true::
 
@@ -329,6 +342,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 return parsed_origin.netloc.endswith(".mydomain.com")
 
         .. versionadded:: 4.0
+
         """
         parsed_origin = urlparse(origin)
         origin = parsed_origin.netloc
