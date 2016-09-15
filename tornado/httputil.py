@@ -352,6 +352,7 @@ class HTTPServerRequest(object):
         self.protocol = getattr(context, 'protocol', "http")
 
         self.host = host or self.headers.get("Host") or "127.0.0.1"
+        self.host_name = split_host_and_port(self.host.lower())[0]
         self.files = files or {}
         self.connection = connection
         self._start_time = time.time()
