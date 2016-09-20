@@ -2834,3 +2834,16 @@ class URLSpecReverseTest(unittest.TestCase):
     def test_reverse_arguments(self):
         self.assertEqual('/api/v1/foo/bar',
                          url(r'^/api/v1/foo/(\w+)$', None).reverse('bar'))
+
+
+@wsgi_safe
+class EmptyHandlerListTest(WebTestCase):
+    # issue #1738
+    # If the handler list is empty and default_host is not configured,
+    # tornado should return 404 instead of redirecting (301) to http:///
+    def get_handlers(self):
+        return []
+
+    def test_404_when_no_handlers_configured(self):
+        response = self.fetch('/404')
+        self.assertEqual(response.code, 404)
