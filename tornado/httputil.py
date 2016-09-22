@@ -243,6 +243,91 @@ class HTTPHeaders(collections.MutableMapping):
     __unicode__ = __str__
 
 
+# part of Cookie library module (py>=2.6 and py<=3.4 have identical code)
+# and follow RFC 2109 and RFC 2068
+_cookie_value_decode = Cookie.SimpleCookie().value_decode
+_cookie_attr_reserved = Cookie.Morsel._reserved
+# py2.6 and some minor 2.7 hasn't Morsel._flags attribute
+_cookie_attr_flags = set(["secure", "httponly"])
+_re_cookie_lchars = r"[\w\d!#%&'~_`><@,:/\$\*\+\-\.\^\|\)\(\?\}\{\=]"
+_re_cookie = re.compile(
+    r"(?x)"  # This is a Verbose pattern
+    r"[\s;]*"  # Optional whitespace or semicolon at start of cookie
+    r"(?P<key>"  # Start of group 'key'
+    "" + _re_cookie_lchars + "+?"  # Any word of at least one letter, nongreedy
+    r")"  # End of group 'key'
+    r"("  # Optional group: there may not be a value.
+    r"\s*=\s*"  # Equal Sign
+    r"(?P<val>"  # Start of group 'val'
+    r'"(?:[^\\"]|\\.)*"'  # Any doublequoted string
+    r"|"  # or
+    r"\w{3},\s[\s\w\d-]{9,11}\s[\d:]{8}\sGMT"  # Special case for "expires"
+    r"|"  # or
+    "" + _re_cookie_lchars + "*"  # Any word or empty string
+    r")"  # End of group 'val'
+    r")?"  # End of optional value group
+    r"\s*"  # Any number of spaces.
+    r"(\s+|;|$)"  # Ending either at space, semicolon, or EOS.
+    "")
+
+
+def cookie_pairs(cookie_str):
+    i = 0  # Our starting point
+    n = len(cookie_str)     # Length of string
+
+    while 0 <= i < n:
+        # Start looking for a cookie
+        match = _re_cookie.match(cookie_str, i)
+        if not match:
+            break  # No more cookies
+
+        k = match.group("key")
+        v = match.group("val")
+        i = match.end(0)
+
+        # Parse the key, value in case it's metainfo
+        yield k, v
+
+
+def parse_cookie_to(key, value, cookies, morsel=None):
+    if key[0] == "$":
+        if morsel:
+            morsel[key[1:]] = value
+    elif key.lower() in _cookie_attr_reserved:
+        if morsel:
+            if value is None:
+                if key.lower() in _cookie_attr_flags:
+                    morsel[key] = True
+            else:
+                morsel[key] = _cookie_value_decode(value)[0]
+    elif value is not None:
+        real_val, coded_val = _cookie_value_decode(value)
+        morsel = cookies.get(key, Cookie.Morsel())
+        morsel.set(key, real_val, coded_val)
+        dict.__setitem__(cookies, key, morsel)
+    return morsel
+
+
+def parse_cookies(cookie_str, cookies=None, errors="strict"):
+    if cookies is None:
+        cookies = Cookie.SimpleCookie()
+    prev_morsel = None
+    for k, v in cookie_pairs(cookie_str):
+        try:
+            prev_morsel = parse_cookie_to(k, v, cookies, prev_morsel)
+        except Exception:
+            if errors == "ignore":
+                continue
+            raise
+
+    return cookies
+
+
+def _cookies_as_dict(c):
+    """Convert SimpleCookie to plain dict"""
+    return dict((k, m.value) for k, m in c.items())
+
+
 class HTTPServerRequest(object):
     """A single HTTP request.
 
@@ -378,11 +463,9 @@ class HTTPServerRequest(object):
         if not hasattr(self, "_cookies"):
             self._cookies = Cookie.SimpleCookie()
             if "Cookie" in self.headers:
-                try:
-                    self._cookies.load(
-                        native_str(self.headers["Cookie"]))
-                except Exception:
-                    self._cookies = {}
+                parse_cookies(native_str(self.headers["Cookie"]),
+                              cookies=self._cookies,
+                              errors="ignore")
         return self._cookies
 
     def write(self, chunk, callback=None):
@@ -552,9 +635,9 @@ class HTTPConnection(object):
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
         :arg headers: a `.HTTPHeaders` instance.
-        :arg chunk: the first (optional) chunk of data.  This is an optimization
-            so that small responses can be written in the same call as their
-            headers.
+        :arg chunk: the first (optional) chunk of data.  This is an
+            optimization so that small responses can be written in the same
+            call as their headers.
         :arg callback: a callback to be run when the write is complete.
 
         The ``version`` field of ``start_line`` is ignored.
@@ -697,7 +780,8 @@ def parse_body_arguments(content_type, body, arguments, files, headers=None):
         return
     if content_type.startswith("application/x-www-form-urlencoded"):
         try:
-            uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
+            uri_arguments = parse_qs_bytes(native_str(body),
+                                           keep_blank_values=True)
         except Exception as e:
             gen_log.warning('Invalid x-www-form-urlencoded body: %s', e)
             uri_arguments = {}
