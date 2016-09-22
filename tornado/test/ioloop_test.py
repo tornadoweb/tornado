@@ -9,6 +9,7 @@ import socket
 import sys
 import threading
 import time
+import types
 
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PollIOLoop, PeriodicCallback
@@ -61,6 +62,25 @@ class FakeTimeIOLoop(PollIOLoop):
 
 
 class TestIOLoop(AsyncTestCase):
+    def test_add_callback_return_sequence(self):
+        # A callback returning {} or [] shouldn't spin the CPU, see Issue #1803.
+        self.calls = 0
+
+        loop = self.io_loop
+        test = self
+        old_add_callback = loop.add_callback
+
+        def add_callback(self, callback, *args, **kwargs):
+            test.calls += 1
+            old_add_callback(callback, *args, **kwargs)
+
+        loop.add_callback = types.MethodType(add_callback, loop)
+        loop.add_callback(lambda: {})
+        loop.add_callback(lambda: [])
+        loop.add_timeout(datetime.timedelta(milliseconds=50), loop.stop)
+        loop.start()
+        self.assertLess(self.calls, 10)
+
     @skipOnTravis
     def test_add_callback_wakeup(self):
         # Make sure that add_callback from inside a running IOLoop
