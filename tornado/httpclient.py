@@ -341,13 +341,15 @@ class HTTPRequest(object):
            Allowed values are implementation-defined; ``curl_httpclient``
            supports "basic" and "digest"; ``simple_httpclient`` only supports
            "basic"
-        :arg float connect_timeout: Timeout for initial connection in seconds
-        :arg float request_timeout: Timeout for entire request in seconds
+        :arg float connect_timeout: Timeout for initial connection in seconds,
+           default 20 seconds
+        :arg float request_timeout: Timeout for entire request in seconds,
+           default 20 seconds
         :arg if_modified_since: Timestamp for ``If-Modified-Since`` header
         :type if_modified_since: `datetime` or `float`
         :arg bool follow_redirects: Should redirects be followed automatically
-           or return the 3xx response?
-        :arg int max_redirects: Limit for ``follow_redirects``
+           or return the 3xx response? Default True.
+        :arg int max_redirects: Limit for ``follow_redirects``, default 5.
         :arg string user_agent: String to send as ``User-Agent`` header
         :arg bool decompress_response: Request a compressed response from
            the server and decompress it after downloading.  Default is True.
@@ -381,9 +383,9 @@ class HTTPRequest(object):
         :arg string proxy_auth_mode: HTTP proxy Authentication mode;
            default is "basic". supports "basic" and "digest"
         :arg bool allow_nonstandard_methods: Allow unknown values for ``method``
-           argument?
+           argument? Default is False.
         :arg bool validate_cert: For HTTPS requests, validate the server's
-           certificate?
+           certificate? Default is True.
         :arg string ca_certs: filename of CA certificates in PEM format,
            or None to use defaults.  See note below when used with
            ``curl_httpclient``.
