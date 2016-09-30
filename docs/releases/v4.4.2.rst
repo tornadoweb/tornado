@@ -1,0 +1,22 @@
+What's new in Tornado 4.4.2
+===========================
+
+Oct 1, 2016
+------------
+
+Security fixes
+~~~~~~~~~~~~~~
+
+* A difference in cookie parsing between Tornado and web browsers
+  (especially when combined with Google Analytics) could allow an
+  attacker to set arbitrary cookies and bypass XSRF protection. The
+  cookie parser has been rewritten to fix this attack.
+
+Backwards-compatibility notes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Cookies containing certain special characters (in particular semicolon
+  and square brackets) are now parsed differently.
+* If the cookie header contains a combination of valid and invalid cookies,
+  the valid ones will be returned (older versions of Tornado would reject the
+  entire header for a single invalid cookie).

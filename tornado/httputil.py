@@ -379,10 +379,18 @@ class HTTPServerRequest(object):
             self._cookies = Cookie.SimpleCookie()
             if "Cookie" in self.headers:
                 try:
-                    self._cookies.load(
-                        native_str(self.headers["Cookie"]))
+                    parsed = parse_cookie(self.headers["Cookie"])
                 except Exception:
-                    self._cookies = {}
+                    pass
+                else:
+                    for k, v in parsed.items():
+                        try:
+                            self._cookies[k] = v
+                        except Exception:
+                            # SimpleCookie imposes some restrictions on keys;
+                            # parse_cookie does not. Discard any cookies
+                            # with disallowed keys.
+                            pass
         return self._cookies
 
     def write(self, chunk, callback=None):
@@ -909,3 +917,82 @@ def split_host_and_port(netloc):
         host = netloc
         port = None
     return (host, port)
+
+_OctalPatt = re.compile(r"\\[0-3][0-7][0-7]")
+_QuotePatt = re.compile(r"[\\].")
+_nulljoin = ''.join
+
+def _unquote_cookie(str):
+    """Handle double quotes and escaping in cookie values.
+
+    This method is copied verbatim from the Python 3.5 standard
+    library (http.cookies._unquote) so we don't have to depend on
+    non-public interfaces.
+    """
+    # If there aren't any doublequotes,
+    # then there can't be any special characters.  See RFC 2109.
+    if str is None or len(str) < 2:
+        return str
+    if str[0] != '"' or str[-1] != '"':
+        return str
+
+    # We have to assume that we must decode this string.
+    # Down to work.
+
+    # Remove the "s
+    str = str[1:-1]
+
+    # Check for special sequences.  Examples:
+    #    \012 --> \n
+    #    \"   --> "
+    #
+    i = 0
+    n = len(str)
+    res = []
+    while 0 <= i < n:
+        o_match = _OctalPatt.search(str, i)
+        q_match = _QuotePatt.search(str, i)
+        if not o_match and not q_match:              # Neither matched
+            res.append(str[i:])
+            break
+        # else:
+        j = k = -1
+        if o_match:
+            j = o_match.start(0)
+        if q_match:
+            k = q_match.start(0)
+        if q_match and (not o_match or k < j):     # QuotePatt matched
+            res.append(str[i:k])
+            res.append(str[k+1])
+            i = k + 2
+        else:                                      # OctalPatt matched
+            res.append(str[i:j])
+            res.append(chr(int(str[j+1:j+4], 8)))
+            i = j + 4
+    return _nulljoin(res)
+
+
+def parse_cookie(cookie):
+    """Parse a ``Cookie`` HTTP header into a dict of name/value pairs.
+
+    This function attempts to mimic browser cookie parsing behavior;
+    it specifically does not follow any of the cookie-related RFCs
+    (because browsers don't either).
+
+    The algorithm used is identical to that used by Django version 1.9.10.
+
+    .. versionadded:: 4.4.2
+    """
+    cookiedict = {}
+    for chunk in cookie.split(str(';')):
+        if str('=') in chunk:
+            key, val = chunk.split(str('='), 1)
+        else:
+            # Assume an empty name per
+            # https://bugzilla.mozilla.org/show_bug.cgi?id=169091
+            key, val = str(''), chunk
+        key, val = key.strip(), val.strip()
+        if key or val:
+            # unquote using Python's algorithm.
+            cookiedict[key] = _unquote_cookie(val)
+    return cookiedict

@@ -279,8 +279,8 @@ class CookieTest(WebTestCase):
 
         data = [('foo=a=b', 'a=b'),
                 ('foo="a=b"', 'a=b'),
-                ('foo="a;b"', 'a;b'),
-                # ('foo=a\\073b', 'a;b'),  # even encoded, ";" is a delimiter
+                ('foo="a;b"', '"a'),  # even quoted, ";" is a delimiter
+                ('foo=a\\073b', 'a\\073b'),  # escapes only decoded in quotes
                 ('foo="a\\073b"', 'a;b'),
                 ('foo="a\\"b"', 'a"b'),
                 ]
