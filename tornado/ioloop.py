@@ -885,8 +885,9 @@ class PollIOLoop(IOLoop):
                 # this IOLoop that modify self._events
                 self._events.update(event_pairs)
                 while self._events:
-                    fd, events = self._events.popitem()
+                    fd, events = None, None
                     try:
+                        fd, events = self._events.popitem()
                         fd_obj, handler_func = self._handlers[fd]
                         handler_func(fd_obj, events)
                     except (OSError, IOError) as e:
@@ -896,7 +897,8 @@ class PollIOLoop(IOLoop):
                         else:
                             self.handle_callback_exception(self._handlers.get(fd))
                     except Exception:
-                        self.handle_callback_exception(self._handlers.get(fd))
+                        if fd:
+                            self.handle_callback_exception(self._handlers.get(fd))
                 fd_obj = handler_func = None
 
         finally:
