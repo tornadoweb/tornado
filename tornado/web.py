@@ -1769,6 +1769,9 @@ class Application(httputil.HTTPServerConnectionDelegate):
             (r"/article/([0-9]+)", ArticleHandler),
         ])
 
+    If there's no match for the current request's host, then ``default_host``
+    parameter value is matched against host regular expressions.
+
     You can serve static files by sending the ``static_path`` setting
     as a keyword argument. We will serve those files from the
     ``/static/`` URI (this is configurable with the
