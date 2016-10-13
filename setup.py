@@ -30,6 +30,10 @@ version = "3.0.2"
 with open('README.rst') as f:
     long_description = f.read()
 
+# http://packages.python.org/distribute/python3.html#note-on-compatibility-with-setuptools
+if sys.version_info >= (3,):
+    kwargs['use_2to3'] = True
+
 distutils.core.setup(
     name="tornado",
     version=version,
