@@ -3081,7 +3081,8 @@ class URLSpec(object):
             if not isinstance(a, (unicode_type, bytes)):
                 a = str(a)
             converted_args.append(escape.url_escape(utf8(a), plus=False))
-        return self._path % tuple(converted_args)
+        path = self._path if not url.endswith("/?") else self._path[:-2]
+        return path % tuple(converted_args)
 
 url = URLSpec
 
