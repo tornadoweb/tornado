@@ -1031,7 +1031,7 @@ class WithTimeoutTest(AsyncTestCase):
         self.io_loop.add_timeout(datetime.timedelta(seconds=0.1),
                                  lambda: future.set_result('asdf'))
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                        future)
+                                        future, io_loop=self.io_loop)
         self.assertEqual(result, 'asdf')
 
     @gen_test
@@ -1041,14 +1041,15 @@ class WithTimeoutTest(AsyncTestCase):
             datetime.timedelta(seconds=0.1),
             lambda: future.set_exception(ZeroDivisionError))
         with self.assertRaises(ZeroDivisionError):
-            yield gen.with_timeout(datetime.timedelta(seconds=3600), future)
+            yield gen.with_timeout(datetime.timedelta(seconds=3600),
+                                   future, io_loop=self.io_loop)
 
     @gen_test
     def test_already_resolved(self):
         future = Future()
         future.set_result('asdf')
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                        future)
+                                        future, io_loop=self.io_loop)
         self.assertEqual(result, 'asdf')
 
     @unittest.skipIf(futures is None, 'futures module not present')
