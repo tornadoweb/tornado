@@ -73,8 +73,8 @@ are mapped to ``StoryHandler``.  That number is passed (as a string) to
             self.write("this is story %s" % story_id)
 
     app = Application([
-        url(r"/", MainHandler),
-        url(r"/story/([0-9]+)", StoryHandler, dict(db=db), name="story")
+        (r"/", MainHandler),
+        (r"/story/([0-9]+)", StoryHandler, dict(db=db), name="story")
         ])
 
 The `.Application` constructor takes many keyword arguments that
@@ -267,7 +267,7 @@ manner.
 static redirect::
 
     app = tornado.web.Application([
-        url(r"/app", tornado.web.RedirectHandler,
+        (r"/app", tornado.web.RedirectHandler,
             dict(url="http://itunes.apple.com/my-app-id")),
         ])
 
@@ -276,8 +276,8 @@ The following rule redirects all requests beginning with ``/pictures/``
 to the prefix ``/photos/`` instead::
 
     app = tornado.web.Application([
-        url(r"/photos/(.*)", MyPhotoHandler),
-        url(r"/pictures/(.*)", tornado.web.RedirectHandler,
+        (r"/photos/(.*)", MyPhotoHandler),
+        (r"/pictures/(.*)", tornado.web.RedirectHandler,
             dict(url=r"/photos/\1")),
         ])
 
