@@ -16,22 +16,22 @@ A minimal "hello world" example looks something like this:
 
 .. testcode::
 
-    from tornado.ioloop import IOLoop
-    from tornado.web import RequestHandler, Application, url
+    import tornado.ioloop
+    import tornado.web
 
-    class HelloHandler(RequestHandler):
+    class MainHandler(tornado.web.RequestHandler):
         def get(self):
             self.write("Hello, world")
 
     def make_app():
-        return Application([
-            url(r"/", HelloHandler),
-            ])
+        return tornado.web.Application([
+            (r"/", MainHandler),
+        ])
 
-    def main():
+    if __name__ == "__main__":
         app = make_app()
         app.listen(8888)
-        IOLoop.current().start()
+        tornado.ioloop.IOLoop.current().start()
 
 .. testoutput::
    :hide:
