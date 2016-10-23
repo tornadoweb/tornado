@@ -480,7 +480,7 @@ class XHeaderTest(HandlerBaseTestCase):
                             remote_protocol=self.request.protocol))
 
     def get_httpserver_options(self):
-        return dict(xheaders=True)
+        return dict(xheaders=True, trusted_downstream=['5.5.5.5'])
 
     def test_ip_headers(self):
         self.assertEqual(self.fetch_json("/")["remote_ip"], "127.0.0.1")
@@ -519,6 +519,13 @@ class XHeaderTest(HandlerBaseTestCase):
         self.assertEqual(
             self.fetch_json("/", headers=invalid_host)["remote_ip"],
             "127.0.0.1")
+
+    def test_trusted_downstream(self):
+
+        valid_ipv4_list = {"X-Forwarded-For": "127.0.0.1, 4.4.4.4, 5.5.5.5"}
+        self.assertEqual(
+            self.fetch_json("/", headers=valid_ipv4_list)["remote_ip"],
+            "4.4.4.4")
 
     def test_scheme_headers(self):
         self.assertEqual(self.fetch_json("/")["remote_protocol"], "http")

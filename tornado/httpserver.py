@@ -62,6 +62,13 @@ class HTTPServer(TCPServer, Configurable,
     if Tornado is run behind an SSL-decoding proxy that does not set one of
     the supported ``xheaders``.
 
+    By default, when parsing the ``X-Forwarded-For`` header, Tornado will
+    select the last (i.e., the closest) address on the list of hosts as the
+    remote host IP address.  To select the next server in the chain, a list of
+    trusted downstream hosts may be passed as the ``trusted_downstream``
+    argument.  These hosts will be skipped when parsing the ``X-Forwarded-For``
+    header.
+
     To make this server serve SSL traffic, send the ``ssl_options`` keyword
     argument with an `ssl.SSLContext` object. For compatibility with older
     versions of Python ``ssl_options`` may also be a dictionary of keyword
@@ -138,7 +145,8 @@ class HTTPServer(TCPServer, Configurable,
                    decompress_request=False,
                    chunk_size=None, max_header_size=None,
                    idle_connection_timeout=None, body_timeout=None,
-                   max_body_size=None, max_buffer_size=None):
+                   max_body_size=None, max_buffer_size=None,
+                   trusted_downstream=None):
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
@@ -154,6 +162,7 @@ class HTTPServer(TCPServer, Configurable,
                            max_buffer_size=max_buffer_size,
                            read_chunk_size=chunk_size)
         self._connections = set()
+        self.trusted_downstream = trusted_downstream
 
     @classmethod
     def configurable_base(cls):
@@ -172,7 +181,8 @@ class HTTPServer(TCPServer, Configurable,
 
     def handle_stream(self, stream, address):
         context = _HTTPRequestContext(stream, address,
-                                      self.protocol)
+                                      self.protocol,
+                                      self.trusted_downstream)
         conn = HTTP1ServerConnection(
             stream, self.conn_params, context)
         self._connections.add(conn)
@@ -186,7 +196,7 @@ class HTTPServer(TCPServer, Configurable,
 
 
 class _HTTPRequestContext(object):
-    def __init__(self, stream, address, protocol):
+    def __init__(self, stream, address, protocol, trusted_downstream=None):
         self.address = address
         # Save the socket's address family now so we know how to
         # interpret self.address even after the stream is closed
@@ -210,6 +220,7 @@ class _HTTPRequestContext(object):
             self.protocol = "http"
         self._orig_remote_ip = self.remote_ip
         self._orig_protocol = self.protocol
+        self.trusted_downstream = set(trusted_downstream or [])
 
     def __str__(self):
         if self.address_family in (socket.AF_INET, socket.AF_INET6):
@@ -226,7 +237,10 @@ class _HTTPRequestContext(object):
         """Rewrite the ``remote_ip`` and ``protocol`` fields."""
         # Squid uses X-Forwarded-For, others use X-Real-Ip
         ip = headers.get("X-Forwarded-For", self.remote_ip)
-        ip = ip.split(',')[-1].strip()
+        # Skip trusted downstream hosts in X-Forwarded-For list
+        for ip in (cand.strip() for cand in reversed(ip.split(','))):
+            if ip not in self.trusted_downstream:
+                break
         ip = headers.get("X-Real-Ip", ip)
         if netutil.is_valid_ip(ip):
             self.remote_ip = ip
