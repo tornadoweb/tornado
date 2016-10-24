@@ -797,7 +797,10 @@ class BaseIOStream(object):
             # _consume().
             if self._read_buffer:
                 while True:
-                    loc = self._read_buffer[0].find(self._read_delimiter)
+                    try:
+                        loc = self._read_buffer[0].find(self._read_delimiter)
+                    except AttributeError:  # might be a memoryview
+                        loc = self._read_buffer[0].tobytes().find(self._read_delimiter)
                     if loc != -1:
                         delimiter_len = len(self._read_delimiter)
                         self._check_max_bytes(self._read_delimiter,
@@ -852,9 +855,7 @@ class BaseIOStream(object):
                     self._write_buffer_frozen = True
                     break
                 self._write_buffer_frozen = False
-                if num_bytes != len(self._write_buffer[0]):
-                    _merge_prefix(self._write_buffer, num_bytes)
-                self._write_buffer.popleft()
+                remove_prefix(self._write_buffer, num_bytes)
                 self._write_buffer_size -= num_bytes
             except (socket.error, IOError, OSError) as e:
                 if e.args[0] in _ERRNO_WOULDBLOCK:
@@ -882,9 +883,9 @@ class BaseIOStream(object):
     def _consume(self, loc):
         if loc == 0:
             return b""
-        _merge_prefix(self._read_buffer, loc)
+        item = pop_prefix(self._read_buffer, loc)
         self._read_buffer_size -= loc
-        return self._read_buffer.popleft()
+        return item
 
     def _check_closed(self):
         if self.closed():
@@ -1511,6 +1512,36 @@ def _double_prefix(deque):
     new_len = max(len(deque[0]) * 2,
                   (len(deque[0]) + len(deque[1])))
     _merge_prefix(deque, new_len)
+
+
+def remove_prefix(deque, n):
+    """ Remove prefix of length n from deque """
+    while n and n >= len(deque[0]):
+        item = deque.popleft()
+        n -= len(item)
+
+    if n:
+        deque[0] = memoryview(deque[0])[n:]
+
+
+def pop_prefix(deque, n):
+    """ Return prefix of length n from deque, remove from deque """
+    out = []
+    while n and n >= len(deque[0]):
+        item = deque.popleft()
+        n -= len(item)
+        out.append(item)
+
+    if n:
+        item = deque[0]
+        out.append(memoryview(item)[:n])
+        deque[0] = memoryview(item)[n:]
+
+    if sys.version_info[0] == 2:
+        out = [bytes(o) for o in out]
+
+    return b''.join(out)
+
 
 
 def _merge_prefix(deque, size):
