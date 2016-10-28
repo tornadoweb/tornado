@@ -1,0 +1,51 @@
+<html>
+<head>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script>
+ $(document).ready(function(){
+    
+  
+    $("#submit").click(function(){
+        $("#question").css("background-color", "pink");
+        setTimeout(returnAnswer,0);
+    });
+  
+    $.ajax({
+
+    type: "GET",
+//    url: "http://localhost:8888/",
+    dataType:"jsonp",
+    crossDomain:true,
+	}).done(function (data) {
+    console.log(data);
+	});
+var returnAnswer=function(){
+	var url="http://localhost:8888/faq?question="+$("#question").val();
+	returnJson(url);
+	
+	}   
+   var returnJson=function(url){
+	var xhttp;
+    
+    xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+    document.getElementById("demo").innerHTML = xhttp.responseText;
+	console.log(xhttp.responseText);	
+    }
+  };
+	
+	xhttp.open("GET", url, true);
+	xhttp.send();
+}
+
+});
+</script>
+
+</head>
+<body>	
+	<input type="text" id="question" name="question" placeholder="question"/></br>
+	<input type="button"  name="submit" id="submit" value=">>"/></br>
+	<div id="demo"></div>
+</body>
+</html>
