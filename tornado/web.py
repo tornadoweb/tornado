@@ -2191,13 +2191,29 @@ class RedirectHandler(RequestHandler):
         application = web.Application([
             (r"/oldpath", web.RedirectHandler, {"url": "/newpath"}),
         ])
+
+    `RedirectHandler` supports regular expression substitutions. E.g., to
+    swap the first and second parts of a path while preserving the remainder::
+
+        application = web.Application([
+            (r"/(.*?)/(.*?)/(.*)", web.RedirectHandler, {"url": "/{1}/{0}/{2}"}),
+        ])
+
+    The final URL is formatted with `str.format` and the substrings that match
+    the capturing groups. In the above example, a request to "/a/b/c" would be
+    formatted like::
+
+        str.format("/{1}/{0}/{2}", "a", "b", "c")  # -> "/b/a/c"
+
+    Use Python's :ref:`format string syntax <formatstrings>` to customize how
+    values are substituted.
     """
     def initialize(self, url, permanent=True):
         self._url = url
         self._permanent = permanent
 
-    def get(self):
-        self.redirect(self._url, permanent=self._permanent)
+    def get(self, *args):
+        self.redirect(self._url.format(*args), permanent=self._permanent)
 
 
 class StaticFileHandler(RequestHandler):

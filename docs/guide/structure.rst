@@ -278,7 +278,7 @@ to the prefix ``/photos/`` instead::
     app = tornado.web.Application([
         url(r"/photos/(.*)", MyPhotoHandler),
         url(r"/pictures/(.*)", tornado.web.RedirectHandler,
-            dict(url=r"/photos/\1")),
+            dict(url=r"/photos/{0}")),
         ])
 
 Unlike `.RequestHandler.redirect`, `.RedirectHandler` uses permanent
