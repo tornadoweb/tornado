@@ -848,7 +848,7 @@ class BaseIOStream(object):
                 self._write_buffer_size -= num_bytes
                 # Amortized O(1) shrink
                 if self._write_buffer_pos > self._write_buffer_size:
-                    self._write_buffer = self._write_buffer[self._write_buffer_pos:]
+                    del self._write_buffer[:self._write_buffer_pos]
                     self._write_buffer_pos = 0
             except (socket.error, IOError, OSError) as e:
                 if e.args[0] in _ERRNO_WOULDBLOCK:
@@ -886,7 +886,7 @@ class BaseIOStream(object):
         self._read_buffer_size -= loc
         # Amortized O(1) shrink
         if self._read_buffer_pos > self._read_buffer_size:
-            self._read_buffer = self._read_buffer[self._read_buffer_pos:]
+            del self._read_buffer[:self._read_buffer_pos]
             self._read_buffer_pos = 0
         return b
 
