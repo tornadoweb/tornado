@@ -377,7 +377,6 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Now returns a `.Future` if no callback is given.
         """
-        assert isinstance(data, bytes)
         self._check_closed()
         if data:
             if (self.max_write_buffer_size is not None and
