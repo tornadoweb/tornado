@@ -820,17 +820,19 @@ class BaseIOStream(object):
         while self._write_buffer_size:
             try:
                 start = self._write_buffer_pos
-                if _WINDOWS:
+                if self._write_buffer_frozen:
+                    size = self._write_buffer_frozen
+                elif _WINDOWS:
                     # On windows, socket.send blows up if given a
                     # write buffer that's too large, instead of just
                     # returning the number of bytes it was able to
                     # process.  Therefore we must not call socket.send
                     # with more than 128KB at a time.
-                    stop = start + 128 * 1024
+                    size = 128 * 1024
                 else:
-                    stop = None
+                    size = self._write_buffer_size
                 num_bytes = self.write_to_fd(
-                    memoryview(self._write_buffer)[start:stop])
+                    memoryview(self._write_buffer)[start:start + size])
                 assert self._write_buffer_size >= 0
                 if num_bytes == 0:
                     # With OpenSSL, if we couldn't write the entire buffer,
@@ -841,7 +843,7 @@ class BaseIOStream(object):
                     # SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, but this is
                     # not yet accessible from python
                     # (http://bugs.python.org/issue8240)
-                    self._write_buffer_frozen = True
+                    self._write_buffer_frozen = size
                     break
                 self._write_buffer_frozen = False
                 self._write_buffer_pos += num_bytes
@@ -852,7 +854,7 @@ class BaseIOStream(object):
                     self._write_buffer_pos = 0
             except (socket.error, IOError, OSError) as e:
                 if e.args[0] in _ERRNO_WOULDBLOCK:
-                    self._write_buffer_frozen = True
+                    self._write_buffer_frozen = size
                     break
                 else:
                     if not self._is_connreset(e):
