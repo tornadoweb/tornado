@@ -605,7 +605,6 @@ class TestIOStreamMixin(object):
     def test_write_memoryview(self):
         server, client = self.make_iostream_pair()
         try:
-            # Ask for more than is available with partial=True
             client.read_bytes(4, self.stop)
             server.write(memoryview(b"hello"))
             data = self.wait()
