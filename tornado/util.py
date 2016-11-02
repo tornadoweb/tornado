@@ -13,6 +13,8 @@ and `.Resolver`.
 from __future__ import absolute_import, division, print_function, with_statement
 
 import array
+import contextlib
+import gc
 import os
 import re
 import sys
@@ -431,6 +433,21 @@ def _websocket_mask_python(mask, data):
         return unmasked_arr.tobytes()
     else:
         return unmasked_arr.tostring()
+
+
+@contextlib.contextmanager
+def disable_gc():
+    """A context manager to disable the GC temporarily.
+    """
+    if gc.isenabled():
+        gc.disable()
+        try:
+            yield
+        finally:
+            gc.enable()
+    else:
+        yield
+
 
 if (os.environ.get('TORNADO_NO_EXTENSION') or
         os.environ.get('TORNADO_EXTENSION') == '0'):
