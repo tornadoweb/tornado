@@ -47,7 +47,7 @@ from tornado.concurrent import TracebackFuture, is_future
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
-from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds
+from tornado.util import PY3, Configurable, disable_gc, errno_from_exception, timedelta_to_seconds
 
 try:
     import signal
@@ -937,19 +937,21 @@ class PollIOLoop(IOLoop):
         if thread.get_ident() != self._thread_ident:
             # If we're not on the IOLoop's thread, we need to synchronize
             # with other threads, or waking logic will induce a race.
-            with self._callback_lock:
-                if self._closing:
-                    return
-                list_empty = not self._callbacks
-                self._callbacks.append(functools.partial(
-                    stack_context.wrap(callback), *args, **kwargs))
-                if list_empty:
-                    # If we're not in the IOLoop's thread, and we added the
-                    # first callback to an empty list, we may need to wake it
-                    # up (it may wake up on its own, but an occasional extra
-                    # wake is harmless).  Waking up a polling IOLoop is
-                    # relatively expensive, so we try to avoid it when we can.
-                    self._waker.wake()
+            # Also disable the GC to avoid accidental reentrant calls.
+            with disable_gc():
+                with self._callback_lock:
+                    if self._closing:
+                        return
+                    list_empty = not self._callbacks
+                    self._callbacks.append(functools.partial(
+                        stack_context.wrap(callback), *args, **kwargs))
+                    if list_empty:
+                        # If we're not in the IOLoop's thread, and we added the
+                        # first callback to an empty list, we may need to wake it
+                        # up (it may wake up on its own, but an occasional extra
+                        # wake is harmless).  Waking up a polling IOLoop is
+                        # relatively expensive, so we try to avoid it when we can.
+                        self._waker.wake()
         else:
             if self._closing:
                 return
