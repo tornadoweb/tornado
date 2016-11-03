@@ -91,7 +91,7 @@ class Waker(interface.Waker):
     def wake(self):
         try:
             self.writer.send(b"x")
-        except (IOError, socket.error):
+        except (IOError, socket.error, ValueError):
             pass
 
     def consume(self):
