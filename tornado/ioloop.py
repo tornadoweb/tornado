@@ -712,7 +712,6 @@ class PollIOLoop(IOLoop):
                          self.READ)
 
     def close(self, all_fds=False):
-        self._waker.mark_closing()
         self._closing = True
         self.remove_handler(self._waker.fileno())
         if all_fds:

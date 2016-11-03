@@ -3,8 +3,24 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import errno
 import socket
+import time
 
 from tornado.platform import interface
+
+
+def try_close(f):
+    # Avoid issue #875 (race condition when using the file in another
+    # thread).
+    for i in range(10):
+        try:
+            f.close()
+        except IOError:
+            # Yield to another thread
+            time.sleep(1e-3)
+        else:
+            break
+    # Try a last time and let raise
+    f.close()
 
 
 class Waker(interface.Waker):
@@ -18,7 +34,6 @@ class Waker(interface.Waker):
         # Based on Zope select_trigger.py:
         # https://github.com/zopefoundation/Zope/blob/master/src/ZServer/medusa/thread/select_trigger.py
 
-        self.closing = False
         self.writer = socket.socket()
         # Disable buffering -- pulling the trigger sends 1 byte,
         # and we want that sent immediately, to wake up ASAP.
@@ -74,10 +89,6 @@ class Waker(interface.Waker):
         return self.writer.fileno()
 
     def wake(self):
-        if self.closing:
-            # Avoid issue #875 (race condition when closing the fd in another
-            # thread).
-            return
         try:
             self.writer.send(b"x")
         except (IOError, socket.error):
@@ -94,7 +105,4 @@ class Waker(interface.Waker):
 
     def close(self):
         self.reader.close()
-        self.writer.close()
-
-    def mark_closing(self):
-        self.closing = True
+        try_close(self.writer)
