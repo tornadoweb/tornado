@@ -36,6 +36,7 @@ def _set_nonblocking(fd):
 
 class Waker(interface.Waker):
     def __init__(self):
+        self.closing = False
         r, w = os.pipe()
         _set_nonblocking(r)
         _set_nonblocking(w)
@@ -51,6 +52,10 @@ class Waker(interface.Waker):
         return self.writer.fileno()
 
     def wake(self):
+        if self.closing:
+            # Avoid issue #875 (race condition when closing the fd in another
+            # thread).
+            return
         try:
             self.writer.write(b"x")
         except IOError:
@@ -68,3 +73,6 @@ class Waker(interface.Waker):
     def close(self):
         self.reader.close()
         self.writer.close()
+
+    def mark_closing(self):
+        self.closing = True
