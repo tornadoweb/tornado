@@ -798,6 +798,10 @@ class PollIOLoop(IOLoop):
 
         try:
             while True:
+                # Prevent IO event starvation by delaying new callbacks
+                # to the next iteration of the event loop.
+                ncallbacks = len(self._callbacks)
+
                 # Add any timeouts that have come due to the callback list.
                 # Do not run anything until we have determined which ones
                 # are ready, so timeouts that call add_timeout cannot
@@ -825,10 +829,7 @@ class PollIOLoop(IOLoop):
                                           if x.callback is not None]
                         heapq.heapify(self._timeouts)
 
-                # Prevent IO event starvation by delaying new callbacks
-                # to the next iteration of the event loop.
-                n = len(self._callbacks)
-                for i in range(n):
+                for i in range(ncallbacks):
                     self._run_callback(self._callbacks.popleft())
                 for timeout in due_timeouts:
                     if timeout.callback is not None:
