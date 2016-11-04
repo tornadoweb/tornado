@@ -2004,29 +2004,31 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         app = self.application
         handlers = app._get_host_handlers(self.request)
         if not handlers:
-            self.handler_class = RedirectHandler
-            self.handler_kwargs = dict(url="%s://%s/"
-                                       % (self.request.protocol,
-                                          app.default_host))
-            return
-        for spec in handlers:
-            match = spec.regex.match(self.request.path)
-            if match:
-                self.handler_class = spec.handler_class
-                self.handler_kwargs = spec.kwargs
-                if spec.regex.groups:
-                    # Pass matched groups to the handler.  Since
-                    # match.groups() includes both named and
-                    # unnamed groups, we want to use either groups
-                    # or groupdict but not both.
-                    if spec.regex.groupindex:
-                        self.path_kwargs = dict(
-                            (str(k), _unquote_or_none(v))
-                            for (k, v) in match.groupdict().items())
-                    else:
-                        self.path_args = [_unquote_or_none(s)
-                                          for s in match.groups()]
+            if app.default_host:
+                self.handler_class = RedirectHandler
+                self.handler_kwargs = dict(url="%s://%s/"
+                                           % (self.request.protocol,
+                                              app.default_host))
                 return
+        else:
+            for spec in handlers:
+                match = spec.regex.match(self.request.path)
+                if match:
+                    self.handler_class = spec.handler_class
+                    self.handler_kwargs = spec.kwargs
+                    if spec.regex.groups:
+                        # Pass matched groups to the handler.  Since
+                        # match.groups() includes both named and
+                        # unnamed groups, we want to use either groups
+                        # or groupdict but not both.
+                        if spec.regex.groupindex:
+                            self.path_kwargs = dict(
+                                (str(k), _unquote_or_none(v))
+                                for (k, v) in match.groupdict().items())
+                        else:
+                            self.path_args = [_unquote_or_none(s)
+                                              for s in match.groups()]
+                    return
         if app.settings.get('default_handler_class'):
             self.handler_class = app.settings['default_handler_class']
             self.handler_kwargs = app.settings.get(
