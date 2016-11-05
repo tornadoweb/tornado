@@ -2866,3 +2866,20 @@ class URLSpecReverseTest(unittest.TestCase):
     def test_reverse_arguments(self):
         self.assertEqual('/api/v1/foo/bar',
                          url(r'^/api/v1/foo/(\w+)$', None).reverse('bar'))
+
+
+class RedirectHandlerTest(WebTestCase):
+    def get_handlers(self):
+        return [
+            ('/src', WebRedirectHandler, {'url': '/dst'}),
+            (r'/(.*?)/(.*?)/(.*)', WebRedirectHandler, {'url': '/{1}/{0}/{2}'})]
+
+    def test_basic_redirect(self):
+        response = self.fetch('/src', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst')
+
+    def test_redirect_pattern(self):
+        response = self.fetch('/a/b/c', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/b/a/c')
