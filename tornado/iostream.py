@@ -830,7 +830,10 @@ class BaseIOStream(object):
         self._pending_writes_while_frozen[:] = []
 
     def _got_empty_write(self, size):
-        pass
+        """
+        Called when a non-blocking write() failed writing anything.
+        Can be overridden in subclasses.
+        """
 
     def _handle_write(self):
         while self._write_buffer_size:
@@ -856,6 +859,8 @@ class BaseIOStream(object):
                 self._write_buffer_pos += num_bytes
                 self._write_buffer_size -= num_bytes
                 # Amortized O(1) shrink
+                # (this heuristic is implemented natively in Python 3.4+
+                #  but is replicated here for Python 2)
                 if self._write_buffer_pos > self._write_buffer_size:
                     del self._write_buffer[:self._write_buffer_pos]
                     self._write_buffer_pos = 0
@@ -896,6 +901,8 @@ class BaseIOStream(object):
         self._read_buffer_pos += loc
         self._read_buffer_size -= loc
         # Amortized O(1) shrink
+        # (this heuristic is implemented natively in Python 3.4+
+        #  but is replicated here for Python 2)
         if self._read_buffer_pos > self._read_buffer_size:
             del self._read_buffer[:self._read_buffer_pos]
             self._read_buffer_pos = 0
