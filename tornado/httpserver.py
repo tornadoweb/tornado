@@ -179,10 +179,43 @@ class HTTPServer(TCPServer, Configurable,
         conn.start_serving(self)
 
     def start_request(self, server_conn, request_conn):
-        return _ServerRequestAdapter(self, server_conn, request_conn)
+        if isinstance(self.request_callback, httputil.HTTPServerConnectionDelegate):
+            delegate = self.request_callback.start_request(server_conn, request_conn)
+        else:
+            delegate = _CallableAdapter(self.request_callback, request_conn)
+
+        if self.xheaders:
+            delegate = _ProxyAdapter(delegate, request_conn)
+
+        return delegate
 
     def on_close(self, server_conn):
         self._connections.remove(server_conn)
+
+
+class _CallableAdapter(httputil.HTTPMessageDelegate):
+    def __init__(self, request_callback, request_conn):
+        self.connection = request_conn
+        self.request_callback = request_callback
+        self.request = None
+        self.delegate = None
+        self._chunks = []
+
+    def headers_received(self, start_line, headers):
+        self.request = httputil.HTTPServerRequest(
+            connection=self.connection, start_line=start_line,
+            headers=headers)
+
+    def data_received(self, chunk):
+        self._chunks.append(chunk)
+
+    def finish(self):
+        self.request.body = b''.join(self._chunks)
+        self.request._parse_body()
+        self.request_callback(self.request)
+
+    def on_connection_close(self):
+        self._chunks = None
 
 
 class _HTTPRequestContext(object):
@@ -247,58 +280,27 @@ class _HTTPRequestContext(object):
         self.protocol = self._orig_protocol
 
 
-class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
-    """Adapts the `HTTPMessageDelegate` interface to the interface expected
-    by our clients.
-    """
-    def __init__(self, server, server_conn, request_conn):
-        self.server = server
+class _ProxyAdapter(httputil.HTTPMessageDelegate):
+    def __init__(self, delegate, request_conn):
         self.connection = request_conn
-        self.request = None
-        if isinstance(server.request_callback,
-                      httputil.HTTPServerConnectionDelegate):
-            self.delegate = server.request_callback.start_request(
-                server_conn, request_conn)
-            self._chunks = None
-        else:
-            self.delegate = None
-            self._chunks = []
+        self.delegate = delegate
 
     def headers_received(self, start_line, headers):
-        if self.server.xheaders:
-            self.connection.context._apply_xheaders(headers)
-        if self.delegate is None:
-            self.request = httputil.HTTPServerRequest(
-                connection=self.connection, start_line=start_line,
-                headers=headers)
-        else:
-            return self.delegate.headers_received(start_line, headers)
+        self.connection.context._apply_xheaders(headers)
+        return self.delegate.headers_received(start_line, headers)
 
     def data_received(self, chunk):
-        if self.delegate is None:
-            self._chunks.append(chunk)
-        else:
-            return self.delegate.data_received(chunk)
+        return self.delegate.data_received(chunk)
 
     def finish(self):
-        if self.delegate is None:
-            self.request.body = b''.join(self._chunks)
-            self.request._parse_body()
-            self.server.request_callback(self.request)
-        else:
-            self.delegate.finish()
+        self.delegate.finish()
         self._cleanup()
 
     def on_connection_close(self):
-        if self.delegate is None:
-            self._chunks = None
-        else:
-            self.delegate.on_connection_close()
+        self.delegate.on_connection_close()
         self._cleanup()
 
     def _cleanup(self):
-        if self.server.xheaders:
-            self.connection.context._unapply_xheaders()
-
+        self.connection.context._unapply_xheaders()
 
 HTTPRequest = httputil.HTTPServerRequest
