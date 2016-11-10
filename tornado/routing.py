@@ -12,7 +12,96 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Basic implementation of rule-based routing.
+"""Basic routing implementation.
+
+Tornado routes HTTP requests to appropriate handlers using `Router` class implementations.
+
+Any `Router` implementation can be used directly as a ``request_callback`` for
+`~.httpserver.HTTPServer` (this is possible because `Router` implements
+`~.httputil.HTTPServerConnectionDelegate`):
+
+.. code-block:: python
+
+    class CustomRouter(Router):
+        def find_handler(self, request, **kwargs):
+            # some routing logic providing a suitable HTTPMessageDelegate implementation
+            return HTTPMessageDelegateImplementation()
+
+    router = CustomRouter()
+    server = HTTPServer(router)
+
+`Router.find_handler` is the only method that you must implement to provide routing
+logic in its simplest case. This method must return an instance of
+`~.httputil.HTTPMessageDelegate` that will be used to process the request.
+
+`ReversibleRouter` interface adds the ability to distinguish between the routes and
+reverse them to the original urls using route's name and additional arguments.
+`~.web.Application` is itself an implementation of `ReversibleRouter` class.
+
+`RuleRouter` and `ReversibleRuleRouter` provide an interface for creating rule-based
+routing configurations. For example, `RuleRouter` can be used to route between applications:
+
+.. code-block:: python
+
+    app1 = Application([
+        (r"/app1/handler1", Handler1),
+        # other handlers ...
+    ])
+
+    app2 = Application([
+        (r"/app2/handler1", Handler1),
+        # other handlers ...
+    ])
+
+    router = RuleRouter([
+        Rule(PathMatches("/app1.*"), app1),
+        Rule(PathMatches("/app2.*"), app2)
+    ])
+
+    server = HTTPServer(router)
+
+Subclasses of `~.httputil.HTTPMessageDelegate` and old-style callables can also be used as
+rule targets:
+
+.. code-block:: python
+
+    router = RuleRouter([
+        Rule(PathMatches("/callable"), request_callable),  # def request_callable(request): ...
+        Rule(PathMatches("/delegate"), HTTPMessageDelegateSubclass)
+    ])
+
+    server = HTTPServer(router)
+
+You can use nested routers as targets as well:
+
+.. code-block:: python
+
+    router = RuleRouter([
+        Rule(PathMatches("/router.*"), CustomRouter())
+    ])
+
+    server = HTTPServer(router)
+
+And of course a nested `RuleRouter` would be a valid thing:
+
+.. code-block:: python
+
+    router = RuleRouter([
+        Rule(HostMatches("example.com"), RuleRouter([
+            Rule(PathMatches("/app1/.*"), Application([(r"/app1/handler", Handler)]))),
+        ]))
+    ])
+
+    server = HTTPServer(router)
+
+Rules are instances of `Rule` class. They contain some target (`~.web.Application` instance,
+`~.httputil.HTTPMessageDelegate` subclass, a callable or a nested `Router`) and provide the
+basic routing logic defining whether this rule is a match for a particular request.
+This routing logic is implemented in `Matcher` subclasses (see `HostMatches`, `PathMatches`
+and others).
+
+`~URLSpec` is simply a subclass of a `Rule` with `PathMatches` matcher and is preserved for
+backwards compatibility.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -34,15 +123,18 @@ except ImportError:
 
 
 class Router(httputil.HTTPServerConnectionDelegate):
-    """Abstract router interface.
-    Any `Router` instance that correctly implements `find_handler` method can be used as a ``request_callback``
-    in `httpserver.HTTPServer`.
-    """
+    """Abstract router interface."""
+
     def find_handler(self, request, **kwargs):
         # type: (httputil.HTTPServerRequest, typing.Any)->httputil.HTTPMessageDelegate
-        """Must be implemented to return an appropriate instance of `httputil.HTTPMessageDelegate`
-        that can serve current request.
-        Router implementations may pass additional kwargs to extend the routing logic.
+        """Must be implemented to return an appropriate instance of `~.httputil.HTTPMessageDelegate`
+        that can serve the request.
+        Routing implementations may pass additional kwargs to extend the routing logic.
+
+        :arg httputil.HTTPServerRequest request: current HTTP request.
+        :arg kwargs: additional keyword arguments passed by routing implementation.
+        :returns: an instance of `~.httputil.HTTPMessageDelegate` that will be used to
+            process the request.
         """
         raise NotImplementedError()
 
@@ -51,7 +143,18 @@ class Router(httputil.HTTPServerConnectionDelegate):
 
 
 class ReversibleRouter(Router):
+    """Abstract router interface for routers that can handle named routes
+    and support reversing them to original urls.
+    """
+
     def reverse_url(self, name, *args):
+        """Returns url string for a given route name and arguments
+        or ``None`` if no match is found.
+
+        :arg str name: route name.
+        :arg args: url parameters.
+        :returns: parametrized url string for a given route name (or ``None``).
+        """
         raise NotImplementedError()
 
 
@@ -80,12 +183,41 @@ class _RoutingDelegate(httputil.HTTPMessageDelegate):
 
 
 class RuleRouter(Router):
+    """Rule-based router implementation."""
+
     def __init__(self, rules=None):
+        """Constructs a router with an ordered list of rules::
+
+            RuleRouter([
+                Rule(PathMatches("/handler"), SomeHandler),
+                # ... more rules
+            ])
+
+        You can also omit explicit `Rule` constructor and use tuples of arguments::
+
+            RuleRouter([
+                (PathMatches("/handler"), SomeHandler),
+            ])
+
+        `PathMatches` is a default matcher, so the example above can be simplified::
+
+            RuleRouter([
+                ("/handler", SomeHandler),
+            ])
+
+        :arg rules: a list of `Rule` instances or tuples of `Rule`
+            constructor arguments.
+        """
         self.rules = []  # type: typing.List[Rule]
         if rules:
             self.add_rules(rules)
 
     def add_rules(self, rules):
+        """Appends new rules to the router.
+
+        :arg rules: a list of Rule instances (or tuples of arguments, which are
+            passed to Rule constructor).
+        """
         for rule in rules:
             if isinstance(rule, (tuple, list)):
                 assert len(rule) in (2, 3, 4)
@@ -97,6 +229,11 @@ class RuleRouter(Router):
             self.rules.append(self.process_rule(rule))
 
     def process_rule(self, rule):
+        """Override this method for additional preprocessing of each rule.
+
+        :arg Rule rule: a rule to be processed.
+        :returns: the same or modified Rule instance.
+        """
         return rule
 
     def find_handler(self, request, **kwargs):
@@ -115,6 +252,15 @@ class RuleRouter(Router):
         return None
 
     def get_target_delegate(self, target, request, **target_params):
+        """Returns an instance of `~.httputil.HTTPMessageDelegate` for a
+        Rule's target. This method is called by `~.find_handler` and can be
+        extended to provide additional target types.
+
+        :arg target: a Rule's target.
+        :arg httputil.HTTPServerRequest request: current request.
+        :arg target_params: additional parameters that can be useful
+            for `~.httputil.HTTPMessageDelegate` creation.
+        """
         if isinstance(target, Router):
             return target.find_handler(request, **target_params)
 
@@ -130,8 +276,15 @@ class RuleRouter(Router):
 
 
 class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
+    """A rule-based router that implements ``reverse_url`` method.
+
+    Each rule added to this router may have a ``name`` attribute that can be
+    used to reconstruct an original uri. The actual reconstruction takes place
+    in a rule's matcher (see `Matcher.reverse`).
+    """
+
     def __init__(self, rules=None):
-        self.named_rules = {}
+        self.named_rules = {}  # type: typing.Dict[str]
         super(ReversibleRuleRouter, self).__init__(rules)
 
     def process_rule(self, rule):
@@ -160,7 +313,24 @@ class ReversibleRuleRouter(ReversibleRouter, RuleRouter):
 
 
 class Rule(object):
+    """A routing rule."""
+
     def __init__(self, matcher, target, target_kwargs=None, name=None):
+        """Constructs a Rule instance.
+
+        :arg Matcher matcher: a `Matcher` instance used for determining
+            whether the rule should be considered a match for a specific
+            request.
+        :arg target: a Rule's target (typically a ``RequestHandler`` or
+            `~.httputil.HTTPMessageDelegate` subclass or even a nested `Router`).
+        :arg dict target_kwargs: a dict of parameters that can be useful
+            at the moment of target instantiation (for example, ``status_code``
+            for a ``RequestHandler`` subclass). They end up in
+            ``target_params['target_kwargs']`` of `RuleRouter.get_target_delegate`
+            method.
+        :arg str name: the name of the rule that can be used to find it
+            in `ReversibleRouter.reverse_url` implementation.
+        """
         if isinstance(target, str):
             # import the Module and instantiate the class
             # Must be a fully qualified name (module.ClassName)
@@ -181,34 +351,35 @@ class Rule(object):
 
 
 class Matcher(object):
-    """A complex matcher can be represented as an instance of some
-    `Matcher` subclass. It must implement ``__call__`` (which will be executed
-    with a `httpserver.HTTPRequest` argument).
-    """
+    """Represents a matcher for request features."""
 
     def match(self, request):
-        """Matches an instance against the request.
+        """Matches current instance against the request.
 
-        :arg tornado.httpserver.HTTPRequest request: current HTTP request
-        :returns a dict of parameters to be passed to the target handler
-        (for example, ``handler_kwargs``, ``path_args``, ``path_kwargs``
-        can be passed for proper `tornado.web.RequestHandler` instantiation).
-        An empty dict is a valid (and common) return value to indicate a match
-        when the argument-passing features are not used.
-        ``None`` must be returned to indicate that there is no match."""
+        :arg httputil.HTTPServerRequest request: current HTTP request
+        :returns: a dict of parameters to be passed to the target handler
+            (for example, ``handler_kwargs``, ``path_args``, ``path_kwargs``
+            can be passed for proper `~.web.RequestHandler` instantiation).
+            An empty dict is a valid (and common) return value to indicate a match
+            when the argument-passing features are not used.
+            ``None`` must be returned to indicate that there is no match."""
         raise NotImplementedError()
 
     def reverse(self, *args):
-        """Reconstruct URL from matcher instance"""
+        """Reconstructs full url from matcher instance and additional arguments."""
         return None
 
 
 class AnyMatches(Matcher):
+    """Matches any request."""
+
     def match(self, request):
         return {}
 
 
 class HostMatches(Matcher):
+    """Matches requests from hosts specified by ``host_pattern`` regex."""
+
     def __init__(self, host_pattern):
         if isinstance(host_pattern, basestring_type):
             if not host_pattern.endswith("$"):
@@ -225,6 +396,10 @@ class HostMatches(Matcher):
 
 
 class DefaultHostMatches(Matcher):
+    """Matches requests from host that is equal to application's default_host.
+    Always returns no match if ``X-Real-Ip`` header is present.
+    """
+
     def __init__(self, application, host_pattern):
         self.application = application
         self.host_pattern = host_pattern
@@ -238,13 +413,15 @@ class DefaultHostMatches(Matcher):
 
 
 class PathMatches(Matcher):
-    def __init__(self, pattern):
-        if isinstance(pattern, basestring_type):
-            if not pattern.endswith('$'):
-                pattern += '$'
-            self.regex = re.compile(pattern)
+    """Matches requests with paths specified by ``path_pattern`` regex."""
+
+    def __init__(self, path_pattern):
+        if isinstance(path_pattern, basestring_type):
+            if not path_pattern.endswith('$'):
+                path_pattern += '$'
+            self.regex = re.compile(path_pattern)
         else:
-            self.regex = pattern
+            self.regex = path_pattern
 
         assert len(self.regex.groupindex) in (0, self.regex.groups), \
             ("groups in url regexes must either be all named or all "
@@ -334,13 +511,13 @@ class URLSpec(Rule):
           position if unnamed. Named and unnamed capturing groups may
           may not be mixed in the same rule).
 
-        * ``handler``: `RequestHandler` subclass to be invoked.
+        * ``handler``: `~.web.RequestHandler` subclass to be invoked.
 
         * ``kwargs`` (optional): A dictionary of additional arguments
           to be passed to the handler's constructor.
 
         * ``name`` (optional): A name for this handler.  Used by
-          `Application.reverse_url`.
+          `~.web.Application.reverse_url`.
 
         """
         super(URLSpec, self).__init__(PathMatches(pattern), handler, kwargs, name)
