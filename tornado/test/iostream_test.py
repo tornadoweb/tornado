@@ -808,6 +808,40 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    def test_future_write(self):
+        """
+        Test that write() Futures are never orphaned.
+        """
+        # Run concurrent writers that will write enough bytes so as to
+        # clog the socket buffer and accumulate bytes in our write buffer.
+        m, n = 10000, 1000
+        nproducers = 10
+        total_bytes = m * n * nproducers
+        server, client = self.make_iostream_pair(max_buffer_size=total_bytes)
+
+        @gen.coroutine
+        def produce():
+            data = b'x' * m
+            for i in range(n):
+                yield server.write(data)
+
+        @gen.coroutine
+        def consume():
+            nread = 0
+            while nread < total_bytes:
+                res = yield client.read_bytes(m)
+                nread += len(res)
+
+        @gen.coroutine
+        def main():
+            yield [produce() for i in range(nproducers)] + [consume()]
+
+        try:
+            self.io_loop.run_sync(main)
+        finally:
+            server.close()
+            client.close()
+
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):
