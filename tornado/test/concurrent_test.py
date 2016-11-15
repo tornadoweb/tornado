@@ -15,6 +15,7 @@
 # under the License.
 from __future__ import absolute_import, division, print_function, with_statement
 
+import gc
 import logging
 import re
 import socket
@@ -187,6 +188,7 @@ class ReturnFutureTest(AsyncTestCase):
             yield gen.moment
             yield gen.moment
             del g
+            gc.collect()  # for PyPy
 
 
 # The following series of classes demonstrate and test various styles
