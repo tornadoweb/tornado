@@ -76,7 +76,8 @@ except ImportError:
         atexit.register(lambda: L.append(None))
 
         def is_finalizing():
-            return bool(L)
+            # Not referencing any globals here
+            return L != []
 
         return is_finalizing
 
