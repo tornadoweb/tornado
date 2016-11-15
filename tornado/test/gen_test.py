@@ -657,6 +657,28 @@ class GenCoroutineTest(AsyncTestCase):
         super(GenCoroutineTest, self).tearDown()
         assert self.finished
 
+    def test_attributes(self):
+        self.finished = True
+
+        def f():
+            yield gen.moment
+
+        coro = gen.coroutine(f)
+        self.assertEqual(coro.__name__, f.__name__)
+        self.assertEqual(coro.__module__, f.__module__)
+        self.assertIs(coro.__wrapped__, f)
+
+    def test_is_coroutine_function(self):
+        self.finished = True
+
+        def f():
+            yield gen.moment
+
+        coro = gen.coroutine(f)
+        self.assertFalse(gen.is_coroutine_function(f))
+        self.assertTrue(gen.is_coroutine_function(coro))
+        self.assertFalse(gen.is_coroutine_function(coro()))
+
     @gen_test
     def test_sync_gen_return(self):
         @gen.coroutine
