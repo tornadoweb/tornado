@@ -1732,17 +1732,27 @@ def addslash(method):
     return wrapper
 
 
-class ApplicationRouter(ReversibleRuleRouter):
+class _ApplicationRouter(ReversibleRuleRouter):
+    """Routing implementation used by `Application`.
+
+    Provides a binding between `Application` and `RequestHandler` implementations.
+    This implementation extends `~.routing.ReversibleRuleRouter` in a couple of ways:
+        * it allows to use `RequestHandler` subclasses as `~.routing.Rule` target and
+        * it allows to use a list/tuple of rules as `~.routing.Rule` target. This list is
+        substituted with an `ApplicationRouter`, instantiated with current application and
+        the list of routes.
+    """
+
     def __init__(self, application, rules=None):
         assert isinstance(application, Application)
         self.application = application
-        super(ApplicationRouter, self).__init__(rules)
+        super(_ApplicationRouter, self).__init__(rules)
 
     def process_rule(self, rule):
-        rule = super(ApplicationRouter, self).process_rule(rule)
+        rule = super(_ApplicationRouter, self).process_rule(rule)
 
         if isinstance(rule.target, (list, tuple)):
-            rule.target = ApplicationRouter(self.application, rule.target)
+            rule.target = _ApplicationRouter(self.application, rule.target)
 
         return rule
 
@@ -1750,7 +1760,7 @@ class ApplicationRouter(ReversibleRuleRouter):
         if isclass(target) and issubclass(target, RequestHandler):
             return self.application.get_handler_delegate(request, target, **target_params)
 
-        return super(ApplicationRouter, self).get_target_delegate(target, request, **target_params)
+        return super(_ApplicationRouter, self).get_target_delegate(target, request, **target_params)
 
 
 class Application(ReversibleRouter):
@@ -1766,20 +1776,35 @@ class Application(ReversibleRouter):
         http_server.listen(8080)
         ioloop.IOLoop.current().start()
 
-    The constructor for this class takes in a list of `URLSpec` objects
-    or (regexp, request_class) tuples. When we receive requests, we
-    iterate over the list in order and instantiate an instance of the
-    first request class whose regexp matches the request path.
-    The request class can be specified as either a class object or a
-    (fully-qualified) name.
+    The constructor for this class takes in a list of `~.routing.Rule`
+    objects or tuples of values corresponding to the arguments of
+    `~.routing.Rule` constructor: ``(matcher, target, [target_kwargs], [name])``,
+    the values in square brackets being optional. The default matcher is
+    `~.routing.PathMatches`, so ``(regexp, target)`` tuples can also be used
+    instead of ``(PathMatches(regexp), target)``.
 
-    Each tuple can contain additional elements, which correspond to the
-    arguments to the `URLSpec` constructor.  (Prior to Tornado 3.2,
-    only tuples of two or three elements were allowed).
+    A common routing target is a `RequestHandler` subclass, but you can also
+    use lists of rules as a target, which create a nested routing configuration::
 
-    A dictionary may be passed as the third element of the tuple,
-    which will be used as keyword arguments to the handler's
-    constructor and `~RequestHandler.initialize` method.  This pattern
+        application = web.Application([
+            (HostMatches("example.com"), [
+                (r"/", MainPageHandler),
+                (r"/feed", FeedHandler),
+            ]),
+        ])
+
+    In addition to this you can use nested `~.routing.Router` instances,
+    `~.httputil.HTTPMessageDelegate` subclasses and callables as routing targets
+    (see `~.routing` module docs for more information).
+
+    When we receive requests, we iterate over the list in order and
+    instantiate an instance of the first request class whose regexp
+    matches the request path. The request class can be specified as
+    either a class object or a (fully-qualified) name.
+
+    A dictionary may be passed as the third element (``target_kwargs``)
+    of the tuple, which will be used as keyword arguments to the handler's
+    constructor and `~RequestHandler.initialize` method. This pattern
     is used for the `StaticFileHandler` in this example (note that a
     `StaticFileHandler` can be installed automatically with the
     static_path setting described below)::
@@ -1844,10 +1869,8 @@ class Application(ReversibleRouter):
             self.settings.setdefault('static_hash_cache', False)
             self.settings.setdefault('serve_traceback', True)
 
-        self.wildcard_router = ApplicationRouter(self, handlers)
-
-        self.default_router = ApplicationRouter(self)
-        self.default_router.add_rules([
+        self.wildcard_router = _ApplicationRouter(self, handlers)
+        self.default_router = _ApplicationRouter(self, [
             Rule(AnyMatches(), self.wildcard_router)
         ])
 
@@ -1889,7 +1912,7 @@ class Application(ReversibleRouter):
         added. All matching patterns will be considered.
         """
         host_matcher = HostMatches(host_pattern)
-        rule = Rule(host_matcher, ApplicationRouter(self, host_handlers))
+        rule = Rule(host_matcher, _ApplicationRouter(self, host_handlers))
 
         self.default_router.rules.insert(-1, rule)
 
@@ -1936,7 +1959,7 @@ class Application(ReversibleRouter):
         dispatcher = self.find_handler(request)
         return dispatcher.execute()
 
-    def find_handler(self, request):
+    def find_handler(self, request, **kwargs):
         route = self.default_router.find_handler(request)
         if route is not None:
             return route
