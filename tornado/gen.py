@@ -273,10 +273,11 @@ def _make_coroutine_wrapper(func, replace_callback):
     """
     # On Python 3.5, set the coroutine flag on our generator, to allow it
     # to be used with 'await'.
+    wrapped = func
     if hasattr(types, 'coroutine'):
         func = types.coroutine(func)
 
-    @functools.wraps(func)
+    @functools.wraps(wrapped)
     def wrapper(*args, **kwargs):
         future = TracebackFuture()
 
@@ -328,7 +329,17 @@ def _make_coroutine_wrapper(func, replace_callback):
                     future = None
         future.set_result(result)
         return future
+
+    wrapper.__wrapped__ = wrapped
+    wrapper.__tornado_coroutine__ = True
     return wrapper
+
+
+def is_coroutine_function(func):
+    """Return whether *func* is a coroutine function, i.e. a function
+    wrapped with `~.gen.coroutine`.
+    """
+    return getattr(func, '__tornado_coroutine__', False)
 
 
 class Return(Exception):
