@@ -15,6 +15,7 @@
 # under the License.
 from __future__ import absolute_import, division, print_function, with_statement
 
+import gc
 import logging
 import re
 import socket
@@ -25,9 +26,10 @@ from tornado.concurrent import Future, return_future, ReturnValueIgnoredError, r
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.iostream import IOStream
+from tornado.log import app_log
 from tornado import stack_context
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, LogTrapTestCase, bind_unused_port, gen_test
+from tornado.testing import AsyncTestCase, ExpectLog, LogTrapTestCase, bind_unused_port, gen_test
 from tornado.test.util import unittest
 
 
@@ -170,6 +172,24 @@ class ReturnFutureTest(AsyncTestCase):
         except ZeroDivisionError:
             tb = traceback.extract_tb(sys.exc_info()[2])
             self.assertIn(self.expected_frame, tb)
+
+    @gen_test
+    def test_uncaught_exception_log(self):
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            1/0
+
+        g = f()
+
+        with ExpectLog(app_log,
+                       "(?s)Future.* exception was never retrieved:"
+                       ".*ZeroDivisionError"):
+            yield gen.moment
+            yield gen.moment
+            del g
+            gc.collect()  # for PyPy
+
 
 # The following series of classes demonstrate and test various styles
 # of use, with and without generators and futures.

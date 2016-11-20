@@ -13,6 +13,7 @@ and `.Resolver`.
 from __future__ import absolute_import, division, print_function, with_statement
 
 import array
+import atexit
 import os
 import re
 import sys
@@ -64,6 +65,23 @@ else:
         _BaseString = str
     else:
         _BaseString = Union[bytes, unicode_type]
+
+
+try:
+    from sys import is_finalizing
+except ImportError:
+    # Emulate it
+    def _get_emulated_is_finalizing():
+        L = []
+        atexit.register(lambda: L.append(None))
+
+        def is_finalizing():
+            # Not referencing any globals here
+            return L != []
+
+        return is_finalizing
+
+    is_finalizing = _get_emulated_is_finalizing()
 
 
 class ObjectDict(_ObjectDictBase):

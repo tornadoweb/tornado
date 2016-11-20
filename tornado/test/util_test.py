@@ -6,7 +6,7 @@ import datetime
 
 import tornado.escape
 from tornado.escape import utf8
-from tornado.util import raise_exc_info, Configurable, exec_in, ArgReplacer, timedelta_to_seconds, import_object, re_unescape, PY3
+from tornado.util import raise_exc_info, Configurable, exec_in, ArgReplacer, timedelta_to_seconds, import_object, re_unescape, is_finalizing, PY3
 from tornado.test.util import unittest
 
 if PY3:
@@ -220,3 +220,8 @@ class ReUnescapeTest(unittest.TestCase):
             re_unescape('\\b')
         with self.assertRaises(ValueError):
             re_unescape('\\Z')
+
+
+class IsFinalizingTest(unittest.TestCase):
+    def test_basic(self):
+        self.assertFalse(is_finalizing())
