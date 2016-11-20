@@ -125,6 +125,9 @@ def main():
     # Silence the warning until we can drop 3.5.[01].
     warnings.filterwarnings("ignore", category=PendingDeprecationWarning,
                             message=".*legacy __aiter__ protocol")
+    # 3.5.2's PendingDeprecationWarning became a DeprecationWarning in 3.6.
+    warnings.filterwarnings("ignore", category=DeprecationWarning,
+                            message=".*legacy __aiter__ protocol")
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
