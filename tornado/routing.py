@@ -60,14 +60,14 @@ routing configurations. For example, `RuleRouter` can be used to route between a
 
     server = HTTPServer(router)
 
-Subclasses of `~.httputil.HTTPMessageDelegate` and old-style callables can also be used as
+Implementations of `~.httputil.HTTPServerConnectionDelegate` and old-style callables can also be used as
 rule targets:
 
 .. code-block:: python
 
     router = RuleRouter([
         Rule(PathMatches("/callable"), request_callable),  # def request_callable(request): ...
-        Rule(PathMatches("/delegate"), HTTPMessageDelegateSubclass)
+        Rule(PathMatches("/delegate"), HTTPServerConnectionDelegateImpl())
     ])
 
     server = HTTPServer(router)
@@ -95,8 +95,8 @@ And of course a nested `RuleRouter` would be a valid thing:
     server = HTTPServer(router)
 
 Rules are instances of `Rule` class. They contain some target (`~.web.Application` instance,
-`~.httputil.HTTPMessageDelegate` subclass, a callable or a nested `Router`) and provide the
-basic routing logic defining whether this rule is a match for a particular request.
+`~.httputil.HTTPServerConnectionDelegate` implementation, a callable or a nested `Router`) and
+provide the basic routing logic defining whether this rule is a match for a particular request.
 This routing logic is implemented in `Matcher` subclasses (see `HostMatches`, `PathMatches`
 and others).
 
@@ -108,7 +108,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import re
 from functools import partial
-from inspect import isclass
 
 from tornado import httputil
 from tornado.httpserver import _CallableAdapter
@@ -139,7 +138,7 @@ class Router(httputil.HTTPServerConnectionDelegate):
         raise NotImplementedError()
 
     def start_request(self, server_conn, request_conn):
-        return _RoutingDelegate(self, request_conn)
+        return _RoutingDelegate(self, server_conn, request_conn)
 
 
 class ReversibleRouter(Router):
@@ -159,15 +158,17 @@ class ReversibleRouter(Router):
 
 
 class _RoutingDelegate(httputil.HTTPMessageDelegate):
-    def __init__(self, router, request_conn):
-        self.connection = request_conn
+    def __init__(self, router, server_conn, request_conn):
+        self.server_conn = server_conn
+        self.request_conn = request_conn
         self.delegate = None
         self.router = router  # type: Router
 
     def headers_received(self, start_line, headers):
         request = httputil.HTTPServerRequest(
-            connection=self.connection, start_line=start_line,
-            headers=headers)
+            connection=self.request_conn,
+            server_connection=self.server_conn,
+            start_line=start_line, headers=headers)
 
         self.delegate = self.router.find_handler(request)
         return self.delegate.headers_received(start_line, headers)
@@ -264,8 +265,8 @@ class RuleRouter(Router):
         if isinstance(target, Router):
             return target.find_handler(request, **target_params)
 
-        elif isclass(target) and issubclass(target, httputil.HTTPMessageDelegate):
-            return target(request.connection)
+        elif isinstance(target, httputil.HTTPServerConnectionDelegate):
+            return target.start_request(request.server_connection, request.connection)
 
         elif callable(target):
             return _CallableAdapter(
@@ -322,7 +323,7 @@ class Rule(object):
             whether the rule should be considered a match for a specific
             request.
         :arg target: a Rule's target (typically a ``RequestHandler`` or
-            `~.httputil.HTTPMessageDelegate` subclass or even a nested `Router`).
+            `~.httputil.HTTPServerConnectionDelegate` subclass or even a nested `Router`).
         :arg dict target_kwargs: a dict of parameters that can be useful
             at the moment of target instantiation (for example, ``status_code``
             for a ``RequestHandler`` subclass). They end up in

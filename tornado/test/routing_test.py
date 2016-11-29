@@ -13,7 +13,7 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, ResponseStartLine
+from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
 from tornado.routing import HostMatches, PathMatches, ReversibleRouter, Rule, RuleRouter
 from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, RequestHandler
@@ -80,17 +80,22 @@ class CustomRouterTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"app2: first_handler: /first_handler")
 
 
-class MessageDelegate(HTTPMessageDelegate):
-    def __init__(self, connection):
-        self.connection = connection
+class ConnectionDelegate(HTTPServerConnectionDelegate):
+    def start_request(self, server_conn, request_conn):
 
-    def finish(self):
-        response_body = b"OK"
-        self.connection.write_headers(
-            ResponseStartLine("HTTP/1.1", 200, "OK"),
-            HTTPHeaders({"Content-Length": str(len(response_body))}))
-        self.connection.write(response_body)
-        self.connection.finish()
+        class MessageDelegate(HTTPMessageDelegate):
+            def __init__(self, connection):
+                self.connection = connection
+
+            def finish(self):
+                response_body = b"OK"
+                self.connection.write_headers(
+                    ResponseStartLine("HTTP/1.1", 200, "OK"),
+                    HTTPHeaders({"Content-Length": str(len(response_body))}))
+                self.connection.write(response_body)
+                self.connection.finish()
+
+        return MessageDelegate(request_conn)
 
 
 class RuleRouterTest(AsyncHTTPTestCase):
@@ -107,7 +112,7 @@ class RuleRouterTest(AsyncHTTPTestCase):
             ]),
             Rule(PathMatches("/first_handler"), FirstHandler, name="first_handler"),
             Rule(PathMatches("/request_callable"), request_callable),
-            ("/message_delegate", MessageDelegate)
+            ("/connection_delegate", ConnectionDelegate())
         ])
 
         return app
@@ -118,7 +123,7 @@ class RuleRouterTest(AsyncHTTPTestCase):
         response = self.fetch("/first_handler", headers={'Host': 'www.example.com'})
         self.assertEqual(response.body, b"second_handler: /first_handler")
 
-        response = self.fetch("/message_delegate")
+        response = self.fetch("/connection_delegate")
         self.assertEqual(response.body, b"OK")
 
         response = self.fetch("/request_callable")

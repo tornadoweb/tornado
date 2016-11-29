@@ -337,7 +337,7 @@ class HTTPServerRequest(object):
     """
     def __init__(self, method=None, uri=None, version="HTTP/1.0", headers=None,
                  body=None, host=None, files=None, connection=None,
-                 start_line=None):
+                 start_line=None, server_connection=None):
         if start_line is not None:
             method, uri, version = start_line
         self.method = method
@@ -355,6 +355,7 @@ class HTTPServerRequest(object):
         self.host_name = split_host_and_port(self.host.lower())[0]
         self.files = files or {}
         self.connection = connection
+        self.server_connection = server_connection
         self._start_time = time.time()
         self._finish_time = None
 
