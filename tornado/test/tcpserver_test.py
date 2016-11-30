@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function, with_statement
+
 import socket
 
 from tornado import gen
@@ -37,3 +38,11 @@ class TCPServerTest(AsyncTestCase):
                 server.stop()
             if client is not None:
                 client.close()
+
+    def test_stop_twice(self):
+        sock, port = bind_unused_port()
+        server = TCPServer()
+        server.add_socket(sock)
+        server.stop()
+        server.stop()
+
