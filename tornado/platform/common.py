@@ -6,7 +6,7 @@ import socket
 import time
 
 from tornado.platform import interface
-
+from tornado.util import errno_from_exception
 
 def try_close(f):
     # Avoid issue #875 (race condition when using the file in another
@@ -61,7 +61,7 @@ class Waker(interface.Waker):
                 break    # success
             except socket.error as detail:
                 if (not hasattr(errno, 'WSAEADDRINUSE') or
-                        detail[0] != errno.WSAEADDRINUSE):
+                        errno_from_exception(detail) != errno.WSAEADDRINUSE):
                     # "Address already in use" is the only error
                     # I've seen on two WinXP Pro SP2 boxes, under
                     # Pythons 2.3.5 and 2.4.1.
