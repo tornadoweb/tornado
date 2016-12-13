@@ -110,6 +110,7 @@ class TCPServer(object):
         self._sockets = {}  # fd -> socket object
         self._pending_sockets = []
         self._started = False
+        self._stopped = False
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
 
@@ -228,7 +229,11 @@ class TCPServer(object):
         Requests currently in progress may still continue after the
         server is stopped.
         """
+        if self._stopped:
+            return
+        self._stopped = True
         for fd, sock in self._sockets.items():
+            assert sock.fileno() == fd
             self.io_loop.remove_handler(fd)
             sock.close()
 
