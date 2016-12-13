@@ -96,6 +96,9 @@ else:
 # thread now.
 u'foo'.encode('idna')
 
+# For undiagnosed reasons, 'latin1' codec may also need to be preloaded.
+u'foo'.encode('latin1')
+
 # These errnos indicate that a non-blocking operation must be retried
 # at a later time.  On most platforms they're the same value, but on
 # some they differ.
