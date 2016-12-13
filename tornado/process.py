@@ -67,7 +67,7 @@ def cpu_count():
         pass
     try:
         return os.sysconf("SC_NPROCESSORS_CONF")
-    except ValueError:
+    except (AttributeError, ValueError):
         pass
     gen_log.error("Could not detect number of processors; assuming 1")
     return 1
