@@ -103,6 +103,12 @@ else:
     Future = futures.Future
 
 
+FUTURES = (Future,)
+
+def is_future(x):
+    return isinstance(x, FUTURES)
+
+
 class TracebackFuture(Future):
     """Subclass of `Future` which can store a traceback with
     exceptions.
