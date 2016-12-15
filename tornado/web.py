@@ -74,7 +74,7 @@ import traceback
 import types
 import uuid
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, is_future
 from tornado import escape
 from tornado import httputil
 from tornado import locale
@@ -1139,7 +1139,7 @@ class RequestHandler(object):
         try:
             if result is None:
                 callback()
-            elif isinstance(result, Future):
+            elif is_future(result):
                 if result.done():
                     if result.result() is not None:
                         raise ValueError('Expected None, got %r' % result)
@@ -1296,7 +1296,7 @@ def asynchronous(method):
         with stack_context.ExceptionStackContext(
                 self._stack_context_handle_exception):
             result = method(self, *args, **kwargs)
-            if isinstance(result, Future):
+            if is_future(result):
                 # If @asynchronous is used with @gen.coroutine, (but
                 # not @gen.engine), we can automatically finish the
                 # request when the future resolves.  Additionally,

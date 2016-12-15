@@ -81,7 +81,7 @@ import itertools
 import sys
 import types
 
-from tornado.concurrent import Future, TracebackFuture
+from tornado.concurrent import Future, TracebackFuture, is_future
 from tornado.ioloop import IOLoop
 from tornado.stack_context import ExceptionStackContext, wrap
 
@@ -445,7 +445,7 @@ class Multi(YieldPoint):
     def __init__(self, children):
         self.children = []
         for i in children:
-            if isinstance(i, Future):
+            if is_future(i):
                 i = YieldFuture(i)
             self.children.append(i)
         assert all(isinstance(i, YieldPoint) for i in self.children)
@@ -564,7 +564,7 @@ class Runner(object):
                     raise
                 if isinstance(yielded, list):
                     yielded = Multi(yielded)
-                elif isinstance(yielded, Future):
+                elif is_future(yielded):
                     yielded = YieldFuture(yielded)
                 if isinstance(yielded, YieldPoint):
                     self.yield_point = yielded
