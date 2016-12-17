@@ -16,63 +16,108 @@
 
 Tornado routes HTTP requests to appropriate handlers using `Router` class implementations.
 
-Any `Router` implementation can be used directly as a ``request_callback`` for
-`~.httpserver.HTTPServer` (this is possible because `Router` implements
-`~.httputil.HTTPServerConnectionDelegate`):
+`Router` interface extends `~.httputil.HTTPServerConnectionDelegate` to provide additional
+routing capabilities. This also means that any `Router` implementation can be used directly
+as a ``request_callback`` for `~.httpserver.HTTPServer` constructor.
+
+`Router` subclass must implement a ``find_handler`` method to provide a suitable
+`~.httputil.HTTPMessageDelegate` instance to handle the request:
 
 .. code-block:: python
 
     class CustomRouter(Router):
         def find_handler(self, request, **kwargs):
-            # some routing logic providing a suitable HTTPMessageDelegate implementation
-            return HTTPMessageDelegateImplementation()
+            # some routing logic providing a suitable HTTPMessageDelegate instance
+            return MessageDelegate(request.connection)
+
+    class MessageDelegate(HTTPMessageDelegate):
+        def __init__(self, connection):
+            self.connection = connection
+
+        def finish(self):
+            self.connection.write_headers(
+                ResponseStartLine("HTTP/1.1", 200, "OK"),
+                HTTPHeaders({"Content-Length": "2"}),
+                b"OK")
+            self.connection.finish()
 
     router = CustomRouter()
     server = HTTPServer(router)
 
-`Router.find_handler` is the only method that you must implement to provide routing
-logic in its simplest case. This method must return an instance of
-`~.httputil.HTTPMessageDelegate` that will be used to process the request.
+The main responsibility of `Router` implementation is to provide a mapping from a request
+to `~.httputil.HTTPMessageDelegate` instance that will handle this request. In the example above
+we can see that routing is possible even without instantiating an `~.web.Application`.
+
+For routing to `~.web.RequestHandler` implementations we need an `~.web.Application` instance.
+`~.web.Application.get_handler_delegate` provides a convenient way to create
+`~.httputil.HTTPMessageDelegate` for a given request and `~.web.RequestHandler`.
+
+Here is a simple example of how we can we route to `~.web.RequestHandler` subclasses
+by HTTP method:
+
+.. code-block:: python
+
+    resources = {}
+
+    class GetResource(RequestHandler):
+        def get(self, path):
+            if path not in resources:
+                raise HTTPError(404)
+
+            self.finish(resources[path])
+
+    class PostResource(RequestHandler):
+        def post(self, path):
+            resources[path] = self.request.body
+
+    class HTTPMethodRouter(Router):
+        def __init__(self, app):
+            self.app = app
+
+        def find_handler(self, request, **kwargs):
+            handler = GetResource if request.method == "GET" else PostResource
+            return self.app.get_handler_delegate(request, handler, path_args=[request.path])
+
+    router = HTTPMethodRouter(Application())
+    server = HTTPServer(router)
 
 `ReversibleRouter` interface adds the ability to distinguish between the routes and
 reverse them to the original urls using route's name and additional arguments.
 `~.web.Application` is itself an implementation of `ReversibleRouter` class.
 
-`RuleRouter` and `ReversibleRuleRouter` provide an interface for creating rule-based
-routing configurations. For example, `RuleRouter` can be used to route between applications:
+`RuleRouter` and `ReversibleRuleRouter` are implementations of `Router` and `ReversibleRouter`
+interfaces and can be used for creating rule-based routing configurations.
 
-.. code-block:: python
+Rules are instances of `Rule` class. They contain a `Matcher`, which provides the logic for
+determining whether the rule is a match for a particular request and a target, which can be
+one of the following.
 
-    app1 = Application([
-        (r"/app1/handler1", Handler1),
-        # other handlers ...
-    ])
-
-    app2 = Application([
-        (r"/app2/handler1", Handler1),
-        # other handlers ...
-    ])
-
-    router = RuleRouter([
-        Rule(PathMatches("/app1.*"), app1),
-        Rule(PathMatches("/app2.*"), app2)
-    ])
-
-    server = HTTPServer(router)
-
-Implementations of `~.httputil.HTTPServerConnectionDelegate` and old-style callables can also be used as
-rule targets:
+1) An instance of `~.httputil.HTTPServerConnectionDelegate`:
 
 .. code-block:: python
 
     router = RuleRouter([
-        Rule(PathMatches("/callable"), request_callable),  # def request_callable(request): ...
-        Rule(PathMatches("/delegate"), HTTPServerConnectionDelegateImpl())
+        Rule(PathMatches("/handler"), ConnectionDelegate()),
+        # ... more rules
     ])
 
-    server = HTTPServer(router)
+    class ConnectionDelegate(HTTPServerConnectionDelegate):
+        def start_request(self, server_conn, request_conn):
+            return MessageDelegate(request_conn)
 
-You can use nested routers as targets as well:
+2) A callable accepting a single argument of `~.httputil.HTTPServerRequest` type:
+
+.. code-block:: python
+
+    router = RuleRouter([
+        Rule(PathMatches("/callable"), request_callable)
+    ])
+
+    def request_callable(request):
+        request.write(b"HTTP/1.1 200 OK\\r\\nContent-Length: 2\\r\\n\\r\\nOK")
+        request.finish()
+
+3) Another `Router` instance:
 
 .. code-block:: python
 
@@ -80,9 +125,7 @@ You can use nested routers as targets as well:
         Rule(PathMatches("/router.*"), CustomRouter())
     ])
 
-    server = HTTPServer(router)
-
-And of course a nested `RuleRouter` would be a valid thing:
+Of course a nested `RuleRouter` or a `~.web.Application` is allowed:
 
 .. code-block:: python
 
@@ -94,14 +137,28 @@ And of course a nested `RuleRouter` would be a valid thing:
 
     server = HTTPServer(router)
 
-Rules are instances of `Rule` class. They contain some target (`~.web.Application` instance,
-`~.httputil.HTTPServerConnectionDelegate` implementation, a callable or a nested `Router`) and
-provide the basic routing logic defining whether this rule is a match for a particular request.
-This routing logic is implemented in `Matcher` subclasses (see `HostMatches`, `PathMatches`
-and others).
+In the example below `RuleRouter` is used to route between applications:
 
-`~URLSpec` is simply a subclass of a `Rule` with `PathMatches` matcher and is preserved for
-backwards compatibility.
+.. code-block:: python
+
+    app1 = Application([
+        (r"/app1/handler", Handler1),
+        # other handlers ...
+    ])
+
+    app2 = Application([
+        (r"/app2/handler", Handler2),
+        # other handlers ...
+    ])
+
+    router = RuleRouter([
+        Rule(PathMatches("/app1.*"), app1),
+        Rule(PathMatches("/app2.*"), app2)
+    ])
+
+    server = HTTPServer(router)
+
+For more information on application-level routing see docs for `~.web.Application`.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -187,24 +244,27 @@ class RuleRouter(Router):
     """Rule-based router implementation."""
 
     def __init__(self, rules=None):
-        """Constructs a router with an ordered list of rules::
+        """Constructs a router from an ordered list of rules::
 
             RuleRouter([
-                Rule(PathMatches("/handler"), SomeHandler),
+                Rule(PathMatches("/handler"), Target),
                 # ... more rules
             ])
 
         You can also omit explicit `Rule` constructor and use tuples of arguments::
 
             RuleRouter([
-                (PathMatches("/handler"), SomeHandler),
+                (PathMatches("/handler"), Target),
             ])
 
         `PathMatches` is a default matcher, so the example above can be simplified::
 
             RuleRouter([
-                ("/handler", SomeHandler),
+                ("/handler", Target),
             ])
+
+        In the examples above, ``Target`` can be a nested `Router` instance, an instance of
+        `~.httputil.HTTPServerConnectionDelegate` or an old-style callable, accepting a request argument.
 
         :arg rules: a list of `Rule` instances or tuples of `Rule`
             constructor arguments.
@@ -323,7 +383,8 @@ class Rule(object):
             whether the rule should be considered a match for a specific
             request.
         :arg target: a Rule's target (typically a ``RequestHandler`` or
-            `~.httputil.HTTPServerConnectionDelegate` subclass or even a nested `Router`).
+            `~.httputil.HTTPServerConnectionDelegate` subclass or even a nested `Router`,
+            depending on routing implementation).
         :arg dict target_kwargs: a dict of parameters that can be useful
             at the moment of target instantiation (for example, ``status_code``
             for a ``RequestHandler`` subclass). They end up in
@@ -502,7 +563,12 @@ class PathMatches(Matcher):
 
 
 class URLSpec(Rule):
-    """Specifies mappings between URLs and handlers."""
+    """Specifies mappings between URLs and handlers.
+
+    .. versionchanged: 4.5
+       `URLSpec` is now a subclass of a `Rule` with `PathMatches` matcher and is preserved for
+       backwards compatibility.
+    """
     def __init__(self, pattern, handler, kwargs=None, name=None):
         """Parameters:
 
