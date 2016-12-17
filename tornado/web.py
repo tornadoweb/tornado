@@ -77,6 +77,7 @@ import time
 import tornado
 import traceback
 import types
+from inspect import isclass
 from io import BytesIO
 
 from tornado.concurrent import Future
@@ -89,9 +90,13 @@ from tornado.log import access_log, app_log, gen_log
 from tornado import stack_context
 from tornado import template
 from tornado.escape import utf8, _unicode
-from tornado.util import (import_object, ObjectDict, raise_exc_info,
-                          unicode_type, _websocket_mask, re_unescape, PY3)
-from tornado.httputil import split_host_and_port
+from tornado.routing import (AnyMatches, DefaultHostMatches, HostMatches,
+                             ReversibleRouter, Rule, ReversibleRuleRouter,
+                             URLSpec)
+from tornado.util import (ObjectDict, raise_exc_info,
+                          unicode_type, _websocket_mask, PY3)
+
+url = URLSpec
 
 if PY3:
     import http.cookies as Cookie
@@ -1730,7 +1735,38 @@ def addslash(method):
     return wrapper
 
 
-class Application(httputil.HTTPServerConnectionDelegate):
+class _ApplicationRouter(ReversibleRuleRouter):
+    """Routing implementation used by `Application`.
+
+    Provides a binding between `Application` and `RequestHandler` implementations.
+    This implementation extends `~.routing.ReversibleRuleRouter` in a couple of ways:
+        * it allows to use `RequestHandler` subclasses as `~.routing.Rule` target and
+        * it allows to use a list/tuple of rules as `~.routing.Rule` target. This list is
+        substituted with an `ApplicationRouter`, instantiated with current application and
+        the list of routes.
+    """
+
+    def __init__(self, application, rules=None):
+        assert isinstance(application, Application)
+        self.application = application
+        super(_ApplicationRouter, self).__init__(rules)
+
+    def process_rule(self, rule):
+        rule = super(_ApplicationRouter, self).process_rule(rule)
+
+        if isinstance(rule.target, (list, tuple)):
+            rule.target = _ApplicationRouter(self.application, rule.target)
+
+        return rule
+
+    def get_target_delegate(self, target, request, **target_params):
+        if isclass(target) and issubclass(target, RequestHandler):
+            return self.application.get_handler_delegate(request, target, **target_params)
+
+        return super(_ApplicationRouter, self).get_target_delegate(target, request, **target_params)
+
+
+class Application(ReversibleRouter):
     """A collection of request handlers that make up a web application.
 
     Instances of this class are callable and can be passed directly to
@@ -1743,20 +1779,35 @@ class Application(httputil.HTTPServerConnectionDelegate):
         http_server.listen(8080)
         ioloop.IOLoop.current().start()
 
-    The constructor for this class takes in a list of `URLSpec` objects
-    or (regexp, request_class) tuples. When we receive requests, we
-    iterate over the list in order and instantiate an instance of the
-    first request class whose regexp matches the request path.
-    The request class can be specified as either a class object or a
-    (fully-qualified) name.
+    The constructor for this class takes in a list of `~.routing.Rule`
+    objects or tuples of values corresponding to the arguments of
+    `~.routing.Rule` constructor: ``(matcher, target, [target_kwargs], [name])``,
+    the values in square brackets being optional. The default matcher is
+    `~.routing.PathMatches`, so ``(regexp, target)`` tuples can also be used
+    instead of ``(PathMatches(regexp), target)``.
 
-    Each tuple can contain additional elements, which correspond to the
-    arguments to the `URLSpec` constructor.  (Prior to Tornado 3.2,
-    only tuples of two or three elements were allowed).
+    A common routing target is a `RequestHandler` subclass, but you can also
+    use lists of rules as a target, which create a nested routing configuration::
 
-    A dictionary may be passed as the third element of the tuple,
-    which will be used as keyword arguments to the handler's
-    constructor and `~RequestHandler.initialize` method.  This pattern
+        application = web.Application([
+            (HostMatches("example.com"), [
+                (r"/", MainPageHandler),
+                (r"/feed", FeedHandler),
+            ]),
+        ])
+
+    In addition to this you can use nested `~.routing.Router` instances,
+    `~.httputil.HTTPMessageDelegate` subclasses and callables as routing targets
+    (see `~.routing` module docs for more information).
+
+    When we receive requests, we iterate over the list in order and
+    instantiate an instance of the first request class whose regexp
+    matches the request path. The request class can be specified as
+    either a class object or a (fully-qualified) name.
+
+    A dictionary may be passed as the third element (``target_kwargs``)
+    of the tuple, which will be used as keyword arguments to the handler's
+    constructor and `~RequestHandler.initialize` method. This pattern
     is used for the `StaticFileHandler` in this example (note that a
     `StaticFileHandler` can be installed automatically with the
     static_path setting described below)::
@@ -1784,7 +1835,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
     ``static_handler_class`` setting.
 
     """
-    def __init__(self, handlers=None, default_host="", transforms=None,
+    def __init__(self, handlers=None, default_host=None, transforms=None,
                  **settings):
         if transforms is None:
             self.transforms = []
@@ -1792,8 +1843,6 @@ class Application(httputil.HTTPServerConnectionDelegate):
                 self.transforms.append(GZipContentEncoding)
         else:
             self.transforms = transforms
-        self.handlers = []
-        self.named_handlers = {}
         self.default_host = default_host
         self.settings = settings
         self.ui_modules = {'linkify': _linkify,
@@ -1816,14 +1865,17 @@ class Application(httputil.HTTPServerConnectionDelegate):
                             r"/(favicon\.ico)", r"/(robots\.txt)"]:
                 handlers.insert(0, (pattern, static_handler_class,
                                     static_handler_args))
-        if handlers:
-            self.add_handlers(".*$", handlers)
 
         if self.settings.get('debug'):
             self.settings.setdefault('autoreload', True)
             self.settings.setdefault('compiled_template_cache', False)
             self.settings.setdefault('static_hash_cache', False)
             self.settings.setdefault('serve_traceback', True)
+
+        self.wildcard_router = _ApplicationRouter(self, handlers)
+        self.default_router = _ApplicationRouter(self, [
+            Rule(AnyMatches(), self.wildcard_router)
+        ])
 
         # Automatically reload modified modules
         if self.settings.get('autoreload'):
@@ -1862,46 +1914,19 @@ class Application(httputil.HTTPServerConnectionDelegate):
         Host patterns are processed sequentially in the order they were
         added. All matching patterns will be considered.
         """
-        if not host_pattern.endswith("$"):
-            host_pattern += "$"
-        handlers = []
-        # The handlers with the wildcard host_pattern are a special
-        # case - they're added in the constructor but should have lower
-        # precedence than the more-precise handlers added later.
-        # If a wildcard handler group exists, it should always be last
-        # in the list, so insert new groups just before it.
-        if self.handlers and self.handlers[-1][0].pattern == '.*$':
-            self.handlers.insert(-1, (re.compile(host_pattern), handlers))
-        else:
-            self.handlers.append((re.compile(host_pattern), handlers))
+        host_matcher = HostMatches(host_pattern)
+        rule = Rule(host_matcher, _ApplicationRouter(self, host_handlers))
 
-        for spec in host_handlers:
-            if isinstance(spec, (tuple, list)):
-                assert len(spec) in (2, 3, 4)
-                spec = URLSpec(*spec)
-            handlers.append(spec)
-            if spec.name:
-                if spec.name in self.named_handlers:
-                    app_log.warning(
-                        "Multiple handlers named %s; replacing previous value",
-                        spec.name)
-                self.named_handlers[spec.name] = spec
+        self.default_router.rules.insert(-1, rule)
+
+        if self.default_host is not None:
+            self.wildcard_router.add_rules([(
+                DefaultHostMatches(self, host_matcher.host_pattern),
+                host_handlers
+            )])
 
     def add_transform(self, transform_class):
         self.transforms.append(transform_class)
-
-    def _get_host_handlers(self, request):
-        host = split_host_and_port(request.host.lower())[0]
-        matches = []
-        for pattern, handlers in self.handlers:
-            if pattern.match(host):
-                matches.extend(handlers)
-        # Look for default host if not behind load balancer (for debugging)
-        if not matches and "X-Real-Ip" not in request.headers:
-            for pattern, handlers in self.handlers:
-                if pattern.match(self.default_host):
-                    matches.extend(handlers)
-        return matches or None
 
     def _load_ui_methods(self, methods):
         if isinstance(methods, types.ModuleType):
@@ -1932,15 +1957,29 @@ class Application(httputil.HTTPServerConnectionDelegate):
                 except TypeError:
                     pass
 
-    def start_request(self, server_conn, request_conn):
-        # Modern HTTPServer interface
-        return _RequestDispatcher(self, request_conn)
-
     def __call__(self, request):
         # Legacy HTTPServer interface
-        dispatcher = _RequestDispatcher(self, None)
-        dispatcher.set_request(request)
+        dispatcher = self.find_handler(request)
         return dispatcher.execute()
+
+    def find_handler(self, request, **kwargs):
+        route = self.default_router.find_handler(request)
+        if route is not None:
+            return route
+
+        if self.settings.get('default_handler_class'):
+            return self.get_handler_delegate(
+                request,
+                self.settings['default_handler_class'],
+                self.settings.get('default_handler_args', {}))
+
+        return self.get_handler_delegate(
+            request, ErrorHandler, {'status_code': 404})
+
+    def get_handler_delegate(self, request, target_class, target_kwargs=None,
+                             path_args=None, path_kwargs=None):
+        return _HandlerDelegate(
+            self, request, target_class, target_kwargs, path_args, path_kwargs)
 
     def reverse_url(self, name, *args):
         """Returns a URL path for handler named ``name``
@@ -1951,8 +1990,10 @@ class Application(httputil.HTTPServerConnectionDelegate):
         They will be converted to strings if necessary, encoded as utf8,
         and url-escaped.
         """
-        if name in self.named_handlers:
-            return self.named_handlers[name].reverse(*args)
+        reversed_url = self.default_router.reverse_url(name, *args)
+        if reversed_url is not None:
+            return reversed_url
+
         raise KeyError("%s not found in named urls" % name)
 
     def log_request(self, handler):
@@ -1977,66 +2018,23 @@ class Application(httputil.HTTPServerConnectionDelegate):
                    handler._request_summary(), request_time)
 
 
-class _RequestDispatcher(httputil.HTTPMessageDelegate):
-    def __init__(self, application, connection):
+class _HandlerDelegate(httputil.HTTPMessageDelegate):
+    def __init__(self, application, request, handler_class, handler_kwargs,
+                 path_args, path_kwargs):
         self.application = application
-        self.connection = connection
-        self.request = None
+        self.connection = request.connection
+        self.request = request
+        self.handler_class = handler_class
+        self.handler_kwargs = handler_kwargs or {}
+        self.path_args = path_args or []
+        self.path_kwargs = path_kwargs or {}
         self.chunks = []
-        self.handler_class = None
-        self.handler_kwargs = None
-        self.path_args = []
-        self.path_kwargs = {}
+        self.stream_request_body = _has_stream_request_body(self.handler_class)
 
     def headers_received(self, start_line, headers):
-        self.set_request(httputil.HTTPServerRequest(
-            connection=self.connection, start_line=start_line,
-            headers=headers))
         if self.stream_request_body:
             self.request.body = Future()
             return self.execute()
-
-    def set_request(self, request):
-        self.request = request
-        self._find_handler()
-        self.stream_request_body = _has_stream_request_body(self.handler_class)
-
-    def _find_handler(self):
-        # Identify the handler to use as soon as we have the request.
-        # Save url path arguments for later.
-        app = self.application
-        handlers = app._get_host_handlers(self.request)
-        if not handlers:
-            self.handler_class = RedirectHandler
-            self.handler_kwargs = dict(url="%s://%s/"
-                                       % (self.request.protocol,
-                                          app.default_host))
-            return
-        for spec in handlers:
-            match = spec.regex.match(self.request.path)
-            if match:
-                self.handler_class = spec.handler_class
-                self.handler_kwargs = spec.kwargs
-                if spec.regex.groups:
-                    # Pass matched groups to the handler.  Since
-                    # match.groups() includes both named and
-                    # unnamed groups, we want to use either groups
-                    # or groupdict but not both.
-                    if spec.regex.groupindex:
-                        self.path_kwargs = dict(
-                            (str(k), _unquote_or_none(v))
-                            for (k, v) in match.groupdict().items())
-                    else:
-                        self.path_args = [_unquote_or_none(s)
-                                          for s in match.groups()]
-                return
-        if app.settings.get('default_handler_class'):
-            self.handler_class = app.settings['default_handler_class']
-            self.handler_kwargs = app.settings.get(
-                'default_handler_args', {})
-        else:
-            self.handler_class = ErrorHandler
-            self.handler_kwargs = dict(status_code=404)
 
     def data_received(self, data):
         if self.stream_request_body:
@@ -3012,99 +3010,6 @@ class _UIModuleNamespace(object):
             raise AttributeError(str(e))
 
 
-class URLSpec(object):
-    """Specifies mappings between URLs and handlers."""
-    def __init__(self, pattern, handler, kwargs=None, name=None):
-        """Parameters:
-
-        * ``pattern``: Regular expression to be matched. Any capturing
-          groups in the regex will be passed in to the handler's
-          get/post/etc methods as arguments (by keyword if named, by
-          position if unnamed. Named and unnamed capturing groups may
-          may not be mixed in the same rule).
-
-        * ``handler``: `RequestHandler` subclass to be invoked.
-
-        * ``kwargs`` (optional): A dictionary of additional arguments
-          to be passed to the handler's constructor.
-
-        * ``name`` (optional): A name for this handler.  Used by
-          `Application.reverse_url`.
-
-        """
-        if not pattern.endswith('$'):
-            pattern += '$'
-        self.regex = re.compile(pattern)
-        assert len(self.regex.groupindex) in (0, self.regex.groups), \
-            ("groups in url regexes must either be all named or all "
-             "positional: %r" % self.regex.pattern)
-
-        if isinstance(handler, str):
-            # import the Module and instantiate the class
-            # Must be a fully qualified name (module.ClassName)
-            handler = import_object(handler)
-
-        self.handler_class = handler
-        self.kwargs = kwargs or {}
-        self.name = name
-        self._path, self._group_count = self._find_groups()
-
-    def __repr__(self):
-        return '%s(%r, %s, kwargs=%r, name=%r)' % \
-            (self.__class__.__name__, self.regex.pattern,
-             self.handler_class, self.kwargs, self.name)
-
-    def _find_groups(self):
-        """Returns a tuple (reverse string, group count) for a url.
-
-        For example: Given the url pattern /([0-9]{4})/([a-z-]+)/, this method
-        would return ('/%s/%s/', 2).
-        """
-        pattern = self.regex.pattern
-        if pattern.startswith('^'):
-            pattern = pattern[1:]
-        if pattern.endswith('$'):
-            pattern = pattern[:-1]
-
-        if self.regex.groups != pattern.count('('):
-            # The pattern is too complicated for our simplistic matching,
-            # so we can't support reversing it.
-            return (None, None)
-
-        pieces = []
-        for fragment in pattern.split('('):
-            if ')' in fragment:
-                paren_loc = fragment.index(')')
-                if paren_loc >= 0:
-                    pieces.append('%s' + fragment[paren_loc + 1:])
-            else:
-                try:
-                    unescaped_fragment = re_unescape(fragment)
-                except ValueError as exc:
-                    # If we can't unescape part of it, we can't
-                    # reverse this url.
-                    return (None, None)
-                pieces.append(unescaped_fragment)
-
-        return (''.join(pieces), self.regex.groups)
-
-    def reverse(self, *args):
-        if self._path is None:
-            raise ValueError("Cannot reverse url regex " + self.regex.pattern)
-        assert len(args) == self._group_count, "required number of arguments "\
-            "not found"
-        if not len(args):
-            return self._path
-        converted_args = []
-        for a in args:
-            if not isinstance(a, (unicode_type, bytes)):
-                a = str(a)
-            converted_args.append(escape.url_escape(utf8(a), plus=False))
-        return self._path % tuple(converted_args)
-
-url = URLSpec
-
-
 if hasattr(hmac, 'compare_digest'):  # python 3.3
     _time_independent_equals = hmac.compare_digest
 else:
@@ -3325,15 +3230,3 @@ def _create_signature_v2(secret, s):
     hash = hmac.new(utf8(secret), digestmod=hashlib.sha256)
     hash.update(utf8(s))
     return utf8(hash.hexdigest())
-
-
-def _unquote_or_none(s):
-    """None-safe wrapper around url_unescape to handle unmatched optional
-    groups correctly.
-
-    Note that args are passed as bytes so the handler can decide what
-    encoding to use.
-    """
-    if s is None:
-        return s
-    return escape.url_unescape(s, encoding=None, plus=False)

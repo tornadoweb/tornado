@@ -1348,6 +1348,8 @@ class HostMatchingTest(WebTestCase):
                               [("/bar", HostMatchingTest.Handler, {"reply": "[1]"})])
         self.app.add_handlers("www.example.com",
                               [("/baz", HostMatchingTest.Handler, {"reply": "[2]"})])
+        self.app.add_handlers("www.e.*e.com",
+                              [("/baz", HostMatchingTest.Handler, {"reply": "[3]"})])
 
         response = self.fetch("/foo")
         self.assertEqual(response.body, b"wildcard")
@@ -1362,6 +1364,8 @@ class HostMatchingTest(WebTestCase):
         self.assertEqual(response.body, b"[1]")
         response = self.fetch("/baz", headers={'Host': 'www.example.com'})
         self.assertEqual(response.body, b"[2]")
+        response = self.fetch("/baz", headers={'Host': 'www.exe.com'})
+        self.assertEqual(response.body, b"[3]")
 
 
 @wsgi_safe
@@ -1387,8 +1391,8 @@ class DefaultHostMatchingTest(WebTestCase):
         response = self.fetch("/baz")
         self.assertEqual(response.code, 404)
 
-        response = self.fetch("/foo", follow_redirects=False, headers={"X-Real-Ip": "127.0.0.1"})
-        self.assertEqual(response.code, 301)
+        response = self.fetch("/foo", headers={"X-Real-Ip": "127.0.0.1"})
+        self.assertEqual(response.code, 404)
 
         self.app.default_host = "www.test.com"
 
