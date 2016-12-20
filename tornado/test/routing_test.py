@@ -14,13 +14,79 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
-from tornado.routing import HostMatches, PathMatches, ReversibleRouter, Rule, RuleRouter
+from tornado.routing import HostMatches, PathMatches, ReversibleRouter, Router, Rule, RuleRouter
 from tornado.testing import AsyncHTTPTestCase
-from tornado.web import Application, RequestHandler
+from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
 
 
-def get_named_handler(handler_name):
+class BasicRouter(Router):
+    def find_handler(self, request, **kwargs):
+
+        class MessageDelegate(HTTPMessageDelegate):
+            def __init__(self, connection):
+                self.connection = connection
+
+            def finish(self):
+                self.connection.write_headers(
+                    ResponseStartLine("HTTP/1.1", 200, "OK"), HTTPHeaders({"Content-Length": "2"}), b"OK"
+                )
+                self.connection.finish()
+
+        return MessageDelegate(request.connection)
+
+
+class BasicRouterTestCase(AsyncHTTPTestCase):
+    def get_app(self):
+        return BasicRouter()
+
+    def test_basic_router(self):
+        response = self.fetch("/any_request")
+        self.assertEqual(response.body, b"OK")
+
+
+resources = {}
+
+
+class GetResource(RequestHandler):
+    def get(self, path):
+        if path not in resources:
+            raise HTTPError(404)
+
+        self.finish(resources[path])
+
+
+class PostResource(RequestHandler):
+    def post(self, path):
+        resources[path] = self.request.body
+
+
+class HTTPMethodRouter(Router):
+    def __init__(self, app):
+        self.app = app
+
+    def find_handler(self, request, **kwargs):
+        handler = GetResource if request.method == "GET" else PostResource
+        return self.app.get_handler_delegate(request, handler, path_args=[request.path])
+
+
+class HTTPMethodRouterTestCase(AsyncHTTPTestCase):
+    def get_app(self):
+        return HTTPMethodRouter(Application())
+
+    def test_http_method_router(self):
+        response = self.fetch("/post_resource", method="POST", body="data")
+        self.assertEqual(response.code, 200)
+
+        response = self.fetch("/get_resource")
+        self.assertEqual(response.code, 404)
+
+        response = self.fetch("/post_resource")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body, b"data")
+
+
+def _get_named_handler(handler_name):
     class Handler(RequestHandler):
         def get(self, *args, **kwargs):
             if self.application.settings.get("app_name") is not None:
@@ -31,8 +97,8 @@ def get_named_handler(handler_name):
     return Handler
 
 
-FirstHandler = get_named_handler("first_handler")
-SecondHandler = get_named_handler("second_handler")
+FirstHandler = _get_named_handler("first_handler")
+SecondHandler = _get_named_handler("second_handler")
 
 
 class CustomRouter(ReversibleRouter):

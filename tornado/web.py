@@ -1736,14 +1736,14 @@ def addslash(method):
 
 
 class _ApplicationRouter(ReversibleRuleRouter):
-    """Routing implementation used by `Application`.
+    """Routing implementation used internally by `Application`.
 
-    Provides a binding between `Application` and `RequestHandler` implementations.
+    Provides a binding between `Application` and `RequestHandler`.
     This implementation extends `~.routing.ReversibleRuleRouter` in a couple of ways:
         * it allows to use `RequestHandler` subclasses as `~.routing.Rule` target and
-        * it allows to use a list/tuple of rules as `~.routing.Rule` target. This list is
-        substituted with an `ApplicationRouter`, instantiated with current application and
-        the list of routes.
+        * it allows to use a list/tuple of rules as `~.routing.Rule` target.
+        ``process_rule`` implementation will substitute this list with an appropriate
+        `_ApplicationRouter` instance.
     """
 
     def __init__(self, application, rules=None):
@@ -1978,6 +1978,16 @@ class Application(ReversibleRouter):
 
     def get_handler_delegate(self, request, target_class, target_kwargs=None,
                              path_args=None, path_kwargs=None):
+        """Returns `~.httputil.HTTPMessageDelegate` that can serve a request
+        for application and `RequestHandler` subclass.
+
+        :arg httputil.HTTPServerRequest request: current HTTP request.
+        :arg RequestHandler target_class: a `RequestHandler` class.
+        :arg dict target_kwargs: keyword arguments for ``target_class`` constructor.
+        :arg list path_args: positional arguments for ``target_class`` HTTP method that
+            will be executed while handling a request (``get``, ``post`` or any other).
+        :arg dict path_kwargs: keyword arguments for ``target_class`` HTTP method.
+        """
         return _HandlerDelegate(
             self, request, target_class, target_kwargs, path_args, path_kwargs)
 
