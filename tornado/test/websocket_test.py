@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import random
+import string
 import traceback
 
 from tornado.concurrent import Future
@@ -67,6 +69,15 @@ class HeaderHandler(TestWebSocketHandler):
         self.write_message(self.request.headers.get('X-Test', ''))
 
 
+class HeaderEchoHandler(TestWebSocketHandler):
+    def upgrade_response_headers(self):
+        return ''.join(
+            "{}: {}\r\n".format(k, v)
+            for k, v in self.request.headers.get_all()
+            if k.lower().startswith('x-test')
+        )
+
+
 class NonWebSocketHandler(RequestHandler):
     def get(self):
         self.write('ok')
@@ -118,6 +129,8 @@ class WebSocketTest(WebSocketBaseTestCase):
             ('/echo', EchoHandler, dict(close_future=self.close_future)),
             ('/non_ws', NonWebSocketHandler),
             ('/header', HeaderHandler, dict(close_future=self.close_future)),
+            ('/header_echo', HeaderEchoHandler,
+             dict(close_future=self.close_future)),
             ('/close_reason', CloseReasonHandler,
              dict(close_future=self.close_future)),
             ('/error_in_on_message', ErrorInOnMessageHandler,
@@ -219,6 +232,23 @@ class WebSocketTest(WebSocketBaseTestCase):
                         headers={'X-Test': 'hello'}))
         response = yield ws.read_message()
         self.assertEqual(response, 'hello')
+        yield self.close(ws)
+
+    @gen_test
+    def test_websocket_header_echo(self):
+        # Ensure that headers can be returned in the response.
+        # Specifically, that arbitrary headers passed through websocket_connect
+        # can be returned.
+        random_str = ''.join(random.choice(string.ascii_lowercase)
+                             for i in range(10))
+        ws = yield websocket_connect(
+            HTTPRequest('ws://127.0.0.1:%d/header_echo' % self.get_http_port(),
+                        headers={'X-Test-Hello': 'hello',
+                                 'X-Test-Goodbye': 'goodbye',
+                                 'X-Test-Random': random_str}))
+        self.assertEqual(ws.headers.get('X-Test-Hello'), 'hello')
+        self.assertEqual(ws.headers.get('X-Test-Goodbye'), 'goodbye')
+        self.assertEqual(ws.headers.get('X-Test-Random'), random_str)
         yield self.close(ws)
 
     @gen_test

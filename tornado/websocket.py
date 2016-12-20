@@ -65,6 +65,9 @@ class WebSocketHandler(tornado.web.RequestHandler):
     override `open` and `on_close` to handle opened and closed
     connections.
 
+    Custom upgrade response headers can be sent by overriding
+    `upgrade_response_headers`.
+
     See http://dev.w3.org/html5/websockets/ for details on the
     JavaScript interface.  The protocol is specified at
     http://tools.ietf.org/html/rfc6455.
@@ -237,6 +240,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
         .. versionadded:: 4.1
         """
         return None
+
+    def upgrade_response_headers(self):
+        """Override to return additional headers to send in the websocket
+           upgrade response.
+        """
+        return ""
 
     def open(self, *args, **kwargs):
         """Invoked when a new WebSocket is opened.
@@ -598,9 +607,10 @@ class WebSocketProtocol13(WebSocketProtocol):
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
             "Sec-WebSocket-Accept: %s\r\n"
-            "%s%s"
+            "%s%s%s"
             "\r\n" % (self._challenge_response(),
-                      subprotocol_header, extension_header)))
+                      subprotocol_header, extension_header,
+                      self.handler.upgrade_response_headers())))
 
         self._run_callback(self.handler.open, *self.handler.open_args,
                            **self.handler.open_kwargs)
