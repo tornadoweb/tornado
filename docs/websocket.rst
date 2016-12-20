@@ -22,6 +22,7 @@
 
    .. automethod:: WebSocketHandler.write_message
    .. automethod:: WebSocketHandler.close
+   .. automethod:: WebSocketHandler.upgrade_response_headers
 
    Configuration
    -------------
