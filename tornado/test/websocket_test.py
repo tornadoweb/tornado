@@ -70,12 +70,11 @@ class HeaderHandler(TestWebSocketHandler):
 
 
 class HeaderEchoHandler(TestWebSocketHandler):
-    def upgrade_response_headers(self):
-        return ''.join(
-            "{}: {}\r\n".format(k, v)
-            for k, v in self.request.headers.get_all()
-            if k.lower().startswith('x-test')
-        )
+    def set_default_headers(self):
+        for k, v in self.request.headers.get_all():
+            if k.lower().startswith('x-test'):
+                self.set_header(k, v)
+        self.set_header("X-Extra-Response-Header", "Extra-Response-Value")
 
 
 class NonWebSocketHandler(RequestHandler):
@@ -249,6 +248,7 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.assertEqual(ws.headers.get('X-Test-Hello'), 'hello')
         self.assertEqual(ws.headers.get('X-Test-Goodbye'), 'goodbye')
         self.assertEqual(ws.headers.get('X-Test-Random'), random_str)
+        self.assertEqual(ws.headers.get('X-Extra-Response-Header'), 'Extra-Response-Value')
         yield self.close(ws)
 
     @gen_test
