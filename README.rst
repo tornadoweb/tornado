@@ -4,6 +4,12 @@ Tornado Web Server
 .. image:: https://badges.gitter.im/Join%20Chat.svg
    :alt: Join the chat at https://gitter.im/tornadoweb/tornado
    :target: https://gitter.im/tornadoweb/tornado?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
+.. image:: https://travis-ci.org/elbuo8/sendgrid-django.svg?branch=master
+   :target: https://travis-ci.org/elbuo8/sendgrid-django
+   :alt: Travis CI
+.. image:: https://codecov.io/github/elbuo8/sendgrid-django/coverage.svg?branch=master
+   :target: https://codecov.io/github/elbuo8/sendgrid-django
+   :alt: codecov.io
 
 `Tornado <http://www.tornadoweb.org>`_ is a Python web framework and
 asynchronous networking library, originally developed at `FriendFeed
