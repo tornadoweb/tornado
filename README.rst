@@ -5,7 +5,7 @@ Tornado Web Server
    :alt: Join the chat at https://gitter.im/tornadoweb/tornado
    :target: https://gitter.im/tornadoweb/tornado?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 .. image:: https://travis-ci.org/elbuo8/sendgrid-django.svg?branch=master
-   :target: https://travis-ci.org/elbuo8/sendgrid-django
+   :target: https://travis-ci.org/tornadoweb/tornado
    :alt: Travis CI
 .. image:: https://codecov.io/github/elbuo8/sendgrid-django/coverage.svg?branch=master
    :target: https://codecov.io/github/elbuo8/sendgrid-django
