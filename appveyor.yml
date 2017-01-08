@@ -14,14 +14,6 @@ environment:
       PYTHON_VERSION: "3.5.x"
       PYTHON_ARCH: "64"
 
-    - PYTHON: "C:\\Python36-x64"
-          PYTHON_VERSION: "3.6"
-          PYTHON_ARCH: "64"
-
-    - PYTHON: "C:\\Python36-x64"
-          PYTHON_VERSION: "3.6"
-          PYTHON_ARCH: "64"
-
 install:
   # Make sure the right python version is first on the PATH.
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
@@ -44,7 +36,7 @@ test_script:
   # but for now it lets us avoid duplication with .travis.yml and tox.ini.
   # Running "py35-full" would be nice but it's failing on installing
   # dependencies with no useful logs.
-  - "tox -e py36"
+  - "tox -e py35"
 
 after_test:
   # If tests are successful, create binary packages for the project.
