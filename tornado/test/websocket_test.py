@@ -145,6 +145,13 @@ class WebSocketTest(WebSocketBaseTestCase):
         response = self.fetch('/echo')
         self.assertEqual(response.code, 400)
 
+    def test_bad_websocket_version(self):
+        response = self.fetch('/echo',
+                              headers={'Connection': 'Upgrade',
+                                       'Upgrade': 'WebSocket',
+                                       'Sec-WebSocket-Version': '12'})
+        self.assertEqual(response.code, 426)
+
     @gen_test
     def test_websocket_gen(self):
         ws = yield self.ws_connect('/echo')

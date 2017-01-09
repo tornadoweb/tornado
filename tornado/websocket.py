@@ -183,7 +183,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         if self.ws_connection:
             self.ws_connection.accept_connection()
         else:
-            self.set_status(426)
+            self.set_status(426, "Upgrade Required")
             self.set_header("Sec-WebSocket-Version", "7, 8, 13")
             self.finish()
 
