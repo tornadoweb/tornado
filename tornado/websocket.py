@@ -66,7 +66,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
     connections.
 
     Custom upgrade response headers can be sent by overriding
-    `set_default_headers` or `prepare`.
+    `~tornado.web.RequestHandler.set_default_headers` or
+    `~tornado.web.RequestHandler.prepare`.
 
     See http://dev.w3.org/html5/websockets/ for details on the
     JavaScript interface.  The protocol is specified at
