@@ -127,12 +127,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
     to accept it before the websocket connection will succeed.
     """
     def __init__(self, application, request, **kwargs):
+        super(WebSocketHandler, self).__init__(application, request, **kwargs)
         self.ws_connection = None
         self.close_code = None
         self.close_reason = None
         self.stream = None
         self._on_close_called = False
-        super(WebSocketHandler, self).__init__(application, request, **kwargs)
 
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
@@ -405,19 +405,14 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def _attach_stream(self):
         self.stream = self.request.connection.detach()
         self.stream.set_close_callback(self.on_connection_close)
+        # disable non-WS methods
+        for method in ["write", "redirect", "set_header", "set_cookie",
+                       "set_status", "flush", "finish"]:
+            setattr(self, method, _raise_not_supported_for_websockets)
 
 
-def _wrap_method(method):
-    def _disallow_for_websocket(self, *args, **kwargs):
-        if self.stream is None:
-            method(self, *args, **kwargs)
-        else:
-            raise RuntimeError("Method not supported for Web Sockets")
-    return _disallow_for_websocket
-for method in ["write", "redirect", "set_header", "set_cookie",
-               "set_status", "flush", "finish"]:
-    setattr(WebSocketHandler, method,
-            _wrap_method(getattr(WebSocketHandler, method)))
+def _raise_not_supported_for_websockets(*args, **kwargs):
+    raise RuntimeError("Method not supported for Web Sockets")
 
 
 class WebSocketProtocol(object):

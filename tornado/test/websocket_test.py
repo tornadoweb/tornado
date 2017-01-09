@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import functools
 import random
 import string
 import traceback
@@ -59,13 +60,23 @@ class ErrorInOnMessageHandler(TestWebSocketHandler):
 
 class HeaderHandler(TestWebSocketHandler):
     def open(self):
-        try:
-            # In a websocket context, many RequestHandler methods
-            # raise RuntimeErrors.
-            self.set_status(503)
-            raise Exception("did not get expected exception")
-        except RuntimeError:
-            pass
+        methods_to_test = [
+            functools.partial(self.write, 'This should not work'),
+            functools.partial(self.redirect, 'http://localhost/elsewhere'),
+            functools.partial(self.set_header, 'X-Test', ''),
+            functools.partial(self.set_cookie, 'Chocolate', 'Chip'),
+            functools.partial(self.set_status, 503),
+            self.flush,
+            self.finish,
+        ]
+        for method in methods_to_test:
+            try:
+                # In a websocket context, many RequestHandler methods
+                # raise RuntimeErrors.
+                method()
+                raise Exception("did not get expected exception")
+            except RuntimeError:
+                pass
         self.write_message(self.request.headers.get('X-Test', ''))
 
 
