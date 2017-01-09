@@ -30,7 +30,7 @@ import zlib
 
 from tornado.concurrent import TracebackFuture
 from tornado.escape import utf8, native_str, to_unicode
-from tornado import httpclient, httputil
+from tornado import gen, httpclient, httputil
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
@@ -269,6 +269,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """Handle incoming messages on the WebSocket
 
         This method must be overridden.
+
+        .. versionchanged:: 4.5
+
+           ``on_message`` can be a coroutine.
         """
         raise NotImplementedError
 
@@ -442,14 +446,21 @@ class WebSocketProtocol(object):
     def _run_callback(self, callback, *args, **kwargs):
         """Runs the given callback with exception handling.
 
-        On error, aborts the websocket connection and returns False.
+        If the callback is a coroutine, returns its Future. On error, aborts the
+        websocket connection and returns None.
         """
         try:
-            callback(*args, **kwargs)
+            result = callback(*args, **kwargs)
         except Exception:
             app_log.error("Uncaught exception in %s",
                           getattr(self.request, 'path', None), exc_info=True)
             self._abort()
+        else:
+            if result is not None:
+                self.stream.io_loop.add_future(gen.convert_yielded(result),
+                                               lambda f: f.result())
+
+            return result
 
     def on_connection_close(self):
         self._abort()
@@ -810,6 +821,8 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._on_frame_data(_websocket_mask(self._frame_mask, data))
 
     def _on_frame_data(self, data):
+        handled_future = None
+
         self._wire_bytes_in += len(data)
         if self._frame_opcode_is_control:
             # control frames may be interleaved with a series of fragmented
@@ -842,12 +855,18 @@ class WebSocketProtocol13(WebSocketProtocol):
                 self._fragmented_message_buffer = data
 
         if self._final_frame:
-            self._handle_message(opcode, data)
+            handled_future = self._handle_message(opcode, data)
 
         if not self.client_terminated:
-            self._receive_frame()
+            if handled_future:
+                # on_message is a coroutine, process more frames once it's done.
+                gen.convert_yielded(handled_future).add_done_callback(
+                    lambda future: self._receive_frame())
+            else:
+                self._receive_frame()
 
     def _handle_message(self, opcode, data):
+        """Execute on_message, returning its Future if it is a coroutine."""
         if self.client_terminated:
             return
 
@@ -862,11 +881,11 @@ class WebSocketProtocol13(WebSocketProtocol):
             except UnicodeDecodeError:
                 self._abort()
                 return
-            self._run_callback(self.handler.on_message, decoded)
+            return self._run_callback(self.handler.on_message, decoded)
         elif opcode == 0x2:
             # Binary data
             self._message_bytes_in += len(data)
-            self._run_callback(self.handler.on_message, data)
+            return self._run_callback(self.handler.on_message, data)
         elif opcode == 0x8:
             # Close
             self.client_terminated = True
@@ -883,7 +902,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         elif opcode == 0xA:
             # Pong
             self.last_pong = IOLoop.current().time()
-            self._run_callback(self.handler.on_pong, data)
+            return self._run_callback(self.handler.on_pong, data)
         else:
             self._abort()
 

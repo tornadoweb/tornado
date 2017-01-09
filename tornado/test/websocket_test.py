@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import sys
 import traceback
 
 from tornado.concurrent import Future
@@ -7,7 +8,7 @@ from tornado import gen
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log, app_log
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipBefore35, exec_test
 from tornado.web import Application, RequestHandler
 
 try:
@@ -92,6 +93,22 @@ class PathArgsHandler(TestWebSocketHandler):
         self.write_message(arg)
 
 
+class CoroutineOnMessageHandler(TestWebSocketHandler):
+    def initialize(self, close_future, compression_options=None):
+        super(CoroutineOnMessageHandler, self).initialize(close_future,
+                                                          compression_options)
+        self.sleeping = 0
+
+    @gen.coroutine
+    def on_message(self, message):
+        if self.sleeping > 0:
+            self.write_message('another coroutine is already sleeping')
+        self.sleeping += 1
+        yield gen.sleep(0.01)
+        self.sleeping -= 1
+        self.write_message(message)
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, **kwargs):
@@ -125,6 +142,8 @@ class WebSocketTest(WebSocketBaseTestCase):
             ('/async_prepare', AsyncPrepareHandler,
              dict(close_future=self.close_future)),
             ('/path_args/(.*)', PathArgsHandler,
+             dict(close_future=self.close_future)),
+            ('/coroutine', CoroutineOnMessageHandler,
              dict(close_future=self.close_future)),
         ])
 
@@ -260,6 +279,17 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.assertEqual(res, 'hello')
 
     @gen_test
+    def test_coroutine(self):
+        ws = yield self.ws_connect('/coroutine')
+        # Send both messages immediately, coroutine must process one at a time.
+        yield ws.write_message('hello1')
+        yield ws.write_message('hello2')
+        res = yield ws.read_message()
+        self.assertEqual(res, 'hello1')
+        res = yield ws.read_message()
+        self.assertEqual(res, 'hello2')
+
+    @gen_test
     def test_check_origin_valid_no_path(self):
         port = self.get_http_port()
 
@@ -328,6 +358,42 @@ class WebSocketTest(WebSocketBaseTestCase):
                                     io_loop=self.io_loop)
 
         self.assertEqual(cm.exception.code, 403)
+
+
+if sys.version_info >= (3, 5):
+    NativeCoroutineOnMessageHandler = exec_test(globals(), locals(), """
+class NativeCoroutineOnMessageHandler(TestWebSocketHandler):
+    def initialize(self, close_future, compression_options=None):
+        super().initialize(close_future, compression_options)
+        self.sleeping = 0
+
+    async def on_message(self, message):
+        if self.sleeping > 0:
+            self.write_message('another coroutine is already sleeping')
+        self.sleeping += 1
+        await gen.sleep(0.01)
+        self.sleeping -= 1
+        self.write_message(message)""")['NativeCoroutineOnMessageHandler']
+
+
+class WebSocketNativeCoroutineTest(WebSocketBaseTestCase):
+    def get_app(self):
+        self.close_future = Future()
+        return Application([
+            ('/native', NativeCoroutineOnMessageHandler,
+             dict(close_future=self.close_future))])
+
+    @skipBefore35
+    @gen_test
+    def test_native_coroutine(self):
+        ws = yield self.ws_connect('/native')
+        # Send both messages immediately, coroutine must process one at a time.
+        yield ws.write_message('hello1')
+        yield ws.write_message('hello2')
+        res = yield ws.read_message()
+        self.assertEqual(res, 'hello1')
+        res = yield ws.read_message()
+        self.assertEqual(res, 'hello2')
 
 
 class CompressionTestMixin(object):
