@@ -66,7 +66,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     connections.
 
     Custom upgrade response headers can be sent by overriding
-    `set_default_headers`.
+    `set_default_headers` or `prepare`.
 
     See http://dev.w3.org/html5/websockets/ for details on the
     JavaScript interface.  The protocol is specified at
@@ -235,17 +235,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         .. versionadded:: 4.1
         """
         return None
-
-    def set_default_headers(self):
-        """Override this to set HTTP headers at the beginning of the
-           WebSocket upgrade request.
-
-        For example, this is the place to set a custom ``Server`` header.
-        Note that setting such headers in the normal flow of request
-        processing may not do what you want, since headers may be reset
-        during error handling.
-        """
-        pass
 
     def open(self, *args, **kwargs):
         """Invoked when a new WebSocket is opened.

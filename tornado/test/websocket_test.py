@@ -1,8 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 import functools
-import random
-import string
 import traceback
 
 from tornado.concurrent import Future
@@ -82,10 +80,12 @@ class HeaderHandler(TestWebSocketHandler):
 
 class HeaderEchoHandler(TestWebSocketHandler):
     def set_default_headers(self):
+        self.set_header("X-Extra-Response-Header", "Extra-Response-Value")
+
+    def prepare(self):
         for k, v in self.request.headers.get_all():
             if k.lower().startswith('x-test'):
                 self.set_header(k, v)
-        self.set_header("X-Extra-Response-Header", "Extra-Response-Value")
 
 
 class NonWebSocketHandler(RequestHandler):
@@ -256,16 +256,10 @@ class WebSocketTest(WebSocketBaseTestCase):
         # Ensure that headers can be returned in the response.
         # Specifically, that arbitrary headers passed through websocket_connect
         # can be returned.
-        random_str = ''.join(random.choice(string.ascii_lowercase)
-                             for i in range(10))
         ws = yield websocket_connect(
             HTTPRequest('ws://127.0.0.1:%d/header_echo' % self.get_http_port(),
-                        headers={'X-Test-Hello': 'hello',
-                                 'X-Test-Goodbye': 'goodbye',
-                                 'X-Test-Random': random_str}))
+                        headers={'X-Test-Hello': 'hello'}))
         self.assertEqual(ws.headers.get('X-Test-Hello'), 'hello')
-        self.assertEqual(ws.headers.get('X-Test-Goodbye'), 'goodbye')
-        self.assertEqual(ws.headers.get('X-Test-Random'), random_str)
         self.assertEqual(ws.headers.get('X-Extra-Response-Header'), 'Extra-Response-Value')
         yield self.close(ws)
 

@@ -22,7 +22,6 @@
 
    .. automethod:: WebSocketHandler.write_message
    .. automethod:: WebSocketHandler.close
-   .. automethod:: WebSocketHandler.set_default_headers
 
    Configuration
    -------------
