@@ -715,7 +715,7 @@ class PollIOLoop(IOLoop):
         self._closing = True
         self.remove_handler(self._waker.fileno())
         if all_fds:
-            for fd, handler in self._handlers.values():
+            for fd, handler in list(self._handlers.values()):
                 self.close_fd(fd)
         self._waker.close()
         self._impl.close()
