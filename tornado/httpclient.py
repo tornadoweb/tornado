@@ -311,7 +311,7 @@ class HTTPRequest(object):
                  header_callback=None, prepare_curl_callback=None,
                  proxy_host=None, proxy_port=None, proxy_username=None,
                  proxy_password=None, proxy_auth_mode=None,
-                 allow_nonstandard_methods=None, validate_cert=None,
+                 allow_nonstandard_methods=None, validate_cert=True,
                  ca_certs=None, allow_ipv6=None, client_key=None,
                  client_cert=None, body_producer=None,
                  expect_100_continue=False, decompress_response=None,
