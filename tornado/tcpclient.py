@@ -47,7 +47,7 @@ class _Connector(object):
     http://tools.ietf.org/html/rfc6555
 
     """
-    def __init__(self, addrinfo, io_loop, connect):
+    def __init__(self, addrinfo, io_loop, connect, source_ip=None):
         self.io_loop = io_loop
         self.connect = connect
 
@@ -56,6 +56,7 @@ class _Connector(object):
         self.last_error = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
+        self.source_ip = source_ip
 
     @staticmethod
     def split(addrinfo):
@@ -93,7 +94,7 @@ class _Connector(object):
                 self.future.set_exception(self.last_error or
                                           IOError("connection failed"))
             return
-        future = self.connect(af, addr)
+        future = self.connect(af, addr, source_ip=self.source_ip)
         future.add_done_callback(functools.partial(self.on_connect_done,
                                                    addrs, af, addr))
 
@@ -155,16 +156,23 @@ class TCPClient(object):
 
     @gen.coroutine
     def connect(self, host, port, af=socket.AF_UNSPEC, ssl_options=None,
-                max_buffer_size=None):
+                max_buffer_size=None, source_ip=None):
         """Connect to the given host and port.
 
         Asynchronously returns an `.IOStream` (or `.SSLIOStream` if
         ``ssl_options`` is not None).
+
+        source_ip
+            Specify the source IP address to use when establishing
+            the connection. In case the user needs to resolve and
+            use a specific interface, it has to be handled outside
+            of Tornado as this depneds very much on the platform.
         """
         addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(
             addrinfo, self.io_loop,
-            functools.partial(self._create_stream, max_buffer_size))
+            functools.partial(self._create_stream, max_buffer_size),
+            source_ip=source_ip)
         af, addr, stream = yield connector.start()
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
@@ -174,16 +182,16 @@ class TCPClient(object):
                                             server_hostname=host)
         raise gen.Return(stream)
 
-    def _create_stream(self, max_buffer_size, af, addr):
+    def _create_stream(self, max_buffer_size, af, addr, source_ip=None):
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.
         try:
             stream = IOStream(socket.socket(af),
-                            io_loop=self.io_loop,
-                            max_buffer_size=max_buffer_size)
+                              io_loop=self.io_loop,
+                              max_buffer_size=max_buffer_size)
         except socket.error as e:
             fu = Future()
             fu.set_exception(e)
             return fu
         else:
-            return stream.connect(addr)
+            return stream.connect(addr, source_ip=source_ip)
