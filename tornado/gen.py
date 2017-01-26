@@ -960,6 +960,7 @@ class Runner(object):
         # of the coroutine.
         self.stack_context_deactivate = None
         if self.handle_yield(first_yielded):
+            gen = result_future = first_yielded = None
             self.run()
 
     def register_callback(self, key):
@@ -1018,8 +1019,10 @@ class Runner(object):
                         exc_info = sys.exc_info()
 
                     if exc_info is not None:
-                        yielded = self.gen.throw(*exc_info)
-                        exc_info = None
+                        try:
+                            yielded = self.gen.throw(*exc_info)
+                        finally:
+                            exc_info = None
                     else:
                         yielded = self.gen.send(value)
 
