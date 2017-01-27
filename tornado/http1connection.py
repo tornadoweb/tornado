@@ -257,6 +257,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             if need_delegate_close:
                 with _ExceptionLoggingContext(app_log):
                     delegate.on_connection_close()
+            header_future = None
             self._clear_callbacks()
         raise gen.Return(True)
 

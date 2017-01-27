@@ -295,6 +295,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                     future.set_exc_info(sys.exc_info())
                 else:
                     Runner(result, future, yielded)
+                yielded = None
                 try:
                     return future
                 finally:
@@ -1017,6 +1018,7 @@ class Runner(object):
                     except Exception:
                         self.had_exception = True
                         exc_info = sys.exc_info()
+                    future = None
 
                     if exc_info is not None:
                         try:
@@ -1057,6 +1059,7 @@ class Runner(object):
                     return
                 if not self.handle_yield(yielded):
                     return
+                yielded = None
         finally:
             self.running = False
 
@@ -1105,8 +1108,11 @@ class Runner(object):
                 self.future.set_exc_info(sys.exc_info())
 
         if not self.future.done() or self.future is moment:
+            def inner(f):
+                f = None
+                self.run()
             self.io_loop.add_future(
-                self.future, lambda f: self.run())
+                self.future, inner)
             return False
         return True
 
