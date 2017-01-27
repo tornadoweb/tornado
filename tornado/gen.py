@@ -1022,6 +1022,8 @@ class Runner(object):
                         try:
                             yielded = self.gen.throw(*exc_info)
                         finally:
+                            # Break up a reference to itself
+                            # for faster GC on CPython.
                             exc_info = None
                     else:
                         yielded = self.gen.send(value)
