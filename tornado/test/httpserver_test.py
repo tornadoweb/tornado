@@ -411,14 +411,14 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.stream.write(b'asdf\r\n\r\n')
             # TODO: need an async version of ExpectLog so we don't need
             # hard-coded timeouts here.
-            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.05),
                                      self.stop)
             self.wait()
 
     def test_malformed_headers(self):
         with ExpectLog(gen_log, '.*Malformed HTTP headers'):
             self.stream.write(b'GET / HTTP/1.0\r\nasdf\r\n\r\n')
-            self.io_loop.add_timeout(datetime.timedelta(seconds=0.01),
+            self.io_loop.add_timeout(datetime.timedelta(seconds=0.05),
                                      self.stop)
             self.wait()
 
@@ -428,6 +428,25 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
         self.stream.write(b"""\
 POST /echo HTTP/1.1
 Transfer-Encoding: chunked
+Content-Type: application/x-www-form-urlencoded
+
+4
+foo=
+3
+bar
+0
+
+""".replace(b"\n", b"\r\n"))
+        read_stream_body(self.stream, self.stop)
+        headers, response = self.wait()
+        self.assertEqual(json_decode(response), {u'foo': [u'bar']})
+
+    def test_chunked_request_uppercase(self):
+        # As per RFC 2616 section 3.6, "Transfer-Encoding" header's value is
+        # case-insensitive.
+        self.stream.write(b"""\
+POST /echo HTTP/1.1
+Transfer-Encoding: Chunked
 Content-Type: application/x-www-form-urlencoded
 
 4

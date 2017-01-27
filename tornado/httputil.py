@@ -38,11 +38,12 @@ from tornado.util import ObjectDict, PY3
 if PY3:
     import http.cookies as Cookie
     from http.client import responses
-    from urllib.parse import urlencode
+    from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 else:
     import Cookie
     from httplib import responses
     from urllib import urlencode
+    from urlparse import urlparse, urlunparse, parse_qsl
 
 
 # responses is unused in this file, but we re-export it to other files.
@@ -337,7 +338,7 @@ class HTTPServerRequest(object):
     """
     def __init__(self, method=None, uri=None, version="HTTP/1.0", headers=None,
                  body=None, host=None, files=None, connection=None,
-                 start_line=None):
+                 start_line=None, server_connection=None):
         if start_line is not None:
             method, uri, version = start_line
         self.method = method
@@ -352,8 +353,10 @@ class HTTPServerRequest(object):
         self.protocol = getattr(context, 'protocol', "http")
 
         self.host = host or self.headers.get("Host") or "127.0.0.1"
+        self.host_name = split_host_and_port(self.host.lower())[0]
         self.files = files or {}
         self.connection = connection
+        self.server_connection = server_connection
         self._start_time = time.time()
         self._finish_time = None
 
@@ -599,11 +602,26 @@ def url_concat(url, args):
     >>> url_concat("http://example.com/foo?a=b", [("c", "d"), ("c", "d2")])
     'http://example.com/foo?a=b&c=d&c=d2'
     """
-    if not args:
-        return url
-    if url[-1] not in ('?', '&'):
-        url += '&' if ('?' in url) else '?'
-    return url + urlencode(args)
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = "'args' parameter should be dict, list or tuple. Not {0}".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
 
 
 class HTTPFile(ObjectDict):

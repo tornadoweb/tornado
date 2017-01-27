@@ -50,6 +50,8 @@
 
    .. autofunction:: maybe_future
 
+   .. autofunction:: is_coroutine_function
+
    Legacy interface
    ----------------
 

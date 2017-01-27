@@ -1348,6 +1348,8 @@ class HostMatchingTest(WebTestCase):
                               [("/bar", HostMatchingTest.Handler, {"reply": "[1]"})])
         self.app.add_handlers("www.example.com",
                               [("/baz", HostMatchingTest.Handler, {"reply": "[2]"})])
+        self.app.add_handlers("www.e.*e.com",
+                              [("/baz", HostMatchingTest.Handler, {"reply": "[3]"})])
 
         response = self.fetch("/foo")
         self.assertEqual(response.body, b"wildcard")
@@ -1361,6 +1363,40 @@ class HostMatchingTest(WebTestCase):
         response = self.fetch("/bar", headers={'Host': 'www.example.com'})
         self.assertEqual(response.body, b"[1]")
         response = self.fetch("/baz", headers={'Host': 'www.example.com'})
+        self.assertEqual(response.body, b"[2]")
+        response = self.fetch("/baz", headers={'Host': 'www.exe.com'})
+        self.assertEqual(response.body, b"[3]")
+
+
+@wsgi_safe
+class DefaultHostMatchingTest(WebTestCase):
+    def get_handlers(self):
+        return []
+
+    def get_app_kwargs(self):
+        return {'default_host': "www.example.com"}
+
+    def test_default_host_matching(self):
+        self.app.add_handlers("www.example.com",
+                              [("/foo", HostMatchingTest.Handler, {"reply": "[0]"})])
+        self.app.add_handlers(r"www\.example\.com",
+                              [("/bar", HostMatchingTest.Handler, {"reply": "[1]"})])
+        self.app.add_handlers("www.test.com",
+                              [("/baz", HostMatchingTest.Handler, {"reply": "[2]"})])
+
+        response = self.fetch("/foo")
+        self.assertEqual(response.body, b"[0]")
+        response = self.fetch("/bar")
+        self.assertEqual(response.body, b"[1]")
+        response = self.fetch("/baz")
+        self.assertEqual(response.code, 404)
+
+        response = self.fetch("/foo", headers={"X-Real-Ip": "127.0.0.1"})
+        self.assertEqual(response.code, 404)
+
+        self.app.default_host = "www.test.com"
+
+        response = self.fetch("/baz")
         self.assertEqual(response.body, b"[2]")
 
 
@@ -2834,3 +2870,20 @@ class URLSpecReverseTest(unittest.TestCase):
     def test_reverse_arguments(self):
         self.assertEqual('/api/v1/foo/bar',
                          url(r'^/api/v1/foo/(\w+)$', None).reverse('bar'))
+
+
+class RedirectHandlerTest(WebTestCase):
+    def get_handlers(self):
+        return [
+            ('/src', WebRedirectHandler, {'url': '/dst'}),
+            (r'/(.*?)/(.*?)/(.*)', WebRedirectHandler, {'url': '/{1}/{0}/{2}'})]
+
+    def test_basic_redirect(self):
+        response = self.fetch('/src', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst')
+
+    def test_redirect_pattern(self):
+        response = self.fetch('/a/b/c', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/b/a/c')

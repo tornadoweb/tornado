@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import gc
 import contextlib
 import datetime
 import functools
@@ -24,7 +25,6 @@ try:
     from concurrent import futures
 except ImportError:
     futures = None
-
 
 class GenEngineTest(AsyncTestCase):
     def setUp(self):
@@ -656,6 +656,28 @@ class GenCoroutineTest(AsyncTestCase):
     def tearDown(self):
         super(GenCoroutineTest, self).tearDown()
         assert self.finished
+
+    def test_attributes(self):
+        self.finished = True
+
+        def f():
+            yield gen.moment
+
+        coro = gen.coroutine(f)
+        self.assertEqual(coro.__name__, f.__name__)
+        self.assertEqual(coro.__module__, f.__module__)
+        self.assertIs(coro.__wrapped__, f)
+
+    def test_is_coroutine_function(self):
+        self.finished = True
+
+        def f():
+            yield gen.moment
+
+        coro = gen.coroutine(f)
+        self.assertFalse(gen.is_coroutine_function(f))
+        self.assertTrue(gen.is_coroutine_function(coro))
+        self.assertFalse(gen.is_coroutine_function(coro()))
 
     @gen_test
     def test_sync_gen_return(self):
@@ -1392,6 +1414,29 @@ class WaitIteratorTest(AsyncTestCase):
         yield gen.with_timeout(datetime.timedelta(seconds=0.1),
                                gen.WaitIterator(gen.sleep(0)).next())
 
+
+class RunnerGCTest(AsyncTestCase):
+    """Github issue 1769: Runner objects can get GCed unexpectedly"""
+    @gen_test
+    def test_gc(self):
+        """Runners shouldn't GC if future is alive"""
+        # Create the weakref
+        weakref_scope = [None]
+        def callback():
+            gc.collect(2)
+            weakref_scope[0]().set_result(123)
+
+        @gen.coroutine
+        def tester():
+            fut = Future()
+            weakref_scope[0] = weakref.ref(fut)
+            self.io_loop.add_callback(callback)
+            yield fut
+
+        yield gen.with_timeout(
+            datetime.timedelta(seconds=0.2),
+            tester()
+        )
 
 if __name__ == '__main__':
     unittest.main()

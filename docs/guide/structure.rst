@@ -153,6 +153,10 @@ By default uploaded files are fully buffered in memory; if you need to
 handle files that are too large to comfortably keep in memory see the
 `.stream_request_body` class decorator.
 
+In the demos directory,
+`file_receiver.py <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload/>`_
+shows both methods of receiving file uploads.
+
 Due to the quirks of the HTML form encoding (e.g. the ambiguity around
 singular versus plural arguments), Tornado does not attempt to unify
 form arguments with other types of input.  In particular, we do not
@@ -278,7 +282,7 @@ to the prefix ``/photos/`` instead::
     app = tornado.web.Application([
         url(r"/photos/(.*)", MyPhotoHandler),
         url(r"/pictures/(.*)", tornado.web.RedirectHandler,
-            dict(url=r"/photos/\1")),
+            dict(url=r"/photos/{0}")),
         ])
 
 Unlike `.RequestHandler.redirect`, `.RedirectHandler` uses permanent

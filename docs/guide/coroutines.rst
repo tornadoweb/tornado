@@ -143,7 +143,11 @@ the `.IOLoop` will log a stack trace::
     # we pass the function object to be called by the IOLoop.
     IOLoop.current().spawn_callback(divide, 1, 0)
 
-Finally, at the top level of a program, *if the `.IOLoop` is not yet
+Using `.IOLoop.spawn_callback` in this way is *recommended* for
+functions using ``@gen.coroutine``, but it is *required* for functions
+using ``async def`` (otherwise the coroutine runner will not start).
+
+Finally, at the top level of a program, *if the IOLoop is not yet
 running,* you can start the `.IOLoop`, run the coroutine, and then
 stop the `.IOLoop` with the `.IOLoop.run_sync` method. This is often
 used to start the ``main`` function of a batch-oriented program::
@@ -234,6 +238,12 @@ immediately, so you can start another operation before waiting:
 
 .. testoutput::
    :hide:
+
+This pattern is most usable with ``@gen.coroutine``. If
+``fetch_next_chunk()`` uses ``async def``, then it must be called as
+``fetch_future =
+tornado.gen.convert_yielded(self.fetch_next_chunk())`` to start the
+background processing.
 
 Looping
 ^^^^^^^

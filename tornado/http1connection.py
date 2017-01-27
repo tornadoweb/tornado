@@ -566,7 +566,7 @@ class HTTP1Connection(httputil.HTTPConnection):
 
         if content_length is not None:
             return self._read_fixed_body(content_length, delegate)
-        if headers.get("Transfer-Encoding") == "chunked":
+        if headers.get("Transfer-Encoding", "").lower() == "chunked":
             return self._read_chunked_body(delegate)
         if self.is_client:
             return self._read_body_until_close(delegate)
