@@ -47,7 +47,7 @@ class _Connector(object):
     http://tools.ietf.org/html/rfc6555
 
     """
-    def __init__(self, addrinfo, io_loop, connect, source_ip=None):
+    def __init__(self, addrinfo, io_loop, connect):
         self.io_loop = io_loop
         self.connect = connect
 
@@ -56,7 +56,6 @@ class _Connector(object):
         self.last_error = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
-        self.source_ip = source_ip
 
     @staticmethod
     def split(addrinfo):
@@ -94,7 +93,7 @@ class _Connector(object):
                 self.future.set_exception(self.last_error or
                                           IOError("connection failed"))
             return
-        future = self.connect(af, addr, source_ip=self.source_ip)
+        future = self.connect(af, addr)
         future.add_done_callback(functools.partial(self.on_connect_done,
                                                    addrs, af, addr))
 
@@ -201,4 +200,4 @@ class TCPClient(object):
             fu.set_exception(e)
             return fu
         else:
-            return stream.connect(addr, source_ip=source_ip)
+            return stream.connect(addr)
