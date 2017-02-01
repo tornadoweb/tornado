@@ -1023,8 +1023,7 @@ class IOStream(BaseIOStream):
     def write_to_fd(self, data):
         return self.socket.send(data)
 
-    def connect(self, address, callback=None, server_hostname=None,
-                source_ip=None):
+    def connect(self, address, callback=None, server_hostname=None):
         """Connects the socket to a remote address without blocking.
 
         May only be called if the socket passed to the constructor was
@@ -1048,9 +1047,6 @@ class IOStream(BaseIOStream):
         ``ssl_options``) and SNI (if supported; requires Python
         2.7.9+).
 
-        If ``source_ip`` is specified, will try to use a certain source
-        IP address to establish the connection.
-
         Note that it is safe to call `IOStream.write
         <BaseIOStream.write>` while the connection is pending, in
         which case the data will be written as soon as the connection
@@ -1072,17 +1068,6 @@ class IOStream(BaseIOStream):
             future = None
         else:
             future = self._connect_future = TracebackFuture()
-        if source_ip:
-            try:
-                self.socket.bind((source_ip, 0))
-                # port = 0, will not bind to a specific port
-            except socket.error as e:
-                gen_log.error("Unable to use the source IP %s",
-                                    source_ip)
-                gen_log.error("%s: %s", self.socket.fileno(), e)
-                # log the error and move on
-                # will try to connect using the loopback
-                gen_log.warning("Using the loopback IP address as source.")
         try:
             self.socket.connect(address)
         except socket.error as e:
@@ -1361,9 +1346,7 @@ class SSLIOStream(IOStream):
             return
         super(SSLIOStream, self)._handle_write()
 
-    def connect(self, address, callback=None, server_hostname=None,
-                source_ip=None):
-        # source_ip not used here
+    def connect(self, address, callback=None, server_hostname=None):
         self._server_hostname = server_hostname
         # Pass a dummy callback to super.connect(), which is slightly
         # more efficient than letting it return a Future we ignore.

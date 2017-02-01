@@ -162,17 +162,18 @@ class TCPClient(object):
         Asynchronously returns an `.IOStream` (or `.SSLIOStream` if
         ``ssl_options`` is not None).
 
-        source_ip
-            Specify the source IP address to use when establishing
-            the connection. In case the user needs to resolve and
-            use a specific interface, it has to be handled outside
-            of Tornado as this depneds very much on the platform.
+        Using the `source_ip` kwarg, one can specify the source
+        IP address to use when establishing the connection.
+        In case the user needs to resolve and
+        use a specific interface, it has to be handled outside
+        of Tornado as this depends very much on the platform.
         """
         addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(
             addrinfo, self.io_loop,
-            functools.partial(self._create_stream, max_buffer_size),
-            source_ip=source_ip)
+            functools.partial(self._create_stream, max_buffer_size,
+                              source_ip=source_ip)
+        )
         af, addr, stream = yield connector.start()
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
@@ -185,6 +186,12 @@ class TCPClient(object):
     def _create_stream(self, max_buffer_size, af, addr, source_ip=None):
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.
+        if source_ip:
+            # If source_ip is needed, will try binding.
+            # If it fails, will exit loudly.
+            self.socket.bind((source_ip, 0))
+            # Does not bind try binding to a specific port,
+            # so the port argument is set to 0.
         try:
             stream = IOStream(socket.socket(af),
                               io_loop=self.io_loop,
