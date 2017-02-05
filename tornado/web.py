@@ -1672,10 +1672,6 @@ def stream_request_body(cls):
     * The regular HTTP method (``post``, ``put``, etc) will be called after
       the entire body has been read.
 
-    There is a subtle interaction between ``data_received`` and asynchronous
-    ``prepare``: The first call to ``data_received`` may occur at any point
-    after the call to ``prepare`` has returned *or yielded*.
-
     See the `file receiver demo <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload/>`_
     for example usage.
     """
