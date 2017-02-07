@@ -25,7 +25,7 @@ from tornado.netutil import bind_sockets, Resolver
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, gen_test
-from tornado.test.util import skipIfNoIPv6, unittest, refusing_port
+from tornado.test.util import skipIfNoIPv6, unittest, refusing_port, skipIfNonUnix
 
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
@@ -143,6 +143,7 @@ class TCPClientTest(AsyncTestCase):
         '''
         self.do_test_connect(socket.AF_INET, '127.0.0.1', source_ip='127.0.0.1')
 
+    @skipIfNonUnix
     def test_source_port_fail(self):
         '''
         Fail when trying to use source port 1.
