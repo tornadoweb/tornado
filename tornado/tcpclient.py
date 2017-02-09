@@ -142,6 +142,7 @@ class TCPClient(object):
     """
     def __init__(self, resolver=None, io_loop=None):
         self.io_loop = io_loop or IOLoop.current()
+        self._future = None
         if resolver is not None:
             self.resolver = resolver
             self._own_resolver = False
@@ -155,24 +156,34 @@ class TCPClient(object):
 
     @gen.coroutine
     def connect(self, host, port, af=socket.AF_UNSPEC, ssl_options=None,
-                max_buffer_size=None):
+                max_buffer_size=None, timeout=None):
         """Connect to the given host and port.
 
         Asynchronously returns an `.IOStream` (or `.SSLIOStream` if
         ``ssl_options`` is not None).
         """
-        addrinfo = yield self.resolver.resolve(host, port, af)
+        self._future = Future()
+        if timeout:
+            self.io_loop.add_timeout(self.io_loop.time() + timeout, self._connect_timeout)
+        self._future = self.resolver.resolve(host, port, af)
+        addrinfo = yield self._future
         connector = _Connector(
             addrinfo, self.io_loop,
             functools.partial(self._create_stream, max_buffer_size))
-        af, addr, stream = yield connector.start()
+        self._future = connector.start()
+        af, addr, stream = yield self._future
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
-            stream = yield stream.start_tls(False, ssl_options=ssl_options,
+            self._future = stream.start_tls(False, ssl_options=ssl_options,
                                             server_hostname=host)
+            stream = yield self._future
         raise gen.Return(stream)
+
+    def _connect_timeout(self):
+        if self._future and not self._future.done():
+            self._future.set_exception(IOError('connection timeout'))
 
     def _create_stream(self, max_buffer_size, af, addr):
         # Always connect in plaintext; we'll convert to ssl if necessary
