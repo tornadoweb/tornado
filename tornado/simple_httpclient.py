@@ -499,7 +499,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _should_follow_redirect(self):
         return (self.request.follow_redirects and
                 self.request.max_redirects > 0 and
-                self.code in (301, 302, 303, 307))
+                self.code in (301, 302, 303, 307, 308))
 
     def finish(self):
         data = b''.join(self.chunks)
