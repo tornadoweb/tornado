@@ -41,8 +41,14 @@ class AsyncIOLoopTest(AsyncTestCase):
     @gen_test
     def test_asyncio_future(self):
         # Test that we can yield an asyncio future from a tornado coroutine.
-        # Without 'yield from', we must wrap coroutines in asyncio.async.
-        x = yield asyncio.async(
+        # Without 'yield from', we must wrap coroutines in ensure_future,
+        # which was introduced during Python 3.4, deprecating the prior "async".
+        if hasattr(asyncio, 'ensure_future'):
+            ensure_future = asyncio.ensure_future
+        else:
+            ensure_future = asyncio.async
+
+        x = yield ensure_future(
             asyncio.get_event_loop().run_in_executor(None, lambda: 42))
         self.assertEqual(x, 42)
 
