@@ -25,7 +25,7 @@ from tornado.netutil import bind_sockets, Resolver
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, gen_test
-from tornado.test.util import skipIfNoIPv6, unittest, refusing_port
+from tornado.test.util import skipIfNoIPv6, unittest, refusing_port, skipIfNonUnix
 
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
@@ -81,9 +81,11 @@ class TCPClientTest(AsyncTestCase):
             self.skipTest("localhost does not resolve to ipv6")
 
     @gen_test
-    def do_test_connect(self, family, host):
+    def do_test_connect(self, family, host, source_ip=None, source_port=None):
         port = self.start_server(family)
-        stream = yield self.client.connect(host, port)
+        stream = yield self.client.connect(host, port,
+                                           source_ip=source_ip,
+                                           source_port=source_port)
         with closing(stream):
             stream.write(b"hello")
             data = yield self.server.streams[0].read_bytes(5)
@@ -124,6 +126,33 @@ class TCPClientTest(AsyncTestCase):
         self.addCleanup(cleanup_func)
         with self.assertRaises(IOError):
             yield self.client.connect('127.0.0.1', port)
+
+    def test_source_ip_fail(self):
+        '''
+        Fail when trying to use the source IP Address '8.8.8.8'.
+        '''
+        self.assertRaises(socket.error,
+                          self.do_test_connect,
+                          socket.AF_INET,
+                          '127.0.0.1',
+                          source_ip='8.8.8.8')
+
+    def test_source_ip_success(self):
+        '''
+        Success when trying to use the source IP Address '127.0.0.1'
+        '''
+        self.do_test_connect(socket.AF_INET, '127.0.0.1', source_ip='127.0.0.1')
+
+    @skipIfNonUnix
+    def test_source_port_fail(self):
+        '''
+        Fail when trying to use source port 1.
+        '''
+        self.assertRaises(socket.error,
+                          self.do_test_connect,
+                          socket.AF_INET,
+                          '127.0.0.1',
+                          source_port=1)
 
 
 class TestConnectorSplit(unittest.TestCase):
