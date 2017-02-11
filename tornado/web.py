@@ -1583,9 +1583,13 @@ class RequestHandler(object):
         Walks the call-stack until it finds the correct requesthandler
         """
         call_stack = stack()
-        for i in range(len(call_stack) - 1, -1, -1):
-            if 'self' in call_stack[i].frame.f_locals and isinstance(call_stack[i].frame.f_locals['self'], cls):
-                return call_stack[i].frame.f_locals['self']
+        for stack_entry in call_stack[::-1]:
+            if isinstance(stack_entry,tuple):
+                frame = stack_entry[0]
+            else:
+                frame = stack_entry.frame
+            if 'self' in frame.f_locals and isinstance(frame.f_locals['self'], cls):
+                return frame.f_locals['self']
         return None
 
 def asynchronous(method):
