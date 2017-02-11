@@ -77,7 +77,7 @@ import time
 import tornado
 import traceback
 import types
-from inspect import isclass
+from inspect import isclass, stack
 from io import BytesIO
 
 from tornado.concurrent import Future
@@ -1576,6 +1576,17 @@ class RequestHandler(object):
         for h in headers:
             self.clear_header(h)
 
+    @classmethod
+    def current(cls):
+        """Returns the request handler serving this request, or None
+
+        Walks the call-stack until it finds the correct requesthandler
+        """
+        call_stack = stack()
+        for i in range(len(call_stack) - 1, -1, -1):
+            if 'self' in call_stack[i].frame.f_locals and isinstance(call_stack[i].frame.f_locals['self'], cls):
+                return call_stack[i].frame.f_locals['self']
+        return None
 
 def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.

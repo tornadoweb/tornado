@@ -2813,6 +2813,46 @@ class CacheTest(WebTestCase):
         self.assertEqual(response.code, status_code)
 
 
+def out_of_scope_method():
+    handler = RequestHandler.current()
+    if handler is None:
+        return "None"
+    query_parameter = handler.get_query_argument('q')
+    data = handler.data
+    return "%s%s" % (data, query_parameter)
+
+class RequestHandlerCurrentTest(WebTestCase):
+    def get_handlers(self):
+        class BaseHandler(RequestHandler):
+            data = 'B'
+
+            def get(self):
+                self.write(out_of_scope_method())
+                self.data='C'
+
+        class DerivedHandler(BaseHandler):
+            data = 'D'
+
+            def get(self):
+                self.write(out_of_scope_method())
+
+        return [('/base', BaseHandler),
+                ('/derived', DerivedHandler)]
+
+    def test_current_request_handler(self):
+        resp = self.fetch("/base?q=1")
+        self.assertEqual(resp.body, b"B1")
+        resp = self.fetch("/base?q=1")
+        self.assertEqual(resp.body, b"B1")
+        resp = self.fetch("/derived?q=2")
+        self.assertEqual(resp.body, b"D2")
+        unrequested = out_of_scope_method()
+        self.assertEqual(unrequested, "None")
+
+    def test_missing_remote_ip(self):
+        resp = self.fetch("/")
+        self.assertEqual(resp.body, b"GET / (None)")
+
 @wsgi_safe
 class RequestSummaryTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
