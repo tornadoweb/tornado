@@ -2821,6 +2821,7 @@ def out_of_scope_method():
     data = handler.data
     return "%s%s" % (data, query_parameter)
 
+
 class RequestHandlerCurrentTest(WebTestCase):
     def get_handlers(self):
         class BaseHandler(RequestHandler):
@@ -2849,9 +2850,6 @@ class RequestHandlerCurrentTest(WebTestCase):
         unrequested = out_of_scope_method()
         self.assertEqual(unrequested, "None")
 
-    def test_missing_remote_ip(self):
-        resp = self.fetch("/")
-        self.assertEqual(resp.body, b"GET / (None)")
 
 @wsgi_safe
 class RequestSummaryTest(SimpleHandlerTestCase):
