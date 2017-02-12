@@ -1751,9 +1751,11 @@ class _ApplicationRouter(ReversibleRuleRouter):
         `_ApplicationRouter` instance.
     """
 
-    def __init__(self, application, rules=[]):
+    def __init__(self, application, rules=None):
         assert isinstance(application, Application)
         self.application = application
+        if not rules:
+            rules = []
         if not isinstance(rules, list):
             rules = list(rules)
         while RequestHandler.rules:
