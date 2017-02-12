@@ -60,7 +60,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import base64
 import binascii
-import collections
 import datetime
 import email.utils
 import functools
@@ -164,15 +163,14 @@ class RequestHandler(object):
     _template_loaders = {}  # type: typing.Dict[str, template.BaseLoader]
     _template_loader_lock = threading.Lock()
     _remove_control_chars_regex = re.compile(r"[\x00-\x08\x0e-\x1f]")
-    rules = collections.defaultdict(list)
+    rules = []
 
     def __init_subclass__(cls, **kwargs):
         if sys.version_info < (3,6):
             raise NotImplementedError()
         if "route" in kwargs:
             rule = (kwargs.pop("route"), cls)
-            router = kwargs.pop("router", "_ApplicationRouter")
-            RequestHandler.rules[router].append(rule)
+            RequestHandler.rules.append(rule)
         super().__init_subclass__(**kwargs)
 
     def __init__(self, application, request, **kwargs):
@@ -1753,13 +1751,13 @@ class _ApplicationRouter(ReversibleRuleRouter):
         `_ApplicationRouter` instance.
     """
 
-    def __init__(self, application, rules=None):
+    def __init__(self, application, rules=[]):
         assert isinstance(application, Application)
         self.application = application
-        clsName = self.__class__.__name__
-        if clsName in RequestHandler.rules:
-            while RequestHandler.rules[clsName]:
-                rules.append(RequestHandler.rules[clsName].pop(0))
+        if not isinstance(rules, list):
+            rules = list(rules)
+        while RequestHandler.rules:
+            rules.append(RequestHandler.rules.pop(0))
         super(_ApplicationRouter, self).__init__(rules)
 
     def process_rule(self, rule):
