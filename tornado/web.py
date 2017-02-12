@@ -169,9 +169,17 @@ class RequestHandler(object):
         if sys.version_info < (3,6):
             raise NotImplementedError()
         if "route" in kwargs:
-            rule = (kwargs.pop("route"), cls)
+            route = kwargs.pop("route")
+            name = kwargs.pop("name", None)
+            target_kwargs = {}
+            for key in kwargs:
+                #All remaining keys must be fed to target_kwargs
+                target_kwargs[key] = kwargs[key]
+            if len(target_kwargs) == 0:
+                target_kwargs = None
+            rule = (route, cls, target_kwargs, name)
             RequestHandler.rules.append(rule)
-        super().__init_subclass__(**kwargs)
+        super().__init_subclass__() #No remaining kwargs transmitted up
 
     def __init__(self, application, request, **kwargs):
         super(RequestHandler, self).__init__()
