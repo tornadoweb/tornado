@@ -60,6 +60,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import base64
 import binascii
+import collections
 import datetime
 import email.utils
 import functools
@@ -163,6 +164,16 @@ class RequestHandler(object):
     _template_loaders = {}  # type: typing.Dict[str, template.BaseLoader]
     _template_loader_lock = threading.Lock()
     _remove_control_chars_regex = re.compile(r"[\x00-\x08\x0e-\x1f]")
+    routes = collections.defaultdict(list)
+
+    def __init_subclass__(cls, **kwargs):
+        if sys.version_info < (3,6):
+            raise NotImplementedError()
+        if "route" in kwargs:
+            route = (kwargs.pop("route"), cls)
+            router = kwargs.pop("router", "_ApplicationRouter")
+            RequestHandler.routes[router].append(route)
+        super().__init_subclass__(**kwargs)
 
     def __init__(self, application, request, **kwargs):
         super(RequestHandler, self).__init__()
@@ -1745,6 +1756,10 @@ class _ApplicationRouter(ReversibleRuleRouter):
     def __init__(self, application, rules=None):
         assert isinstance(application, Application)
         self.application = application
+        clsName = self.__class__.__name__
+        if clsName in RequestHandler.routes:
+            while RequestHandler.routes[clsName]:
+                rules.append(RequestHandler.routes[clsName].pop(0))
         super(_ApplicationRouter, self).__init__(rules)
 
     def process_rule(self, rule):
