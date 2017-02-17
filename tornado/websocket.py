@@ -319,7 +319,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
            This is an important security measure; don't disable it
            without understanding the security implications. In
-           particular, if your authenticatino is cookie-based, you
+           particular, if your authentication is cookie-based, you
            must either restrict the origins allowed by
            ``check_origin()`` or implement your own XSRF-like
            protection for websocket connections. See `these
