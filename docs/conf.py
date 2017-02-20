@@ -16,7 +16,6 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.coverage",
     "sphinx.ext.doctest",
-    "sphinx.ext.extlinks",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
     ]
@@ -78,19 +77,6 @@ html_favicon = 'favicon.ico'
 latex_documents = [
     ('index', 'tornado.tex', 'Tornado Documentation', 'The Tornado Authors', 'manual', False),
     ]
-
-# HACK: sphinx has limited support for substitutions with the |version|
-# variable, but there doesn't appear to be any way to use this in a link
-# target.
-# http://stackoverflow.com/questions/1227037/substitutions-inside-links-in-rest-sphinx
-# The extlink extension can be used to do link substitutions, but it requires a
-# portion of the url to be literally contained in the document.  Therefore,
-# this link must be referenced as :current_tarball:`z`
-extlinks = {
-    'current_tarball': (
-        'https://pypi.org/packages/source/t/tornado/tornado-%s.tar.g%%s' % version,
-        'tornado-%s.tar.g' % version),
-    }
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3.5/', None),
