@@ -201,8 +201,12 @@ class TCPClient(object):
         socket_obj = socket.socket(af)
         if source_port_bind or source_ip_bind:
             # If the user requires binding also to a specific IP/port.
-            socket_obj.bind((source_ip_bind, source_port_bind))
-            # Fail loudly if unable to use the IP/port.
+            try:
+                socket_obj.bind((source_ip_bind, source_port_bind))
+            except socket.error:
+                socket_obj.close()
+                # Fail loudly if unable to use the IP/port.
+                raise
         try:
             stream = IOStream(socket_obj,
                               io_loop=self.io_loop,

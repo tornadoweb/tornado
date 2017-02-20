@@ -40,9 +40,10 @@ Python 3.5: ``async`` and ``await``
 
 Python 3.5 introduces the ``async`` and ``await`` keywords (functions
 using these keywords are also called "native coroutines"). Starting in
-Tornado 4.3, you can use them in place of ``yield``-based coroutines.
-Simply use ``async def foo()`` in place of a function definition with
-the ``@gen.coroutine`` decorator, and ``await`` in place of yield. The
+Tornado 4.3, you can use them in place of most ``yield``-based
+coroutines (see the following paragraphs for limitations). Simply use
+``async def foo()`` in place of a function definition with the
+``@gen.coroutine`` decorator, and ``await`` in place of yield. The
 rest of this document still uses the ``yield`` style for compatibility
 with older versions of Python, but ``async`` and ``await`` will run
 faster when they are available::
@@ -55,9 +56,14 @@ faster when they are available::
 The ``await`` keyword is less versatile than the ``yield`` keyword.
 For example, in a ``yield``-based coroutine you can yield a list of
 ``Futures``, while in a native coroutine you must wrap the list in
-`tornado.gen.multi`. You can also use `tornado.gen.convert_yielded`
+`tornado.gen.multi`. This also eliminates the integration with
+`concurrent.futures`. You can use `tornado.gen.convert_yielded`
 to convert anything that would work with ``yield`` into a form that
-will work with ``await``.
+will work with ``await``::
+
+    async def f():
+        executor = concurrent.futures.ThreadPoolExecutor()
+        await tornado.gen.convert_yielded(executor.submit(g))
 
 While native coroutines are not visibly tied to a particular framework
 (i.e. they do not use a decorator like `tornado.gen.coroutine` or
