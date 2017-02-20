@@ -149,7 +149,7 @@ class SubprocessTest(AsyncTestCase):
                              stdin=Subprocess.STREAM,
                              stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
                              io_loop=self.io_loop)
-        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
+        self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
         subproc.stdout.read_until(b'>>> ', self.stop)
         self.wait()
         subproc.stdin.write(b"print('hello')\n")
@@ -170,7 +170,7 @@ class SubprocessTest(AsyncTestCase):
                              stdin=Subprocess.STREAM,
                              stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
                              io_loop=self.io_loop)
-        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
+        self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
         subproc.stdout.read_until(b'>>> ', self.stop)
         self.wait()
         subproc.stdin.close()
@@ -186,7 +186,7 @@ class SubprocessTest(AsyncTestCase):
                               r"import sys; sys.stderr.write('hello\n')"],
                              stderr=Subprocess.STREAM,
                              io_loop=self.io_loop)
-        self.addCleanup(lambda: os.kill(subproc.pid, signal.SIGTERM))
+        self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
         subproc.stderr.read_until(b'\n', self.stop)
         data = self.wait()
         self.assertEqual(data, b'hello\n')
