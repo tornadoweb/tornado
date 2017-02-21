@@ -94,10 +94,10 @@ class PathArgsHandler(TestWebSocketHandler):
 
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
-    def ws_connect(self, path, compression_options=None):
+    def ws_connect(self, path, **kwargs):
         ws = yield websocket_connect(
             'ws://127.0.0.1:%d%s' % (self.get_http_port(), path),
-            compression_options=compression_options)
+            **kwargs)
         raise gen.Return(ws)
 
     @gen.coroutine
@@ -448,5 +448,26 @@ class ServerPeriodicPingTest(WebSocketBaseTestCase):
         for i in range(3):
             response = yield ws.read_message()
             self.assertEqual(response, "got pong")
+        yield self.close(ws)
+        # TODO: test that the connection gets closed if ping responses stop.
+
+
+class ClientPeriodicPingTest(WebSocketBaseTestCase):
+    def get_app(self):
+        class PingHandler(TestWebSocketHandler):
+            def on_ping(self, data):
+                self.write_message("got ping")
+
+        self.close_future = Future()
+        return Application([
+            ('/', PingHandler, dict(close_future=self.close_future)),
+        ])
+
+    @gen_test
+    def test_client_ping(self):
+        ws = yield self.ws_connect('/', ping_interval=0.01)
+        for i in range(3):
+            response = yield ws.read_message()
+            self.assertEqual(response, "got ping")
         yield self.close(ws)
         # TODO: test that the connection gets closed if ping responses stop.
