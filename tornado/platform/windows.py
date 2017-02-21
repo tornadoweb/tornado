@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # NOTE: win32 support is currently experimental, and not recommended
 # for production use.
 

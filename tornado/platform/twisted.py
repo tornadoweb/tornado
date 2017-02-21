@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Author: Ovidiu Predescu
 # Date: July 2011
 #

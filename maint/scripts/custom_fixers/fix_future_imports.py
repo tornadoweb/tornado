@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """Updates all source files to import the same set of __future__ directives.
 """
 from lib2to3 import fixer_base

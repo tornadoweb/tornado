@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """Shim to allow python -m tornado.test.
 
 This only works in python 2.7+.
