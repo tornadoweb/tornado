@@ -11,6 +11,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.test.escape_test import custom_encoder
 from tornado.util import ObjectDict, unicode_type, timedelta_to_seconds, PY3
 from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version, GZipContentEncoding
 
@@ -2068,6 +2069,26 @@ class HandlerByNameTest(WebTestCase):
         self.assertEqual(resp.body, b'hello')
         resp = self.fetch('/hello3')
         self.assertEqual(resp.body, b'hello')
+
+
+class CustomEncoderHandler(RequestHandler):
+    def get(self):
+        value = datetime.datetime(2008, 5, 5)
+        self.write({'datetime': value})
+
+
+@wsgi_safe
+class CustomEncoderTest(WebTestCase):
+
+    def get_app_kwargs(self):
+        return {"json_custom_encoder": custom_encoder}
+
+    def get_handlers(self):
+        return [('/custom_encoder', CustomEncoderHandler)]
+
+    def test_handler_by_name(self):
+        resp = self.fetch('/custom_encoder')
+        self.assertEqual(json_decode(resp.body), {"datetime": "2008-05-05"})
 
 
 class StreamingRequestBodyTest(WebTestCase):
