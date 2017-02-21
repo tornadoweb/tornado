@@ -429,3 +429,24 @@ class PythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
 class CythonMaskFunctionTest(MaskFunctionMixin, unittest.TestCase):
     def mask(self, mask, data):
         return speedups.websocket_mask(mask, data)
+
+
+class ServerPeriodicPingTest(WebSocketBaseTestCase):
+    def get_app(self):
+        class PingHandler(TestWebSocketHandler):
+            def on_pong(self, data):
+                self.write_message("got pong")
+
+        self.close_future = Future()
+        return Application([
+            ('/', PingHandler, dict(close_future=self.close_future)),
+        ], websocket_ping_interval=0.01)
+
+    @gen_test
+    def test_server_ping(self):
+        ws = yield self.ws_connect('/')
+        for i in range(3):
+            response = yield ws.read_message()
+            self.assertEqual(response, "got pong")
+        yield self.close(ws)
+        # TODO: test that the connection gets closed if ping responses stop.

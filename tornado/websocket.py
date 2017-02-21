@@ -193,9 +193,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
                     "Sec-WebSocket-Version: 7, 8, 13\r\n\r\n"))
                 self.stream.close()
 
-    ping_callback = None
-    last_ping = 0
-    last_pong = 0
     stream = None
 
     @property
@@ -274,39 +271,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         pass
 
-    def start_pinging(self):
-        """Start sending periodic pings to keep the connection alive"""
-        if self.ping_interval > 0:
-            loop = IOLoop.current()
-            self.last_ping = loop.time()  # Remember time of last ping
-            self.last_pong = self.last_ping
-            self.ping_callback = PeriodicCallback(
-                self.send_ping, self.ping_interval*1000, io_loop=loop,
-            )
-            self.ping_callback.start()
-
-    def send_ping(self):
-        """Send a ping to keep the websocket alive
-
-        Called periodically if the websocket_ping_interval is set and non-zero.
-        """
-        if self.stream.closed() and self.ping_callback is not None:
-            self.ping_callback.stop()
-            return
-
-        # check for timeout on pong.  Make sure that we really have sent a recent ping in
-        # case the machine with both server and client has been suspended since the last ping.
-        now = IOLoop.current().time()
-        since_last_pong = now - self.last_pong
-        since_last_ping = now - self.last_ping
-        if since_last_ping < 2*self.ping_interval and since_last_pong > self.ping_timeout:
-            self.log.warn("WebSocket ping timeout after %i ms.", since_last_pong)
-            self.close()
-            return
-
-        self.ping(b'')
-        self.last_ping = now
-
     def on_message(self, message):
         """Handle incoming messages on the WebSocket
 
@@ -321,13 +285,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.ws_connection.write_ping(data)
 
     def on_pong(self, data):
-        """Invoked when the response to a ping frame is received.
-
-        If you override this, be sure to call the parent method, otherwise
-        tornado's regular pinging may decide that the connection has dropped
-        and close the websocket.
-        """
-        self.last_pong = IOLoop.current().time()
+        """Invoked when the response to a ping frame is received."""
+        pass
 
     def on_close(self):
         """Invoked when the WebSocket is closed.
@@ -577,6 +536,10 @@ class WebSocketProtocol13(WebSocketProtocol):
         # the effect of compression, frame overhead, and control frames.
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
+        self.ping_callback = None
+        self.last_ping = 0
+        self.last_pong = 0
+
 
     def accept_connection(self):
         try:
@@ -653,7 +616,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             "\r\n" % (self._challenge_response(),
                       subprotocol_header, extension_header)))
 
-        self._run_callback(self.handler.start_pinging)
+        self.start_pinging()
         self._run_callback(self.handler.open, *self.handler.open_args,
                            **self.handler.open_kwargs)
         self._receive_frame()
@@ -906,6 +869,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._write_frame(True, 0xA, data)
         elif opcode == 0xA:
             # Pong
+            self.last_pong = IOLoop.current().time()
             self._run_callback(self.handler.on_pong, data)
         else:
             self._abort()
@@ -934,6 +898,37 @@ class WebSocketProtocol13(WebSocketProtocol):
             # otherwise just close the connection.
             self._waiting = self.stream.io_loop.add_timeout(
                 self.stream.io_loop.time() + 5, self._abort)
+
+    def start_pinging(self):
+        """Start sending periodic pings to keep the connection alive"""
+        if self.handler.ping_interval > 0:
+            self.last_ping = self.last_pong = IOLoop.current().time()
+            self.ping_callback = PeriodicCallback(
+                self.periodic_ping, self.handler.ping_interval*1000)
+            self.ping_callback.start()
+
+    def periodic_ping(self):
+        """Send a ping to keep the websocket alive
+
+        Called periodically if the websocket_ping_interval is set and non-zero.
+        """
+        if self.stream.closed() and self.ping_callback is not None:
+            self.ping_callback.stop()
+            return
+
+        # Check for timeout on pong. Make sure that we really have
+        # sent a recent ping in case the machine with both server and
+        # client has been suspended since the last ping.
+        now = IOLoop.current().time()
+        since_last_pong = now - self.last_pong
+        since_last_ping = now - self.last_ping
+        if (since_last_ping < 2*self.handler.ping_interval and
+                since_last_pong > self.handler.ping_timeout):
+            self.close()
+            return
+
+        self.write_ping(b'')
+        self.last_ping = now
 
 
 class WebSocketClientConnection(simple_httpclient._HTTPConnection):
