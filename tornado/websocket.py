@@ -264,6 +264,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """Invoked when the response to a ping frame is received."""
         pass
 
+    def on_ping(self, data):
+        """Invoked when the a ping frame is received."""
+        pass
+
     def on_close(self):
         """Invoked when the WebSocket is closed.
 
@@ -852,6 +856,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         elif opcode == 0x9:
             # Ping
             self._write_frame(True, 0xA, data)
+            self._run_callback(self.handler.on_ping, data)
         elif opcode == 0xA:
             # Pong
             self._run_callback(self.handler.on_pong, data)
@@ -1014,6 +1019,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.read_queue.append(message)
 
     def on_pong(self, data):
+        pass
+
+    def on_ping(self, data):
         pass
 
     def get_websocket_protocol(self):
