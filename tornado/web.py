@@ -756,45 +756,21 @@ class RequestHandler(object):
             if body_part:
                 html_bodies.append(utf8(body_part))
 
-        def is_absolute(path):
-            return any(path.startswith(x) for x in ["/", "http:", "https:"])
         if js_files:
             # Maintain order of JavaScript files given by modules
-            paths = []
-            unique_paths = set()
-            for path in js_files:
-                if not is_absolute(path):
-                    path = self.static_url(path)
-                if path not in unique_paths:
-                    paths.append(path)
-                    unique_paths.add(path)
-            js = ''.join('<script src="' + escape.xhtml_escape(p) +
-                         '" type="text/javascript"></script>'
-                         for p in paths)
+            js = self.render_linked_js(js_files)
             sloc = html.rindex(b'</body>')
             html = html[:sloc] + utf8(js) + b'\n' + html[sloc:]
         if js_embed:
-            js = b'<script type="text/javascript">\n//<![CDATA[\n' + \
-                b'\n'.join(js_embed) + b'\n//]]>\n</script>'
+            js = self.render_embed_js(js_embed)
             sloc = html.rindex(b'</body>')
             html = html[:sloc] + js + b'\n' + html[sloc:]
         if css_files:
-            paths = []
-            unique_paths = set()
-            for path in css_files:
-                if not is_absolute(path):
-                    path = self.static_url(path)
-                if path not in unique_paths:
-                    paths.append(path)
-                    unique_paths.add(path)
-            css = ''.join('<link href="' + escape.xhtml_escape(p) + '" '
-                          'type="text/css" rel="stylesheet"/>'
-                          for p in paths)
+            css = self.render_linked_css(css_files)
             hloc = html.index(b'</head>')
             html = html[:hloc] + utf8(css) + b'\n' + html[hloc:]
         if css_embed:
-            css = b'<style type="text/css">\n' + b'\n'.join(css_embed) + \
-                b'\n</style>'
+            css = self.render_embed_css(css_embed)
             hloc = html.index(b'</head>')
             html = html[:hloc] + css + b'\n' + html[hloc:]
         if html_heads:
@@ -804,6 +780,64 @@ class RequestHandler(object):
             hloc = html.index(b'</body>')
             html = html[:hloc] + b''.join(html_bodies) + b'\n' + html[hloc:]
         self.finish(html)
+
+    def render_linked_js(self, js_files):
+        """Default method used to render the final js links for the
+        rendered webpage.
+
+        Override this method in a sub-classed controller to change the output.
+        """
+        paths = []
+        unique_paths = set()
+
+        for path in js_files:
+            if not is_absolute(path):
+                path = self.static_url(path)
+            if path not in unique_paths:
+                paths.append(path)
+                unique_paths.add(path)
+
+        return ''.join('<script src="' + escape.xhtml_escape(p) +
+                       '" type="text/javascript"></script>'
+                       for p in paths)
+
+    def render_embed_js(self, js_embed):
+        """Default method used to render the final embedded js for the
+        rendered webpage.
+
+        Override this method in a sub-classed controller to change the output.
+        """
+        return b'<script type="text/javascript">\n//<![CDATA[\n' + \
+               b'\n'.join(js_embed) + b'\n//]]>\n</script>'
+
+    def render_linked_css(self, css_files):
+        """Default method used to render the final css links for the
+        rendered webpage.
+
+        Override this method in a sub-classed controller to change the output.
+        """
+        paths = []
+        unique_paths = set()
+
+        for path in css_files:
+            if not is_absolute(path):
+                path = self.static_url(path)
+            if path not in unique_paths:
+                paths.append(path)
+                unique_paths.add(path)
+
+        return ''.join('<link href="' + escape.xhtml_escape(p) + '" '
+                       'type="text/css" rel="stylesheet"/>'
+                       for p in paths)
+
+    def render_embed_css(self, css_embed):
+        """Default method used to render the final embedded css for the
+        rendered webpage.
+
+        Override this method in a sub-classed controller to change the output.
+        """
+        return b'<style type="text/css">\n' + b'\n'.join(css_embed) + \
+               b'\n</style>'
 
     def render_string(self, template_name, **kwargs):
         """Generate the given template with the given arguments.
@@ -3236,3 +3270,7 @@ def _create_signature_v2(secret, s):
     hash = hmac.new(utf8(secret), digestmod=hashlib.sha256)
     hash.update(utf8(s))
     return utf8(hash.hexdigest())
+
+
+def is_absolute(path):
+    return any(path.startswith(x) for x in ["/", "http:", "https:"])
