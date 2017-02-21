@@ -14,14 +14,14 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-__all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'QueueFull', 'QueueEmpty']
-
 import collections
 import heapq
 
 from tornado import gen, ioloop
 from tornado.concurrent import Future
 from tornado.locks import Event
+
+__all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'QueueFull', 'QueueEmpty']
 
 
 class QueueEmpty(Exception):

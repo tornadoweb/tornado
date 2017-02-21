@@ -430,8 +430,8 @@ class AuthTest(AsyncHTTPTestCase):
         parsed = json_decode(response.body)
         self.assertEqual(parsed,
                          {u'access_token': {u'key': u'hjkl',
-                                              u'screen_name': u'foo',
-                                              u'secret': u'vbnm'},
+                                            u'screen_name': u'foo',
+                                            u'secret': u'vbnm'},
                           u'name': u'Foo',
                           u'screen_name': u'foo',
                           u'username': u'foo'})

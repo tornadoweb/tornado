@@ -14,9 +14,9 @@ loops.
 
 .. note::
 
-   Tornado requires the `~asyncio.BaseEventLoop.add_reader` family of methods,
-   so it is not compatible with the `~asyncio.ProactorEventLoop` on Windows.
-   Use the `~asyncio.SelectorEventLoop` instead.
+   Tornado requires the `~asyncio.AbstractEventLoop.add_reader` family of
+   methods, so it is not compatible with the `~asyncio.ProactorEventLoop` on
+   Windows. Use the `~asyncio.SelectorEventLoop` instead.
 """
 
 from __future__ import absolute_import, division, print_function, with_statement
@@ -30,11 +30,11 @@ from tornado import stack_context
 try:
     # Import the real asyncio module for py33+ first.  Older versions of the
     # trollius backport also use this name.
-    import asyncio
+    import asyncio # type: ignore
 except ImportError as e:
     # Asyncio itself isn't available; see if trollius is (backport to py26+).
     try:
-        import trollius as asyncio
+        import trollius as asyncio  # type: ignore
     except ImportError:
         # Re-raise the original asyncio error, not the trollius one.
         raise e
@@ -141,6 +141,8 @@ class BaseAsyncIOLoop(IOLoop):
 
     def add_callback(self, callback, *args, **kwargs):
         if self.closing:
+            # TODO: this is racy; we need a lock to ensure that the
+            # loop isn't closed during call_soon_threadsafe.
             raise RuntimeError("IOLoop is closing")
         self.asyncio_loop.call_soon_threadsafe(
             self._run_callback,
@@ -158,6 +160,9 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
         import asyncio
         AsyncIOMainLoop().install()
         asyncio.get_event_loop().run_forever()
+
+    See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
+    installing alternative IOLoops.
     """
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
@@ -213,4 +218,4 @@ def to_asyncio_future(tornado_future):
     return af
 
 if hasattr(convert_yielded, 'register'):
-    convert_yielded.register(asyncio.Future, to_tornado_future)
+    convert_yielded.register(asyncio.Future, to_tornado_future)  # type: ignore

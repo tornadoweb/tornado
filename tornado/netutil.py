@@ -51,11 +51,11 @@ if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # pytho
     ssl_match_hostname = ssl.match_hostname
     SSLCertificateError = ssl.CertificateError
 elif ssl is None:
-    ssl_match_hostname = SSLCertificateError = None
+    ssl_match_hostname = SSLCertificateError = None  # type: ignore
 else:
     import backports.ssl_match_hostname
     ssl_match_hostname = backports.ssl_match_hostname.match_hostname
-    SSLCertificateError = backports.ssl_match_hostname.CertificateError
+    SSLCertificateError = backports.ssl_match_hostname.CertificateError  # type: ignore
 
 if hasattr(ssl, 'SSLContext'):
     if hasattr(ssl, 'create_default_context'):
@@ -96,13 +96,16 @@ else:
 # thread now.
 u'foo'.encode('idna')
 
+# For undiagnosed reasons, 'latin1' codec may also need to be preloaded.
+u'foo'.encode('latin1')
+
 # These errnos indicate that a non-blocking operation must be retried
 # at a later time.  On most platforms they're the same value, but on
 # some they differ.
 _ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
 
 if hasattr(errno, "WSAEWOULDBLOCK"):
-    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)
+    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)  # type: ignore
 
 # Default backlog used when calling sock.listen()
 _DEFAULT_BACKLOG = 128
@@ -129,7 +132,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
     ``flags`` is a bitmask of AI_* flags to `~socket.getaddrinfo`, like
     ``socket.AI_PASSIVE | socket.AI_NUMERICHOST``.
 
-    ``resuse_port`` option sets ``SO_REUSEPORT`` option for every socket
+    ``reuse_port`` option sets ``SO_REUSEPORT`` option for every socket
     in the list. If your platform doesn't support this option ValueError will
     be raised.
     """
@@ -332,6 +335,11 @@ class Resolver(Configurable):
         port)`` pair for IPv4; additional fields may be present for
         IPv6). If a ``callback`` is passed, it will be run with the
         result as an argument when it is complete.
+
+        :raises IOError: if the address cannot be resolved.
+
+        .. versionchanged:: 4.4
+           Standardized all implementations to raise `IOError`.
         """
         raise NotImplementedError()
 
@@ -411,8 +419,8 @@ class ThreadedResolver(ExecutorResolver):
        All ``ThreadedResolvers`` share a single thread pool, whose
        size is set by the first one to be created.
     """
-    _threadpool = None
-    _threadpool_pid = None
+    _threadpool = None  # type: ignore
+    _threadpool_pid = None  # type: int
 
     def initialize(self, io_loop=None, num_threads=10):
         threadpool = ThreadedResolver._create_threadpool(num_threads)
@@ -516,4 +524,4 @@ def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
         else:
             return context.wrap_socket(socket, **kwargs)
     else:
-        return ssl.wrap_socket(socket, **dict(context, **kwargs))
+        return ssl.wrap_socket(socket, **dict(context, **kwargs))  # type: ignore

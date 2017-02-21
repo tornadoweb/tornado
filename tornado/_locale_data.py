@@ -19,15 +19,6 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-# NOTE: This file is supposed to contain unicode strings, which is
-# exactly what you'd get with e.g. u"Español" in most python versions.
-# However, Python 3.2 doesn't support the u"" syntax, so we use a u()
-# function instead. tornado.util.u cannot be used because it doesn't
-# support non-ascii characters on python 2.
-# When we drop support for Python 3.2, we can remove the parens
-# and make these plain unicode strings.
-from tornado.escape import to_unicode as u
-
 LOCALE_NAMES = {
     "af_ZA": {"name_en": u"Afrikaans", "name": u"Afrikaans"},
     "am_ET": {"name_en": u"Amharic", "name": u"አማርኛ"},

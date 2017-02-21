@@ -13,7 +13,7 @@ from tornado.web import Application, RequestHandler
 
 
 try:
-    import pycurl
+    import pycurl  # type: ignore
 except ImportError:
     pycurl = None
 

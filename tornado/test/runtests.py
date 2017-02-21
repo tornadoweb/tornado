@@ -43,6 +43,7 @@ TEST_MODULES = [
     'tornado.test.options_test',
     'tornado.test.process_test',
     'tornado.test.queues_test',
+    'tornado.test.routing_test',
     'tornado.test.simple_httpclient_test',
     'tornado.test.stack_context_test',
     'tornado.test.tcpclient_test',
@@ -53,6 +54,7 @@ TEST_MODULES = [
     'tornado.test.util_test',
     'tornado.test.web_test',
     'tornado.test.websocket_test',
+    'tornado.test.windows_test',
     'tornado.test.wsgi_test',
 ]
 
@@ -120,6 +122,13 @@ def main():
     # Twisted 15.0.0 triggers some warnings on py3 with -bb.
     warnings.filterwarnings("ignore", category=BytesWarning,
                             module=r"twisted\..*")
+    # The __aiter__ protocol changed in python 3.5.2.
+    # Silence the warning until we can drop 3.5.[01].
+    warnings.filterwarnings("ignore", category=PendingDeprecationWarning,
+                            message=".*legacy __aiter__ protocol")
+    # 3.5.2's PendingDeprecationWarning became a DeprecationWarning in 3.6.
+    warnings.filterwarnings("ignore", category=DeprecationWarning,
+                            message=".*legacy __aiter__ protocol")
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 

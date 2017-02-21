@@ -6,19 +6,20 @@ import os
 import sys
 
 from tornado.options import OptionParser, Error
-from tornado.util import basestring_type
+from tornado.util import basestring_type, PY3
 from tornado.test.util import unittest
 
-try:
-    from cStringIO import StringIO  # python 2
-except ImportError:
-    from io import StringIO  # python 3
+if PY3:
+    from io import StringIO
+else:
+    from cStringIO import StringIO
 
 try:
-    from unittest import mock  # python 3.3
+    # py33+
+    from unittest import mock  # type: ignore
 except ImportError:
     try:
-        import mock  # third-party mock package
+        import mock  # type: ignore
     except ImportError:
         mock = None
 
@@ -34,10 +35,13 @@ class OptionsTest(unittest.TestCase):
         options = OptionParser()
         options.define("port", default=80)
         options.define("username", default='foo')
-        options.parse_config_file(os.path.join(os.path.dirname(__file__),
-                                               "options_test.cfg"))
-        self.assertEquals(options.port, 443)
+        options.define("my_path")
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "options_test.cfg")
+        options.parse_config_file(config_path)
+        self.assertEqual(options.port, 443)
         self.assertEqual(options.username, "李康")
+        self.assertEqual(options.my_path, config_path)
 
     def test_parse_callbacks(self):
         options = OptionParser()

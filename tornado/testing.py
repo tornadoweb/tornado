@@ -2,7 +2,7 @@
 """Support classes for automated testing.
 
 * `AsyncTestCase` and `AsyncHTTPTestCase`:  Subclasses of unittest.TestCase
-  with additional support for testing asynchronous (`.IOLoop` based) code.
+  with additional support for testing asynchronous (`.IOLoop`-based) code.
 
 * `ExpectLog` and `LogTrapTestCase`: Make test logs less spammy.
 
@@ -23,16 +23,16 @@ try:
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
     # won't work, but e.g. LogTrapTestCase and main() will.
-    AsyncHTTPClient = None
-    gen = None
-    HTTPServer = None
-    IOLoop = None
-    netutil = None
-    SimpleAsyncHTTPClient = None
-    Subprocess = None
+    AsyncHTTPClient = None  # type: ignore
+    gen = None  # type: ignore
+    HTTPServer = None  # type: ignore
+    IOLoop = None  # type: ignore
+    netutil = None  # type: ignore
+    SimpleAsyncHTTPClient = None  # type: ignore
+    Subprocess = None  # type: ignore
 from tornado.log import gen_log, app_log
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import raise_exc_info, basestring_type
+from tornado.util import raise_exc_info, basestring_type, PY3
 import functools
 import inspect
 import logging
@@ -42,19 +42,19 @@ import signal
 import socket
 import sys
 
-try:
-    from cStringIO import StringIO  # py2
-except ImportError:
-    from io import StringIO  # py3
+if PY3:
+    from io import StringIO
+else:
+    from cStringIO import StringIO
 
 try:
-    from collections.abc import Generator as GeneratorType  # py35+
+    from collections.abc import Generator as GeneratorType  # type: ignore
 except ImportError:
-    from types import GeneratorType
+    from types import GeneratorType  # type: ignore
 
 if sys.version_info >= (3, 5):
-    iscoroutine = inspect.iscoroutine
-    iscoroutinefunction = inspect.iscoroutinefunction
+    iscoroutine = inspect.iscoroutine  # type: ignore
+    iscoroutinefunction = inspect.iscoroutinefunction  # type: ignore
 else:
     iscoroutine = iscoroutinefunction = lambda f: False
 
@@ -62,16 +62,16 @@ else:
 # (either py27+ or unittest2) so tornado.test.util enforces
 # this requirement, but for other users of tornado.testing we want
 # to allow the older version if unitest2 is not available.
-if sys.version_info >= (3,):
+if PY3:
     # On python 3, mixing unittest2 and unittest (including doctest)
     # doesn't seem to work, so always use unittest.
     import unittest
 else:
     # On python 2, prefer unittest2 when available.
     try:
-        import unittest2 as unittest
+        import unittest2 as unittest  # type: ignore
     except ImportError:
-        import unittest
+        import unittest  # type: ignore
 
 _next_port = 10000
 
@@ -96,9 +96,13 @@ def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.
 
     Returns a tuple (socket, port).
+
+    .. versionchanged:: 4.4
+       Always binds to ``127.0.0.1`` without resolving the name
+       ``localhost``.
     """
     sock = netutil.bind_sockets(None, '127.0.0.1', family=socket.AF_INET,
-                                  reuse_port=reuse_port)[0]
+                                reuse_port=reuse_port)[0]
     port = sock.getsockname()[1]
     return sock, port
 
@@ -123,7 +127,7 @@ class _TestMethodWrapper(object):
     method yields it must use a decorator to consume the generator),
     but will also detect other kinds of return values (these are not
     necessarily errors, but we alert anyway since there is no good
-    reason to return a value from a test.
+    reason to return a value from a test).
     """
     def __init__(self, orig_method):
         self.orig_method = orig_method
@@ -208,8 +212,8 @@ class AsyncTestCase(unittest.TestCase):
                 self.assertIn("FriendFeed", response.body)
                 self.stop()
     """
-    def __init__(self, methodName='runTest', **kwargs):
-        super(AsyncTestCase, self).__init__(methodName, **kwargs)
+    def __init__(self, methodName='runTest'):
+        super(AsyncTestCase, self).__init__(methodName)
         self.__stopped = False
         self.__running = False
         self.__failure = None
@@ -547,7 +551,7 @@ def gen_test(func=None, timeout=None):
 
 # Without this attribute, nosetests will try to run gen_test as a test
 # anywhere it is imported.
-gen_test.__test__ = False
+gen_test.__test__ = False  # type: ignore
 
 
 class LogTrapTestCase(unittest.TestCase):
@@ -617,7 +621,7 @@ class ExpectLog(logging.Filter):
             an empty string to watch the root logger.
         :param regex: Regular expression to match.  Any log entries on
             the specified logger that match this regex will be suppressed.
-        :param required: If true, an exeption will be raised if the end of
+        :param required: If true, an exception will be raised if the end of
             the ``with`` statement is reached without matching any log entries.
         """
         if isinstance(logger, basestring_type):

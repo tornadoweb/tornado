@@ -29,19 +29,18 @@ import numbers
 import socket
 import sys
 
-import twisted.internet.abstract
-from twisted.internet.defer import Deferred
-from twisted.internet.posixbase import PosixReactorBase
-from twisted.internet.interfaces import \
-    IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor
-from twisted.python import failure, log
-from twisted.internet import error
-import twisted.names.cache
-import twisted.names.client
-import twisted.names.hosts
-import twisted.names.resolve
+import twisted.internet.abstract  # type: ignore
+from twisted.internet.defer import Deferred  # type: ignore
+from twisted.internet.posixbase import PosixReactorBase  # type: ignore
+from twisted.internet.interfaces import IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor  # type: ignore
+from twisted.python import failure, log  # type: ignore
+from twisted.internet import error  # type: ignore
+import twisted.names.cache  # type: ignore
+import twisted.names.client  # type: ignore
+import twisted.names.hosts  # type: ignore
+import twisted.names.resolve  # type: ignore
 
-from zope.interface import implementer
+from zope.interface import implementer  # type: ignore
 
 from tornado.concurrent import Future
 from tornado.escape import utf8
@@ -354,7 +353,7 @@ def install(io_loop=None):
     if not io_loop:
         io_loop = tornado.ioloop.IOLoop.current()
     reactor = TornadoReactor(io_loop)
-    from twisted.internet.main import installReactor
+    from twisted.internet.main import installReactor  # type: ignore
     installReactor(reactor)
     return reactor
 
@@ -408,11 +407,14 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
     Not compatible with `tornado.process.Subprocess.set_exit_callback`
     because the ``SIGCHLD`` handlers used by Tornado and Twisted conflict
     with each other.
+
+    See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
+    installing alternative IOLoops.
     """
     def initialize(self, reactor=None, **kwargs):
         super(TwistedIOLoop, self).initialize(**kwargs)
         if reactor is None:
-            import twisted.internet.reactor
+            import twisted.internet.reactor  # type: ignore
             reactor = twisted.internet.reactor
         self.reactor = reactor
         self.fds = {}
@@ -554,7 +556,10 @@ class TwistedResolver(Resolver):
             deferred = self.resolver.getHostByName(utf8(host))
             resolved = yield gen.Task(deferred.addBoth)
             if isinstance(resolved, failure.Failure):
-                resolved.raiseException()
+                try:
+                    resolved.raiseException()
+                except twisted.names.error.DomainError as e:
+                    raise IOError(e)
             elif twisted.internet.abstract.isIPAddress(resolved):
                 resolved_family = socket.AF_INET
             elif twisted.internet.abstract.isIPv6Address(resolved):
@@ -570,7 +575,7 @@ class TwistedResolver(Resolver):
         raise gen.Return(result)
 
 if hasattr(gen.convert_yielded, 'register'):
-    @gen.convert_yielded.register(Deferred)
+    @gen.convert_yielded.register(Deferred)  # type: ignore
     def _(d):
         f = Future()
 

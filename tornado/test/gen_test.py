@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
+import gc
 import contextlib
 import datetime
 import functools
@@ -24,7 +25,6 @@ try:
     from concurrent import futures
 except ImportError:
     futures = None
-
 
 class GenEngineTest(AsyncTestCase):
     def setUp(self):
@@ -657,6 +657,28 @@ class GenCoroutineTest(AsyncTestCase):
         super(GenCoroutineTest, self).tearDown()
         assert self.finished
 
+    def test_attributes(self):
+        self.finished = True
+
+        def f():
+            yield gen.moment
+
+        coro = gen.coroutine(f)
+        self.assertEqual(coro.__name__, f.__name__)
+        self.assertEqual(coro.__module__, f.__module__)
+        self.assertIs(coro.__wrapped__, f)
+
+    def test_is_coroutine_function(self):
+        self.finished = True
+
+        def f():
+            yield gen.moment
+
+        coro = gen.coroutine(f)
+        self.assertFalse(gen.is_coroutine_function(f))
+        self.assertTrue(gen.is_coroutine_function(coro))
+        self.assertFalse(gen.is_coroutine_function(coro()))
+
     @gen_test
     def test_sync_gen_return(self):
         @gen.coroutine
@@ -765,6 +787,19 @@ class GenCoroutineTest(AsyncTestCase):
         f2(callback=(yield gen.Callback('cb')))
         results = yield [namespace['f1'](), gen.Wait('cb')]
         self.assertEqual(results, [42, 43])
+        self.finished = True
+
+    @skipBefore35
+    @gen_test
+    def test_async_with_timeout(self):
+        namespace = exec_test(globals(), locals(), """
+        async def f1():
+            return 42
+        """)
+
+        result = yield gen.with_timeout(datetime.timedelta(hours=1),
+                                        namespace['f1']())
+        self.assertEqual(result, 42)
         self.finished = True
 
     @gen_test
@@ -1354,6 +1389,29 @@ class WaitIteratorTest(AsyncTestCase):
         yield gen.with_timeout(datetime.timedelta(seconds=0.1),
                                gen.WaitIterator(gen.sleep(0)).next())
 
+
+class RunnerGCTest(AsyncTestCase):
+    """Github issue 1769: Runner objects can get GCed unexpectedly"""
+    @gen_test
+    def test_gc(self):
+        """Runners shouldn't GC if future is alive"""
+        # Create the weakref
+        weakref_scope = [None]
+        def callback():
+            gc.collect(2)
+            weakref_scope[0]().set_result(123)
+
+        @gen.coroutine
+        def tester():
+            fut = Future()
+            weakref_scope[0] = weakref.ref(fut)
+            self.io_loop.add_callback(callback)
+            yield fut
+
+        yield gen.with_timeout(
+            datetime.timedelta(seconds=0.2),
+            tester()
+        )
 
 if __name__ == '__main__':
     unittest.main()

@@ -58,7 +58,7 @@ except ImportError:
 _ERRNO_WOULDBLOCK = (errno.EWOULDBLOCK, errno.EAGAIN)
 
 if hasattr(errno, "WSAEWOULDBLOCK"):
-    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)
+    _ERRNO_WOULDBLOCK += (errno.WSAEWOULDBLOCK,)  # type: ignore
 
 # These errnos indicate that a connection has been abruptly terminated.
 # They should be caught and handled less noisily than other errors.
@@ -66,7 +66,7 @@ _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE,
                     errno.ETIMEDOUT)
 
 if hasattr(errno, "WSAECONNRESET"):
-    _ERRNO_CONNRESET += (errno.WSAECONNRESET, errno.WSAECONNABORTED, errno.WSAETIMEDOUT)
+    _ERRNO_CONNRESET += (errno.WSAECONNRESET, errno.WSAECONNABORTED, errno.WSAETIMEDOUT)  # type: ignore
 
 if sys.platform == 'darwin':
     # OSX appears to have a race condition that causes send(2) to return
@@ -74,13 +74,13 @@ if sys.platform == 'darwin':
     # http://erickt.github.io/blog/2014/11/19/adventures-in-debugging-a-potential-osx-kernel-bug/
     # Since the socket is being closed anyway, treat this as an ECONNRESET
     # instead of an unexpected error.
-    _ERRNO_CONNRESET += (errno.EPROTOTYPE,)
+    _ERRNO_CONNRESET += (errno.EPROTOTYPE,)  # type: ignore
 
 # More non-portable errnos:
 _ERRNO_INPROGRESS = (errno.EINPROGRESS,)
 
 if hasattr(errno, "WSAEINPROGRESS"):
-    _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)
+    _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)  # type: ignore
 
 
 class StreamClosedError(IOError):

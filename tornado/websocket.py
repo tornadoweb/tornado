@@ -36,17 +36,13 @@ from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
 from tornado import simple_httpclient
 from tornado.tcpclient import TCPClient
-from tornado.util import _websocket_mask
+from tornado.util import _websocket_mask, PY3
 
-try:
+if PY3:
     from urllib.parse import urlparse  # py2
-except ImportError:
+    xrange = range
+else:
     from urlparse import urlparse  # py3
-
-try:
-    xrange  # py2
-except NameError:
-    xrange = range  # py3
 
 
 class WebSocketError(Exception):
@@ -288,6 +284,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """Invoked when the response to a ping frame is received."""
         pass
 
+    def on_ping(self, data):
+        """Invoked when the a ping frame is received."""
+        pass
+
     def on_close(self):
         """Invoked when the WebSocket is closed.
 
@@ -339,6 +339,19 @@ class WebSocketHandler(tornado.web.RequestHandler):
         browsers, since WebSockets are allowed to bypass the usual same-origin
         policies and don't use CORS headers.
 
+        .. warning::
+
+           This is an important security measure; don't disable it
+           without understanding the security implications. In
+           particular, if your authenticatino is cookie-based, you
+           must either restrict the origins allowed by
+           ``check_origin()`` or implement your own XSRF-like
+           protection for websocket connections. See `these
+           <https://www.christian-schneider.net/CrossSiteWebSocketHijacking.html>`_
+           `articles
+           <https://devcenter.heroku.com/articles/websocket-security>`_
+           for more.
+
         To accept all cross-origin traffic (which was the default prior to
         Tornado 4.0), simply override this method to always return true::
 
@@ -353,6 +366,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 return parsed_origin.netloc.endswith(".mydomain.com")
 
         .. versionadded:: 4.0
+
         """
         parsed_origin = urlparse(origin)
         origin = parsed_origin.netloc
@@ -867,6 +881,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         elif opcode == 0x9:
             # Ping
             self._write_frame(True, 0xA, data)
+            self._run_callback(self.handler.on_ping, data)
         elif opcode == 0xA:
             # Pong
             self.last_pong = IOLoop.current().time()
@@ -1061,6 +1076,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.read_queue.append(message)
 
     def on_pong(self, data):
+        pass
+
+    def on_ping(self, data):
         pass
 
     def get_websocket_protocol(self):

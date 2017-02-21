@@ -82,22 +82,15 @@ from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import unicode_type, ArgReplacer
+from tornado.util import unicode_type, ArgReplacer, PY3
 
-try:
-    import urlparse  # py2
-except ImportError:
-    import urllib.parse as urlparse  # py3
-
-try:
-    import urllib.parse as urllib_parse  # py3
-except ImportError:
-    import urllib as urllib_parse  # py2
-
-try:
-    long  # py2
-except NameError:
-    long = int  # py3
+if PY3:
+    import urllib.parse as urlparse
+    import urllib.parse as urllib_parse
+    long = int
+else:
+    import urlparse
+    import urllib as urllib_parse
 
 
 class AuthError(Exception):
@@ -290,7 +283,7 @@ class OpenIdMixin(object):
         if name:
             user["name"] = name
         elif name_parts:
-            user["name"] = u(" ").join(name_parts)
+            user["name"] = u" ".join(name_parts)
         elif email:
             user["name"] = email.split("@")[0]
         if email:
@@ -996,6 +989,9 @@ class FacebookGraphMixin(OAuth2Mixin):
             callback=functools.partial(
                 self._on_get_user_info, future, session, fields),
             access_token=session["access_token"],
+            appsecret_proof=hmac.new(key=client_secret.encode('utf8'),
+                                     msg=session["access_token"].encode('utf8'),
+                                     digestmod=hashlib.sha256).hexdigest(),
             fields=",".join(fields)
         )
 

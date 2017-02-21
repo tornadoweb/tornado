@@ -35,7 +35,7 @@ from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
 from tornado.platform.auto import set_close_exec
 from tornado import stack_context
-from tornado.util import errno_from_exception
+from tornado.util import errno_from_exception, PY3
 
 try:
     import multiprocessing
@@ -43,11 +43,8 @@ except ImportError:
     # Multiprocessing is not available on Google App Engine.
     multiprocessing = None
 
-try:
-    long  # py2
-except NameError:
-    long = int  # py3
-
+if PY3:
+    long = int
 
 # Re-export this exception for convenience.
 try:
@@ -70,7 +67,7 @@ def cpu_count():
         pass
     try:
         return os.sysconf("SC_NPROCESSORS_CONF")
-    except ValueError:
+    except (AttributeError, ValueError):
         pass
     gen_log.error("Could not detect number of processors; assuming 1")
     return 1
@@ -147,6 +144,7 @@ def fork_processes(num_processes, max_restarts=100):
         else:
             children[pid] = i
             return None
+
     for i in range(num_processes):
         id = start_child(i)
         if id is not None:
@@ -204,13 +202,19 @@ class Subprocess(object):
       attribute of the resulting Subprocess a `.PipeIOStream`.
     * A new keyword argument ``io_loop`` may be used to pass in an IOLoop.
 
+    The ``Subprocess.STREAM`` option and the ``set_exit_callback`` and
+    ``wait_for_exit`` methods do not work on Windows. There is
+    therefore no reason to use this class instead of
+    ``subprocess.Popen`` on that platform.
+
     .. versionchanged:: 4.1
        The ``io_loop`` argument is deprecated.
+
     """
     STREAM = object()
 
     _initialized = False
-    _waiting = {}
+    _waiting = {}  # type: ignore
 
     def __init__(self, *args, **kwargs):
         self.io_loop = kwargs.pop('io_loop', None) or ioloop.IOLoop.current()

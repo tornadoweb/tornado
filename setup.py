@@ -103,7 +103,7 @@ http://api.mongodb.org/python/current/installation.html#osx
 
 kwargs = {}
 
-version = "4.4.dev1"
+version = "4.5.dev1"
 
 with open('README.rst') as f:
     kwargs['long_description'] = f.read()
@@ -129,7 +129,7 @@ if setuptools is not None:
     if sys.version_info < (2, 7):
         # Only needed indirectly, for singledispatch.
         install_requires.append('ordereddict')
-    if sys.version_info < (3, 2):
+    if sys.version_info < (2, 7, 9):
         install_requires.append('backports.ssl_match_hostname')
     if sys.version_info < (3, 4):
         install_requires.append('singledispatch')
@@ -178,6 +178,8 @@ setup(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
         ],

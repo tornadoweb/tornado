@@ -177,7 +177,13 @@ class TCPClient(object):
     def _create_stream(self, max_buffer_size, af, addr):
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.
-        stream = IOStream(socket.socket(af),
-                          io_loop=self.io_loop,
-                          max_buffer_size=max_buffer_size)
-        return stream.connect(addr)
+        try:
+            stream = IOStream(socket.socket(af),
+                            io_loop=self.io_loop,
+                            max_buffer_size=max_buffer_size)
+        except socket.error as e:
+            fu = Future()
+            fu.set_exception(e)
+            return fu
+        else:
+            return stream.connect(addr)

@@ -61,3 +61,6 @@ class Waker(object):
     def close(self):
         """Closes the waker's file descriptor(s)."""
         raise NotImplementedError()
+
+def monotonic_time():
+    raise NotImplementedError()

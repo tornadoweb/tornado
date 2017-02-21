@@ -41,12 +41,12 @@ from tornado import httputil
 from tornado.log import access_log
 from tornado import web
 from tornado.escape import native_str
-from tornado.util import unicode_type
+from tornado.util import unicode_type, PY3
 
 
-try:
+if PY3:
     import urllib.parse as urllib_parse  # py3
-except ImportError:
+else:
     import urllib as urllib_parse
 
 # PEP 3333 specifies that WSGI on python 3 generally deals with byte strings

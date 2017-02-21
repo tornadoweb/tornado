@@ -38,7 +38,7 @@ from tornado.escape import _unicode
 from tornado.util import unicode_type, basestring_type
 
 try:
-    import curses
+    import curses  # type: ignore
 except ImportError:
     curses = None
 
@@ -77,8 +77,8 @@ class LogFormatter(logging.Formatter):
     * Robust against str/bytes encoding problems.
 
     This formatter is enabled automatically by
-    `tornado.options.parse_command_line` (unless ``--logging=none`` is
-    used).
+    `tornado.options.parse_command_line` or `tornado.options.parse_config_file`
+    (unless ``--logging=none`` is used).
     """
     DEFAULT_FORMAT = '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s'
     DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'

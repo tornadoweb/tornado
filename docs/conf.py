@@ -88,12 +88,12 @@ latex_documents = [
 # this link must be referenced as :current_tarball:`z`
 extlinks = {
     'current_tarball': (
-        'https://pypi.python.org/packages/source/t/tornado/tornado-%s.tar.g%%s' % version,
+        'https://pypi.org/packages/source/t/tornado/tornado-%s.tar.g%%s' % version,
         'tornado-%s.tar.g' % version),
     }
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3.4/', None),
+    'python': ('https://docs.python.org/3.5/', None),
     }
 
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'

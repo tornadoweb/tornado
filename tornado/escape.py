@@ -24,7 +24,6 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import json
 import re
-import sys
 
 from tornado.util import PY3, unicode_type, basestring_type
 
@@ -37,6 +36,11 @@ else:
     from urlparse import parse_qs as _parse_qs
     import htmlentitydefs
     import urllib as urllib_parse
+
+try:
+    import typing  # noqa
+except ImportError:
+    pass
 
 
 _XHTML_ESCAPE_RE = re.compile('[&<>"\']')
@@ -181,6 +185,7 @@ _UTF8_TYPES = (bytes, type(None))
 
 
 def utf8(value):
+    # type: (typing.Union[bytes,unicode_type,None])->typing.Union[bytes,None]
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
