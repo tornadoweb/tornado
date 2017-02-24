@@ -426,7 +426,7 @@ class WebSocketProtocol(object):
             callback(*args, **kwargs)
         except Exception:
             app_log.error("Uncaught exception in %s",
-                          self.request.path, exc_info=True)
+                          getattr(self.request, 'path', None), exc_info=True)
             self._abort()
 
     def on_connection_close(self):
