@@ -92,6 +92,12 @@ class PathArgsHandler(TestWebSocketHandler):
         self.write_message(arg)
 
 
+class HandshakeResponseHeadersHandler(TestWebSocketHandler):
+
+    def prepare(self):
+        self._headers['Set-Cookie'] = 'hello=1'
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, **kwargs):
@@ -126,12 +132,16 @@ class WebSocketTest(WebSocketBaseTestCase):
              dict(close_future=self.close_future)),
             ('/path_args/(.*)', PathArgsHandler,
              dict(close_future=self.close_future)),
+            ('/handshake_response_headers', HandshakeResponseHeadersHandler,
+             dict(close_future=self.close_future)),
         ])
 
     def test_http_request(self):
         # WS server, HTTP client.
         response = self.fetch('/echo')
         self.assertEqual(response.code, 400)
+        self.assertEqual(response.headers.get('Content-Type'),
+                         "text/html; charset=UTF-8")
 
     @gen_test
     def test_websocket_gen(self):
@@ -184,6 +194,8 @@ class WebSocketTest(WebSocketBaseTestCase):
         with self.assertRaises(HTTPError) as cm:
             yield self.ws_connect('/notfound')
         self.assertEqual(cm.exception.code, 404)
+        self.assertEqual(cm.exception.response.headers.get('Content-Type'),
+                         "text/html; charset=UTF-8")
 
     @gen_test
     def test_websocket_http_success(self):
@@ -298,6 +310,8 @@ class WebSocketTest(WebSocketBaseTestCase):
             yield websocket_connect(HTTPRequest(url, headers=headers),
                                     io_loop=self.io_loop)
         self.assertEqual(cm.exception.code, 403)
+        self.assertEqual(cm.exception.response.headers.get('Content-Type'),
+                         "text/html; charset=UTF-8")
 
     @gen_test
     def test_check_origin_invalid(self):
@@ -313,6 +327,9 @@ class WebSocketTest(WebSocketBaseTestCase):
                                     io_loop=self.io_loop)
 
         self.assertEqual(cm.exception.code, 403)
+        self.assertEqual(cm.exception.response.headers.get('Content-Type'),
+                         "text/html; charset=UTF-8")
+
 
     @gen_test
     def test_check_origin_invalid_subdomains(self):
@@ -328,6 +345,31 @@ class WebSocketTest(WebSocketBaseTestCase):
                                     io_loop=self.io_loop)
 
         self.assertEqual(cm.exception.code, 403)
+        # check default Content-Type is set
+        self.assertEqual(cm.exception.response.headers.get('Content-Type'),
+                         "text/html; charset=UTF-8")
+
+    @gen_test
+    def test_success_response_content_type(self):
+        ws = yield self.ws_connect('/echo')
+
+        self.assertIsNone(ws.headers.get('Content-Type'))
+
+    @gen_test
+    def test_handshake_response_headers(self):
+        ws = yield self.ws_connect('/handshake_response_headers')
+
+        self.assertEqual(ws.headers.get('Set-Cookie'), 'hello=1')
+
+    def test_handshake_response_headers_error(self):
+        # WS server, HTTP client.
+        response = self.fetch('/handshake_response_headers')
+
+        self.assertEqual(response.code, 400)
+        # extra headers should not be passed on error
+        self.assertIsNone(response.headers.get('Set-Cookie'))
+        self.assertEqual(response.headers.get('Content-Type'),
+                         "text/html; charset=UTF-8")
 
 
 class CompressionTestMixin(object):

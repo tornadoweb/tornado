@@ -138,6 +138,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         # Upgrade header should be present and should be equal to WebSocket
         if self.request.headers.get("Upgrade", "").lower() != 'websocket':
+            self.clear()
             self.set_status(400)
             log_msg = "Can \"Upgrade\" only to \"WebSocket\"."
             self.finish(log_msg)
@@ -151,6 +152,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         connection = map(lambda s: s.strip().lower(),
                          headers.get("Connection", "").split(","))
         if 'upgrade' not in connection:
+            self.clear()
             self.set_status(400)
             log_msg = "\"Connection\" must be \"Upgrade\"."
             self.finish(log_msg)
@@ -170,6 +172,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         # according to check_origin. When the origin is None, we assume it
         # did not come from a browser and that it can be passed on.
         if origin is not None and not self.check_origin(origin):
+            self.clear()
             self.set_status(403)
             log_msg = "Cross origin websockets not allowed"
             self.finish(log_msg)
@@ -181,6 +184,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         self.ws_connection = self.get_websocket_protocol()
         if self.ws_connection:
+            self.clear_header('Content-Type')
             self.ws_connection.accept_connection()
         else:
             if not self.stream.closed():
@@ -413,7 +417,8 @@ class WebSocketHandler(tornado.web.RequestHandler):
         websocket_version = self.request.headers.get("Sec-WebSocket-Version")
         if websocket_version in ("7", "8", "13"):
             return WebSocketProtocol13(
-                self, compression_options=self.get_compression_options())
+                self, compression_options=self.get_compression_options(),
+                response_headers=self._headers)
 
 
 def _wrap_method(method):
@@ -524,8 +529,9 @@ class WebSocketProtocol13(WebSocketProtocol):
     OPCODE_MASK = 0x0f
 
     def __init__(self, handler, mask_outgoing=False,
-                 compression_options=None):
+                 compression_options=None, response_headers=None):
         WebSocketProtocol.__init__(self, handler)
+        self._response_headers = response_headers
         self.mask_outgoing = mask_outgoing
         self._final_frame = False
         self._frame_opcode = None
@@ -616,6 +622,11 @@ class WebSocketProtocol13(WebSocketProtocol):
                                         'permessage-deflate', ext[1]))
                 break
 
+        response_headers = ''
+        if self._response_headers is not None:
+            for header_name, header_value in self._response_headers.get_all():
+                response_headers += '%s: %s\r\n' % (header_name, header_value)
+
         if self.stream.closed():
             self._abort()
             return
@@ -624,9 +635,9 @@ class WebSocketProtocol13(WebSocketProtocol):
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
             "Sec-WebSocket-Accept: %s\r\n"
-            "%s%s"
-            "\r\n" % (self._challenge_response(),
-                      subprotocol_header, extension_header)))
+            "%s%s%s"
+            "\r\n" % (self._challenge_response(), subprotocol_header,
+                      extension_header, response_headers)))
 
         self.start_pinging()
         self._run_callback(self.handler.open, *self.handler.open_args,
