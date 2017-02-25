@@ -31,7 +31,7 @@ import zlib
 from tornado.concurrent import TracebackFuture
 from tornado.escape import utf8, native_str, to_unicode
 from tornado import httpclient, httputil
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
 from tornado import simple_httpclient
@@ -189,6 +189,24 @@ class WebSocketHandler(tornado.web.RequestHandler):
                     "Sec-WebSocket-Version: 7, 8, 13\r\n\r\n"))
                 self.stream.close()
 
+    stream = None
+
+    @property
+    def ping_interval(self):
+        """The interval for websocket keep-alive pings.
+
+        Set ws_ping_interval = 0 to disable pings.
+        """
+        return self.settings.get('websocket_ping_interval', None)
+
+    @property
+    def ping_timeout(self):
+        """If no ping is received in this many seconds,
+        close the websocket connection (VPNs, etc. can fail to cleanly close ws connections).
+        Default is max of 3 pings or 30 seconds.
+        """
+        return self.settings.get('websocket_ping_timeout', None)
+
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket.
 
@@ -262,6 +280,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
     def on_pong(self, data):
         """Invoked when the response to a ping frame is received."""
+        pass
+
+    def on_ping(self, data):
+        """Invoked when the a ping frame is received."""
         pass
 
     def on_close(self):
@@ -526,6 +548,10 @@ class WebSocketProtocol13(WebSocketProtocol):
         # the effect of compression, frame overhead, and control frames.
         self._wire_bytes_in = 0
         self._wire_bytes_out = 0
+        self.ping_callback = None
+        self.last_ping = 0
+        self.last_pong = 0
+
 
     def accept_connection(self):
         try:
@@ -602,6 +628,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             "\r\n" % (self._challenge_response(),
                       subprotocol_header, extension_header)))
 
+        self.start_pinging()
         self._run_callback(self.handler.open, *self.handler.open_args,
                            **self.handler.open_kwargs)
         self._receive_frame()
@@ -852,8 +879,10 @@ class WebSocketProtocol13(WebSocketProtocol):
         elif opcode == 0x9:
             # Ping
             self._write_frame(True, 0xA, data)
+            self._run_callback(self.handler.on_ping, data)
         elif opcode == 0xA:
             # Pong
+            self.last_pong = IOLoop.current().time()
             self._run_callback(self.handler.on_pong, data)
         else:
             self._abort()
@@ -883,6 +912,51 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._waiting = self.stream.io_loop.add_timeout(
                 self.stream.io_loop.time() + 5, self._abort)
 
+    @property
+    def ping_interval(self):
+        interval = self.handler.ping_interval
+        if interval is not None:
+            return interval
+        return 0
+
+    @property
+    def ping_timeout(self):
+        timeout = self.handler.ping_timeout
+        if timeout is not None:
+            return timeout
+        return max(3 * self.ping_interval, 30)
+
+    def start_pinging(self):
+        """Start sending periodic pings to keep the connection alive"""
+        if self.ping_interval > 0:
+            self.last_ping = self.last_pong = IOLoop.current().time()
+            self.ping_callback = PeriodicCallback(
+                self.periodic_ping, self.ping_interval*1000)
+            self.ping_callback.start()
+
+    def periodic_ping(self):
+        """Send a ping to keep the websocket alive
+
+        Called periodically if the websocket_ping_interval is set and non-zero.
+        """
+        if self.stream.closed() and self.ping_callback is not None:
+            self.ping_callback.stop()
+            return
+
+        # Check for timeout on pong. Make sure that we really have
+        # sent a recent ping in case the machine with both server and
+        # client has been suspended since the last ping.
+        now = IOLoop.current().time()
+        since_last_pong = now - self.last_pong
+        since_last_ping = now - self.last_ping
+        if (since_last_ping < 2*self.ping_interval and
+                since_last_pong > self.ping_timeout):
+            self.close()
+            return
+
+        self.write_ping(b'')
+        self.last_ping = now
+
 
 class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     """WebSocket client connection.
@@ -891,7 +965,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     `websocket_connect` function instead.
     """
     def __init__(self, io_loop, request, on_message_callback=None,
-                 compression_options=None):
+                 compression_options=None, ping_interval=None, ping_timeout=None):
         self.compression_options = compression_options
         self.connect_future = TracebackFuture()
         self.protocol = None
@@ -900,6 +974,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.key = base64.b64encode(os.urandom(16))
         self._on_message_callback = on_message_callback
         self.close_code = self.close_reason = None
+        self.ping_interval = ping_interval
+        self.ping_timeout = ping_timeout
 
         scheme, sep, rest = request.url.partition(':')
         scheme = {'ws': 'http', 'wss': 'https'}[scheme]
@@ -963,6 +1039,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.headers = headers
         self.protocol = self.get_websocket_protocol()
         self.protocol._process_server_headers(self.key, self.headers)
+        self.protocol.start_pinging()
         self.protocol._receive_frame()
 
         if self._timeout is not None:
@@ -1016,13 +1093,17 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     def on_pong(self, data):
         pass
 
+    def on_ping(self, data):
+        pass
+
     def get_websocket_protocol(self):
         return WebSocketProtocol13(self, mask_outgoing=True,
                                    compression_options=self.compression_options)
 
 
 def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
-                      on_message_callback=None, compression_options=None):
+                      on_message_callback=None, compression_options=None,
+                      ping_interval=None, ping_timeout=None):
     """Client-side websocket support.
 
     Takes a url and returns a Future whose result is a
@@ -1066,7 +1147,9 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
         request, httpclient.HTTPRequest._DEFAULTS)
     conn = WebSocketClientConnection(io_loop, request,
                                      on_message_callback=on_message_callback,
-                                     compression_options=compression_options)
+                                     compression_options=compression_options,
+                                     ping_interval=ping_interval,
+                                     ping_timeout=ping_timeout)
     if callback is not None:
         io_loop.add_future(conn.connect_future, callback)
     return conn.connect_future
