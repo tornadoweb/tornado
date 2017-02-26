@@ -40,7 +40,6 @@ from tornado.util import unicode_type, basestring_type
 
 try:
     import colorama
-    colorama.init()
 except ImportError:
     colorama = None
 
@@ -89,6 +88,13 @@ class LogFormatter(logging.Formatter):
     This formatter is enabled automatically by
     `tornado.options.parse_command_line` or `tornado.options.parse_config_file`
     (unless ``--logging=none`` is used).
+
+    Color support on Windows versions that do not support ANSI color codes is
+    enabled by use of the colorama__ library. Applications that wish to use
+    this must first initialize colorama with a call to :func:`colorama.init`.
+    See the colorama documentation for details.
+
+    __ https://pypi.python.org/pypi/colorama
     """
     DEFAULT_FORMAT = '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s'
     DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'
@@ -137,7 +143,7 @@ class LogFormatter(logging.Formatter):
                 for levelno, code in colors.items():
                     self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
                 self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
-            elif colorama is not None:
+            elif sys.stderr is getattr(colorama, 'wrapped_stderr', object()):
                 for levelno, code in colors.items():
                     self._colors[levelno] = '\033[2;3%dm' % code
                 self._normal = '\033[0m'
