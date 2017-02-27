@@ -89,8 +89,8 @@ class LogFormatter(logging.Formatter):
         logging.ERROR: 1,  # Red
     }
 
-    def __init__(self, color=True, fmt=DEFAULT_FORMAT,
-                 datefmt=DEFAULT_DATE_FORMAT, colors=DEFAULT_COLORS):
+    def __init__(self, fmt=DEFAULT_FORMAT, datefmt=DEFAULT_DATE_FORMAT,
+                 style='%', color=True, colors=DEFAULT_COLORS):
         r"""
         :arg bool color: Enables color support.
         :arg string fmt: Log message format.
