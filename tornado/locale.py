@@ -187,7 +187,7 @@ def load_gettext_translations(directory, domain):
 
         {directory}/{lang}/LC_MESSAGES/{domain}.mo
 
-    Three steps are required to have you app translated:
+    Three steps are required to have your app translated:
 
     1. Generate POT translation file::
 
