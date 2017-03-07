@@ -2,7 +2,7 @@
 # for production use.
 
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 import ctypes  # type: ignore
 import ctypes.wintypes  # type: ignore
 

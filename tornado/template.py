@@ -196,7 +196,7 @@ if you need to include a literal ``{{``, ``{%``, or ``{#`` in the output.
     `filter_whitespace` for available options. New in Tornado 4.3.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import datetime
 import linecache

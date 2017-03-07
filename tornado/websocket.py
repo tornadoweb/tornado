@@ -16,7 +16,7 @@ the protocol (known as "draft 76") and are not compatible with this module.
    Removed support for the draft 76 protocol version.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 # Author: Jacob Kristhammar, 2010
 
 import base64
