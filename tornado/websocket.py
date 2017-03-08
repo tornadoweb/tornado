@@ -520,7 +520,7 @@ class _PerMessageDeflateCompressor(object):
 
 
 class _PerMessageDeflateDecompressor(object):
-    def __init__(self, persistent, max_wbits):
+    def __init__(self, persistent, max_wbits, compression_options=None):
         if max_wbits is None:
             max_wbits = zlib.MAX_WBITS
         if not (8 <= max_wbits <= zlib.MAX_WBITS):
@@ -716,7 +716,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._compressor = _PerMessageDeflateCompressor(
             **self._get_compressor_options(side, agreed_parameters, compression_options))
         self._decompressor = _PerMessageDeflateDecompressor(
-            **self._get_compressor_options(other_side, agreed_parameters))
+            **self._get_compressor_options(other_side, agreed_parameters, compression_options))
 
     def _write_frame(self, fin, opcode, data, flags=0):
         if fin:
