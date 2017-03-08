@@ -689,7 +689,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             else:
                 raise ValueError("unsupported extension %r", ext)
 
-    def _get_compressor_options(self, side, agreed_parameters):
+    def _get_compressor_options(self, side, agreed_parameters, compression_options):
         """Converts a websocket agreed_parameters set to keyword arguments
         for our compressor objects.
         """
@@ -700,6 +700,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             options['max_wbits'] = zlib.MAX_WBITS
         else:
             options['max_wbits'] = int(wbits_header)
+        options['compression_options'] = compression_options
         return options
 
     def _create_compressors(self, side, agreed_parameters, compression_options=None):
@@ -713,7 +714,7 @@ class WebSocketProtocol13(WebSocketProtocol):
                 raise ValueError("unsupported compression parameter %r" % key)
         other_side = 'client' if (side == 'server') else 'server'
         self._compressor = _PerMessageDeflateCompressor(
-            **self._get_compressor_options(side, agreed_parameters), compression_options=compression_options)
+            **self._get_compressor_options(side, agreed_parameters, compression_options))
         self._decompressor = _PerMessageDeflateDecompressor(
             **self._get_compressor_options(other_side, agreed_parameters))
 
