@@ -689,7 +689,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             else:
                 raise ValueError("unsupported extension %r", ext)
 
-    def _get_compressor_options(self, side, agreed_parameters, compression_options):
+    def _get_compressor_options(self, side, agreed_parameters, compression_options=None):
         """Converts a websocket agreed_parameters set to keyword arguments
         for our compressor objects.
         """
