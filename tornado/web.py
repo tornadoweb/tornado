@@ -287,10 +287,11 @@ class RequestHandler(object):
     def clear(self):
         """Resets all headers and content for this response."""
         self._headers = httputil.HTTPHeaders({
-            "Server": "TornadoServer/%s" % tornado.version,
             "Content-Type": "text/html; charset=UTF-8",
             "Date": httputil.format_timestamp(time.time()),
         })
+        if self.settings.get('server_tokens', True):
+            self.add_header("Server", "TornadoServer/%s" % tornado.version)
         self.set_default_headers()
         self._write_buffer = []
         self._status_code = 200
