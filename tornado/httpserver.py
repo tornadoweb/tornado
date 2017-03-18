@@ -259,7 +259,7 @@ class _HTTPRequestContext(object):
         """Rewrite the ``remote_ip`` and ``protocol`` fields."""
         # Squid uses X-Forwarded-For, others use X-Real-Ip
         ip = headers.get("X-Forwarded-For", self.remote_ip)
-        ip = ip.split(',')[-1].strip()
+        ip = ip.split(',')[0].strip()
         ip = headers.get("X-Real-Ip", ip)
         if netutil.is_valid_ip(ip):
             self.remote_ip = ip
