@@ -72,6 +72,7 @@ import binascii
 import functools
 import hashlib
 import hmac
+import json
 import time
 import uuid
 
@@ -985,9 +986,19 @@ class FacebookGraphMixin(OAuth2Mixin):
             future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
             return
 
-        args = urlparse.parse_qs(escape.native_str(response.body))
+        try:
+            """
+            Facebook graph API versions 2.3+ return JSON instead of query strings
+            in the response body
+            """
+            args = json.loads(response.body)
+            access_token = args.get("access_token")
+        except ValueError:
+            args = urlparse.parse_qs(escape.native_str(response.body))
+            access_token = args["access_token"][-1]
+
         session = {
-            "access_token": args["access_token"][-1],
+            "access_token": access_token,
             "expires": args.get("expires")
         }
 
