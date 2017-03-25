@@ -504,15 +504,15 @@ class _PerMessageDeflateCompressor(object):
             self._mem_level = compression_options['mem_level']
 
         if persistent:
-            self._compressor = self._create_compressor(self._compression_level, self._mem_level)
+            self._compressor = self._create_compressor()
         else:
             self._compressor = None
 
-    def _create_compressor(self, compression_level, mem_level):
-        return zlib.compressobj(compression_level, zlib.DEFLATED, -self._max_wbits, mem_level)
+    def _create_compressor(self):
+        return zlib.compressobj(self._compression_level, zlib.DEFLATED, -self._max_wbits, self._mem_level)
 
     def compress(self, data):
-        compressor = self._compressor or self._create_compressor(self._compression_level, self._mem_level)
+        compressor = self._compressor or self._create_compressor()
         data = (compressor.compress(data) +
                 compressor.flush(zlib.Z_SYNC_FLUSH))
         assert data.endswith(b'\x00\x00\xff\xff')
