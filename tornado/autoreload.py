@@ -128,7 +128,7 @@ def start(io_loop=None, check_time=500):
     if len(_io_loops) > 1:
         gen_log.warning("tornado.autoreload started more than once in the same process")
     if _has_execv:
-        add_reload_hook(functools.partial(io_loop.close, all_fds=True))
+        add_reload_hook(functools.partial(_close_ioloop_forced, io_loop))
     modify_times = {}
     callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
@@ -164,6 +164,13 @@ def add_reload_hook(fn):
     of using a reload hook to close them.
     """
     _reload_hooks.append(fn)
+
+
+def _close_ioloop_forced(io_loop):
+    try:
+        io_loop.close(all_fds=True)
+    except:
+        pass
 
 
 def _reload_on_update(modify_times):
