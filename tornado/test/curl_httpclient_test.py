@@ -1,5 +1,5 @@
 # coding: utf-8
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 from hashlib import md5
 

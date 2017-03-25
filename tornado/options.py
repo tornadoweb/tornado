@@ -82,7 +82,7 @@ instances to define isolated sets of options, such as for subcommands.
    underscores.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import datetime
 import numbers
