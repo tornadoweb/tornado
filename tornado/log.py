@@ -91,7 +91,7 @@ class LogFormatter(logging.Formatter):
 
     Color support on Windows versions that do not support ANSI color codes is
     enabled by use of the colorama__ library. Applications that wish to use
-    this must first initialize colorama with a call to :func:`colorama.init`.
+    this must first initialize colorama with a call to ``colorama.init``.
     See the colorama documentation for details.
 
     __ https://pypi.python.org/pypi/colorama
