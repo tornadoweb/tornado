@@ -16,7 +16,7 @@
 
 """A non-blocking TCP connection factory.
 """
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import functools
 import socket
@@ -155,16 +155,27 @@ class TCPClient(object):
 
     @gen.coroutine
     def connect(self, host, port, af=socket.AF_UNSPEC, ssl_options=None,
-                max_buffer_size=None):
+                max_buffer_size=None, source_ip=None, source_port=None):
         """Connect to the given host and port.
 
         Asynchronously returns an `.IOStream` (or `.SSLIOStream` if
         ``ssl_options`` is not None).
+
+        Using the ``source_ip`` kwarg, one can specify the source
+        IP address to use when establishing the connection.
+        In case the user needs to resolve and
+        use a specific interface, it has to be handled outside
+        of Tornado as this depends very much on the platform.
+
+        Similarly, when the user requires a certain source port, it can
+        be specified using the ``source_port`` arg.
         """
         addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(
             addrinfo, self.io_loop,
-            functools.partial(self._create_stream, max_buffer_size))
+            functools.partial(self._create_stream, max_buffer_size,
+                              source_ip=source_ip, source_port=source_port)
+        )
         af, addr, stream = yield connector.start()
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
@@ -174,13 +185,32 @@ class TCPClient(object):
                                             server_hostname=host)
         raise gen.Return(stream)
 
-    def _create_stream(self, max_buffer_size, af, addr):
+    def _create_stream(self, max_buffer_size, af, addr, source_ip=None,
+                       source_port=None):
         # Always connect in plaintext; we'll convert to ssl if necessary
         # after one connection has completed.
+        source_port_bind = source_port if isinstance(source_port, int) else 0
+        source_ip_bind = source_ip
+        if source_port_bind and not source_ip:
+            # User required a specific port, but did not specify
+            # a certain source IP, will bind to the default loopback.
+            source_ip_bind = '::1' if af == socket.AF_INET6 else '127.0.0.1'
+            # Trying to use the same address family as the requested af socket:
+            # - 127.0.0.1 for IPv4
+            # - ::1 for IPv6
+        socket_obj = socket.socket(af)
+        if source_port_bind or source_ip_bind:
+            # If the user requires binding also to a specific IP/port.
+            try:
+                socket_obj.bind((source_ip_bind, source_port_bind))
+            except socket.error:
+                socket_obj.close()
+                # Fail loudly if unable to use the IP/port.
+                raise
         try:
-            stream = IOStream(socket.socket(af),
-                            io_loop=self.io_loop,
-                            max_buffer_size=max_buffer_size)
+            stream = IOStream(socket_obj,
+                              io_loop=self.io_loop,
+                              max_buffer_size=max_buffer_size)
         except socket.error as e:
             fu = Future()
             fu.set_exception(e)

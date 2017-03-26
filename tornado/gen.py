@@ -74,7 +74,7 @@ See the `convert_yielded` function to extend this mechanism.
    via ``singledispatch``.
 
 """
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import collections
 import functools
@@ -1249,7 +1249,9 @@ def convert_yielded(yielded):
     .. versionadded:: 4.1
     """
     # Lists and dicts containing YieldPoints were handled earlier.
-    if isinstance(yielded, (list, dict)):
+    if yielded is None:
+        return moment
+    elif isinstance(yielded, (list, dict)):
         return multi(yielded)
     elif is_future(yielded):
         return yielded

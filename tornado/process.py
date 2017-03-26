@@ -18,7 +18,7 @@
 the server into multiple processes and managing subprocesses.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import errno
 import os
@@ -355,6 +355,10 @@ class Subprocess(object):
         else:
             assert os.WIFEXITED(status)
             self.returncode = os.WEXITSTATUS(status)
+        # We've taken over wait() duty from the subprocess.Popen
+        # object. If we don't inform it of the process's return code,
+        # it will log a warning at destruction in python 3.6+.
+        self.proc.returncode = self.returncode
         if self._exit_callback:
             callback = self._exit_callback
             self._exit_callback = None

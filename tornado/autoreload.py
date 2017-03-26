@@ -45,7 +45,7 @@ incorrectly.
 
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import os
 import sys
@@ -103,10 +103,6 @@ except ImportError:
 # os.execv is broken on Windows and can't properly parse command line
 # arguments and executable name if they contain whitespaces. subprocess
 # fixes that behavior.
-# This distinction is also important because when we use execv, we want to
-# close the IOLoop and all its file descriptors, to guard against any
-# file descriptors that were not set CLOEXEC. When execv is not available,
-# we must not close the IOLoop because we want the process to exit cleanly.
 _has_execv = sys.platform != 'win32'
 
 _watched_files = set()
@@ -127,8 +123,6 @@ def start(io_loop=None, check_time=500):
     _io_loops[io_loop] = True
     if len(_io_loops) > 1:
         gen_log.warning("tornado.autoreload started more than once in the same process")
-    if _has_execv:
-        add_reload_hook(functools.partial(io_loop.close, all_fds=True))
     modify_times = {}
     callback = functools.partial(_reload_on_update, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)

@@ -12,7 +12,17 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from __future__ import absolute_import, division, print_function, with_statement
+"""Asynchronous queues for coroutines.
+
+.. warning::
+
+   Unlike the standard library's `queue` module, the classes defined here
+   are *not* thread-safe. To use these queues from another thread,
+   use `.IOLoop.add_callback` to transfer control to the `.IOLoop` thread
+   before calling any queue methods.
+"""
+
+from __future__ import absolute_import, division, print_function
 
 import collections
 import heapq

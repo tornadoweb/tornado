@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 from tornado.concurrent import Future
 from tornado import gen
 from tornado import netutil
@@ -598,6 +598,17 @@ class TestIOStreamMixin(object):
             client.close()
             self.wait()
             self.assertTrue(closed[0])
+        finally:
+            server.close()
+            client.close()
+
+    def test_write_memoryview(self):
+        server, client = self.make_iostream_pair()
+        try:
+            client.read_bytes(4, self.stop)
+            server.write(memoryview(b"hello"))
+            data = self.wait()
+            self.assertEqual(data, b"hell")
         finally:
             server.close()
             client.close()

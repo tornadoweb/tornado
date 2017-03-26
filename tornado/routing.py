@@ -161,7 +161,7 @@ In the example below `RuleRouter` is used to route between applications:
 For more information on application-level routing see docs for `~.web.Application`.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import re
 from functools import partial

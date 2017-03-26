@@ -65,7 +65,7 @@ Example usage for Google OAuth:
    errors are more consistently reported through the ``Future`` interfaces.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import base64
 import binascii

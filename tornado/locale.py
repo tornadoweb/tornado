@@ -39,7 +39,7 @@ supported by `gettext` and related tools).  If neither method is called,
 the `Locale.translate` method will simply return the original string.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import codecs
 import csv
@@ -187,7 +187,7 @@ def load_gettext_translations(directory, domain):
 
         {directory}/{lang}/LC_MESSAGES/{domain}.mo
 
-    Three steps are required to have you app translated:
+    Three steps are required to have your app translated:
 
     1. Generate POT translation file::
 

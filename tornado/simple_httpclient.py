@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 from tornado.escape import utf8, _unicode
 from tornado import gen
@@ -499,7 +499,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _should_follow_redirect(self):
         return (self.request.follow_redirects and
                 self.request.max_redirects > 0 and
-                self.code in (301, 302, 303, 307))
+                self.code in (301, 302, 303, 307, 308))
 
     def finish(self):
         data = b''.join(self.chunks)

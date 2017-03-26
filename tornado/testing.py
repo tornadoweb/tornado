@@ -10,7 +10,7 @@
   for the tornado.autoreload module to rerun the tests when code changes.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 try:
     from tornado import gen
@@ -656,7 +656,9 @@ def main(**kwargs):
 
     This test runner is essentially equivalent to `unittest.main` from
     the standard library, but adds support for tornado-style option
-    parsing and log formatting.
+    parsing and log formatting. It is *not* necessary to use this
+    `main` function to run tests using `AsyncTestCase`; these tests
+    are self-contained and can run with any test runner.
 
     The easiest way to run a test is via the command line::
 

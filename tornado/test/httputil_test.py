@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp, HTTPServerRequest, parse_request_start_line, parse_cookie
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
@@ -43,14 +43,14 @@ class TestUrlConcat(unittest.TestCase):
             "https://localhost/path?x",
             [('y', 'y'), ('z', 'z')],
         )
-        self.assertEqual(url, "https://localhost/path?x&y=y&z=z")
+        self.assertEqual(url, "https://localhost/path?x=&y=y&z=z")
 
     def test_url_concat_trailing_amp(self):
         url = url_concat(
             "https://localhost/path?x&",
             [('y', 'y'), ('z', 'z')],
         )
-        self.assertEqual(url, "https://localhost/path?x&y=y&z=z")
+        self.assertEqual(url, "https://localhost/path?x=&y=y&z=z")
 
     def test_url_concat_mult_params(self):
         url = url_concat(
@@ -65,6 +65,34 @@ class TestUrlConcat(unittest.TestCase):
             [],
         )
         self.assertEqual(url, "https://localhost/path?r=1&t=2")
+
+    def test_url_concat_with_frag(self):
+        url = url_concat(
+            "https://localhost/path#tab",
+            [('y', 'y')],
+        )
+        self.assertEqual(url, "https://localhost/path?y=y#tab")
+
+    def test_url_concat_multi_same_params(self):
+        url = url_concat(
+            "https://localhost/path",
+            [('y', 'y1'), ('y', 'y2')],
+        )
+        self.assertEqual(url, "https://localhost/path?y=y1&y=y2")
+
+    def test_url_concat_multi_same_query_params(self):
+        url = url_concat(
+            "https://localhost/path?r=1&r=2",
+            [('y', 'y')],
+        )
+        self.assertEqual(url, "https://localhost/path?r=1&r=2&y=y")
+
+    def test_url_concat_dict_params(self):
+        url = url_concat(
+            "https://localhost/path",
+            dict(y='y'),
+        )
+        self.assertEqual(url, "https://localhost/path?y=y")
 
 
 class MultipartFormDataTest(unittest.TestCase):

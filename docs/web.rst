@@ -188,6 +188,14 @@
            of `UIModule` or UI methods to be made available to templates.
            May be set to a module, dictionary, or a list of modules
            and/or dicts.  See :ref:`ui-modules` for more details.
+         * ``websocket_ping_interval``: If set to a number, all websockets will
+           be pinged every n seconds. This can help keep the connection alive
+           through certain proxy servers which close idle connections, and it
+           can detect if the websocket has failed without being properly closed.
+         * ``websocket_ping_timeout``: If the ping interval is set, and the
+           server doesn't receive a 'pong' in this many seconds, it will close
+           the websocket. The default is three times the ping interval, with a
+           minimum of 30 seconds. Ignored if the ping interval is not set.
 
          Authentication and security settings:
 

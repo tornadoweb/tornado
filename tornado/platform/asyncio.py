@@ -19,7 +19,7 @@ loops.
    Windows. Use the `~asyncio.SelectorEventLoop` instead.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 import functools
 
 import tornado.concurrent

@@ -17,7 +17,7 @@
 
 Used as a fallback for systems that don't support epoll or kqueue.
 """
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, print_function
 
 import select
 
