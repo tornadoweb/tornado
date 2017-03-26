@@ -276,6 +276,13 @@ class GenEngineTest(AsyncTestCase):
             pass
         self.orphaned_callback()
 
+    def test_none(self):
+        @gen.engine
+        def f():
+            yield None
+            self.stop()
+        self.run_gen(f)
+
     def test_multi(self):
         @gen.engine
         def f():
@@ -746,6 +753,21 @@ class GenCoroutineTest(AsyncTestCase):
         namespace = exec_test(globals(), locals(), """
         async def f():
             await gen.Task(self.io_loop.add_callback)
+            return 42
+        """)
+        result = yield namespace['f']()
+        self.assertEqual(result, 42)
+        self.finished = True
+
+    @skipBefore35
+    @gen_test
+    def test_asyncio_sleep_zero(self):
+        # asyncio.sleep(0) turns into a special case (equivalent to
+        # `yield None`)
+        namespace = exec_test(globals(), locals(), """
+        async def f():
+            import asyncio
+            await asyncio.sleep(0)
             return 42
         """)
         result = yield namespace['f']()
