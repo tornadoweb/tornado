@@ -467,9 +467,8 @@ class WebSocketProtocol(object):
             self._abort()
         else:
             if result is not None:
-                self.stream.io_loop.add_future(gen.convert_yielded(result),
-                                               lambda f: f.result())
-
+                result = gen.convert_yielded(result)
+                self.stream.io_loop.add_future(result, lambda f: f.result())
             return result
 
     def on_connection_close(self):
@@ -881,7 +880,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         if not self.client_terminated:
             if handled_future:
                 # on_message is a coroutine, process more frames once it's done.
-                gen.convert_yielded(handled_future).add_done_callback(
+                handled_future.add_done_callback(
                     lambda future: self._receive_frame())
             else:
                 self._receive_frame()
