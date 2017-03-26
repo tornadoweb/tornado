@@ -219,10 +219,27 @@ class SubprocessTest(AsyncTestCase):
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c',
                               'import time; time.sleep(30)'],
+                             stdout=Subprocess.STREAM,
                              io_loop=self.io_loop)
         subproc.set_exit_callback(self.stop)
         os.kill(subproc.pid, signal.SIGTERM)
-        ret = self.wait()
+        try:
+            ret = self.wait(timeout=1.0)
+        except AssertionError:
+            # We failed to get the termination signal. This test is
+            # occasionally flaky on pypy, so try to get a little more
+            # information: did the process close its stdout
+            # (indicating that the problem is in the parent process's
+            # signal handling) or did the child process somehow fail
+            # to terminate?
+            subproc.stdout.read_until_close(callback=self.stop)
+            try:
+                self.wait(timeout=1.0)
+            except AssertionError:
+                raise AssertionError("subprocess failed to terminate")
+            else:
+                raise AssertionError("subprocess closed stdout but failed to "
+                                     "get termination signal")
         self.assertEqual(subproc.returncode, ret)
         self.assertEqual(ret, -signal.SIGTERM)
 
