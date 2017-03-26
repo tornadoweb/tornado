@@ -374,11 +374,15 @@ class BaseIOStream(object):
 
         If no ``callback`` is given, this method returns a `.Future` that
         resolves (with a result of ``None``) when the write has been
-        completed.  If `write` is called again before that `.Future` has
-        resolved, the previous future will be orphaned and will never resolve.
+        completed.
+
+        The ``data`` argument may be of type `bytes` or `memoryview`.
 
         .. versionchanged:: 4.0
             Now returns a `.Future` if no callback is given.
+
+        .. versionchanged:: 4.5
+            Added support for `memoryview` arguments.
         """
         self._check_closed()
         if data:

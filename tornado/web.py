@@ -1864,6 +1864,8 @@ class Application(ReversibleRouter):
     `StaticFileHandler` can be specified with the
     ``static_handler_class`` setting.
 
+    .. versionchanged:: 4.5
+       Integration with the new `tornado.routing` module.
     """
     def __init__(self, handlers=None, default_host=None, transforms=None,
                  **settings):
@@ -2248,6 +2250,9 @@ class RedirectHandler(RequestHandler):
 
     Use Python's :ref:`format string syntax <formatstrings>` to customize how
     values are substituted.
+
+    .. versionchanged:: 4.5
+       Added support for substitutions into the destination URL.
     """
     def initialize(self, url, permanent=True):
         self._url = url

@@ -169,6 +169,9 @@ class TCPClient(object):
 
         Similarly, when the user requires a certain source port, it can
         be specified using the ``source_port`` arg.
+
+        .. versionchanged:: 4.5
+           Added the ``source_ip`` and ``source_port`` arguments.
         """
         addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(

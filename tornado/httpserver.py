@@ -131,6 +131,9 @@ class HTTPServer(TCPServer, Configurable,
 
     .. versionchanged:: 4.2
        `HTTPServer` is now a subclass of `tornado.util.Configurable`.
+
+    .. versionchanged:: 4.5
+       Added the ``trusted_downstream`` argument.
     """
     def __init__(self, *args, **kwargs):
         # Ignore args to __init__; real initialization belongs in

@@ -339,6 +339,8 @@ def _make_coroutine_wrapper(func, replace_callback):
 def is_coroutine_function(func):
     """Return whether *func* is a coroutine function, i.e. a function
     wrapped with `~.gen.coroutine`.
+
+    .. versionadded:: 4.5
     """
     return getattr(func, '__tornado_coroutine__', False)
 
@@ -961,6 +963,9 @@ coroutines that are likely to yield Futures that are ready instantly.
 Usage: ``yield gen.moment``
 
 .. versionadded:: 4.0
+
+.. deprecated:: 4.5
+   ``yield None`` is now equivalent to ``yield gen.moment``.
 """
 moment.set_result(None)
 

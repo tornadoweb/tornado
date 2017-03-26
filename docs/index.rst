@@ -66,7 +66,7 @@ installed in this way, so you may wish to download a copy of the
 source tarball or clone the `git repository
 <https://github.com/tornadoweb/tornado>`_ as well.
 
-**Prerequisites**: Tornado 4.3 runs on Python 2.7, and 3.3+
+**Prerequisites**: Tornado runs on Python 2.7, and 3.3+
 For Python 2, version 2.7.9 or newer is *strongly*
 recommended for the improved SSL support. In addition to the requirements
 which will be installed automatically by ``pip`` or ``setup.py install``,
@@ -77,8 +77,7 @@ the following optional packages may be useful:
   `~tornado.netutil.ThreadedResolver`.  It is needed only on Python 2;
   Python 3 includes this package in the standard library.
 * `pycurl <http://pycurl.sourceforge.net>`_ is used by the optional
-  ``tornado.curl_httpclient``.  Libcurl version 7.19.3.1 or higher is required;
-  version 7.21.1 or higher is recommended.
+  ``tornado.curl_httpclient``.  Libcurl version 7.22 or higher is required.
 * `Twisted <http://www.twistedmatrix.com>`_ may be used with the classes in
   `tornado.platform.twisted`.
 * `pycares <https://pypi.python.org/pypi/pycares>`_ is an alternative

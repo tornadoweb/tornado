@@ -71,6 +71,8 @@
       before those methods are called, so the values are available
       during `prepare`.
 
+   .. automethod:: RequestHandler.data_received
+
    Output
    ^^^^^^
 
@@ -89,8 +91,10 @@
    .. automethod:: RequestHandler.send_error
    .. automethod:: RequestHandler.write_error
    .. automethod:: RequestHandler.clear
-   .. automethod:: RequestHandler.data_received
-
+   .. automethod:: RequestHandler.render_linked_js
+   .. automethod:: RequestHandler.render_embed_js
+   .. automethod:: RequestHandler.render_linked_css
+   .. automethod:: RequestHandler.render_embed_css
 
    Cookies
    ^^^^^^^

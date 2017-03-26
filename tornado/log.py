@@ -95,6 +95,10 @@ class LogFormatter(logging.Formatter):
     See the colorama documentation for details.
 
     __ https://pypi.python.org/pypi/colorama
+
+    .. versionchanged:: 4.5
+       Added support for ``colorama``. Changed the constructor
+       signature to be compatible with `logging.config.dictConfig`.
     """
     DEFAULT_FORMAT = '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s'
     DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'

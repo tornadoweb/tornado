@@ -126,6 +126,13 @@ class WebSocketHandler(tornado.web.RequestHandler):
     to show the "accept this certificate" dialog but has nowhere to show it.
     You must first visit a regular HTML page using the same certificate
     to accept it before the websocket connection will succeed.
+
+    If the application setting ``websocket_ping_interval`` has a non-zero
+    value, a ping will be sent periodically, and the connection will be
+    closed if a response is not received before the ``websocket_ping_timeout``.
+
+    .. versionchanged:: 4.5
+       Added ``websocket_ping_interval`` and ``websocket_ping_timeout``.
     """
     def __init__(self, application, request, **kwargs):
         super(WebSocketHandler, self).__init__(application, request, **kwargs)
@@ -194,7 +201,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
     def ping_interval(self):
         """The interval for websocket keep-alive pings.
 
-        Set ws_ping_interval = 0 to disable pings.
+        Set websocket_ping_interval = 0 to disable pings.
         """
         return self.settings.get('websocket_ping_interval', None)
 
@@ -250,11 +257,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
         will be enabled.  The contents of the dict may be used to
         control the following compression options:
 
-        ``compression_level`` specifies the compression level. 
+        ``compression_level`` specifies the compression level.
 
         ``mem_level`` specifies the amount of memory used for the internal compression state.
-         
-         These parameters are documented in details here: https://docs.python.org/3.6/library/zlib.html#zlib.compressobj
+
+         These parameters are documented in details here:
+         https://docs.python.org/3.6/library/zlib.html#zlib.compressobj
 
         .. versionadded:: 4.1
 
