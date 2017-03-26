@@ -193,7 +193,11 @@ def exec_in(code, glob, loc=None):
 if PY3:
     exec("""
 def raise_exc_info(exc_info):
-    raise exc_info[1].with_traceback(exc_info[2])
+    try:
+        raise exc_info[1].with_traceback(exc_info[2])
+    finally:
+        exc_info = None
+
 """)
 else:
     exec("""

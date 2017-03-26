@@ -315,6 +315,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                     future.set_exc_info(sys.exc_info())
                 else:
                     _futures_to_runners[future] = Runner(result, future, yielded)
+                yielded = None
                 try:
                     return future
                 finally:
@@ -990,6 +991,7 @@ class Runner(object):
         # of the coroutine.
         self.stack_context_deactivate = None
         if self.handle_yield(first_yielded):
+            gen = result_future = first_yielded = None
             self.run()
 
     def register_callback(self, key):
@@ -1046,10 +1048,15 @@ class Runner(object):
                     except Exception:
                         self.had_exception = True
                         exc_info = sys.exc_info()
+                    future = None
 
                     if exc_info is not None:
-                        yielded = self.gen.throw(*exc_info)
-                        exc_info = None
+                        try:
+                            yielded = self.gen.throw(*exc_info)
+                        finally:
+                            # Break up a reference to itself
+                            # for faster GC on CPython.
+                            exc_info = None
                     else:
                         yielded = self.gen.send(value)
 
@@ -1082,6 +1089,7 @@ class Runner(object):
                     return
                 if not self.handle_yield(yielded):
                     return
+                yielded = None
         finally:
             self.running = False
 
@@ -1130,8 +1138,11 @@ class Runner(object):
                 self.future.set_exc_info(sys.exc_info())
 
         if not self.future.done() or self.future is moment:
+            def inner(f):
+                f = None
+                self.run()
             self.io_loop.add_future(
-                self.future, lambda f: self.run())
+                self.future, inner)
             return False
         return True
 

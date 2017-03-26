@@ -234,7 +234,10 @@ class Future(object):
         if self._result is not None:
             return self._result
         if self._exc_info is not None:
-            raise_exc_info(self._exc_info)
+            try:
+                raise_exc_info(self._exc_info)
+            finally:
+                self = None
         self._check_done()
         return self._result
 

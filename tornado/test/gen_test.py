@@ -1014,6 +1014,31 @@ class GenCoroutineTest(AsyncTestCase):
 
         self.finished = True
 
+    @skipNotCPython
+    def test_coroutine_refcounting(self):
+        # On CPython, tasks and their arguments should be released immediately
+        # without waiting for garbage collection.
+        @gen.coroutine
+        def inner():
+            class Foo(object):
+                pass
+            local_var = Foo()
+            self.local_ref = weakref.ref(local_var)
+            yield gen.coroutine(lambda: None)()
+            raise ValueError('Some error')
+
+        @gen.coroutine
+        def inner2():
+            try:
+                yield inner()
+            except ValueError:
+                pass
+
+        self.io_loop.run_sync(inner2, timeout=3)
+
+        self.assertIs(self.local_ref(), None)
+        self.finished = True
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
