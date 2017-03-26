@@ -3,7 +3,7 @@ environment:
   global:
     TORNADO_EXTENSION: "1"
 
-  # We only build with 3.5 because it works out of the box, while other
+  # We only build with 3.5+ because it works out of the box, while other
   # versions require lots of machinery.
   matrix:
     - PYTHON: "C:\\Python35"
@@ -12,6 +12,14 @@ environment:
 
     - PYTHON: "C:\\Python35-x64"
       PYTHON_VERSION: "3.5.x"
+      PYTHON_ARCH: "64"
+
+    - PYTHON: "C:\\Python36"
+      PYTHON_VERSION: "3.6.x"
+      PYTHON_ARCH: "32"
+
+    - PYTHON: "C:\\Python36-x64"
+      PYTHON_VERSION: "3.6.x"
       PYTHON_ARCH: "64"
 
 install:
@@ -32,11 +40,11 @@ build: false  # Not a C# project, build stuff at the test step instead.
 
 test_script:
   # Build the compiled extension and run the project tests.
-  # This is a bit of a hack that won't scale when py36 is out,
+  # This is a bit of a hack that doesn't scale with new python versions,
   # but for now it lets us avoid duplication with .travis.yml and tox.ini.
-  # Running "py35-full" would be nice but it's failing on installing
+  # Running "py3x-full" would be nice but it's failing on installing
   # dependencies with no useful logs.
-  - "tox -e py35"
+  - "tox -e py35,py36 --skip-missing-interpreters"
 
 after_test:
   # If tests are successful, create binary packages for the project.
