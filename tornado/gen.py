@@ -243,7 +243,7 @@ def coroutine(func, replace_callback=True):
        to `.IOLoop.add_future`.
 
     """
-    return _make_coroutine_wrapper(func, replace_callback=True)
+    return _make_coroutine_wrapper(func, replace_callback=replace_callback)
 
 # Ties lifetime of runners to their result futures. Github Issue #1769
 # Generators, like any object in Python, must be strong referenced

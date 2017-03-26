@@ -1014,6 +1014,33 @@ class GenCoroutineTest(AsyncTestCase):
 
         self.finished = True
 
+    @gen_test
+    def test_callback_swallow(self):
+        """
+        Test optional callback kwarg swallowing
+        """
+        kwarg_history = []
+        def undecorated_method(**kwargs):
+            kwarg_history.append(kwargs)
+
+        swallows_callback = gen.coroutine(
+                undecorated_method, replace_callback=True)
+
+        leaves_callback = gen.coroutine(
+                undecorated_method, replace_callback=False)
+
+        cb = lambda x:None
+
+        yield swallows_callback(callback=cb)
+        self.assertEqual(kwarg_history[0], {},
+                "callback arg is swallowed")
+
+        yield leaves_callback(callback=cb)
+        self.assertEqual(kwarg_history[1], {'callback':cb},
+                "callback arg is left intact")
+
+        self.finished = True
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
