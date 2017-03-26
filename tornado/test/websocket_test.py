@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import functools
 import sys
 import traceback
 
@@ -58,14 +59,34 @@ class ErrorInOnMessageHandler(TestWebSocketHandler):
 
 class HeaderHandler(TestWebSocketHandler):
     def open(self):
-        try:
-            # In a websocket context, many RequestHandler methods
-            # raise RuntimeErrors.
-            self.set_status(503)
-            raise Exception("did not get expected exception")
-        except RuntimeError:
-            pass
+        methods_to_test = [
+            functools.partial(self.write, 'This should not work'),
+            functools.partial(self.redirect, 'http://localhost/elsewhere'),
+            functools.partial(self.set_header, 'X-Test', ''),
+            functools.partial(self.set_cookie, 'Chocolate', 'Chip'),
+            functools.partial(self.set_status, 503),
+            self.flush,
+            self.finish,
+        ]
+        for method in methods_to_test:
+            try:
+                # In a websocket context, many RequestHandler methods
+                # raise RuntimeErrors.
+                method()
+                raise Exception("did not get expected exception")
+            except RuntimeError:
+                pass
         self.write_message(self.request.headers.get('X-Test', ''))
+
+
+class HeaderEchoHandler(TestWebSocketHandler):
+    def set_default_headers(self):
+        self.set_header("X-Extra-Response-Header", "Extra-Response-Value")
+
+    def prepare(self):
+        for k, v in self.request.headers.get_all():
+            if k.lower().startswith('x-test'):
+                self.set_header(k, v)
 
 
 class NonWebSocketHandler(RequestHandler):
@@ -135,6 +156,8 @@ class WebSocketTest(WebSocketBaseTestCase):
             ('/echo', EchoHandler, dict(close_future=self.close_future)),
             ('/non_ws', NonWebSocketHandler),
             ('/header', HeaderHandler, dict(close_future=self.close_future)),
+            ('/header_echo', HeaderEchoHandler,
+             dict(close_future=self.close_future)),
             ('/close_reason', CloseReasonHandler,
              dict(close_future=self.close_future)),
             ('/error_in_on_message', ErrorInOnMessageHandler,
@@ -151,6 +174,13 @@ class WebSocketTest(WebSocketBaseTestCase):
         # WS server, HTTP client.
         response = self.fetch('/echo')
         self.assertEqual(response.code, 400)
+
+    def test_bad_websocket_version(self):
+        response = self.fetch('/echo',
+                              headers={'Connection': 'Upgrade',
+                                       'Upgrade': 'WebSocket',
+                                       'Sec-WebSocket-Version': '12'})
+        self.assertEqual(response.code, 426)
 
     @gen_test
     def test_websocket_gen(self):
@@ -238,6 +268,18 @@ class WebSocketTest(WebSocketBaseTestCase):
                         headers={'X-Test': 'hello'}))
         response = yield ws.read_message()
         self.assertEqual(response, 'hello')
+        yield self.close(ws)
+
+    @gen_test
+    def test_websocket_header_echo(self):
+        # Ensure that headers can be returned in the response.
+        # Specifically, that arbitrary headers passed through websocket_connect
+        # can be returned.
+        ws = yield websocket_connect(
+            HTTPRequest('ws://127.0.0.1:%d/header_echo' % self.get_http_port(),
+                        headers={'X-Test-Hello': 'hello'}))
+        self.assertEqual(ws.headers.get('X-Test-Hello'), 'hello')
+        self.assertEqual(ws.headers.get('X-Extra-Response-Header'), 'Extra-Response-Value')
         yield self.close(ws)
 
     @gen_test
