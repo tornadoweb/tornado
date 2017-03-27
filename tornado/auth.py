@@ -929,8 +929,7 @@ class FacebookGraphMixin(OAuth2Mixin):
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
                                code, callback, extra_fields=None):
-        """
-        Handles the login for the Facebook user, returning a user object.
+        """Handles the login for the Facebook user, returning a user object.
 
         Example usage:
 
