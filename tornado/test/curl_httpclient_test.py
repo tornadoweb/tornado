@@ -1,3 +1,4 @@
+# coding: utf-8
 from __future__ import absolute_import, division, print_function, with_statement
 
 from hashlib import md5
@@ -12,7 +13,7 @@ from tornado.web import Application, RequestHandler
 
 
 try:
-    import pycurl
+    import pycurl  # type: ignore
 except ImportError:
     pycurl = None
 
@@ -83,8 +84,7 @@ class CustomFailReasonHandler(RequestHandler):
 class CurlHTTPClientTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(CurlHTTPClientTestCase, self).setUp()
-        self.http_client = CurlAsyncHTTPClient(self.io_loop,
-                                               defaults=dict(allow_ipv6=False))
+        self.http_client = self.create_client()
 
     def get_app(self):
         return Application([
@@ -92,6 +92,11 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
             ('/custom_reason', CustomReasonHandler),
             ('/custom_fail_reason', CustomFailReasonHandler),
         ])
+
+    def create_client(self, **kwargs):
+        return CurlAsyncHTTPClient(self.io_loop, force_instance=True,
+                                   defaults=dict(allow_ipv6=False),
+                                   **kwargs)
 
     def test_prepare_curl_callback_stack_context(self):
         exc_info = []
@@ -122,3 +127,8 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
         response = self.fetch('/custom_fail_reason')
         self.assertEqual(str(response.error), "HTTP 400: Custom reason")
 
+    def test_failed_setup(self):
+        self.http_client = self.create_client(max_clients=1)
+        for i in range(5):
+            response = self.fetch(u'/ユニコード')
+            self.assertIsNot(response.error, None)

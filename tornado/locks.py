@@ -14,12 +14,12 @@
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-__all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore', 'Lock']
-
 import collections
 
 from tornado import gen, ioloop
 from tornado.concurrent import Future
+
+__all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore', 'Lock']
 
 
 class _TimeoutGarbageCollector(object):
@@ -465,7 +465,7 @@ class Lock(object):
     ...
     ...    # Now the lock is released.
 
-    .. versionchanged:: 3.5
+    .. versionchanged:: 4.3
        Added ``async with`` support in Python 3.5.
 
     """

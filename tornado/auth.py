@@ -83,22 +83,15 @@ from tornado import escape
 from tornado.httputil import url_concat
 from tornado.log import gen_log
 from tornado.stack_context import ExceptionStackContext
-from tornado.util import u, unicode_type, ArgReplacer
+from tornado.util import unicode_type, ArgReplacer, PY3
 
-try:
-    import urlparse  # py2
-except ImportError:
-    import urllib.parse as urlparse  # py3
-
-try:
-    import urllib.parse as urllib_parse  # py3
-except ImportError:
-    import urllib as urllib_parse  # py2
-
-try:
-    long  # py2
-except NameError:
-    long = int  # py3
+if PY3:
+    import urllib.parse as urlparse
+    import urllib.parse as urllib_parse
+    long = int
+else:
+    import urlparse
+    import urllib as urllib_parse
 
 
 class AuthError(Exception):
@@ -189,7 +182,7 @@ class OpenIdMixin(object):
         """
         # Verify the OpenID response via direct request to the OP
         args = dict((k, v[-1]) for k, v in self.request.arguments.items())
-        args["openid.mode"] = u("check_authentication")
+        args["openid.mode"] = u"check_authentication"
         url = self._OPENID_ENDPOINT
         if http_client is None:
             http_client = self.get_auth_http_client()
@@ -256,13 +249,13 @@ class OpenIdMixin(object):
         ax_ns = None
         for name in self.request.arguments:
             if name.startswith("openid.ns.") and \
-                    self.get_argument(name) == u("http://openid.net/srv/ax/1.0"):
+                    self.get_argument(name) == u"http://openid.net/srv/ax/1.0":
                 ax_ns = name[10:]
                 break
 
         def get_ax_arg(uri):
             if not ax_ns:
-                return u("")
+                return u""
             prefix = "openid." + ax_ns + ".type."
             ax_name = None
             for name in self.request.arguments.keys():
@@ -271,8 +264,8 @@ class OpenIdMixin(object):
                     ax_name = "openid." + ax_ns + ".value." + part
                     break
             if not ax_name:
-                return u("")
-            return self.get_argument(ax_name, u(""))
+                return u""
+            return self.get_argument(ax_name, u"")
 
         email = get_ax_arg("http://axschema.org/contact/email")
         name = get_ax_arg("http://axschema.org/namePerson")
@@ -291,7 +284,7 @@ class OpenIdMixin(object):
         if name:
             user["name"] = name
         elif name_parts:
-            user["name"] = u(" ").join(name_parts)
+            user["name"] = u" ".join(name_parts)
         elif email:
             user["name"] = email.split("@")[0]
         if email:
@@ -936,7 +929,8 @@ class FacebookGraphMixin(OAuth2Mixin):
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
                                code, callback, extra_fields=None):
-        """Handles the login for the Facebook user, returning a user object.
+        """
+        Handles the login for the Facebook user, returning a user object.
 
         Example usage:
 
@@ -986,19 +980,9 @@ class FacebookGraphMixin(OAuth2Mixin):
             future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
             return
 
-        try:
-            """
-            Facebook graph API versions 2.3+ return JSON instead of query strings
-            in the response body
-            """
-            args = json.loads(response.body)
-            access_token = args.get("access_token")
-        except ValueError:
-            args = urlparse.parse_qs(escape.native_str(response.body))
-            access_token = args["access_token"][-1]
-
+        args = escape.json_decode(response.body)
         session = {
-            "access_token": access_token,
+            "access_token": args.get("access_token"),
             "expires": args.get("expires")
         }
 
@@ -1007,6 +991,9 @@ class FacebookGraphMixin(OAuth2Mixin):
             callback=functools.partial(
                 self._on_get_user_info, future, session, fields),
             access_token=session["access_token"],
+            appsecret_proof=hmac.new(key=client_secret.encode('utf8'),
+                                     msg=session["access_token"].encode('utf8'),
+                                     digestmod=hashlib.sha256).hexdigest(),
             fields=",".join(fields)
         )
 

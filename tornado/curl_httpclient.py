@@ -21,7 +21,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import collections
 import functools
 import logging
-import pycurl
+import pycurl  # type: ignore
 import threading
 import time
 from io import BytesIO
@@ -221,6 +221,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                         # _process_queue() is called from
                         # _finish_pending_requests the exceptions have
                         # nowhere to go.
+                        self._free_list.append(curl)
                         callback(HTTPResponse(
                             request=request,
                             code=599,
@@ -277,6 +278,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if curl_log.isEnabledFor(logging.DEBUG):
             curl.setopt(pycurl.VERBOSE, 1)
             curl.setopt(pycurl.DEBUGFUNCTION, self._curl_debug)
+        if hasattr(pycurl,'PROTOCOLS'): # PROTOCOLS first appeared in pycurl 7.19.5 (2014-07-12)
+            curl.setopt(pycurl.PROTOCOLS, pycurl.PROTO_HTTP|pycurl.PROTO_HTTPS)
+            curl.setopt(pycurl.REDIR_PROTOCOLS, pycurl.PROTO_HTTP|pycurl.PROTO_HTTPS)
         return curl
 
     def _curl_setup_request(self, curl, request, buffer, headers):
@@ -341,6 +345,15 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 credentials = '%s:%s' % (request.proxy_username,
                                          request.proxy_password)
                 curl.setopt(pycurl.PROXYUSERPWD, credentials)
+
+            if (request.proxy_auth_mode is None or
+                    request.proxy_auth_mode == "basic"):
+                curl.setopt(pycurl.PROXYAUTH, pycurl.HTTPAUTH_BASIC)
+            elif request.proxy_auth_mode == "digest":
+                curl.setopt(pycurl.PROXYAUTH, pycurl.HTTPAUTH_DIGEST)
+            else:
+                raise ValueError(
+                    "Unsupported proxy_auth_mode %s" % request.proxy_auth_mode)
         else:
             curl.setopt(pycurl.PROXY, '')
             curl.unsetopt(pycurl.PROXYUSERPWD)
@@ -461,7 +474,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             request.prepare_curl_callback(curl)
 
     def _curl_header_callback(self, headers, header_callback, header_line):
-        header_line = native_str(header_line)
+        header_line = native_str(header_line.decode('latin1'))
         if header_callback is not None:
             self.io_loop.add_callback(header_callback, header_line)
         # header_line as returned by curl includes the end-of-line characters.

@@ -22,32 +22,26 @@ have crept in over time.
 
 from __future__ import absolute_import, division, print_function, with_statement
 
-import re
-import sys
-
-from tornado.util import unicode_type, basestring_type, u
-
-try:
-    from urllib.parse import parse_qs as _parse_qs  # py3
-except ImportError:
-    from urlparse import parse_qs as _parse_qs  # Python 2.6+
-
-try:
-    import htmlentitydefs  # py2
-except ImportError:
-    import html.entities as htmlentitydefs  # py3
-
-try:
-    import urllib.parse as urllib_parse  # py3
-except ImportError:
-    import urllib as urllib_parse  # py2
-
 import json
+import re
+
+from tornado.util import PY3, unicode_type, basestring_type
+
+if PY3:
+    from urllib.parse import parse_qs as _parse_qs
+    import html.entities as htmlentitydefs
+    import urllib.parse as urllib_parse
+    unichr = chr
+else:
+    from urlparse import parse_qs as _parse_qs
+    import htmlentitydefs
+    import urllib as urllib_parse
 
 try:
-    unichr
-except NameError:
-    unichr = chr
+    import typing  # noqa
+except ImportError:
+    pass
+
 
 _XHTML_ESCAPE_RE = re.compile('[&<>"\']')
 _XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
@@ -116,7 +110,7 @@ def url_escape(value, plus=True):
 # python 3 changed things around enough that we need two separate
 # implementations of url_unescape.  We also need our own implementation
 # of parse_qs since python 3's version insists on decoding everything.
-if sys.version_info[0] < 3:
+if not PY3:
     def url_unescape(value, encoding='utf-8', plus=True):
         """Decodes the given value from a URL.
 
@@ -191,6 +185,7 @@ _UTF8_TYPES = (bytes, type(None))
 
 
 def utf8(value):
+    # type: (typing.Union[bytes,unicode_type,None])->typing.Union[bytes,None]
     """Converts a string argument to a byte string.
 
     If the argument is already a byte string or None, it is returned unchanged.
@@ -366,7 +361,7 @@ def linkify(text, shorten=False, extra_params="",
                     # have a status bar, such as Safari by default)
                     params += ' title="%s"' % href
 
-        return u('<a href="%s"%s>%s</a>') % (href, params, url)
+        return u'<a href="%s"%s>%s</a>' % (href, params, url)
 
     # First HTML-escape so that our strings are all safe.
     # The regex is modified to avoid character entites other than &amp; so

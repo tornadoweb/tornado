@@ -1,46 +1,43 @@
 # https://travis-ci.org/tornadoweb/tornado
 language: python
 python:
-    - 2.6
+    - 2.7.8
     - 2.7
     - pypy
-    - 3.2
     - 3.3
     - 3.4
     - 3.5
+    - 3.6
     - nightly
     - pypy3
 
-env:
-    - DEPS=true
-    - DEPS=false
-
 install:
-    # always install unittest2 on py26 even if $DEPS is unset
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then travis_retry pip install unittest2; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then travis_retry pip install futures mock Monotime trollius; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' && $DEPS == true ]]; then travis_retry pip install futures mock; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install futures mock monotonic trollius; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then travis_retry pip install futures mock; fi
     # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
-    #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry pip install pycares; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry pip install pycurl; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.2' && $DEPS == true ]]; then travis_retry pip install mock; fi
+    #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycares; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycurl; fi
     # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then travis_retry pip install Twisted; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' && $DEPS == true ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install Twisted; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' || $TRAVIS_PYTHON_VERSION == '3.5' || $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
-    # Coverage 4.0 no longer supports py32. Install an older version before
-    # codecov tries to install the latest.
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.2' ]]; then travis_retry pip install 'coverage<4.0'; fi
     - travis_retry pip install codecov
+    # Create a separate no-dependencies virtualenv to make sure all imports
+    # of optional-dependencies are guarded.
+    - virtualenv ./nodeps
+    - ./nodeps/bin/python setup.py install
     - curl-config --version; pip freeze
 
 script:
-    # Get out of the source directory before running tests to avoid PYTHONPATH
-    # confusion.  This is necessary to ensure that the speedups module can
-    # be found in the installation directory.
+    # Run the tests once from the source directory to detect issues
+    # involving relative __file__ paths; see
+    # https://github.com/tornadoweb/tornado/issues/1780
+    - unset TORNADO_EXTENSION && python -m tornado.test
+    # For all other test variants, get out of the source directory before
+    # running tests to ensure that we get the installed speedups module
+    # instead of the source directory which doesn't have it.
     - cd maint
     # Copy the coveragerc down so coverage.py can find it.
     - cp ../.coveragerc .
@@ -50,36 +47,35 @@ script:
     # the default timeout of 5s.
     - export ASYNC_TEST_TIMEOUT=15
     # We use "python -m coverage" instead of the "bin/coverage" script
-    # so we can pass additional arguments to python.  However, this doesn't
-    # work on 2.6, so skip coverage on that version.
+    # so we can pass additional arguments to python.
     # coverage needs a function that was removed in python 3.6 so we can't
     # run it with nightly cpython.
-    - if [[ $TRAVIS_PYTHON_VERSION != 2.6 && $TRAVIS_PYTHON_VERSION != nightly ]]; then export TARGET="-m coverage run $TARGET"; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then export TARGET="-m coverage run $TARGET"; fi
     - python $TARGET
     - python $TARGET --ioloop=tornado.platform.select.SelectIOLoop
     - python -O $TARGET
     - LANG=C python $TARGET
     - LANG=en_US.utf-8 python $TARGET
     - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python -bb $TARGET; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != pypy* && $DEPS == true ]]; then python $TARGET --resolver=tornado.netutil.ThreadedResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != '3.2' && $TRAVIS_PYTHON_VERSION != 'pypy'* && $DEPS == true ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 3.4 || $TRAVIS_PYTHON_VERSION == 3.5 ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* && $DEPS == true ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
-    #- if [[ $TRAVIS_PYTHON_VERSION != pypy* && $DEPS == true ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 3* && $TRAVIS_PYTHON_VERSION != '3.2' ]]; then python $TARGET --ioloop_time_monotonic; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.netutil.ThreadedResolver; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop_time_monotonic; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 3.4 || $TRAVIS_PYTHON_VERSION == 3.5 || $TRAVIS_PYTHON_VERSION == 3.6 ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
+    #- if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python $TARGET --ioloop_time_monotonic; fi
+    - ../nodeps/bin/python -m tornado.test.runtests
     # make coverage reports for Codecov to find
-    - if [[ $TRAVIS_PYTHON_VERSION != 2.6 && $TRAVIS_PYTHON_VERSION != nightly ]]; then coverage xml; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then coverage xml; fi
     - export TORNADO_EXTENSION=0
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' && $DEPS == true ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' || $TRAVIS_PYTHON_VERSION == 3.6 ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' || $TRAVIS_PYTHON_VERSION == '3.5' || $TRAVIS_PYTHON_VERSION == 3.6 ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
 
 after_success:
     # call codecov from project root
-    - if [[ $TRAVIS_PYTHON_VERSION != 2.6 && $TRAVIS_PYTHON_VERSION != nightly ]]; then cd ../ && codecov -e DEPS; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then cd ../ && codecov; fi
 
 # This reportedly works around an issue downloading packages from pypi on
 # travis.  Consider removing this after the underlying issue is fixed.

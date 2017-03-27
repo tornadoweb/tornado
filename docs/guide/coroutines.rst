@@ -40,9 +40,10 @@ Python 3.5: ``async`` and ``await``
 
 Python 3.5 introduces the ``async`` and ``await`` keywords (functions
 using these keywords are also called "native coroutines"). Starting in
-Tornado 4.3, you can use them in place of ``yield``-based coroutines.
-Simply use ``async def foo()`` in place of a function definition with
-the ``@gen.coroutine`` decorator, and ``await`` in place of yield. The
+Tornado 4.3, you can use them in place of most ``yield``-based
+coroutines (see the following paragraphs for limitations). Simply use
+``async def foo()`` in place of a function definition with the
+``@gen.coroutine`` decorator, and ``await`` in place of yield. The
 rest of this document still uses the ``yield`` style for compatibility
 with older versions of Python, but ``async`` and ``await`` will run
 faster when they are available::
@@ -55,9 +56,14 @@ faster when they are available::
 The ``await`` keyword is less versatile than the ``yield`` keyword.
 For example, in a ``yield``-based coroutine you can yield a list of
 ``Futures``, while in a native coroutine you must wrap the list in
-`tornado.gen.multi`. You can also use `tornado.gen.convert_yielded`
+`tornado.gen.multi`. This also eliminates the integration with
+`concurrent.futures`. You can use `tornado.gen.convert_yielded`
 to convert anything that would work with ``yield`` into a form that
-will work with ``await``.
+will work with ``await``::
+
+    async def f():
+        executor = concurrent.futures.ThreadPoolExecutor()
+        await tornado.gen.convert_yielded(executor.submit(g))
 
 While native coroutines are not visibly tied to a particular framework
 (i.e. they do not use a decorator like `tornado.gen.coroutine` or
@@ -143,7 +149,11 @@ the `.IOLoop` will log a stack trace::
     # we pass the function object to be called by the IOLoop.
     IOLoop.current().spawn_callback(divide, 1, 0)
 
-Finally, at the top level of a program, *if the `.IOLoop` is not yet
+Using `.IOLoop.spawn_callback` in this way is *recommended* for
+functions using ``@gen.coroutine``, but it is *required* for functions
+using ``async def`` (otherwise the coroutine runner will not start).
+
+Finally, at the top level of a program, *if the IOLoop is not yet
 running,* you can start the `.IOLoop`, run the coroutine, and then
 stop the `.IOLoop` with the `.IOLoop.run_sync` method. This is often
 used to start the ``main`` function of a batch-oriented program::
@@ -235,6 +245,12 @@ immediately, so you can start another operation before waiting:
 .. testoutput::
    :hide:
 
+This pattern is most usable with ``@gen.coroutine``. If
+``fetch_next_chunk()`` uses ``async def``, then it must be called as
+``fetch_future =
+tornado.gen.convert_yielded(self.fetch_next_chunk())`` to start the
+background processing.
+
 Looping
 ^^^^^^^
 
@@ -242,7 +258,7 @@ Looping is tricky with coroutines since there is no way in Python
 to ``yield`` on every iteration of a ``for`` or ``while`` loop and
 capture the result of the yield.  Instead, you'll need to separate
 the loop condition from accessing the results, as in this example
-from `Motor <http://motor.readthedocs.org/en/stable/>`_::
+from `Motor <https://motor.readthedocs.io/en/stable/>`_::
 
     import motor
     db = motor.MotorClient().test

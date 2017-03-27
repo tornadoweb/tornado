@@ -1,0 +1,95 @@
+What's new in Tornado 4.4
+=========================
+
+Jul 15, 2016
+------------
+
+General
+~~~~~~~
+
+* Tornado now requires Python 2.7 or 3.3+; versions 2.6 and 3.2 are no
+  longer supported. Pypy3 is still supported even though its latest
+  release is mainly based on Python 3.2.
+* The `monotonic <https://pypi.python.org/pypi/monotonic>`_ package is
+  now supported as an alternative to `Monotime
+  <https://pypi.python.org/pypi/Monotime>`_ for monotonic clock support
+  on Python 2.
+
+``tornado.curl_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Failures in ``_curl_setup_request`` no longer cause the
+  ``max_clients`` pool to be exhausted.
+* Non-ascii header values are now handled correctly.
+
+`tornado.gen`
+~~~~~~~~~~~~~
+
+* `.with_timeout` now accepts any yieldable object (except
+  `.YieldPoint`), not just `tornado.concurrent.Future`.
+
+`tornado.httpclient`
+~~~~~~~~~~~~~~~~~~~~
+
+* The errors raised by timeouts now indicate what state the request
+  was in; the error message is no longer simply "599 Timeout".
+* Calling `repr` on a `tornado.httpclient.HTTPError` no longer raises
+  an error.
+
+`tornado.httpserver`
+~~~~~~~~~~~~~~~~~~~~
+
+* Int-like enums (including `http.HTTPStatus`) can now be used as
+  status codes.
+* Responses with status code ``204 No Content`` no longer emit a
+  ``Content-Length: 0`` header.
+
+`tornado.ioloop`
+~~~~~~~~~~~~~~~~
+
+* Improved performance when there are large numbers of active timeouts.
+
+`tornado.netutil`
+~~~~~~~~~~~~~~~~~
+
+* All included `.Resolver` implementations raise `IOError` (or a
+  subclass) for any resolution failure.
+
+`tornado.options`
+~~~~~~~~~~~~~~~~~
+
+* Options can now be modified with subscript syntax in addition to
+  attribute syntax.
+* The special variable ``__file__`` is now available inside config files.
+
+``tornado.simple_httpclient``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* HTTP/1.0 (not 1.1) responses without a ``Content-Length`` header now
+  work correctly.
+
+`tornado.tcpserver`
+~~~~~~~~~~~~~~~~~~~
+
+* `.TCPServer.bind` now accepts a ``reuse_port`` argument.
+
+`tornado.testing`
+~~~~~~~~~~~~~~~~~
+
+* Test sockets now always use ``127.0.0.1`` instead of ``localhost``.
+  This avoids conflicts when the automatically-assigned port is
+  available on IPv4 but not IPv6, or in unusual network configurations
+  when ``localhost`` has multiple IP addresses.
+
+`tornado.web`
+~~~~~~~~~~~~~
+
+* ``image/svg+xml`` is now on the list of compressible mime types.
+* Fixed an error on Python 3 when compression is used with multiple
+  ``Vary`` headers.
+
+`tornado.websocket`
+~~~~~~~~~~~~~~~~~~~
+
+* ``WebSocketHandler.__init__`` now uses `super`, which improves
+  support for multiple inheritance.

@@ -83,7 +83,7 @@ if __name__ == "__main__":
 import functools
 import logging
 import os
-import pkgutil
+import pkgutil  # type: ignore
 import sys
 import traceback
 import types
@@ -112,7 +112,7 @@ _has_execv = sys.platform != 'win32'
 _watched_files = set()
 _reload_hooks = []
 _reload_attempted = False
-_io_loops = weakref.WeakKeyDictionary()
+_io_loops = weakref.WeakKeyDictionary()  # type: ignore
 
 
 def start(io_loop=None, check_time=500):

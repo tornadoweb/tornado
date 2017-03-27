@@ -12,7 +12,7 @@ import threading
 import datetime
 from io import BytesIO
 
-from tornado.escape import utf8
+from tornado.escape import utf8, native_str
 from tornado import gen
 from tornado.httpclient import HTTPRequest, HTTPResponse, _RequestProxy, HTTPError, HTTPClient
 from tornado.httpserver import HTTPServer
@@ -23,7 +23,6 @@ from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
 from tornado.test.util import unittest, skipOnTravis
-from tornado.util import u
 from tornado.web import Application, RequestHandler, url
 from tornado.httputil import format_timestamp, HTTPHeaders
 
@@ -114,6 +113,15 @@ class AllMethodsHandler(RequestHandler):
 
     get = post = put = delete = options = patch = other = method
 
+
+class SetHeaderHandler(RequestHandler):
+    def get(self):
+        # Use get_arguments for keys to get strings, but
+        # request.arguments for values to get bytes.
+        for k, v in zip(self.get_arguments('k'),
+                        self.request.arguments['v']):
+            self.set_header(k, v)
+
 # These tests end up getting run redundantly: once here with the default
 # HTTPClient implementation, and then again in each implementation's own
 # test suite.
@@ -134,6 +142,7 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
             url("/304_with_content_length", ContentLength304Handler),
             url("/all_methods", AllMethodsHandler),
             url('/patch', PatchHandler),
+            url('/set_header', SetHeaderHandler),
         ], gzip=True)
 
     def test_patch_receives_payload(self):
@@ -271,7 +280,7 @@ Transfer-Encoding: chunked
                          response.body)
 
     def test_body_encoding(self):
-        unicode_body = u("\xe9")
+        unicode_body = u"\xe9"
         byte_body = binascii.a2b_hex(b"e9")
 
         # unicode string in body gets converted to utf8
@@ -291,7 +300,7 @@ Transfer-Encoding: chunked
         # break anything
         response = self.fetch("/echopost", method="POST", body=byte_body,
                               headers={"Content-Type": "application/blah"},
-                              user_agent=u("foo"))
+                              user_agent=u"foo")
         self.assertEqual(response.headers["Content-Length"], "1")
         self.assertEqual(response.body, byte_body)
 
@@ -363,7 +372,7 @@ Transfer-Encoding: chunked
         # in a plain dictionary or an HTTPHeaders object.
         # Keys must always be the native str type.
         # All combinations should have the same results on the wire.
-        for value in [u("MyUserAgent"), b"MyUserAgent"]:
+        for value in [u"MyUserAgent", b"MyUserAgent"]:
             for container in [dict, HTTPHeaders]:
                 headers = container()
                 headers['User-Agent'] = value
@@ -521,6 +530,12 @@ X-XSS-Protection: 1;
         response.rethrow()
         self.assertEqual(response.body, b"Put body: hello")
 
+    def test_non_ascii_header(self):
+        # Non-ascii headers are sent as latin1.
+        response = self.fetch("/set_header?k=foo&v=%E9")
+        response.rethrow()
+        self.assertEqual(response.headers["Foo"], native_str(u"\u00e9"))
+
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):
@@ -656,6 +671,15 @@ class HTTPErrorTestCase(unittest.TestCase):
         self.assertIsNot(e, e2)
         self.assertEqual(e.code, e2.code)
 
-    def test_str(self):
+    def test_plain_error(self):
         e = HTTPError(403)
         self.assertEqual(str(e), "HTTP 403: Forbidden")
+        self.assertEqual(repr(e), "HTTP 403: Forbidden")
+
+    def test_error_with_response(self):
+        resp = HTTPResponse(HTTPRequest('http://example.com/'), 403)
+        with self.assertRaises(HTTPError) as cm:
+            resp.rethrow()
+        e = cm.exception
+        self.assertEqual(str(e), "HTTP 403: Forbidden")
+        self.assertEqual(repr(e), "HTTP 403: Forbidden")

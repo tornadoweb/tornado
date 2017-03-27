@@ -83,16 +83,18 @@ import os
 import sys
 import textwrap
 import types
+import weakref
 
 from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
-from tornado.util import raise_exc_info
+from tornado.util import PY3, raise_exc_info
 
 try:
     try:
-        from functools import singledispatch  # py34+
+        # py34+
+        from functools import singledispatch  # type: ignore
     except ImportError:
         from singledispatch import singledispatch  # backport
 except ImportError:
@@ -108,12 +110,14 @@ except ImportError:
 
 try:
     try:
-        from collections.abc import Generator as GeneratorType  # py35+
+        # py35+
+        from collections.abc import Generator as GeneratorType  # type: ignore
     except ImportError:
-        from backports_abc import Generator as GeneratorType
+        from backports_abc import Generator as GeneratorType  # type: ignore
 
     try:
-        from inspect import isawaitable  # py35+
+        # py35+
+        from inspect import isawaitable  # type: ignore
     except ImportError:
         from backports_abc import isawaitable
 except ImportError:
@@ -121,12 +125,12 @@ except ImportError:
         raise
     from types import GeneratorType
 
-    def isawaitable(x):
+    def isawaitable(x):  # type: ignore
         return False
 
-try:
-    import builtins  # py3
-except ImportError:
+if PY3:
+    import builtins
+else:
     import __builtin__ as builtins
 
 
@@ -241,6 +245,24 @@ def coroutine(func, replace_callback=True):
     """
     return _make_coroutine_wrapper(func, replace_callback=True)
 
+# Ties lifetime of runners to their result futures. Github Issue #1769
+# Generators, like any object in Python, must be strong referenced
+# in order to not be cleaned up by the garbage collector. When using
+# coroutines, the Runner object is what strong-refs the inner
+# generator. However, the only item that strong-reffed the Runner
+# was the last Future that the inner generator yielded (via the
+# Future's internal done_callback list). Usually this is enough, but
+# it is also possible for this Future to not have any strong references
+# other than other objects referenced by the Runner object (usually
+# when using other callback patterns and/or weakrefs). In this
+# situation, if a garbage collection ran, a cycle would be detected and
+# Runner objects could be destroyed along with their inner generators
+# and everything in their local scope.
+# This map provides strong references to Runner objects as long as
+# their result future objects also have strong references (typically
+# from the parent coroutine's Runner). This keeps the coroutine's
+# Runner alive.
+_futures_to_runners = weakref.WeakKeyDictionary()
 
 def _make_coroutine_wrapper(func, replace_callback):
     """The inner workings of ``@gen.coroutine`` and ``@gen.engine``.
@@ -251,10 +273,11 @@ def _make_coroutine_wrapper(func, replace_callback):
     """
     # On Python 3.5, set the coroutine flag on our generator, to allow it
     # to be used with 'await'.
+    wrapped = func
     if hasattr(types, 'coroutine'):
         func = types.coroutine(func)
 
-    @functools.wraps(func)
+    @functools.wraps(wrapped)
     def wrapper(*args, **kwargs):
         future = TracebackFuture()
 
@@ -291,7 +314,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                 except Exception:
                     future.set_exc_info(sys.exc_info())
                 else:
-                    Runner(result, future, yielded)
+                    _futures_to_runners[future] = Runner(result, future, yielded)
                 try:
                     return future
                 finally:
@@ -306,7 +329,17 @@ def _make_coroutine_wrapper(func, replace_callback):
                     future = None
         future.set_result(result)
         return future
+
+    wrapper.__wrapped__ = wrapped
+    wrapper.__tornado_coroutine__ = True
     return wrapper
+
+
+def is_coroutine_function(func):
+    """Return whether *func* is a coroutine function, i.e. a function
+    wrapped with `~.gen.coroutine`.
+    """
+    return getattr(func, '__tornado_coroutine__', False)
 
 
 class Return(Exception):
@@ -830,7 +863,7 @@ def maybe_future(x):
 
 
 def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
-    """Wraps a `.Future` in a timeout.
+    """Wraps a `.Future` (or other yieldable object) in a timeout.
 
     Raises `TimeoutError` if the input future does not complete before
     ``timeout``, which may be specified in any form allowed by
@@ -841,15 +874,18 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
     will be logged unless it is of a type contained in ``quiet_exceptions``
     (which may be an exception type or a sequence of types).
 
-    Currently only supports Futures, not other `YieldPoint` classes.
+    Does not support `YieldPoint` subclasses.
 
     .. versionadded:: 4.0
 
     .. versionchanged:: 4.1
        Added the ``quiet_exceptions`` argument and the logging of unhandled
        exceptions.
+
+    .. versionchanged:: 4.4
+       Added support for yieldable objects other than `.Future`.
     """
-    # TODO: allow yield points in addition to futures?
+    # TODO: allow YieldPoints in addition to other yieldables?
     # Tricky to do with stack_context semantics.
     #
     # It's tempting to optimize this by cancelling the input future on timeout
@@ -857,6 +893,7 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
     # one waiting on the input future, so cancelling it might disrupt other
     # callers and B) concurrent futures can only be cancelled while they are
     # in the queue, so cancellation cannot reliably bound our waiting time.
+    future = convert_yielded(future)
     result = Future()
     chain_future(future, result)
     if io_loop is None:

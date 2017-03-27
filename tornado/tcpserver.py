@@ -21,6 +21,7 @@ import errno
 import os
 import socket
 
+from tornado import gen
 from tornado.log import app_log
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, SSLIOStream
@@ -39,7 +40,21 @@ class TCPServer(object):
     r"""A non-blocking, single-threaded TCP server.
 
     To use `TCPServer`, define a subclass which overrides the `handle_stream`
-    method.
+    method. For example, a simple echo server could be defined like this::
+
+      from tornado.tcpserver import TCPServer
+      from tornado.iostream import StreamClosedError
+      from tornado import gen
+
+      class EchoServer(TCPServer):
+          @gen.coroutine
+          def handle_stream(self, stream, address):
+              while True:
+                  try:
+                      data = yield stream.read_until(b"\n")
+                      yield stream.write(data)
+                  except StreamClosedError:
+                      break
 
     To make this server serve SSL traffic, send the ``ssl_options`` keyword
     argument with an `ssl.SSLContext` object. For compatibility with older
@@ -95,6 +110,7 @@ class TCPServer(object):
         self._sockets = {}  # fd -> socket object
         self._pending_sockets = []
         self._started = False
+        self._stopped = False
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
 
@@ -147,7 +163,8 @@ class TCPServer(object):
         """Singular version of `add_sockets`.  Takes a single socket object."""
         self.add_sockets([socket])
 
-    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128):
+    def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128,
+             reuse_port=False):
         """Binds this server to the given port on the given address.
 
         To start the server, call `start`. If you want to run this server
@@ -162,13 +179,17 @@ class TCPServer(object):
         both will be used if available.
 
         The ``backlog`` argument has the same meaning as for
-        `socket.listen <socket.socket.listen>`.
+        `socket.listen <socket.socket.listen>`. The ``reuse_port`` argument
+        has the same meaning as for `.bind_sockets`.
 
         This method may be called multiple times prior to `start` to listen
         on multiple ports or interfaces.
+
+        .. versionchanged:: 4.4
+           Added the ``reuse_port`` argument.
         """
         sockets = bind_sockets(port, address=address, family=family,
-                               backlog=backlog)
+                               backlog=backlog, reuse_port=reuse_port)
         if self._started:
             self.add_sockets(sockets)
         else:
@@ -208,7 +229,11 @@ class TCPServer(object):
         Requests currently in progress may still continue after the
         server is stopped.
         """
+        if self._stopped:
+            return
+        self._stopped = True
         for fd, sock in self._sockets.items():
+            assert sock.fileno() == fd
             self.io_loop.remove_handler(fd)
             sock.close()
 
@@ -266,8 +291,10 @@ class TCPServer(object):
                 stream = IOStream(connection, io_loop=self.io_loop,
                                   max_buffer_size=self.max_buffer_size,
                                   read_chunk_size=self.read_chunk_size)
+
             future = self.handle_stream(stream, address)
             if future is not None:
-                self.io_loop.add_future(future, lambda f: f.result())
+                self.io_loop.add_future(gen.convert_yielded(future),
+                                        lambda f: f.result())
         except Exception:
             app_log.error("Error in connection callback", exc_info=True)

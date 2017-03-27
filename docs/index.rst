@@ -20,13 +20,11 @@ applications that require a long-lived connection to each user.
 Quick links
 -----------
 
-* |Download current version|: :current_tarball:`z` (:doc:`release notes <releases>`)
+* Current version: |version| (`download from PyPI <https://pypi.python.org/pypi/tornado>`_, :doc:`release notes <releases>`)
 * `Source (github) <https://github.com/tornadoweb/tornado>`_
 * Mailing lists: `discussion <http://groups.google.com/group/python-tornado>`_ and `announcements <http://groups.google.com/group/python-tornado-announce>`_
 * `Stack Overflow <http://stackoverflow.com/questions/tagged/tornado>`_
 * `Wiki <https://github.com/tornadoweb/tornado/wiki/Links>`_
-
-.. |Download current version| replace:: Download version |version|
 
 Hello, world
 ------------
@@ -57,38 +55,23 @@ that see this `simple chat room
 Installation
 ------------
 
-**Automatic installation**::
+::
 
     pip install tornado
 
 Tornado is listed in `PyPI <http://pypi.python.org/pypi/tornado>`_ and
-can be installed with ``pip`` or ``easy_install``.  Note that the
-source distribution includes demo applications that are not present
-when Tornado is installed in this way, so you may wish to download a
-copy of the source tarball as well.
+can be installed with ``pip``. Note that the source distribution
+includes demo applications that are not present when Tornado is
+installed in this way, so you may wish to download a copy of the
+source tarball or clone the `git repository
+<https://github.com/tornadoweb/tornado>`_ as well.
 
-**Manual installation**: Download :current_tarball:`z`:
-
-.. parsed-literal::
-
-    tar xvzf tornado-|version|.tar.gz
-    cd tornado-|version|
-    python setup.py build
-    sudo python setup.py install
-
-The Tornado source code is `hosted on GitHub
-<https://github.com/tornadoweb/tornado>`_.
-
-**Prerequisites**: Tornado 4.3 runs on Python 2.6, 2.7, and 3.2+
-(support for Python 2.6 and 3.2 is deprecated and will be removed in
-the next release). For Python 2, version 2.7.9 or newer is *strongly*
+**Prerequisites**: Tornado 4.3 runs on Python 2.7, and 3.3+
+For Python 2, version 2.7.9 or newer is *strongly*
 recommended for the improved SSL support. In addition to the requirements
 which will be installed automatically by ``pip`` or ``setup.py install``,
 the following optional packages may be useful:
 
-* `unittest2 <https://pypi.python.org/pypi/unittest2>`_ is needed to run
-  Tornado's test suite on Python 2.6 (it is unnecessary on more recent
-  versions of Python)
 * `concurrent.futures <https://pypi.python.org/pypi/futures>`_ is the
   recommended thread pool for use with Tornado and enables the use of
   `~tornado.netutil.ThreadedResolver`.  It is needed only on Python 2;
@@ -101,9 +84,10 @@ the following optional packages may be useful:
 * `pycares <https://pypi.python.org/pypi/pycares>`_ is an alternative
   non-blocking DNS resolver that can be used when threads are not
   appropriate.
-* `Monotime <https://pypi.python.org/pypi/Monotime>`_ adds support for
-  a monotonic clock, which improves reliability in environments
-  where clock adjustments are frequent.  No longer needed in Python 3.3.
+* `monotonic <https://pypi.python.org/pypi/monotonic>`_ or `Monotime
+  <https://pypi.python.org/pypi/Monotime>`_ add support for a
+  monotonic clock, which improves reliability in environments where
+  clock adjustements are frequent. No longer needed in Python 3.3.
 
 **Platforms**: Tornado should run on any Unix-like platform, although
 for the best performance and scalability only Linux (with ``epoll``)
@@ -112,7 +96,9 @@ and BSD (with ``kqueue``) are recommended for production deployment
 networking performance is generally poor so it is recommended only for
 development use).  Tornado will also run on Windows, although this
 configuration is not officially supported and is recommended only for
-development use.
+development use. Without reworking Tornado IOLoop interface, it's not
+possible to add a native Tornado Windows IOLoop implementation or
+leverage Windows' IOCP support from frameworks like AsyncIO or Twisted.
 
 Documentation
 -------------

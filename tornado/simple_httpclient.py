@@ -11,6 +11,7 @@ from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
 from tornado import stack_context
 from tornado.tcpclient import TCPClient
+from tornado.util import PY3
 
 import base64
 import collections
@@ -22,10 +23,10 @@ import sys
 from io import BytesIO
 
 
-try:
-    import urlparse  # py2
-except ImportError:
-    import urllib.parse as urlparse  # py3
+if PY3:
+    import urllib.parse as urlparse
+else:
+    import urlparse
 
 try:
     import ssl
@@ -126,7 +127,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             timeout_handle = self.io_loop.add_timeout(
                 self.io_loop.time() + min(request.connect_timeout,
                                           request.request_timeout),
-                functools.partial(self._on_timeout, key))
+                functools.partial(self._on_timeout, key, "in request queue"))
         else:
             timeout_handle = None
         self.waiting[key] = (request, callback, timeout_handle)
@@ -167,11 +168,20 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
                 self.io_loop.remove_timeout(timeout_handle)
             del self.waiting[key]
 
-    def _on_timeout(self, key):
+    def _on_timeout(self, key, info=None):
+        """Timeout callback of request.
+
+        Construct a timeout HTTPResponse when a timeout occurs.
+
+        :arg object key: A simple object to mark the request.
+        :info string key: More detailed timeout information.
+        """
         request, callback, timeout_handle = self.waiting[key]
         self.queue.remove((key, request, callback))
+
+        error_message = "Timeout {0}".format(info) if info else "Timeout"
         timeout_response = HTTPResponse(
-            request, 599, error=HTTPError(599, "Timeout"),
+            request, 599, error=HTTPError(599, error_message),
             request_time=self.io_loop.time() - request.start_time)
         self.io_loop.add_callback(callback, timeout_response)
         del self.waiting[key]
@@ -229,7 +239,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if timeout:
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
-                    stack_context.wrap(self._on_timeout))
+                    stack_context.wrap(functools.partial(self._on_timeout, "while connecting")))
             self.tcp_client.connect(host, port, af=af,
                                     ssl_options=ssl_options,
                                     max_buffer_size=self.max_buffer_size,
@@ -284,10 +294,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             return ssl_options
         return None
 
-    def _on_timeout(self):
+    def _on_timeout(self, info=None):
+        """Timeout callback of _HTTPConnection instance.
+
+        Raise a timeout HTTPError when a timeout occurs.
+
+        :info string key: More detailed timeout information.
+        """
         self._timeout = None
+        error_message = "Timeout {0}".format(info) if info else "Timeout"
         if self.final_callback is not None:
-            raise HTTPError(599, "Timeout")
+            raise HTTPError(599, error_message)
 
     def _remove_timeout(self):
         if self._timeout is not None:
@@ -307,13 +324,14 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
-                stack_context.wrap(self._on_timeout))
+                stack_context.wrap(functools.partial(self._on_timeout, "during request")))
         if (self.request.method not in self._SUPPORTED_METHODS and
                 not self.request.allow_nonstandard_methods):
             raise KeyError("unknown method %s" % self.request.method)
         for key in ('network_interface',
                     'proxy_host', 'proxy_port',
-                    'proxy_username', 'proxy_password'):
+                    'proxy_username', 'proxy_password',
+                    'proxy_auth_mode'):
             if getattr(self.request, key, None):
                 raise NotImplementedError('%s not supported' % key)
         if "Connection" not in self.request.headers:
@@ -481,7 +499,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _should_follow_redirect(self):
         return (self.request.follow_redirects and
                 self.request.max_redirects > 0 and
-                self.code in (301, 302, 303, 307))
+                self.code in (301, 302, 303, 307, 308))
 
     def finish(self):
         data = b''.join(self.chunks)

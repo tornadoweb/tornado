@@ -17,6 +17,7 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.log import gen_log
+from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler
@@ -72,10 +73,8 @@ class OptionsHandler(RequestHandler):
 
 class NoContentHandler(RequestHandler):
     def get(self):
-        if self.get_argument("error", None):
-            self.set_header("Content-Length", "5")
-            self.write("hello")
         self.set_status(204)
+        self.finish()
 
 
 class SeeOtherPostHandler(RequestHandler):
@@ -238,6 +237,24 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual("POST", response.request.method)
 
     @skipOnTravis
+    def test_connect_timeout(self):
+        timeout = 0.1
+        timeout_min, timeout_max = 0.099, 1.0
+
+        class TimeoutResolver(Resolver):
+            def resolve(self, *args, **kwargs):
+                return Future()  # never completes
+
+        with closing(self.create_client(resolver=TimeoutResolver())) as client:
+            client.fetch(self.get_url('/hello'), self.stop,
+                         connect_timeout=timeout)
+            response = self.wait()
+            self.assertEqual(response.code, 599)
+            self.assertTrue(timeout_min < response.request_time < timeout_max,
+                            response.request_time)
+            self.assertEqual(str(response.error), "HTTP 599: Timeout while connecting")
+
+    @skipOnTravis
     def test_request_timeout(self):
         timeout = 0.1
         timeout_min, timeout_max = 0.099, 0.15
@@ -249,7 +266,7 @@ class SimpleHTTPClientTestMixin(object):
         self.assertEqual(response.code, 599)
         self.assertTrue(timeout_min < response.request_time < timeout_max,
                         response.request_time)
-        self.assertEqual(str(response.error), "HTTP 599: Timeout")
+        self.assertEqual(str(response.error), "HTTP 599: Timeout during request")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
@@ -303,17 +320,11 @@ class SimpleHTTPClientTestMixin(object):
     def test_no_content(self):
         response = self.fetch("/no_content")
         self.assertEqual(response.code, 204)
-        # 204 status doesn't need a content-length, but tornado will
-        # add a zero content-length anyway.
+        # 204 status shouldn't have a content-length
         #
-        # A test without a content-length header is included below
+        # Tests with a content-length header are included below
         # in HTTP204NoContentTestCase.
-        self.assertEqual(response.headers["Content-length"], "0")
-
-        # 204 status with non-zero content length is malformed
-        with ExpectLog(gen_log, "Malformed HTTP message"):
-            response = self.fetch("/no_content?error=1")
-        self.assertEqual(response.code, 599)
+        self.assertNotIn("Content-Length", response.headers)
 
     def test_host_header(self):
         host_re = re.compile(b"^localhost:[0-9]+$")
@@ -357,7 +368,7 @@ class SimpleHTTPClientTestMixin(object):
 
             self.assertEqual(response.code, 599)
             self.assertTrue(response.request_time < 1, response.request_time)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout")
+            self.assertEqual(str(response.error), "HTTP 599: Timeout in request queue")
             self.triggers.popleft()()
             self.wait()
 
@@ -592,16 +603,20 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
                                              HTTPHeaders())
             request.connection.finish()
             return
+
         # A 204 response never has a body, even if doesn't have a content-length
-        # (which would otherwise mean read-until-close).  Tornado always
-        # sends a content-length, so we simulate here a server that sends
-        # no content length and does not close the connection.
+        # (which would otherwise mean read-until-close).  We simulate here a
+        # server that sends no content length and does not close the connection.
         #
-        # Tests of a 204 response with a Content-Length header are included
+        # Tests of a 204 response with no Content-Length header are included
         # in SimpleHTTPClientTestMixin.
         stream = request.connection.detach()
-        stream.write(
-            b"HTTP/1.1 204 No content\r\n\r\n")
+        stream.write(b"HTTP/1.1 204 No content\r\n")
+        if request.arguments.get("error", [False])[-1]:
+            stream.write(b"Content-Length: 5\r\n")
+        else:
+            stream.write(b"Content-Length: 0\r\n")
+        stream.write(b"\r\n")
         stream.close()
 
     def get_app(self):
@@ -613,6 +628,16 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
             self.skipTest("requires HTTP/1.x")
         self.assertEqual(resp.code, 204)
         self.assertEqual(resp.body, b'')
+
+    def test_204_invalid_content_length(self):
+        # 204 status with non-zero content length is malformed
+        with ExpectLog(gen_log, ".*Response with code 204 should not have body"):
+            response = self.fetch("/?error=1")
+            if not self.http1:
+                self.skipTest("requires HTTP/1.x")
+            if self.http_client.configured_class != SimpleAsyncHTTPClient:
+                self.skipTest("curl client accepts invalid headers")
+            self.assertEqual(response.code, 599)
 
 
 class HostnameMappingTestCase(AsyncHTTPTestCase):
@@ -754,6 +779,6 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
     def test_chunked_with_content_length(self):
         # Make sure the invalid headers are detected
         with ExpectLog(gen_log, ("Malformed HTTP message from None: Response "
-                       "with both Transfer-Encoding and Content-Length")):
+                                 "with both Transfer-Encoding and Content-Length")):
             response = self.fetch('/chunkwithcl')
         self.assertEqual(response.code, 599)

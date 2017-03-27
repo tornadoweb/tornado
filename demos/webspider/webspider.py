@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import time
 from datetime import timedelta
 

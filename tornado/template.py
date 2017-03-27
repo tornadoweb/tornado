@@ -19,13 +19,13 @@
 Basic usage looks like::
 
     t = template.Template("<html>{{ myvalue }}</html>")
-    print t.generate(myvalue="XXX")
+    print(t.generate(myvalue="XXX"))
 
 `Loader` is a class that loads templates from a root directory and caches
 the compiled templates::
 
     loader = template.Loader("/home/btaylor")
-    print loader.load("test.html").generate(myvalue="XXX")
+    print(loader.load("test.html").generate(myvalue="XXX"))
 
 We compile all templates to raw Python. Error-reporting is currently... uh,
 interesting. Syntax for the templates::
@@ -94,11 +94,14 @@ Syntax Reference
 Template expressions are surrounded by double curly braces: ``{{ ... }}``.
 The contents may be any python expression, which will be escaped according
 to the current autoescape setting and inserted into the output.  Other
-template directives use ``{% %}``.  These tags may be escaped as ``{{!``
-and ``{%!`` if you need to include a literal ``{{`` or ``{%`` in the output.
+template directives use ``{% %}``.
 
 To comment out a section so that it is omitted from the output, surround it
 with ``{# ... #}``.
+
+These tags may be escaped as ``{{!``, ``{%!``, and ``{#!``
+if you need to include a literal ``{{``, ``{%``, or ``{#`` in the output.
+
 
 ``{% apply *function* %}...{% end %}``
     Applies a function to the output of all template code between ``apply``
@@ -204,12 +207,12 @@ import threading
 
 from tornado import escape
 from tornado.log import app_log
-from tornado.util import ObjectDict, exec_in, unicode_type
+from tornado.util import ObjectDict, exec_in, unicode_type, PY3
 
-try:
-    from cStringIO import StringIO  # py2
-except ImportError:
-    from io import StringIO  # py3
+if PY3:
+    from io import StringIO
+else:
+    from cStringIO import StringIO
 
 _DEFAULT_AUTOESCAPE = "xhtml_escape"
 _UNSET = object()
@@ -665,7 +668,7 @@ class ParseError(Exception):
     .. versionchanged:: 4.3
        Added ``filename`` and ``lineno`` attributes.
     """
-    def __init__(self, message, filename, lineno):
+    def __init__(self, message, filename=None, lineno=0):
         self.message = message
         # The names "filename" and "lineno" are chosen for consistency
         # with python SyntaxError.

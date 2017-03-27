@@ -3,8 +3,8 @@ This directory contains virtual machine setup scripts for testing Tornado.
 Requirements:
 
 Vagrant (http://vagrantup.com) and VirtualBox (http://virtualbox.org).
-Vagrant provides an easy download for Ubuntu 10.04 (aka lucid64); base
-images for other platforms are harder to find and can be built with
+Vagrant provides an easy download for Ubuntu images, base images for
+other platforms are harder to find and can be built with
 VeeWee (https://github.com/jedi4ever/veewee).
 
 Usage:

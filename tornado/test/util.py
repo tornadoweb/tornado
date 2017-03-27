@@ -12,7 +12,7 @@ from tornado.testing import bind_unused_port
 # To be used as 'from tornado.test.util import unittest'.
 if sys.version_info < (2, 7):
     # In py26, we must always use unittest2.
-    import unittest2 as unittest
+    import unittest2 as unittest  # type: ignore
 else:
     # Otherwise, use whichever version of unittest was imported in
     # tornado.testing.
@@ -72,7 +72,25 @@ def exec_test(caller_globals, caller_locals, s):
     # Flatten the real global and local namespace into our fake
     # globals: it's all global from the perspective of code defined
     # in s.
-    global_namespace = dict(caller_globals, **caller_locals)
+    global_namespace = dict(caller_globals, **caller_locals)  # type: ignore
     local_namespace = {}
     exec(textwrap.dedent(s), global_namespace, local_namespace)
     return local_namespace
+
+
+def is_coverage_running():
+    """Return whether coverage is currently running.
+    """
+    if 'coverage' not in sys.modules:
+        return False
+    tracer = sys.gettrace()
+    if tracer is None:
+        return False
+    try:
+        mod = tracer.__module__
+    except AttributeError:
+        try:
+            mod = tracer.__class__.__module__
+        except AttributeError:
+            return False
+    return mod.startswith('coverage')

@@ -25,6 +25,11 @@
    These methods can be made asynchronous with one of the following
    decorators: `.gen.coroutine`, `.return_future`, or `asynchronous`.
 
+   The arguments to these methods come from the `.URLSpec`: Any
+   capturing groups in the regular expression become arguments to the
+   HTTP verb methods (keyword arguments if the group is named,
+   positional arguments if its unnamed).
+
    To support a method not on this list, override the class variable
    ``SUPPORTED_METHODS``::
 
@@ -183,6 +188,14 @@
            of `UIModule` or UI methods to be made available to templates.
            May be set to a module, dictionary, or a list of modules
            and/or dicts.  See :ref:`ui-modules` for more details.
+         * ``websocket_ping_interval``: If set to a number, all websockets will
+           be pinged every n seconds. This can help keep the connection alive
+           through certain proxy servers which close idle connections, and it
+           can detect if the websocket has failed without being properly closed.
+         * ``websocket_ping_timeout``: If the ping interval is set, and the
+           server doesn't receive a 'pong' in this many seconds, it will close
+           the websocket. The default is three times the ping interval, with a
+           minimum of 30 seconds. Ignored if the ping interval is not set.
 
          Authentication and security settings:
 

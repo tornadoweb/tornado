@@ -20,10 +20,10 @@ import ssl
 import sys
 
 try:
-    from unittest import mock  # python 3.3
+    from unittest import mock  # type: ignore
 except ImportError:
     try:
-        import mock  # third-party mock package
+        import mock  # type: ignore
     except ImportError:
         mock = None
 
@@ -258,7 +258,7 @@ class TestIOStreamMixin(object):
         stream = IOStream(s, io_loop=self.io_loop)
         stream.set_close_callback(self.stop)
         with mock.patch('socket.socket.connect',
-                        side_effect=socket.gaierror('boom')):
+                        side_effect=socket.gaierror(errno.EIO, 'boom')):
             with ExpectLog(gen_log, "Connect error"):
                 stream.connect(('localhost', 80), callback=self.stop)
                 self.wait()
@@ -598,6 +598,17 @@ class TestIOStreamMixin(object):
             client.close()
             self.wait()
             self.assertTrue(closed[0])
+        finally:
+            server.close()
+            client.close()
+
+    def test_write_memoryview(self):
+        server, client = self.make_iostream_pair()
+        try:
+            client.read_bytes(4, self.stop)
+            server.write(memoryview(b"hello"))
+            data = self.wait()
+            self.assertEqual(data, b"hell")
         finally:
             server.close()
             client.close()

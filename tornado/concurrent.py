@@ -31,12 +31,17 @@ import sys
 
 from tornado.log import app_log
 from tornado.stack_context import ExceptionStackContext, wrap
-from tornado.util import raise_exc_info, ArgReplacer
+from tornado.util import raise_exc_info, ArgReplacer, is_finalizing
 
 try:
     from concurrent import futures
 except ImportError:
     futures = None
+
+try:
+    import typing
+except ImportError:
+    typing = None
 
 
 # Can the garbage collector handle cycles that include __del__ methods?
@@ -118,8 +123,8 @@ class _TracebackLogger(object):
         self.exc_info = None
         self.formatted_tb = None
 
-    def __del__(self):
-        if self.formatted_tb:
+    def __del__(self, is_finalizing=is_finalizing):
+        if not is_finalizing() and self.formatted_tb:
             app_log.error('Future exception was never retrieved: %s',
                           ''.join(self.formatted_tb).rstrip())
 
@@ -324,8 +329,8 @@ class Future(object):
     # cycle are never destroyed. It's no longer the case on Python 3.4 thanks to
     # the PEP 442.
     if _GC_CYCLE_FINALIZERS:
-        def __del__(self):
-            if not self._log_traceback:
+        def __del__(self, is_finalizing=is_finalizing):
+            if is_finalizing() or not self._log_traceback:
                 # set_exception() was not called, or result() or exception()
                 # has consumed the exception
                 return
@@ -338,7 +343,7 @@ class Future(object):
 TracebackFuture = Future
 
 if futures is None:
-    FUTURES = Future
+    FUTURES = Future  # type: typing.Union[type, typing.Tuple[type, ...]]
 else:
     FUTURES = (futures.Future, Future)
 
@@ -500,8 +505,9 @@ def chain_future(a, b):
         assert future is a
         if b.done():
             return
-        if (isinstance(a, TracebackFuture) and isinstance(b, TracebackFuture)
-                and a.exc_info() is not None):
+        if (isinstance(a, TracebackFuture) and
+                isinstance(b, TracebackFuture) and
+                a.exc_info() is not None):
             b.set_exc_info(a.exc_info())
         elif a.exception() is not None:
             b.set_exception(a.exception())

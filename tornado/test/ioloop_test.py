@@ -9,6 +9,7 @@ import socket
 import sys
 import threading
 import time
+import types
 
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PollIOLoop, PeriodicCallback
@@ -61,6 +62,25 @@ class FakeTimeIOLoop(PollIOLoop):
 
 
 class TestIOLoop(AsyncTestCase):
+    def test_add_callback_return_sequence(self):
+        # A callback returning {} or [] shouldn't spin the CPU, see Issue #1803.
+        self.calls = 0
+
+        loop = self.io_loop
+        test = self
+        old_add_callback = loop.add_callback
+
+        def add_callback(self, callback, *args, **kwargs):
+            test.calls += 1
+            old_add_callback(callback, *args, **kwargs)
+
+        loop.add_callback = types.MethodType(add_callback, loop)
+        loop.add_callback(lambda: {})
+        loop.add_callback(lambda: [])
+        loop.add_timeout(datetime.timedelta(milliseconds=50), loop.stop)
+        loop.start()
+        self.assertLess(self.calls, 10)
+
     @skipOnTravis
     def test_add_callback_wakeup(self):
         # Make sure that add_callback from inside a running IOLoop
@@ -140,6 +160,8 @@ class TestIOLoop(AsyncTestCase):
     def test_add_callback_while_closing(self):
         # Issue #635: add_callback() should raise a clean exception
         # if called while another thread is closing the IOLoop.
+        if IOLoop.configured_class().__name__.endswith('AsyncIOLoop'):
+            raise unittest.SkipTest("AsyncIOMainLoop shutdown not thread safe")
         closing = threading.Event()
 
         def target():
@@ -375,6 +397,7 @@ class TestIOLoop(AsyncTestCase):
             self.io_loop.add_callback(namespace["callback"])
             with ExpectLog(app_log, "Exception in callback"):
                 self.wait()
+
     def test_spawn_callback(self):
         # An added callback runs in the test's stack_context, so will be
         # re-arised in wait().
@@ -407,7 +430,7 @@ class TestIOLoop(AsyncTestCase):
                     self.io_loop.remove_handler(client)
             self.io_loop.add_handler(client, handle_read, self.io_loop.READ)
             self.io_loop.add_handler(server, handle_read, self.io_loop.READ)
-            self.io_loop.call_later(0.03, self.stop)
+            self.io_loop.call_later(0.1, self.stop)
             self.wait()
 
             # Only one fd was read; the other was cleanly removed.

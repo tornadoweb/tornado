@@ -41,6 +41,12 @@ either::
     # or
     tornado.options.parse_config_file("/etc/server.conf")
 
+.. note:
+
+   When using tornado.options.parse_command_line or
+   tornado.options.parse_config_file, the only options that are set are
+   ones that were previously defined with tornado.options.define.
+
 Command line formats are what you would expect (``--myoption=myvalue``).
 Config files are just Python files. Global names become options, e.g.::
 
@@ -132,8 +138,10 @@ class OptionParser(object):
         return name in self._options
 
     def __getitem__(self, name):
-        name = self._normalize_name(name)
-        return self._options[name].value()
+        return self.__getattr__(name)
+
+    def __setitem__(self, name, value):
+        return self.__setattr__(name, value)
 
     def items(self):
         """A sequence of (name, value) pairs.
@@ -300,8 +308,12 @@ class OptionParser(object):
         .. versionchanged:: 4.1
            Config files are now always interpreted as utf-8 instead of
            the system default encoding.
+
+        .. versionchanged:: 4.4
+           The special variable ``__file__`` is available inside config
+           files, specifying the absolute path to the config file itself.
         """
-        config = {}
+        config = {'__file__': os.path.abspath(path)}
         with open(path, 'rb') as f:
             exec_in(native_str(f.read()), config, config)
         for name in config:
