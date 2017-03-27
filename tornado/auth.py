@@ -928,7 +928,8 @@ class FacebookGraphMixin(OAuth2Mixin):
     @_auth_return_future
     def get_authenticated_user(self, redirect_uri, client_id, client_secret,
                                code, callback, extra_fields=None):
-        """Handles the login for the Facebook user, returning a user object.
+        """
+        Handles the login for the Facebook user, returning a user object.
 
         Example usage:
 
@@ -978,9 +979,9 @@ class FacebookGraphMixin(OAuth2Mixin):
             future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
             return
 
-        args = urlparse.parse_qs(escape.native_str(response.body))
+        args = escape.json_decode(response.body)
         session = {
-            "access_token": args["access_token"][-1],
+            "access_token": args.get("access_token"),
             "expires": args.get("expires")
         }
 
