@@ -978,9 +978,9 @@ class FacebookGraphMixin(OAuth2Mixin):
             future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
             return
 
-        args = urlparse.parse_qs(escape.native_str(response.body))
+        args = escape.json_decode(response.body)
         session = {
-            "access_token": args["access_token"][-1],
+            "access_token": args.get("access_token"),
             "expires": args.get("expires")
         }
 
