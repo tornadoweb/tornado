@@ -22,6 +22,7 @@ import socket
 
 from tornado.concurrent import Future
 from tornado.netutil import bind_sockets, Resolver
+from tornado.queues import Queue
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, gen_test
@@ -36,12 +37,14 @@ class TestTCPServer(TCPServer):
     def __init__(self, family):
         super(TestTCPServer, self).__init__()
         self.streams = []
+        self.queue = Queue()
         sockets = bind_sockets(None, 'localhost', family)
         self.add_sockets(sockets)
         self.port = sockets[0].getsockname()[1]
 
     def handle_stream(self, stream, address):
         self.streams.append(stream)
+        self.queue.put(stream)
 
     def stop(self):
         super(TestTCPServer, self).stop()
@@ -86,9 +89,10 @@ class TCPClientTest(AsyncTestCase):
         stream = yield self.client.connect(host, port,
                                            source_ip=source_ip,
                                            source_port=source_port)
+        server_stream = yield self.server.queue.get()
         with closing(stream):
             stream.write(b"hello")
-            data = yield self.server.streams[0].read_bytes(5)
+            data = yield server_stream.read_bytes(5)
             self.assertEqual(data, b"hello")
 
     def test_connect_ipv4_ipv4(self):
