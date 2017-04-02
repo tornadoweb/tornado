@@ -85,6 +85,11 @@ class _State(threading.local):
 _state = _State()
 
 
+class LocalContexts(threading.local):
+    def __init__(self):
+        self.contexts = list()
+
+
 class StackContext(object):
     """Establishes the given context as a StackContext that will be transferred.
 
@@ -107,7 +112,7 @@ class StackContext(object):
     """
     def __init__(self, context_factory):
         self.context_factory = context_factory
-        self.contexts = []
+        self.local_contexts = LocalContexts()
         self.active = True
 
     def _deactivate(self):
@@ -116,11 +121,11 @@ class StackContext(object):
     # StackContext protocol
     def enter(self):
         context = self.context_factory()
-        self.contexts.append(context)
+        self.local_contexts.contexts.append(context)
         context.__enter__()
 
     def exit(self, type, value, traceback):
-        context = self.contexts.pop()
+        context = self.local_contexts.contexts.pop()
         context.__exit__(type, value, traceback)
 
     # Note that some of this code is duplicated in ExceptionStackContext

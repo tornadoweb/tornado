@@ -11,6 +11,8 @@ from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
 import logging
+import time
+from threading import Thread
 
 
 class TestRequestHandler(RequestHandler):
@@ -283,6 +285,55 @@ class StackContextTest(AsyncTestCase):
             StackContext(functools.partial(self.context, 'c1')),
             f1)
         self.assertEqual(self.active_contexts, [])
+
+    @gen_test
+    def test_thread_safe_stack_context_regression(self):
+        num_iterations = 1000
+        num_workers = 10
+        exception = [0]
+
+        class Context(object):
+            def __init__(self):
+                self.entered = False
+
+            def __enter__(self):
+                self.entered = True
+
+            def __exit__(self, *args):
+                assert self.entered
+                self.entered = False
+
+        def async_task():
+            time.sleep(0.001)
+
+        class Worker(Thread):
+            def __init__(self, fn):
+                super(Worker, self).__init__()
+                self.fn = fn
+
+            def run(self):
+                try:
+                    for _ in range(0, num_iterations):
+                        self.fn()
+                except Exception as e:
+                    exception[0] = e
+                    raise
+
+        with StackContext(Context):
+            workers = []
+            for i in range(0, num_workers):
+                worker = Worker(wrap(async_task))
+                workers.append(worker)
+
+            for worker in workers:
+                worker.start()
+
+            for worker in workers:
+                worker.join()
+
+            if exception[0]:
+                raise exception[0]
+
 
 if __name__ == '__main__':
     unittest.main()
