@@ -4,6 +4,12 @@ What's new in Tornado 4.5
 Xxx XX, 2017
 ------------
 
+Backwards-compatibility warning
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- The `tornado.websocket` module now imposes a limit on the size of incoming
+  messages, which defaults to 10MiB.
+
 New module
 ~~~~~~~~~~
 
@@ -146,6 +152,8 @@ General changes
   application settings can now be used to enable a periodic ping of
   the websocket connection, allowing dropped connections to be
   detected and closed.
+- The new ``websocket_max_message_size`` setting defaults to 10MiB.
+  The connection will be closed if messages larger than this are received.
 - Headers set by `.RequestHandler.prepare` or
   `.RequestHandler.set_default_headers` are now sent as a part of the
   websocket handshake.

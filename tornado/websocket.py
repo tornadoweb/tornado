@@ -131,8 +131,12 @@ class WebSocketHandler(tornado.web.RequestHandler):
     value, a ping will be sent periodically, and the connection will be
     closed if a response is not received before the ``websocket_ping_timeout``.
 
+    Messages larger than the ``websocket_max_message_size`` application setting
+    (default 10MiB) will not be accepted.
+
     .. versionchanged:: 4.5
-       Added ``websocket_ping_interval`` and ``websocket_ping_timeout``.
+       Added ``websocket_ping_interval``, ``websocket_ping_timeout``, and
+       ``websocket_max_message_size``.
     """
     def __init__(self, application, request, **kwargs):
         super(WebSocketHandler, self).__init__(application, request, **kwargs)
@@ -212,6 +216,17 @@ class WebSocketHandler(tornado.web.RequestHandler):
         Default is max of 3 pings or 30 seconds.
         """
         return self.settings.get('websocket_ping_timeout', None)
+
+    @property
+    def max_message_size(self):
+        """Maximum allowed message size.
+
+        If the remote peer sends a message larger than this, the connection
+        will be closed.
+
+        Default is 10MiB.
+        """
+        return self.settings.get('websocket_max_message_size', None)
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket.
@@ -799,14 +814,24 @@ class WebSocketProtocol13(WebSocketProtocol):
                 if self._masked_frame:
                     self.stream.read_bytes(4, self._on_masking_key)
                 else:
-                    self.stream.read_bytes(self._frame_length,
-                                           self._on_frame_data)
+                    self._read_frame_data(False)
             elif payloadlen == 126:
                 self.stream.read_bytes(2, self._on_frame_length_16)
             elif payloadlen == 127:
                 self.stream.read_bytes(8, self._on_frame_length_64)
         except StreamClosedError:
             self._abort()
+
+    def _read_frame_data(self, masked):
+        new_len = self._frame_length
+        if self._fragmented_message_buffer is not None:
+            new_len += len(self._fragmented_message_buffer)
+        if new_len > (self.handler.max_message_size or 10*1024*1024):
+            self.close(1009, "message too big")
+            return
+        self.stream.read_bytes(
+            self._frame_length,
+            self._on_masked_frame_data if masked else self._on_frame_data)
 
     def _on_frame_length_16(self, data):
         self._wire_bytes_in += len(data)
@@ -815,7 +840,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             if self._masked_frame:
                 self.stream.read_bytes(4, self._on_masking_key)
             else:
-                self.stream.read_bytes(self._frame_length, self._on_frame_data)
+                self._read_frame_data(False)
         except StreamClosedError:
             self._abort()
 
@@ -826,7 +851,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             if self._masked_frame:
                 self.stream.read_bytes(4, self._on_masking_key)
             else:
-                self.stream.read_bytes(self._frame_length, self._on_frame_data)
+                self._read_frame_data(False)
         except StreamClosedError:
             self._abort()
 
@@ -834,8 +859,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._wire_bytes_in += len(data)
         self._frame_mask = data
         try:
-            self.stream.read_bytes(self._frame_length,
-                                   self._on_masked_frame_data)
+            self._read_frame_data(True)
         except StreamClosedError:
             self._abort()
 
@@ -1007,7 +1031,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     `websocket_connect` function instead.
     """
     def __init__(self, io_loop, request, on_message_callback=None,
-                 compression_options=None, ping_interval=None, ping_timeout=None):
+                 compression_options=None, ping_interval=None, ping_timeout=None,
+                 max_message_size=None):
         self.compression_options = compression_options
         self.connect_future = TracebackFuture()
         self.protocol = None
@@ -1018,6 +1043,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.close_code = self.close_reason = None
         self.ping_interval = ping_interval
         self.ping_timeout = ping_timeout
+        self.max_message_size = max_message_size
 
         scheme, sep, rest = request.url.partition(':')
         scheme = {'ws': 'http', 'wss': 'https'}[scheme]
@@ -1145,7 +1171,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 
 def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
                       on_message_callback=None, compression_options=None,
-                      ping_interval=None, ping_timeout=None):
+                      ping_interval=None, ping_timeout=None,
+                      max_message_size=None):
     """Client-side websocket support.
 
     Takes a url and returns a Future whose result is a
@@ -1174,6 +1201,10 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
     .. versionchanged:: 4.1
        Added ``compression_options`` and ``on_message_callback``.
        The ``io_loop`` argument is deprecated.
+
+    .. versionchanged:: 4.5
+       Added the ``ping_interval``, ``ping_timeout``, and ``max_message_size``
+       arguments, which have the same meaning as in `WebSocketHandler`.
     """
     if io_loop is None:
         io_loop = IOLoop.current()
@@ -1191,7 +1222,8 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
                                      on_message_callback=on_message_callback,
                                      compression_options=compression_options,
                                      ping_interval=ping_interval,
-                                     ping_timeout=ping_timeout)
+                                     ping_timeout=ping_timeout,
+                                     max_message_size=max_message_size)
     if callback is not None:
         io_loop.add_future(conn.connect_future, callback)
     return conn.connect_future
