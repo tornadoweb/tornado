@@ -579,3 +579,31 @@ class ClientPeriodicPingTest(WebSocketBaseTestCase):
             self.assertEqual(response, "got ping")
         yield self.close(ws)
         # TODO: test that the connection gets closed if ping responses stop.
+
+
+class MaxMessageSizeTest(WebSocketBaseTestCase):
+    def get_app(self):
+        self.close_future = Future()
+        return Application([
+            ('/', EchoHandler, dict(close_future=self.close_future)),
+        ], websocket_max_message_size=1024)
+
+    @gen_test
+    def test_large_message(self):
+        ws = yield self.ws_connect('/')
+
+        # Write a message that is allowed.
+        msg = 'a' * 1024
+        ws.write_message(msg)
+        resp = yield ws.read_message()
+        self.assertEqual(resp, msg)
+
+        # Write a message that is too large.
+        ws.write_message(msg + 'b')
+        resp = yield ws.read_message()
+        # A message of None means the other side closed the connection.
+        self.assertIs(resp, None)
+        self.assertEqual(ws.close_code, 1009)
+        self.assertEqual(ws.close_reason, "message too big")
+        # TODO: Needs tests of messages split over multiple
+        # continuation frames.
