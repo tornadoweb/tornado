@@ -981,7 +981,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         args = escape.json_decode(response.body)
         session = {
             "access_token": args.get("access_token"),
-            "expires": args.get("expires")
+            "expires": args.get("expires_in")
         }
 
         self.facebook_request(
