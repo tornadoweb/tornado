@@ -149,7 +149,7 @@ class FacebookClientLoginHandler(RequestHandler, FacebookGraphMixin):
 
 class FacebookServerAccessTokenHandler(RequestHandler):
     def get(self):
-        self.write(dict(access_token="asdf"))
+        self.write(dict(access_token="asdf", expires_in=54770))
 
 
 class FacebookServerMeHandler(RequestHandler):

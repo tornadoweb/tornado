@@ -981,7 +981,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         args = escape.json_decode(response.body)
         session = {
             "access_token": args.get("access_token"),
-            "expires": args.get("expires")
+            "expires_in": args.get("expires_in")
         }
 
         self.facebook_request(
@@ -1004,7 +1004,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         for field in fields:
             fieldmap[field] = user.get(field)
 
-        fieldmap.update({"access_token": session["access_token"], "session_expires": session.get("expires")})
+        fieldmap.update({"access_token": session["access_token"], "session_expires": session.get("expires_in")})
         future.set_result(fieldmap)
 
     @_auth_return_future
