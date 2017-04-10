@@ -70,6 +70,9 @@ coverage_ignore_functions = [
     # parse_qs_bytes should probably be documented but it's complicated by
     # having different implementations between py2 and py3.
     "parse_qs_bytes",
+
+    # tornado.gen
+    "Multi",
 ]
 
 html_favicon = 'favicon.ico'
