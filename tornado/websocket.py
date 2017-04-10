@@ -513,12 +513,12 @@ class _PerMessageDeflateCompressor(object):
                              max_wbits, zlib.MAX_WBITS)
         self._max_wbits = max_wbits
 
-        if compression_options is None or not 'compression_level' in compression_options:
+        if compression_options is None or 'compression_level' not in compression_options:
             self._compression_level = tornado.web.GZipContentEncoding.GZIP_LEVEL
         else:
             self._compression_level = compression_options['compression_level']
 
-        if compression_options is None or not 'mem_level' in compression_options:
+        if compression_options is None or 'mem_level' not in compression_options:
             self._mem_level = 8
         else:
             self._mem_level = compression_options['mem_level']
@@ -638,7 +638,6 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.request.headers.get("Sec-Websocket-Key"))
 
     def _accept_connection(self):
-        subprotocol_header = ''
         subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", '')
         subprotocols = [s.strip() for s in subprotocols.split(',')]
         if subprotocols:
@@ -647,7 +646,6 @@ class WebSocketProtocol13(WebSocketProtocol):
                 assert selected in subprotocols
                 self.handler.set_header("Sec-WebSocket-Protocol", selected)
 
-        extension_header = ''
         extensions = self._parse_extensions_header(self.request.headers)
         for ext in extensions:
             if (ext[0] == 'permessage-deflate' and

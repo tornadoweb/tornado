@@ -1147,7 +1147,8 @@ class Runner(object):
 
         if not self.future.done() or self.future is moment:
             def inner(f):
-                f = None
+                # Break a reference cycle to speed GC.
+                f = None # noqa
                 self.run()
             self.io_loop.add_future(
                 self.future, inner)
