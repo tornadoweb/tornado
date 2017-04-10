@@ -954,6 +954,20 @@ class FacebookGraphMixin(OAuth2Mixin):
         .. testoutput::
            :hide:
 
+        This method returns a dictionary which may contain the following fields:
+
+        * ``access_token``, a string which may be passed to `facebook_request`
+        * ``session_expires``, an integer encoded as a string representing
+          the time until the access token expires in seconds. This field should
+          be used like ``int(user['session_expires'])``; in a future version of
+          Tornado it will change from a string to an integer.
+        * ``id``, ``name``, ``first_name``, ``last_name``, ``locale``, ``picture``,
+          ``link``, plus any fields named in the ``extra_fields`` argument. These
+          fields are copied from the Facebook graph API `user object <https://developers.facebook.com/docs/graph-api/reference/user>`_
+
+        .. versionchanged:: 4.5
+           The ``session_expires`` field was updated to support changes made to the
+           Facebook API in March 2017.
         """
         http = self.get_auth_http_client()
         args = {
@@ -981,7 +995,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         args = escape.json_decode(response.body)
         session = {
             "access_token": args.get("access_token"),
-            "expires": args.get("expires")
+            "expires_in": args.get("expires_in")
         }
 
         self.facebook_request(
@@ -1004,7 +1018,12 @@ class FacebookGraphMixin(OAuth2Mixin):
         for field in fields:
             fieldmap[field] = user.get(field)
 
-        fieldmap.update({"access_token": session["access_token"], "session_expires": session.get("expires")})
+        # session_expires is converted to str for compatibility with
+        # older versions in which the server used url-encoding and
+        # this code simply returned the string verbatim.
+        # This should change in Tornado 5.0.
+        fieldmap.update({"access_token": session["access_token"],
+                         "session_expires": str(session.get("expires_in"))})
         future.set_result(fieldmap)
 
     @_auth_return_future

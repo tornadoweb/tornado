@@ -149,7 +149,7 @@ class FacebookClientLoginHandler(RequestHandler, FacebookGraphMixin):
 
 class FacebookServerAccessTokenHandler(RequestHandler):
     def get(self):
-        self.write(dict(access_token="asdf"))
+        self.write(dict(access_token="asdf", expires_in=3600))
 
 
 class FacebookServerMeHandler(RequestHandler):
@@ -401,6 +401,9 @@ class AuthTest(AsyncHTTPTestCase):
         self.assertTrue('/facebook/server/authorize?' in response.headers['Location'])
         response = self.fetch('/facebook/client/login?code=1234', follow_redirects=False)
         self.assertEqual(response.code, 200)
+        user = json_decode(response.body)
+        self.assertEqual(user['access_token'], 'asdf')
+        self.assertEqual(user['session_expires'], '3600')
 
     def base_twitter_redirect(self, url):
         # Same as test_oauth10a_redirect
