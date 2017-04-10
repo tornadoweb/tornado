@@ -285,7 +285,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
            Added ``compression_level`` and ``mem_level``.
         """
-        #TODO: Add wbits option.
+        # TODO: Add wbits option.
         return None
 
     def open(self, *args, **kwargs):
@@ -513,12 +513,12 @@ class _PerMessageDeflateCompressor(object):
                              max_wbits, zlib.MAX_WBITS)
         self._max_wbits = max_wbits
 
-        if compression_options is None or not 'compression_level' in compression_options:
+        if compression_options is None or 'compression_level' not in compression_options:
             self._compression_level = tornado.web.GZipContentEncoding.GZIP_LEVEL
         else:
             self._compression_level = compression_options['compression_level']
 
-        if compression_options is None or not 'mem_level' in compression_options:
+        if compression_options is None or 'mem_level' not in compression_options:
             self._mem_level = 8
         else:
             self._mem_level = compression_options['mem_level']
@@ -603,7 +603,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.last_ping = 0
         self.last_pong = 0
 
-
     def accept_connection(self):
         try:
             self._handle_websocket_headers()
@@ -639,7 +638,6 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.request.headers.get("Sec-Websocket-Key"))
 
     def _accept_connection(self):
-        subprotocol_header = ''
         subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", '')
         subprotocols = [s.strip() for s in subprotocols.split(',')]
         if subprotocols:
@@ -648,7 +646,6 @@ class WebSocketProtocol13(WebSocketProtocol):
                 assert selected in subprotocols
                 self.handler.set_header("Sec-WebSocket-Protocol", selected)
 
-        extension_header = ''
         extensions = self._parse_extensions_header(self.request.headers)
         for ext in extensions:
             if (ext[0] == 'permessage-deflate' and
@@ -826,7 +823,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         new_len = self._frame_length
         if self._fragmented_message_buffer is not None:
             new_len += len(self._fragmented_message_buffer)
-        if new_len > (self.handler.max_message_size or 10*1024*1024):
+        if new_len > (self.handler.max_message_size or 10 * 1024 * 1024):
             self.close(1009, "message too big")
             return
         self.stream.read_bytes(
@@ -997,7 +994,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         if self.ping_interval > 0:
             self.last_ping = self.last_pong = IOLoop.current().time()
             self.ping_callback = PeriodicCallback(
-                self.periodic_ping, self.ping_interval*1000)
+                self.periodic_ping, self.ping_interval * 1000)
             self.ping_callback.start()
 
     def periodic_ping(self):
@@ -1015,7 +1012,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         now = IOLoop.current().time()
         since_last_pong = now - self.last_pong
         since_last_ping = now - self.last_ping
-        if (since_last_ping < 2*self.ping_interval and
+        if (since_last_ping < 2 * self.ping_interval and
                 since_last_pong > self.ping_timeout):
             self.close()
             return

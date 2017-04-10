@@ -68,4 +68,3 @@ class TCPServerTest(AsyncTestCase):
         server.add_socket(sock)
         server.stop()
         server.stop()
-

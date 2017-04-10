@@ -574,6 +574,7 @@ class TwistedResolver(Resolver):
         ]
         raise gen.Return(result)
 
+
 if hasattr(gen.convert_yielded, 'register'):
     @gen.convert_yielded.register(Deferred)  # type: ignore
     def _(d):

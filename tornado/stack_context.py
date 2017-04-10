@@ -82,6 +82,8 @@ class StackContextInconsistentError(Exception):
 class _State(threading.local):
     def __init__(self):
         self.contexts = (tuple(), None)
+
+
 _state = _State()
 
 

@@ -908,8 +908,8 @@ class BaseIOStream(object):
         assert loc <= self._read_buffer_size
         # Slice the bytearray buffer into bytes, without intermediate copying
         b = (memoryview(self._read_buffer)
-                       [self._read_buffer_pos:self._read_buffer_pos + loc]
-                       ).tobytes()
+             [self._read_buffer_pos:self._read_buffer_pos + loc]
+             ).tobytes()
         self._read_buffer_pos += loc
         self._read_buffer_size -= loc
         # Amortized O(1) shrink

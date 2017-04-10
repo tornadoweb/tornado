@@ -178,7 +178,7 @@ class ReturnFutureTest(AsyncTestCase):
         @gen.coroutine
         def f():
             yield gen.moment
-            1/0
+            1 / 0
 
         g = f()
 

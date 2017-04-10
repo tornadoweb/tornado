@@ -185,5 +185,6 @@ def main():
                           log_counter.warning_count, log_counter.error_count)
             sys.exit(1)
 
+
 if __name__ == '__main__':
     main()
