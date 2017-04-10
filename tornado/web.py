@@ -3119,6 +3119,7 @@ def create_signed_value(secret, name, value, version=None, clock=None,
     else:
         raise ValueError("Unsupported version %d" % version)
 
+
 # A leading version number in decimal
 # with no leading zeros, followed by a pipe.
 _signed_value_version_re = re.compile(br"^([1-9][0-9]*)\|(.*)$")

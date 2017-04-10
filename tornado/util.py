@@ -236,6 +236,7 @@ def _re_unescape_replacement(match):
         raise ValueError("cannot unescape '\\\\%s'" % group[0])
     return group
 
+
 _re_unescape_pattern = re.compile(r'\\(.)', re.DOTALL)
 
 
@@ -453,6 +454,7 @@ def _websocket_mask_python(mask, data):
         return unmasked_arr.tobytes()
     else:
         return unmasked_arr.tostring()
+
 
 if (os.environ.get('TORNADO_NO_EXTENSION') or
         os.environ.get('TORNADO_EXTENSION') == '0'):

@@ -343,6 +343,7 @@ class Future(object):
             app_log.error('Future %r exception was never retrieved: %s',
                           self, ''.join(tb).rstrip())
 
+
 TracebackFuture = Future
 
 if futures is None:
@@ -366,6 +367,7 @@ class DummyExecutor(object):
 
     def shutdown(self, wait=True):
         pass
+
 
 dummy_executor = DummyExecutor()
 

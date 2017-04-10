@@ -8,6 +8,7 @@ from tornado.platform.auto import set_close_exec
 
 skipIfNonWindows = unittest.skipIf(os.name != 'nt', 'non-windows platform')
 
+
 @skipIfNonWindows
 class WindowsTest(unittest.TestCase):
     def test_set_close_exec(self):

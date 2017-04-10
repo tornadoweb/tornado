@@ -1574,7 +1574,6 @@ class GzipTestCase(SimpleHandlerTestCase):
                 response.headers.get('X-Consumed-Content-Encoding')),
             'gzip')
 
-
     def test_gzip(self):
         response = self.fetch('/')
         self.assert_compressed(response)
@@ -1604,6 +1603,7 @@ class GzipTestCase(SimpleHandlerTestCase):
         self.assert_compressed(response)
         self.assertEqual([s.strip() for s in response.headers['Vary'].split(',')],
                          ['Accept-Language', 'Cookie', 'Accept-Encoding'])
+
 
 @wsgi_safe
 class PathArgsInPrepareTest(WebTestCase):

@@ -245,6 +245,7 @@ def coroutine(func, replace_callback=True):
     """
     return _make_coroutine_wrapper(func, replace_callback=True)
 
+
 # Ties lifetime of runners to their result futures. Github Issue #1769
 # Generators, like any object in Python, must be strong referenced
 # in order to not be cleaned up by the garbage collector. When using
@@ -263,6 +264,7 @@ def coroutine(func, replace_callback=True):
 # from the parent coroutine's Runner). This keeps the coroutine's
 # Runner alive.
 _futures_to_runners = weakref.WeakKeyDictionary()
+
 
 def _make_coroutine_wrapper(func, replace_callback):
     """The inner workings of ``@gen.coroutine`` and ``@gen.engine``.
@@ -718,6 +720,7 @@ def multi(children, quiet_exceptions=()):
     else:
         return multi_future(children, quiet_exceptions=quiet_exceptions)
 
+
 Multi = multi
 
 
@@ -1169,6 +1172,7 @@ class Runner(object):
             self.stack_context_deactivate()
             self.stack_context_deactivate = None
 
+
 Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
 
 
@@ -1187,6 +1191,7 @@ def _argument_adapter(callback):
         else:
             callback(None)
     return wrapper
+
 
 # Convert Awaitables into Futures. It is unfortunately possible
 # to have infinite recursion here if those Awaitables assume that
@@ -1275,6 +1280,7 @@ def convert_yielded(yielded):
         return _wrap_awaitable(yielded)
     else:
         raise BadYieldError("yielded unknown object %r" % (yielded,))
+
 
 if singledispatch is not None:
     convert_yielded = singledispatch(convert_yielded)

@@ -99,6 +99,7 @@ class _NormalizedHeaderCache(dict):
             del self[old_key]
         return normalized
 
+
 _normalized_headers = _NormalizedHeaderCache(1000)
 
 
@@ -936,9 +937,11 @@ def split_host_and_port(netloc):
         port = None
     return (host, port)
 
+
 _OctalPatt = re.compile(r"\\[0-3][0-7][0-7]")
 _QuotePatt = re.compile(r"[\\].")
 _nulljoin = ''.join
+
 
 def _unquote_cookie(str):
     """Handle double quotes and escaping in cookie values.
@@ -981,11 +984,11 @@ def _unquote_cookie(str):
             k = q_match.start(0)
         if q_match and (not o_match or k < j):     # QuotePatt matched
             res.append(str[i:k])
-            res.append(str[k+1])
+            res.append(str[k + 1])
             i = k + 2
         else:                                      # OctalPatt matched
             res.append(str[i:j])
-            res.append(chr(int(str[j+1:j+4], 8)))
+            res.append(chr(int(str[j + 1:j + 4], 8)))
             i = j + 4
     return _nulljoin(res)
 

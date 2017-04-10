@@ -200,6 +200,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
         sockets.append(sock)
     return sockets
 
+
 if hasattr(socket, 'AF_UNIX'):
     def bind_unix_socket(file, mode=0o600, backlog=_DEFAULT_BACKLOG):
         """Creates a listening unix socket.

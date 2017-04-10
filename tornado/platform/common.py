@@ -8,6 +8,7 @@ import time
 from tornado.platform import interface
 from tornado.util import errno_from_exception
 
+
 def try_close(f):
     # Avoid issue #875 (race condition when using the file in another
     # thread).

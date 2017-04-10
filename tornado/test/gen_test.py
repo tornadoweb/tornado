@@ -26,6 +26,7 @@ try:
 except ImportError:
     futures = None
 
+
 class GenEngineTest(AsyncTestCase):
     def setUp(self):
         super(GenEngineTest, self).setUp()
@@ -1444,6 +1445,7 @@ class RunnerGCTest(AsyncTestCase):
         """Runners shouldn't GC if future is alive"""
         # Create the weakref
         weakref_scope = [None]
+
         def callback():
             gc.collect(2)
             weakref_scope[0]().set_result(123)
@@ -1459,6 +1461,7 @@ class RunnerGCTest(AsyncTestCase):
             datetime.timedelta(seconds=0.2),
             tester()
         )
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -321,4 +321,5 @@ class _ProxyAdapter(httputil.HTTPMessageDelegate):
     def _cleanup(self):
         self.connection.context._unapply_xheaders()
 
+
 HTTPRequest = httputil.HTTPServerRequest

@@ -284,5 +284,6 @@ class StackContextTest(AsyncTestCase):
             f1)
         self.assertEqual(self.active_contexts, [])
 
+
 if __name__ == '__main__':
     unittest.main()
