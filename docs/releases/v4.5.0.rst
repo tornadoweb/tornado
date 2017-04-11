@@ -22,6 +22,19 @@ General changes
 - Reduced the number of circular references, reducing memory usage and
   improving performance.
 
+`tornado.auth`
+~~~~~~~~~~~~~~
+
+* The `tornado.auth` module has been updated for compatibility with `a
+  change to Facebook's access_token endpoint
+  <https://github.com/tornadoweb/tornado/pull/1977>`_. This includes both
+  the changes initially released in Tornado 4.4.3 and an additional change
+  to support the ```session_expires`` field in the new format.
+  The ``session_expires`` field is currently a string; it should be accessed
+  as ``int(user['session_expires'])`` because it will change from a string to
+  an int in Tornado 5.0.
+
+
 `tornado.autoreload`
 ~~~~~~~~~~~~~~~~~~~~
 
