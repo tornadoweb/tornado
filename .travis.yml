@@ -23,10 +23,10 @@ install:
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
-    - travis_retry pip install codecov
+    - travis_retry pip install codecov virtualenv
     # Create a separate no-dependencies virtualenv to make sure all imports
     # of optional-dependencies are guarded.
-    - virtualenv -p `which python` ./nodeps
+    - virtualenv ./nodeps
     - ./nodeps/bin/python -VV
     - ./nodeps/bin/python setup.py install
     - curl-config --version; pip freeze
