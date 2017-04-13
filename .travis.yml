@@ -26,7 +26,8 @@ install:
     - travis_retry pip install codecov
     # Create a separate no-dependencies virtualenv to make sure all imports
     # of optional-dependencies are guarded.
-    - virtualenv ./nodeps
+    - virtualenv -p `which python` ./nodeps
+    - ./nodeps/bin/python -VV
     - ./nodeps/bin/python setup.py install
     - curl-config --version; pip freeze
 
