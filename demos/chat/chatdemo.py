@@ -25,6 +25,12 @@ from tornado.concurrent import Future
 from tornado import gen
 from tornado.options import define, options, parse_command_line
 
+try:
+    xrange  # py2
+except NameError:
+    xrange = range  # py3
+
+
 define("port", default=8888, help="run on the given port", type=int)
 define("debug", default=False, help="run in debug mode")
 
