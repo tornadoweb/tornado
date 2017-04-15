@@ -8,6 +8,7 @@ from tornado.concurrent import Future
 from tornado import gen
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log, app_log
+from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipBefore35, exec_test
 from tornado.web import Application, RequestHandler
@@ -130,6 +131,11 @@ class CoroutineOnMessageHandler(TestWebSocketHandler):
         self.write_message(message)
 
 
+class RenderMessageHandler(TestWebSocketHandler):
+    def on_message(self, message):
+        self.write_message(self.render_string('message.html', message=message))
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, **kwargs):
@@ -168,7 +174,15 @@ class WebSocketTest(WebSocketBaseTestCase):
              dict(close_future=self.close_future)),
             ('/coroutine', CoroutineOnMessageHandler,
              dict(close_future=self.close_future)),
-        ])
+            ('/render', RenderMessageHandler,
+             dict(close_future=self.close_future)),
+        ], template_loader=DictLoader({
+            'message.html': '<b>{{ message }}</b>',
+        }))
+
+    def tearDown(self):
+        super(WebSocketTest, self).tearDown()
+        RequestHandler._template_loaders.clear()
 
     def test_http_request(self):
         # WS server, HTTP client.
@@ -217,6 +231,14 @@ class WebSocketTest(WebSocketBaseTestCase):
         ws.write_message(u'hello \u00e9')
         response = yield ws.read_message()
         self.assertEqual(response, u'hello \u00e9')
+        yield self.close(ws)
+
+    @gen_test
+    def test_render_message(self):
+        ws = yield self.ws_connect('/render')
+        ws.write_message('hello')
+        response = yield ws.read_message()
+        self.assertEqual(response, '<b>hello</b>')
         yield self.close(ws)
 
     @gen_test
