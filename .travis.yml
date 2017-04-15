@@ -23,11 +23,13 @@ install:
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
-    - travis_retry pip install codecov
+    - travis_retry pip install codecov virtualenv
     # Create a separate no-dependencies virtualenv to make sure all imports
-    # of optional-dependencies are guarded.
-    - virtualenv ./nodeps
-    - ./nodeps/bin/python setup.py install
+    # of optional-dependencies are guarded. (skipped on pypy3 because
+    # virtualenv no longer supports py32)
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then virtualenv ./nodeps; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then ./nodeps/bin/python -VV; fi
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then ./nodeps/bin/python setup.py install; fi
     - curl-config --version; pip freeze
 
 script:
@@ -66,7 +68,7 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
     #- if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python $TARGET --ioloop_time_monotonic; fi
-    - ../nodeps/bin/python -m tornado.test.runtests
+    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then ../nodeps/bin/python -m tornado.test.runtests; fi
     # make coverage reports for Codecov to find
     - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then coverage xml; fi
     - export TORNADO_EXTENSION=0
