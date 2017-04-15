@@ -993,6 +993,9 @@ class RequestHandler(object):
         self._log()
         self._finished = True
         self.on_finish()
+        self._break_cycles()
+
+    def _break_cycles(self):
         # Break up a reference cycle between this handler and the
         # _ui_module closures to allow for faster GC on CPython.
         self.ui = None

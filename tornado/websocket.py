@@ -434,6 +434,16 @@ class WebSocketHandler(tornado.web.RequestHandler):
         if not self._on_close_called:
             self._on_close_called = True
             self.on_close()
+            self._break_cycles()
+
+    def _break_cycles(self):
+        # WebSocketHandlers call finish() early, but we don't want to
+        # break up reference cycles (which makes it impossible to call
+        # self.render_string) until after we've really closed the
+        # connection (if it was established in the first place,
+        # indicated by status code 101).
+        if self.get_status() != 101 or self._on_close_called:
+            super(WebSocketHandler, self)._break_cycles()
 
     def send_error(self, *args, **kwargs):
         if self.stream is None:
