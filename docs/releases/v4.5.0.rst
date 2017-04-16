@@ -1,7 +1,7 @@
 What's new in Tornado 4.5
 =========================
 
-Xxx XX, 2017
+Apr 16, 2017
 ------------
 
 Backwards-compatibility warning
