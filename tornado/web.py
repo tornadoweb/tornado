@@ -1320,6 +1320,11 @@ class RequestHandler(object):
            Added support for cookie version 2.  Both versions 1 and 2 are
            supported.
         """
+        if hasattr(self, 'no_xsrf') and self.no_xsrf:
+            # when handler.no_xsrf = True, we will not check xsrf cookie
+            # this is very useful when exposing handlers to HTTP clients
+            # other than browsers
+            return
         token = (self.get_argument("_xsrf", None) or
                  self.request.headers.get("X-Xsrftoken") or
                  self.request.headers.get("X-Csrftoken"))

@@ -98,6 +98,12 @@ class ObjectDict(_ObjectDictBase):
         # type: (str, Any) -> None
         self[name] = value
 
+    def __delattr__(self, name):
+        try:
+            del self[name]
+        except KeyError:
+            raise AttributeError(name)
+
 
 class GzipDecompressor(object):
     """Streaming gzip decompressor.
