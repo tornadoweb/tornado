@@ -420,16 +420,18 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 # forbid clients from sending a body, it arguably
                 # disallows the server from doing anything with them.
                 raise ValueError('Body must be None for GET request')
-            request_buffer = BytesIO(utf8(request.body or ''))
 
-            def ioctl(cmd):
-                if cmd == curl.IOCMD_RESTARTREAD:
-                    request_buffer.seek(0)
-            curl.setopt(pycurl.READFUNCTION, request_buffer.read)
-            curl.setopt(pycurl.IOCTLFUNCTION, ioctl)
             if request.method == "POST":
-                curl.setopt(pycurl.POSTFIELDSIZE, len(request.body or ''))
+                curl.setopt(pycurl.POSTFIELDS, utf8(request.body or ''))
             else:
+                request_buffer = BytesIO(utf8(request.body or ''))
+
+                def ioctl(cmd):
+                    if cmd == curl.IOCMD_RESTARTREAD:
+                        request_buffer.seek(0)
+
+                curl.setopt(pycurl.READFUNCTION, request_buffer.read)
+                curl.setopt(pycurl.IOCTLFUNCTION, ioctl)
                 curl.setopt(pycurl.UPLOAD, True)
                 curl.setopt(pycurl.INFILESIZE, len(request.body or ''))
 
