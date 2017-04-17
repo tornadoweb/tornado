@@ -342,16 +342,16 @@ class Locale(object):
         if not full_format:
             if relative and days == 0:
                 if seconds < 50:
-                    return _("1 second ago", "%(seconds)d seconds ago",
+                    return _("%(seconds)d second ago", "%(seconds)d seconds ago",
                              seconds) % {"seconds": seconds}
 
                 if seconds < 50 * 60:
                     minutes = round(seconds / 60.0)
-                    return _("1 minute ago", "%(minutes)d minutes ago",
+                    return _("%(minutes)d minute ago", "%(minutes)d minutes ago",
                              minutes) % {"minutes": minutes}
 
                 hours = round(seconds / (60.0 * 60))
-                return _("1 hour ago", "%(hours)d hours ago",
+                return _("%(hours)d hour ago", "%(hours)d hours ago",
                          hours) % {"hours": hours}
 
             if days == 0:
