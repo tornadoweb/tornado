@@ -25,11 +25,12 @@ import warnings
 
 from tornado.concurrent import (Future, future_add_done_callback,
                                 future_set_result_unless_cancelled)
-from tornado.escape import native_str, utf8
+from tornado.escape import native_str, urllib_parse, utf8
 from tornado import gen
 from tornado import httputil
 from tornado import iostream
 from tornado.log import gen_log, app_log
+from tornado import options
 from tornado import stack_context
 from tornado.util import GzipDecompressor, PY3
 
@@ -83,6 +84,8 @@ class HTTP1ConnectionParameters(object):
 
 
 class HTTP1Connection(httputil.HTTPConnection):
+    _header_safe = ''.join(chr(i) for i in range(128))
+
     """Implements the HTTP/1.x protocol.
 
     This class can be on its own for clients, or via `HTTP1ServerConnection`
@@ -526,7 +529,23 @@ class HTTP1Connection(httputil.HTTPConnection):
         # insert between messages of a reused connection.  Per RFC 7230,
         # we SHOULD ignore at least one empty line before the request.
         # http://tools.ietf.org/html/rfc7230#section-3.5
-        data = native_str(data.decode('latin1')).lstrip("\r\n")
+        if options.options.disable_hh_patches:
+            data = native_str(data.decode('latin1')).lstrip("\r\n")
+        else:
+            decoded_headers = None
+            for enc in ('ascii', 'cp1251', 'utf-8'):
+                try:
+                    decoded_headers = data.decode(enc)
+                    break
+                except UnicodeDecodeError:
+                    gen_log.exception('Exception during headers decoding')
+                    continue
+
+            if decoded_headers is None:
+                raise httputil.HTTPInputError("Invalid encoding in headers")
+
+            data = urllib_parse.quote(native_str(decoded_headers), safe=self._header_safe)
+
         # RFC 7230 section allows for both CRLF and bare LF.
         eol = data.find("\n")
         start_line = data[:eol].rstrip("\r")

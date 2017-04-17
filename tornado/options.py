@@ -652,3 +652,5 @@ def add_parse_callback(callback):
 
 # Default options
 define_logging_options(options)
+
+options.define('disable_hh_patches', default=False, type=bool, help='Disables all hh-specific patches')

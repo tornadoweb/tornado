@@ -169,6 +169,8 @@ def main():
     define('locale', type=str, default=None,
            callback=lambda x: locale.setlocale(locale.LC_ALL, x))
 
+    options.disable_hh_patches = True
+
     def configure_ioloop():
         kwargs = {}
         if options.ioloop_time_monotonic:
