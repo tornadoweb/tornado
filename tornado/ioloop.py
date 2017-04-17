@@ -897,8 +897,9 @@ class PollIOLoop(IOLoop):
                 fd_obj = handler_func = None
 
         finally:
-            # reset the stopped flag so another start/stop pair can be issued
+            # reset the stopped, running flags so another start/stop pair can be issued
             self._stopped = False
+            self._running = False
             if self._blocking_signal_threshold is not None:
                 signal.setitimer(signal.ITIMER_REAL, 0, 0)
             IOLoop._current.instance = old_current
