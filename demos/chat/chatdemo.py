@@ -21,6 +21,8 @@ import tornado.web
 import os.path
 import uuid
 
+from collections import deque
+
 from tornado.concurrent import Future
 from tornado import gen
 from tornado.options import define, options, parse_command_line
@@ -32,8 +34,9 @@ define("debug", default=False, help="run in debug mode")
 class MessageBuffer(object):
     def __init__(self):
         self.waiters = set()
-        self.cache = []
         self.cache_size = 200
+        self.cache = deque(maxlen=self.cache_size)
+
 
     def wait_for_messages(self, cursor=None):
         # Construct a Future to return to our caller.  This allows
@@ -64,8 +67,6 @@ class MessageBuffer(object):
             future.set_result(messages)
         self.waiters = set()
         self.cache.extend(messages)
-        if len(self.cache) > self.cache_size:
-            self.cache = self.cache[-self.cache_size:]
 
 
 # Making this a non-singleton is left as an exercise for the reader.
