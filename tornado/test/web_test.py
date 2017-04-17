@@ -2636,6 +2636,14 @@ class XSRFTest(SimpleHandlerTestCase):
                 headers=self.cookie_headers())
         self.assertEqual(response.code, 403)
 
+    def test_xsrf_fail_malformed_header(self):
+        with ExpectLog(gen_log, ".*XSRF cookie does not match POST"):
+            response = self.fetch(
+                "/", method="POST", body=b"",
+                headers=dict({"X-Xsrftoken": b"null"}, **self.cookie_headers()))
+
+        self.assertEqual(response.code, 403)
+
     def test_xsrf_success_short_token(self):
         response = self.fetch(
             "/", method="POST",
