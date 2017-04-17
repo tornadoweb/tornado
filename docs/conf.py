@@ -3,6 +3,7 @@ import os
 import sys
 import time
 sys.path.insert(0, os.path.abspath(".."))
+from setuptools.command import easy_install
 import tornado
 
 master_doc = "index"
@@ -91,6 +92,9 @@ on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 # default anyway.  This block will use the same theme when building locally
 # as on RTD.
 if not on_rtd:
-    import sphinx_rtd_theme
+    try:
+        import sphinx_rtd_theme
+    except ImportError:
+        easy_install.main(["sphinx_rtd_theme"])
     html_theme = 'sphinx_rtd_theme'
     html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
