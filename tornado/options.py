@@ -150,6 +150,11 @@ class OptionParser(object):
         """
         return [(opt.name, opt.value()) for name, opt in self._options.items()]
 
+    def iteritems(self):
+        """Return an iterator of the (name, value) pairs.
+        """
+        return ((name, opt.value()) for name, opt in self._options.iteritems())
+
     def groups(self):
         """The set of option-groups created by ``define``.
 
