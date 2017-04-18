@@ -44,7 +44,7 @@ script:
     # Copy the coveragerc down so coverage.py can find it.
     - cp ../.coveragerc .
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
-    - export TARGET="-m tornado.test.runtests"
+    - export TARGET="-m tornado.test.runtests --verbose"
     # Travis workers are often overloaded and cause our tests to exceed
     # the default timeout of 5s.
     - export ASYNC_TEST_TIMEOUT=15
