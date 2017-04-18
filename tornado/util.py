@@ -87,6 +87,16 @@ except ImportError:
 class ObjectDict(_ObjectDictBase):
     """Makes a dictionary behave like an object, with attribute-style access.
     """
+    def __init__(self, *args, **kwargs):
+        super(ObjectDict, self).__init__(*args, **kwargs)
+        for name in self:
+            if isinstance(self[name], dict):
+                self[name] = ObjectDict(self[name])
+            elif isinstance(self[name], list):
+                for i, elem in enumerate(self[name]):
+                    if isinstance(elem, dict):
+                        self[name][i] = ObjectDict(elem)
+
     def __getattr__(self, name):
         # type: (str) -> Any
         try:
