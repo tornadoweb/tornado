@@ -190,6 +190,13 @@ class OptionsTest(unittest.TestCase):
         self.assertEqual(options.foo, 2)
 
     def test_types(self):
+
+        class email(str):
+           def __new__(cls, value):
+                if '@' not in value:
+                    raise ValueError()
+                return str.__new__(cls, value)
+
         options = OptionParser()
         options.define('str', type=str)
         options.define('basestring', type=basestring_type)
@@ -197,13 +204,18 @@ class OptionsTest(unittest.TestCase):
         options.define('float', type=float)
         options.define('datetime', type=datetime.datetime)
         options.define('timedelta', type=datetime.timedelta)
+        options.define('email', type=email)
+        options.define('list-of-int', type=int, multiple=True)
         options.parse_command_line(['main.py',
                                     '--str=asdf',
                                     '--basestring=qwer',
                                     '--int=42',
                                     '--float=1.5',
                                     '--datetime=2013-04-28 05:16',
-                                    '--timedelta=45s'])
+                                    '--timedelta=45s',
+                                    '--email=tornado@web.com',
+                                    '--list-of-int=1,2,3'])
+
         self.assertEqual(options.str, 'asdf')
         self.assertEqual(options.basestring, 'qwer')
         self.assertEqual(options.int, 42)
@@ -211,6 +223,39 @@ class OptionsTest(unittest.TestCase):
         self.assertEqual(options.datetime,
                          datetime.datetime(2013, 4, 28, 5, 16))
         self.assertEqual(options.timedelta, datetime.timedelta(seconds=45))
+        self.assertEqual(options.email, 'tornado@web.com')
+        self.assertTrue(isinstance(options.email, email))
+        self.assertEqual(options.list_of_int, [1, 2, 3])
+
+    def test_types_with_conf_file(self):
+
+        class email(str):
+           def __new__(cls, value):
+                if '@' not in value:
+                    raise ValueError()
+                return str.__new__(cls, value)
+
+        options = OptionParser()
+        options.define('str', type=str)
+        options.define('basestring', type=basestring_type)
+        options.define('int', type=int)
+        options.define('float', type=float)
+        options.define('datetime', type=datetime.datetime)
+        options.define('timedelta', type=datetime.timedelta)
+        options.define('email', type=email)
+        options.define('list-of-int', type=int, multiple=True)
+        options.parse_config_file(os.path.join(os.path.dirname(__file__),
+                                               "options_test_types.cfg"))
+        self.assertEqual(options.str, 'asdf')
+        self.assertEqual(options.basestring, 'qwer')
+        self.assertEqual(options.int, 42)
+        self.assertEqual(options.float, 1.5)
+        self.assertEqual(options.datetime,
+                         datetime.datetime(2013, 4, 28, 5, 16))
+        self.assertEqual(options.timedelta, datetime.timedelta(seconds=45))
+        self.assertEqual(options.email, 'tornado@web.com')
+        self.assertTrue(isinstance(options.email, email))
+        self.assertEqual(options.list_of_int, [1, 2, 3])
 
     def test_multiple_string(self):
         options = OptionParser()
