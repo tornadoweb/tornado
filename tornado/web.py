@@ -2292,6 +2292,12 @@ class StaticFileHandler(RequestHandler):
     in your application settings, or add ``default_filename`` as an initializer
     argument for your ``StaticFileHandler``.
 
+    To serve a file without an extension (like ``/path/to/file``) when the
+    file has an extension on the file system (``/path/to/file.html``), set
+    ``static_handler_args=dict(default_extension=".html")`` in your application
+    settings, or add ``default_extension`` as an initializer argument for your
+    ``StaticFileHandler``.
+
     To maximize the effectiveness of browser caching, this class supports
     versioned urls (by default using the argument ``?v=``).  If a version
     is given, we instruct the browser to cache this file indefinitely.
@@ -2336,9 +2342,10 @@ class StaticFileHandler(RequestHandler):
     _static_hashes = {}  # type: typing.Dict
     _lock = threading.Lock()  # protects _static_hashes
 
-    def initialize(self, path, default_filename=None):
+    def initialize(self, path, default_filename=None, default_extension=None):
         self.root = path
         self.default_filename = default_filename
+        self.default_extension = default_extension
 
     @classmethod
     def reset(cls):
@@ -2546,7 +2553,15 @@ class StaticFileHandler(RequestHandler):
                 return
             absolute_path = os.path.join(absolute_path, self.default_filename)
         if not os.path.exists(absolute_path):
-            raise HTTPError(404)
+            if (self.default_extension is not None
+                    and os.path.splitext(absolute_path)[1] == ''
+                    and os.path.exists(absolute_path + self.default_extension)):
+                # The default extension is defined, the requested file does
+                # not have an extension already, and the path exists with
+                # the default_extension. Therfore, append extension.
+                absolute_path += self.default_extension
+            else:
+                raise HTTPError(404)
         if not os.path.isfile(absolute_path):
             raise HTTPError(403, "%s is not a file", self.path)
         return absolute_path

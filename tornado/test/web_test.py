@@ -1247,6 +1247,25 @@ class StaticDefaultFilenameTest(WebTestCase):
 
 
 @wsgi_safe
+class StaticDefaultExtensionTest(WebTestCase):
+    def get_app_kwargs(self):
+        return dict(static_path=relpath('static'),
+                    static_handler_args=dict(default_extension='.html'))
+
+    def get_handlers(self):
+        return []
+
+    def test_static_default_extension(self):
+        response = self.fetch('/static/dir/index', follow_redirects=False)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b'this is the index\n', response.body)
+
+    def test_static_default_extension_404(self):
+        response = self.fetch('/static/dir/missing', follow_redirects=False)
+        self.assertEqual(response.code, 404)
+
+
+@wsgi_safe
 class StaticFileWithPathTest(WebTestCase):
     def get_app_kwargs(self):
         return dict(static_path=relpath('static'),
