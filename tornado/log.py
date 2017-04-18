@@ -33,6 +33,7 @@ from __future__ import absolute_import, division, print_function
 import logging
 import logging.handlers
 import sys
+import warnings
 
 from tornado.escape import _unicode
 from tornado.util import unicode_type, basestring_type
@@ -131,6 +132,7 @@ class LogFormatter(logging.Formatter):
         self._fmt = fmt
 
         self._colors = {}
+        self._normal = ''
         if color and _stderr_supports_color():
             if curses is not None:
                 # The curses module has some str/bytes confusion in
@@ -153,9 +155,7 @@ class LogFormatter(logging.Formatter):
                     self._colors[levelno] = '\033[2;3%dm' % code
                 self._normal = '\033[0m'
             else:
-                raise RuntimeError("No supported color terminal library")
-        else:
-            self._normal = ''
+                warnings.warn("No supported color terminal library", RuntimeWarning)
 
     def format(self, record):
         try:
