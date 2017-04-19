@@ -40,7 +40,6 @@ from tornado.util import unicode_type, basestring_type
 
 try:
     import colorama
-    import colorama.initialise
 except ImportError:
     colorama = None
 
@@ -65,8 +64,9 @@ def _stderr_supports_color():
                     color = True
             except Exception:
                 pass
-        elif colorama is not None:
-            if colorama.initialise.wrapped_stderr is not None:
+        elif sys.platform.startswith('win') and colorama is not None:
+            # colorama has been initialized
+            if isinstance(sys.stderr, colorama.ansitowin32.StreamWrapper):
                 color = True
     return color
 
@@ -150,7 +150,7 @@ class LogFormatter(logging.Formatter):
                 for levelno, code in colors.items():
                     self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
                 self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
-            elif sys.stderr is getattr(colorama.initialise, 'wrapped_stderr', object()):
+            elif colorama is not None:
                 for levelno, code in colors.items():
                     self._colors[levelno] = '\033[2;3%dm' % code
                 self._normal = '\033[0m'
