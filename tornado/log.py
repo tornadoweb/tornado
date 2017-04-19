@@ -66,8 +66,11 @@ def _stderr_supports_color():
                 pass
         elif sys.platform.startswith('win') and colorama is not None:
             # colorama has been initialized
-            if isinstance(sys.stderr, colorama.ansitowin32.StreamWrapper):
-                color = True
+            try:
+                if isinstance(sys.stderr, colorama.ansitowin32.StreamWrapper):
+                    color = True
+            except AttributeError:  # in case colorama's API changes in the future
+                warnings.warn("Problem with initializing colorama.")
     return color
 
 
