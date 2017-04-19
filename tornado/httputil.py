@@ -131,6 +131,9 @@ class HTTPHeaders(collections.MutableMapping):
     Set-Cookie: A=B
     Set-Cookie: C=D
     """
+
+    __slots__ = ["_dict", "_as_list", "_last_key"]
+
     def __init__(self, *args, **kwargs):
         self._dict = {}  # type: typing.Dict[str, str]
         self._as_list = {}  # type: typing.Dict[str, typing.List[str]]
@@ -226,6 +229,19 @@ class HTTPHeaders(collections.MutableMapping):
 
     def __iter__(self):
         return iter(self._dict)
+
+    # required for pickle: because __slots__ defined
+    def __getstate__(self):
+        return {
+            slot: getattr(self, slot)
+            for slot in self.__slots__
+            if hasattr(self, slot)
+        }
+
+    # required for pickle: because __slots__ defined
+    def __setstate__(self, state):
+        for slot, value in state.items():
+            setattr(self, slot, value)
 
     def copy(self):
         # defined in dict but not in MutableMapping.
