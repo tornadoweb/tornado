@@ -79,7 +79,7 @@ def json_encode(value):
     # the javascript.  Some json libraries do this escaping by default,
     # although python's standard library does not, so we do it here.
     # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
-    return json.dumps(value).replace("</", "<\\/")
+    return json.dumps(value, separators=(',', ':')).replace("</", "<\\/")
 
 
 def json_decode(value):
