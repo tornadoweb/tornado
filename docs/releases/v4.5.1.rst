@@ -1,7 +1,7 @@
-What's new in Tornado 4.5
-=========================
+What's new in Tornado 4.5.1
+===========================
 
-Apr 16, 2017
+Apr 20, 2017
 ------------
 
 `tornado.log`
