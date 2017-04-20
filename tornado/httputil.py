@@ -603,6 +603,8 @@ def url_concat(url, args):
     >>> url_concat("http://example.com/foo?a=b", [("c", "d"), ("c", "d2")])
     'http://example.com/foo?a=b&c=d&c=d2'
     """
+    if args is None:
+        return url
     parsed_url = urlparse(url)
     if isinstance(args, dict):
         parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)

@@ -66,6 +66,13 @@ class TestUrlConcat(unittest.TestCase):
         )
         self.assertEqual(url, "https://localhost/path?r=1&t=2")
 
+    def test_url_concat_none_params(self):
+        url = url_concat(
+            "https://localhost/path?r=1&t=2",
+            None,
+        )
+        self.assertEqual(url, "https://localhost/path?r=1&t=2")
+
     def test_url_concat_with_frag(self):
         url = url_concat(
             "https://localhost/path#tab",
