@@ -36,6 +36,9 @@ install:
 
   - "pip install tox wheel"
 
+  # Install colorama to make sure no failures when it exists
+  - "pip install colorama"
+
 build: false  # Not a C# project, build stuff at the test step instead.
 
 test_script:

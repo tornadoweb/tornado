@@ -33,6 +33,7 @@ from __future__ import absolute_import, division, print_function
 import logging
 import logging.handlers
 import sys
+import warnings
 
 from tornado.escape import _unicode
 from tornado.util import unicode_type, basestring_type
@@ -63,8 +64,13 @@ def _stderr_supports_color():
                     color = True
             except Exception:
                 pass
-        elif colorama:
-            color = True
+        elif sys.platform.startswith('win') and colorama is not None:
+            # colorama has been initialized
+            try:
+                if isinstance(sys.stderr, colorama.ansitowin32.StreamWrapper):
+                    color = True
+            except AttributeError:  # in case colorama's API changes in the future
+                warnings.warn("Problem with initializing colorama.")
     return color
 
 
@@ -129,6 +135,7 @@ class LogFormatter(logging.Formatter):
         self._fmt = fmt
 
         self._colors = {}
+        self._normal = ''
         if color and _stderr_supports_color():
             if curses is not None:
                 # The curses module has some str/bytes confusion in
@@ -146,14 +153,12 @@ class LogFormatter(logging.Formatter):
                 for levelno, code in colors.items():
                     self._colors[levelno] = unicode_type(curses.tparm(fg_color, code), "ascii")
                 self._normal = unicode_type(curses.tigetstr("sgr0"), "ascii")
-            elif sys.stderr is getattr(colorama, 'wrapped_stderr', object()):
+            elif colorama is not None:
                 for levelno, code in colors.items():
                     self._colors[levelno] = '\033[2;3%dm' % code
                 self._normal = '\033[0m'
             else:
-                raise RuntimeError("No supported color terminal library")
-        else:
-            self._normal = ''
+                warnings.warn("No supported color terminal library", RuntimeWarning)
 
     def format(self, record):
         try:
