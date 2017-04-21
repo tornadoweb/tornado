@@ -635,7 +635,8 @@ class RequestHandler(object):
         key_version = None
         if isinstance(secret, dict):
             if self.application.settings.get("key_version") is None:
-                raise Exception("key_version setting must be used for secret_key dicts")
+                raise Exception(
+                    "key_version setting must be used for secret_key dicts")
             key_version = self.application.settings["key_version"]
 
         return create_signed_value(secret, name, value, version=version,
@@ -709,7 +710,9 @@ class RequestHandler(object):
         if not isinstance(chunk, (bytes, unicode_type, dict)):
             message = "write() only accepts bytes, unicode, and dict objects"
             if isinstance(chunk, list):
-                message += ". Lists not accepted for security reasons; see http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"
+                message += (". Lists not accepted for security reasons; see "
+                            "http://www.tornadoweb.org/en/stable/web.html#"
+                            "tornado.web.RequestHandler.write")
             raise TypeError(message)
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
@@ -975,7 +978,8 @@ class RequestHandler(object):
                     self._write_buffer = []
                     self.set_status(304)
             if self._status_code in (204, 304):
-                assert not self._write_buffer, "Cannot send body with %s" % self._status_code
+                assert not self._write_buffer, \
+                    "Cannot send body with %s" % self._status_code
                 self._clear_headers_for_304()
             elif "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
@@ -3113,8 +3117,10 @@ def create_signed_value(secret, name, value, version=None, clock=None,
             b''])
 
         if isinstance(secret, dict):
-            assert key_version is not None, 'Key version must be set when sign key dict is used'
-            assert version >= 2, 'Version must be at least 2 for key version support'
+            assert key_version is not None, \
+                'Key version must be set when sign key dict is used'
+            assert version >= 2, \
+                'Version must be at least 2 for key version support'
             secret = secret[key_version]
 
         signature = _create_signature_v2(secret, to_sign)
@@ -3229,7 +3235,8 @@ def _decode_fields_v2(value):
 
 def _decode_signed_value_v2(secret, name, value, max_age_days, clock):
     try:
-        key_version, timestamp, name_field, value_field, passed_sig = _decode_fields_v2(value)
+        key_version, timestamp, name_field, value_field, passed_sig = \
+            _decode_fields_v2(value)
     except ValueError:
         return None
     signed_string = value[:-len(passed_sig)]
