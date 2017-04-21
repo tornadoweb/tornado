@@ -74,6 +74,12 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         self._multi.close()
         super(CurlAsyncHTTPClient, self).close()
 
+        # Set below properties to None to reduce the reference count of current
+        # instance, because those properties hold some methods of current
+        # instance that will case circular reference.
+        self._force_timeout_callback = None
+        self._multi = None
+
     def fetch_impl(self, request, callback):
         self._requests.append((request, callback))
         self._process_queue()
