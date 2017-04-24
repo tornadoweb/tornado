@@ -26,6 +26,8 @@ import signal
 import subprocess
 import sys
 import time
+import ctypes
+import signal
 
 from binascii import hexlify
 
@@ -133,10 +135,13 @@ def fork_processes(num_processes, max_restarts=100):
     gen_log.info("Starting %d processes", num_processes)
     children = {}
 
+    libc = ctypes.CDLL('libc.so.6')
+
     def start_child(i):
         pid = os.fork()
         if pid == 0:
             # child process
+            libc.prctl(1, signal.SIGTERM)
             _reseed_random()
             global _task_id
             _task_id = i
