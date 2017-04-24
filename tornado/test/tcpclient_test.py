@@ -27,6 +27,7 @@ from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, gen_test
 from tornado.test.util import skipIfNoIPv6, unittest, refusing_port, skipIfNonUnix
+from tornado.gen import TimeoutError
 
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
@@ -157,6 +158,17 @@ class TCPClientTest(AsyncTestCase):
                           socket.AF_INET,
                           '127.0.0.1',
                           source_port=1)
+
+    @gen_test
+    def test_connect_timeout(self):
+        timeout = 0.1
+
+        class TimeoutResolver(Resolver):
+            def resolve(self, *args, **kwargs):
+                return Future()  # never completes
+        with self.assertRaises(TimeoutError):
+            yield TCPClient(resolver=TimeoutResolver()).connect(
+                '8.8.8.8', 12345, self.io_loop.time() + timeout)
 
 
 class TestConnectorSplit(unittest.TestCase):

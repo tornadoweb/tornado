@@ -155,7 +155,8 @@ class TCPClient(object):
 
     @gen.coroutine
     def connect(self, host, port, af=socket.AF_UNSPEC, ssl_options=None,
-                max_buffer_size=None, source_ip=None, source_port=None):
+                max_buffer_size=None, source_ip=None, source_port=None,
+                timeout=None):
         """Connect to the given host and port.
 
         Asynchronously returns an `.IOStream` (or `.SSLIOStream` if
@@ -173,19 +174,30 @@ class TCPClient(object):
         .. versionchanged:: 4.5
            Added the ``source_ip`` and ``source_port`` arguments.
         """
-        addrinfo = yield self.resolver.resolve(host, port, af)
+        if timeout:
+            addrinfo = yield gen.with_timeout(
+                timeout, self.resolver.resolve(host, port, af))
+        else:
+            addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(
             addrinfo, self.io_loop,
             functools.partial(self._create_stream, max_buffer_size,
                               source_ip=source_ip, source_port=source_port)
         )
-        af, addr, stream = yield connector.start()
+        if timeout:
+            af, addr, stream = yield gen.with_timeout(timeout, connector.start())
+        else:
+            af, addr, stream = yield connector.start()
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
-            stream = yield stream.start_tls(False, ssl_options=ssl_options,
-                                            server_hostname=host)
+            if timeout:
+                stream = yield gen.with_timeout(timeout, stream.start_tls(
+                    False, ssl_options=ssl_options, server_hostname=host))
+            else:
+                stream = yield stream.start_tls(False, ssl_options=ssl_options,
+                                                server_hostname=host)
         raise gen.Return(stream)
 
     def _create_stream(self, max_buffer_size, af, addr, source_ip=None,
