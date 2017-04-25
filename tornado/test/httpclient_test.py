@@ -536,6 +536,15 @@ X-XSS-Protection: 1;
         response.rethrow()
         self.assertEqual(response.headers["Foo"], native_str(u"\u00e9"))
 
+    def test_async_context_manager(self):
+        with self.http_client:
+            response = self.fetch("/hello")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers["Content-Type"], "text/plain")
+        self.assertEqual(response.body, b"Hello world!")
+        self.assertEqual(int(response.request_time), 0)
+        self.assert_(self.http_client._closed)
+
 
 class RequestProxyTest(unittest.TestCase):
     def test_request_set(self):
@@ -631,6 +640,12 @@ class SyncHTTPClientTest(unittest.TestCase):
         with self.assertRaises(HTTPError) as assertion:
             self.http_client.fetch(self.get_url('/notfound'))
         self.assertEqual(assertion.exception.code, 404)
+
+    def test_sync_context_manager(self):
+        with HTTPClient() as client:
+            response = self.http_client.fetch(self.get_url('/'))
+        self.assertEqual(b'Hello world!', response.body)
+        self.assert_(client._closed)
 
 
 class HTTPRequestTestCase(unittest.TestCase):
