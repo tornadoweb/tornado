@@ -168,7 +168,7 @@ class TCPClientTest(AsyncTestCase):
                 return Future()  # never completes
         with self.assertRaises(TimeoutError):
             yield TCPClient(resolver=TimeoutResolver()).connect(
-                '8.8.8.8', 12345, self.io_loop.time() + timeout)
+                '8.8.8.8', 12345, timeout=self.io_loop.time() + timeout)
 
 
 class TestConnectorSplit(unittest.TestCase):
