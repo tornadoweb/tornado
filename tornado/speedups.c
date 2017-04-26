@@ -1,5 +1,6 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include <stdint.h>
 
 static PyObject* websocket_mask(PyObject* self, PyObject* args) {
     const char* mask;
