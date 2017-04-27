@@ -265,6 +265,16 @@ class RequestHandler(object):
         """
         pass
 
+    def on_complete(self):
+        """Called after the end of http method.
+
+        Override this method to perform cleanup, logging, etc.
+        This method is a counterpart to `prepare`. But different from
+        `on_finish`. This method can be asynchronous decoration like
+        `prepare`.
+        """
+        pass
+
     def on_connection_close(self):
         """Called in async handlers if the client closed the connection.
 
@@ -1507,6 +1517,9 @@ class RequestHandler(object):
 
             method = getattr(self, self.request.method.lower())
             result = method(*self.path_args, **self.path_kwargs)
+            if result is not None:
+                result = yield result
+            result = self.on_complete()
             if result is not None:
                 result = yield result
             if self._auto_finish and not self._finished:
