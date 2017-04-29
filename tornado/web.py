@@ -1348,7 +1348,7 @@ class RequestHandler(object):
         return '<input type="hidden" name="_xsrf" value="' + \
             escape.xhtml_escape(self.xsrf_token) + '"/>'
 
-    def static_url(self, path, include_host=None, **kwargs):
+    def static_url(self, path, include_host=None, static_host=None, **kwargs):
         """Returns a static URL for the given relative static file path.
 
         This method requires you set the ``static_path`` setting in your
@@ -1373,13 +1373,22 @@ class RequestHandler(object):
         get_url = self.settings.get("static_handler_class",
                                     StaticFileHandler).make_static_url
 
-        if include_host is None:
-            include_host = getattr(self, "include_host", False)
+        if static_host is None:
+            static_host = getattr(self, "static_host", False)
 
-        if include_host:
-            base = self.request.protocol + "://" + self.request.host
+        if static_host:
+            if "://" in static_host:
+                base = static_host
+            else:
+                base = self.request.protocol + "://" + static_host
         else:
-            base = ""
+            if include_host is None:
+                include_host = getattr(self, "include_host", False)
+
+            if include_host:
+                base = self.request.protocol + "://" + self.request.host
+            else:
+                base = ""
 
         return base + get_url(self.settings, path, **kwargs)
 
