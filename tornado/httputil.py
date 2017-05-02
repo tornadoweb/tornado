@@ -27,6 +27,7 @@ import collections
 import copy
 import datetime
 import email.utils
+import json
 import numbers
 import re
 import time
@@ -714,7 +715,7 @@ def _int_or_none(val):
 def parse_body_arguments(content_type, body, arguments, files, headers=None):
     """Parses a form request body.
 
-    Supports ``application/x-www-form-urlencoded`` and
+    Supports ``application/x-www-form-urlencoded``, ``application/json`` and
     ``multipart/form-data``.  The ``content_type`` parameter should be
     a string and ``body`` should be a byte string.  The ``arguments``
     and ``files`` parameters are dictionaries that will be updated
@@ -729,6 +730,15 @@ def parse_body_arguments(content_type, body, arguments, files, headers=None):
             uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
         except Exception as e:
             gen_log.warning('Invalid x-www-form-urlencoded body: %s', e)
+            uri_arguments = {}
+        for name, values in uri_arguments.items():
+            if values:
+                arguments.setdefault(name, []).extend(values)
+    elif content_type.startswith("application/json"):
+        try:
+            uri_arguments = json.load(body)
+        except Exception as e:
+            gen_log.warning('Invalid json body: %s', e)
             uri_arguments = {}
         for name, values in uri_arguments.items():
             if values:
