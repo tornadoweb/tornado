@@ -2898,6 +2898,17 @@ def authenticated(method):
     return wrapper
 
 
+def https_only(method):
+    """Decorate methods with this to ensure request will be sent only via HTTPS."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if self.request.protocol != "https":
+            self.redirect(self.request.full_url().replace("http", "https"))
+        else:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class UIModule(object):
     """A re-usable, modular UI unit on a page.
 
