@@ -43,6 +43,7 @@ from __future__ import absolute_import, division, print_function
 import functools
 import time
 import weakref
+import cgi
 
 from tornado.concurrent import TracebackFuture
 from tornado.escape import utf8, native_str
@@ -585,7 +586,20 @@ class HTTPResponse(object):
         if self.buffer is None:
             return None
         elif self._body is None:
-            self._body = self.buffer.getvalue()
+            encoding = 'ascii'
+
+            if 'Content-Type' in self.headers:
+                _content_type, params = cgi.parse_header(
+                    self.headers['Content-Type'])
+
+                if 'charset' in params:
+                    encoding = params['charset'].strip("'\"")
+
+            try:
+                self._body = self.buffer.getvalue().decode(encoding=encoding)
+            except UnicodeError:
+                self._body = self.buffer.getvalue().decode(encoding=encoding,
+                                                           errors='replace')
 
         return self._body
 
