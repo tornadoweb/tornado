@@ -24,4 +24,6 @@ class WindowsTest(unittest.TestCase):
         with self.assertRaises(WindowsError) as cm:
             set_close_exec(r)
         ERROR_INVALID_HANDLE = 6
-        self.assertEqual(cm.exception.winerror, ERROR_INVALID_HANDLE)
+        ERROR_INVALID_PARAMETER = 87
+        errors = (ERROR_INVALID_HANDLE, ERROR_INVALID_PARAMETER)
+        self.assertIn(cm.exception.winerror, errors)
