@@ -883,17 +883,18 @@ class PollIOLoop(IOLoop):
                 self._events.update(event_pairs)
                 while self._events:
                     fd, events = self._events.popitem()
-                    try:
-                        fd_obj, handler_func = self._handlers[fd]
-                        handler_func(fd_obj, events)
-                    except (OSError, IOError) as e:
-                        if errno_from_exception(e) == errno.EPIPE:
-                            # Happens when the client closes the connection
-                            pass
-                        else:
+                    if fd in self._handlers: 
+                        try:
+                            fd_obj, handler_func = self._handlers[fd]
+                            handler_func(fd_obj, events)
+                        except (OSError, IOError) as e:
+                            if errno_from_exception(e) == errno.EPIPE:
+                                # Happens when the client closes the connection
+                                pass
+                            else:
+                                self.handle_callback_exception(self._handlers.get(fd))
+                        except Exception:
                             self.handle_callback_exception(self._handlers.get(fd))
-                    except Exception:
-                        self.handle_callback_exception(self._handlers.get(fd))
                 fd_obj = handler_func = None
 
         finally:
