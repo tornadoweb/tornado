@@ -196,14 +196,20 @@ def _check_file(modify_times, path):
         return
     if modify_times[path] != modified:
         gen_log.info("%s modified; restarting server", path)
-        _reload()
+        _reload(filepath=path)
 
 
-def _reload():
+def _reload(filepath=None):
     global _reload_attempted
     _reload_attempted = True
     for fn in _reload_hooks:
-        fn()
+        # If the callback has an argument named filepath, we call the function
+        # and pass the file path of the file modified. It helps the callback to
+        # trigger different treatments.
+        if filepath and 'filepath' in fn.func_code.co_varnames):
+            fn(filepath=filepath)
+        else:
+            fn()
     if hasattr(signal, "setitimer"):
         # Clear the alarm signal set by
         # ioloop.set_blocking_log_threshold so it doesn't fire
