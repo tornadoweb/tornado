@@ -764,10 +764,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             data = mask + _websocket_mask(mask, data)
         frame += data
         self._wire_bytes_out += len(frame)
-        try:
-            return self.stream.write(frame)
-        except StreamClosedError:
-            self._abort()
+        return self.stream.write(frame)
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket."""
@@ -951,7 +948,10 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.close(self.handler.close_code)
         elif opcode == 0x9:
             # Ping
-            self._write_frame(True, 0xA, data)
+            try:
+                self._write_frame(True, 0xA, data)
+            except StreamClosedError:
+                self._abort()
             self._run_callback(self.handler.on_ping, data)
         elif opcode == 0xA:
             # Pong
@@ -972,7 +972,10 @@ class WebSocketProtocol13(WebSocketProtocol):
                     close_data = struct.pack('>H', code)
                 if reason is not None:
                     close_data += utf8(reason)
-                self._write_frame(True, 0x8, close_data)
+                try:
+                    self._write_frame(True, 0x8, close_data)
+                except StreamClosedError:
+                    self._abort()
             self.server_terminated = True
         if self.client_terminated:
             if self._waiting is not None:
