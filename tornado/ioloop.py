@@ -121,6 +121,16 @@ class IOLoop(Configurable):
     current instance. If ``make_current=False``, the new `IOLoop` will
     not try to become current.
 
+    In general, an `IOLoop` cannot survive a fork or be shared across
+    processes in any way. When multiple processes are being used, each
+    process should create its own `IOLoop`, which also implies that
+    any objects which depend on the `IOLoop` (such as
+    `.AsyncHTTPClient`) must also be created in the child processes.
+    As a guideline, anything that starts processes (including the
+    `tornado.process` and `multiprocessing` modules) should do so as
+    early as possible, ideally the first thing the application does
+    after loading its configuration in ``main()``.
+
     .. versionchanged:: 4.2
        Added the ``make_current`` keyword argument to the `IOLoop`
        constructor.
@@ -701,6 +711,7 @@ class PollIOLoop(IOLoop):
         self._stopped = False
         self._closing = False
         self._thread_ident = None
+        self._pid = os.getpid()
         self._blocking_signal_threshold = None
         self._timeout_counter = itertools.count()
 
@@ -753,6 +764,8 @@ class PollIOLoop(IOLoop):
     def start(self):
         if self._running:
             raise RuntimeError("IOLoop is already running")
+        if os.getpid() != self._pid:
+            raise RuntimeError("Cannot share PollIOLoops across processes")
         self._setup_logging()
         if self._stopped:
             self._stopped = False
