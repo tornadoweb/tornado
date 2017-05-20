@@ -917,6 +917,10 @@ class ErrorResponseTest(WebTestCase):
             self.assertEqual(response.code, 503)
             self.assertTrue(b"503: Service Unavailable" in response.body)
 
+            response = self.fetch("/default?status=435")
+            self.assertEqual(response.code, 435)
+            self.assertTrue(b"435: Unknown" in response.body)
+
     def test_write_error(self):
         with ExpectLog(app_log, "Uncaught exception"):
             response = self.fetch("/write_error")
@@ -1489,9 +1493,9 @@ class StatusReasonTest(SimpleHandlerTestCase):
         response = self.fetch("/?code=682&reason=Bar")
         self.assertEqual(response.code, 682)
         self.assertEqual(response.reason, "Bar")
-        with ExpectLog(app_log, 'Uncaught exception'):
-            response = self.fetch("/?code=682")
-        self.assertEqual(response.code, 500)
+        response = self.fetch("/?code=682")
+        self.assertEqual(response.code, 682)
+        self.assertEqual(response.reason, "Unknown")
 
 
 @wsgi_safe

@@ -319,10 +319,7 @@ class RequestHandler(object):
         if reason is not None:
             self._reason = escape.native_str(reason)
         else:
-            try:
-                self._reason = httputil.responses[status_code]
-            except KeyError:
-                raise ValueError("unknown status code %d" % status_code)
+            self._reason = httputil.responses.get(status_code, "Unknown")
 
     def get_status(self):
         """Returns the status code for our response."""
@@ -1561,11 +1558,7 @@ class RequestHandler(object):
             # send a response.
             return
         if isinstance(e, HTTPError):
-            if e.status_code not in httputil.responses and not e.reason:
-                gen_log.error("Bad HTTP status code: %d", e.status_code)
-                self.send_error(500, exc_info=sys.exc_info())
-            else:
-                self.send_error(e.status_code, exc_info=sys.exc_info())
+            self.send_error(e.status_code, exc_info=sys.exc_info())
         else:
             self.send_error(500, exc_info=sys.exc_info())
 
