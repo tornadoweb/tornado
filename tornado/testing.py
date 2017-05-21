@@ -73,24 +73,6 @@ else:
     except ImportError:
         import unittest  # type: ignore
 
-_next_port = 10000
-
-
-def get_unused_port():
-    """Returns a (hopefully) unused port number.
-
-    This function does not guarantee that the port it returns is available,
-    only that a series of get_unused_port calls in a single process return
-    distinct ports.
-
-    .. deprecated::
-       Use bind_unused_port instead, which is guaranteed to find an unused port.
-    """
-    global _next_port
-    port = _next_port
-    _next_port = _next_port + 1
-    return port
-
 
 def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.

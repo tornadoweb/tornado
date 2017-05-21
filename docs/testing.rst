@@ -36,6 +36,4 @@
 
    .. autofunction:: bind_unused_port
 
-   .. autofunction:: get_unused_port
-
    .. autofunction:: get_async_test_timeout
