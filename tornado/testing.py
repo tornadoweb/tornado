@@ -395,14 +395,20 @@ class AsyncHTTPTestCase(AsyncTestCase):
         raise NotImplementedError()
 
     def fetch(self, path, **kwargs):
-        """Convenience method to synchronously fetch a url.
+        """Convenience method to synchronously fetch a URL.
 
         The given path will be appended to the local server's host and
         port.  Any additional kwargs will be passed directly to
         `.AsyncHTTPClient.fetch` (and so could be used to pass
         ``method="POST"``, ``body="..."``, etc).
+
+        If the path begins with http:// or https://, it will be treated as a
+        full URL and will be fetched as-is.
         """
-        self.http_client.fetch(self.get_url(path), self.stop, **kwargs)
+        if path.lower().startswith(('http://', 'https://')):
+            self.http_client.fetch(path, self.stop, **kwargs)
+        else:
+            self.http_client.fetch(self.get_url(path), self.stop, **kwargs)
         return self.wait()
 
     def get_httpserver_options(self):

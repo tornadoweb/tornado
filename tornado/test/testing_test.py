@@ -4,8 +4,9 @@ from __future__ import absolute_import, division, print_function
 
 from tornado import gen, ioloop
 from tornado.log import app_log
-from tornado.testing import AsyncTestCase, gen_test, ExpectLog
 from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test, ExpectLog
+from tornado.web import Application
 import contextlib
 import os
 import traceback
@@ -73,6 +74,40 @@ class AsyncTestCaseTest(AsyncTestCase):
             with self.assertRaises(Exception) as cm:
                 self.wait()
         self.assertEqual(str(cm.exception), "error one")
+
+
+class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super(AsyncHTTPTestCaseTest, cls).setUpClass()
+        # An unused port is bound so we can make requests upon it without
+        # impacting a real local web server.
+        cls.external_sock, cls.external_port = bind_unused_port()
+
+    def get_app(self):
+        return Application()
+
+    def test_fetch_segment(self):
+        path = '/path'
+        response = self.fetch(path)
+        self.assertEqual(response.request.url, self.get_url(path))
+
+    def test_fetch_full_http_url(self):
+        path = 'http://localhost:%d/path' % self.external_port
+
+        response = self.fetch(path, request_timeout=0.1)
+        self.assertEqual(response.request.url, path)
+
+    def test_fetch_full_https_url(self):
+        path = 'https://localhost:%d/path' % self.external_port
+
+        response = self.fetch(path, request_timeout=0.1)
+        self.assertEqual(response.request.url, path)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.external_sock.close()
+        super(AsyncHTTPTestCaseTest, cls).tearDownClass()
 
 
 class AsyncTestCaseWrapperTest(unittest.TestCase):
