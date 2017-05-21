@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import contextlib
 import os
 import platform
 import socket
@@ -94,3 +95,15 @@ def is_coverage_running():
         except AttributeError:
             return False
     return mod.startswith('coverage')
+
+
+def subTest(test, *args, **kwargs):
+    """Compatibility shim for unittest.TestCase.subTest.
+
+    Usage: ``with tornado.test.util.subTest(self, x=x):``
+    """
+    try:
+        subTest = test.subTest  # py34+
+    except AttributeError:
+        subTest = contextlib.contextmanager(lambda *a, **kw: (yield))
+    return subTest(*args, **kwargs)

@@ -223,9 +223,10 @@ class OptionParser(object):
         override options set earlier on the command line, but can be overridden
         by later flags.
         """
-        if name in self._options:
+        normalized = self._normalize_name(name)
+        if normalized in self._options:
             raise Error("Option %r already defined in %s" %
-                        (name, self._options[name].file_name))
+                        (normalized, self._options[normalized].file_name))
         frame = sys._getframe(0)
         options_file = frame.f_code.co_filename
 
@@ -247,7 +248,6 @@ class OptionParser(object):
             group_name = group
         else:
             group_name = file_name
-        normalized = self._normalize_name(name)
         option = _Option(name, file_name=file_name,
                          default=default, type=type, help=help,
                          metavar=metavar, multiple=multiple,
