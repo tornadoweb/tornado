@@ -86,6 +86,19 @@ class ConditionTest(AsyncTestCase):
             list(range(4)) + ['notify_all'],
             self.history)
 
+    def test_notify_all_with_priority(self):
+        c = locks.Condition()
+        for i in range(4):
+            self.record_done(c.wait(priority=-i), i)
+
+        c.notify_all()
+        self.history.append('notify_all')
+
+        # Callbacks execute in the order of priority.
+        self.assertEqual(
+            list(range(3, -1, -1)) + ['notify_all'],
+            self.history)
+
     @gen_test
     def test_wait_timeout(self):
         c = locks.Condition()
@@ -251,6 +264,27 @@ class SemaphoreTest(AsyncTestCase):
         self.assertFalse(f2.done())
         sem.release()
         self.assertTrue(f2.done())
+
+        sem.release()
+        # Now acquire() is instant.
+        self.assertTrue(sem.acquire().done())
+        self.assertEqual(0, len(sem._waiters))
+
+    def test_acquire_with_priority(self):
+        sem = locks.Semaphore()
+        f0 = sem.acquire()
+        self.assertTrue(f0.done())
+
+        # Wait for release().
+        f1 = sem.acquire(priority=1)
+        self.assertFalse(f1.done())
+        f2 = sem.acquire()
+        self.assertFalse(f2.done())
+        sem.release()
+        self.assertFalse(f1.done())
+        self.assertTrue(f2.done())
+        sem.release()
+        self.assertTrue(f1.done())
 
         sem.release()
         # Now acquire() is instant.
@@ -442,6 +476,19 @@ class LockTests(AsyncTestCase):
         self.assertFalse(future.done())
         lock.release()
         self.assertTrue(future.done())
+
+    def test_acquire_release_with_priority(self):
+        lock = locks.Lock()
+        self.assertTrue(lock.acquire().done())
+        f1 = lock.acquire()
+        self.assertFalse(f1.done())
+        f2 = lock.acquire(priority=-1)
+        self.assertFalse(f2.done())
+        lock.release()
+        self.assertFalse(f1.done())
+        self.assertTrue(f2.done())
+        lock.release()
+        self.assertTrue(f1.done())
 
     @gen_test
     def test_acquire_fifo(self):

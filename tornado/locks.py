@@ -14,12 +14,33 @@
 
 from __future__ import absolute_import, division, print_function
 
-import collections
+import heapq
 
 from tornado import gen, ioloop
 from tornado.concurrent import Future
 
 __all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore', 'Lock']
+
+
+class _Waiter(object):
+    """Enqueued waiter.
+
+    Waiters are woken up in the order of priority.
+    Waiters with the same priority are woken up in the order of addition,
+    which is implemented using the auxiliary tiebreaker field.
+    """
+    def __init__(self, priority, tiebreaker, future):
+        self.priority = priority
+        self.tiebreaker = tiebreaker
+        self.future = future
+
+    def __lt__(self, other):
+        if self.priority < other.priority:
+            return True
+        elif self.priority > other.priority:
+            return False
+        else:
+            return self.tiebreaker < other.tiebreaker
 
 
 class _TimeoutGarbageCollector(object):
@@ -32,16 +53,26 @@ class _TimeoutGarbageCollector(object):
             print('looping....')
     """
     def __init__(self):
-        self._waiters = collections.deque()  # Futures.
+        self._waiters = []
         self._timeouts = 0
+        self._tiebreaker = 0
 
     def _garbage_collect(self):
         # Occasionally clear timed-out waiters.
         self._timeouts += 1
         if self._timeouts > 100:
             self._timeouts = 0
-            self._waiters = collections.deque(
-                w for w in self._waiters if not w.done())
+            self._waiters = [
+                w for w in self._waiters if not w.future.done()]
+            heapq.heapify(self._waiters)
+
+    def _put(self, priority, future):
+        heapq.heappush(
+            self._waiters, _Waiter(priority, self._tiebreaker, future))
+        self._tiebreaker += 1
+
+    def _get(self):
+        return heapq.heappop(self._waiters).future
 
 
 class Condition(_TimeoutGarbageCollector):
@@ -113,14 +144,16 @@ class Condition(_TimeoutGarbageCollector):
             result += ' waiters[%s]' % len(self._waiters)
         return result + '>'
 
-    def wait(self, timeout=None):
+    def wait(self, timeout=None, priority=0):
         """Wait for `.notify`.
 
         Returns a `.Future` that resolves ``True`` if the condition is notified,
         or ``False`` after a timeout.
+        Waiters are unblocked in the order of priority (the smaller, the better),
+        or, if priorities are the same, in the order of addition.
         """
         waiter = Future()
-        self._waiters.append(waiter)
+        self._put(priority, waiter)
         if timeout:
             def on_timeout():
                 waiter.set_result(False)
@@ -135,7 +168,7 @@ class Condition(_TimeoutGarbageCollector):
         """Wake ``n`` waiters."""
         waiters = []  # Waiters we plan to run right now.
         while n and self._waiters:
-            waiter = self._waiters.popleft()
+            waiter = self._get()
             if not waiter.done():  # Might have timed out.
                 n -= 1
                 waiters.append(waiter)
@@ -361,7 +394,7 @@ class Semaphore(_TimeoutGarbageCollector):
         """Increment the counter and wake one waiter."""
         self._value += 1
         while self._waiters:
-            waiter = self._waiters.popleft()
+            waiter = self._get()
             if not waiter.done():
                 self._value -= 1
 
@@ -374,18 +407,20 @@ class Semaphore(_TimeoutGarbageCollector):
                 waiter.set_result(_ReleasingContextManager(self))
                 break
 
-    def acquire(self, timeout=None):
+    def acquire(self, timeout=None, priority=0):
         """Decrement the counter. Returns a Future.
 
         Block if the counter is zero and wait for a `.release`. The Future
         raises `.TimeoutError` after the deadline.
+        Waiters are unblocked in the order of priority (the smaller, the better),
+        or, if priorities are the same, in the order of addition.
         """
         waiter = Future()
         if self._value > 0:
             self._value -= 1
             waiter.set_result(_ReleasingContextManager(self))
         else:
-            self._waiters.append(waiter)
+            self._put(priority, waiter)
             if timeout:
                 def on_timeout():
                     waiter.set_exception(gen.TimeoutError())
@@ -477,13 +512,15 @@ class Lock(object):
             self.__class__.__name__,
             self._block)
 
-    def acquire(self, timeout=None):
+    def acquire(self, timeout=None, priority=0):
         """Attempt to lock. Returns a Future.
 
         Returns a Future, which raises `tornado.gen.TimeoutError` after a
         timeout.
+        Waiters are unblocked in the order of priority (the smaller, the better),
+        or, if priorities are the same, in the order of addition.
         """
-        return self._block.acquire(timeout)
+        return self._block.acquire(timeout, priority)
 
     def release(self):
         """Unlock.
