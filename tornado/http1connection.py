@@ -164,7 +164,6 @@ class HTTP1Connection(httputil.HTTPConnection):
                     header_data = yield gen.with_timeout(
                         self.stream.io_loop.time() + self.params.header_timeout,
                         header_future,
-                        io_loop=self.stream.io_loop,
                         quiet_exceptions=iostream.StreamClosedError)
                 except gen.TimeoutError:
                     self.close()
@@ -224,7 +223,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                         try:
                             yield gen.with_timeout(
                                 self.stream.io_loop.time() + self._body_timeout,
-                                body_future, self.stream.io_loop,
+                                body_future,
                                 quiet_exceptions=iostream.StreamClosedError)
                         except gen.TimeoutError:
                             gen_log.info("Timeout reading body from %s",

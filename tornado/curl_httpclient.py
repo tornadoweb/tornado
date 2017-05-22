@@ -37,8 +37,8 @@ curl_log = logging.getLogger('tornado.curl_httpclient')
 
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
-    def initialize(self, io_loop, max_clients=10, defaults=None):
-        super(CurlAsyncHTTPClient, self).initialize(io_loop, defaults=defaults)
+    def initialize(self, max_clients=10, defaults=None):
+        super(CurlAsyncHTTPClient, self).initialize(defaults=defaults)
         self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
@@ -53,7 +53,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         # SOCKETFUNCTION.  Mitigate the effects of such bugs by
         # forcing a periodic scan of all active requests.
         self._force_timeout_callback = ioloop.PeriodicCallback(
-            self._handle_force_timeout, 1000, io_loop=io_loop)
+            self._handle_force_timeout, 1000)
         self._force_timeout_callback.start()
 
         # Work around a bug in libcurl 7.29.0: Some fields in the curl

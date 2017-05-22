@@ -134,6 +134,9 @@ class HTTPServer(TCPServer, Configurable,
 
     .. versionchanged:: 4.5
        Added the ``trusted_downstream`` argument.
+
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument has been removed.
     """
     def __init__(self, *args, **kwargs):
         # Ignore args to __init__; real initialization belongs in
@@ -143,7 +146,7 @@ class HTTPServer(TCPServer, Configurable,
         # completely)
         pass
 
-    def initialize(self, request_callback, no_keep_alive=False, io_loop=None,
+    def initialize(self, request_callback, no_keep_alive=False,
                    xheaders=False, ssl_options=None, protocol=None,
                    decompress_request=False,
                    chunk_size=None, max_header_size=None,
@@ -162,7 +165,7 @@ class HTTPServer(TCPServer, Configurable,
             max_body_size=max_body_size,
             body_timeout=body_timeout,
             no_keep_alive=no_keep_alive)
-        TCPServer.__init__(self, io_loop=io_loop, ssl_options=ssl_options,
+        TCPServer.__init__(self, ssl_options=ssl_options,
                            max_buffer_size=max_buffer_size,
                            read_chunk_size=chunk_size)
         self._connections = set()

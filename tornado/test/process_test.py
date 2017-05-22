@@ -147,8 +147,7 @@ class SubprocessTest(AsyncTestCase):
                                     "LayeredTwistedIOLoop")
         subproc = Subprocess([sys.executable, '-u', '-i'],
                              stdin=Subprocess.STREAM,
-                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
-                             io_loop=self.io_loop)
+                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT)
         self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
         subproc.stdout.read_until(b'>>> ', self.stop)
         self.wait()
@@ -168,8 +167,7 @@ class SubprocessTest(AsyncTestCase):
         # Close the parent's stdin handle and see that the child recognizes it.
         subproc = Subprocess([sys.executable, '-u', '-i'],
                              stdin=Subprocess.STREAM,
-                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT,
-                             io_loop=self.io_loop)
+                             stdout=Subprocess.STREAM, stderr=subprocess.STDOUT)
         self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
         subproc.stdout.read_until(b'>>> ', self.stop)
         self.wait()
@@ -184,8 +182,7 @@ class SubprocessTest(AsyncTestCase):
         skip_if_twisted()
         subproc = Subprocess([sys.executable, '-u', '-c',
                               r"import sys; sys.stderr.write('hello\n')"],
-                             stderr=Subprocess.STREAM,
-                             io_loop=self.io_loop)
+                             stderr=Subprocess.STREAM)
         self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
         subproc.stderr.read_until(b'\n', self.stop)
         data = self.wait()
@@ -194,10 +191,9 @@ class SubprocessTest(AsyncTestCase):
     def test_sigchild(self):
         # Twisted's SIGCHLD handler and Subprocess's conflict with each other.
         skip_if_twisted()
-        Subprocess.initialize(io_loop=self.io_loop)
+        Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
-        subproc = Subprocess([sys.executable, '-c', 'pass'],
-                             io_loop=self.io_loop)
+        subproc = Subprocess([sys.executable, '-c', 'pass'])
         subproc.set_exit_callback(self.stop)
         ret = self.wait()
         self.assertEqual(ret, 0)
@@ -215,12 +211,11 @@ class SubprocessTest(AsyncTestCase):
 
     def test_sigchild_signal(self):
         skip_if_twisted()
-        Subprocess.initialize(io_loop=self.io_loop)
+        Subprocess.initialize()
         self.addCleanup(Subprocess.uninitialize)
         subproc = Subprocess([sys.executable, '-c',
                               'import time; time.sleep(30)'],
-                             stdout=Subprocess.STREAM,
-                             io_loop=self.io_loop)
+                             stdout=Subprocess.STREAM)
         subproc.set_exit_callback(self.stop)
         os.kill(subproc.pid, signal.SIGTERM)
         try:

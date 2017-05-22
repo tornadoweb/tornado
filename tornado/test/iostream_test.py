@@ -185,8 +185,7 @@ class TestIOStreamMixin(object):
         def connect_callback():
             streams[1] = client_stream
             self.stop()
-        netutil.add_accept_handler(listener, accept_callback,
-                                   io_loop=self.io_loop)
+        netutil.add_accept_handler(listener, accept_callback)
         client_stream = self._make_client_iostream(socket.socket(), **kwargs)
         client_stream.connect(('127.0.0.1', port),
                               callback=connect_callback)
@@ -227,7 +226,7 @@ class TestIOStreamMixin(object):
         # epoll IOLoop in this respect)
         cleanup_func, port = refusing_port()
         self.addCleanup(cleanup_func)
-        stream = IOStream(socket.socket(), self.io_loop)
+        stream = IOStream(socket.socket())
         self.connect_called = False
 
         def connect_callback():
@@ -255,7 +254,7 @@ class TestIOStreamMixin(object):
         # so we mock it instead. If IOStream changes to call a Resolver
         # before sock.connect, the mock target will need to change too.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        stream = IOStream(s, io_loop=self.io_loop)
+        stream = IOStream(s)
         stream.set_close_callback(self.stop)
         with mock.patch('socket.socket.connect',
                         side_effect=socket.gaierror(errno.EIO, 'boom')):
@@ -845,12 +844,12 @@ class TestIOStreamMixin(object):
 
 class TestIOStreamWebHTTP(TestIOStreamWebMixin, AsyncHTTPTestCase):
     def _make_client_iostream(self):
-        return IOStream(socket.socket(), io_loop=self.io_loop)
+        return IOStream(socket.socket())
 
 
 class TestIOStreamWebHTTPS(TestIOStreamWebMixin, AsyncHTTPSTestCase):
     def _make_client_iostream(self):
-        return SSLIOStream(socket.socket(), io_loop=self.io_loop,
+        return SSLIOStream(socket.socket(),
                            ssl_options=dict(cert_reqs=ssl.CERT_NONE))
 
 
@@ -868,10 +867,10 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
                                      server_side=True,
                                      do_handshake_on_connect=False,
                                      **_server_ssl_options())
-        return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
+        return SSLIOStream(connection, **kwargs)
 
     def _make_client_iostream(self, connection, **kwargs):
-        return SSLIOStream(connection, io_loop=self.io_loop,
+        return SSLIOStream(connection,
                            ssl_options=dict(cert_reqs=ssl.CERT_NONE),
                            **kwargs)
 
@@ -889,12 +888,11 @@ class TestIOStreamSSLContext(TestIOStreamMixin, AsyncTestCase):
         connection = ssl_wrap_socket(connection, context,
                                      server_side=True,
                                      do_handshake_on_connect=False)
-        return SSLIOStream(connection, io_loop=self.io_loop, **kwargs)
+        return SSLIOStream(connection, **kwargs)
 
     def _make_client_iostream(self, connection, **kwargs):
         context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-        return SSLIOStream(connection, io_loop=self.io_loop,
-                           ssl_options=context, **kwargs)
+        return SSLIOStream(connection, ssl_options=context, **kwargs)
 
 
 class TestIOStreamStartTLS(AsyncTestCase):
@@ -1100,8 +1098,8 @@ class TestPipeIOStream(AsyncTestCase):
     def test_pipe_iostream(self):
         r, w = os.pipe()
 
-        rs = PipeIOStream(r, io_loop=self.io_loop)
-        ws = PipeIOStream(w, io_loop=self.io_loop)
+        rs = PipeIOStream(r)
+        ws = PipeIOStream(w)
 
         ws.write(b"hel")
         ws.write(b"lo world")
@@ -1125,8 +1123,8 @@ class TestPipeIOStream(AsyncTestCase):
     def test_pipe_iostream_big_write(self):
         r, w = os.pipe()
 
-        rs = PipeIOStream(r, io_loop=self.io_loop)
-        ws = PipeIOStream(w, io_loop=self.io_loop)
+        rs = PipeIOStream(r)
+        ws = PipeIOStream(w)
 
         NUM_BYTES = 1048576
 

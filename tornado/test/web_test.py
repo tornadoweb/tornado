@@ -379,7 +379,7 @@ class ConnectionCloseTest(WebTestCase):
     def test_connection_close(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("127.0.0.1", self.get_http_port()))
-        self.stream = IOStream(s, io_loop=self.io_loop)
+        self.stream = IOStream(s)
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
         self.wait()
 
@@ -1481,7 +1481,7 @@ class StatusReasonTest(SimpleHandlerTestCase):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't expose the reason string
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     def test_status(self):
         response = self.fetch("/?code=304")
@@ -1520,7 +1520,7 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't expose the reason string
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     def test_raise_with_reason(self):
         response = self.fetch("/")
@@ -2115,7 +2115,7 @@ class StreamingRequestBodyTest(WebTestCase):
         # Use a raw connection so we can control the sending of data.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("127.0.0.1", self.get_http_port()))
-        stream = IOStream(s, io_loop=self.io_loop)
+        stream = IOStream(s)
         stream.write(b"GET " + url + b" HTTP/1.1\r\n")
         if connection_close:
             stream.write(b"Connection: close\r\n")
@@ -2211,7 +2211,7 @@ class BaseStreamingRequestFlowControlTest(object):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't support body_producer.
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     # Test all the slightly different code paths for fixed, chunked, etc bodies.
     def test_flow_control_fixed_body(self):

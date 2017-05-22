@@ -102,10 +102,13 @@ class TCPServer(object):
 
     .. versionadded:: 3.1
        The ``max_buffer_size`` argument.
+
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument has been removed.
     """
-    def __init__(self, io_loop=None, ssl_options=None, max_buffer_size=None,
+    def __init__(self, ssl_options=None, max_buffer_size=None,
                  read_chunk_size=None):
-        self.io_loop = io_loop
+        self.io_loop = IOLoop.current()
         self.ssl_options = ssl_options
         self._sockets = {}  # fd -> socket object
         self._pending_sockets = []
@@ -151,13 +154,9 @@ class TCPServer(object):
         method and `tornado.process.fork_processes` to provide greater
         control over the initialization of a multi-process server.
         """
-        if self.io_loop is None:
-            self.io_loop = IOLoop.current()
-
         for sock in sockets:
             self._sockets[sock.fileno()] = sock
-            add_accept_handler(sock, self._handle_connection,
-                               io_loop=self.io_loop)
+            add_accept_handler(sock, self._handle_connection)
 
     def add_socket(self, socket):
         """Singular version of `add_sockets`.  Takes a single socket object."""
@@ -284,11 +283,11 @@ class TCPServer(object):
                     raise
         try:
             if self.ssl_options is not None:
-                stream = SSLIOStream(connection, io_loop=self.io_loop,
+                stream = SSLIOStream(connection,
                                      max_buffer_size=self.max_buffer_size,
                                      read_chunk_size=self.read_chunk_size)
             else:
-                stream = IOStream(connection, io_loop=self.io_loop,
+                stream = IOStream(connection,
                                   max_buffer_size=self.max_buffer_size,
                                   read_chunk_size=self.read_chunk_size)
 

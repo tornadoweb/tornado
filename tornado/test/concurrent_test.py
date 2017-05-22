@@ -25,6 +25,7 @@ import traceback
 from tornado.concurrent import Future, return_future, ReturnValueIgnoredError, run_on_executor
 from tornado.escape import utf8, to_unicode
 from tornado import gen
+from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado.log import app_log
 from tornado import stack_context
@@ -217,9 +218,8 @@ class CapError(Exception):
 
 
 class BaseCapClient(object):
-    def __init__(self, port, io_loop):
+    def __init__(self, port):
         self.port = port
-        self.io_loop = io_loop
 
     def process_response(self, data):
         status, message = re.match('(.*)\t(.*)\n', to_unicode(data)).groups()
@@ -233,7 +233,7 @@ class ManualCapClient(BaseCapClient):
     def capitalize(self, request_data, callback=None):
         logging.info("capitalize")
         self.request_data = request_data
-        self.stream = IOStream(socket.socket(), io_loop=self.io_loop)
+        self.stream = IOStream(socket.socket())
         self.stream.connect(('127.0.0.1', self.port),
                             callback=self.handle_connect)
         self.future = Future()
@@ -261,7 +261,7 @@ class DecoratorCapClient(BaseCapClient):
     def capitalize(self, request_data, callback):
         logging.info("capitalize")
         self.request_data = request_data
-        self.stream = IOStream(socket.socket(), io_loop=self.io_loop)
+        self.stream = IOStream(socket.socket())
         self.stream.connect(('127.0.0.1', self.port),
                             callback=self.handle_connect)
         self.callback = callback
@@ -282,7 +282,7 @@ class GeneratorCapClient(BaseCapClient):
     @gen.engine
     def capitalize(self, request_data, callback):
         logging.info('capitalize')
-        stream = IOStream(socket.socket(), io_loop=self.io_loop)
+        stream = IOStream(socket.socket())
         logging.info('connecting')
         yield gen.Task(stream.connect, ('127.0.0.1', self.port))
         stream.write(utf8(request_data + '\n'))
@@ -296,10 +296,10 @@ class GeneratorCapClient(BaseCapClient):
 class ClientTestMixin(object):
     def setUp(self):
         super(ClientTestMixin, self).setUp()  # type: ignore
-        self.server = CapServer(io_loop=self.io_loop)
+        self.server = CapServer()
         sock, port = bind_unused_port()
         self.server.add_sockets([sock])
-        self.client = self.client_class(io_loop=self.io_loop, port=port)
+        self.client = self.client_class(port=port)
 
     def tearDown(self):
         self.server.stop()

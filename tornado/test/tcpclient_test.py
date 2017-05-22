@@ -218,7 +218,7 @@ class ConnectorTest(AsyncTestCase):
             future.set_exception(IOError())
 
     def start_connect(self, addrinfo):
-        conn = _Connector(addrinfo, self.io_loop, self.create_stream)
+        conn = _Connector(addrinfo, self.create_stream)
         # Give it a huge timeout; we'll trigger timeouts manually.
         future = conn.start(3600)
         return conn, future
