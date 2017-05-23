@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 from hashlib import md5
 
+from tornado import netutil
 from tornado.escape import utf8
 from tornado.httpclient import HTTPRequest
 from tornado.stack_context import ExceptionStackContext
@@ -132,3 +133,25 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
         for i in range(5):
             response = self.fetch(u'/ユニコード')
             self.assertIsNot(response.error, None)
+
+    def test_timeout_must_close_connection(self):
+        server_sock, port = httpclient_test.bind_unused_port()
+        client_sock = [None]
+
+        def accept_callback(conn, address):
+            client_sock[0] = conn
+            conn.recv(1024)
+
+        netutil.add_accept_handler(server_sock, accept_callback, self.io_loop)
+        self.http_client.fetch(HTTPRequest("http://127.0.0.1:%d/" % port, request_timeout=1), self.stop)
+        response = self.wait()
+
+        self.assertEqual(response.code, 599)
+
+        # The socket must be closed
+        client_sock[0].setblocking(0)
+
+        try:
+            self.assertEqual(client_sock[0].recv(1024), b"", msg="Socket must be closed")
+        except IOError as e:
+            self.fail("Socket must be closed, but instead %s was raised" % e)
