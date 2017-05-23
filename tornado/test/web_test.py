@@ -2714,6 +2714,46 @@ class FinishExceptionTest(SimpleHandlerTestCase):
             self.assertEqual(b'authentication required', response.body)
 
 
+class HandleMethodResultTest(SimpleHandlerTestCase):
+    class SyncHandler(RequestHandler):
+        RESPONSE = repr(os.urandom(8))
+
+        @gen.coroutine
+        def execute(self, method, *args, **kwargs):
+            result = yield gen.maybe_future(method(*args, **kwargs))
+            self.write(result)
+
+        def get(self):
+            return self.RESPONSE
+
+    class AsyncHandler(RequestHandler):
+        RESPONSE = repr(os.urandom(8))
+
+        @gen.coroutine
+        def execute(self, method, *args, **kwargs):
+            result = yield gen.maybe_future(method(*args, **kwargs))
+            self.write(result)
+
+        @gen.coroutine
+        def get(self):
+            yield gen.sleep(0.1)
+            raise gen.Return(self.RESPONSE)
+
+    def get_handlers(self):
+        return (
+            ('/sync', self.SyncHandler),
+            ('/async', self.AsyncHandler),
+        )
+
+    def test_method_result_sync(self):
+        response = self.fetch('/sync')
+        self.assertEqual(response.body.decode('utf-8'), self.SyncHandler.RESPONSE)
+
+    def test_method_result_async(self):
+        response = self.fetch('/async')
+        self.assertEqual(response.body.decode('utf-8'), self.AsyncHandler.RESPONSE)
+
+
 @wsgi_safe
 class DecoratorTest(WebTestCase):
     def get_handlers(self):

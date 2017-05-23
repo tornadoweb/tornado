@@ -1489,6 +1489,18 @@ class RequestHandler(object):
             self._handle_request_exception(value)
         return True
 
+    def execute(self, method, *args, **kwargs):
+        """The method is called before the end of the request handler.
+
+        You can inherit this method for if you want custom behavior::
+
+            @gen.coroutine
+            def execute(self, method, *args, **kwargs):
+                self.finish((yield gen.maybe_future(method(*args, **kwargs)))
+
+        """
+        return method(*args, **kwargs)
+
     @gen.coroutine
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
@@ -1526,7 +1538,7 @@ class RequestHandler(object):
                     return
 
             method = getattr(self, self.request.method.lower())
-            result = method(*self.path_args, **self.path_kwargs)
+            result = self.execute(method, *self.path_args, **self.path_kwargs)
             if result is not None:
                 result = yield result
             if self._auto_finish and not self._finished:
