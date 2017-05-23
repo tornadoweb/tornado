@@ -1056,8 +1056,10 @@ class RequestHandler(object):
             self.write_error(status_code, **kwargs)
         except Exception:
             app_log.error("Uncaught exception in write_error", exc_info=True)
-        if not self._finished:
-            self.finish()
+            if not self._finished:
+                self.finish()
+        else:
+            self._execute_finish()
 
     def write_error(self, status_code, **kwargs):
         """Override to implement custom error pages.

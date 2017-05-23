@@ -860,8 +860,22 @@ js_embed()
 
 class NonWSGIWebTests(WebTestCase):
     def get_handlers(self):
+        class AutoFinishHandler(RequestHandler):
+            @asynchronous
+            def get(self):
+                1 / 0
+
+            def write_error(self, status_code, **kwargs):
+                from tornado.ioloop import IOLoop
+                IOLoop.current().add_callback(self.finish_callback)
+
+            def finish_callback(self):
+                self.set_header("Content-Type", "text/plain")
+                self.finish("Custom error")
+
         return [("/flow_control", FlowControlHandler),
                 ("/empty_flush", EmptyFlushCallbackHandler),
+                ("/auto_finish", AutoFinishHandler),
                 ]
 
     def test_flow_control(self):
@@ -870,6 +884,12 @@ class NonWSGIWebTests(WebTestCase):
     def test_empty_flush(self):
         response = self.fetch("/empty_flush")
         self.assertEqual(response.body, b"ok")
+
+    def test_write_error_auto_finish(self):
+        with ExpectLog(app_log, "Uncaught exception"):
+            response = self.fetch("/auto_finish")
+            self.assertEqual(response.code, 500)
+            self.assertEqual(b"Custom error", response.body)
 
 
 @wsgi_safe
