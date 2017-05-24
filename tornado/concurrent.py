@@ -326,7 +326,7 @@ class Future(object):
             except Exception:
                 app_log.exception('Exception in callback %r for %r',
                                   cb, self)
-        self._callbacks = None
+        self._callbacks = []
 
     # On Python 3.3 or older, objects with a destructor part of a reference
     # cycle are never destroyed. It's no longer the case on Python 3.4 thanks to
