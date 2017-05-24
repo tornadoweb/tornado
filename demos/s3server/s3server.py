@@ -23,11 +23,16 @@ We don't support all the features of S3, but it does work with the
 standard S3 client for the most basic semantics. To use the standard
 S3 client with this module:
 
-    c = S3.AWSAuthConnection("", "", server="localhost", port=8888,
-                             is_secure=False)
-    c.create_bucket("mybucket")
-    c.put("mybucket", "mykey", "a value")
-    print c.get("mybucket", "mykey").body
+    from boto.s3.connection import S3Connection
+    c = S3Connection(
+                   "", "", host="localhost", port=8888,
+                   is_secure=False,
+                   calling_format=boto.s3.connection.OrdinaryCallingFormat()
+    )
+
+We do support multipart uploads.  Multipart uploads are buffered until the
+next writable part is fully uploaded, so if you upload many parts with high
+parallelism, expect increased memory usage.
 
 """
 
@@ -37,6 +42,9 @@ import hashlib
 import os
 import os.path
 import urllib
+import uuid
+from threading import Lock
+import sys
 
 from tornado import escape
 from tornado import httpserver
@@ -49,7 +57,6 @@ def start(port, root_directory="/tmp/s3", bucket_depth=0):
     http_server = httpserver.HTTPServer(application)
     http_server.listen(port)
     ioloop.IOLoop.current().start()
-
 
 class S3Application(web.Application):
     """Implementation of an S3-like storage server based on local files.
@@ -210,6 +217,8 @@ class BucketHandler(BaseRequestHandler):
 
 
 class ObjectHandler(BaseRequestHandler):
+    SUPPORTED_METHODS = ("PUT", "GET", "DELETE", "POST")
+
     def get(self, bucket, object_name):
         object_name = urllib.unquote(object_name)
         path = self._object_path(bucket, object_name)
@@ -222,7 +231,12 @@ class ObjectHandler(BaseRequestHandler):
             info.st_mtime))
         object_file = open(path, "rb")
         try:
-            self.finish(object_file.read())
+            chunk = object_file.read(1048576)
+            while chunk:
+                self.write(chunk)
+                self.flush()
+                chunk = object_file.read(1048576)
+            self.finish()
         finally:
             object_file.close()
 
@@ -239,12 +253,48 @@ class ObjectHandler(BaseRequestHandler):
         directory = os.path.dirname(path)
         if not os.path.exists(directory):
             os.makedirs(directory)
-        object_file = open(path, "w")
-        object_file.write(self.request.body)
-        object_file.close()
+        part_number = self._get_part_number()
+        upload_id = self._get_upload_id()
+        if part_number and upload_id:
+            object_file = MultipartUploaderFactory(upload_id, None)
+            if not object_file:
+                raise web.HTTPError(404, "No such upload ID %r" % upload_id)
+            object_file.write(int(part_number), self.request.body)
+        else:
+            object_file = open(path, "w")
+            object_file.write(self.request.body)
+            object_file.close()
+        # there is a bug in line 178 of s3/s3util/uploader.go
+        # it chokes if no ETag is returned to it
+        # p.ETag = s[1 : len(s)-1]
+        # so I add this nonsense as a compromise
+        self.set_header("ETag", "ignored")
         self.finish()
 
+    def _get_upload_id(self):
+        upload_id = self.get_argument("UploadId", None)
+        if not upload_id:
+            upload_id = self.get_argument("uploadId", None)
+        return upload_id
+
+    def _get_part_number(self):
+        upload_id = self.get_argument("PartNumber", None)
+        if not upload_id:
+            upload_id = self.get_argument("partNumber", None)
+        return upload_id
+
     def delete(self, bucket, object_name):
+        upload_id = self._get_upload_id()
+        if upload_id:
+            object_file = MultipartUploaderFactory(upload_id, None)
+            if not object_file:
+                raise web.HTTPError(
+                    404, "No such upload ID %r" % upload_id
+            )
+            object_file.abort()
+            self.set_status(204)
+            self.finish()
+            return
         object_name = urllib.unquote(object_name)
         path = self._object_path(bucket, object_name)
         if not path.startswith(self.application.directory) or \
@@ -253,3 +303,136 @@ class ObjectHandler(BaseRequestHandler):
         os.unlink(path)
         self.set_status(204)
         self.finish()
+
+    def post(self, bucket, object_name):
+        '''Implements multipart uploads in a hacky way'''
+        upload_id = self._get_upload_id()
+        if upload_id:
+            object_file = MultipartUploaderFactory(upload_id, None)
+            if not object_file:
+                raise web.HTTPError(
+                    404, "No such upload ID %r" % upload_id
+            )
+            object_file.close()
+            self.set_status(200)
+            complete_multipart_upload = "\n".join([
+                '''  <Part><PartNumber>%s</Bucket>
+  <ETag>ignored</ETag></Part>''' % (pn)
+                for pn in range(1, object_file.part_number)
+            ])
+            xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<CompleteMultipartUpload xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+%s
+</CompleteMultipartUpload>''' % complete_multipart_upload
+            self.finish(xml)
+            return
+        else:
+            if not self.request.uri.endswith("?uploads"):
+                if not self.request.uri.endswith("?uploads="):
+                    raise web.HTTPError(
+                        400, "No ?uploads parameter specified"
+                    )
+            bucket_dir = os.path.abspath(os.path.join(
+                self.application.directory, bucket))
+            if not bucket_dir.startswith(self.application.directory) or \
+               not os.path.isdir(bucket_dir):
+                raise web.HTTPError(404)
+            path = self._object_path(bucket, object_name)
+            if not path.startswith(bucket_dir) or os.path.isdir(path):
+                raise web.HTTPError(403)
+            directory = os.path.dirname(path)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            gen_id = uuid.uuid4().hex
+            m = MultipartUploaderFactory(gen_id, path)
+            self.set_status(200)
+            xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Bucket>%s</Bucket>
+  <Key>%s</Key>
+  <UploadId>%s</UploadId>
+</InitiateMultipartUploadResult>''' % (bucket, object_name, m.upload_id)
+            self.finish(xml)
+
+
+multipart_uploaders = {}
+multipart_uploaders_lock = Lock()
+
+
+class _MultipartUploader(object):
+
+    path = None
+    upload_id = None
+    file = None
+    lock = None
+    part_number = None
+
+    def __init__(self, upload_id, path):
+        self.path = path
+        self.upload_id = upload_id
+        self.file = open(path, "w")
+        self.lock = Lock()
+        self.part_number = 1
+        self.buffers = {}
+
+    def write(self, part_number, data):
+        with self.lock:
+            if part_number in self.buffers:
+                raise web.HTTPError(
+                    400, "PartNumber %r already received" % part_number
+                )
+            self.buffers[part_number] = data
+        self.trigger_write_completion()
+
+    def trigger_write_completion(self):
+        with self.lock:
+            while self.part_number in self.buffers:
+                self.file.write(self.buffers[self.part_number])
+                del self.buffers[self.part_number]
+                self.part_number = self.part_number + 1
+
+    def close(self):
+        global multipart_uploaders
+        global multipart_uploaders_lock
+
+        self.trigger_write_completion()
+        self.file.flush()
+        self.file.close()
+        with multipart_uploaders_lock:
+            del multipart_uploaders[self.upload_id]
+
+    def abort(self):
+        global multipart_uploaders
+        global multipart_uploaders_lock
+
+        self.file.close()
+        os.unlink(self.path)
+        with multipart_uploaders_lock:
+            del multipart_uploaders[self.upload_id]
+
+
+def MultipartUploaderFactory(upload_id, path):
+    '''Returns a multipart uploader, whether an existing one for a
+    file that is being received in parts, or a new one for a file
+    that is about to be received in parts'''
+    global multipart_uploaders
+    global multipart_uploaders_lock
+
+    with multipart_uploaders_lock:
+        if upload_id in multipart_uploaders:
+            return multipart_uploaders[upload_id]
+        if not path:
+            return None  # no such upload ID
+        m = _MultipartUploader(upload_id, path)
+        multipart_uploaders[upload_id] = m
+        return m
+
+
+def main():
+    try:
+        start(int(sys.argv[1]), sys.argv[2])
+    except IndexError:
+        print >> sys.stderr, "usage: %s <integer port> <S3 store directory>" % sys.argv[0]
+
+if __name__ == "__main__":
+    main()
