@@ -81,6 +81,12 @@ class HTTPClient(object):
     def __del__(self):
         self.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.close()
+
     def close(self):
         """Closes the HTTPClient, freeing any resources used."""
         if not self._closed:
@@ -174,6 +180,12 @@ class AsyncHTTPClient(Configurable):
         if instance_cache is not None:
             instance_cache[instance.io_loop] = instance
         return instance
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.close()
 
     def initialize(self, io_loop, defaults=None):
         self.io_loop = io_loop
