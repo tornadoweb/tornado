@@ -257,7 +257,7 @@ class BaseIOStream(object):
         except UnsatisfiableReadError as e:
             # Handle this the same way as in _handle_events.
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
             return future
         except:
             if future is not None:
@@ -290,7 +290,7 @@ class BaseIOStream(object):
         except UnsatisfiableReadError as e:
             # Handle this the same way as in _handle_events.
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
             return future
         except:
             if future is not None:
@@ -428,10 +428,14 @@ class BaseIOStream(object):
         """
         if not self.closed():
             if exc_info:
-                if not isinstance(exc_info, tuple):
-                    exc_info = sys.exc_info()
-                if any(exc_info):
+                if isinstance(exc_info, tuple):
                     self.error = exc_info[1]
+                elif isinstance(exc_info, BaseException):
+                    self.error = exc_info
+                else:
+                    exc_info = sys.exc_info()
+                    if any(exc_info):
+                        self.error = exc_info[1]
             if self._read_until_close:
                 if (self._streaming_callback is not None and
                         self._read_buffer_size):
@@ -548,11 +552,11 @@ class BaseIOStream(object):
                 self.io_loop.update_handler(self.fileno(), self._state)
         except UnsatisfiableReadError as e:
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
         except Exception:
             gen_log.error("Uncaught exception, closing connection.",
                           exc_info=True)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
             raise
 
     def _run_callback(self, callback, *args):
@@ -560,14 +564,14 @@ class BaseIOStream(object):
             self._pending_callbacks -= 1
             try:
                 return callback(*args)
-            except Exception:
+            except Exception as e:
                 app_log.error("Uncaught exception, closing connection.",
                               exc_info=True)
                 # Close the socket on an uncaught exception from a user callback
                 # (It would eventually get closed when the socket object is
                 # gc'd, but we don't want to rely on gc happening before we
                 # run out of file descriptors)
-                self.close(exc_info=True)
+                self.close(exc_info=e)
                 # Re-raise the exception so that IOLoop.handle_callback_exception
                 # can see it and log the error
                 raise
@@ -657,7 +661,7 @@ class BaseIOStream(object):
             raise
         except Exception as e:
             gen_log.warning("error on read: %s" % e)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
             return
         if pos is not None:
             self._read_from_buffer(pos)
@@ -744,9 +748,9 @@ class BaseIOStream(object):
                     # Treat ECONNRESET as a connection close rather than
                     # an error to minimize log spam  (the exception will
                     # be available on self.error for apps that care).
-                    self.close(exc_info=True)
+                    self.close(exc_info=e)
                     return
-                self.close(exc_info=True)
+                self.close(exc_info=e)
                 raise
             break
         if chunk is None:
@@ -885,7 +889,7 @@ class BaseIOStream(object):
                         # minimize log spam
                         gen_log.warning("Write error on %s: %s",
                                         self.fileno(), e)
-                    self.close(exc_info=True)
+                    self.close(exc_info=e)
                     return
 
         while self._write_futures:
@@ -1123,7 +1127,7 @@ class IOStream(BaseIOStream):
                 if future is None:
                     gen_log.warning("Connect error on fd %s: %s",
                                     self.socket.fileno(), e)
-                self.close(exc_info=True)
+                self.close(exc_info=e)
                 return future
         self._add_io_state(self.io_loop.WRITE)
         return future
@@ -1317,7 +1321,7 @@ class SSLIOStream(IOStream):
                 return
             elif err.args[0] in (ssl.SSL_ERROR_EOF,
                                  ssl.SSL_ERROR_ZERO_RETURN):
-                return self.close(exc_info=True)
+                return self.close(exc_info=err)
             elif err.args[0] == ssl.SSL_ERROR_SSL:
                 try:
                     peer = self.socket.getpeername()
@@ -1325,7 +1329,7 @@ class SSLIOStream(IOStream):
                     peer = '(not connected)'
                 gen_log.warning("SSL Error on %s %s: %s",
                                 self.socket.fileno(), peer, err)
-                return self.close(exc_info=True)
+                return self.close(exc_info=err)
             raise
         except socket.error as err:
             # Some port scans (e.g. nmap in -sT mode) have been known
@@ -1334,13 +1338,13 @@ class SSLIOStream(IOStream):
             # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
             if (self._is_connreset(err) or
                     err.args[0] in (errno.EBADF, errno.ENOTCONN)):
-                return self.close(exc_info=True)
+                return self.close(exc_info=err)
             raise
         except AttributeError:
             # On Linux, if the connection was reset before the call to
             # wrap_socket, do_handshake will fail with an
             # AttributeError.
-            return self.close(exc_info=True)
+            return self.close(exc_info=err)
         else:
             self._ssl_accepting = False
             if not self._verify_cert(self.socket.getpeercert()):
@@ -1539,7 +1543,7 @@ class PipeIOStream(BaseIOStream):
             elif errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will
                 # report it as readable but reads will fail with EBADF.
-                self.close(exc_info=True)
+                self.close(exc_info=e)
                 return None
             else:
                 raise
