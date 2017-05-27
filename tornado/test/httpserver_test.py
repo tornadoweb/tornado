@@ -256,7 +256,7 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
         # Run through a 100-continue interaction by hand:
         # When given Expect: 100-continue, we get a 100 response after the
         # headers, and then the real response after the body.
-        stream = IOStream(socket.socket(), io_loop=self.io_loop)
+        stream = IOStream(socket.socket())
         stream.connect(("127.0.0.1", self.get_http_port()), callback=self.stop)
         self.wait()
         stream.write(b"\r\n".join([b"POST /hello HTTP/1.1",
@@ -597,9 +597,9 @@ class UnixSocketTest(AsyncTestCase):
         self.sockfile = os.path.join(self.tmpdir, "test.sock")
         sock = netutil.bind_unix_socket(self.sockfile)
         app = Application([("/hello", HelloWorldRequestHandler)])
-        self.server = HTTPServer(app, io_loop=self.io_loop)
+        self.server = HTTPServer(app)
         self.server.add_socket(sock)
-        self.stream = IOStream(socket.socket(socket.AF_UNIX), io_loop=self.io_loop)
+        self.stream = IOStream(socket.socket(socket.AF_UNIX))
         self.stream.connect(self.sockfile, self.stop)
         self.wait()
 
@@ -681,7 +681,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
 
     # The next few methods are a crude manual http client
     def connect(self):
-        self.stream = IOStream(socket.socket(), io_loop=self.io_loop)
+        self.stream = IOStream(socket.socket())
         self.stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
         self.wait()
 
@@ -842,7 +842,7 @@ class StreamingChunkSizeTest(AsyncHTTPTestCase):
     def get_http_client(self):
         # body_producer doesn't work on curl_httpclient, so override the
         # configured AsyncHTTPClient implementation.
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     def get_httpserver_options(self):
         return dict(chunk_size=self.CHUNK_SIZE, decompress_request=True)
@@ -1025,7 +1025,7 @@ class BodyLimitsTest(AsyncHTTPTestCase):
     def get_http_client(self):
         # body_producer doesn't work on curl_httpclient, so override the
         # configured AsyncHTTPClient implementation.
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     def test_small_body(self):
         response = self.fetch('/buffered', method='PUT', body=b'a' * 4096)

@@ -111,13 +111,13 @@ _reload_attempted = False
 _io_loops = weakref.WeakKeyDictionary()  # type: ignore
 
 
-def start(io_loop=None, check_time=500):
+def start(check_time=500):
     """Begins watching source files for changes.
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    io_loop = io_loop or ioloop.IOLoop.current()
+    io_loop = ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return
     _io_loops[io_loop] = True
@@ -125,7 +125,7 @@ def start(io_loop=None, check_time=500):
         gen_log.warning("tornado.autoreload started more than once in the same process")
     modify_times = {}
     callback = functools.partial(_reload_on_update, modify_times)
-    scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
+    scheduler = ioloop.PeriodicCallback(callback, check_time)
     scheduler.start()
 
 

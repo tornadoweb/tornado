@@ -73,24 +73,6 @@ else:
     except ImportError:
         import unittest  # type: ignore
 
-_next_port = 10000
-
-
-def get_unused_port():
-    """Returns a (hopefully) unused port number.
-
-    This function does not guarantee that the port it returns is available,
-    only that a series of get_unused_port calls in a single process return
-    distinct ports.
-
-    .. deprecated::
-       Use bind_unused_port instead, which is guaranteed to find an unused port.
-    """
-    global _next_port
-    port = _next_port
-    _next_port = _next_port + 1
-    return port
-
 
 def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.
@@ -166,8 +148,7 @@ class AsyncTestCase(unittest.TestCase):
     callbacks should call ``self.stop()`` to signal completion.
 
     By default, a new `.IOLoop` is constructed for each test and is available
-    as ``self.io_loop``.  This `.IOLoop` should be used in the construction of
-    HTTP clients/servers, etc.  If the code being tested requires a
+    as ``self.io_loop``.  If the code being tested requires a
     global `.IOLoop`, subclasses should override `get_new_ioloop` to return it.
 
     The `.IOLoop`'s ``start`` and ``stop`` methods should not be
@@ -182,7 +163,7 @@ class AsyncTestCase(unittest.TestCase):
         class MyTestCase(AsyncTestCase):
             @tornado.testing.gen_test
             def test_http_fetch(self):
-                client = AsyncHTTPClient(self.io_loop)
+                client = AsyncHTTPClient()
                 response = yield client.fetch("http://www.tornadoweb.org")
                 # Test contents of response
                 self.assertIn("FriendFeed", response.body)
@@ -190,7 +171,7 @@ class AsyncTestCase(unittest.TestCase):
         # This test uses argument passing between self.stop and self.wait.
         class MyTestCase2(AsyncTestCase):
             def test_http_fetch(self):
-                client = AsyncHTTPClient(self.io_loop)
+                client = AsyncHTTPClient()
                 client.fetch("http://www.tornadoweb.org/", self.stop)
                 response = self.wait()
                 # Test contents of response
@@ -199,7 +180,7 @@ class AsyncTestCase(unittest.TestCase):
         # This test uses an explicit callback-based style.
         class MyTestCase3(AsyncTestCase):
             def test_http_fetch(self):
-                client = AsyncHTTPClient(self.io_loop)
+                client = AsyncHTTPClient()
                 client.fetch("http://www.tornadoweb.org/", self.handle_fetch)
                 self.wait()
 
@@ -382,11 +363,10 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_server.add_sockets([sock])
 
     def get_http_client(self):
-        return AsyncHTTPClient(io_loop=self.io_loop)
+        return AsyncHTTPClient()
 
     def get_http_server(self):
-        return HTTPServer(self._app, io_loop=self.io_loop,
-                          **self.get_httpserver_options())
+        return HTTPServer(self._app, **self.get_httpserver_options())
 
     def get_app(self):
         """Should be overridden by subclasses to return a
@@ -448,7 +428,7 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
     Interface is generally the same as `AsyncHTTPTestCase`.
     """
     def get_http_client(self):
-        return AsyncHTTPClient(io_loop=self.io_loop, force_instance=True,
+        return AsyncHTTPClient(force_instance=True,
                                defaults=dict(validate_cert=False))
 
     def get_httpserver_options(self):

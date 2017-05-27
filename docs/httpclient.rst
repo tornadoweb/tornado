@@ -47,7 +47,7 @@ Implementations
 
 .. module:: tornado.curl_httpclient
 
-.. class:: CurlAsyncHTTPClient(io_loop, max_clients=10, defaults=None)
+.. class:: CurlAsyncHTTPClient(max_clients=10, defaults=None)
 
    ``libcurl``-based HTTP client.
 

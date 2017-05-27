@@ -1096,8 +1096,7 @@ class GenTaskHandler(RequestHandler):
     @asynchronous
     @gen.engine
     def get(self):
-        io_loop = self.request.connection.stream.io_loop
-        client = AsyncHTTPClient(io_loop=io_loop)
+        client = AsyncHTTPClient()
         response = yield gen.Task(client.fetch, self.get_argument('url'))
         response.rethrow()
         self.finish(b"got response: " + response.body)
@@ -1250,7 +1249,7 @@ class WithTimeoutTest(AsyncTestCase):
         self.io_loop.add_timeout(datetime.timedelta(seconds=0.1),
                                  lambda: future.set_result('asdf'))
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                        future, io_loop=self.io_loop)
+                                        future)
         self.assertEqual(result, 'asdf')
 
     @gen_test
@@ -1261,14 +1260,14 @@ class WithTimeoutTest(AsyncTestCase):
             lambda: future.set_exception(ZeroDivisionError()))
         with self.assertRaises(ZeroDivisionError):
             yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                   future, io_loop=self.io_loop)
+                                   future)
 
     @gen_test
     def test_already_resolved(self):
         future = Future()
         future.set_result('asdf')
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                        future, io_loop=self.io_loop)
+                                        future)
         self.assertEqual(result, 'asdf')
 
     @unittest.skipIf(futures is None, 'futures module not present')

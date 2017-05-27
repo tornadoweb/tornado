@@ -135,12 +135,10 @@ class BaseIOStream(object):
     Subclasses must implement `fileno`, `close_fd`, `write_to_fd`,
     `read_from_fd`, and optionally `get_fd_error`.
     """
-    def __init__(self, io_loop=None, max_buffer_size=None,
+    def __init__(self, max_buffer_size=None,
                  read_chunk_size=None, max_write_buffer_size=None):
         """`BaseIOStream` constructor.
 
-        :arg io_loop: The `.IOLoop` to use; defaults to `.IOLoop.current`.
-                      Deprecated since Tornado 4.1.
         :arg max_buffer_size: Maximum amount of incoming data to buffer;
             defaults to 100MB.
         :arg read_chunk_size: Amount of data to read at one time from the
@@ -151,8 +149,11 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
            Add the ``max_write_buffer_size`` parameter.  Changed default
            ``read_chunk_size`` to 64KB.
+        .. versionchanged:: 5.0
+           The ``io_loop`` argument (deprecated since version 4.1) has been
+           removed.
         """
-        self.io_loop = io_loop or ioloop.IOLoop.current()
+        self.io_loop = ioloop.IOLoop.current()
         self.max_buffer_size = max_buffer_size or 104857600
         # A chunk size that is too close to max_buffer_size can cause
         # spurious failures.
@@ -1190,8 +1191,7 @@ class IOStream(BaseIOStream):
         self._close_callback = None
 
         future = TracebackFuture()
-        ssl_stream = SSLIOStream(socket, ssl_options=ssl_options,
-                                 io_loop=self.io_loop)
+        ssl_stream = SSLIOStream(socket, ssl_options=ssl_options)
         # Wrap the original close callback so we can fail our Future as well.
         # If we had an "unwrap" counterpart to this method we would need
         # to restore the original callback after our Future resolves

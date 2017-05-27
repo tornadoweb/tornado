@@ -378,9 +378,9 @@ def run_on_executor(*args, **kwargs):
     The decorated method may be called with a ``callback`` keyword
     argument and returns a future.
 
-    The `.IOLoop` and executor to be used are determined by the ``io_loop``
-    and ``executor`` attributes of ``self``. To use different attributes,
-    pass keyword arguments to the decorator::
+    The executor to be used is determined by the ``executor``
+    attributes of ``self``. To use a different attribute name, pass a
+    keyword argument to the decorator::
 
         @run_on_executor(executor='_thread_pool')
         def foo(self):
@@ -388,17 +388,20 @@ def run_on_executor(*args, **kwargs):
 
     .. versionchanged:: 4.2
        Added keyword arguments to use alternative attributes.
+
+    .. versionchanged:: 5.0
+       Always uses the current IOLoop instead of ``self.io_loop``.
     """
     def run_on_executor_decorator(fn):
         executor = kwargs.get("executor", "executor")
-        io_loop = kwargs.get("io_loop", "io_loop")
 
         @functools.wraps(fn)
         def wrapper(self, *args, **kwargs):
             callback = kwargs.pop("callback", None)
             future = getattr(self, executor).submit(fn, self, *args, **kwargs)
             if callback:
-                getattr(self, io_loop).add_future(
+                from tornado.ioloop import IOLoop
+                IOLoop.current().add_future(
                     future, lambda future: callback(future.result()))
             return future
         return wrapper

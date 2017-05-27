@@ -19,11 +19,11 @@ class CaresResolver(Resolver):
     the default for ``tornado.simple_httpclient``, but other libraries
     may default to ``AF_UNSPEC``.
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    def initialize(self, io_loop=None):
-        self.io_loop = io_loop or IOLoop.current()
+    def initialize(self):
+        self.io_loop = IOLoop.current()
         self.channel = pycares.Channel(sock_state_cb=self._sock_state_cb)
         self.fds = {}
 

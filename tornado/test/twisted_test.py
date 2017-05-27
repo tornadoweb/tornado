@@ -98,8 +98,9 @@ def restore_signal_handlers(saved):
 class ReactorTestCase(unittest.TestCase):
     def setUp(self):
         self._saved_signals = save_signal_handlers()
-        self._io_loop = IOLoop()
-        self._reactor = TornadoReactor(self._io_loop)
+        self._io_loop = IOLoop(make_current=True)
+        self._reactor = TornadoReactor()
+        IOLoop.clear_current()
 
     def tearDown(self):
         self._io_loop.close(all_fds=True)
@@ -361,7 +362,7 @@ class CompatibilityTests(unittest.TestCase):
         self.saved_signals = save_signal_handlers()
         self.io_loop = IOLoop()
         self.io_loop.make_current()
-        self.reactor = TornadoReactor(self.io_loop)
+        self.reactor = TornadoReactor()
 
     def tearDown(self):
         self.reactor.disconnectAll()
@@ -385,7 +386,7 @@ class CompatibilityTests(unittest.TestCase):
                 self.write("Hello from tornado!")
         app = Application([('/', HelloHandler)],
                           log_function=lambda x: None)
-        server = HTTPServer(app, io_loop=self.io_loop)
+        server = HTTPServer(app)
         sock, self.tornado_port = bind_unused_port()
         server.add_sockets([sock])
 
@@ -401,7 +402,7 @@ class CompatibilityTests(unittest.TestCase):
 
     def tornado_fetch(self, url, runner):
         responses = []
-        client = AsyncHTTPClient(self.io_loop)
+        client = AsyncHTTPClient()
 
         def callback(response):
             responses.append(response)
@@ -701,7 +702,7 @@ if have_twisted:
             # get the next-best IOLoop implementation, so use the lowest common
             # denominator.
             self.real_io_loop = SelectIOLoop(make_current=False)  # type: ignore
-            reactor = TornadoReactor(io_loop=self.real_io_loop)
+            reactor = self.real_io_loop.run_sync(gen.coroutine(TornadoReactor))
             super(LayeredTwistedIOLoop, self).initialize(reactor=reactor, **kwargs)
             self.add_callback(self.make_current)
 

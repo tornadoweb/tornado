@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 from tornado import gen
+from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado.stack_context import (StackContext, wrap, NullContext, StackContextInconsistentError,
                                    ExceptionStackContext, run_with_stack_context, _state)
@@ -14,22 +15,21 @@ import logging
 
 
 class TestRequestHandler(RequestHandler):
-    def __init__(self, app, request, io_loop):
+    def __init__(self, app, request):
         super(TestRequestHandler, self).__init__(app, request)
-        self.io_loop = io_loop
 
     @asynchronous
     def get(self):
         logging.debug('in get()')
         # call self.part2 without a self.async_callback wrapper.  Its
         # exception should still get thrown
-        self.io_loop.add_callback(self.part2)
+        IOLoop.current().add_callback(self.part2)
 
     def part2(self):
         logging.debug('in part2()')
         # Go through a third layer to make sure that contexts once restored
         # are again passed on to future callbacks
-        self.io_loop.add_callback(self.part3)
+        IOLoop.current().add_callback(self.part3)
 
     def part3(self):
         logging.debug('in part3()')
@@ -44,8 +44,7 @@ class TestRequestHandler(RequestHandler):
 
 class HTTPStackContextTest(AsyncHTTPTestCase):
     def get_app(self):
-        return Application([('/', TestRequestHandler,
-                             dict(io_loop=self.io_loop))])
+        return Application([('/', TestRequestHandler)])
 
     def test_stack_context(self):
         with ExpectLog(app_log, "Uncaught exception GET /"):

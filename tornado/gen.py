@@ -624,14 +624,14 @@ def Task(func, *args, **kwargs):
 
 
 class YieldFuture(YieldPoint):
-    def __init__(self, future, io_loop=None):
+    def __init__(self, future):
         """Adapts a `.Future` to the `YieldPoint` interface.
 
-        .. versionchanged:: 4.1
-           The ``io_loop`` argument is deprecated.
+        .. versionchanged:: 5.0
+           The ``io_loop`` argument (deprecated since version 4.1) has been removed.
         """
         self.future = future
-        self.io_loop = io_loop or IOLoop.current()
+        self.io_loop = IOLoop.current()
 
     def start(self, runner):
         if not self.future.done():
@@ -868,7 +868,7 @@ def maybe_future(x):
         return fut
 
 
-def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
+def with_timeout(timeout, future, quiet_exceptions=()):
     """Wraps a `.Future` (or other yieldable object) in a timeout.
 
     Raises `TimeoutError` if the input future does not complete before
@@ -902,8 +902,7 @@ def with_timeout(timeout, future, io_loop=None, quiet_exceptions=()):
     future = convert_yielded(future)
     result = Future()
     chain_future(future, result)
-    if io_loop is None:
-        io_loop = IOLoop.current()
+    io_loop = IOLoop.current()
 
     def error_callback(future):
         try:

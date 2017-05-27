@@ -1040,7 +1040,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     This class should not be instantiated directly; use the
     `websocket_connect` function instead.
     """
-    def __init__(self, io_loop, request, on_message_callback=None,
+    def __init__(self, request, on_message_callback=None,
                  compression_options=None, ping_interval=None, ping_timeout=None,
                  max_message_size=None):
         self.compression_options = compression_options
@@ -1073,9 +1073,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             request.headers['Sec-WebSocket-Extensions'] = (
                 'permessage-deflate; client_max_window_bits')
 
-        self.tcp_client = TCPClient(io_loop=io_loop)
+        self.tcp_client = TCPClient()
         super(WebSocketClientConnection, self).__init__(
-            io_loop, None, request, lambda: None, self._on_http_response,
+            None, request, lambda: None, self._on_http_response,
             104857600, self.tcp_client, 65536, 104857600)
 
     def close(self, code=None, reason=None):
@@ -1179,7 +1179,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                                    compression_options=self.compression_options)
 
 
-def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
+def websocket_connect(url, callback=None, connect_timeout=None,
                       on_message_callback=None, compression_options=None,
                       ping_interval=None, ping_timeout=None,
                       max_message_size=None):
@@ -1210,14 +1210,14 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
 
     .. versionchanged:: 4.1
        Added ``compression_options`` and ``on_message_callback``.
-       The ``io_loop`` argument is deprecated.
 
     .. versionchanged:: 4.5
        Added the ``ping_interval``, ``ping_timeout``, and ``max_message_size``
        arguments, which have the same meaning as in `WebSocketHandler`.
+
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    if io_loop is None:
-        io_loop = IOLoop.current()
     if isinstance(url, httpclient.HTTPRequest):
         assert connect_timeout is None
         request = url
@@ -1228,12 +1228,12 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
         request = httpclient.HTTPRequest(url, connect_timeout=connect_timeout)
     request = httpclient._RequestProxy(
         request, httpclient.HTTPRequest._DEFAULTS)
-    conn = WebSocketClientConnection(io_loop, request,
+    conn = WebSocketClientConnection(request,
                                      on_message_callback=on_message_callback,
                                      compression_options=compression_options,
                                      ping_interval=ping_interval,
                                      ping_timeout=ping_timeout,
                                      max_message_size=max_message_size)
     if callback is not None:
-        io_loop.add_future(conn.connect_future, callback)
+        IOLoop.current().add_future(conn.connect_future, callback)
     return conn.connect_future

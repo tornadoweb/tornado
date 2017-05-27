@@ -210,10 +210,10 @@ Transfer-Encoding: chunked
             def accept_callback(conn, address):
                 # fake an HTTP server using chunked encoding where the final chunks
                 # and connection close all happen at once
-                stream = IOStream(conn, io_loop=self.io_loop)
+                stream = IOStream(conn)
                 stream.read_until(b"\r\n\r\n",
                                   functools.partial(write_response, stream))
-            netutil.add_accept_handler(sock, accept_callback, self.io_loop)
+            netutil.add_accept_handler(sock, accept_callback)
             self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
             resp = self.wait()
             resp.rethrow()
@@ -358,7 +358,7 @@ Transfer-Encoding: chunked
     def test_configure_defaults(self):
         defaults = dict(user_agent='TestDefaultUserAgent', allow_ipv6=False)
         # Construct a new instance of the configured client class
-        client = self.http_client.__class__(self.io_loop, force_instance=True,
+        client = self.http_client.__class__(force_instance=True,
                                             defaults=defaults)
         try:
             client.fetch(self.get_url('/user_agent'), callback=self.stop)
@@ -398,10 +398,10 @@ X-XSS-Protection: 1;
 """.replace(b"\n", b"\r\n"), callback=stream.close)
 
             def accept_callback(conn, address):
-                stream = IOStream(conn, io_loop=self.io_loop)
+                stream = IOStream(conn)
                 stream.read_until(b"\r\n\r\n",
                                   functools.partial(write_response, stream))
-            netutil.add_accept_handler(sock, accept_callback, self.io_loop)
+            netutil.add_accept_handler(sock, accept_callback)
             self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
             resp = self.wait()
             resp.rethrow()
@@ -594,10 +594,13 @@ class SyncHTTPClientTest(unittest.TestCase):
                 'AsyncIOMainLoop')
         self.server_ioloop = IOLoop()
 
-        sock, self.port = bind_unused_port()
-        app = Application([('/', HelloWorldHandler)])
-        self.server = HTTPServer(app, io_loop=self.server_ioloop)
-        self.server.add_socket(sock)
+        @gen.coroutine
+        def init_server():
+            sock, self.port = bind_unused_port()
+            app = Application([('/', HelloWorldHandler)])
+            self.server = HTTPServer(app)
+            self.server.add_socket(sock)
+        self.server_ioloop.run_sync(init_server)
 
         self.server_thread = threading.Thread(target=self.server_ioloop.start)
         self.server_thread.start()

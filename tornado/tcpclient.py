@@ -47,8 +47,8 @@ class _Connector(object):
     http://tools.ietf.org/html/rfc6555
 
     """
-    def __init__(self, addrinfo, io_loop, connect):
-        self.io_loop = io_loop
+    def __init__(self, addrinfo, connect):
+        self.io_loop = IOLoop.current()
         self.connect = connect
 
         self.future = Future()
@@ -137,16 +137,15 @@ class _Connector(object):
 class TCPClient(object):
     """A non-blocking TCP connection factory.
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    def __init__(self, resolver=None, io_loop=None):
-        self.io_loop = io_loop or IOLoop.current()
+    def __init__(self, resolver=None):
         if resolver is not None:
             self.resolver = resolver
             self._own_resolver = False
         else:
-            self.resolver = Resolver(io_loop=io_loop)
+            self.resolver = Resolver()
             self._own_resolver = True
 
     def close(self):
@@ -175,7 +174,7 @@ class TCPClient(object):
         """
         addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(
-            addrinfo, self.io_loop,
+            addrinfo,
             functools.partial(self._create_stream, max_buffer_size,
                               source_ip=source_ip, source_port=source_port)
         )
@@ -212,7 +211,6 @@ class TCPClient(object):
                 raise
         try:
             stream = IOStream(socket_obj,
-                              io_loop=self.io_loop,
                               max_buffer_size=max_buffer_size)
         except socket.error as e:
             fu = Future()

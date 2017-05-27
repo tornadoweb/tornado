@@ -1000,15 +1000,15 @@ class PeriodicCallback(object):
 
     `start` must be called after the `PeriodicCallback` is created.
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    def __init__(self, callback, callback_time, io_loop=None):
+    def __init__(self, callback, callback_time):
         self.callback = callback
         if callback_time <= 0:
             raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
-        self.io_loop = io_loop or IOLoop.current()
+        self.io_loop = IOLoop.current()
         self._running = False
         self._timeout = None
 

@@ -6,6 +6,7 @@ from tornado import gen
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection, HTTP1ConnectionParameters
+from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 from tornado.netutil import Resolver, OverrideResolver, _client_ssl_defaults
 from tornado.log import gen_log
@@ -56,7 +57,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
     are not reused, and callers cannot select the network interface to be
     used.
     """
-    def initialize(self, io_loop, max_clients=10,
+    def initialize(self, max_clients=10,
                    hostname_mapping=None, max_buffer_size=104857600,
                    resolver=None, defaults=None, max_header_size=None,
                    max_body_size=None):
@@ -92,8 +93,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
         .. versionchanged:: 4.2
            Added the ``max_body_size`` argument.
         """
-        super(SimpleAsyncHTTPClient, self).initialize(io_loop,
-                                                      defaults=defaults)
+        super(SimpleAsyncHTTPClient, self).initialize(defaults=defaults)
         self.max_clients = max_clients
         self.queue = collections.deque()
         self.active = {}
@@ -107,12 +107,12 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
             self.resolver = resolver
             self.own_resolver = False
         else:
-            self.resolver = Resolver(io_loop=io_loop)
+            self.resolver = Resolver()
             self.own_resolver = True
         if hostname_mapping is not None:
             self.resolver = OverrideResolver(resolver=self.resolver,
                                              mapping=hostname_mapping)
-        self.tcp_client = TCPClient(resolver=self.resolver, io_loop=io_loop)
+        self.tcp_client = TCPClient(resolver=self.resolver)
 
     def close(self):
         super(SimpleAsyncHTTPClient, self).close()
@@ -153,7 +153,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
     def _handle_request(self, request, release_callback, final_callback):
         self._connection_class()(
-            self.io_loop, self, request, release_callback,
+            self, request, release_callback,
             final_callback, self.max_buffer_size, self.tcp_client,
             self.max_header_size, self.max_body_size)
 
@@ -190,11 +190,11 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 
-    def __init__(self, io_loop, client, request, release_callback,
+    def __init__(self, client, request, release_callback,
                  final_callback, max_buffer_size, tcp_client,
                  max_header_size, max_body_size):
-        self.start_time = io_loop.time()
-        self.io_loop = io_loop
+        self.io_loop = IOLoop.current()
+        self.start_time = self.io_loop.time()
         self.client = client
         self.request = request
         self.release_callback = release_callback

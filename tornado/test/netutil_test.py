@@ -78,7 +78,7 @@ def _failing_getaddrinfo(*args):
 class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(BlockingResolverTest, self).setUp()
-        self.resolver = BlockingResolver(io_loop=self.io_loop)
+        self.resolver = BlockingResolver()
 
 
 # getaddrinfo-based tests need mocking to reliably generate errors;
@@ -87,7 +87,7 @@ class BlockingResolverTest(AsyncTestCase, _ResolverTestMixin):
 class BlockingResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
     def setUp(self):
         super(BlockingResolverErrorTest, self).setUp()
-        self.resolver = BlockingResolver(io_loop=self.io_loop)
+        self.resolver = BlockingResolver()
         self.real_getaddrinfo = socket.getaddrinfo
         socket.getaddrinfo = _failing_getaddrinfo
 
@@ -101,7 +101,7 @@ class BlockingResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
 class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(ThreadedResolverTest, self).setUp()
-        self.resolver = ThreadedResolver(io_loop=self.io_loop)
+        self.resolver = ThreadedResolver()
 
     def tearDown(self):
         self.resolver.close()
@@ -111,7 +111,7 @@ class ThreadedResolverTest(AsyncTestCase, _ResolverTestMixin):
 class ThreadedResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
     def setUp(self):
         super(ThreadedResolverErrorTest, self).setUp()
-        self.resolver = BlockingResolver(io_loop=self.io_loop)
+        self.resolver = BlockingResolver()
         self.real_getaddrinfo = socket.getaddrinfo
         socket.getaddrinfo = _failing_getaddrinfo
 
@@ -158,7 +158,7 @@ class ThreadedResolverImportTest(unittest.TestCase):
 class CaresResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(CaresResolverTest, self).setUp()
-        self.resolver = CaresResolver(io_loop=self.io_loop)
+        self.resolver = CaresResolver()
 
 
 # TwistedResolver produces consistent errors in our test cases so we
@@ -170,7 +170,7 @@ class TwistedResolverTest(AsyncTestCase, _ResolverTestMixin,
                           _ResolverErrorTestMixin):
     def setUp(self):
         super(TwistedResolverTest, self).setUp()
-        self.resolver = TwistedResolver(io_loop=self.io_loop)
+        self.resolver = TwistedResolver()
 
 
 class IsValidIPTest(unittest.TestCase):
