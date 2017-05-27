@@ -177,6 +177,11 @@ class IOLoop(Configurable):
         """Returns true if the singleton instance has been created."""
         return hasattr(IOLoop, "_instance")
 
+    @staticmethod
+    def running():
+        """Returns true if the global instance is present running"""
+        return hasattr(IOLoop, "_instance") and IOLoop._instance._running
+
     def install(self):
         """Installs this `IOLoop` object as the singleton instance.
 
