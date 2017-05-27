@@ -382,6 +382,8 @@ class _FD(object):
             self.handler(self.fileobj, tornado.ioloop.IOLoop.ERROR)
             self.lost = True
 
+    writeConnectionLost = readConnectionLost = connectionLost
+
     def logPrefix(self):
         return ''
 
