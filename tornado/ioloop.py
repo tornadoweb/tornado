@@ -249,15 +249,7 @@ class IOLoop(Configurable):
 
     @classmethod
     def configurable_default(cls):
-        if hasattr(select, "epoll"):
-            from tornado.platform.epoll import EPollIOLoop
-            return EPollIOLoop
-        if hasattr(select, "kqueue"):
-            # Python 2.6+ on BSD or Mac
-            from tornado.platform.kqueue import KQueueIOLoop
-            return KQueueIOLoop
-        from tornado.platform.select import SelectIOLoop
-        return SelectIOLoop
+        return PollIOLoop
 
     def initialize(self, make_current=None):
         if make_current is None:
@@ -721,6 +713,22 @@ class PollIOLoop(IOLoop):
         self.add_handler(self._waker.fileno(),
                          lambda fd, events: self._waker.consume(),
                          self.READ)
+
+    @classmethod
+    def configurable_base(cls):
+        return PollIOLoop
+
+    @classmethod
+    def configurable_default(cls):
+        if hasattr(select, "epoll"):
+            from tornado.platform.epoll import EPollIOLoop
+            return EPollIOLoop
+        if hasattr(select, "kqueue"):
+            # Python 2.6+ on BSD or Mac
+            from tornado.platform.kqueue import KQueueIOLoop
+            return KQueueIOLoop
+        from tornado.platform.select import SelectIOLoop
+        return SelectIOLoop
 
     def close(self, all_fds=False):
         self._closing = True
