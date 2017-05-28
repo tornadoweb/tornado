@@ -31,6 +31,11 @@ class Waker(interface.Waker):
     be passed to select()), but do have sockets.  This includes Windows
     and Jython.
     """
+
+    BUFFER_SIZE = 1024  # Socket communication buffer size
+    MAX_QUEUED_CONNECTIONS = 1  # Maximum number of queued connections
+    LOCAL_ADDR = "127.0.0.1"
+
     def __init__(self):
         # Based on Zope select_trigger.py:
         # https://github.com/zopefoundation/Zope/blob/master/src/ZServer/medusa/thread/select_trigger.py
@@ -41,7 +46,7 @@ class Waker(interface.Waker):
         self.writer.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         count = 0
-        while 1:
+        while True:
             count += 1
             # Bind to a local port; for efficiency, let the OS pick
             # a free port for us.
@@ -54,8 +59,9 @@ class Waker(interface.Waker):
             # http://mail.zope.org/pipermail/zope/2005-July/160433.html
             # for hideous details.
             a = socket.socket()
-            a.bind(("127.0.0.1", 0))
-            a.listen(1)
+            a.bind((self.LOCAL_ADDR, 0))
+            a.listen(self.MAX_QUEUED_CONNECTIONS)
+
             connect_address = a.getsockname()  # assigned (host, port) pair
             try:
                 self.writer.connect(connect_address)
@@ -98,8 +104,7 @@ class Waker(interface.Waker):
     def consume(self):
         try:
             while True:
-                result = self.reader.recv(1024)
-                if not result:
+                if not self.reader.recv(self.BUFFER_SIZE):
                     break
         except (IOError, socket.error):
             pass
