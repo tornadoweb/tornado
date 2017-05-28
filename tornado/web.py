@@ -2898,7 +2898,8 @@ def authenticated(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if not self.current_user:
-            if self.request.method in ("GET", "HEAD"):
+            if self.request.method in ("GET", "HEAD") and
+                self.request.headers.get("X-Requested-With", "") != "XMLHttpRequest":
                 url = self.get_login_url()
                 if "?" not in url:
                     if urlparse.urlsplit(url).scheme:
