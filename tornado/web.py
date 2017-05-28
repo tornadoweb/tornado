@@ -1250,9 +1250,14 @@ class RequestHandler(object):
                                  output_version)
             if version is None:
                 expires_days = 30 if self.current_user else None
-                self.set_cookie("_xsrf", self._xsrf_token,
-                                expires_days=expires_days,
-                                **cookie_kwargs)
+                if self.application.settings.get("cookie_secret", None):
+                    self.set_secure_cookie("_xsrf", self._xsrf_token,
+                                           expires_days=expires_days,
+                                           **cookie_kwargs)
+                else:
+                    self.set_cookie("_xsrf", self._xsrf_token,
+                                    expires_days=expires_days,
+                                    **cookie_kwargs)
         return self._xsrf_token
 
     def _get_raw_xsrf_token(self):
@@ -1283,6 +1288,11 @@ class RequestHandler(object):
         """Convert a cookie string into a the tuple form returned by
         _get_raw_xsrf_token.
         """
+
+        if self.application.settings.get("cookie_secret", None):
+            cookie = self.get_secure_cookie("_xsrf", cookie)
+            if not cookie:
+                raise HTTPError(403, "Invalid cookie signature")
 
         try:
             m = _signed_value_version_re.match(utf8(cookie))
