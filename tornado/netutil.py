@@ -270,6 +270,7 @@ def add_accept_handler(sock, callback):
                 if errno_from_exception(e) == errno.ECONNABORTED:
                     continue
                 raise
+            set_close_exec(connection.fileno())
             callback(connection, address)
     IOLoop.current().add_handler(sock, accept_handler, IOLoop.READ)
 
