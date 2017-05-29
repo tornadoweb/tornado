@@ -216,13 +216,11 @@ class AsyncTestCase(unittest.TestCase):
         # Clean up Subprocess, so it can be used again with a new ioloop.
         Subprocess.uninitialize()
         self.io_loop.clear_current()
-        if (not IOLoop.initialized() or
-                self.io_loop is not IOLoop.instance()):
-            # Try to clean up any file descriptors left open in the ioloop.
-            # This avoids leaks, especially when tests are run repeatedly
-            # in the same process with autoreload (because curl does not
-            # set FD_CLOEXEC on its file descriptors)
-            self.io_loop.close(all_fds=True)
+        # Try to clean up any file descriptors left open in the ioloop.
+        # This avoids leaks, especially when tests are run repeatedly
+        # in the same process with autoreload (because curl does not
+        # set FD_CLOEXEC on its file descriptors)
+        self.io_loop.close(all_fds=True)
         super(AsyncTestCase, self).tearDown()
         # In case an exception escaped or the StackContext caught an exception
         # when there wasn't a wait() to re-raise it, do so here.
@@ -416,9 +414,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
         self.http_server.stop()
         self.io_loop.run_sync(self.http_server.close_all_connections,
                               timeout=get_async_test_timeout())
-        if (not IOLoop.initialized() or
-                self.http_client.io_loop is not IOLoop.instance()):
-            self.http_client.close()
+        self.http_client.close()
         super(AsyncHTTPTestCase, self).tearDown()
 
 
