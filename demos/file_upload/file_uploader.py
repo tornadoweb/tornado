@@ -100,13 +100,14 @@ def put(filenames):
         print(response)
 
 
-define("put", type=bool, help="Use PUT instead of POST", group="file uploader")
+if __name__ == "__main__":
+    define("put", type=bool, help="Use PUT instead of POST", group="file uploader")
 
-# Tornado configures logging from command line opts and returns remaining args.
-filenames = options.parse_command_line()
-if not filenames:
-    print("Provide a list of filenames to upload.", file=sys.stderr)
-    sys.exit(1)
+    # Tornado configures logging from command line opts and returns remaining args.
+    filenames = options.parse_command_line()
+    if not filenames:
+        print("Provide a list of filenames to upload.", file=sys.stderr)
+        sys.exit(1)
 
-method = put if options.put else post
-ioloop.IOLoop.current().run_sync(lambda: method(filenames))
+    method = put if options.put else post
+    ioloop.IOLoop.current().run_sync(lambda: method(filenames))
