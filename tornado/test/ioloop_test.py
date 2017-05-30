@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 import types
+import random
 
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PollIOLoop, PeriodicCallback
@@ -583,6 +584,38 @@ class TestIOLoopFutures(AsyncTestCase):
 
         self.assertEqual(self.exception.args[0], "callback")
         self.assertEqual(self.future.exception().args[0], "worker")
+
+    def test_run_in_executor_gen(self):
+        def func(arg1, arg2):
+            return arg1 + arg2
+
+        @gen.coroutine
+        def main():
+            arg1, arg2 = random.random(), random.random()
+            res = yield IOLoop.current().run_in_executor(None, func, arg1, arg2)
+            self.assertEqual(arg1 + arg2, res)
+
+        IOLoop.current().run_sync(main)
+
+    @skipBefore35
+    def test_run_in_executor_native(self):
+        def func(arg1, arg2):
+            return arg1 + arg2
+
+        async def main():
+            arg1, arg2 = random.random(), random.random()
+            res = await IOLoop.current().run_in_executor(None, func, arg1, arg2)
+            self.assertEqual(arg1 + arg2, res)
+
+        IOLoop.current().run_sync(main)
+
+    def test_set_default_executor(self):
+        class MyExecutor(futures.ThreadPoolExecutor):
+            pass
+
+        executor = MyExecutor()
+        IOLoop.current().set_default_executor(executor)
+        self.assertIsInstance(IOLoop.current()._executor, MyExecutor)
 
 
 class TestIOLoopRunSync(unittest.TestCase):

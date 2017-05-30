@@ -44,7 +44,7 @@ import time
 import traceback
 import math
 
-from tornado.concurrent import TracebackFuture, is_future
+from tornado.concurrent import TracebackFuture, is_future, Future, chain_future
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
@@ -55,6 +55,12 @@ try:
 except ImportError:
     signal = None
 
+try:
+    from concurrent.futures import ThreadPoolExecutor
+    _concurrent_futures_found = True
+except ImportError:
+    ThreadPoolExecutor = None
+    _concurrent_futures_found = False
 
 if PY3:
     import _thread as thread
@@ -624,6 +630,35 @@ class IOLoop(Configurable):
         callback = stack_context.wrap(callback)
         future.add_done_callback(
             lambda future: self.add_callback(callback, future))
+
+    def run_in_executor(self, executor, func, *args):
+        """Runs a function in a ``concurrent.futures.Executor``. If
+        ``executor`` is ``None``, the IO loop's default executor will be used.
+
+        Use `functools.partial` to pass keyword arguments to `func`.
+
+        """
+        if not _concurrent_futures_found:
+            raise RuntimeError(
+                "concurrent.futures is required to use IOLoop.run_in_executor")
+
+        if executor is None:
+            if not hasattr(self, '_executor'):
+                self._executor = ThreadPoolExecutor()
+            executor = self._executor
+
+        future = executor.submit(func, *args)
+        self.add_future(future, lambda future: future.result())
+        if sys.version_info >= (3, 5):
+            future_ = Future()
+            chain_future(future, future_)
+            return future_
+        else:
+            return future
+
+    def set_default_executor(self, executor):
+        """Sets the default executor to use with :meth:`run_in_executor`."""
+        self._executor = executor
 
     def _run_callback(self, callback):
         """Runs a callback with error handling.
