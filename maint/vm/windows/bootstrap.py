@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 r"""Installs files needed for tornado testing on windows.
 
 These instructions are compatible with the VMs provided by http://modern.ie.

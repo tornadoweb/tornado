@@ -1,12 +1,11 @@
-#!/usr/bin/env python
-
-
 from __future__ import absolute_import, division, print_function
+
 import logging
 import os
 import signal
 import subprocess
 import sys
+
 from tornado.httpclient import HTTPClient, HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
