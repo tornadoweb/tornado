@@ -602,12 +602,13 @@ class TestIOLoopFutures(AsyncTestCase):
         def func(arg1, arg2):
             return arg1 + arg2
 
+        namespace = exec_test(globals(), locals(), """
         async def main():
             arg1, arg2 = random.random(), random.random()
             res = await IOLoop.current().run_in_executor(None, func, arg1, arg2)
             self.assertEqual(arg1 + arg2, res)
-
-        IOLoop.current().run_sync(main)
+        """)
+        IOLoop.current().run_sync(namespace['main'])
 
     def test_set_default_executor(self):
         class MyExecutor(futures.ThreadPoolExecutor):
