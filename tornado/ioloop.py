@@ -43,6 +43,7 @@ import threading
 import time
 import traceback
 import math
+from multiprocessing import cpu_count
 
 from tornado.concurrent import TracebackFuture, is_future, Future, chain_future
 from tornado.log import app_log, gen_log
@@ -644,7 +645,7 @@ class IOLoop(Configurable):
 
         if executor is None:
             if not hasattr(self, '_executor'):
-                self._executor = ThreadPoolExecutor()
+                self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
             executor = self._executor
 
         future = executor.submit(func, *args)

@@ -614,7 +614,7 @@ class TestIOLoopFutures(AsyncTestCase):
         class MyExecutor(futures.ThreadPoolExecutor):
             pass
 
-        executor = MyExecutor()
+        executor = MyExecutor(max_workers=1)
         IOLoop.current().set_default_executor(executor)
         self.assertIsInstance(IOLoop.current()._executor, MyExecutor)
 
