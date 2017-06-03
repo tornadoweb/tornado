@@ -10,14 +10,13 @@ import sys
 import threading
 import time
 import types
-import random
 
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PollIOLoop, PeriodicCallback
 from tornado.log import app_log
 from tornado.platform.select import _Select
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
-from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog
+from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis, skipBefore35, exec_test
 
 try:
@@ -585,28 +584,40 @@ class TestIOLoopFutures(AsyncTestCase):
         self.assertEqual(self.exception.args[0], "callback")
         self.assertEqual(self.future.exception().args[0], "worker")
 
+    @gen_test
     def test_run_in_executor_gen(self):
-        def func(arg1, arg2):
-            return arg1 + arg2
+        event1 = threading.Event()
+        event2 = threading.Event()
 
-        @gen.coroutine
-        def main():
-            arg1, arg2 = random.random(), random.random()
-            res = yield IOLoop.current().run_in_executor(None, func, arg1, arg2)
-            self.assertEqual(arg1 + arg2, res)
+        def callback(self_event, other_event):
+            self_event.set()
+            other_event.wait()
+            return self_event
 
-        IOLoop.current().run_sync(main)
+        res = yield [
+            IOLoop.current().run_in_executor(None, callback, event1, event2),
+            IOLoop.current().run_in_executor(None, callback, event2, event1)
+        ]
+
+        self.assertEqual([event1, event2], res)
 
     @skipBefore35
     def test_run_in_executor_native(self):
-        def func(arg1, arg2):
-            return arg1 + arg2
+        event1 = threading.Event()
+        event2 = threading.Event()
+
+        def callback(self_event, other_event):
+            self_event.set()
+            other_event.wait()
+            return self_event
 
         namespace = exec_test(globals(), locals(), """
-        async def main():
-            arg1, arg2 = random.random(), random.random()
-            res = await IOLoop.current().run_in_executor(None, func, arg1, arg2)
-            self.assertEqual(arg1 + arg2, res)
+            async def main():
+                res = await gen.multi([
+                    IOLoop.current().run_in_executor(None, callback, event1, event2),
+                    IOLoop.current().run_in_executor(None, callback, event2, event1)
+                ])
+                self.assertEqual([event1, event2], res)
         """)
         IOLoop.current().run_sync(namespace['main'])
 
