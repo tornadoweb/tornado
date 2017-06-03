@@ -275,7 +275,9 @@ class TestIOLoop(AsyncTestCase):
         self.io_loop.call_later(0, results.append, 4)
         self.io_loop.call_later(0, self.stop)
         self.wait()
-        self.assertEqual(results, [1, 2, 3, 4])
+        # The asyncio event loop does not guarantee the order of these
+        # callbacks, but PollIOLoop does.
+        self.assertEqual(sorted(results), [1, 2, 3, 4])
 
     def test_add_timeout_return(self):
         # All the timeout methods return non-None handles that can be
@@ -699,10 +701,17 @@ class TestIOLoopConfiguration(unittest.TestCase):
         return native_str(subprocess.check_output(args)).strip()
 
     def test_default(self):
-        # The default is a subclass of PollIOLoop
-        is_poll = self.run_python(
-            'print(isinstance(IOLoop.current(), PollIOLoop))')
-        self.assertEqual(is_poll, 'True')
+        if asyncio is not None:
+            # When asyncio is available, it is used by default.
+            cls = self.run_python('print(classname(IOLoop.current()))')
+            self.assertEqual(cls, 'AsyncIOMainLoop')
+            cls = self.run_python('print(classname(IOLoop()))')
+            self.assertEqual(cls, 'AsyncIOLoop')
+        else:
+            # Otherwise, the default is a subclass of PollIOLoop
+            is_poll = self.run_python(
+                'print(isinstance(IOLoop.current(), PollIOLoop))')
+            self.assertEqual(is_poll, 'True')
 
     def test_explicit_select(self):
         # SelectIOLoop can always be configured explicitly.
@@ -716,7 +725,7 @@ class TestIOLoopConfiguration(unittest.TestCase):
         cls = self.run_python(
             'IOLoop.configure("tornado.platform.asyncio.AsyncIOLoop")',
             'print(classname(IOLoop.current()))')
-        self.assertEqual(cls, 'AsyncIOLoop')
+        self.assertEqual(cls, 'AsyncIOMainLoop')
 
     @unittest.skipIf(asyncio is None, "asyncio module not present")
     def test_asyncio_main(self):

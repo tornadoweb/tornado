@@ -17,12 +17,15 @@ from tornado.testing import bind_unused_port, ExpectLog, AsyncTestCase, gen_test
 from tornado.test.util import unittest, skipIfNonUnix
 from tornado.web import RequestHandler, Application
 
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
 
 def skip_if_twisted():
-    if IOLoop.configured_class().__name__.endswith(('TwistedIOLoop',
-                                                    'AsyncIOMainLoop')):
-        raise unittest.SkipTest("Process tests not compatible with "
-                                "TwistedIOLoop or AsyncIOMainLoop")
+    if IOLoop.configured_class().__name__.endswith('TwistedIOLoop'):
+        raise unittest.SkipTest("Process tests not compatible with TwistedIOLoop")
 
 # Not using AsyncHTTPTestCase because we need control over the IOLoop.
 
@@ -58,8 +61,10 @@ class ProcessTest(unittest.TestCase):
         super(ProcessTest, self).tearDown()
 
     def test_multi_process(self):
-        # This test can't work on twisted because we use the global reactor
-        # and have no way to get it back into a sane state after the fork.
+        # This test doesn't work on twisted because we use the global
+        # reactor and don't restore it to a sane state after the fork
+        # (asyncio has the same issue, but we have a special case in
+        # place for it).
         skip_if_twisted()
         with ExpectLog(gen_log, "(Starting .* processes|child .* exited|uncaught exception)"):
             self.assertFalse(IOLoop.initialized())
@@ -81,6 +86,10 @@ class ProcessTest(unittest.TestCase):
                 sock.close()
                 return
             try:
+                if asyncio is not None:
+                    # Reset the global asyncio event loop, which was put into
+                    # a broken state by the fork.
+                    asyncio.set_event_loop(asyncio.new_event_loop())
                 if id in (0, 1):
                     self.assertEqual(id, task_id())
                     server = HTTPServer(self.get_app())

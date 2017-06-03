@@ -61,6 +61,11 @@ if PY3:
 else:
     import thread
 
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
 
 _POLL_TIMEOUT = 3600.0
 
@@ -242,7 +247,13 @@ class IOLoop(Configurable):
         """
         current = getattr(IOLoop._current, "instance", None)
         if current is None and instance:
-            current = IOLoop()
+            current = None
+            if asyncio is not None:
+                from tornado.platform.asyncio import AsyncIOLoop, AsyncIOMainLoop
+                if IOLoop.configured_class() is AsyncIOLoop:
+                    current = AsyncIOMainLoop()
+            if current is None:
+                current = IOLoop()
             if IOLoop._current.instance is not current:
                 raise RuntimeError("new IOLoop did not become current")
         return current
@@ -276,6 +287,9 @@ class IOLoop(Configurable):
 
     @classmethod
     def configurable_default(cls):
+        if asyncio is not None:
+            from tornado.platform.asyncio import AsyncIOLoop
+            return AsyncIOLoop
         return PollIOLoop
 
     def initialize(self, make_current=None):
