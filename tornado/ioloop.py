@@ -58,10 +58,8 @@ except ImportError:
 
 try:
     from concurrent.futures import ThreadPoolExecutor
-    _concurrent_futures_found = True
 except ImportError:
     ThreadPoolExecutor = None
-    _concurrent_futures_found = False
 
 if PY3:
     import _thread as thread
@@ -639,7 +637,7 @@ class IOLoop(Configurable):
         Use `functools.partial` to pass keyword arguments to `func`.
 
         """
-        if not _concurrent_futures_found:
+        if ThreadPoolExecutor is None:
             raise RuntimeError(
                 "concurrent.futures is required to use IOLoop.run_in_executor")
 
