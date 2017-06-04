@@ -6,11 +6,13 @@ import contextlib
 import datetime
 import functools
 import socket
+import subprocess
 import sys
 import threading
 import time
 import types
 
+from tornado.escape import native_str
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError, PollIOLoop, PeriodicCallback
 from tornado.log import app_log
@@ -23,6 +25,16 @@ try:
     from concurrent import futures
 except ImportError:
     futures = None
+
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
+try:
+    import twisted
+except ImportError:
+    twisted = None
 
 
 class FakeTimeSelect(_Select):
@@ -263,7 +275,9 @@ class TestIOLoop(AsyncTestCase):
         self.io_loop.call_later(0, results.append, 4)
         self.io_loop.call_later(0, self.stop)
         self.wait()
-        self.assertEqual(results, [1, 2, 3, 4])
+        # The asyncio event loop does not guarantee the order of these
+        # callbacks, but PollIOLoop does.
+        self.assertEqual(sorted(results), [1, 2, 3, 4])
 
     def test_add_timeout_return(self):
         # All the timeout methods return non-None handles that can be
@@ -675,6 +689,59 @@ class TestPeriodicCallback(unittest.TestCase):
         pc.start()
         self.io_loop.start()
         self.assertEqual(calls, expected)
+
+
+class TestIOLoopConfiguration(unittest.TestCase):
+    def run_python(self, *statements):
+        statements = [
+            'from tornado.ioloop import IOLoop, PollIOLoop',
+            'classname = lambda x: x.__class__.__name__',
+        ] + list(statements)
+        args = [sys.executable, '-c', '; '.join(statements)]
+        return native_str(subprocess.check_output(args)).strip()
+
+    def test_default(self):
+        if asyncio is not None:
+            # When asyncio is available, it is used by default.
+            cls = self.run_python('print(classname(IOLoop.current()))')
+            self.assertEqual(cls, 'AsyncIOMainLoop')
+            cls = self.run_python('print(classname(IOLoop()))')
+            self.assertEqual(cls, 'AsyncIOLoop')
+        else:
+            # Otherwise, the default is a subclass of PollIOLoop
+            is_poll = self.run_python(
+                'print(isinstance(IOLoop.current(), PollIOLoop))')
+            self.assertEqual(is_poll, 'True')
+
+    def test_explicit_select(self):
+        # SelectIOLoop can always be configured explicitly.
+        default_class = self.run_python(
+            'IOLoop.configure("tornado.platform.select.SelectIOLoop")',
+            'print(classname(IOLoop.current()))')
+        self.assertEqual(default_class, 'SelectIOLoop')
+
+    @unittest.skipIf(asyncio is None, "asyncio module not present")
+    def test_asyncio(self):
+        cls = self.run_python(
+            'IOLoop.configure("tornado.platform.asyncio.AsyncIOLoop")',
+            'print(classname(IOLoop.current()))')
+        self.assertEqual(cls, 'AsyncIOMainLoop')
+
+    @unittest.skipIf(asyncio is None, "asyncio module not present")
+    def test_asyncio_main(self):
+        cls = self.run_python(
+            'from tornado.platform.asyncio import AsyncIOMainLoop',
+            'AsyncIOMainLoop().install()',
+            'print(classname(IOLoop.current()))')
+        self.assertEqual(cls, 'AsyncIOMainLoop')
+
+    @unittest.skipIf(twisted is None, "twisted module not present")
+    def test_twisted(self):
+        cls = self.run_python(
+            'from tornado.platform.twisted import TwistedIOLoop',
+            'TwistedIOLoop().install()',
+            'print(classname(IOLoop.current()))')
+        self.assertEqual(cls, 'TwistedIOLoop')
 
 
 if __name__ == "__main__":
