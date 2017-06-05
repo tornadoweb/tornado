@@ -34,7 +34,7 @@ import socket
 import sys
 import re
 
-from tornado.concurrent import TracebackFuture
+from tornado.concurrent import Future
 from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
@@ -395,7 +395,7 @@ class BaseIOStream(object):
             self._write_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = TracebackFuture()
+            future = Future()
             future.add_done_callback(lambda f: f.exception())
             self._write_futures.append((self._total_write_index, future))
         if not self._connecting:
@@ -671,7 +671,7 @@ class BaseIOStream(object):
         if callback is not None:
             self._read_callback = stack_context.wrap(callback)
         else:
-            self._read_future = TracebackFuture()
+            self._read_future = Future()
         return self._read_future
 
     def _run_read_callback(self, size, streaming):
@@ -1091,7 +1091,7 @@ class IOStream(BaseIOStream):
             self._connect_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = self._connect_future = TracebackFuture()
+            future = self._connect_future = Future()
         try:
             self.socket.connect(address)
         except socket.error as e:
@@ -1169,7 +1169,7 @@ class IOStream(BaseIOStream):
         orig_close_callback = self._close_callback
         self._close_callback = None
 
-        future = TracebackFuture()
+        future = Future()
         ssl_stream = SSLIOStream(socket, ssl_options=ssl_options)
         # Wrap the original close callback so we can fail our Future as well.
         # If we had an "unwrap" counterpart to this method we would need
@@ -1425,7 +1425,7 @@ class SSLIOStream(IOStream):
             self._ssl_connect_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = self._ssl_connect_future = TracebackFuture()
+            future = self._ssl_connect_future = Future()
         if not self._ssl_accepting:
             self._run_ssl_connect_callback()
         return future

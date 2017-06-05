@@ -146,8 +146,6 @@ class Future(object):
     and ``set_exc_info`` are supported to capture tracebacks in Python 2.
     The traceback is automatically available in Python 3, but in the
     Python 2 futures backport this information is discarded.
-    This functionality was previously available in a separate class
-    ``TracebackFuture``, which is now a deprecated alias for this class.
 
     .. versionchanged:: 4.0
        `tornado.concurrent.Future` is always a thread-unsafe ``Future``
@@ -164,6 +162,10 @@ class Future(object):
        where it results in undesired logging it may be necessary to
        suppress the logging by ensuring that the exception is observed:
        ``f.add_done_callback(lambda f: f.exception())``.
+
+    .. versionchanged:: 5.0
+       This class was previoiusly available under the name ``TracebackFuture``.
+       This name, which was deprecated since version 4.0, has been removed.
     """
     def __init__(self):
         self._done = False
@@ -344,8 +346,6 @@ class Future(object):
                           self, ''.join(tb).rstrip())
 
 
-TracebackFuture = Future
-
 if futures is None:
     FUTURES = Future  # type: typing.Union[type, typing.Tuple[type, ...]]
 else:
@@ -358,7 +358,7 @@ def is_future(x):
 
 class DummyExecutor(object):
     def submit(self, fn, *args, **kwargs):
-        future = TracebackFuture()
+        future = Future()
         try:
             future.set_result(fn(*args, **kwargs))
         except Exception:
@@ -460,7 +460,7 @@ def return_future(f):
 
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
-        future = TracebackFuture()
+        future = Future()
         callback, args, kwargs = replacer.replace(
             lambda value=_NO_RESULT: future.set_result(value),
             args, kwargs)
