@@ -498,7 +498,7 @@ def return_future(f):
                     callback()
                 else:
                     callback(future.result())
-            future.add_done_callback(wrap(run_callback))
+            future_add_done_callback(future, wrap(run_callback))
         return future
     return wrapper
 
@@ -520,7 +520,7 @@ def chain_future(a, b):
             b.set_exception(a.exception())
         else:
             b.set_result(a.result())
-    a.add_done_callback(copy)
+    future_add_done_callback(a, copy)
 
 
 def future_set_exc_info(future, exc_info):
@@ -537,3 +537,18 @@ def future_set_exc_info(future, exc_info):
     else:
         # asyncio.Future
         future.set_exception(exc_info[1])
+
+
+def future_add_done_callback(future, callback):
+    """Arrange to call ``callback`` when ``future`` is complete.
+
+    ``callback`` is invoked with one argument, the ``future``.
+
+    If ``future`` is already done, ``callback`` is invoked immediately.
+    This may differ from the behavior of `.Future.add_done_callback`,
+    which makes no such guarantee.
+    """
+    if future.done():
+        callback(future)
+    else:
+        future.add_done_callback(callback)

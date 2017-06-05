@@ -85,7 +85,7 @@ import textwrap
 import types
 import weakref
 
-from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info
+from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
@@ -200,7 +200,7 @@ def engine(func):
         # The engine interface doesn't give us any way to return
         # errors but to raise them into the stack context.
         # Save the stack context here to use when the Future has resolved.
-        future.add_done_callback(stack_context.wrap(final_callback))
+        future_add_done_callback(future, stack_context.wrap(final_callback))
     return wrapper
 
 
@@ -440,7 +440,7 @@ class WaitIterator(object):
         self._running_future = None
 
         for future in futures:
-            future.add_done_callback(self._done_callback)
+            future_add_done_callback(future, self._done_callback)
 
     def done(self):
         """Returns True if this iterator has no more results."""
@@ -838,7 +838,7 @@ def multi_future(children, quiet_exceptions=()):
     for f in children:
         if f not in listening:
             listening.add(f)
-            f.add_done_callback(callback)
+            future_add_done_callback(f, callback)
     return future
 
 
@@ -910,14 +910,14 @@ def with_timeout(timeout, future, quiet_exceptions=()):
     def timeout_callback():
         result.set_exception(TimeoutError("Timeout"))
         # In case the wrapped future goes on to fail, log it.
-        future.add_done_callback(error_callback)
+        future_add_done_callback(future, error_callback)
     timeout_handle = io_loop.add_timeout(
         timeout, timeout_callback)
     if isinstance(future, Future):
         # We know this future will resolve on the IOLoop, so we don't
         # need the extra thread-safety of IOLoop.add_future (and we also
         # don't care about StackContext here.
-        future.add_done_callback(
+        future_add_done_callback(future,
             lambda future: io_loop.remove_timeout(timeout_handle))
     else:
         # concurrent.futures.Futures may resolve on any thread, so we
