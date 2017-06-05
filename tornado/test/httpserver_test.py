@@ -719,6 +719,7 @@ class KeepAliveTest(AsyncHTTPTestCase):
         self.stream.read_until_close(callback=self.stop)
         data = self.wait()
         self.assertTrue(not data)
+        self.assertEqual(self.headers['Connection'], 'close')
         self.close()
 
     # keepalive is supported for http 1.0 too, but it's opt-in
