@@ -463,6 +463,7 @@ class BaseIOStream(object):
                 self._ssl_connect_future = None
             for future in futures:
                 future.set_exception(StreamClosedError(real_error=self.error))
+                future.exception()
             if self._close_callback is not None:
                 cb = self._close_callback
                 self._close_callback = None

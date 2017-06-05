@@ -105,14 +105,21 @@ class BaseAsyncIOLoop(IOLoop):
     def start(self):
         old_current = IOLoop.current(instance=False)
         try:
+            old_asyncio = asyncio.get_event_loop()
+        except RuntimeError:
+            old_asyncio = None
+        try:
             self._setup_logging()
             self.make_current()
+            # This is automatic in 3.5, but must be done manually in 3.4.
+            asyncio.set_event_loop(self.asyncio_loop)
             self.asyncio_loop.run_forever()
         finally:
             if old_current is None:
                 IOLoop.clear_current()
             else:
                 old_current.make_current()
+            asyncio.set_event_loop(old_asyncio)
 
     def stop(self):
         self.asyncio_loop.stop()
@@ -186,10 +193,12 @@ def to_tornado_future(asyncio_future):
     """Convert an `asyncio.Future` to a `tornado.concurrent.Future`.
 
     .. versionadded:: 4.1
+
+    .. deprecated:: 5.0
+       Tornado ``Futures`` have been merged with `asyncio.Future`,
+       so this method is now a no-op.
     """
-    tf = tornado.concurrent.Future()
-    tornado.concurrent.chain_future(asyncio_future, tf)
-    return tf
+    return asyncio_future
 
 
 def to_asyncio_future(tornado_future):
@@ -200,12 +209,9 @@ def to_asyncio_future(tornado_future):
     .. versionchanged:: 4.3
        Now accepts any yieldable object, not just
        `tornado.concurrent.Future`.
+
+    .. deprecated:: 5.0
+       Tornado ``Futures`` have been merged with `asyncio.Future`,
+       so this method is now equivalent to `tornado.gen.convert_yielded`.
     """
-    tornado_future = convert_yielded(tornado_future)
-    af = asyncio.Future()
-    tornado.concurrent.chain_future(tornado_future, af)
-    return af
-
-
-if hasattr(convert_yielded, 'register'):
-    convert_yielded.register(asyncio.Future, to_tornado_future)  # type: ignore
+    return convert_yielded(tornado_future)

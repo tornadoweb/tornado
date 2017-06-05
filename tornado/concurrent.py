@@ -39,6 +39,11 @@ except ImportError:
     futures = None
 
 try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
+try:
     import typing
 except ImportError:
     typing = None
@@ -138,14 +143,17 @@ class Future(object):
     Tornado they are normally used with `.IOLoop.add_future` or by
     yielding them in a `.gen.coroutine`.
 
-    `tornado.concurrent.Future` is similar to
-    `concurrent.futures.Future`, but not thread-safe (and therefore
-    faster for use with single-threaded event loops).
+    `tornado.concurrent.Future` is an alias for `asyncio.Future` when
+    that package is available (Python 3.4+). Unlike
+    `concurrent.futures.Future`, the ``Futures`` used by Tornado and
+    `asyncio` are not thread-safe (and therefore faster for use with
+    single-threaded event loops).
 
-    In addition to ``exception`` and ``set_exception``, methods ``exc_info``
-    and ``set_exc_info`` are supported to capture tracebacks in Python 2.
-    The traceback is automatically available in Python 3, but in the
-    Python 2 futures backport this information is discarded.
+    In addition to ``exception`` and ``set_exception``, Tornado's
+    ``Future`` implementation supports storing an ``exc_info`` triple
+    to support better tracebacks on Python 2. To set an ``exc_info``
+    triple, use `future_set_exc_info`, and to retrieve one, call
+    `result()` (which will raise it).
 
     .. versionchanged:: 4.0
        `tornado.concurrent.Future` is always a thread-unsafe ``Future``
@@ -164,8 +172,15 @@ class Future(object):
        ``f.add_done_callback(lambda f: f.exception())``.
 
     .. versionchanged:: 5.0
-       This class was previoiusly available under the name ``TracebackFuture``.
-       This name, which was deprecated since version 4.0, has been removed.
+
+       This class was previoiusly available under the name
+       ``TracebackFuture``. This name, which was deprecated since
+       version 4.0, has been removed. When `asyncio` is available
+       ``tornado.concurrent.Future`` is now an alias for
+       `asyncio.Future`. Like `asyncio.Future`, callbacks are now
+       always scheduled on the `.IOLoop` and are never run
+       synchronously.
+
     """
     def __init__(self):
         self._done = False
@@ -267,7 +282,8 @@ class Future(object):
         `add_done_callback` directly.
         """
         if self._done:
-            fn(self)
+            from tornado.ioloop import IOLoop
+            IOLoop.current().add_callback(fn, self)
         else:
             self._callbacks.append(fn)
 
@@ -322,12 +338,10 @@ class Future(object):
 
     def _set_done(self):
         self._done = True
+        from tornado.ioloop import IOLoop
+        loop = IOLoop.current()
         for cb in self._callbacks:
-            try:
-                cb(self)
-            except Exception:
-                app_log.exception('Exception in callback %r for %r',
-                                  cb, self)
+            loop.add_callback(cb, self)
         self._callbacks = None
 
     # On Python 3.3 or older, objects with a destructor part of a reference
@@ -345,6 +359,9 @@ class Future(object):
             app_log.error('Future %r exception was never retrieved: %s',
                           self, ''.join(tb).rstrip())
 
+
+if asyncio is not None:
+    Future = asyncio.Future  # noqa
 
 if futures is None:
     FUTURES = Future  # type: typing.Union[type, typing.Tuple[type, ...]]
