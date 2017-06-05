@@ -154,7 +154,6 @@ class HTTPServer(TCPServer, Configurable,
                    max_body_size=None, max_buffer_size=None,
                    trusted_downstream=None):
         self.request_callback = request_callback
-        self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
         self.protocol = protocol
         self.conn_params = HTTP1ConnectionParameters(
