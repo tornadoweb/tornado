@@ -42,7 +42,7 @@ import twisted.names.resolve  # type: ignore
 
 from zope.interface import implementer  # type: ignore
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_exc_info
 from tornado.escape import utf8
 from tornado import gen
 import tornado.ioloop
@@ -585,6 +585,6 @@ if hasattr(gen.convert_yielded, 'register'):
                 # Should never happen, but just in case
                 raise Exception("errback called without error")
             except:
-                f.set_exc_info(sys.exc_info())
+                future_set_exc_info(f, sys.exc_info())
         d.addCallbacks(f.set_result, errback)
         return f
