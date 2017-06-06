@@ -1,10 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-#from functools import partial
 import socket
 
 from tornado import gen
-from tornado.iostream import IOStream, StreamClosedError
+from tornado.iostream import IOStream
 from tornado.log import app_log
 from tornado.stack_context import NullContext
 from tornado.tcpserver import TCPServer
@@ -103,11 +102,14 @@ class TCPServerTest(AsyncTestCase):
 
         self.assertGreater(len(connected_clients), 0,
                            "all clients failed connecting")
-        self.assertLess(len(connected_clients), N,
-                        "at least one client should fail connecting for "
-                        "the test to be meaningful")
+        try:
+            if len(connected_clients) == N:
+                # Ideally we'd make the test deterministic, but we're testing
+                # for a race condition in combination with the system's TCP stack...
+                self.skipTest("at least one client should fail connecting "
+                              "for the test to be meaningful")
+        finally:
+            for c in connected_clients:
+                c.close()
 
-        for c in connected_clients:
-            c.close()
-        # AsyncTestCase.tearDown() would re-raise the EBADF encountered in the IO loop
-
+        # Here tearDown() would re-raise the EBADF encountered in the IO loop
