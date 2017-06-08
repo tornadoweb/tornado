@@ -168,6 +168,11 @@ class Queue(object):
 
         Returns a Future, which raises `tornado.gen.TimeoutError` after a
         timeout.
+
+        ``timeout`` may be a number denoting a time (on the same
+        scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
+        `datetime.timedelta` object for a deadline relative to the
+        current time.
         """
         try:
             self.put_nowait(item)
@@ -200,6 +205,11 @@ class Queue(object):
 
         Returns a Future which resolves once an item is available, or raises
         `tornado.gen.TimeoutError` after a timeout.
+
+        ``timeout`` may be a number denoting a time (on the same
+        scale as `tornado.ioloop.IOLoop.time`, normally `time.time`), or a
+        `datetime.timedelta` object for a deadline relative to the
+        current time.
         """
         future = Future()
         try:
