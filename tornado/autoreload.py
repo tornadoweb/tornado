@@ -63,12 +63,11 @@ import sys
 # file.py gets added to the path, which can cause confusion as imports
 # may become relative in spite of the future import.
 #
-# We address the former problem by setting the $PYTHONPATH environment
-# variable before re-execution so the new process will see the correct
-# path.  We attempt to address the latter problem when tornado.autoreload
-# is run as __main__, although we can't fix the general case because
-# we cannot reliably reconstruct the original command line
-# (http://bugs.python.org/issue14208).
+# We address the former problem by reconstructing the original command
+# line (Python >= 3.4) or by setting the $PYTHONPATH environment
+# variable (Python < 3.4) before re-execution so the new process will
+# see the correct path.  We attempt to address the latter problem when
+# tornado.autoreload is run as __main__.
 
 if __name__ == "__main__":
     # This sys.path manipulation must come before our imports (as much
@@ -209,15 +208,22 @@ def _reload():
         # ioloop.set_blocking_log_threshold so it doesn't fire
         # after the exec.
         signal.setitimer(signal.ITIMER_REAL, 0, 0)
-    # sys.path fixes: see comments at top of file.  If sys.path[0] is an empty
-    # string, we were (probably) invoked with -m and the effective path
-    # is about to change on re-exec.  Add the current directory to $PYTHONPATH
-    # to ensure that the new process sees the same path we did.
-    path_prefix = '.' + os.pathsep
-    if (sys.path[0] == '' and
-            not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
-        os.environ["PYTHONPATH"] = (path_prefix +
-                                    os.environ.get("PYTHONPATH", ""))
+    # sys.path fixes: see comments at top of file.  If __main__.__spec__
+    # exists, we were invoked with -m and the effective path is about to
+    # change on re-exec.  Reconstruct the original command line to
+    # ensure that the new process sees the same path we did.  If
+    # __spec__ is not available (Python < 3.4), check instead if
+    # sys.path[0] is an empty string and add the current directory to
+    # $PYTHONPATH.
+    spec = getattr(sys.modules['__main__'], '__spec__', None)
+    if spec:
+        sys.argv = ['-m', spec.name] + sys.argv[1:]
+    else:
+        path_prefix = '.' + os.pathsep
+        if (sys.path[0] == '' and
+                not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
+            os.environ["PYTHONPATH"] = (path_prefix +
+                                        os.environ.get("PYTHONPATH", ""))
     if not _has_execv:
         subprocess.Popen([sys.executable] + sys.argv)
         sys.exit(0)
