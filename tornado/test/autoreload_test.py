@@ -40,7 +40,9 @@ class AutoreloadTest(unittest.TestCase):
         if 'PYTHONPATH' in os.environ:
             pythonpath += os.pathsep + os.environ['PYTHONPATH']
 
-        p = Popen([sys.executable, '-m', 'testapp'], stdout=subprocess.PIPE,
-                  cwd=path, env=dict(os.environ, PYTHONPATH=pythonpath))
-        out = p.communicate()[0].decode()
+        p = Popen(
+            [sys.executable, '-m', 'testapp'], stdout=subprocess.PIPE,
+            cwd=path, env=dict(os.environ, PYTHONPATH=pythonpath),
+            universal_newlines=True)
+        out = p.communicate()[0]
         self.assertEqual(out, 'Starting\nStarting\n')
