@@ -9,7 +9,6 @@ class ImportTest(unittest.TestCase):
         # all (unless they have external dependencies) here to at
         # least ensure that there are no syntax errors.
         import tornado.auth
-        import tornado.autoreload
         import tornado.concurrent
         import tornado.escape
         import tornado.gen
