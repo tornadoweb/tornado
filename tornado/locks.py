@@ -99,7 +99,7 @@ class Condition(_TimeoutGarbageCollector):
         # Wait up to 1 second.
         yield condition.wait(timeout=datetime.timedelta(seconds=1))
 
-    The method raises `tornado.gen.TimeoutError` if there's no notification
+    The method raises `tornado.util.TimeoutError` if there's no notification
     before the deadline.
     """
 
@@ -220,7 +220,7 @@ class Event(object):
     def wait(self, timeout=None):
         """Block until the internal flag is true.
 
-        Returns a Future, which raises `tornado.gen.TimeoutError` after a
+        Returns a Future, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
         if timeout is None:
@@ -480,7 +480,7 @@ class Lock(object):
     def acquire(self, timeout=None):
         """Attempt to lock. Returns a Future.
 
-        Returns a Future, which raises `tornado.gen.TimeoutError` after a
+        Returns a Future, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
         return self._block.acquire(timeout)
