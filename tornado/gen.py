@@ -89,7 +89,7 @@ from tornado.concurrent import Future, TracebackFuture, is_future, chain_future
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
-from tornado.util import PY3, raise_exc_info
+from tornado.util import PY3, raise_exc_info, TimeoutError
 
 try:
     try:
@@ -152,10 +152,6 @@ class BadYieldError(Exception):
 
 class ReturnValueIgnoredError(Exception):
     pass
-
-
-class TimeoutError(Exception):
-    """Exception raised by ``with_timeout``."""
 
 
 def _value_from_stopiteration(e):
@@ -871,10 +867,10 @@ def maybe_future(x):
 def with_timeout(timeout, future, quiet_exceptions=()):
     """Wraps a `.Future` (or other yieldable object) in a timeout.
 
-    Raises `TimeoutError` if the input future does not complete before
-    ``timeout``, which may be specified in any form allowed by
-    `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
-    relative to `.IOLoop.time`)
+    Raises `tornado.util.TimeoutError` if the input future does not
+    complete before ``timeout``, which may be specified in any form
+    allowed by `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or
+    an absolute time relative to `.IOLoop.time`)
 
     If the wrapped `.Future` fails after it has timed out, the exception
     will be logged unless it is of a type contained in ``quiet_exceptions``
