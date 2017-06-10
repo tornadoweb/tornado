@@ -250,6 +250,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         except httputil.HTTPInputError as e:
             gen_log.info("Malformed HTTP message from %s: %s",
                          self.context, e)
+            if not self.is_client:
+                yield self.stream.write(b'HTTP/1.1 400 Bad Request\r\n\r\n')
             self.close()
             raise gen.Return(False)
         finally:

@@ -829,6 +829,8 @@ def parse_request_start_line(line):
     try:
         method, path, version = line.split(" ")
     except ValueError:
+        # https://tools.ietf.org/html/rfc7230#section-3.1.1
+        # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
     if not re.match(r"^HTTP/1\.[0-9]$", version):
         raise HTTPInputError(
