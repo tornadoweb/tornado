@@ -359,6 +359,10 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # Applications are discouraged from touching Transfer-Encoding,
                 # but if they do, leave it alone.
                 'Transfer-Encoding' not in headers)
+            # If connection to a 1.1 client will be closed, inform client
+            if (self._request_start_line.version == 'HTTP/1.1' and
+                self._disconnect_on_finish):
+                headers['Connection'] = 'close'
             # If a 1.0 client asked for keep-alive, add the header.
             if (self._request_start_line.version == 'HTTP/1.0' and
                 (self._request_headers.get('Connection', '').lower() ==
@@ -420,7 +424,7 @@ class HTTP1Connection(httputil.HTTPConnection):
     def write(self, chunk, callback=None):
         """Implements `.HTTPConnection.write`.
 
-        For backwards compatibility is is allowed but deprecated to
+        For backwards compatibility it is allowed but deprecated to
         skip `write_headers` and instead call `write()` with a
         pre-encoded header block.
         """
