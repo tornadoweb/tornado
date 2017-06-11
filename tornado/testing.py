@@ -4,7 +4,7 @@
 * `AsyncTestCase` and `AsyncHTTPTestCase`:  Subclasses of unittest.TestCase
   with additional support for testing asynchronous (`.IOLoop`-based) code.
 
-* `ExpectLog` and `LogTrapTestCase`: Make test logs less spammy.
+* `ExpectLog`: Make test logs less spammy.
 
 * `main()`: A simple test runner (wrapper around unittest.main()) with support
   for the tornado.autoreload module to rerun the tests when code changes.
@@ -22,7 +22,7 @@ try:
     from tornado.process import Subprocess
 except ImportError:
     # These modules are not importable on app engine.  Parts of this module
-    # won't work, but e.g. LogTrapTestCase and main() will.
+    # won't work, but e.g. main() will.
     AsyncHTTPClient = None  # type: ignore
     gen = None  # type: ignore
     HTTPServer = None  # type: ignore
@@ -534,49 +534,6 @@ def gen_test(func=None, timeout=None):
 # Without this attribute, nosetests will try to run gen_test as a test
 # anywhere it is imported.
 gen_test.__test__ = False  # type: ignore
-
-
-class LogTrapTestCase(unittest.TestCase):
-    """A test case that captures and discards all logging output
-    if the test passes.
-
-    Some libraries can produce a lot of logging output even when
-    the test succeeds, so this class can be useful to minimize the noise.
-    Simply use it as a base class for your test case.  It is safe to combine
-    with AsyncTestCase via multiple inheritance
-    (``class MyTestCase(AsyncHTTPTestCase, LogTrapTestCase):``)
-
-    This class assumes that only one log handler is configured and
-    that it is a `~logging.StreamHandler`.  This is true for both
-    `logging.basicConfig` and the "pretty logging" configured by
-    `tornado.options`.  It is not compatible with other log buffering
-    mechanisms, such as those provided by some test runners.
-
-    .. deprecated:: 4.1
-       Use the unittest module's ``--buffer`` option instead, or `.ExpectLog`.
-    """
-    def run(self, result=None):
-        logger = logging.getLogger()
-        if not logger.handlers:
-            logging.basicConfig()
-        handler = logger.handlers[0]
-        if (len(logger.handlers) > 1 or
-                not isinstance(handler, logging.StreamHandler)):
-            # Logging has been configured in a way we don't recognize,
-            # so just leave it alone.
-            super(LogTrapTestCase, self).run(result)
-            return
-        old_stream = handler.stream
-        try:
-            handler.stream = StringIO()
-            gen_log.info("RUNNING TEST: " + str(self))
-            old_error_count = len(result.failures) + len(result.errors)
-            super(LogTrapTestCase, self).run(result)
-            new_error_count = len(result.failures) + len(result.errors)
-            if new_error_count != old_error_count:
-                old_stream.write(handler.stream.getvalue())
-        finally:
-            handler.stream = old_stream
 
 
 class ExpectLog(logging.Filter):

@@ -14,7 +14,7 @@ Apr 8, 2013
   of the `ssl.match_hostname` function.
 * `tornado.websocket.websocket_connect` now fails cleanly when it attempts
   to connect to a non-websocket url.
-* `tornado.testing.LogTrapTestCase` once again works with byte strings
+* ``tornado.testing.LogTrapTestCase`` once again works with byte strings
   on Python 2.
 * The ``request`` attribute of `tornado.httpclient.HTTPResponse` is
   now always an `~tornado.httpclient.HTTPRequest`, never a ``_RequestProxy``.

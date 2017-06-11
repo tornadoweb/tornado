@@ -23,9 +23,6 @@
    .. autoclass:: ExpectLog
       :members:
 
-   .. autoclass:: LogTrapTestCase
-      :members:
-
    Test runner
    -----------
 

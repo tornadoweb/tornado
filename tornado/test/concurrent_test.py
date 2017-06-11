@@ -30,7 +30,7 @@ from tornado.iostream import IOStream
 from tornado.log import app_log
 from tornado import stack_context
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncTestCase, ExpectLog, LogTrapTestCase, bind_unused_port, gen_test
+from tornado.testing import AsyncTestCase, ExpectLog, bind_unused_port, gen_test
 from tornado.test.util import unittest
 
 
@@ -198,12 +198,12 @@ class ReturnFutureTest(AsyncTestCase):
 
 class CapServer(TCPServer):
     def handle_stream(self, stream, address):
-        logging.info("handle_stream")
+        logging.debug("handle_stream")
         self.stream = stream
         self.stream.read_until(b"\n", self.handle_read)
 
     def handle_read(self, data):
-        logging.info("handle_read")
+        logging.debug("handle_read")
         data = to_unicode(data)
         if data == data.upper():
             self.stream.write(b"error\talready capitalized\n")
@@ -231,7 +231,7 @@ class BaseCapClient(object):
 
 class ManualCapClient(BaseCapClient):
     def capitalize(self, request_data, callback=None):
-        logging.info("capitalize")
+        logging.debug("capitalize")
         self.request_data = request_data
         self.stream = IOStream(socket.socket())
         self.stream.connect(('127.0.0.1', self.port),
@@ -243,12 +243,12 @@ class ManualCapClient(BaseCapClient):
         return self.future
 
     def handle_connect(self):
-        logging.info("handle_connect")
+        logging.debug("handle_connect")
         self.stream.write(utf8(self.request_data + "\n"))
         self.stream.read_until(b'\n', callback=self.handle_read)
 
     def handle_read(self, data):
-        logging.info("handle_read")
+        logging.debug("handle_read")
         self.stream.close()
         try:
             self.future.set_result(self.process_response(data))
@@ -259,7 +259,7 @@ class ManualCapClient(BaseCapClient):
 class DecoratorCapClient(BaseCapClient):
     @return_future
     def capitalize(self, request_data, callback):
-        logging.info("capitalize")
+        logging.debug("capitalize")
         self.request_data = request_data
         self.stream = IOStream(socket.socket())
         self.stream.connect(('127.0.0.1', self.port),
@@ -267,12 +267,12 @@ class DecoratorCapClient(BaseCapClient):
         self.callback = callback
 
     def handle_connect(self):
-        logging.info("handle_connect")
+        logging.debug("handle_connect")
         self.stream.write(utf8(self.request_data + "\n"))
         self.stream.read_until(b'\n', callback=self.handle_read)
 
     def handle_read(self, data):
-        logging.info("handle_read")
+        logging.debug("handle_read")
         self.stream.close()
         self.callback(self.process_response(data))
 
@@ -281,14 +281,14 @@ class GeneratorCapClient(BaseCapClient):
     @return_future
     @gen.engine
     def capitalize(self, request_data, callback):
-        logging.info('capitalize')
+        logging.debug('capitalize')
         stream = IOStream(socket.socket())
-        logging.info('connecting')
+        logging.debug('connecting')
         yield gen.Task(stream.connect, ('127.0.0.1', self.port))
         stream.write(utf8(request_data + '\n'))
-        logging.info('reading')
+        logging.debug('reading')
         data = yield gen.Task(stream.read_until, b'\n')
-        logging.info('returning')
+        logging.debug('returning')
         stream.close()
         callback(self.process_response(data))
 
@@ -345,15 +345,15 @@ class ClientTestMixin(object):
         self.wait()
 
 
-class ManualClientTest(ClientTestMixin, AsyncTestCase, LogTrapTestCase):
+class ManualClientTest(ClientTestMixin, AsyncTestCase):
     client_class = ManualCapClient
 
 
-class DecoratorClientTest(ClientTestMixin, AsyncTestCase, LogTrapTestCase):
+class DecoratorClientTest(ClientTestMixin, AsyncTestCase):
     client_class = DecoratorCapClient
 
 
-class GeneratorClientTest(ClientTestMixin, AsyncTestCase, LogTrapTestCase):
+class GeneratorClientTest(ClientTestMixin, AsyncTestCase):
     client_class = GeneratorCapClient
 
 
