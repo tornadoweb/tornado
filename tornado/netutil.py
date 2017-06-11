@@ -251,7 +251,7 @@ def add_accept_handler(sock, callback):
        A callable is returned (``None`` was returned before).
     """
     io_loop = IOLoop.current()
-    removed = []
+    removed = [False]
 
     def accept_handler(fd, events):
         # More connections may come in while we're handling callbacks;
@@ -266,7 +266,7 @@ def add_accept_handler(sock, callback):
         # heuristic for the number of connections we can reasonably
         # accept at once.
         for i in xrange(_DEFAULT_BACKLOG):
-            if removed:
+            if removed[0]:
                 # The socket was probably closed
                 return
             try:
@@ -287,7 +287,7 @@ def add_accept_handler(sock, callback):
 
     def remove_handler():
         io_loop.remove_handler(sock)
-        removed.append(True)
+        removed[0] = True
 
     io_loop.add_handler(sock, accept_handler, IOLoop.READ)
     return remove_handler
