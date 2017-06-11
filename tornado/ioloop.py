@@ -48,7 +48,7 @@ from tornado.concurrent import TracebackFuture, is_future
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
-from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds
+from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds, TimeoutError
 
 try:
     import signal
@@ -68,10 +68,6 @@ except ImportError:
 
 
 _POLL_TIMEOUT = 3600.0
-
-
-class TimeoutError(Exception):
-    pass
 
 
 class IOLoop(Configurable):
@@ -457,7 +453,7 @@ class IOLoop(Configurable):
 
         The keyword-only argument ``timeout`` may be used to set
         a maximum duration for the function.  If the timeout expires,
-        a `TimeoutError` is raised.
+        a `tornado.util.TimeoutError` is raised.
 
         This method is useful in conjunction with `tornado.gen.coroutine`
         to allow asynchronous calls in a ``main()`` function::
