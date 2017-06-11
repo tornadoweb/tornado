@@ -408,12 +408,13 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
         self.wait()
 
     def test_malformed_first_line_response(self):
-        self.stream.write(b'asdf\r\n\r\n')
-        read_stream_body(self.stream, self.stop)
-        start_line, headers, response = self.wait()
-        self.assertEqual('HTTP/1.1', start_line.version)
-        self.assertEqual(400, start_line.code)
-        self.assertEqual('Bad Request', start_line.reason)
+        with ExpectLog(gen_log, '.*Malformed HTTP request line'):
+            self.stream.write(b'asdf\r\n\r\n')
+            read_stream_body(self.stream, self.stop)
+            start_line, headers, response = self.wait()
+            self.assertEqual('HTTP/1.1', start_line.version)
+            self.assertEqual(400, start_line.code)
+            self.assertEqual('Bad Request', start_line.reason)
 
     def test_malformed_first_line_log(self):
         with ExpectLog(gen_log, '.*Malformed HTTP request line'):
