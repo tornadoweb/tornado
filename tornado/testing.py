@@ -458,7 +458,7 @@ def gen_test(func=None, timeout=None):
         class MyTest(AsyncHTTPTestCase):
             @gen_test
             def test_something(self):
-                response = yield gen.Task(self.fetch('/'))
+                response = yield self.http_client.fetch(self.get_url('/'))
 
     By default, ``@gen_test`` times out after 5 seconds. The timeout may be
     overridden globally with the ``ASYNC_TEST_TIMEOUT`` environment variable,
@@ -467,7 +467,11 @@ def gen_test(func=None, timeout=None):
         class MyTest(AsyncHTTPTestCase):
             @gen_test(timeout=10)
             def test_something_slow(self):
-                response = yield gen.Task(self.fetch('/'))
+                response = yield self.http_client.fetch(self.get_url('/'))
+
+    Note that ``@gen_test`` is incompatible with `AsyncTestCase.stop`,
+    `AsyncTestCase.wait`, and `AsyncHTTPTestCase.fetch`. Use ``yield
+    self.http_client.fetch(self.get_url())`` as shown above instead.
 
     .. versionadded:: 3.1
        The ``timeout`` argument and ``ASYNC_TEST_TIMEOUT`` environment
@@ -476,6 +480,7 @@ def gen_test(func=None, timeout=None):
     .. versionchanged:: 4.0
        The wrapper now passes along ``*args, **kwargs`` so it can be used
        on functions with arguments.
+
     """
     if timeout is None:
         timeout = get_async_test_timeout()
