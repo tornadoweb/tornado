@@ -177,13 +177,10 @@ class TestIOLoop(AsyncTestCase):
         # This also happens to be the first test where we run an IOLoop in
         # a non-main thread.
         other_ioloop = IOLoop()
-        self.assertFalse(other_ioloop.is_running())
         thread = threading.Thread(target=other_ioloop.start)
         thread.start()
-        self.assertTrue(other_ioloop.is_running())
         other_ioloop.add_callback_from_signal(other_ioloop.stop)
         thread.join()
-        self.assertFalse(other_ioloop.is_running())
         other_ioloop.close()
 
     def test_add_callback_while_closing(self):
