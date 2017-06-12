@@ -74,6 +74,20 @@ class FakeTimeIOLoop(PollIOLoop):
 
 
 class TestIOLoop(AsyncTestCase):
+    def test_is_running(self):
+        loop = self.io_loop
+        was_running = [None]
+
+        def cb():
+            was_running[0] = loop.is_running()
+
+        loop.add_callback(cb)
+        loop.add_callback(loop.stop)
+        self.assertFalse(loop.is_running())
+        loop.start()
+        self.assertTrue(was_running[0])
+        self.assertFalse(loop.is_running())
+
     def test_add_callback_return_sequence(self):
         # A callback returning {} or [] shouldn't spin the CPU, see Issue #1803.
         self.calls = 0
@@ -163,10 +177,13 @@ class TestIOLoop(AsyncTestCase):
         # This also happens to be the first test where we run an IOLoop in
         # a non-main thread.
         other_ioloop = IOLoop()
+        self.assertFalse(other_ioloop.is_running())
         thread = threading.Thread(target=other_ioloop.start)
         thread.start()
+        self.assertTrue(other_ioloop.is_running())
         other_ioloop.add_callback_from_signal(other_ioloop.stop)
         thread.join()
+        self.assertFalse(other_ioloop.is_running())
         other_ioloop.close()
 
     def test_add_callback_while_closing(self):
