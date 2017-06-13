@@ -648,12 +648,9 @@ class IOLoop(Configurable):
 
         future = executor.submit(func, *args)
         self.add_future(future, lambda future: future.result())
-        if sys.version_info >= (3, 5):
-            future_ = Future()
-            chain_future(future, future_)
-            return future_
-        else:
-            return future
+        future_ = Future()
+        chain_future(future, future_)
+        return future_
 
     def set_default_executor(self, executor):
         """Sets the default executor to use with :meth:`run_in_executor`."""
