@@ -217,19 +217,20 @@ def _reload():
     # $PYTHONPATH.
     spec = getattr(sys.modules['__main__'], '__spec__', None)
     if spec:
-        sys.argv = ['-m', spec.name] + sys.argv[1:]
+        argv = ['-m', spec.name] + sys.argv[1:]
     else:
+        argv = sys.argv
         path_prefix = '.' + os.pathsep
         if (sys.path[0] == '' and
                 not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
             os.environ["PYTHONPATH"] = (path_prefix +
                                         os.environ.get("PYTHONPATH", ""))
     if not _has_execv:
-        subprocess.Popen([sys.executable] + sys.argv)
+        subprocess.Popen([sys.executable] + argv)
         sys.exit(0)
     else:
         try:
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            os.execv(sys.executable, [sys.executable] + argv)
         except OSError:
             # Mac OS X versions prior to 10.6 do not support execv in
             # a process that contains multiple threads.  Instead of
@@ -242,8 +243,7 @@ def _reload():
             # Unfortunately the errno returned in this case does not
             # appear to be consistent, so we can't easily check for
             # this error specifically.
-            os.spawnv(os.P_NOWAIT, sys.executable,
-                      [sys.executable] + sys.argv)
+            os.spawnv(os.P_NOWAIT, sys.executable, [sys.executable] + argv)
             # At this point the IOLoop has been closed and finally
             # blocks will experience errors if we allow the stack to
             # unwind, so just exit uncleanly.
