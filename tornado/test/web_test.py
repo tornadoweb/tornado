@@ -2880,12 +2880,23 @@ class RedirectHandlerTest(WebTestCase):
     def get_handlers(self):
         return [
             ('/src', WebRedirectHandler, {'url': '/dst'}),
+            ('/src2', WebRedirectHandler, {'url': '/dst2?foo=bar'}),
             (r'/(.*?)/(.*?)/(.*)', WebRedirectHandler, {'url': '/{1}/{0}/{2}'})]
 
     def test_basic_redirect(self):
         response = self.fetch('/src', follow_redirects=False)
         self.assertEqual(response.code, 301)
         self.assertEqual(response.headers['Location'], '/dst')
+
+    def test_redirect_with_argument(self):
+        response = self.fetch('/src?foo=bar', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst?foo=bar')
+
+    def test_redirect_with_appending_argument(self):
+        response = self.fetch('/src2?foo2=bar2', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst2?foo=bar&foo2=bar2')
 
     def test_redirect_pattern(self):
         response = self.fetch('/a/b/c', follow_redirects=False)
