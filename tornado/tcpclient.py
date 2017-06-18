@@ -20,6 +20,9 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import socket
+import time
+import numbers
+import datetime
 
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
@@ -27,6 +30,8 @@ from tornado.iostream import IOStream
 from tornado import gen
 from tornado.netutil import Resolver
 from tornado.platform.auto import set_close_exec
+from tornado.gen import TimeoutError
+from tornado.util import timedelta_to_seconds
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
@@ -54,6 +59,7 @@ class _Connector(object):
 
         self.future = Future()
         self.timeout = None
+        self.connect_timeout = None
         self.last_error = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
@@ -78,9 +84,11 @@ class _Connector(object):
                 secondary.append((af, addr))
         return primary, secondary
 
-    def start(self, timeout=_INITIAL_CONNECT_TIMEOUT):
+    def start(self, timeout=_INITIAL_CONNECT_TIMEOUT, connect_timeout=None):
         self.try_connect(iter(self.primary_addrs))
-        self.set_timout(timeout)
+        self.set_timeout(timeout)
+        if connect_timeout is not None:
+            self.set_connect_timeout(connect_timeout)
         return self.future
 
     def try_connect(self, addrs):
@@ -116,13 +124,14 @@ class _Connector(object):
                 self.on_timeout()
             return
         self.clear_timeout()
+        self.clear_connect_timeout()
         if self.future.done():
             # This is a late arrival; just drop it.
             stream.close()
         else:
             self.future.set_result((af, addr, stream))
 
-    def set_timout(self, timeout):
+    def set_timeout(self, timeout):
         self.timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout,
                                                 self.on_timeout)
 
@@ -133,6 +142,18 @@ class _Connector(object):
     def clear_timeout(self):
         if self.timeout is not None:
             self.io_loop.remove_timeout(self.timeout)
+
+    def set_connect_timeout(self, connect_timeout):
+        self.connect_timeout = self.io_loop.add_timeout(
+            connect_timeout, self.on_connect_timeout)
+
+    def on_connect_timeout(self):
+        if not self.future.done():
+            self.future.set_exception(TimeoutError())
+
+    def clear_connect_timeout(self):
+        if self.connect_timeout is not None:
+            self.io_loop.remove_timeout(self.connect_timeout)
 
 
 class TCPClient(object):
@@ -171,10 +192,22 @@ class TCPClient(object):
         Similarly, when the user requires a certain source port, it can
         be specified using the ``source_port`` arg.
 
+        Raises `TimeoutError` if the input future does not complete before
+        ``timeout``, which may be specified in any form allowed by
+        `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
+        relative to `.IOLoop.time`)
+
         .. versionchanged:: 4.5
            Added the ``source_ip`` and ``source_port`` arguments.
         """
-        if timeout:
+        if timeout is not None:
+            if isinstance(timeout, numbers.Real):
+                timeout = time.time() + timeout
+            elif isinstance(timeout, datetime.timedelta):
+                timeout = time.time() + timedelta_to_seconds(timeout)
+            else:
+                raise TypeError("Unsupported timeout %r" % timeout)
+        if timeout is not None:
             addrinfo = yield gen.with_timeout(
                 timeout, self.resolver.resolve(host, port, af))
         else:
@@ -184,15 +217,12 @@ class TCPClient(object):
             functools.partial(self._create_stream, max_buffer_size,
                               source_ip=source_ip, source_port=source_port)
         )
-        if timeout:
-            af, addr, stream = yield gen.with_timeout(timeout, connector.start())
-        else:
-            af, addr, stream = yield connector.start()
+        af, addr, stream = yield connector.start(connect_timeout=timeout)
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
-            if timeout:
+            if timeout is not None:
                 stream = yield gen.with_timeout(timeout, stream.start_tls(
                     False, ssl_options=ssl_options, server_hostname=host))
             else:
