@@ -26,7 +26,8 @@ from tornado.queues import Queue
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, gen_test
-from tornado.test.util import skipIfNoIPv6, unittest, refusing_port, skipIfNonUnix
+from tornado.test.util import skipIfNoIPv6, unittest, refusing_port, skipIfNonUnix, skipOnTravis
+from tornado.gen import TimeoutError
 
 # Fake address families for testing.  Used in place of AF_INET
 # and AF_INET6 because some installations do not have AF_INET6.
@@ -158,6 +159,21 @@ class TCPClientTest(AsyncTestCase):
                           '127.0.0.1',
                           source_port=1)
 
+    @skipOnTravis
+    @gen_test
+    def test_connect_timeout(self):
+        timeout = 0.02
+        timeout_min = self.io_loop.time() + 0.01
+        timeout_max = self.io_loop.time() + 0.03
+
+        class TimeoutResolver(Resolver):
+            def resolve(self, *args, **kwargs):
+                return Future()  # never completes
+        with self.assertRaises(TimeoutError):
+            yield TCPClient(resolver=TimeoutResolver()).connect(
+                '8.8.8.8', 12345, timeout=timeout)
+        self.assertTrue(timeout_min < self.io_loop.time() < timeout_max)
+
 
 class TestConnectorSplit(unittest.TestCase):
     def test_one_family(self):
@@ -220,7 +236,7 @@ class ConnectorTest(AsyncTestCase):
     def start_connect(self, addrinfo):
         conn = _Connector(addrinfo, self.create_stream)
         # Give it a huge timeout; we'll trigger timeouts manually.
-        future = conn.start(3600)
+        future = conn.start(3600, connect_timeout=self.io_loop.time() + 3600)
         return conn, future
 
     def test_immediate_success(self):
@@ -311,3 +327,46 @@ class ConnectorTest(AsyncTestCase):
         self.assertFalse(future.done())
         self.resolve_connect(AF1, 'b', False)
         self.assertRaises(IOError, future.result)
+
+    def test_timeout_after_connect_timeout(self):
+        conn, future = self.start_connect([(AF1, 'a')])
+        self.assert_pending((AF1, 'a'))
+        conn.on_connect_timeout()
+        conn.on_timeout()
+        self.assertRaises(TimeoutError, future.result)
+
+    def test_timeout_before_connect_timeout(self):
+        conn, future = self.start_connect([(AF1, 'a')])
+        self.assert_pending((AF1, 'a'))
+        conn.on_timeout()
+        conn.on_connect_timeout()
+        self.assertRaises(TimeoutError, future.result)
+
+    def test_failure_before_connect_timeout(self):
+        conn, future = self.start_connect([(AF1, 'a')])
+        self.assert_pending((AF1, 'a'))
+        self.resolve_connect(AF1, 'a', False)
+        conn.on_connect_timeout()
+        self.assertRaises(IOError, future.result)
+
+    def test_failure_after_connect_timeout(self):
+        conn, future = self.start_connect([(AF1, 'a')])
+        self.assert_pending((AF1, 'a'))
+        conn.on_connect_timeout()
+        self.resolve_connect(AF1, 'a', False)
+        self.assertRaises(TimeoutError, future.result)
+
+    def test_success_before_connect_timeout(self):
+        conn, future = self.start_connect([(AF1, 'a')])
+        self.assert_pending((AF1, 'a'))
+        self.resolve_connect(AF1, 'a', True)
+        conn.on_connect_timeout()
+        self.assertEqual(future.result(), (AF1, 'a', self.streams['a']))
+
+    def test_success_after_connect_timeout(self):
+        conn, future = self.start_connect([(AF1, 'a')])
+        self.assert_pending((AF1, 'a'))
+        conn.on_connect_timeout()
+        self.resolve_connect(AF1, 'a', True)
+        self.assertTrue(self.streams.pop('a').closed)
+        self.assertRaises(TimeoutError, future.result)
