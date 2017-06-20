@@ -50,6 +50,8 @@ Implementations
 .. class:: CurlAsyncHTTPClient(io_loop, max_clients=10, defaults=None)
 
    ``libcurl``-based HTTP client.
+   
+   ``max_clients`` is the number of concurrent requests that can be in progress; when this limit is reached additional requests will be queued. Note that unlike ``SimpleAsyncHTTPClient``, time spent waiting in this queue **does not** count against the request_timeout.
 
 Example Code
 ~~~~~~~~~~~~
