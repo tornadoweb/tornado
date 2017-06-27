@@ -349,10 +349,11 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # self._request_start_line.version or
                 # start_line.version?
                 self._request_start_line.version == 'HTTP/1.1' and
-                # 304 responses have no body (not even a zero-length body), and so
-                # should not have either Content-Length or Transfer-Encoding.
-                # headers.
+                # 1xx, 204 and 304 responses have no body (not even a zero-length
+                # body), and so should not have either Content-Length or
+                # Transfer-Encoding headers.
                 start_line.code not in (204, 304) and
+                (start_line.code < 100 or start_line.code >= 200) and
                 # No need to chunk the output if a Content-Length is specified.
                 'Content-Length' not in headers and
                 # Applications are discouraged from touching Transfer-Encoding,
