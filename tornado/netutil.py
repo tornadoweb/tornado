@@ -241,9 +241,18 @@ def add_accept_handler(sock, callback):
     is different from the ``callback(fd, events)`` signature used for
     `.IOLoop` handlers.
 
+    A callable is returned which, when called, will remove the `.IOLoop`
+    event handler and stop processing further incoming connections.
+
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+    .. versionchanged:: 5.0
+       A callable is returned (``None`` was returned before).
     """
+    io_loop = IOLoop.current()
+    removed = [False]
+
     def accept_handler(fd, events):
         # More connections may come in while we're handling callbacks;
         # to prevent starvation of other tasks we must limit the number
@@ -257,6 +266,9 @@ def add_accept_handler(sock, callback):
         # heuristic for the number of connections we can reasonably
         # accept at once.
         for i in xrange(_DEFAULT_BACKLOG):
+            if removed[0]:
+                # The socket was probably closed
+                return
             try:
                 connection, address = sock.accept()
             except socket.error as e:
@@ -272,7 +284,13 @@ def add_accept_handler(sock, callback):
                 raise
             set_close_exec(connection.fileno())
             callback(connection, address)
-    IOLoop.current().add_handler(sock, accept_handler, IOLoop.READ)
+
+    def remove_handler():
+        io_loop.remove_handler(sock)
+        removed[0] = True
+
+    io_loop.add_handler(sock, accept_handler, IOLoop.READ)
+    return remove_handler
 
 
 def is_valid_ip(ip):

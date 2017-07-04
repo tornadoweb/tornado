@@ -110,7 +110,8 @@ class TCPServer(object):
                  read_chunk_size=None):
         self.io_loop = IOLoop.current()
         self.ssl_options = ssl_options
-        self._sockets = {}  # fd -> socket object
+        self._sockets = {}   # fd -> socket object
+        self._handlers = {}  # fd -> remove_handler callable
         self._pending_sockets = []
         self._started = False
         self._stopped = False
@@ -156,7 +157,8 @@ class TCPServer(object):
         """
         for sock in sockets:
             self._sockets[sock.fileno()] = sock
-            add_accept_handler(sock, self._handle_connection)
+            self._handlers[sock.fileno()] = add_accept_handler(
+                sock, self._handle_connection)
 
     def add_socket(self, socket):
         """Singular version of `add_sockets`.  Takes a single socket object."""
@@ -233,7 +235,8 @@ class TCPServer(object):
         self._stopped = True
         for fd, sock in self._sockets.items():
             assert sock.fileno() == fd
-            self.io_loop.remove_handler(fd)
+            # Unregister socket from IOLoop
+            self._handlers.pop(fd)()
             sock.close()
 
     def handle_stream(self, stream, address):
