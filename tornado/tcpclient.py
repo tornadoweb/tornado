@@ -63,6 +63,7 @@ class _Connector(object):
         self.last_error = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
+        self.streams = set()
 
     @staticmethod
     def split(addrinfo):
@@ -102,7 +103,8 @@ class _Connector(object):
                 self.future.set_exception(self.last_error or
                                           IOError("connection failed"))
             return
-        future = self.connect(af, addr)
+        stream, future = self.connect(af, addr)
+        self.streams.add(stream)
         future.add_done_callback(functools.partial(self.on_connect_done,
                                                    addrs, af, addr))
 
@@ -123,13 +125,14 @@ class _Connector(object):
                 self.io_loop.remove_timeout(self.timeout)
                 self.on_timeout()
             return
-        self.clear_timeout()
-        self.clear_connect_timeout()
+        self.clear_timeouts()
         if self.future.done():
             # This is a late arrival; just drop it.
             stream.close()
         else:
+            self.streams.discard(stream)
             self.future.set_result((af, addr, stream))
+            self.close_streams()
 
     def set_timeout(self, timeout):
         self.timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout,
@@ -151,10 +154,17 @@ class _Connector(object):
     def on_connect_timeout(self):
         if not self.future.done():
             self.future.set_exception(TimeoutError())
+        self.close_streams()
 
-    def clear_connect_timeout(self):
+    def clear_timeouts(self):
+        if self.timeout is not None:
+            self.io_loop.remove_timeout(self.timeout)
         if self.connect_timeout is not None:
             self.io_loop.remove_timeout(self.connect_timeout)
+
+    def close_streams(self):
+        for stream in self.streams:
+            stream.close()
 
 
 class TCPClient(object):
@@ -203,9 +213,9 @@ class TCPClient(object):
         """
         if timeout is not None:
             if isinstance(timeout, numbers.Real):
-                timeout = time.time() + timeout
+                timeout = IOLoop.current().time() + timeout
             elif isinstance(timeout, datetime.timedelta):
-                timeout = time.time() + timedelta_to_seconds(timeout)
+                timeout = IOLoop.current().time() + timedelta_to_seconds(timeout)
             else:
                 raise TypeError("Unsupported timeout %r" % timeout)
         if timeout is not None:
@@ -262,4 +272,4 @@ class TCPClient(object):
             fu.set_exception(e)
             return fu
         else:
-            return stream.connect(addr)
+            return stream, stream.connect(addr)
