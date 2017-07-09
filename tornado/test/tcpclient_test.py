@@ -330,7 +330,7 @@ class ConnectorTest(AsyncTestCase):
         self.resolve_connect(AF1, 'b', False)
         self.assertRaises(IOError, future.result)
 
-    def test_one_family_connect_timeout(self):
+    def test_one_family_timeout_after_connect_timeout(self):
         conn, future = self.start_connect([(AF1, 'a'), (AF1, 'b')])
         self.assert_pending((AF1, 'a'))
         conn.on_connect_timeout()
@@ -338,6 +338,7 @@ class ConnectorTest(AsyncTestCase):
         # should explicitly pop the connect_future.
         self.connect_futures.pop((AF1, 'a'))
         self.assertTrue(self.streams.pop('a').closed)
+        conn.on_timeout()
         # if the future is set with TimeoutError, we will not iterate next
         # possible address.
         self.assert_pending()
