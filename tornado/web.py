@@ -2279,7 +2279,11 @@ class RedirectHandler(RequestHandler):
         self._permanent = permanent
 
     def get(self, *args):
-        self.redirect(self._url.format(*args), permanent=self._permanent)
+        to_url = self._url.format(*args)
+        if self.request.query_arguments:
+            to_url = httputil.url_concat(
+                to_url, list(httputil.qs_to_qsl(self.request.query_arguments)))
+        self.redirect(to_url, permanent=self._permanent)
 
 
 class StaticFileHandler(RequestHandler):

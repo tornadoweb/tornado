@@ -942,6 +942,14 @@ def split_host_and_port(netloc):
     return (host, port)
 
 
+def qs_to_qsl(qs):
+    """Generator rewinding a result of ``parse_qs`` back to name-value pairs. 
+    """
+    for k, vs in qs.items():
+        for v in vs:
+            yield (k, v)
+
+
 _OctalPatt = re.compile(r"\\[0-3][0-7][0-7]")
 _QuotePatt = re.compile(r"[\\].")
 _nulljoin = ''.join
