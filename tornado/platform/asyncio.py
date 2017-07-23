@@ -3,9 +3,8 @@
 .. versionadded:: 3.2
 
 This module integrates Tornado with the ``asyncio`` module introduced
-in Python 3.4 (and available `as a separate download
-<https://pypi.python.org/pypi/asyncio>`_ for Python 3.3).  This makes
-it possible to combine the two libraries on the same event loop.
+in Python 3.4. This makes it possible to combine the two libraries on
+the same event loop.
 
 Most applications should use `AsyncIOMainLoop` to run Tornado on the
 default ``asyncio`` event loop.  Applications that need to run event
