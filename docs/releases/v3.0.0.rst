@@ -287,7 +287,7 @@ Multiple modules
 * New function `tornado.options.add_parse_callback` schedules a callback
   to be run after the command line or config file has been parsed.  The
   keyword argument ``final=False`` can be used on either parsing function
-  to supress these callbacks.
+  to suppress these callbacks.
 * `tornado.options.define` now takes a ``callback`` argument.  This callback
   will be run with the new value whenever the option is changed.  This is
   especially useful for options that set other options, such as by reading

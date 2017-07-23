@@ -607,7 +607,7 @@ class SyncHTTPClientTest(unittest.TestCase):
             self.server.stop()
             # Delay the shutdown of the IOLoop by one iteration because
             # the server may still have some cleanup work left when
-            # the client finishes with the response (this is noticable
+            # the client finishes with the response (this is noticeable
             # with http/2, which leaves a Future with an unexamined
             # StreamClosedError on the loop).
             self.server_ioloop.add_callback(self.server_ioloop.stop)

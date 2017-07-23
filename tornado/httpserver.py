@@ -77,7 +77,7 @@ class HTTPServer(TCPServer, Configurable,
        ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
        ssl_ctx.load_cert_chain(os.path.join(data_dir, "mydomain.crt"),
                                os.path.join(data_dir, "mydomain.key"))
-       HTTPServer(applicaton, ssl_options=ssl_ctx)
+       HTTPServer(application, ssl_options=ssl_ctx)
 
     `HTTPServer` initialization follows one of three patterns (the
     initialization methods are defined on `tornado.tcpserver.TCPServer`):

@@ -177,7 +177,7 @@ class LogFormatter(logging.Formatter):
             # bytestrings.  This is a bit of a hacky place to do this, but
             # it's worth it since the encoding errors that would otherwise
             # result are so useless (and tornado is fond of using utf8-encoded
-            # byte strings whereever possible).
+            # byte strings wherever possible).
             record.message = _safe_unicode(message)
         except Exception as e:
             record.message = "Bad message (%r): %r" % (e, record.__dict__)

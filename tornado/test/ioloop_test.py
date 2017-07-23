@@ -414,7 +414,7 @@ class TestIOLoop(AsyncTestCase):
 
     def test_spawn_callback(self):
         # An added callback runs in the test's stack_context, so will be
-        # re-arised in wait().
+        # re-raised in wait().
         self.io_loop.add_callback(lambda: 1 / 0)
         with self.assertRaises(ZeroDivisionError):
             self.wait()
