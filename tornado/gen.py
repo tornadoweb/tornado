@@ -478,9 +478,8 @@ class WaitIterator(object):
         self.current_future = done
         self.current_index = self._unfinished.pop(done)
 
-    @coroutine
     def __aiter__(self):
-        raise Return(self)
+        return self
 
     def __anext__(self):
         if self.done():
