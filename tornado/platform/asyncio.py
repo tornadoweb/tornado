@@ -126,7 +126,7 @@ class BaseAsyncIOLoop(IOLoop):
                 old_current.make_current()
 
     def stop(self):
-        self.asyncio_loop.stop()
+        self.add_callback(self.asyncio_loop.stop)
 
     def call_at(self, when, callback, *args, **kwargs):
         # asyncio.call_at supports *args but not **kwargs, so bind them here.
