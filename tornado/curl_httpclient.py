@@ -261,6 +261,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             queue=info["curl_start_time"] - info["request"].start_time,
             namelookup=curl.getinfo(pycurl.NAMELOOKUP_TIME),
             connect=curl.getinfo(pycurl.CONNECT_TIME),
+            appconnect=curl.getinfo(pycurl.APPCONNECT_TIME),
             pretransfer=curl.getinfo(pycurl.PRETRANSFER_TIME),
             starttransfer=curl.getinfo(pycurl.STARTTRANSFER_TIME),
             total=curl.getinfo(pycurl.TOTAL_TIME),
