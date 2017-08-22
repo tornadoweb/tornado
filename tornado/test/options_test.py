@@ -2,9 +2,11 @@
 from __future__ import absolute_import, division, print_function
 
 import datetime
+import json
 import os
 import sys
 
+from tornado.escape import to_unicode
 from tornado.options import OptionParser, Error
 from tornado.util import basestring_type, PY3
 from tornado.test.util import unittest, subTest
@@ -22,6 +24,12 @@ except ImportError:
         import mock  # type: ignore
     except ImportError:
         mock = None
+
+
+def load_json(path):
+    """Load a JSON file, and convert string keys/values to unicode."""
+    with open(path) as fileobj:
+        return json.load(fileobj)
 
 
 class OptionsTest(unittest.TestCase):
@@ -42,6 +50,16 @@ class OptionsTest(unittest.TestCase):
         self.assertEqual(options.port, 443)
         self.assertEqual(options.username, "李康")
         self.assertEqual(options.my_path, config_path)
+
+    def test_parse_config_file_custom_loader(self):
+        options = OptionParser()
+        options.define("port", default=80)
+        options.define("username", default='foo', type=basestring_type)
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "options_test.json")
+        options.parse_config_file(config_path, loader=load_json)
+        self.assertEqual(options.port, 443)
+        self.assertEqual(options.username, to_unicode("李康"))
 
     def test_parse_callbacks(self):
         options = OptionParser()
