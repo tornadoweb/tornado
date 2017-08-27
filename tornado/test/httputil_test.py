@@ -418,6 +418,10 @@ class HTTPServerRequestTest(unittest.TestCase):
         requets = HTTPServerRequest(uri='/')
         self.assertIsInstance(requets.body, bytes)
 
+    def test_repr_does_not_contain_headers(self):
+        request = HTTPServerRequest(uri='/', headers={'Canary': 'Coal Mine'})
+        self.assertTrue('Canary' not in repr(request))
+
 
 class ParseRequestStartLineTest(unittest.TestCase):
     METHOD = "GET"
