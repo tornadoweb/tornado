@@ -1,0 +1,10 @@
+What's new in Tornado 4.5.2
+===========================
+
+Aug 27, 2017
+------------
+
+Bug Fixes
+~~~~~~~~~
+
+- Tornado now sets the ``FD_CLOEXEC`` flag on all file descriptors it creates. This prevents hanging client connections and resource leaks when the `tornado.autoreload` module (or ``Application(debug=True)``) is used.
