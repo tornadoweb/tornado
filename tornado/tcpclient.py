@@ -26,6 +26,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
 from tornado.netutil import Resolver
+from tornado.platform.auto import set_close_exec
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
@@ -202,6 +203,7 @@ class TCPClient(object):
             # - 127.0.0.1 for IPv4
             # - ::1 for IPv6
         socket_obj = socket.socket(af)
+        set_close_exec(socket_obj.fileno())
         if source_port_bind or source_ip_bind:
             # If the user requires binding also to a specific IP/port.
             try:
