@@ -32,10 +32,12 @@ class Waker(interface.Waker):
     and Jython.
     """
     def __init__(self):
+        from .auto import set_close_exec
         # Based on Zope select_trigger.py:
         # https://github.com/zopefoundation/Zope/blob/master/src/ZServer/medusa/thread/select_trigger.py
 
         self.writer = socket.socket()
+        set_close_exec(self.writer.fileno())
         # Disable buffering -- pulling the trigger sends 1 byte,
         # and we want that sent immediately, to wake up ASAP.
         self.writer.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -54,6 +56,7 @@ class Waker(interface.Waker):
             # http://mail.zope.org/pipermail/zope/2005-July/160433.html
             # for hideous details.
             a = socket.socket()
+            set_close_exec(a.fileno())
             a.bind(("127.0.0.1", 0))
             a.listen(1)
             connect_address = a.getsockname()  # assigned (host, port) pair
@@ -78,6 +81,7 @@ class Waker(interface.Waker):
                 a.close()
 
         self.reader, addr = a.accept()
+        set_close_exec(self.reader.fileno())
         self.reader.setblocking(0)
         self.writer.setblocking(0)
         a.close()
