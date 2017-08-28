@@ -40,6 +40,14 @@ skipBefore35 = unittest.skipIf(sys.version_info < (3, 5), 'PEP 492 (async/await)
 skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
                                  'Not CPython implementation')
 
+# Used for tests affected by
+# https://bitbucket.org/pypy/pypy/issues/2616/incomplete-error-handling-in
+# TODO: remove this after pypy3 5.8 is obsolete.
+skipPypy3V58 = unittest.skipIf(platform.python_implementation() == 'PyPy' and
+                               sys.version_info > (3,) and
+                               sys.pypy_version_info < (5, 9),
+                               'pypy3 5.8 has buggy ssl module')
+
 
 def _detect_ipv6():
     if not socket.has_ipv6:
