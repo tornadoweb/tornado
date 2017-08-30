@@ -135,13 +135,9 @@ def wait():
     to run the tests again after any source file changes (but see also
     the command-line interface in `main`)
     """
-    # stop and clear the current io loop as we need a new one
-    ioloop.IOLoop().stop()
-    ioloop.IOLoop().clear_current()
-    # create a new ioloop (this will also set it as the current ioloop)
-    new_ioloop = ioloop.IOLoop().current(True)
-    start()
-    new_ioloop.start()
+    io_loop = ioloop.IOLoop()
+    io_loop.add_callback(start)
+    io_loop.start()
 
 
 def watch(filename):
