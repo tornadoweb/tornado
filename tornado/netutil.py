@@ -57,6 +57,22 @@ else:
     ssl_match_hostname = backports.ssl_match_hostname.match_hostname
     SSLCertificateError = backports.ssl_match_hostname.CertificateError  # type: ignore
 
+
+def _default_ca_certs():
+    if certifi is None:
+        # This function is never called if ssl.create_default_context exists.
+        raise Exception("The 'certifi' package is required to use TLS "
+                        "in this version of Python")
+    # New versions of certifi don't get along with old versions of
+    # openssl. If we can detect this situation use certifi's
+    # backwards-compatibility mode.
+    if (hasattr(ssl, 'OPENSSL_VERSION_INFO') and
+            hasattr(certifi, 'old_where') and
+            ssl.OPENSSL_VERSION_INFO < (1, 0, 2)):
+        return certifi.old_where()
+    return certifi.where()
+
+
 if hasattr(ssl, 'SSLContext'):
     if hasattr(ssl, 'create_default_context'):
         # Python 2.7.9+, 3.4+
@@ -70,7 +86,7 @@ if hasattr(ssl, 'SSLContext'):
         # Python 3.2-3.3
         _client_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
         _client_ssl_defaults.verify_mode = ssl.CERT_REQUIRED
-        _client_ssl_defaults.load_verify_locations(certifi.where())
+        _client_ssl_defaults.load_verify_locations(_default_ca_certs())
         _server_ssl_defaults = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
         if hasattr(ssl, 'OP_NO_COMPRESSION'):
             # Disable TLS compression to avoid CRIME and related attacks.
@@ -81,7 +97,7 @@ if hasattr(ssl, 'SSLContext'):
 elif ssl:
     # Python 2.6-2.7.8
     _client_ssl_defaults = dict(cert_reqs=ssl.CERT_REQUIRED,
-                                ca_certs=certifi.where())
+                                ca_certs=_default_ca_certs())
     _server_ssl_defaults = {}
 else:
     # Google App Engine
