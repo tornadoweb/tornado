@@ -136,7 +136,7 @@ def wait():
     the command-line interface in `main`)
     """
     io_loop = ioloop.IOLoop()
-    start(io_loop)
+    io_loop.add_callback(start)
     io_loop.start()
 
 
