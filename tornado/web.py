@@ -726,7 +726,7 @@ class RequestHandler(object):
         """
         if self._finished:
             raise RuntimeError("Cannot write() after finish()")
-        if not isinstance(chunk, (bytes, unicode_type, dict)):
+        if not isinstance(chunk, (bytes, bytearray, unicode_type, dict)):
             message = "write() only accepts bytes, unicode, and dict objects"
             if isinstance(chunk, list):
                 message += ". Lists not accepted for security reasons; see http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"

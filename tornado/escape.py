@@ -181,7 +181,7 @@ else:
         return encoded
 
 
-_UTF8_TYPES = (bytes, type(None))
+_UTF8_TYPES = (bytes, bytearray, type(None))
 
 
 def utf8(value):
