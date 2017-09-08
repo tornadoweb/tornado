@@ -34,28 +34,24 @@ def multipart_producer(boundary, filenames, write):
 
     for filename in filenames:
         filename_bytes = filename.encode()
-        write(b'--%s\r\n' % (boundary_bytes,))
-        write(b'Content-Disposition: form-data; name="%s"; filename="%s"\r\n' %
-              (filename_bytes, filename_bytes))
+        yield write(b'--%s\r\n' % (boundary_bytes,))
+        yield write(b'Content-Disposition: form-data; name="%s"; filename="%s"\r\n' %
+                    (filename_bytes, filename_bytes))
 
         mtype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-        write(b'Content-Type: %s\r\n' % (mtype.encode(),))
-        write(b'\r\n')
+        yield write(b'Content-Type: %s\r\n' % (mtype.encode(),))
+        yield write(b'\r\n')
         with open(filename, 'rb') as f:
             while True:
                 # 16k at a time.
                 chunk = f.read(16 * 1024)
                 if not chunk:
                     break
-                write(chunk)
+                yield write(chunk)
 
-                # Let the IOLoop process its event queue.
-                yield gen.moment
+        yield write(b'\r\n')
 
-        write(b'\r\n')
-        yield gen.moment
-
-    write(b'--%s--\r\n' % (boundary_bytes,))
+    yield write(b'--%s--\r\n' % (boundary_bytes,))
 
 
 # Using HTTP PUT, upload one raw file. This is preferred for large files since
@@ -84,7 +80,7 @@ def raw_producer(filename, write):
                 # Complete.
                 break
 
-            write(chunk)
+            yield write(chunk)
 
 
 @gen.coroutine
