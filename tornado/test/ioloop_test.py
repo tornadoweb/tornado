@@ -591,7 +591,8 @@ class TestIOLoopFutures(AsyncTestCase):
 
         def callback(self_event, other_event):
             self_event.set()
-            other_event.wait()
+            time.sleep(0.01)
+            self.assertTrue(other_event.is_set())
             return self_event
 
         res = yield [
@@ -608,6 +609,8 @@ class TestIOLoopFutures(AsyncTestCase):
 
         def callback(self_event, other_event):
             self_event.set()
+            time.sleep(0.01)
+            self.assertTrue(other_event.is_set())
             other_event.wait()
             return self_event
 
