@@ -554,7 +554,7 @@ class BaseIOStream(object):
         except UnsatisfiableReadError as e:
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
             self.close(exc_info=e)
-        except Exception:
+        except Exception as e:
             gen_log.error("Uncaught exception, closing connection.",
                           exc_info=True)
             self.close(exc_info=e)
