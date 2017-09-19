@@ -103,7 +103,5 @@ def main():
 
 
 if __name__ == '__main__':
-    import logging
-    logging.basicConfig()
     io_loop = ioloop.IOLoop.current()
     io_loop.run_sync(main)
