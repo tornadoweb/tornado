@@ -616,6 +616,14 @@ class WebSocketProtocol13(WebSocketProtocol):
     def accept_connection(self):
         try:
             self._handle_websocket_headers()
+        except ValueError:
+            self.handler.set_status(400)
+            log_msg = "Missing/Invalid WebSocket headers"
+            self.handler.finish(log_msg)
+            gen_log.debug(log_msg)
+            return
+
+        try:
             self._accept_connection()
         except ValueError:
             gen_log.debug("Malformed WebSocket request received",
