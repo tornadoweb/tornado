@@ -18,6 +18,7 @@ from tornado.platform.select import _Select
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis, skipBefore35, exec_test
+from tornado.concurrent import Future
 
 try:
     from concurrent import futures
@@ -625,12 +626,20 @@ class TestIOLoopFutures(AsyncTestCase):
         IOLoop.current().run_sync(namespace['main'])
 
     def test_set_default_executor(self):
-        class MyExecutor(futures.ThreadPoolExecutor):
-            pass
+        class MyExecutor(futures.Executor):
+            def submit(self, func, *args):
+                return Future()
 
-        executor = MyExecutor(max_workers=1)
-        IOLoop.current().set_default_executor(executor)
-        self.assertIsInstance(IOLoop.current()._executor, MyExecutor)
+        event = threading.Event()
+
+        def future_func():
+            event.set()
+
+        executor = MyExecutor()
+        loop = IOLoop.current()
+        loop.set_default_executor(executor)
+        loop.run_in_executor(None, future_func)
+        loop.add_timeout(0.01, lambda: self.assertFalse(event.is_set()))
 
 
 class TestIOLoopRunSync(unittest.TestCase):
