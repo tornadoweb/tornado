@@ -208,8 +208,9 @@ class LogFormatter(logging.Formatter):
 def enable_pretty_logging(options=None, logger=None):
     """Turns on formatted logging output as configured.
 
-    This is called automatically by `tornado.options.parse_command_line`
-    and `tornado.options.parse_config_file`.
+    This is called automatically by `tornado.options.parse_command_line`,
+    `tornado.options.parse_config_file` and
+    `tornado.options.parse_environment`.
     """
     if options is None:
         import tornado.options

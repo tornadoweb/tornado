@@ -34,17 +34,18 @@ the options used throughout your program; they are all automatically loaded
 when the modules are loaded.  However, all modules that define options
 must have been imported before the command line is parsed.
 
-Your ``main()`` method can parse the command line or parse a config file with
-either::
+Your ``main()`` method can parse the command line, parse a config file or
+parse the environment with either::
 
     tornado.options.parse_command_line()
     # or
     tornado.options.parse_config_file("/etc/server.conf")
+    # or
+    tornado.options.parse_environment(prefix="MYAPP")
 
 .. note:
 
-   When using tornado.options.parse_command_line or
-   tornado.options.parse_config_file, the only options that are set are
+   When using these functions, the only options that are set are
    ones that were previously defined with tornado.options.define.
 
 Command line formats are what you would expect (``--myoption=myvalue``).
@@ -52,6 +53,11 @@ Config files are just Python files. Global names become options, e.g.::
 
     myoption = "myvalue"
     myotheroption = "myothervalue"
+
+Environment variables must be prefixed with the given prefix (the default
+prefix is ``TORNADO``), e.g.::
+
+    MYAPP_myoption="myvalue"
 
 We support `datetimes <datetime.datetime>`, `timedeltas
 <datetime.timedelta>`, ints, and floats (just pass a ``type`` kwarg to
@@ -66,10 +72,11 @@ instances to define isolated sets of options, such as for subcommands.
 .. note::
 
    By default, several options are defined that will configure the
-   standard `logging` module when `parse_command_line` or `parse_config_file`
-   are called.  If you want Tornado to leave the logging configuration
-   alone so you can manage it yourself, either pass ``--logging=none``
-   on the command line or do the following to disable it in code::
+   standard `logging` module when `parse_command_line`, `parse_config_file`
+   or `parse_environment` are called.  If you want Tornado to leave the
+   logging configuration alone so you can manage it yourself, either pass
+   ``--logging=none`` on the command line or do the following to disable it
+   in code::
 
        from tornado.options import options, parse_command_line
        options.logging = None
@@ -80,6 +87,9 @@ instances to define isolated sets of options, such as for subcommands.
    options can be defined, set, and read with any mix of the two.
    Dashes are typical for command-line usage while config files require
    underscores.
+
+.. versionchanged:: 5.0
+   Added support for passing options through environment variables.
 """
 
 from __future__ import absolute_import, division, print_function
@@ -209,8 +219,9 @@ class OptionParser(object):
         file in which they are defined.
 
         Command line option names must be unique globally. They can be parsed
-        from the command line with `parse_command_line` or parsed from a
-        config file with `parse_config_file`.
+        from the command line with `parse_command_line`, parsed from a
+        config file with `parse_config_file`, or parsed from the environment
+        with `parse_environment`.
 
         If a ``callback`` is given, it will be run with the new value whenever
         the option is changed.  This can be used to combine command-line
@@ -320,6 +331,45 @@ class OptionParser(object):
             normalized = self._normalize_name(name)
             if normalized in self._options:
                 self._options[normalized].set(config[name])
+
+        if final:
+            self.run_parse_callbacks()
+
+    def parse_environment(self, prefix='TORNADO', environ=None, final=True):
+        """Parses all options given on the environment (defaults to
+        `os.environ`).
+
+        Only environment variables whose name starts with ``prefix`` followed
+        by an underscore are parsed. The default prefix is ``TORNADO``. The
+        prefix is stripped.
+
+        If ``final`` is ``False``, parse callbacks will not be run.
+        This is useful for applications that wish to combine configurations
+        from multiple sources.
+
+        Example::
+
+            # The environment.
+            MYAPP_mysql_host="myserver:3306"
+            MYAPP_memcache_hosts="myserver:11011,mysecondserver:11011"
+
+            parse_environment(prefix='MYAPP')
+
+        .. versionadded:: 5.0
+        """
+        if environ is None:
+            environ = os.environ
+
+        for name, value in environ.items():
+            if not name.startswith(prefix + '_'):
+                continue
+            name = name[len(prefix) + 1:]
+            name = self._normalize_name(name)
+            if name not in self._options:
+                self.print_help()
+                raise Error('Unrecognized environment variable option: %r' % name)
+            option = self._options[name]
+            option.parse(value)
 
         if final:
             self.run_parse_callbacks()
@@ -572,6 +622,14 @@ def parse_config_file(path, final=True):
     See `OptionParser.parse_config_file`.
     """
     return options.parse_config_file(path, final=final)
+
+
+def parse_environment(path, prefix, environ=None, final=True):
+    """Parses global options from the environment.
+
+    See `OptionParser.parse_environment`.
+    """
+    return options.parse_config_file(prefix, environ=environ, final=final)
 
 
 def print_help(file=None):
