@@ -222,11 +222,12 @@ class StreamBuffer(object):
         self._first_pos = pos
         return b''.join(res)
 
-    def _coalesce(self):
+    def _coalesce(self, allow_offset=False):
         buffers = self._buffers
         pos = self._first_pos
 
-        if pos == 0 and len(buffers) == 1 and buffers[0][0] == False:
+        if ((allow_offset or pos == 0)
+            and len(buffers) == 1 and buffers[0][0] == False):
             # Already coalesced
             return
         size = self._size
@@ -246,17 +247,35 @@ class StreamBuffer(object):
         buffers.append((False, b))
         self._first_pos = 0
 
-    def find(self, delim, pos=0):
+    def find(self, delim):
         if self._size == 0:
             return -1
-        self._coalesce()
-        return self._buffers[0][1].find(delim, pos)
+        buffers = self._buffers
 
-    def regex_search(self, pattern, pos=0):
+        # Relatively quick search in first buffer
+        is_large, b = buffers[0]
+        pos = self._first_pos
+        if is_large:
+            b = bytearray(b[pos:])
+            buffers[0] = (False, b)
+            self._first_pos = pos = 0
+
+        r = b.find(delim, pos)
+        if r >= 0:
+            return r - pos
+        if len(buffers) == 1:
+            return -1
+
+        # Save a bit of time by not looking again over the first bytes
+        pos = len(b) - len(delim)
+        self._coalesce(allow_offset=True)
+        return buffers[0][1].find(delim, pos)
+
+    def regex_search(self, pattern):
         if self._size == 0:
             return None
         self._coalesce()
-        return pattern.search(self._buffers[0][1], pos)
+        return pattern.search(self._buffers[0][1])
 
 
 USE_STREAM_BUFFER_FOR_READS = True
