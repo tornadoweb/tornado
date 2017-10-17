@@ -83,6 +83,7 @@ if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)  # type: ignore
 
 _WINDOWS = sys.platform.startswith('win')
+_PY3 = sys.version_info >= (3,)
 
 
 class StreamClosedError(IOError):
@@ -145,7 +146,12 @@ class StreamBuffer(object):
             else:
                 is_large = True
             if is_large:
-                b = bytearray().join(args)
+                if _PY3:
+                    b = bytearray().join(args)
+                else:
+                    b = bytearray()
+                    for a in args:
+                        b.extend(a)
                 self._buffers.append((False, b))
             else:
                 b.extend(b''.join(args))
@@ -280,7 +286,9 @@ class StreamBuffer(object):
 
 # FIXME: a decision must be made.  The StreamBuffer improves performance
 # for large reads but adds complication for read_until and read_until_regex.
-USE_STREAM_BUFFER_FOR_READS = True
+
+# Not Python 2-compatible because of b''.join([memoryview or bytearray])
+USE_STREAM_BUFFER_FOR_READS = _PY3
 
 
 class BaseIOStream(object):
@@ -563,7 +571,6 @@ class BaseIOStream(object):
                     len(self._write_buffer) + len(data) > self.max_write_buffer_size):
                 raise StreamBufferFullError("Reached maximum write buffer size")
             if self._write_buffer_frozen:
-                # XXX is this still useful or can we extend the write buffer?
                 self._pending_writes_while_frozen.append(data)
             else:
                 self._write_buffer.extend([data])
