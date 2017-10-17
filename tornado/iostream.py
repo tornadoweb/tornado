@@ -584,7 +584,7 @@ class BaseIOStream(object):
             self._write_futures.append((self._total_write_index, future))
         if not self._connecting:
             self._handle_write()
-            if len(self._write_buffer):
+            if self._write_buffer:
                 self._add_io_state(self.io_loop.WRITE)
             self._maybe_add_error_listener()
         return future
