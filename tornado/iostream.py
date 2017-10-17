@@ -278,6 +278,8 @@ class StreamBuffer(object):
         return pattern.search(self._buffers[0][1])
 
 
+# FIXME: a decision must be made.  The StreamBuffer improves performance
+# for large reads but adds complication for read_until and read_until_regex.
 USE_STREAM_BUFFER_FOR_READS = True
 
 
