@@ -12,6 +12,7 @@ from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase
 from tornado.test.util import unittest, skipIfNonUnix, refusing_port, skipPypy3V58
 from tornado.web import RequestHandler, Application
 import errno
+import hashlib
 import io
 import logging
 import os
@@ -838,6 +839,140 @@ class TestIOStreamMixin(object):
         @gen.coroutine
         def main():
             yield [produce() for i in range(nproducers)] + [consume()]
+
+        try:
+            self.io_loop.run_sync(main)
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_into(self):
+        server, client = self.make_iostream_pair()
+
+        def sleep_some():
+            self.io_loop.run_sync(lambda: gen.sleep(0.05))
+        try:
+            buf = bytearray(10)
+            client.read_into(buf, self.stop)
+            server.write(b"hello")
+            sleep_some()
+            self.assertTrue(client.reading())
+            server.write(b"world!!")
+            data = self.wait()
+            self.assertFalse(client.reading())
+            self.assertEqual(data, 10)
+            self.assertEqual(bytes(buf), b"helloworld")
+
+            # Existing buffer is fed into user buffer
+            client.read_into(buf, self.stop)
+            sleep_some()
+            self.assertTrue(client.reading())
+            server.write(b"1234567890")
+            data = self.wait()
+            self.assertFalse(client.reading())
+            self.assertEqual(data, 10)
+            self.assertEqual(bytes(buf), b"!!12345678")
+
+            # Existing buffer can satisfy read immediately
+            buf = bytearray(4)
+            server.write(b"abcdefghi")
+            client.read_into(buf, self.stop)
+            data = self.wait()
+            self.assertEqual(data, 4)
+            self.assertEqual(bytes(buf), b"90ab")
+
+            client.read_bytes(7, self.stop)
+            data = self.wait()
+            self.assertEqual(data, b"cdefghi")
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_into_partial(self):
+        server, client = self.make_iostream_pair()
+
+        def sleep_some():
+            self.io_loop.run_sync(lambda: gen.sleep(0.05))
+        try:
+            # Partial read
+            buf = bytearray(10)
+            client.read_into(buf, self.stop, partial=True)
+            server.write(b"hello")
+            data = self.wait()
+            self.assertFalse(client.reading())
+            self.assertEqual(data, 5)
+            self.assertEqual(bytes(buf), b"hello\0\0\0\0\0")
+
+            # Full read despite partial=True
+            server.write(b"world!1234567890")
+            client.read_into(buf, self.stop, partial=True)
+            data = self.wait()
+            self.assertEqual(data, 10)
+            self.assertEqual(bytes(buf), b"world!1234")
+
+            # Existing buffer can satisfy read immediately
+            client.read_into(buf, self.stop, partial=True)
+            data = self.wait()
+            self.assertEqual(data, 6)
+            self.assertEqual(bytes(buf), b"5678901234")
+
+        finally:
+            server.close()
+            client.close()
+
+    def test_read_into_zero_bytes(self):
+        server, client = self.make_iostream_pair()
+        try:
+            buf = bytearray()
+            fut = client.read_into(buf)
+            self.assertEqual(fut.result(), 0)
+        finally:
+            server.close()
+            client.close()
+
+    def test_many_mixed_reads(self):
+        r = random.Random(42)
+        nbytes = 1000000
+        server, client = self.make_iostream_pair()
+
+        produce_hash = hashlib.sha1()
+        consume_hash = hashlib.sha1()
+
+        @gen.coroutine
+        def produce():
+            remaining = nbytes
+            while remaining > 0:
+                size = r.randint(1, min(1000, remaining))
+                data = os.urandom(size)
+                produce_hash.update(data)
+                yield server.write(data)
+                remaining -= size
+            assert remaining == 0
+
+        @gen.coroutine
+        def consume():
+            remaining = nbytes
+            while remaining > 0:
+                if r.random() > 0.5:
+                    # read_bytes()
+                    size = r.randint(1, min(1000, remaining))
+                    data = yield client.read_bytes(size)
+                    consume_hash.update(data)
+                    remaining -= size
+                else:
+                    # read_into()
+                    size = r.randint(1, min(1000, remaining))
+                    buf = bytearray(size)
+                    n = yield client.read_into(buf)
+                    assert n == size
+                    consume_hash.update(buf)
+                    remaining -= size
+            assert remaining == 0
+
+        @gen.coroutine
+        def main():
+            yield [produce(), consume()]
+            assert produce_hash.hexdigest() == consume_hash.hexdigest()
 
         try:
             self.io_loop.run_sync(main)
