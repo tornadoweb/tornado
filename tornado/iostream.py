@@ -1161,9 +1161,9 @@ class IOStream(BaseIOStream):
         `SSLIOStream`.  After this method has been called,
         any other operation on the original stream is undefined.
 
-        If ``wait_for_handshake`` is true (the default), the SSL handshake
-        is finished by the time the returned Future is done.  If false,
-        the SSL handshake may still be pending.
+        If ``wait_for_handshake`` is true (the default), the SSL
+        handshake is finished by the time the returned Future is done.
+        If false, the SSL handshake may still be pending.
 
         If a close callback is defined on this stream, it will be
         transferred to the new stream.
@@ -1175,7 +1175,7 @@ class IOStream(BaseIOStream):
            ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
            suitably-configured `ssl.SSLContext` to disable.
 
-        .. versionadded:: 5.0
+        .. versionchanged:: 5.0
            Added the ``wait_for_handshake`` argument.
         """
         if (self._read_callback or self._read_future or
