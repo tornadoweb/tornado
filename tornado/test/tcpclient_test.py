@@ -21,6 +21,7 @@ import os
 import socket
 
 from tornado.concurrent import Future
+from tornado.iostream import IOStream
 from tornado.netutil import bind_sockets, Resolver
 from tornado.queues import Queue
 from tornado.tcpclient import TCPClient, _Connector
@@ -169,6 +170,20 @@ class TCPClientTest(AsyncTestCase):
         with self.assertRaises(TimeoutError):
             yield TCPClient(resolver=TimeoutResolver()).connect(
                 '1.2.3.4', 12345, timeout=timeout)
+
+    @gen_test
+    def test_custom_iostream(self):
+        class MyIOStream(IOStream):
+            pass
+
+        class MyTCPClient(TCPClient):
+            IOStream = MyIOStream
+
+        self.client = MyTCPClient()
+        port = self.start_server(socket.AF_INET)
+        stream = yield self.client.connect('127.0.0.1', port)
+        with closing(stream):
+            self.assertIsInstance(stream, MyIOStream)
 
 
 class TestConnectorSplit(unittest.TestCase):
