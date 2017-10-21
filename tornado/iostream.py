@@ -83,15 +83,6 @@ if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)  # type: ignore
 
 _WINDOWS = sys.platform.startswith('win')
-_PY3 = sys.version_info[0] >= 3
-
-if _PY3:
-    # We'd like to release memoryviews explicitly, see
-    # https://github.com/tornadoweb/tornado/pull/2008
-    _release_memoryview = memoryview.release
-else:
-    def _release_memoryview(m):
-        pass
 
 
 class StreamClosedError(IOError):
@@ -867,14 +858,8 @@ class BaseIOStream(object):
                     size = 128 * 1024
                 else:
                     size = self._write_buffer_size
-                mem = memoryview(self._write_buffer)
-                mem2 = mem[start:start + size]
-                try:
-                    num_bytes = self.write_to_fd(mem2)
-                finally:
-                    _release_memoryview(mem2)
-                    _release_memoryview(mem)
-                    del mem, mem2
+                num_bytes = self.write_to_fd(
+                    memoryview(self._write_buffer)[start:start + size])
                 if num_bytes == 0:
                     self._got_empty_write(size)
                     break
@@ -922,14 +907,9 @@ class BaseIOStream(object):
             return b""
         assert loc <= self._read_buffer_size
         # Slice the bytearray buffer into bytes, without intermediate copying
-        mem = memoryview(self._read_buffer)
-        mem2 = mem[self._read_buffer_pos:self._read_buffer_pos + loc]
-        try:
-            b = mem2.tobytes()
-        finally:
-            _release_memoryview(mem2)
-            _release_memoryview(mem)
-            del mem, mem2
+        b = (memoryview(self._read_buffer)
+             [self._read_buffer_pos:self._read_buffer_pos + loc]
+             ).tobytes()
         self._read_buffer_pos += loc
         self._read_buffer_size -= loc
         # Amortized O(1) shrink
@@ -1081,7 +1061,12 @@ class IOStream(BaseIOStream):
         return chunk
 
     def write_to_fd(self, data):
-        return self.socket.send(data)
+        try:
+            return self.socket.send(data)
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def connect(self, address, callback=None, server_hostname=None):
         """Connects the socket to a remote address without blocking.
@@ -1491,6 +1476,10 @@ class SSLIOStream(IOStream):
                 # simply return 0 bytes written.
                 return 0
             raise
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def read_from_fd(self):
         if self._ssl_accepting:
@@ -1548,7 +1537,12 @@ class PipeIOStream(BaseIOStream):
         os.close(self.fd)
 
     def write_to_fd(self, data):
-        return os.write(self.fd, data)
+        try:
+            return os.write(self.fd, data)
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def read_from_fd(self):
         try:
