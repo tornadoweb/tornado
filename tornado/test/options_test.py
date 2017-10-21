@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function
 import datetime
 import os
 import sys
+import collections
 
 from tornado.options import OptionParser, Error
 from tornado.util import basestring_type, PY3
@@ -42,6 +43,36 @@ class OptionsTest(unittest.TestCase):
         self.assertEqual(options.port, 443)
         self.assertEqual(options.username, "李康")
         self.assertEqual(options.my_path, config_path)
+
+    def test_parse_environment(self):
+        options = OptionParser()
+        options.define("host")
+        options.define("port", default=80)
+        options.define("origins", multiple=True, default=[])
+        options.define("my_path")
+        options.define("verbose", type=bool)
+
+        # The prefix intentionally has an underscore, to ensure it is handled
+        # correctly.
+        prefix = 'MY_APP'
+
+        environ = collections.OrderedDict([
+            ('UNRELATED', '100'),
+            ('MY_APP_host', 'localhost'),
+            ('MY_APP_port', '100'),
+            ('MY-APP_port', '101'),
+            ('MYAPP_port', '102'),
+            ('MY_APP_port', '103'),
+            ('MY_APP_origins', 'origin1,origin2'),
+            ('MY_APP_verbose', 'True'),
+            ('ANOTHER_UNRELATED', 'xxx'),
+        ])
+
+        options.parse_environment(prefix, environ)
+        self.assertEqual(options.host, "localhost")
+        self.assertEqual(options.port, 103)
+        self.assertEqual(options.origins, ['origin1', 'origin2'])
+        self.assertEqual(options.verbose, True)
 
     def test_parse_callbacks(self):
         options = OptionParser()

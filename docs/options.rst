@@ -17,6 +17,7 @@
 
    .. autofunction:: parse_command_line
    .. autofunction:: parse_config_file
+   .. autofunction:: parse_environment
    .. autofunction:: print_help(file=sys.stderr)
    .. autofunction:: add_parse_callback
    .. autoexception:: Error
