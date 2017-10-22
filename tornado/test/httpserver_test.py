@@ -150,7 +150,6 @@ class TLSv1Test(BaseSSLTest, SSLTestMixin):
         return ssl.PROTOCOL_TLSv1
 
 
-@unittest.skipIf(not hasattr(ssl, 'SSLContext'), 'ssl.SSLContext not present')
 class SSLContextTest(BaseSSLTest, SSLTestMixin):
     def get_ssl_options(self):
         context = ssl_options_to_context(

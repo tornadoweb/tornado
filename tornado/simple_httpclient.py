@@ -35,18 +35,6 @@ except ImportError:
     # ssl is not available on Google App Engine.
     ssl = None
 
-try:
-    import certifi
-except ImportError:
-    certifi = None
-
-
-def _default_ca_certs():
-    if certifi is None:
-        raise Exception("The 'certifi' package is required to use https "
-                        "in simple_httpclient")
-    return certifi.where()
-
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -261,11 +249,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
             if self.request.ca_certs is not None:
                 ssl_options["ca_certs"] = self.request.ca_certs
-            elif not hasattr(ssl, 'create_default_context'):
-                # When create_default_context is present,
-                # we can omit the "ca_certs" parameter entirely,
-                # which avoids the dependency on "certifi" for py34.
-                ssl_options["ca_certs"] = _default_ca_certs()
             if self.request.client_key is not None:
                 ssl_options["keyfile"] = self.request.client_key
             if self.request.client_cert is not None:
