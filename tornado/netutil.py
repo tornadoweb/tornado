@@ -45,6 +45,10 @@ if ssl is not None:
         ssl.Purpose.SERVER_AUTH)
     _server_ssl_defaults = ssl.create_default_context(
         ssl.Purpose.CLIENT_AUTH)
+    if hasattr(ssl, 'OP_NO_COMPRESSION'):
+        # See netutil.ssl_options_to_context
+        _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
+        _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
 else:
     # Google App Engine
     _client_ssl_defaults = dict(cert_reqs=None,
@@ -465,6 +469,8 @@ def ssl_options_to_context(ssl_options):
         return ssl_options
     assert isinstance(ssl_options, dict)
     assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
+    # Can't use create_default_context since this interface doesn't
+    # tell us client vs server.
     context = ssl.SSLContext(
         ssl_options.get('ssl_version', ssl.PROTOCOL_SSLv23))
     if 'certfile' in ssl_options:
@@ -477,7 +483,9 @@ def ssl_options_to_context(ssl_options):
         context.set_ciphers(ssl_options['ciphers'])
     if hasattr(ssl, 'OP_NO_COMPRESSION'):
         # Disable TLS compression to avoid CRIME and related attacks.
-        # This constant wasn't added until python 3.3.
+        # This constant depends on openssl version 1.0.
+        # TODO: Do we need to do this ourselves or can we trust
+        # the defaults?
         context.options |= ssl.OP_NO_COMPRESSION
     return context
 
