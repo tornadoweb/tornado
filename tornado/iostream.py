@@ -27,6 +27,7 @@ from __future__ import absolute_import, division, print_function
 
 import collections
 import errno
+import io
 import numbers
 import os
 import socket
@@ -1573,6 +1574,7 @@ class PipeIOStream(BaseIOStream):
     """
     def __init__(self, fd, *args, **kwargs):
         self.fd = fd
+        self._fio = io.FileIO(self.fd, "r+")
         _set_nonblocking(fd)
         super(PipeIOStream, self).__init__(*args, **kwargs)
 
@@ -1580,7 +1582,7 @@ class PipeIOStream(BaseIOStream):
         return self.fd
 
     def close_fd(self):
-        os.close(self.fd)
+        self._fio.close()
 
     def write_to_fd(self, data):
         try:
@@ -1592,17 +1594,18 @@ class PipeIOStream(BaseIOStream):
 
     def read_from_fd(self):
         try:
-            chunk = os.read(self.fd, self.read_chunk_size)
+            chunk = self._fio.read(self.read_chunk_size)
         except (IOError, OSError) as e:
-            if errno_from_exception(e) in _ERRNO_WOULDBLOCK:
-                return None
-            elif errno_from_exception(e) == errno.EBADF:
+            if errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will
                 # report it as readable but reads will fail with EBADF.
                 self.close(exc_info=e)
                 return None
             else:
                 raise
+        if chunk is None:
+            # Read would block
+            return None
         if not chunk:
             self.close()
             return None
