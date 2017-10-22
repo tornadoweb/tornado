@@ -94,3 +94,19 @@ if not on_rtd:
     import sphinx_rtd_theme
     html_theme = 'sphinx_rtd_theme'
     html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+
+# Workaround for Sphinx not allowing multiple cross-reference targets.
+# (taken from https://github.com/sphinx-doc/sphinx/issues/3866)
+# Here the culprit is IOStream, defined both as a global in tornado.iostream
+# and as an attribute of the TCPClient and TCPServer classes.
+from sphinx.domains.python import PythonDomain
+
+class PatchedPythonDomain(PythonDomain):
+    def resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode):
+        if 'refspecific' in node:
+            del node['refspecific']
+        return super(PatchedPythonDomain, self).resolve_xref(
+            env, fromdocname, builder, typ, target, node, contnode)
+
+def setup(sphinx):
+    sphinx.override_domain(PatchedPythonDomain)
