@@ -1720,6 +1720,33 @@ class SSLIOStream(IOStream):
             return None
         return chunk
 
+    def readinto_from_fd(self, mem):
+        assert len(mem) > 0
+        if self._ssl_accepting:
+            # If the handshake hasn't finished yet, there can't be anything
+            # to read (attempting to read may or may not raise an exception
+            # depending on the SSL version)
+            return None
+        try:
+            # See comment in read_from_fd() above about SSLSocket.read()
+            nbytes = self.socket.read(len(mem), mem)
+        except ssl.SSLError as e:
+            # SSLError is a subclass of socket.error, so this except
+            # block must come first.
+            if e.args[0] == ssl.SSL_ERROR_WANT_READ:
+                return None
+            else:
+                raise
+        except socket.error as e:
+            if e.args[0] in _ERRNO_WOULDBLOCK:
+                return None
+            else:
+                raise
+        if not nbytes:
+            self.close()
+            return None
+        return nbytes
+
     def _is_connreset(self, e):
         if isinstance(e, ssl.SSLError) and e.args[0] == ssl.SSL_ERROR_EOF:
             return True

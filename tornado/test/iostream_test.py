@@ -931,6 +931,9 @@ class TestIOStreamMixin(object):
             client.close()
 
     def test_many_mixed_reads(self):
+        # Stress buffer handling when going back and forth between
+        # read_bytes() (using an internal buffer) and read_into()
+        # (using a user-allocated buffer).
         r = random.Random(42)
         nbytes = 1000000
         server, client = self.make_iostream_pair()
