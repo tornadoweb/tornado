@@ -1,9 +1,7 @@
 # Requirements for tools used in the development of tornado.
 # This list is for python 3.5; for 2.7 add:
-# - backports.ssl-match-hostname
 # - futures
 # - mock
-# - certifi
 #
 # Use virtualenv instead of venv; tox seems to get confused otherwise.
 #

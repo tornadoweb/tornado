@@ -37,7 +37,7 @@ import re
 from tornado.concurrent import TracebackFuture
 from tornado import ioloop
 from tornado.log import gen_log, app_log
-from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError, _client_ssl_defaults, _server_ssl_defaults
+from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
 from tornado import stack_context
 from tornado.util import errno_from_exception
 
@@ -1387,8 +1387,8 @@ class SSLIOStream(IOStream):
             gen_log.warning("No SSL certificate given")
             return False
         try:
-            ssl_match_hostname(peercert, self._server_hostname)
-        except SSLCertificateError as e:
+            ssl.match_hostname(peercert, self._server_hostname)
+        except ssl.CertificateError as e:
             gen_log.warning("Invalid SSL certificate: %s" % e)
             return False
         else:

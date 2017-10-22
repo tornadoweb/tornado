@@ -497,8 +497,6 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         resp = self.fetch("/hello", ssl_options={})
         self.assertEqual(resp.body, b"Hello world!")
 
-    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
-                     'ssl.SSLContext not present')
     def test_ssl_context(self):
         resp = self.fetch("/hello",
                           ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
@@ -511,8 +509,6 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
                 "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
         self.assertRaises(ssl.SSLError, resp.rethrow)
 
-    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
-                     'ssl.SSLContext not present')
     def test_ssl_context_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
             ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
