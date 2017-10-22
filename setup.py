@@ -16,6 +16,7 @@
 
 import os
 import platform
+import ssl
 import sys
 import warnings
 
@@ -126,20 +127,21 @@ if (platform.python_implementation() == 'CPython' and
 if setuptools is not None:
     # If setuptools is not available, you're on your own for dependencies.
     install_requires = []
-    if sys.version_info < (2, 7):
-        # Only needed indirectly, for singledispatch.
-        install_requires.append('ordereddict')
-    if sys.version_info < (2, 7, 9):
-        install_requires.append('backports.ssl_match_hostname')
     if sys.version_info < (3, 4):
         install_requires.append('singledispatch')
-        # Certifi is also optional on 2.7.9+, although making our dependencies
-        # conditional on micro version numbers seems like a bad idea
-        # until we have more declarative metadata.
-        install_requires.append('certifi')
     if sys.version_info < (3, 5):
         install_requires.append('backports_abc>=0.4')
     kwargs['install_requires'] = install_requires
+
+# Verify that the SSL module has all the modern upgrades. Check for several
+# names individually since they were introduced at different versions,
+# although they should all be present by Python 3.4 or 2.7.9.
+if (not hasattr(ssl, 'SSLContext') or
+        not hasattr(ssl, 'create_default_context') or
+        not hasattr(ssl, 'match_hostname')):
+    raise ImportError("Tornado requires an up-to-date SSL module. This means "
+                      "Python 2.7.9+ or 3.4+ (although some distributions have "
+                      "backported the necessary changes to older versions).")
 
 setup(
     name="tornado",

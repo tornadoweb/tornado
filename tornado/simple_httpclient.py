@@ -35,18 +35,6 @@ except ImportError:
     # ssl is not available on Google App Engine.
     ssl = None
 
-try:
-    import certifi
-except ImportError:
-    certifi = None
-
-
-def _default_ca_certs():
-    if certifi is None:
-        raise Exception("The 'certifi' package is required to use https "
-                        "in simple_httpclient")
-    return certifi.where()
-
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -256,42 +244,19 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     self.request.client_cert is None and
                     self.request.client_key is None):
                 return _client_ssl_defaults
-            ssl_options = {}
-            if self.request.validate_cert:
-                ssl_options["cert_reqs"] = ssl.CERT_REQUIRED
-            if self.request.ca_certs is not None:
-                ssl_options["ca_certs"] = self.request.ca_certs
-            elif not hasattr(ssl, 'create_default_context'):
-                # When create_default_context is present,
-                # we can omit the "ca_certs" parameter entirely,
-                # which avoids the dependency on "certifi" for py34.
-                ssl_options["ca_certs"] = _default_ca_certs()
-            if self.request.client_key is not None:
-                ssl_options["keyfile"] = self.request.client_key
+            ssl_ctx = ssl.create_default_context(
+                ssl.Purpose.SERVER_AUTH,
+                cafile=self.request.ca_certs)
+            if not self.request.validate_cert:
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = ssl.CERT_NONE
             if self.request.client_cert is not None:
-                ssl_options["certfile"] = self.request.client_cert
-
-            # SSL interoperability is tricky.  We want to disable
-            # SSLv2 for security reasons; it wasn't disabled by default
-            # until openssl 1.0.  The best way to do this is to use
-            # the SSL_OP_NO_SSLv2, but that wasn't exposed to python
-            # until 3.2.  Python 2.7 adds the ciphers argument, which
-            # can also be used to disable SSLv2.  As a last resort
-            # on python 2.6, we set ssl_version to TLSv1.  This is
-            # more narrow than we'd like since it also breaks
-            # compatibility with servers configured for SSLv3 only,
-            # but nearly all servers support both SSLv3 and TLSv1:
-            # http://blog.ivanristic.com/2011/09/ssl-survey-protocol-support.html
-            if sys.version_info >= (2, 7):
-                # In addition to disabling SSLv2, we also exclude certain
-                # classes of insecure ciphers.
-                ssl_options["ciphers"] = "DEFAULT:!SSLv2:!EXPORT:!DES"
-            else:
-                # This is really only necessary for pre-1.0 versions
-                # of openssl, but python 2.6 doesn't expose version
-                # information.
-                ssl_options["ssl_version"] = ssl.PROTOCOL_TLSv1
-            return ssl_options
+                ssl_ctx.load_cert_chain(self.request.client_cert,
+                                        self.request.client_key)
+            if hasattr(ssl, 'OP_NO_COMPRESSION'):
+                # See netutil.ssl_options_to_context
+                ssl_ctx.options |= ssl.OP_NO_COMPRESSION
+            return ssl_ctx
         return None
 
     def _on_timeout(self, info=None):

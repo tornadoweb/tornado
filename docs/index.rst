@@ -66,9 +66,10 @@ installed in this way, so you may wish to download a copy of the
 source tarball or clone the `git repository
 <https://github.com/tornadoweb/tornado>`_ as well.
 
-**Prerequisites**: Tornado runs on Python 2.7, and 3.4+
-For Python 2, version 2.7.9 or newer is *strongly*
-recommended for the improved SSL support. In addition to the requirements
+**Prerequisites**: Tornado runs on Python 2.7, and 3.4+.
+The updates to the `ssl` module in Python 2.7.9 are required
+(in some distributions, these updates may be available in
+older python versions). In addition to the requirements
 which will be installed automatically by ``pip`` or ``setup.py install``,
 the following optional packages may be useful:
 
