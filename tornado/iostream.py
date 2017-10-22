@@ -83,6 +83,7 @@ if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)  # type: ignore
 
 _WINDOWS = sys.platform.startswith('win')
+_PY3 = sys.version_info >= (3,)
 
 
 class StreamClosedError(IOError):
@@ -115,6 +116,179 @@ class UnsatisfiableReadError(Exception):
 class StreamBufferFullError(Exception):
     """Exception raised by `IOStream` methods when the buffer is full.
     """
+
+
+class StreamBuffer(object):
+
+    def __init__(self):
+        # A sequence of (False, bytearray) and (True, memoryview) objects
+        self._buffers = collections.deque()
+        # Position in the first buffer
+        self._first_pos = 0
+        self._size = 0
+
+    def __len__(self):
+        return self._size
+
+    _large_buf_threshold = 1024
+    #_large_buf_threshold = 2**48  # disable
+    #_large_buf_threshold = 7
+
+    def extend(self, args):
+        size = sum(map(len, args))
+        if size > self._large_buf_threshold:
+            args = [memoryview(b) for b in args]
+            self._buffers.extend([(True, b) for b in args if len(b)])
+        elif size > 0:
+            if self._buffers:
+                is_large, b = self._buffers[-1]
+                is_large = is_large or len(b) >= self._large_buf_threshold
+            else:
+                is_large = True
+            if is_large:
+                if _PY3:
+                    b = bytearray().join(args)
+                else:
+                    b = bytearray()
+                    for a in args:
+                        b.extend(a)
+                self._buffers.append((False, b))
+            else:
+                b.extend(b''.join(args))
+
+        self._size += size
+
+    def peek(self, size):
+        try:
+            is_large, b = self._buffers[0]
+        except IndexError:
+            return memoryview(b'')
+
+        pos = self._first_pos
+        if is_large:
+            return b[pos:pos + size]
+        else:
+            return memoryview(b)[pos:pos + size]
+
+    def skip(self, size):
+        assert size <= self._size
+        self._size -= size
+        pos = self._first_pos
+
+        buffers = self._buffers
+        while buffers and size > 0:
+            is_large, b = buffers[0]
+            b_remain = len(b) - size - pos
+            if b_remain <= 0:
+                buffers.popleft()
+                size -= len(b) - pos
+                pos = 0
+            elif is_large:
+                pos += size
+                size = 0
+            else:
+                # Amortized O(1) shrink for Python 2
+                pos += size
+                if len(b) <= 2 * pos:
+                    del b[:size]
+                    pos = 0
+                size = 0
+
+        assert size == 0
+        self._first_pos = pos
+
+    def read(self, size):
+        assert size <= self._size
+        self._size -= size
+        pos = self._first_pos
+
+        res = []
+        buffers = self._buffers
+        while buffers and size > 0:
+            is_large, b = buffers[0]
+            b_remain = len(b) - size - pos
+            if b_remain <= 0:
+                if is_large:
+                    res.append(b[pos:])
+                else:
+                    res.append(memoryview(b)[pos:])
+                buffers.popleft()
+                size -= len(b) - pos
+                pos = 0
+            elif is_large:
+                res.append(b[pos:pos + size])
+                pos += size
+                size = 0
+            else:
+                res.append(memoryview(b)[pos:pos + size])
+                pos += size
+                size = 0
+
+        assert size == 0
+        self._first_pos = pos
+        return b''.join(res)
+
+    def _coalesce(self, allow_offset=False):
+        buffers = self._buffers
+        pos = self._first_pos
+
+        if ((allow_offset or pos == 0)
+            and len(buffers) == 1 and buffers[0][0] == False):
+            # Already coalesced
+            return
+        size = self._size
+        assert size > 0
+        assert len(buffers) > 0
+
+        is_large, b = buffers.popleft()
+        if is_large:
+            args = [b[pos:]]
+        else:
+            args = [memoryview(b)[pos:]]
+        args.extend([b for is_large, b in buffers])
+
+        b = bytearray().join(args)
+        assert len(b) == size
+        buffers.clear()
+        buffers.append((False, b))
+        self._first_pos = 0
+
+    def find(self, delim):
+        if self._size == 0:
+            return -1
+        buffers = self._buffers
+
+        # Relatively quick search in first buffer
+        is_large, b = buffers[0]
+        pos = self._first_pos
+        if is_large:
+            b = bytearray(b[pos:])
+            buffers[0] = (False, b)
+            self._first_pos = pos = 0
+
+        r = b.find(delim, pos)
+        if r >= 0:
+            return r - pos
+        if len(buffers) == 1:
+            return -1
+
+        # Save a bit of time by not looking again over the first bytes
+        pos = len(b) - len(delim)
+        self._coalesce(allow_offset=True)
+        return buffers[0][1].find(delim, pos)
+
+    def regex_search(self, pattern):
+        if self._size == 0:
+            return None
+        self._coalesce()
+        return pattern.search(self._buffers[0][1])
+
+
+# FIXME: a decision must be made.  The StreamBuffer improves performance
+# for large reads but adds complication for read_until and read_until_regex.
+
+# Not Python 2-compatible because of b''.join([memoryview or bytearray])
+USE_STREAM_BUFFER_FOR_READS = _PY3
 
 
 class BaseIOStream(object):
@@ -161,12 +335,13 @@ class BaseIOStream(object):
                                    self.max_buffer_size // 2)
         self.max_write_buffer_size = max_write_buffer_size
         self.error = None
-        self._read_buffer = bytearray()
-        self._read_buffer_pos = 0
-        self._read_buffer_size = 0
-        self._write_buffer = bytearray()
-        self._write_buffer_pos = 0
-        self._write_buffer_size = 0
+        if USE_STREAM_BUFFER_FOR_READS:
+            self._read_buffer = StreamBuffer()
+        else:
+            self._read_buffer = bytearray()
+            self._read_buffer_pos = 0
+            self._read_buffer_size = 0
+        self._write_buffer = StreamBuffer()
         self._write_buffer_frozen = False
         self._total_write_index = 0
         self._total_write_done_index = 0
@@ -352,9 +527,14 @@ class BaseIOStream(object):
         future = self._set_read_callback(callback)
         self._streaming_callback = stack_context.wrap(streaming_callback)
         if self.closed():
-            if self._streaming_callback is not None:
-                self._run_read_callback(self._read_buffer_size, True)
-            self._run_read_callback(self._read_buffer_size, False)
+            if USE_STREAM_BUFFER_FOR_READS:
+                if self._streaming_callback is not None:
+                    self._run_read_callback(len(self._read_buffer), True)
+                self._run_read_callback(len(self._read_buffer), False)
+            else:
+                if self._streaming_callback is not None:
+                    self._run_read_callback(self._read_buffer_size, True)
+                self._run_read_callback(self._read_buffer_size, False)
             return future
         self._read_until_close = True
         try:
@@ -388,13 +568,12 @@ class BaseIOStream(object):
         self._check_closed()
         if data:
             if (self.max_write_buffer_size is not None and
-                    self._write_buffer_size + len(data) > self.max_write_buffer_size):
+                    len(self._write_buffer) + len(data) > self.max_write_buffer_size):
                 raise StreamBufferFullError("Reached maximum write buffer size")
             if self._write_buffer_frozen:
                 self._pending_writes_while_frozen.append(data)
             else:
-                self._write_buffer += data
-                self._write_buffer_size += len(data)
+                self._write_buffer.extend([data])
             self._total_write_index += len(data)
         if callback is not None:
             self._write_callback = stack_context.wrap(callback)
@@ -405,7 +584,7 @@ class BaseIOStream(object):
             self._write_futures.append((self._total_write_index, future))
         if not self._connecting:
             self._handle_write()
-            if self._write_buffer_size:
+            if self._write_buffer:
                 self._add_io_state(self.io_loop.WRITE)
             self._maybe_add_error_listener()
         return future
@@ -438,11 +617,14 @@ class BaseIOStream(object):
                     if any(exc_info):
                         self.error = exc_info[1]
             if self._read_until_close:
+                read_buffer_size = (len(self._read_buffer)
+                                    if USE_STREAM_BUFFER_FOR_READS
+                                    else self._read_buffer_size)
                 if (self._streaming_callback is not None and
-                        self._read_buffer_size):
-                    self._run_read_callback(self._read_buffer_size, True)
+                        read_buffer_size):
+                    self._run_read_callback(read_buffer_size, True)
                 self._read_until_close = False
-                self._run_read_callback(self._read_buffer_size, False)
+                self._run_read_callback(read_buffer_size, False)
             if self._state is not None:
                 self.io_loop.remove_handler(self.fileno())
                 self._state = None
@@ -478,7 +660,6 @@ class BaseIOStream(object):
             # if the IOStream object is kept alive by a reference cycle.
             # TODO: Clear the read buffer too; it currently breaks some tests.
             self._write_buffer = None
-            self._write_buffer_size = 0
 
     def reading(self):
         """Returns true if we are currently reading from the stream."""
@@ -486,7 +667,7 @@ class BaseIOStream(object):
 
     def writing(self):
         """Returns true if we are currently writing to the stream."""
-        return self._write_buffer_size > 0
+        return bool(self._write_buffer)
 
     def closed(self):
         """Returns true if the stream has been closed."""
@@ -540,7 +721,9 @@ class BaseIOStream(object):
                 state |= self.io_loop.READ
             if self.writing():
                 state |= self.io_loop.WRITE
-            if state == self.io_loop.ERROR and self._read_buffer_size == 0:
+            if (state == self.io_loop.ERROR and
+                (len(self._read_buffer) if USE_STREAM_BUFFER_FOR_READS
+                 else self._read_buffer_size) == 0):
                 # If the connection is idle, listen for reads too so
                 # we can tell if the connection is closed.  If there is
                 # data in the read buffer we won't run the close callback
@@ -638,19 +821,22 @@ class BaseIOStream(object):
                 # pending_callback and error_listener mechanisms.
                 #
                 # If we've reached target_bytes, we know we're done.
+                read_buffer_size = (len(self._read_buffer)
+                                    if USE_STREAM_BUFFER_FOR_READS
+                                    else self._read_buffer_size)
                 if (target_bytes is not None and
-                        self._read_buffer_size >= target_bytes):
+                        read_buffer_size >= target_bytes):
                     break
 
                 # Otherwise, we need to call the more expensive find_read_pos.
                 # It's inefficient to do this on every read, so instead
                 # do it on the first read and whenever the read buffer
                 # size has doubled.
-                if self._read_buffer_size >= next_find_pos:
+                if read_buffer_size >= next_find_pos:
                     pos = self._find_read_pos()
                     if pos is not None:
                         return pos
-                    next_find_pos = self._read_buffer_size * 2
+                    next_find_pos = read_buffer_size * 2
             return self._find_read_pos()
         finally:
             self._pending_callbacks -= 1
@@ -756,17 +942,24 @@ class BaseIOStream(object):
             break
         if chunk is None:
             return 0
-        self._read_buffer += chunk
-        self._read_buffer_size += len(chunk)
-        if self._read_buffer_size > self.max_buffer_size:
+        if USE_STREAM_BUFFER_FOR_READS:
+            self._read_buffer.extend([chunk])
+            read_buffer_size = len(self._read_buffer)
+        else:
+            self._read_buffer += chunk
+            self._read_buffer_size += len(chunk)
+            read_buffer_size = self._read_buffer_size
+        if read_buffer_size > self.max_buffer_size:
             gen_log.error("Reached maximum read buffer size")
             self.close()
             raise StreamBufferFullError("Reached maximum read buffer size")
         return len(chunk)
 
     def _run_streaming_callback(self):
-        if self._streaming_callback is not None and self._read_buffer_size:
-            bytes_to_consume = self._read_buffer_size
+        bytes_to_consume = (len(self._read_buffer)
+                            if USE_STREAM_BUFFER_FOR_READS
+                            else self._read_buffer_size)
+        if self._streaming_callback is not None and bytes_to_consume:
             if self._read_bytes is not None:
                 bytes_to_consume = min(self._read_bytes, bytes_to_consume)
                 self._read_bytes -= bytes_to_consume
@@ -789,10 +982,13 @@ class BaseIOStream(object):
         Returns a position in the buffer if the current read can be satisfied,
         or None if it cannot.
         """
+        read_buffer_size = (len(self._read_buffer)
+                            if USE_STREAM_BUFFER_FOR_READS
+                            else self._read_buffer_size)
         if (self._read_bytes is not None and
-            (self._read_buffer_size >= self._read_bytes or
-             (self._read_partial and self._read_buffer_size > 0))):
-            num_bytes = min(self._read_bytes, self._read_buffer_size)
+            (read_buffer_size >= self._read_bytes or
+             (self._read_partial and read_buffer_size > 0))):
+            num_bytes = min(self._read_bytes, read_buffer_size)
             return num_bytes
         elif self._read_delimiter is not None:
             # Multi-byte delimiters (e.g. '\r\n') may straddle two
@@ -804,25 +1000,35 @@ class BaseIOStream(object):
             # since large merges are relatively expensive and get undone in
             # _consume().
             if self._read_buffer:
-                loc = self._read_buffer.find(self._read_delimiter,
-                                             self._read_buffer_pos)
+                if USE_STREAM_BUFFER_FOR_READS:
+                    loc = self._read_buffer.find(self._read_delimiter)
+                else:
+                    loc = self._read_buffer.find(self._read_delimiter,
+                                                 self._read_buffer_pos)
                 if loc != -1:
-                    loc -= self._read_buffer_pos
+                    if not USE_STREAM_BUFFER_FOR_READS:
+                        loc -= self._read_buffer_pos
                     delimiter_len = len(self._read_delimiter)
                     self._check_max_bytes(self._read_delimiter,
                                           loc + delimiter_len)
                     return loc + delimiter_len
                 self._check_max_bytes(self._read_delimiter,
-                                      self._read_buffer_size)
+                                      read_buffer_size)
         elif self._read_regex is not None:
             if self._read_buffer:
-                m = self._read_regex.search(self._read_buffer,
-                                            self._read_buffer_pos)
+                if USE_STREAM_BUFFER_FOR_READS:
+                    m = self._read_buffer.regex_search(self._read_regex)
+                else:
+                    m = self._read_regex.search(self._read_buffer,
+                                                self._read_buffer_pos)
                 if m is not None:
-                    loc = m.end() - self._read_buffer_pos
+                    if USE_STREAM_BUFFER_FOR_READS:
+                        loc = m.end()
+                    else:
+                        loc = m.end() - self._read_buffer_pos
                     self._check_max_bytes(self._read_regex, loc)
                     return loc
-                self._check_max_bytes(self._read_regex, self._read_buffer_size)
+                self._check_max_bytes(self._read_regex, read_buffer_size)
         return None
 
     def _check_max_bytes(self, delimiter, size):
@@ -837,8 +1043,7 @@ class BaseIOStream(object):
 
     def _unfreeze_write_buffer(self):
         self._write_buffer_frozen = False
-        self._write_buffer += b''.join(self._pending_writes_while_frozen)
-        self._write_buffer_size += sum(map(len, self._pending_writes_while_frozen))
+        self._write_buffer.extend(self._pending_writes_while_frozen)
         self._pending_writes_while_frozen[:] = []
 
     def _got_empty_write(self, size):
@@ -848,10 +1053,13 @@ class BaseIOStream(object):
         """
 
     def _handle_write(self):
-        while self._write_buffer_size:
-            assert self._write_buffer_size >= 0
+        while True:
+            size = len(self._write_buffer)
+            if not size:
+                assert not self._write_buffer_frozen
+                break
+            assert size >= 0
             try:
-                start = self._write_buffer_pos
                 if self._write_buffer_frozen:
                     size = self._write_buffer_frozen
                 elif _WINDOWS:
@@ -861,21 +1069,12 @@ class BaseIOStream(object):
                     # process.  Therefore we must not call socket.send
                     # with more than 128KB at a time.
                     size = 128 * 1024
-                else:
-                    size = self._write_buffer_size
-                num_bytes = self.write_to_fd(
-                    memoryview(self._write_buffer)[start:start + size])
+
+                num_bytes = self.write_to_fd(self._write_buffer.peek(size))
                 if num_bytes == 0:
                     self._got_empty_write(size)
                     break
-                self._write_buffer_pos += num_bytes
-                self._write_buffer_size -= num_bytes
-                # Amortized O(1) shrink
-                # (this heuristic is implemented natively in Python 3.4+
-                #  but is replicated here for Python 2)
-                if self._write_buffer_pos > self._write_buffer_size:
-                    del self._write_buffer[:self._write_buffer_pos]
-                    self._write_buffer_pos = 0
+                self._write_buffer.skip(num_bytes)
                 if self._write_buffer_frozen:
                     self._unfreeze_write_buffer()
                 self._total_write_done_index += num_bytes
@@ -900,7 +1099,8 @@ class BaseIOStream(object):
             self._write_futures.popleft()
             future.set_result(None)
 
-        if not self._write_buffer_size:
+        if not len(self._write_buffer):
+            # Finished writing, notify
             if self._write_callback:
                 callback = self._write_callback
                 self._write_callback = None
@@ -910,20 +1110,24 @@ class BaseIOStream(object):
         # Consume loc bytes from the read buffer and return them
         if loc == 0:
             return b""
-        assert loc <= self._read_buffer_size
-        # Slice the bytearray buffer into bytes, without intermediate copying
-        b = (memoryview(self._read_buffer)
-             [self._read_buffer_pos:self._read_buffer_pos + loc]
-             ).tobytes()
-        self._read_buffer_pos += loc
-        self._read_buffer_size -= loc
-        # Amortized O(1) shrink
-        # (this heuristic is implemented natively in Python 3.4+
-        #  but is replicated here for Python 2)
-        if self._read_buffer_pos > self._read_buffer_size:
-            del self._read_buffer[:self._read_buffer_pos]
-            self._read_buffer_pos = 0
-        return b
+        if USE_STREAM_BUFFER_FOR_READS:
+            assert loc <= len(self._read_buffer)
+            return self._read_buffer.read(loc)
+        else:
+            assert loc <= self._read_buffer_size
+            # Slice the bytearray buffer into bytes, without intermediate copying
+            b = (memoryview(self._read_buffer)
+                 [self._read_buffer_pos:self._read_buffer_pos + loc]
+                 ).tobytes()
+            self._read_buffer_pos += loc
+            self._read_buffer_size -= loc
+            # Amortized O(1) shrink
+            # (this heuristic is implemented natively in Python 3.4+
+            #  but is replicated here for Python 2)
+            if self._read_buffer_pos > self._read_buffer_size:
+                del self._read_buffer[:self._read_buffer_pos]
+                self._read_buffer_pos = 0
+            return b
 
     def _check_closed(self):
         if self.closed():
@@ -941,7 +1145,7 @@ class BaseIOStream(object):
         if self._state is None or self._state == ioloop.IOLoop.ERROR:
             if self.closed():
                 self._maybe_run_close_callback()
-            elif (self._read_buffer_size == 0 and
+            elif (not self._read_buffer and
                   self._close_callback is not None):
                 self._add_io_state(ioloop.IOLoop.READ)
 
@@ -1307,7 +1511,7 @@ class SSLIOStream(IOStream):
         # merging the write buffer after an incomplete send.
         # A cleaner solution would be to set
         # SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, but this is
-        # not yet accessible from python
+        # neither set nor available in Python 2.
         # (http://bugs.python.org/issue8240)
         self._freeze_write_buffer(size)
 
