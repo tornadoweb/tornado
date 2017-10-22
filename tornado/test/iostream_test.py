@@ -882,7 +882,6 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
 # This will run some tests that are basically redundant but it's the
 # simplest way to make sure that it works to pass an SSLContext
 # instead of an ssl_options dict to the SSLIOStream constructor.
-@unittest.skipIf(not hasattr(ssl, 'SSLContext'), 'ssl.SSLContext not present')
 class TestIOStreamSSLContext(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
         context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
@@ -985,8 +984,6 @@ class TestIOStreamStartTLS(AsyncTestCase):
         with self.assertRaises((ssl.SSLError, socket.error)):
             yield server_future
 
-    @unittest.skipIf(not hasattr(ssl, 'create_default_context'),
-                     'ssl.create_default_context not present')
     @gen_test
     def test_check_hostname(self):
         # Test that server_hostname parameter to start_tls is being used.

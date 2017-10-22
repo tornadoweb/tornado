@@ -35,42 +35,20 @@ except ImportError:
     # ssl is not available on Google App Engine
     ssl = None
 
-try:
-    import certifi
-except ImportError:
-    # certifi is optional as long as we have ssl.create_default_context.
-    if ssl is None or hasattr(ssl, 'create_default_context'):
-        certifi = None
-    else:
-        raise
-
 if PY3:
     xrange = range
 
-if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
-    ssl_match_hostname = ssl.match_hostname
-    SSLCertificateError = ssl.CertificateError
-elif ssl is None:
-    ssl_match_hostname = SSLCertificateError = None  # type: ignore
-else:
-    import backports.ssl_match_hostname
-    ssl_match_hostname = backports.ssl_match_hostname.match_hostname
-    SSLCertificateError = backports.ssl_match_hostname.CertificateError  # type: ignore
-
-if hasattr(ssl, 'SSLContext'):
-    if hasattr(ssl, 'create_default_context'):
-        # Python 2.7.9+, 3.4+
-        # Note that the naming of ssl.Purpose is confusing; the purpose
-        # of a context is to authentiate the opposite side of the connection.
-        _client_ssl_defaults = ssl.create_default_context(
-            ssl.Purpose.SERVER_AUTH)
-        _server_ssl_defaults = ssl.create_default_context(
-            ssl.Purpose.CLIENT_AUTH)
-elif ssl:
-    # Python 2.6-2.7.8
-    _client_ssl_defaults = dict(cert_reqs=ssl.CERT_REQUIRED,
-                                ca_certs=certifi.where())
-    _server_ssl_defaults = {}
+if ssl is not None:
+    # Note that the naming of ssl.Purpose is confusing; the purpose
+    # of a context is to authentiate the opposite side of the connection.
+    _client_ssl_defaults = ssl.create_default_context(
+        ssl.Purpose.SERVER_AUTH)
+    _server_ssl_defaults = ssl.create_default_context(
+        ssl.Purpose.CLIENT_AUTH)
+    if hasattr(ssl, 'OP_NO_COMPRESSION'):
+        # See netutil.ssl_options_to_context
+        _client_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
+        _server_ssl_defaults.options |= ssl.OP_NO_COMPRESSION
 else:
     # Google App Engine
     _client_ssl_defaults = dict(cert_reqs=None,
@@ -487,11 +465,12 @@ def ssl_options_to_context(ssl_options):
     accepts both forms needs to upgrade to the `~ssl.SSLContext` version
     to use features like SNI or NPN.
     """
-    if isinstance(ssl_options, dict):
-        assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
-    if (not hasattr(ssl, 'SSLContext') or
-            isinstance(ssl_options, ssl.SSLContext)):
+    if isinstance(ssl_options, ssl.SSLContext):
         return ssl_options
+    assert isinstance(ssl_options, dict)
+    assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
+    # Can't use create_default_context since this interface doesn't
+    # tell us client vs server.
     context = ssl.SSLContext(
         ssl_options.get('ssl_version', ssl.PROTOCOL_SSLv23))
     if 'certfile' in ssl_options:
@@ -504,7 +483,9 @@ def ssl_options_to_context(ssl_options):
         context.set_ciphers(ssl_options['ciphers'])
     if hasattr(ssl, 'OP_NO_COMPRESSION'):
         # Disable TLS compression to avoid CRIME and related attacks.
-        # This constant wasn't added until python 3.3.
+        # This constant depends on openssl version 1.0.
+        # TODO: Do we need to do this ourselves or can we trust
+        # the defaults?
         context.options |= ssl.OP_NO_COMPRESSION
     return context
 
@@ -519,14 +500,13 @@ def ssl_wrap_socket(socket, ssl_options, server_hostname=None, **kwargs):
     appropriate).
     """
     context = ssl_options_to_context(ssl_options)
-    if hasattr(ssl, 'SSLContext') and isinstance(context, ssl.SSLContext):
-        if server_hostname is not None and getattr(ssl, 'HAS_SNI'):
-            # Python doesn't have server-side SNI support so we can't
-            # really unittest this, but it can be manually tested with
-            # python3.2 -m tornado.httpclient https://sni.velox.ch
-            return context.wrap_socket(socket, server_hostname=server_hostname,
-                                       **kwargs)
-        else:
-            return context.wrap_socket(socket, **kwargs)
+    if ssl.HAS_SNI:
+        # In python 3.4, wrap_socket only accepts the server_hostname
+        # argument if HAS_SNI is true.
+        # TODO: add a unittest (python added server-side SNI support in 3.4)
+        # In the meantime it can be manually tested with
+        # python3 -m tornado.httpclient https://sni.velox.ch
+        return context.wrap_socket(socket, server_hostname=server_hostname,
+                                   **kwargs)
     else:
-        return ssl.wrap_socket(socket, **dict(context, **kwargs))  # type: ignore
+        return context.wrap_socket(socket, **kwargs)

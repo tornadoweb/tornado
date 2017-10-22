@@ -72,9 +72,6 @@ else:
 skipIfNoTwisted = unittest.skipUnless(have_twisted,
                                       "twisted module not present")
 
-skipIfPy26 = unittest.skipIf(sys.version_info < (2, 7),
-                             "twisted incompatible with singledispatch in py26")
-
 
 def save_signal_handlers():
     saved = {}
@@ -494,7 +491,6 @@ class CompatibilityTests(unittest.TestCase):
             'http://127.0.0.1:%d' % self.tornado_port, self.run_reactor)
         self.assertEqual(response, 'Hello from tornado!')
 
-    @skipIfPy26
     def testTornadoServerTwistedCoroutineClientIOLoop(self):
         self.start_tornado_server()
         response = self.twisted_coroutine_fetch(
@@ -503,7 +499,6 @@ class CompatibilityTests(unittest.TestCase):
 
 
 @skipIfNoTwisted
-@skipIfPy26
 class ConvertDeferredTest(unittest.TestCase):
     def test_success(self):
         @inlineCallbacks
