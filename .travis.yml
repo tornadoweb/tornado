@@ -59,18 +59,17 @@ script:
     # run it with nightly cpython.
     - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then export TARGET="-m coverage run $TARGET"; fi
     - python $TARGET
-    - python $TARGET --ioloop=tornado.platform.select.SelectIOLoop
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.select.SelectIOLoop; fi
     - python -O $TARGET
     - LANG=C python $TARGET
     - LANG=en_US.utf-8 python $TARGET
     - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python -bb $TARGET; fi
     - if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.netutil.ThreadedResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 3.4 || $TRAVIS_PYTHON_VERSION == 3.5 || $TRAVIS_PYTHON_VERSION == 3.6 ]]; then python $TARGET --ioloop=tornado.ioloop.PollIOLoop; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.asyncio.AsyncIOLoop; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --ioloop=tornado.ioloop.PollIOLoop --ioloop_time_monotonic; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.ioloop.PollIOLoop --ioloop_time_monotonic; fi
     #- if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then ../nodeps/bin/python -m tornado.test.runtests; fi
     # make coverage reports for Codecov to find

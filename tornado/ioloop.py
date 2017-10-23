@@ -48,7 +48,7 @@ from tornado.concurrent import Future, is_future, chain_future, future_set_exc_i
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
-from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds, TimeoutError
+from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds, TimeoutError, unicode_type, import_object
 
 try:
     import signal
@@ -160,6 +160,18 @@ class IOLoop(Configurable):
     _instance_lock = threading.Lock()
 
     _current = threading.local()
+
+    @classmethod
+    def configure(cls, impl, **kwargs):
+        if asyncio is not None:
+            from tornado.platform.asyncio import BaseAsyncIOLoop
+
+            if isinstance(impl, (str, unicode_type)):
+                impl = import_object(impl)
+            if not issubclass(impl, BaseAsyncIOLoop):
+                raise RuntimeError(
+                    "only AsyncIOLoop is allowed when asyncio is available")
+        super(IOLoop, cls).configure(impl, **kwargs)
 
     @staticmethod
     def instance():
