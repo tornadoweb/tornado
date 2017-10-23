@@ -37,7 +37,7 @@ import re
 from tornado.concurrent import TracebackFuture
 from tornado import ioloop
 from tornado.log import gen_log, app_log
-from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError, _client_ssl_defaults, _server_ssl_defaults
+from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
 from tornado import stack_context
 from tornado.util import errno_from_exception
 
@@ -167,10 +167,8 @@ class BaseIOStream(object):
         self._write_buffer = bytearray()
         self._write_buffer_pos = 0
         self._write_buffer_size = 0
-        self._write_buffer_frozen = False
         self._total_write_index = 0
         self._total_write_done_index = 0
-        self._pending_writes_while_frozen = []
         self._read_delimiter = None
         self._read_regex = None
         self._read_max_bytes = None
@@ -390,11 +388,8 @@ class BaseIOStream(object):
             if (self.max_write_buffer_size is not None and
                     self._write_buffer_size + len(data) > self.max_write_buffer_size):
                 raise StreamBufferFullError("Reached maximum write buffer size")
-            if self._write_buffer_frozen:
-                self._pending_writes_while_frozen.append(data)
-            else:
-                self._write_buffer += data
-                self._write_buffer_size += len(data)
+            self._write_buffer += data
+            self._write_buffer_size += len(data)
             self._total_write_index += len(data)
         if callback is not None:
             self._write_callback = stack_context.wrap(callback)
@@ -832,29 +827,12 @@ class BaseIOStream(object):
                 "delimiter %r not found within %d bytes" % (
                     delimiter, self._read_max_bytes))
 
-    def _freeze_write_buffer(self, size):
-        self._write_buffer_frozen = size
-
-    def _unfreeze_write_buffer(self):
-        self._write_buffer_frozen = False
-        self._write_buffer += b''.join(self._pending_writes_while_frozen)
-        self._write_buffer_size += sum(map(len, self._pending_writes_while_frozen))
-        self._pending_writes_while_frozen[:] = []
-
-    def _got_empty_write(self, size):
-        """
-        Called when a non-blocking write() failed writing anything.
-        Can be overridden in subclasses.
-        """
-
     def _handle_write(self):
         while self._write_buffer_size:
             assert self._write_buffer_size >= 0
             try:
                 start = self._write_buffer_pos
-                if self._write_buffer_frozen:
-                    size = self._write_buffer_frozen
-                elif _WINDOWS:
+                if _WINDOWS:
                     # On windows, socket.send blows up if given a
                     # write buffer that's too large, instead of just
                     # returning the number of bytes it was able to
@@ -866,7 +844,6 @@ class BaseIOStream(object):
                 num_bytes = self.write_to_fd(
                     memoryview(self._write_buffer)[start:start + size])
                 if num_bytes == 0:
-                    self._got_empty_write(size)
                     break
                 self._write_buffer_pos += num_bytes
                 self._write_buffer_size -= num_bytes
@@ -876,12 +853,9 @@ class BaseIOStream(object):
                 if self._write_buffer_pos > self._write_buffer_size:
                     del self._write_buffer[:self._write_buffer_pos]
                     self._write_buffer_pos = 0
-                if self._write_buffer_frozen:
-                    self._unfreeze_write_buffer()
                 self._total_write_done_index += num_bytes
             except (socket.error, IOError, OSError) as e:
                 if e.args[0] in _ERRNO_WOULDBLOCK:
-                    self._got_empty_write(size)
                     break
                 else:
                     if not self._is_connreset(e):
@@ -1068,7 +1042,12 @@ class IOStream(BaseIOStream):
         return chunk
 
     def write_to_fd(self, data):
-        return self.socket.send(data)
+        try:
+            return self.socket.send(data)
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def connect(self, address, callback=None, server_hostname=None):
         """Connects the socket to a remote address without blocking.
@@ -1308,17 +1287,6 @@ class SSLIOStream(IOStream):
     def writing(self):
         return self._handshake_writing or super(SSLIOStream, self).writing()
 
-    def _got_empty_write(self, size):
-        # With OpenSSL, if we couldn't write the entire buffer,
-        # the very same string object must be used on the
-        # next call to send.  Therefore we suppress
-        # merging the write buffer after an incomplete send.
-        # A cleaner solution would be to set
-        # SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, but this is
-        # not yet accessible from python
-        # (http://bugs.python.org/issue8240)
-        self._freeze_write_buffer(size)
-
     def _do_ssl_handshake(self):
         # Based on code from test_ssl.py in the python stdlib
         try:
@@ -1395,8 +1363,8 @@ class SSLIOStream(IOStream):
             gen_log.warning("No SSL certificate given")
             return False
         try:
-            ssl_match_hostname(peercert, self._server_hostname)
-        except SSLCertificateError as e:
+            ssl.match_hostname(peercert, self._server_hostname)
+        except ssl.CertificateError as e:
             gen_log.warning("Invalid SSL certificate: %s" % e)
             return False
         else:
@@ -1488,6 +1456,10 @@ class SSLIOStream(IOStream):
                 # simply return 0 bytes written.
                 return 0
             raise
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def read_from_fd(self):
         if self._ssl_accepting:
@@ -1548,7 +1520,12 @@ class PipeIOStream(BaseIOStream):
         os.close(self.fd)
 
     def write_to_fd(self, data):
-        return os.write(self.fd, data)
+        try:
+            return os.write(self.fd, data)
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def read_from_fd(self):
         try:

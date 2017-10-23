@@ -18,8 +18,9 @@ from tornado.ioloop import IOLoop, TimeoutError, PollIOLoop, PeriodicCallback
 from tornado.log import app_log
 from tornado.platform.select import _Select
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
-from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog
+from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis, skipBefore35, exec_test
+from tornado.concurrent import Future
 
 try:
     from concurrent import futures
@@ -597,6 +598,76 @@ class TestIOLoopFutures(AsyncTestCase):
 
         self.assertEqual(self.exception.args[0], "callback")
         self.assertEqual(self.future.exception().args[0], "worker")
+
+    @gen_test
+    def test_run_in_executor_gen(self):
+        event1 = threading.Event()
+        event2 = threading.Event()
+
+        def sync_func(self_event, other_event):
+            self_event.set()
+            other_event.wait()
+            # Note that return value doesn't actually do anything,
+            # it is just passed through to our final assertion to
+            # make sure it is passed through properly.
+            return self_event
+
+        # Run two synchronous functions, which would deadlock if not
+        # run in parallel.
+        res = yield [
+            IOLoop.current().run_in_executor(None, sync_func, event1, event2),
+            IOLoop.current().run_in_executor(None, sync_func, event2, event1)
+        ]
+
+        self.assertEqual([event1, event2], res)
+
+    @skipBefore35
+    @gen_test
+    def test_run_in_executor_native(self):
+        event1 = threading.Event()
+        event2 = threading.Event()
+
+        def sync_func(self_event, other_event):
+            self_event.set()
+            other_event.wait()
+            return self_event
+
+        # Go through an async wrapper to ensure that the result of
+        # run_in_executor works with await and not just gen.coroutine
+        # (simply passing the underlying concurrrent future would do that).
+        namespace = exec_test(globals(), locals(), """
+            async def async_wrapper(self_event, other_event):
+                return await IOLoop.current().run_in_executor(
+                    None, sync_func, self_event, other_event)
+        """)
+
+        res = yield [
+            namespace["async_wrapper"](event1, event2),
+            namespace["async_wrapper"](event2, event1)
+            ]
+
+        self.assertEqual([event1, event2], res)
+
+    @gen_test
+    def test_set_default_executor(self):
+        count = [0]
+
+        class MyExecutor(futures.ThreadPoolExecutor):
+            def submit(self, func, *args):
+                count[0] += 1
+                return super(MyExecutor, self).submit(func, *args)
+
+        event = threading.Event()
+
+        def sync_func():
+            event.set()
+
+        executor = MyExecutor(1)
+        loop = IOLoop.current()
+        loop.set_default_executor(executor)
+        yield loop.run_in_executor(None, sync_func)
+        self.assertEqual(1, count[0])
+        self.assertTrue(event.is_set())
 
 
 class TestIOLoopRunSync(unittest.TestCase):

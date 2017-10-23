@@ -44,7 +44,7 @@ import time
 import traceback
 import math
 
-from tornado.concurrent import TracebackFuture, is_future
+from tornado.concurrent import TracebackFuture, is_future, chain_future
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
@@ -55,6 +55,10 @@ try:
 except ImportError:
     signal = None
 
+try:
+    from concurrent.futures import ThreadPoolExecutor
+except ImportError:
+    ThreadPoolExecutor = None
 
 if PY3:
     import _thread as thread
@@ -635,6 +639,33 @@ class IOLoop(Configurable):
         future.add_done_callback(
             lambda future: self.add_callback(callback, future))
 
+    def run_in_executor(self, executor, func, *args):
+        """Runs a function in a ``concurrent.futures.Executor``. If
+        ``executor`` is ``None``, the IO loop's default executor will be used.
+
+        Use `functools.partial` to pass keyword arguments to `func`.
+
+        """
+        if ThreadPoolExecutor is None:
+            raise RuntimeError(
+                "concurrent.futures is required to use IOLoop.run_in_executor")
+
+        if executor is None:
+            if not hasattr(self, '_executor'):
+                from tornado.process import cpu_count
+                self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+            executor = self._executor
+        c_future = executor.submit(func, *args)
+        # Concurrent Futures are not usable with await. Wrap this in a
+        # Tornado Future instead, using self.add_future for thread-safety.
+        t_future = TracebackFuture()
+        self.add_future(c_future, lambda f: chain_future(f, t_future))
+        return t_future
+
+    def set_default_executor(self, executor):
+        """Sets the default executor to use with :meth:`run_in_executor`."""
+        self._executor = executor
+
     def _run_callback(self, callback):
         """Runs a callback with error handling.
 
@@ -777,6 +808,8 @@ class PollIOLoop(IOLoop):
         self._impl.close()
         self._callbacks = None
         self._timeouts = None
+        if hasattr(self, '_executor'):
+            self._executor.shutdown()
 
     def add_handler(self, fd, handler, events):
         fd, obj = self.split_fd(fd)
