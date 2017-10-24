@@ -747,6 +747,21 @@ class TestPeriodicCallback(unittest.TestCase):
         self.io_loop.start()
         self.assertEqual(calls, expected)
 
+    def test_io_loop_set_at_start(self):
+        # Check PeriodicCallback uses the current IOLoop at start() time,
+        # not at instantiation time.
+        calls = []
+        io_loop = FakeTimeIOLoop()
+
+        def cb():
+            calls.append(io_loop.time())
+        pc = PeriodicCallback(cb, 10000)
+        io_loop.make_current()
+        pc.start()
+        io_loop.call_later(50, io_loop.stop)
+        io_loop.start()
+        self.assertEqual(calls, [1010, 1020, 1030, 1040, 1050])
+
 
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
