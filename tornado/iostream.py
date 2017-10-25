@@ -83,7 +83,6 @@ if hasattr(errno, "WSAEINPROGRESS"):
     _ERRNO_INPROGRESS += (errno.WSAEINPROGRESS,)  # type: ignore
 
 _WINDOWS = sys.platform.startswith('win')
-_SSL_ACCEPTS_MOVING_WRITE_BUFFER = sys.version_info >= (2, 7, 9)
 
 
 class StreamClosedError(IOError):
