@@ -44,7 +44,7 @@ import time
 import traceback
 import math
 
-from tornado.concurrent import TracebackFuture, is_future
+from tornado.concurrent import TracebackFuture, is_future, chain_future
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
@@ -655,8 +655,12 @@ class IOLoop(Configurable):
                 from tornado.process import cpu_count
                 self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
             executor = self._executor
-
-        return executor.submit(func, *args)
+        c_future = executor.submit(func, *args)
+        # Concurrent Futures are not usable with await. Wrap this in a
+        # Tornado Future instead, using self.add_future for thread-safety.
+        t_future = TracebackFuture()
+        self.add_future(c_future, lambda f: chain_future(f, t_future))
+        return t_future
 
     def set_default_executor(self, executor):
         """Sets the default executor to use with :meth:`run_in_executor`."""
