@@ -1086,12 +1086,15 @@ class PeriodicCallback(object):
         if callback_time <= 0:
             raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
-        self.io_loop = IOLoop.current()
         self._running = False
         self._timeout = None
 
     def start(self):
         """Starts the timer."""
+        # Looking up the IOLoop here allows to first instantiate the
+        # PeriodicCallback in another thread, then start it using
+        # IOLoop.add_callback().
+        self.io_loop = IOLoop.current()
         self._running = True
         self._next_timeout = self.io_loop.time()
         self._schedule_next()
