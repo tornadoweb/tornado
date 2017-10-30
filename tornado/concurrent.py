@@ -508,6 +508,8 @@ def chain_future(a, b):
 
     The result (success or failure) of ``a`` will be copied to ``b``, unless
     ``b`` has already been completed or cancelled by the time ``a`` finishes.
+
+    Accepts both Tornado/asyncio `Future` objects and `concurrent.futures.Future`.
     """
     def copy(future):
         assert future is a
@@ -520,7 +522,12 @@ def chain_future(a, b):
             b.set_exception(a.exception())
         else:
             b.set_result(a.result())
-    future_add_done_callback(a, copy)
+    if isinstance(a, Future):
+        future_add_done_callback(a, copy)
+    else:
+        # concurrent.futures.Future
+        from tornado.ioloop import IOLoop
+        IOLoop.current().add_future(a, copy)
 
 
 def future_set_exc_info(future, exc_info):

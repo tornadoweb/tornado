@@ -1273,6 +1273,7 @@ class WithTimeoutTest(AsyncTestCase):
     @unittest.skipIf(futures is None, 'futures module not present')
     @gen_test
     def test_timeout_concurrent_future(self):
+        # A concurrent future that does not resolve before the timeout.
         with futures.ThreadPoolExecutor(1) as executor:
             with self.assertRaises(gen.TimeoutError):
                 yield gen.with_timeout(self.io_loop.time(),
@@ -1281,9 +1282,21 @@ class WithTimeoutTest(AsyncTestCase):
     @unittest.skipIf(futures is None, 'futures module not present')
     @gen_test
     def test_completed_concurrent_future(self):
+        # A concurrent future that is resolved before we even submit it
+        # to with_timeout.
+        with futures.ThreadPoolExecutor(1) as executor:
+            f = executor.submit(lambda: None)
+            f.result()  # wait for completion
+            yield gen.with_timeout(datetime.timedelta(seconds=3600), f)
+
+    @unittest.skipIf(futures is None, 'futures module not present')
+    @gen_test
+    def test_normal_concurrent_future(self):
+        # A conccurrent future that resolves while waiting for the timeout.
         with futures.ThreadPoolExecutor(1) as executor:
             yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                   executor.submit(lambda: None))
+                                   executor.submit(lambda: time.sleep(0.01)))
+
 
 
 class WaitIteratorTest(AsyncTestCase):
