@@ -772,3 +772,4 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
                                  "with both Transfer-Encoding and Content-Length")):
             response = self.fetch('/chunkwithcl')
         self.assertEqual(response.code, 599)
+
