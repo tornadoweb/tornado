@@ -103,11 +103,13 @@ class TCPClientTest(AsyncTestCase):
         self.do_test_connect(socket.AF_INET, 'localhost')
 
     @skipIfNoIPv6
+    @skipOnTravis
     def test_connect_ipv6_ipv6(self):
         self.skipIfLocalhostV4()
         self.do_test_connect(socket.AF_INET6, '::1')
 
     @skipIfNoIPv6
+    @skipOnTravis
     def test_connect_ipv6_dual(self):
         self.skipIfLocalhostV4()
         if Resolver.configured_class().__name__.endswith('TwistedResolver'):
