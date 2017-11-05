@@ -270,7 +270,6 @@ class SimpleHTTPClientTestMixin(object):
         self.triggers.popleft()()
 
     @skipIfNoIPv6
-    @skipOnTravis
     def test_ipv6(self):
         [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
         port = sock.getsockname()[1]
