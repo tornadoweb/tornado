@@ -238,6 +238,5 @@ class WSGIContainerTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"WSGI")
 
     def test_delegate_not_found(self):
-        with ExpectLog(app_log, "Delegate for GET /404 request not found"):
-            response = self.fetch("/404")
+        response = self.fetch("/404")
         self.assertEqual(response.code, 404)
