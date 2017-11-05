@@ -14,8 +14,9 @@
 from __future__ import absolute_import, division, print_function
 
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
+from tornado.log import app_log
 from tornado.routing import HostMatches, PathMatches, ReversibleRouter, Router, Rule, RuleRouter
-from tornado.testing import AsyncHTTPTestCase
+from tornado.testing import AsyncHTTPTestCase, ExpectLog
 from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
 
@@ -172,10 +173,16 @@ class RuleRouterTest(AsyncHTTPTestCase):
             request.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK")
             request.finish()
 
+        router = CustomRouter()
+        router.add_routes({
+            "/nested_handler": (app, _get_named_handler("nested_handler"))
+        })
+
         app.add_handlers(".*", [
             (HostMatches("www.example.com"), [
                 (PathMatches("/first_handler"), "tornado.test.routing_test.SecondHandler", {}, "second_handler")
             ]),
+            Rule(PathMatches("/.*handler"), router),
             Rule(PathMatches("/first_handler"), FirstHandler, name="first_handler"),
             Rule(PathMatches("/request_callable"), request_callable),
             ("/connection_delegate", ConnectionDelegate())
@@ -186,8 +193,15 @@ class RuleRouterTest(AsyncHTTPTestCase):
     def test_rule_based_router(self):
         response = self.fetch("/first_handler")
         self.assertEqual(response.body, b"first_handler: /first_handler")
+
         response = self.fetch("/first_handler", headers={'Host': 'www.example.com'})
         self.assertEqual(response.body, b"second_handler: /first_handler")
+
+        response = self.fetch("/nested_handler")
+        self.assertEqual(response.body, b"nested_handler: /nested_handler")
+
+        response = self.fetch("/nested_not_found_handler")
+        self.assertEqual(response.code, 404)
 
         response = self.fetch("/connection_delegate")
         self.assertEqual(response.body, b"OK")
@@ -222,3 +236,8 @@ class WSGIContainerTestCase(AsyncHTTPTestCase):
 
         response = self.fetch("/wsgi")
         self.assertEqual(response.body, b"WSGI")
+
+    def test_delegate_not_found(self):
+        with ExpectLog(app_log, "Delegate for GET /404 request not found"):
+            response = self.fetch("/404")
+        self.assertEqual(response.code, 404)
