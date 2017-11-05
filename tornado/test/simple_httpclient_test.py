@@ -272,16 +272,9 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipIfNoIPv6
     def test_ipv6(self):
-        try:
-            [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
-            port = sock.getsockname()[1]
-            self.http_server.add_socket(sock)
-        except socket.gaierror as e:
-            if e.args[0] == socket.EAI_ADDRFAMILY:
-                # python supports ipv6, but it's not configured on the network
-                # interface, so skip this test.
-                return
-            raise
+        [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
+        port = sock.getsockname()[1]
+        self.http_server.add_socket(sock)
         url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
 
         # ipv6 is currently enabled by default but can be disabled
