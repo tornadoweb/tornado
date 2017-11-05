@@ -423,7 +423,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def get_url(self, path):
         """Returns an absolute url for the given path on the test server."""
-        return '%s://localhost:%s%s' % (self.get_protocol(),
+        return '%s://127.0.0.1:%s%s' % (self.get_protocol(),
                                         self.get_http_port(), path)
 
     def tearDown(self):
