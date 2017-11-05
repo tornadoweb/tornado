@@ -326,7 +326,7 @@ class SimpleHTTPClientTestMixin(object):
         self.assertNotIn("Content-Length", response.headers)
 
     def test_host_header(self):
-        host_re = re.compile(b"^localhost:[0-9]+$")
+        host_re = re.compile(b"^127.0.0.1:[0-9]+$")
         response = self.fetch("/host_echo")
         self.assertTrue(host_re.match(response.body))
 
