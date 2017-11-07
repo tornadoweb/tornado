@@ -26,6 +26,11 @@ try:
 except ImportError:
     futures = None
 
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
 
 class GenEngineTest(AsyncTestCase):
     def setUp(self):
@@ -1041,6 +1046,27 @@ class GenCoroutineTest(AsyncTestCase):
 
         self.assertIs(self.local_ref(), None)
         self.finished = True
+
+    @unittest.skipIf(sys.version_info < (3,),
+                     "test only relevant with asyncio Futures")
+    def test_asyncio_future_debug_info(self):
+        self.finished = True
+        # Enable debug mode
+        asyncio_loop = asyncio.get_event_loop()
+        self.addCleanup(asyncio_loop.set_debug, asyncio_loop.get_debug())
+        asyncio_loop.set_debug(True)
+
+        def f():
+            yield gen.moment
+
+        coro = gen.coroutine(f)()
+        self.assertIsInstance(coro, asyncio.Future)
+        # We expect the coroutine repr() to show the place where
+        # it was instantiated
+        expected = ("created at %s:%d"
+                    % (__file__, f.__code__.co_firstlineno + 3))
+        actual = repr(coro)
+        self.assertIn(expected, actual)
 
 
 class GenSequenceHandler(RequestHandler):
