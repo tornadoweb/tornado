@@ -68,6 +68,10 @@ if PY3:
 else:
     import thread
 
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
 
 skipIfNoTwisted = unittest.skipUnless(have_twisted,
                                       "twisted module not present")
@@ -94,6 +98,7 @@ def restore_signal_handlers(saved):
 class ReactorTestCase(unittest.TestCase):
     def setUp(self):
         self._saved_signals = save_signal_handlers()
+        IOLoop.clear_current()
         self._io_loop = IOLoop(make_current=True)
         self._reactor = TornadoReactor()
         IOLoop.clear_current()
@@ -500,6 +505,14 @@ class CompatibilityTests(unittest.TestCase):
 
 @skipIfNoTwisted
 class ConvertDeferredTest(unittest.TestCase):
+    def setUp(self):
+        if asyncio is not None:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+
+    def tearDown(self):
+        if asyncio is not None:
+            asyncio.set_event_loop(None)
+
     def test_success(self):
         @inlineCallbacks
         def fn():
