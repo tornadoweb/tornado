@@ -141,11 +141,11 @@ class _StreamBuffer(object):
             self._buffers.append((True, data))
         elif size > 0:
             if self._buffers:
-                is_large, b = self._buffers[-1]
-                is_large = is_large or len(b) >= self._large_buf_threshold
+                is_memview, b = self._buffers[-1]
+                new_buf = is_memview or len(b) >= self._large_buf_threshold
             else:
-                is_large = True
-            if is_large:
+                new_buf = True
+            if new_buf:
                 self._buffers.append((False, bytearray(data)))
             else:
                 b += data
@@ -155,17 +155,17 @@ class _StreamBuffer(object):
     def peek(self, size):
         assert size > 0
         try:
-            is_large, b = self._buffers[0]
+            is_memview, b = self._buffers[0]
         except IndexError:
             return memoryview(b'')
 
         pos = self._first_pos
-        if is_large:
+        if is_memview:
             return b[pos:pos + size]
         else:
             return memoryview(b)[pos:pos + size]
 
-    def skip(self, size):
+    def advance(self, size):
         assert 0 < size <= self._size
         self._size -= size
         pos = self._first_pos
@@ -918,7 +918,7 @@ class BaseIOStream(object):
                 num_bytes = self.write_to_fd(self._write_buffer.peek(size))
                 if num_bytes == 0:
                     break
-                self._write_buffer.skip(num_bytes)
+                self._write_buffer.advance(num_bytes)
                 self._total_write_done_index += num_bytes
             except (socket.error, IOError, OSError) as e:
                 if e.args[0] in _ERRNO_WOULDBLOCK:
