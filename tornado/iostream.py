@@ -118,6 +118,10 @@ class StreamBufferFullError(Exception):
 
 
 class _StreamBuffer(object):
+    """
+    A specialized buffer that tries to avoid copies when large pieces
+    of data are encountered.
+    """
 
     def __init__(self):
         # A sequence of (False, bytearray) and (True, memoryview) objects
@@ -134,6 +138,9 @@ class _StreamBuffer(object):
     _large_buf_threshold = 2048
 
     def append(self, data):
+        """
+        Append the given piece of data (should be a buffer-compatible object).
+        """
         size = len(data)
         if size > self._large_buf_threshold:
             if not isinstance(data, memoryview):
@@ -153,6 +160,10 @@ class _StreamBuffer(object):
         self._size += size
 
     def peek(self, size):
+        """
+        Get a view over at most ``size`` bytes (possibly fewer) at the
+        current buffer position.
+        """
         assert size > 0
         try:
             is_memview, b = self._buffers[0]
@@ -166,6 +177,9 @@ class _StreamBuffer(object):
             return memoryview(b)[pos:pos + size]
 
     def advance(self, size):
+        """
+        Advance the current buffer position by ``size`` bytes.
+        """
         assert 0 < size <= self._size
         self._size -= size
         pos = self._first_pos
