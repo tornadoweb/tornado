@@ -1333,7 +1333,7 @@ class TestStreamBuffer(unittest.TestCase):
         while expected:
             n = self.random.randrange(1, len(expected) + 1)
             expected = expected[n:]
-            buf.skip(n)
+            buf.advance(n)
             self.assertEqual(len(buf), len(expected))
             self.check_peek(buf, expected)
 
@@ -1359,9 +1359,9 @@ class TestStreamBuffer(unittest.TestCase):
         for i in range(9):
             buf.append(b'x')
         self.assertEqual(len(buf._buffers), 2)
-        buf.skip(10)
+        buf.advance(10)
         self.assertEqual(len(buf._buffers), 1)
-        buf.skip(8)
+        buf.advance(8)
         self.assertEqual(len(buf._buffers), 0)
         self.assertEqual(len(buf), 0)
 
@@ -1392,8 +1392,8 @@ class TestStreamBuffer(unittest.TestCase):
         self.assertEqual(len(buf._buffers), 4)
         buf.append(b'z')
         self.assertEqual(len(buf._buffers), 4)
-        buf.skip(33)
+        buf.advance(33)
         self.assertEqual(len(buf._buffers), 1)
-        buf.skip(2)
+        buf.advance(2)
         self.assertEqual(len(buf._buffers), 0)
         self.assertEqual(len(buf), 0)

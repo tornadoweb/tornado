@@ -35,7 +35,7 @@ import socket
 import sys
 import re
 
-from tornado.concurrent import TracebackFuture
+from tornado.concurrent import Future
 from tornado import ioloop
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
@@ -119,6 +119,10 @@ class StreamBufferFullError(Exception):
 
 
 class _StreamBuffer(object):
+    """
+    A specialized buffer that tries to avoid copies when large pieces
+    of data are encountered.
+    """
 
     def __init__(self):
         # A sequence of (False, bytearray) and (True, memoryview) objects
@@ -135,6 +139,9 @@ class _StreamBuffer(object):
     _large_buf_threshold = 2048
 
     def append(self, data):
+        """
+        Append the given piece of data (should be a buffer-compatible object).
+        """
         size = len(data)
         if size > self._large_buf_threshold:
             if not isinstance(data, memoryview):
@@ -142,11 +149,11 @@ class _StreamBuffer(object):
             self._buffers.append((True, data))
         elif size > 0:
             if self._buffers:
-                is_large, b = self._buffers[-1]
-                is_large = is_large or len(b) >= self._large_buf_threshold
+                is_memview, b = self._buffers[-1]
+                new_buf = is_memview or len(b) >= self._large_buf_threshold
             else:
-                is_large = True
-            if is_large:
+                new_buf = True
+            if new_buf:
                 self._buffers.append((False, bytearray(data)))
             else:
                 b += data
@@ -154,19 +161,26 @@ class _StreamBuffer(object):
         self._size += size
 
     def peek(self, size):
+        """
+        Get a view over at most ``size`` bytes (possibly fewer) at the
+        current buffer position.
+        """
         assert size > 0
         try:
-            is_large, b = self._buffers[0]
+            is_memview, b = self._buffers[0]
         except IndexError:
             return memoryview(b'')
 
         pos = self._first_pos
-        if is_large:
+        if is_memview:
             return b[pos:pos + size]
         else:
             return memoryview(b)[pos:pos + size]
 
-    def skip(self, size):
+    def advance(self, size):
+        """
+        Advance the current buffer position by ``size`` bytes.
+        """
         assert 0 < size <= self._size
         self._size -= size
         pos = self._first_pos
@@ -496,7 +510,7 @@ class BaseIOStream(object):
             self._write_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = TracebackFuture()
+            future = Future()
             future.add_done_callback(lambda f: f.exception())
             self._write_futures.append((self._total_write_index, future))
         if not self._connecting:
@@ -564,6 +578,7 @@ class BaseIOStream(object):
                 self._ssl_connect_future = None
             for future in futures:
                 future.set_exception(StreamClosedError(real_error=self.error))
+                future.exception()
             if self._close_callback is not None:
                 cb = self._close_callback
                 self._close_callback = None
@@ -776,7 +791,7 @@ class BaseIOStream(object):
         if callback is not None:
             self._read_callback = stack_context.wrap(callback)
         else:
-            self._read_future = TracebackFuture()
+            self._read_future = Future()
         return self._read_future
 
     def _run_read_callback(self, size, streaming):
@@ -1041,7 +1056,7 @@ class BaseIOStream(object):
                 num_bytes = self.write_to_fd(self._write_buffer.peek(size))
                 if num_bytes == 0:
                     break
-                self._write_buffer.skip(num_bytes)
+                self._write_buffer.advance(num_bytes)
                 self._total_write_done_index += num_bytes
             except (socket.error, IOError, OSError) as e:
                 if e.args[0] in _ERRNO_WOULDBLOCK:
@@ -1294,7 +1309,7 @@ class IOStream(BaseIOStream):
             self._connect_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = self._connect_future = TracebackFuture()
+            future = self._connect_future = Future()
         try:
             self.socket.connect(address)
         except socket.error as e:
@@ -1372,7 +1387,7 @@ class IOStream(BaseIOStream):
         orig_close_callback = self._close_callback
         self._close_callback = None
 
-        future = TracebackFuture()
+        future = Future()
         ssl_stream = SSLIOStream(socket, ssl_options=ssl_options)
         # Wrap the original close callback so we can fail our Future as well.
         # If we had an "unwrap" counterpart to this method we would need
@@ -1628,7 +1643,7 @@ class SSLIOStream(IOStream):
             self._ssl_connect_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = self._ssl_connect_future = TracebackFuture()
+            future = self._ssl_connect_future = Future()
         if not self._ssl_accepting:
             self._run_ssl_connect_callback()
         return future

@@ -44,11 +44,11 @@ import time
 import traceback
 import math
 
-from tornado.concurrent import TracebackFuture, is_future, chain_future
+from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
-from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds, TimeoutError
+from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds, TimeoutError, unicode_type, import_object
 
 try:
     import signal
@@ -160,6 +160,18 @@ class IOLoop(Configurable):
     _instance_lock = threading.Lock()
 
     _current = threading.local()
+
+    @classmethod
+    def configure(cls, impl, **kwargs):
+        if asyncio is not None:
+            from tornado.platform.asyncio import BaseAsyncIOLoop
+
+            if isinstance(impl, (str, unicode_type)):
+                impl = import_object(impl)
+            if not issubclass(impl, BaseAsyncIOLoop):
+                raise RuntimeError(
+                    "only AsyncIOLoop is allowed when asyncio is available")
+        super(IOLoop, cls).configure(impl, **kwargs)
 
     @staticmethod
     def instance():
@@ -481,13 +493,13 @@ class IOLoop(Configurable):
                     from tornado.gen import convert_yielded
                     result = convert_yielded(result)
             except Exception:
-                future_cell[0] = TracebackFuture()
-                future_cell[0].set_exc_info(sys.exc_info())
+                future_cell[0] = Future()
+                future_set_exc_info(future_cell[0], sys.exc_info())
             else:
                 if is_future(result):
                     future_cell[0] = result
                 else:
-                    future_cell[0] = TracebackFuture()
+                    future_cell[0] = Future()
                     future_cell[0].set_result(result)
             self.add_future(future_cell[0], lambda future: self.stop())
         self.add_callback(run)
@@ -636,8 +648,8 @@ class IOLoop(Configurable):
         """
         assert is_future(future)
         callback = stack_context.wrap(callback)
-        future.add_done_callback(
-            lambda future: self.add_callback(callback, future))
+        future_add_done_callback(future,
+                           lambda future: self.add_callback(callback, future))
 
     def run_in_executor(self, executor, func, *args):
         """Runs a function in a ``concurrent.futures.Executor``. If
@@ -658,7 +670,7 @@ class IOLoop(Configurable):
         c_future = executor.submit(func, *args)
         # Concurrent Futures are not usable with await. Wrap this in a
         # Tornado Future instead, using self.add_future for thread-safety.
-        t_future = TracebackFuture()
+        t_future = Future()
         self.add_future(c_future, lambda f: chain_future(f, t_future))
         return t_future
 
@@ -1086,12 +1098,15 @@ class PeriodicCallback(object):
         if callback_time <= 0:
             raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
-        self.io_loop = IOLoop.current()
         self._running = False
         self._timeout = None
 
     def start(self):
         """Starts the timer."""
+        # Looking up the IOLoop here allows to first instantiate the
+        # PeriodicCallback in another thread, then start it using
+        # IOLoop.add_callback().
+        self.io_loop = IOLoop.current()
         self._running = True
         self._next_timeout = self.io_loop.time()
         self._schedule_next()
