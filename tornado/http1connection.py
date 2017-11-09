@@ -598,6 +598,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             chunk_len = yield self.stream.read_until(b"\r\n", max_bytes=64)
             chunk_len = int(chunk_len.strip(), 16)
             if chunk_len == 0:
+                yield self.stream.read_bytes(2) # comsume tailing \r\n, fix bug for multiple chunked requests on same connection.
                 return
             total_size += chunk_len
             if total_size > self._max_body_size:
