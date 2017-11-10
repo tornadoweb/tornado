@@ -288,8 +288,9 @@ class _HTTPRequestContext(object):
             "X-Scheme", headers.get("X-Forwarded-Proto",
                                     self.protocol))
         if proto_header:
-            # use the outermost proto entry if there is more than one
-            proto_header = proto_header.split(',')[0].strip()
+            # use only the last proto entry if there is more than one
+            # TODO: support trusting mutiple layers of proxied protocol
+            proto_header = proto_header.split(',')[-1].strip()
         if proto_header in ("http", "https"):
             self.protocol = proto_header
 
