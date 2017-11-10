@@ -1537,6 +1537,9 @@ class RequestHandler(object):
                 self._handle_request_exception(e)
             except Exception:
                 app_log.error("Exception in exception handler", exc_info=True)
+            finally:
+                # Unset result to avoid circular references
+                result = None
             if (self._prepared_future is not None and
                     not self._prepared_future.done()):
                 # In case we failed before setting _prepared_future, do it
