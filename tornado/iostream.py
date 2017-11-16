@@ -428,6 +428,8 @@ class BaseIOStream(object):
         If ``partial`` is true, the callback is run as soon as any bytes
         have been read.  Otherwise, it is run when the ``buf`` has been
         entirely filled with read data.
+
+        .. versionadded:: 5.0
         """
         future = self._set_read_callback(callback)
         assert not memoryview(buf).readonly
@@ -966,8 +968,6 @@ class BaseIOStream(object):
             return
         self._read_into_pos += nbytes
         if self._read_into_pos == len(self._read_into) or self._read_partial:
-            #print("_read_to_user_buffer:",
-                  #self._read_into_pos, len(self._read_into), self._read_partial)
             return True
 
     def _run_streaming_callback(self):
