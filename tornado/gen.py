@@ -85,7 +85,8 @@ import textwrap
 import types
 import weakref
 
-from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback
+from tornado.concurrent import (Future, is_future, chain_future, future_set_exc_info,
+                                future_add_done_callback, future_set_result_unless_cancelled)
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
@@ -327,7 +328,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                                 'stack_context inconsistency (probably caused '
                                 'by yield within a "with StackContext" block)'))
                 except (StopIteration, Return) as e:
-                    future.set_result(_value_from_stopiteration(e))
+                    future_set_result_unless_cancelled(future, _value_from_stopiteration(e))
                 except Exception:
                     future_set_exc_info(future, sys.exc_info())
                 else:
@@ -345,7 +346,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                     # used in the absence of cycles).  We can avoid the
                     # cycle by clearing the local variable after we return it.
                     future = None
-        future.set_result(result)
+        future_set_result_unless_cancelled(future, result)
         return future
 
     wrapper.__wrapped__ = wrapped
@@ -631,7 +632,7 @@ def Task(func, *args, **kwargs):
     def set_result(result):
         if future.done():
             return
-        future.set_result(result)
+        future_set_result_unless_cancelled(future, result)
     with stack_context.ExceptionStackContext(handle_exception):
         func(*args, callback=_argument_adapter(set_result), **kwargs)
     return future
@@ -831,7 +832,8 @@ def multi_future(children, quiet_exceptions=()):
 
     future = _create_future()
     if not children:
-        future.set_result({} if keys is not None else [])
+        future_set_result_unless_cancelled(future,
+                                           {} if keys is not None else [])
 
     def callback(f):
         unfinished_children.remove(f)
@@ -849,9 +851,10 @@ def multi_future(children, quiet_exceptions=()):
                         future_set_exc_info(future, sys.exc_info())
             if not future.done():
                 if keys is not None:
-                    future.set_result(dict(zip(keys, result_list)))
+                    future_set_result_unless_cancelled(future,
+                                                       dict(zip(keys, result_list)))
                 else:
-                    future.set_result(result_list)
+                    future_set_result_unless_cancelled(future, result_list)
 
     listening = set()
     for f in children:
@@ -962,7 +965,8 @@ def sleep(duration):
     .. versionadded:: 4.1
     """
     f = _create_future()
-    IOLoop.current().call_later(duration, lambda: f.set_result(None))
+    IOLoop.current().call_later(duration,
+                                lambda: future_set_result_unless_cancelled(f, None))
     return f
 
 
@@ -1038,7 +1042,8 @@ class Runner(object):
         self.results[key] = result
         if self.yield_point is not None and self.yield_point.is_ready():
             try:
-                self.future.set_result(self.yield_point.get_result())
+                future_set_result_unless_cancelled(self.future,
+                                                   self.yield_point.get_result())
             except:
                 future_set_exc_info(self.future, sys.exc_info())
             self.yield_point = None
@@ -1099,7 +1104,8 @@ class Runner(object):
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
-                    self.result_future.set_result(_value_from_stopiteration(e))
+                    future_set_result_unless_cancelled(self.result_future,
+                                                       _value_from_stopiteration(e))
                     self.result_future = None
                     self._deactivate_stack_context()
                     return
@@ -1131,7 +1137,7 @@ class Runner(object):
                 try:
                     yielded.start(self)
                     if yielded.is_ready():
-                        self.future.set_result(
+                        future_set_result_unless_cancelled(self.future,
                             yielded.get_result())
                     else:
                         self.yield_point = yielded

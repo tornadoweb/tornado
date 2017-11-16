@@ -28,7 +28,7 @@ import collections
 import heapq
 
 from tornado import gen, ioloop
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.locks import Event
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'QueueFull', 'QueueEmpty']
@@ -195,7 +195,7 @@ class Queue(object):
             assert self.empty(), "queue non-empty, why are getters waiting?"
             getter = self._getters.popleft()
             self.__put_internal(item)
-            getter.set_result(self._get())
+            future_set_result_unless_cancelled(getter, self._get())
         elif self.full():
             raise QueueFull
         else:
@@ -231,7 +231,7 @@ class Queue(object):
             assert self.full(), "queue not full, why are putters waiting?"
             item, putter = self._putters.popleft()
             self.__put_internal(item)
-            putter.set_result(None)
+            future_set_result_unless_cancelled(putter, None)
             return self._get()
         elif self.qsize():
             return self._get()

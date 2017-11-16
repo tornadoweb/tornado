@@ -44,7 +44,7 @@ import functools
 import time
 import weakref
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.escape import utf8, native_str
 from tornado import gen, httputil, stack_context
 from tornado.ioloop import IOLoop
@@ -259,7 +259,7 @@ class AsyncHTTPClient(Configurable):
             if raise_error and response.error:
                 future.set_exception(response.error)
             else:
-                future.set_result(response)
+                future_set_result_unless_cancelled(future, response)
         self.fetch_impl(request, handle_response)
         return future
 
