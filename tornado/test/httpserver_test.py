@@ -550,6 +550,16 @@ class XHeaderTest(HandlerBaseTestCase):
             self.fetch_json("/", headers=https_forwarded)["remote_protocol"],
             "https")
 
+        https_multi_forwarded = {"X-Forwarded-Proto": "https , http"}
+        self.assertEqual(
+            self.fetch_json("/", headers=https_multi_forwarded)["remote_protocol"],
+            "http")
+
+        http_multi_forwarded = {"X-Forwarded-Proto": "http,https"}
+        self.assertEqual(
+            self.fetch_json("/", headers=http_multi_forwarded)["remote_protocol"],
+            "https")
+
         bad_forwarded = {"X-Forwarded-Proto": "unknown"}
         self.assertEqual(
             self.fetch_json("/", headers=bad_forwarded)["remote_protocol"],
