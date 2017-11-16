@@ -305,7 +305,11 @@ def _make_coroutine_wrapper(func, replace_callback):
             result = _value_from_stopiteration(e)
         except Exception:
             future_set_exc_info(future, sys.exc_info())
-            return future
+            try:
+                return future
+            finally:
+                # Avoid circular references
+                future = None
         else:
             if isinstance(result, GeneratorType):
                 # Inline the first iteration of Runner.run.  This lets us
