@@ -160,7 +160,14 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
             sockaddr = tuple([host, bound_port] + list(sockaddr[2:]))
 
         sock.setblocking(0)
-        sock.bind(sockaddr)
+        try:
+            sock.bind(sockaddr)
+        except socket.error as e:
+            # Some setups (e.g. Travis-CI with "localhost") might return
+            # an IPv6 address from getaddrinfo() but fail binding to it
+            if errno_from_exception(e) == errno.EADDRNOTAVAIL:
+                continue
+            raise
         bound_port = sock.getsockname()[1]
         sock.listen(backlog)
         sockets.append(sock)
