@@ -29,7 +29,7 @@ def get_links_from_url(url):
         print('fetched %s' % url)
 
         html = response.body if isinstance(response.body, str) \
-            else response.body.decode()
+            else response.body.decode(errors='ignore')
         urls = [urljoin(url, remove_fragment(new_url))
                 for new_url in get_links(html)]
     except Exception as e:
@@ -103,7 +103,5 @@ def main():
 
 
 if __name__ == '__main__':
-    import logging
-    logging.basicConfig()
     io_loop = ioloop.IOLoop.current()
     io_loop.run_sync(main)

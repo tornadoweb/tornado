@@ -34,10 +34,10 @@ import socket
 import sys
 import re
 
-from tornado.concurrent import TracebackFuture
+from tornado.concurrent import Future
 from tornado import ioloop
 from tornado.log import gen_log, app_log
-from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError, _client_ssl_defaults, _server_ssl_defaults
+from tornado.netutil import ssl_wrap_socket, _client_ssl_defaults, _server_ssl_defaults
 from tornado import stack_context
 from tornado.util import errno_from_exception
 
@@ -117,6 +117,96 @@ class StreamBufferFullError(Exception):
     """
 
 
+class _StreamBuffer(object):
+    """
+    A specialized buffer that tries to avoid copies when large pieces
+    of data are encountered.
+    """
+
+    def __init__(self):
+        # A sequence of (False, bytearray) and (True, memoryview) objects
+        self._buffers = collections.deque()
+        # Position in the first buffer
+        self._first_pos = 0
+        self._size = 0
+
+    def __len__(self):
+        return self._size
+
+    # Data above this size will be appended separately instead
+    # of extending an existing bytearray
+    _large_buf_threshold = 2048
+
+    def append(self, data):
+        """
+        Append the given piece of data (should be a buffer-compatible object).
+        """
+        size = len(data)
+        if size > self._large_buf_threshold:
+            if not isinstance(data, memoryview):
+                data = memoryview(data)
+            self._buffers.append((True, data))
+        elif size > 0:
+            if self._buffers:
+                is_memview, b = self._buffers[-1]
+                new_buf = is_memview or len(b) >= self._large_buf_threshold
+            else:
+                new_buf = True
+            if new_buf:
+                self._buffers.append((False, bytearray(data)))
+            else:
+                b += data
+
+        self._size += size
+
+    def peek(self, size):
+        """
+        Get a view over at most ``size`` bytes (possibly fewer) at the
+        current buffer position.
+        """
+        assert size > 0
+        try:
+            is_memview, b = self._buffers[0]
+        except IndexError:
+            return memoryview(b'')
+
+        pos = self._first_pos
+        if is_memview:
+            return b[pos:pos + size]
+        else:
+            return memoryview(b)[pos:pos + size]
+
+    def advance(self, size):
+        """
+        Advance the current buffer position by ``size`` bytes.
+        """
+        assert 0 < size <= self._size
+        self._size -= size
+        pos = self._first_pos
+
+        buffers = self._buffers
+        while buffers and size > 0:
+            is_large, b = buffers[0]
+            b_remain = len(b) - size - pos
+            if b_remain <= 0:
+                buffers.popleft()
+                size -= len(b) - pos
+                pos = 0
+            elif is_large:
+                pos += size
+                size = 0
+            else:
+                # Amortized O(1) shrink for Python 2
+                pos += size
+                if len(b) <= 2 * pos:
+                    del b[:pos]
+                    pos = 0
+                size = 0
+
+        assert size == 0
+        self._first_pos = pos
+
+
 class BaseIOStream(object):
     """A utility class to write to and read from a non-blocking file or socket.
 
@@ -135,12 +225,10 @@ class BaseIOStream(object):
     Subclasses must implement `fileno`, `close_fd`, `write_to_fd`,
     `read_from_fd`, and optionally `get_fd_error`.
     """
-    def __init__(self, io_loop=None, max_buffer_size=None,
+    def __init__(self, max_buffer_size=None,
                  read_chunk_size=None, max_write_buffer_size=None):
         """`BaseIOStream` constructor.
 
-        :arg io_loop: The `.IOLoop` to use; defaults to `.IOLoop.current`.
-                      Deprecated since Tornado 4.1.
         :arg max_buffer_size: Maximum amount of incoming data to buffer;
             defaults to 100MB.
         :arg read_chunk_size: Amount of data to read at one time from the
@@ -151,8 +239,11 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
            Add the ``max_write_buffer_size`` parameter.  Changed default
            ``read_chunk_size`` to 64KB.
+        .. versionchanged:: 5.0
+           The ``io_loop`` argument (deprecated since version 4.1) has been
+           removed.
         """
-        self.io_loop = io_loop or ioloop.IOLoop.current()
+        self.io_loop = ioloop.IOLoop.current()
         self.max_buffer_size = max_buffer_size or 104857600
         # A chunk size that is too close to max_buffer_size can cause
         # spurious failures.
@@ -163,13 +254,9 @@ class BaseIOStream(object):
         self._read_buffer = bytearray()
         self._read_buffer_pos = 0
         self._read_buffer_size = 0
-        self._write_buffer = bytearray()
-        self._write_buffer_pos = 0
-        self._write_buffer_size = 0
-        self._write_buffer_frozen = False
+        self._write_buffer = _StreamBuffer()
         self._total_write_index = 0
         self._total_write_done_index = 0
-        self._pending_writes_while_frozen = []
         self._read_delimiter = None
         self._read_regex = None
         self._read_max_bytes = None
@@ -257,7 +344,7 @@ class BaseIOStream(object):
         except UnsatisfiableReadError as e:
             # Handle this the same way as in _handle_events.
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
             return future
         except:
             if future is not None:
@@ -290,7 +377,7 @@ class BaseIOStream(object):
         except UnsatisfiableReadError as e:
             # Handle this the same way as in _handle_events.
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
             return future
         except:
             if future is not None:
@@ -387,24 +474,20 @@ class BaseIOStream(object):
         self._check_closed()
         if data:
             if (self.max_write_buffer_size is not None and
-                    self._write_buffer_size + len(data) > self.max_write_buffer_size):
+                    len(self._write_buffer) + len(data) > self.max_write_buffer_size):
                 raise StreamBufferFullError("Reached maximum write buffer size")
-            if self._write_buffer_frozen:
-                self._pending_writes_while_frozen.append(data)
-            else:
-                self._write_buffer += data
-                self._write_buffer_size += len(data)
+            self._write_buffer.append(data)
             self._total_write_index += len(data)
         if callback is not None:
             self._write_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = TracebackFuture()
+            future = Future()
             future.add_done_callback(lambda f: f.exception())
             self._write_futures.append((self._total_write_index, future))
         if not self._connecting:
             self._handle_write()
-            if self._write_buffer_size:
+            if self._write_buffer:
                 self._add_io_state(self.io_loop.WRITE)
             self._maybe_add_error_listener()
         return future
@@ -428,10 +511,14 @@ class BaseIOStream(object):
         """
         if not self.closed():
             if exc_info:
-                if not isinstance(exc_info, tuple):
-                    exc_info = sys.exc_info()
-                if any(exc_info):
+                if isinstance(exc_info, tuple):
                     self.error = exc_info[1]
+                elif isinstance(exc_info, BaseException):
+                    self.error = exc_info
+                else:
+                    exc_info = sys.exc_info()
+                    if any(exc_info):
+                        self.error = exc_info[1]
             if self._read_until_close:
                 if (self._streaming_callback is not None and
                         self._read_buffer_size):
@@ -463,6 +550,7 @@ class BaseIOStream(object):
                 self._ssl_connect_future = None
             for future in futures:
                 future.set_exception(StreamClosedError(real_error=self.error))
+                future.exception()
             if self._close_callback is not None:
                 cb = self._close_callback
                 self._close_callback = None
@@ -473,7 +561,6 @@ class BaseIOStream(object):
             # if the IOStream object is kept alive by a reference cycle.
             # TODO: Clear the read buffer too; it currently breaks some tests.
             self._write_buffer = None
-            self._write_buffer_size = 0
 
     def reading(self):
         """Returns true if we are currently reading from the stream."""
@@ -481,7 +568,7 @@ class BaseIOStream(object):
 
     def writing(self):
         """Returns true if we are currently writing to the stream."""
-        return self._write_buffer_size > 0
+        return bool(self._write_buffer)
 
     def closed(self):
         """Returns true if the stream has been closed."""
@@ -548,11 +635,11 @@ class BaseIOStream(object):
                 self.io_loop.update_handler(self.fileno(), self._state)
         except UnsatisfiableReadError as e:
             gen_log.info("Unsatisfiable read, closing connection: %s" % e)
-            self.close(exc_info=True)
-        except Exception:
+            self.close(exc_info=e)
+        except Exception as e:
             gen_log.error("Uncaught exception, closing connection.",
                           exc_info=True)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
             raise
 
     def _run_callback(self, callback, *args):
@@ -560,14 +647,14 @@ class BaseIOStream(object):
             self._pending_callbacks -= 1
             try:
                 return callback(*args)
-            except Exception:
+            except Exception as e:
                 app_log.error("Uncaught exception, closing connection.",
                               exc_info=True)
                 # Close the socket on an uncaught exception from a user callback
                 # (It would eventually get closed when the socket object is
                 # gc'd, but we don't want to rely on gc happening before we
                 # run out of file descriptors)
-                self.close(exc_info=True)
+                self.close(exc_info=e)
                 # Re-raise the exception so that IOLoop.handle_callback_exception
                 # can see it and log the error
                 raise
@@ -657,7 +744,7 @@ class BaseIOStream(object):
             raise
         except Exception as e:
             gen_log.warning("error on read: %s" % e)
-            self.close(exc_info=True)
+            self.close(exc_info=e)
             return
         if pos is not None:
             self._read_from_buffer(pos)
@@ -671,7 +758,7 @@ class BaseIOStream(object):
         if callback is not None:
             self._read_callback = stack_context.wrap(callback)
         else:
-            self._read_future = TracebackFuture()
+            self._read_future = Future()
         return self._read_future
 
     def _run_read_callback(self, size, streaming):
@@ -744,9 +831,9 @@ class BaseIOStream(object):
                     # Treat ECONNRESET as a connection close rather than
                     # an error to minimize log spam  (the exception will
                     # be available on self.error for apps that care).
-                    self.close(exc_info=True)
+                    self.close(exc_info=e)
                     return
-                self.close(exc_info=True)
+                self.close(exc_info=e)
                 raise
             break
         if chunk is None:
@@ -827,56 +914,28 @@ class BaseIOStream(object):
                 "delimiter %r not found within %d bytes" % (
                     delimiter, self._read_max_bytes))
 
-    def _freeze_write_buffer(self, size):
-        self._write_buffer_frozen = size
-
-    def _unfreeze_write_buffer(self):
-        self._write_buffer_frozen = False
-        self._write_buffer += b''.join(self._pending_writes_while_frozen)
-        self._write_buffer_size += sum(map(len, self._pending_writes_while_frozen))
-        self._pending_writes_while_frozen[:] = []
-
-    def _got_empty_write(self, size):
-        """
-        Called when a non-blocking write() failed writing anything.
-        Can be overridden in subclasses.
-        """
-
     def _handle_write(self):
-        while self._write_buffer_size:
-            assert self._write_buffer_size >= 0
+        while True:
+            size = len(self._write_buffer)
+            if not size:
+                break
+            assert size > 0
             try:
-                start = self._write_buffer_pos
-                if self._write_buffer_frozen:
-                    size = self._write_buffer_frozen
-                elif _WINDOWS:
+                if _WINDOWS:
                     # On windows, socket.send blows up if given a
                     # write buffer that's too large, instead of just
                     # returning the number of bytes it was able to
                     # process.  Therefore we must not call socket.send
                     # with more than 128KB at a time.
                     size = 128 * 1024
-                else:
-                    size = self._write_buffer_size
-                num_bytes = self.write_to_fd(
-                    memoryview(self._write_buffer)[start:start + size])
+
+                num_bytes = self.write_to_fd(self._write_buffer.peek(size))
                 if num_bytes == 0:
-                    self._got_empty_write(size)
                     break
-                self._write_buffer_pos += num_bytes
-                self._write_buffer_size -= num_bytes
-                # Amortized O(1) shrink
-                # (this heuristic is implemented natively in Python 3.4+
-                #  but is replicated here for Python 2)
-                if self._write_buffer_pos > self._write_buffer_size:
-                    del self._write_buffer[:self._write_buffer_pos]
-                    self._write_buffer_pos = 0
-                if self._write_buffer_frozen:
-                    self._unfreeze_write_buffer()
+                self._write_buffer.advance(num_bytes)
                 self._total_write_done_index += num_bytes
             except (socket.error, IOError, OSError) as e:
                 if e.args[0] in _ERRNO_WOULDBLOCK:
-                    self._got_empty_write(size)
                     break
                 else:
                     if not self._is_connreset(e):
@@ -885,7 +944,7 @@ class BaseIOStream(object):
                         # minimize log spam
                         gen_log.warning("Write error on %s: %s",
                                         self.fileno(), e)
-                    self.close(exc_info=True)
+                    self.close(exc_info=e)
                     return
 
         while self._write_futures:
@@ -895,7 +954,7 @@ class BaseIOStream(object):
             self._write_futures.popleft()
             future.set_result(None)
 
-        if not self._write_buffer_size:
+        if not len(self._write_buffer):
             if self._write_callback:
                 callback = self._write_callback
                 self._write_callback = None
@@ -1061,7 +1120,12 @@ class IOStream(BaseIOStream):
         return chunk
 
     def write_to_fd(self, data):
-        return self.socket.send(data)
+        try:
+            return self.socket.send(data)
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def connect(self, address, callback=None, server_hostname=None):
         """Connects the socket to a remote address without blocking.
@@ -1107,7 +1171,7 @@ class IOStream(BaseIOStream):
             self._connect_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = self._connect_future = TracebackFuture()
+            future = self._connect_future = Future()
         try:
             self.socket.connect(address)
         except socket.error as e:
@@ -1123,7 +1187,7 @@ class IOStream(BaseIOStream):
                 if future is None:
                     gen_log.warning("Connect error on fd %s: %s",
                                     self.socket.fileno(), e)
-                self.close(exc_info=True)
+                self.close(exc_info=e)
                 return future
         self._add_io_state(self.io_loop.WRITE)
         return future
@@ -1185,9 +1249,8 @@ class IOStream(BaseIOStream):
         orig_close_callback = self._close_callback
         self._close_callback = None
 
-        future = TracebackFuture()
-        ssl_stream = SSLIOStream(socket, ssl_options=ssl_options,
-                                 io_loop=self.io_loop)
+        future = Future()
+        ssl_stream = SSLIOStream(socket, ssl_options=ssl_options)
         # Wrap the original close callback so we can fail our Future as well.
         # If we had an "unwrap" counterpart to this method we would need
         # to restore the original callback after our Future resolves
@@ -1291,17 +1354,6 @@ class SSLIOStream(IOStream):
     def writing(self):
         return self._handshake_writing or super(SSLIOStream, self).writing()
 
-    def _got_empty_write(self, size):
-        # With OpenSSL, if we couldn't write the entire buffer,
-        # the very same string object must be used on the
-        # next call to send.  Therefore we suppress
-        # merging the write buffer after an incomplete send.
-        # A cleaner solution would be to set
-        # SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, but this is
-        # not yet accessible from python
-        # (http://bugs.python.org/issue8240)
-        self._freeze_write_buffer(size)
-
     def _do_ssl_handshake(self):
         # Based on code from test_ssl.py in the python stdlib
         try:
@@ -1317,7 +1369,7 @@ class SSLIOStream(IOStream):
                 return
             elif err.args[0] in (ssl.SSL_ERROR_EOF,
                                  ssl.SSL_ERROR_ZERO_RETURN):
-                return self.close(exc_info=True)
+                return self.close(exc_info=err)
             elif err.args[0] == ssl.SSL_ERROR_SSL:
                 try:
                     peer = self.socket.getpeername()
@@ -1325,7 +1377,7 @@ class SSLIOStream(IOStream):
                     peer = '(not connected)'
                 gen_log.warning("SSL Error on %s %s: %s",
                                 self.socket.fileno(), peer, err)
-                return self.close(exc_info=True)
+                return self.close(exc_info=err)
             raise
         except socket.error as err:
             # Some port scans (e.g. nmap in -sT mode) have been known
@@ -1334,13 +1386,13 @@ class SSLIOStream(IOStream):
             # https://groups.google.com/forum/?fromgroups#!topic/python-tornado/ApucKJat1_0
             if (self._is_connreset(err) or
                     err.args[0] in (errno.EBADF, errno.ENOTCONN)):
-                return self.close(exc_info=True)
+                return self.close(exc_info=err)
             raise
         except AttributeError:
             # On Linux, if the connection was reset before the call to
             # wrap_socket, do_handshake will fail with an
             # AttributeError.
-            return self.close(exc_info=True)
+            return self.close(exc_info=err)
         else:
             self._ssl_accepting = False
             if not self._verify_cert(self.socket.getpeercert()):
@@ -1378,8 +1430,8 @@ class SSLIOStream(IOStream):
             gen_log.warning("No SSL certificate given")
             return False
         try:
-            ssl_match_hostname(peercert, self._server_hostname)
-        except SSLCertificateError as e:
+            ssl.match_hostname(peercert, self._server_hostname)
+        except ssl.CertificateError as e:
             gen_log.warning("Invalid SSL certificate: %s" % e)
             return False
         else:
@@ -1453,7 +1505,7 @@ class SSLIOStream(IOStream):
             self._ssl_connect_callback = stack_context.wrap(callback)
             future = None
         else:
-            future = self._ssl_connect_future = TracebackFuture()
+            future = self._ssl_connect_future = Future()
         if not self._ssl_accepting:
             self._run_ssl_connect_callback()
         return future
@@ -1471,6 +1523,10 @@ class SSLIOStream(IOStream):
                 # simply return 0 bytes written.
                 return 0
             raise
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def read_from_fd(self):
         if self._ssl_accepting:
@@ -1528,7 +1584,12 @@ class PipeIOStream(BaseIOStream):
         os.close(self.fd)
 
     def write_to_fd(self, data):
-        return os.write(self.fd, data)
+        try:
+            return os.write(self.fd, data)
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def read_from_fd(self):
         try:
@@ -1539,7 +1600,7 @@ class PipeIOStream(BaseIOStream):
             elif errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will
                 # report it as readable but reads will fail with EBADF.
-                self.close(exc_info=True)
+                self.close(exc_info=e)
                 return None
             else:
                 raise

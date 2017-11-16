@@ -44,29 +44,34 @@ import time
 import traceback
 import math
 
-from tornado.concurrent import TracebackFuture, is_future
+from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
-from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds
+from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds, TimeoutError, unicode_type, import_object
 
 try:
     import signal
 except ImportError:
     signal = None
 
+try:
+    from concurrent.futures import ThreadPoolExecutor
+except ImportError:
+    ThreadPoolExecutor = None
 
 if PY3:
     import _thread as thread
 else:
     import thread
 
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
 
 _POLL_TIMEOUT = 3600.0
-
-
-class TimeoutError(Exception):
-    pass
 
 
 class IOLoop(Configurable):
@@ -121,6 +126,16 @@ class IOLoop(Configurable):
     current instance. If ``make_current=False``, the new `IOLoop` will
     not try to become current.
 
+    In general, an `IOLoop` cannot survive a fork or be shared across
+    processes in any way. When multiple processes are being used, each
+    process should create its own `IOLoop`, which also implies that
+    any objects which depend on the `IOLoop` (such as
+    `.AsyncHTTPClient`) must also be created in the child processes.
+    As a guideline, anything that starts processes (including the
+    `tornado.process` and `multiprocessing` modules) should do so as
+    early as possible, ideally the first thing the application does
+    after loading its configuration in ``main()``.
+
     .. versionchanged:: 4.2
        Added the ``make_current`` keyword argument to the `IOLoop`
        constructor.
@@ -146,49 +161,84 @@ class IOLoop(Configurable):
 
     _current = threading.local()
 
+    @classmethod
+    def configure(cls, impl, **kwargs):
+        if asyncio is not None:
+            from tornado.platform.asyncio import BaseAsyncIOLoop
+
+            if isinstance(impl, (str, unicode_type)):
+                impl = import_object(impl)
+            if not issubclass(impl, BaseAsyncIOLoop):
+                raise RuntimeError(
+                    "only AsyncIOLoop is allowed when asyncio is available")
+        super(IOLoop, cls).configure(impl, **kwargs)
+
     @staticmethod
     def instance():
-        """Returns a global `IOLoop` instance.
+        """Deprecated alias for `IOLoop.current()`.
 
-        Most applications have a single, global `IOLoop` running on the
-        main thread.  Use this method to get this instance from
-        another thread.  In most other cases, it is better to use `current()`
-        to get the current thread's `IOLoop`.
+        .. versionchanged:: 5.0
+
+           Previously, this method returned a global singleton
+           `IOLoop`, in contrast with the per-thread `IOLoop` returned
+           by `current()`. In nearly all cases the two were the same
+           (when they differed, it was generally used from non-Tornado
+           threads to communicate back to the main thread's `IOLoop`).
+           This distinction is not present in `asyncio`, so in order
+           to facilitate integration with that package `instance()`
+           was changed to be an alias to `current()`. Applications
+           using the cross-thread communications aspect of
+           `instance()` should instead set their own global variable
+           to point to the `IOLoop` they want to use.
+
+        .. deprecated:: 5.0
         """
-        if not hasattr(IOLoop, "_instance"):
-            with IOLoop._instance_lock:
-                if not hasattr(IOLoop, "_instance"):
-                    # New instance after double check
-                    IOLoop._instance = IOLoop()
-        return IOLoop._instance
+        return IOLoop.current()
 
     @staticmethod
     def initialized():
-        """Returns true if the singleton instance has been created."""
-        return hasattr(IOLoop, "_instance")
+        """Returns true if there is a current IOLoop.
+
+        .. versionchanged:: 5.0
+
+           Redefined in terms of `current()` instead of `instance()`.
+
+        .. deprecated:: 5.0
+
+           This method only knows about `IOLoop` objects (and not, for
+           example, `asyncio` event loops), so it is of limited use.
+        """
+        return IOLoop.current(instance=False) is not None
 
     def install(self):
-        """Installs this `IOLoop` object as the singleton instance.
+        """Deprecated alias for `make_current()`.
 
-        This is normally not necessary as `instance()` will create
-        an `IOLoop` on demand, but you may want to call `install` to use
-        a custom subclass of `IOLoop`.
+        .. versionchanged:: 5.0
 
-        When using an `IOLoop` subclass, `install` must be called prior
-        to creating any objects that implicitly create their own
-        `IOLoop` (e.g., :class:`tornado.httpclient.AsyncHTTPClient`).
+           Previously, this method would set this `IOLoop` as the
+           global singleton used by `IOLoop.instance()`. Now that
+           `instance()` is an alias for `current()`, `install()`
+           is an alias for `make_current()`.
+
+        .. deprecated:: 5.0
         """
-        assert not IOLoop.initialized()
-        IOLoop._instance = self
+        self.make_current()
 
     @staticmethod
     def clear_instance():
-        """Clear the global `IOLoop` instance.
+        """Deprecated alias for `clear_current()`.
 
-        .. versionadded:: 4.0
+        .. versionchanged:: 5.0
+
+           Previously, this method would clear the `IOLoop` used as
+           the global singleton by `IOLoop.instance()`. Now that
+           `instance()` is an alias for `current()`,
+           `clear_instance()` is an alias for `clear_instance()`.
+
+        .. deprecated:: 5.0
+
         """
-        if hasattr(IOLoop, "_instance"):
-            del IOLoop._instance
+        IOLoop.clear_current()
 
     @staticmethod
     def current(instance=True):
@@ -196,22 +246,28 @@ class IOLoop(Configurable):
 
         If an `IOLoop` is currently running or has been marked as
         current by `make_current`, returns that instance.  If there is
-        no current `IOLoop`, returns `IOLoop.instance()` (i.e. the
-        main thread's `IOLoop`, creating one if necessary) if ``instance``
-        is true.
-
-        In general you should use `IOLoop.current` as the default when
-        constructing an asynchronous object, and use `IOLoop.instance`
-        when you mean to communicate to the main thread from a different
-        one.
+        no current `IOLoop` and ``instance`` is true, creates one.
 
         .. versionchanged:: 4.1
            Added ``instance`` argument to control the fallback to
            `IOLoop.instance()`.
+        .. versionchanged:: 5.0
+           The ``instance`` argument now controls whether an `IOLoop`
+           is created automatically when there is none, instead of
+           whether we fall back to `IOLoop.instance()` (which is now
+           an alias for this method)
         """
         current = getattr(IOLoop._current, "instance", None)
         if current is None and instance:
-            return IOLoop.instance()
+            current = None
+            if asyncio is not None:
+                from tornado.platform.asyncio import AsyncIOLoop, AsyncIOMainLoop
+                if IOLoop.configured_class() is AsyncIOLoop:
+                    current = AsyncIOMainLoop()
+            if current is None:
+                current = IOLoop()
+            if IOLoop._current.instance is not current:
+                raise RuntimeError("new IOLoop did not become current")
         return current
 
     def make_current(self):
@@ -231,6 +287,10 @@ class IOLoop(Configurable):
 
     @staticmethod
     def clear_current():
+        """Clears the `IOLoop` for the current thread.
+
+        Intended primarily for use by test frameworks in between tests.
+        """
         IOLoop._current.instance = None
 
     @classmethod
@@ -239,15 +299,10 @@ class IOLoop(Configurable):
 
     @classmethod
     def configurable_default(cls):
-        if hasattr(select, "epoll"):
-            from tornado.platform.epoll import EPollIOLoop
-            return EPollIOLoop
-        if hasattr(select, "kqueue"):
-            # Python 2.6+ on BSD or Mac
-            from tornado.platform.kqueue import KQueueIOLoop
-            return KQueueIOLoop
-        from tornado.platform.select import SelectIOLoop
-        return SelectIOLoop
+        if asyncio is not None:
+            from tornado.platform.asyncio import AsyncIOLoop
+            return AsyncIOLoop
+        return PollIOLoop
 
     def initialize(self, make_current=None):
         if make_current is None:
@@ -414,7 +469,7 @@ class IOLoop(Configurable):
 
         The keyword-only argument ``timeout`` may be used to set
         a maximum duration for the function.  If the timeout expires,
-        a `TimeoutError` is raised.
+        a `tornado.util.TimeoutError` is raised.
 
         This method is useful in conjunction with `tornado.gen.coroutine`
         to allow asynchronous calls in a ``main()`` function::
@@ -438,13 +493,13 @@ class IOLoop(Configurable):
                     from tornado.gen import convert_yielded
                     result = convert_yielded(result)
             except Exception:
-                future_cell[0] = TracebackFuture()
-                future_cell[0].set_exc_info(sys.exc_info())
+                future_cell[0] = Future()
+                future_set_exc_info(future_cell[0], sys.exc_info())
             else:
                 if is_future(result):
                     future_cell[0] = result
                 else:
-                    future_cell[0] = TracebackFuture()
+                    future_cell[0] = Future()
                     future_cell[0].set_result(result)
             self.add_future(future_cell[0], lambda future: self.stop())
         self.add_callback(run)
@@ -593,8 +648,35 @@ class IOLoop(Configurable):
         """
         assert is_future(future)
         callback = stack_context.wrap(callback)
-        future.add_done_callback(
-            lambda future: self.add_callback(callback, future))
+        future_add_done_callback(future,
+                           lambda future: self.add_callback(callback, future))
+
+    def run_in_executor(self, executor, func, *args):
+        """Runs a function in a ``concurrent.futures.Executor``. If
+        ``executor`` is ``None``, the IO loop's default executor will be used.
+
+        Use `functools.partial` to pass keyword arguments to `func`.
+
+        """
+        if ThreadPoolExecutor is None:
+            raise RuntimeError(
+                "concurrent.futures is required to use IOLoop.run_in_executor")
+
+        if executor is None:
+            if not hasattr(self, '_executor'):
+                from tornado.process import cpu_count
+                self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+            executor = self._executor
+        c_future = executor.submit(func, *args)
+        # Concurrent Futures are not usable with await. Wrap this in a
+        # Tornado Future instead, using self.add_future for thread-safety.
+        t_future = Future()
+        self.add_future(c_future, lambda f: chain_future(f, t_future))
+        return t_future
+
+    def set_default_executor(self, executor):
+        """Sets the default executor to use with :meth:`run_in_executor`."""
+        self._executor = executor
 
     def _run_callback(self, callback):
         """Runs a callback with error handling.
@@ -701,6 +783,7 @@ class PollIOLoop(IOLoop):
         self._stopped = False
         self._closing = False
         self._thread_ident = None
+        self._pid = os.getpid()
         self._blocking_signal_threshold = None
         self._timeout_counter = itertools.count()
 
@@ -710,6 +793,22 @@ class PollIOLoop(IOLoop):
         self.add_handler(self._waker.fileno(),
                          lambda fd, events: self._waker.consume(),
                          self.READ)
+
+    @classmethod
+    def configurable_base(cls):
+        return PollIOLoop
+
+    @classmethod
+    def configurable_default(cls):
+        if hasattr(select, "epoll"):
+            from tornado.platform.epoll import EPollIOLoop
+            return EPollIOLoop
+        if hasattr(select, "kqueue"):
+            # Python 2.6+ on BSD or Mac
+            from tornado.platform.kqueue import KQueueIOLoop
+            return KQueueIOLoop
+        from tornado.platform.select import SelectIOLoop
+        return SelectIOLoop
 
     def close(self, all_fds=False):
         self._closing = True
@@ -721,6 +820,8 @@ class PollIOLoop(IOLoop):
         self._impl.close()
         self._callbacks = None
         self._timeouts = None
+        if hasattr(self, '_executor'):
+            self._executor.shutdown()
 
     def add_handler(self, fd, handler, events):
         fd, obj = self.split_fd(fd)
@@ -753,6 +854,8 @@ class PollIOLoop(IOLoop):
     def start(self):
         if self._running:
             raise RuntimeError("IOLoop is already running")
+        if os.getpid() != self._pid:
+            raise RuntimeError("Cannot share PollIOLoops across processes")
         self._setup_logging()
         if self._stopped:
             self._stopped = False
@@ -987,20 +1090,23 @@ class PeriodicCallback(object):
 
     `start` must be called after the `PeriodicCallback` is created.
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    def __init__(self, callback, callback_time, io_loop=None):
+    def __init__(self, callback, callback_time):
         self.callback = callback
         if callback_time <= 0:
             raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
-        self.io_loop = io_loop or IOLoop.current()
         self._running = False
         self._timeout = None
 
     def start(self):
         """Starts the timer."""
+        # Looking up the IOLoop here allows to first instantiate the
+        # PeriodicCallback in another thread, then start it using
+        # IOLoop.add_callback().
+        self.io_loop = IOLoop.current()
         self._running = True
         self._next_timeout = self.io_loop.time()
         self._schedule_next()

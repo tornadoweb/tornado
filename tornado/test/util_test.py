@@ -58,12 +58,35 @@ class TestConfig2(TestConfigurable):
         self.pos_arg = pos_arg
 
 
+class TestConfig3(TestConfigurable):
+    # TestConfig3 is a configuration option that is itself configurable.
+    @classmethod
+    def configurable_base(cls):
+        return TestConfig3
+
+    @classmethod
+    def configurable_default(cls):
+        return TestConfig3A
+
+
+class TestConfig3A(TestConfig3):
+    def initialize(self, a=None):
+        self.a = a
+
+
+class TestConfig3B(TestConfig3):
+    def initialize(self, b=None):
+        self.b = b
+
+
 class ConfigurableTest(unittest.TestCase):
     def setUp(self):
         self.saved = TestConfigurable._save_configuration()
+        self.saved3 = TestConfig3._save_configuration()
 
     def tearDown(self):
         TestConfigurable._restore_configuration(self.saved)
+        TestConfig3._restore_configuration(self.saved3)
 
     def checkSubclasses(self):
         # no matter how the class is configured, it should always be
@@ -130,6 +153,39 @@ class ConfigurableTest(unittest.TestCase):
         # args bound in configure don't apply when using the subclass directly
         obj = TestConfig2()
         self.assertIs(obj.b, None)
+
+    def test_config_multi_level(self):
+        TestConfigurable.configure(TestConfig3, a=1)
+        obj = TestConfigurable()
+        self.assertIsInstance(obj, TestConfig3A)
+        self.assertEqual(obj.a, 1)
+
+        TestConfigurable.configure(TestConfig3)
+        TestConfig3.configure(TestConfig3B, b=2)
+        obj = TestConfigurable()
+        self.assertIsInstance(obj, TestConfig3B)
+        self.assertEqual(obj.b, 2)
+
+    def test_config_inner_level(self):
+        # The inner level can be used even when the outer level
+        # doesn't point to it.
+        obj = TestConfig3()
+        self.assertIsInstance(obj, TestConfig3A)
+
+        TestConfig3.configure(TestConfig3B)
+        obj = TestConfig3()
+        self.assertIsInstance(obj, TestConfig3B)
+
+        # Configuring the base doesn't configure the inner.
+        obj = TestConfigurable()
+        self.assertIsInstance(obj, TestConfig1)
+        TestConfigurable.configure(TestConfig2)
+
+        obj = TestConfigurable()
+        self.assertIsInstance(obj, TestConfig2)
+
+        obj = TestConfig3()
+        self.assertIsInstance(obj, TestConfig3B)
 
 
 class UnicodeLiteralTest(unittest.TestCase):

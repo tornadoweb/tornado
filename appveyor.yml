@@ -5,22 +5,38 @@ environment:
 
   # We only build with 3.5+ because it works out of the box, while other
   # versions require lots of machinery.
+  #
+  # We produce binary wheels for 32- and 64-bit builds, but because
+  # the tests are so slow on Windows (6 minutes vs 15 seconds on Linux
+  # or MacOS), we don't want to test the full matrix. We do full
+  # tests on a couple of configurations and on the others we limit
+  # the tests to the websocket module (which, because it exercises the
+  # C extension module, is most likely to exhibit differences between
+  # 32- and 64-bits)
   matrix:
     - PYTHON: "C:\\Python35"
       PYTHON_VERSION: "3.5.x"
       PYTHON_ARCH: "32"
+      TOX_ENV: "py35"
+      TOX_ARGS: ""
 
     - PYTHON: "C:\\Python35-x64"
       PYTHON_VERSION: "3.5.x"
       PYTHON_ARCH: "64"
+      TOX_ENV: "py35"
+      TOX_ARGS: "tornado.test.websocket_test"
 
     - PYTHON: "C:\\Python36"
       PYTHON_VERSION: "3.6.x"
       PYTHON_ARCH: "32"
+      TOX_ENV: "py36"
+      TOX_ARGS: "tornado.test.websocket_test"
 
     - PYTHON: "C:\\Python36-x64"
       PYTHON_VERSION: "3.6.x"
       PYTHON_ARCH: "64"
+      TOX_ENV: "py36"
+      TOX_ARGS: ""
 
 install:
   # Make sure the right python version is first on the PATH.
@@ -44,7 +60,7 @@ test_script:
   # but for now it lets us avoid duplication with .travis.yml and tox.ini.
   # Running "py3x-full" would be nice but it's failing on installing
   # dependencies with no useful logs.
-  - "tox -e py35,py36 --skip-missing-interpreters"
+  - "tox -e %TOX_ENV% -- %TOX_ARGS%"
 
 after_test:
   # If tests are successful, create binary packages for the project.

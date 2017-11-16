@@ -26,6 +26,11 @@ try:
 except ImportError:
     futures = None
 
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
 
 class GenEngineTest(AsyncTestCase):
     def setUp(self):
@@ -1016,6 +1021,8 @@ class GenCoroutineTest(AsyncTestCase):
         self.finished = True
 
     @skipNotCPython
+    @unittest.skipIf((3,) < sys.version_info < (3,6),
+                     "asyncio.Future has reference cycles")
     def test_coroutine_refcounting(self):
         # On CPython, tasks and their arguments should be released immediately
         # without waiting for garbage collection.
@@ -1039,6 +1046,27 @@ class GenCoroutineTest(AsyncTestCase):
 
         self.assertIs(self.local_ref(), None)
         self.finished = True
+
+    @unittest.skipIf(sys.version_info < (3,),
+                     "test only relevant with asyncio Futures")
+    def test_asyncio_future_debug_info(self):
+        self.finished = True
+        # Enable debug mode
+        asyncio_loop = asyncio.get_event_loop()
+        self.addCleanup(asyncio_loop.set_debug, asyncio_loop.get_debug())
+        asyncio_loop.set_debug(True)
+
+        def f():
+            yield gen.moment
+
+        coro = gen.coroutine(f)()
+        self.assertIsInstance(coro, asyncio.Future)
+        # We expect the coroutine repr() to show the place where
+        # it was instantiated
+        expected = ("created at %s:%d"
+                    % (__file__, f.__code__.co_firstlineno + 3))
+        actual = repr(coro)
+        self.assertIn(expected, actual)
 
 
 class GenSequenceHandler(RequestHandler):
@@ -1096,8 +1124,7 @@ class GenTaskHandler(RequestHandler):
     @asynchronous
     @gen.engine
     def get(self):
-        io_loop = self.request.connection.stream.io_loop
-        client = AsyncHTTPClient(io_loop=io_loop)
+        client = AsyncHTTPClient()
         response = yield gen.Task(client.fetch, self.get_argument('url'))
         response.rethrow()
         self.finish(b"got response: " + response.body)
@@ -1250,7 +1277,7 @@ class WithTimeoutTest(AsyncTestCase):
         self.io_loop.add_timeout(datetime.timedelta(seconds=0.1),
                                  lambda: future.set_result('asdf'))
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                        future, io_loop=self.io_loop)
+                                        future)
         self.assertEqual(result, 'asdf')
 
     @gen_test
@@ -1261,19 +1288,20 @@ class WithTimeoutTest(AsyncTestCase):
             lambda: future.set_exception(ZeroDivisionError()))
         with self.assertRaises(ZeroDivisionError):
             yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                   future, io_loop=self.io_loop)
+                                   future)
 
     @gen_test
     def test_already_resolved(self):
         future = Future()
         future.set_result('asdf')
         result = yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                        future, io_loop=self.io_loop)
+                                        future)
         self.assertEqual(result, 'asdf')
 
     @unittest.skipIf(futures is None, 'futures module not present')
     @gen_test
     def test_timeout_concurrent_future(self):
+        # A concurrent future that does not resolve before the timeout.
         with futures.ThreadPoolExecutor(1) as executor:
             with self.assertRaises(gen.TimeoutError):
                 yield gen.with_timeout(self.io_loop.time(),
@@ -1282,9 +1310,21 @@ class WithTimeoutTest(AsyncTestCase):
     @unittest.skipIf(futures is None, 'futures module not present')
     @gen_test
     def test_completed_concurrent_future(self):
+        # A concurrent future that is resolved before we even submit it
+        # to with_timeout.
+        with futures.ThreadPoolExecutor(1) as executor:
+            f = executor.submit(lambda: None)
+            f.result()  # wait for completion
+            yield gen.with_timeout(datetime.timedelta(seconds=3600), f)
+
+    @unittest.skipIf(futures is None, 'futures module not present')
+    @gen_test
+    def test_normal_concurrent_future(self):
+        # A conccurrent future that resolves while waiting for the timeout.
         with futures.ThreadPoolExecutor(1) as executor:
             yield gen.with_timeout(datetime.timedelta(seconds=3600),
-                                   executor.submit(lambda: None))
+                                   executor.submit(lambda: time.sleep(0.01)))
+
 
 
 class WaitIteratorTest(AsyncTestCase):

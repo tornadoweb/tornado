@@ -32,9 +32,8 @@ from tornado.escape import utf8
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PollIOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.platform.select import SelectIOLoop
 from tornado.testing import bind_unused_port
 from tornado.test.util import unittest
 from tornado.util import import_object, PY3
@@ -69,12 +68,13 @@ if PY3:
 else:
     import thread
 
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
 
 skipIfNoTwisted = unittest.skipUnless(have_twisted,
                                       "twisted module not present")
-
-skipIfPy26 = unittest.skipIf(sys.version_info < (2, 7),
-                             "twisted incompatible with singledispatch in py26")
 
 
 def save_signal_handlers():
@@ -98,8 +98,10 @@ def restore_signal_handlers(saved):
 class ReactorTestCase(unittest.TestCase):
     def setUp(self):
         self._saved_signals = save_signal_handlers()
-        self._io_loop = IOLoop()
-        self._reactor = TornadoReactor(self._io_loop)
+        IOLoop.clear_current()
+        self._io_loop = IOLoop(make_current=True)
+        self._reactor = TornadoReactor()
+        IOLoop.clear_current()
 
     def tearDown(self):
         self._io_loop.close(all_fds=True)
@@ -361,7 +363,7 @@ class CompatibilityTests(unittest.TestCase):
         self.saved_signals = save_signal_handlers()
         self.io_loop = IOLoop()
         self.io_loop.make_current()
-        self.reactor = TornadoReactor(self.io_loop)
+        self.reactor = TornadoReactor()
 
     def tearDown(self):
         self.reactor.disconnectAll()
@@ -385,7 +387,7 @@ class CompatibilityTests(unittest.TestCase):
                 self.write("Hello from tornado!")
         app = Application([('/', HelloHandler)],
                           log_function=lambda x: None)
-        server = HTTPServer(app, io_loop=self.io_loop)
+        server = HTTPServer(app)
         sock, self.tornado_port = bind_unused_port()
         server.add_sockets([sock])
 
@@ -401,7 +403,7 @@ class CompatibilityTests(unittest.TestCase):
 
     def tornado_fetch(self, url, runner):
         responses = []
-        client = AsyncHTTPClient(self.io_loop)
+        client = AsyncHTTPClient()
 
         def callback(response):
             responses.append(response)
@@ -494,7 +496,6 @@ class CompatibilityTests(unittest.TestCase):
             'http://127.0.0.1:%d' % self.tornado_port, self.run_reactor)
         self.assertEqual(response, 'Hello from tornado!')
 
-    @skipIfPy26
     def testTornadoServerTwistedCoroutineClientIOLoop(self):
         self.start_tornado_server()
         response = self.twisted_coroutine_fetch(
@@ -503,8 +504,15 @@ class CompatibilityTests(unittest.TestCase):
 
 
 @skipIfNoTwisted
-@skipIfPy26
 class ConvertDeferredTest(unittest.TestCase):
+    def setUp(self):
+        if asyncio is not None:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+
+    def tearDown(self):
+        if asyncio is not None:
+            asyncio.set_event_loop(None)
+
     def test_success(self):
         @inlineCallbacks
         def fn():
@@ -689,7 +697,7 @@ if have_twisted:
 
 if have_twisted:
     class LayeredTwistedIOLoop(TwistedIOLoop):
-        """Layers a TwistedIOLoop on top of a TornadoReactor on a SelectIOLoop.
+        """Layers a TwistedIOLoop on top of a TornadoReactor on a PollIOLoop.
 
         This is of course silly, but is useful for testing purposes to make
         sure we're implementing both sides of the various interfaces
@@ -697,11 +705,8 @@ if have_twisted:
         of the whole stack.
         """
         def initialize(self, **kwargs):
-            # When configured to use LayeredTwistedIOLoop we can't easily
-            # get the next-best IOLoop implementation, so use the lowest common
-            # denominator.
-            self.real_io_loop = SelectIOLoop(make_current=False)  # type: ignore
-            reactor = TornadoReactor(io_loop=self.real_io_loop)
+            self.real_io_loop = PollIOLoop(make_current=False)  # type: ignore
+            reactor = self.real_io_loop.run_sync(gen.coroutine(TornadoReactor))
             super(LayeredTwistedIOLoop, self).initialize(reactor=reactor, **kwargs)
             self.add_callback(self.make_current)
 

@@ -319,10 +319,7 @@ class RequestHandler(object):
         if reason is not None:
             self._reason = escape.native_str(reason)
         else:
-            try:
-                self._reason = httputil.responses[status_code]
-            except KeyError:
-                raise ValueError("unknown status code %d" % status_code)
+            self._reason = httputil.responses.get(status_code, "Unknown")
 
     def get_status(self):
         """Returns the status code for our response."""
@@ -521,18 +518,28 @@ class RequestHandler(object):
         return self.request.cookies
 
     def get_cookie(self, name, default=None):
-        """Gets the value of the cookie with the given name, else default."""
+        """Returns the value of the request cookie with the given name.
+
+        If the named cookie is not present, returns ``default``.
+
+        This method only returns cookies that were present in the request.
+        It does not see the outgoing cookies set by `set_cookie` in this
+        handler.
+        """
         if self.request.cookies is not None and name in self.request.cookies:
             return self.request.cookies[name].value
         return default
 
     def set_cookie(self, name, value, domain=None, expires=None, path="/",
                    expires_days=None, **kwargs):
-        """Sets the given cookie name/value with the given options.
+        """Sets an outgoing cookie name/value with the given options.
 
-        Additional keyword arguments are set on the Cookie.Morsel
+        Newly-set cookies are not immediately visible via `get_cookie`;
+        they are not present until the next request.
+
+        Additional keyword arguments are set on the cookies.Morsel
         directly.
-        See https://docs.python.org/2/library/cookie.html#Cookie.Morsel
+        See https://docs.python.org/3/library/http.cookies.html#http.cookies.Morsel
         for available attributes.
         """
         # The cookie library only accepts type str, in both python 2 and 3
@@ -574,6 +581,9 @@ class RequestHandler(object):
         path and domain to clear a cookie as were used when that cookie
         was set (but there is no way to find out on the server side
         which values were used for a given cookie).
+
+        Similar to `set_cookie`, the effect of this method will not be
+        seen until the following request.
         """
         expires = datetime.datetime.utcnow() - datetime.timedelta(days=365)
         self.set_cookie(name, value="", path=path, expires=expires,
@@ -584,6 +594,9 @@ class RequestHandler(object):
 
         See `clear_cookie` for more information on the path and domain
         parameters.
+
+        Similar to `set_cookie`, the effect of this method will not be
+        seen until the following request.
 
         .. versionchanged:: 3.2
 
@@ -608,6 +621,9 @@ class RequestHandler(object):
 
         Secure cookies may contain arbitrary byte values, not just unicode
         strings (unlike regular cookies)
+
+        Similar to `set_cookie`, the effect of this method will not be
+        seen until the following request.
 
         .. versionchanged:: 3.2.1
 
@@ -647,6 +663,10 @@ class RequestHandler(object):
 
         The decoded cookie value is returned as a byte string (unlike
         `get_cookie`).
+
+        Similar to `get_cookie`, this method only returns cookies that
+        were present in the request. It does not see outgoing cookies set by
+        `set_secure_cookie` in this handler.
 
         .. versionchanged:: 3.2.1
 
@@ -974,7 +994,8 @@ class RequestHandler(object):
                 if self.check_etag_header():
                     self._write_buffer = []
                     self.set_status(304)
-            if self._status_code in (204, 304):
+            if (self._status_code in (204, 304) or
+                (self._status_code >= 100 and self._status_code < 200)):
                 assert not self._write_buffer, "Cannot send body with %s" % self._status_code
                 self._clear_headers_for_304()
             elif "Content-Length" not in self._headers:
@@ -1516,6 +1537,9 @@ class RequestHandler(object):
                 self._handle_request_exception(e)
             except Exception:
                 app_log.error("Exception in exception handler", exc_info=True)
+            finally:
+                # Unset result to avoid circular references
+                result = None
             if (self._prepared_future is not None and
                     not self._prepared_future.done()):
                 # In case we failed before setting _prepared_future, do it
@@ -1561,11 +1585,7 @@ class RequestHandler(object):
             # send a response.
             return
         if isinstance(e, HTTPError):
-            if e.status_code not in httputil.responses and not e.reason:
-                gen_log.error("Bad HTTP status code: %d", e.status_code)
-                self.send_error(500, exc_info=sys.exc_info())
-            else:
-                self.send_error(e.status_code, exc_info=sys.exc_info())
+            self.send_error(e.status_code, exc_info=sys.exc_info())
         else:
             self.send_error(500, exc_info=sys.exc_info())
 
@@ -2262,7 +2282,11 @@ class RedirectHandler(RequestHandler):
         self._permanent = permanent
 
     def get(self, *args):
-        self.redirect(self._url.format(*args), permanent=self._permanent)
+        to_url = self._url.format(*args)
+        if self.request.query_arguments:
+            to_url = httputil.url_concat(
+                to_url, list(httputil.qs_to_qsl(self.request.query_arguments)))
+        self.redirect(to_url, permanent=self._permanent)
 
 
 class StaticFileHandler(RequestHandler):

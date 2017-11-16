@@ -28,7 +28,7 @@ import tornado.escape
 import tornado.web
 import zlib
 
-from tornado.concurrent import TracebackFuture
+from tornado.concurrent import Future
 from tornado.escape import utf8, native_str, to_unicode
 from tornado import gen, httpclient, httputil
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -616,6 +616,14 @@ class WebSocketProtocol13(WebSocketProtocol):
     def accept_connection(self):
         try:
             self._handle_websocket_headers()
+        except ValueError:
+            self.handler.set_status(400)
+            log_msg = "Missing/Invalid WebSocket headers"
+            self.handler.finish(log_msg)
+            gen_log.debug(log_msg)
+            return
+
+        try:
             self._accept_connection()
         except ValueError:
             gen_log.debug("Malformed WebSocket request received",
@@ -764,10 +772,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             data = mask + _websocket_mask(mask, data)
         frame += data
         self._wire_bytes_out += len(frame)
-        try:
-            return self.stream.write(frame)
-        except StreamClosedError:
-            self._abort()
+        return self.stream.write(frame)
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket."""
@@ -951,7 +956,10 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.close(self.handler.close_code)
         elif opcode == 0x9:
             # Ping
-            self._write_frame(True, 0xA, data)
+            try:
+                self._write_frame(True, 0xA, data)
+            except StreamClosedError:
+                self._abort()
             self._run_callback(self.handler.on_ping, data)
         elif opcode == 0xA:
             # Pong
@@ -972,7 +980,10 @@ class WebSocketProtocol13(WebSocketProtocol):
                     close_data = struct.pack('>H', code)
                 if reason is not None:
                     close_data += utf8(reason)
-                self._write_frame(True, 0x8, close_data)
+                try:
+                    self._write_frame(True, 0x8, close_data)
+                except StreamClosedError:
+                    self._abort()
             self.server_terminated = True
         if self.client_terminated:
             if self._waiting is not None:
@@ -1037,11 +1048,11 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     This class should not be instantiated directly; use the
     `websocket_connect` function instead.
     """
-    def __init__(self, io_loop, request, on_message_callback=None,
+    def __init__(self, request, on_message_callback=None,
                  compression_options=None, ping_interval=None, ping_timeout=None,
                  max_message_size=None):
         self.compression_options = compression_options
-        self.connect_future = TracebackFuture()
+        self.connect_future = Future()
         self.protocol = None
         self.read_future = None
         self.read_queue = collections.deque()
@@ -1070,9 +1081,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             request.headers['Sec-WebSocket-Extensions'] = (
                 'permessage-deflate; client_max_window_bits')
 
-        self.tcp_client = TCPClient(io_loop=io_loop)
+        self.tcp_client = TCPClient()
         super(WebSocketClientConnection, self).__init__(
-            io_loop, None, request, lambda: None, self._on_http_response,
+            None, request, lambda: None, self._on_http_response,
             104857600, self.tcp_client, 65536, 104857600)
 
     def close(self, code=None, reason=None):
@@ -1147,7 +1158,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         ready.
         """
         assert self.read_future is None
-        future = TracebackFuture()
+        future = Future()
         if self.read_queue:
             future.set_result(self.read_queue.popleft())
         else:
@@ -1176,7 +1187,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                                    compression_options=self.compression_options)
 
 
-def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
+def websocket_connect(url, callback=None, connect_timeout=None,
                       on_message_callback=None, compression_options=None,
                       ping_interval=None, ping_timeout=None,
                       max_message_size=None):
@@ -1207,14 +1218,14 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
 
     .. versionchanged:: 4.1
        Added ``compression_options`` and ``on_message_callback``.
-       The ``io_loop`` argument is deprecated.
 
     .. versionchanged:: 4.5
        Added the ``ping_interval``, ``ping_timeout``, and ``max_message_size``
        arguments, which have the same meaning as in `WebSocketHandler`.
+
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    if io_loop is None:
-        io_loop = IOLoop.current()
     if isinstance(url, httpclient.HTTPRequest):
         assert connect_timeout is None
         request = url
@@ -1225,12 +1236,12 @@ def websocket_connect(url, io_loop=None, callback=None, connect_timeout=None,
         request = httpclient.HTTPRequest(url, connect_timeout=connect_timeout)
     request = httpclient._RequestProxy(
         request, httpclient.HTTPRequest._DEFAULTS)
-    conn = WebSocketClientConnection(io_loop, request,
+    conn = WebSocketClientConnection(request,
                                      on_message_callback=on_message_callback,
                                      compression_options=compression_options,
                                      ping_interval=ping_interval,
                                      ping_timeout=ping_timeout,
                                      max_message_size=max_message_size)
     if callback is not None:
-        io_loop.add_future(conn.connect_future, callback)
+        IOLoop.current().add_future(conn.connect_future, callback)
     return conn.connect_future

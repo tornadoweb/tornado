@@ -23,7 +23,7 @@ from __future__ import absolute_import, division, print_function
 
 import re
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_add_done_callback
 from tornado.escape import native_str, utf8
 from tornado import gen
 from tornado import httputil
@@ -164,7 +164,6 @@ class HTTP1Connection(httputil.HTTPConnection):
                     header_data = yield gen.with_timeout(
                         self.stream.io_loop.time() + self.params.header_timeout,
                         header_future,
-                        io_loop=self.stream.io_loop,
                         quiet_exceptions=iostream.StreamClosedError)
                 except gen.TimeoutError:
                     self.close()
@@ -224,7 +223,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                         try:
                             yield gen.with_timeout(
                                 self.stream.io_loop.time() + self._body_timeout,
-                                body_future, self.stream.io_loop,
+                                body_future,
                                 quiet_exceptions=iostream.StreamClosedError)
                         except gen.TimeoutError:
                             gen_log.info("Timeout reading body from %s",
@@ -251,6 +250,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         except httputil.HTTPInputError as e:
             gen_log.info("Malformed HTTP message from %s: %s",
                          self.context, e)
+            if not self.is_client:
+                yield self.stream.write(b'HTTP/1.1 400 Bad Request\r\n\r\n')
             self.close()
             raise gen.Return(False)
         finally:
@@ -349,15 +350,20 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # self._request_start_line.version or
                 # start_line.version?
                 self._request_start_line.version == 'HTTP/1.1' and
-                # 304 responses have no body (not even a zero-length body), and so
-                # should not have either Content-Length or Transfer-Encoding.
-                # headers.
+                # 1xx, 204 and 304 responses have no body (not even a zero-length
+                # body), and so should not have either Content-Length or
+                # Transfer-Encoding headers.
                 start_line.code not in (204, 304) and
+                (start_line.code < 100 or start_line.code >= 200) and
                 # No need to chunk the output if a Content-Length is specified.
                 'Content-Length' not in headers and
                 # Applications are discouraged from touching Transfer-Encoding,
                 # but if they do, leave it alone.
                 'Transfer-Encoding' not in headers)
+            # If connection to a 1.1 client will be closed, inform client
+            if (self._request_start_line.version == 'HTTP/1.1' and
+                self._disconnect_on_finish):
+                headers['Connection'] = 'close'
             # If a 1.0 client asked for keep-alive, add the header.
             if (self._request_start_line.version == 'HTTP/1.0' and
                 (self._request_headers.get('Connection', '').lower() ==
@@ -419,7 +425,7 @@ class HTTP1Connection(httputil.HTTPConnection):
     def write(self, chunk, callback=None):
         """Implements `.HTTPConnection.write`.
 
-        For backwards compatibility is is allowed but deprecated to
+        For backwards compatibility it is allowed but deprecated to
         skip `write_headers` and instead call `write()` with a
         pre-encoded header block.
         """
@@ -464,7 +470,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self._pending_write is None:
             self._finish_request(None)
         else:
-            self._pending_write.add_done_callback(self._finish_request)
+            future_add_done_callback(self._pending_write, self._finish_request)
 
     def _on_write_complete(self, future):
         exc = future.exception()

@@ -99,8 +99,13 @@ class Condition(_TimeoutGarbageCollector):
         # Wait up to 1 second.
         yield condition.wait(timeout=datetime.timedelta(seconds=1))
 
-    The method raises `tornado.gen.TimeoutError` if there's no notification
+    The method raises `tornado.util.TimeoutError` if there's no notification
     before the deadline.
+
+    .. versionchanged:: 5.0
+       Previously, waiters could be notified synchronously from within
+       `notify`. Now, the notification will always be received on the
+       next iteration of the `.IOLoop`.
     """
 
     def __init__(self):
@@ -123,7 +128,8 @@ class Condition(_TimeoutGarbageCollector):
         self._waiters.append(waiter)
         if timeout:
             def on_timeout():
-                waiter.set_result(False)
+                if not waiter.done():
+                    waiter.set_result(False)
                 self._garbage_collect()
             io_loop = ioloop.IOLoop.current()
             timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -220,7 +226,7 @@ class Event(object):
     def wait(self, timeout=None):
         """Block until the internal flag is true.
 
-        Returns a Future, which raises `tornado.gen.TimeoutError` after a
+        Returns a Future, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
         if timeout is None:
@@ -272,6 +278,8 @@ class Semaphore(_TimeoutGarbageCollector):
        @gen.coroutine
        def simulator(futures):
            for f in futures:
+               # simulate the asynchronous passage of time
+               yield gen.moment
                yield gen.moment
                f.set_result(None)
 
@@ -388,7 +396,8 @@ class Semaphore(_TimeoutGarbageCollector):
             self._waiters.append(waiter)
             if timeout:
                 def on_timeout():
-                    waiter.set_exception(gen.TimeoutError())
+                    if not waiter.done():
+                        waiter.set_exception(gen.TimeoutError())
                     self._garbage_collect()
                 io_loop = ioloop.IOLoop.current()
                 timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -480,7 +489,7 @@ class Lock(object):
     def acquire(self, timeout=None):
         """Attempt to lock. Returns a Future.
 
-        Returns a Future, which raises `tornado.gen.TimeoutError` after a
+        Returns a Future, which raises `tornado.util.TimeoutError` after a
         timeout.
         """
         return self._block.acquire(timeout)

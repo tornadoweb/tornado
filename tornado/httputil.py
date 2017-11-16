@@ -467,8 +467,7 @@ class HTTPServerRequest(object):
     def __repr__(self):
         attrs = ("protocol", "host", "method", "uri", "version", "remote_ip")
         args = ", ".join(["%s=%r" % (n, getattr(self, n)) for n in attrs])
-        return "%s(%s, headers=%s)" % (
-            self.__class__.__name__, args, dict(self.headers))
+        return "%s(%s)" % (self.__class__.__name__, args)
 
 
 class HTTPInputError(Exception):
@@ -829,6 +828,8 @@ def parse_request_start_line(line):
     try:
         method, path, version = line.split(" ")
     except ValueError:
+        # https://tools.ietf.org/html/rfc7230#section-3.1.1
+        # invalid request-line SHOULD respond with a 400 (Bad Request)
         raise HTTPInputError("Malformed HTTP request line")
     if not re.match(r"^HTTP/1\.[0-9]$", version):
         raise HTTPInputError(
@@ -938,6 +939,14 @@ def split_host_and_port(netloc):
         host = netloc
         port = None
     return (host, port)
+
+
+def qs_to_qsl(qs):
+    """Generator rewinding a result of ``parse_qs`` back to name-value pairs. 
+    """
+    for k, vs in qs.items():
+        for v in vs:
+            yield (k, v)
 
 
 _OctalPatt = re.compile(r"\\[0-3][0-7][0-7]")

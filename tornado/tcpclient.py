@@ -20,13 +20,18 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import socket
+import time
+import numbers
+import datetime
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_add_done_callback
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
 from tornado.netutil import Resolver
 from tornado.platform.auto import set_close_exec
+from tornado.gen import TimeoutError
+from tornado.util import timedelta_to_seconds
 
 _INITIAL_CONNECT_TIMEOUT = 0.3
 
@@ -48,15 +53,17 @@ class _Connector(object):
     http://tools.ietf.org/html/rfc6555
 
     """
-    def __init__(self, addrinfo, io_loop, connect):
-        self.io_loop = io_loop
+    def __init__(self, addrinfo, connect):
+        self.io_loop = IOLoop.current()
         self.connect = connect
 
         self.future = Future()
         self.timeout = None
+        self.connect_timeout = None
         self.last_error = None
         self.remaining = len(addrinfo)
         self.primary_addrs, self.secondary_addrs = self.split(addrinfo)
+        self.streams = set()
 
     @staticmethod
     def split(addrinfo):
@@ -78,9 +85,11 @@ class _Connector(object):
                 secondary.append((af, addr))
         return primary, secondary
 
-    def start(self, timeout=_INITIAL_CONNECT_TIMEOUT):
+    def start(self, timeout=_INITIAL_CONNECT_TIMEOUT, connect_timeout=None):
         self.try_connect(iter(self.primary_addrs))
-        self.set_timout(timeout)
+        self.set_timeout(timeout)
+        if connect_timeout is not None:
+            self.set_connect_timeout(connect_timeout)
         return self.future
 
     def try_connect(self, addrs):
@@ -94,9 +103,10 @@ class _Connector(object):
                 self.future.set_exception(self.last_error or
                                           IOError("connection failed"))
             return
-        future = self.connect(af, addr)
-        future.add_done_callback(functools.partial(self.on_connect_done,
-                                                   addrs, af, addr))
+        stream, future = self.connect(af, addr)
+        self.streams.add(stream)
+        future_add_done_callback(future, functools.partial(self.on_connect_done,
+                                                     addrs, af, addr))
 
     def on_connect_done(self, addrs, af, addr, future):
         self.remaining -= 1
@@ -115,39 +125,60 @@ class _Connector(object):
                 self.io_loop.remove_timeout(self.timeout)
                 self.on_timeout()
             return
-        self.clear_timeout()
+        self.clear_timeouts()
         if self.future.done():
             # This is a late arrival; just drop it.
             stream.close()
         else:
+            self.streams.discard(stream)
             self.future.set_result((af, addr, stream))
+            self.close_streams()
 
-    def set_timout(self, timeout):
+    def set_timeout(self, timeout):
         self.timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout,
                                                 self.on_timeout)
 
     def on_timeout(self):
         self.timeout = None
-        self.try_connect(iter(self.secondary_addrs))
+        if not self.future.done():
+            self.try_connect(iter(self.secondary_addrs))
 
     def clear_timeout(self):
         if self.timeout is not None:
             self.io_loop.remove_timeout(self.timeout)
 
+    def set_connect_timeout(self, connect_timeout):
+        self.connect_timeout = self.io_loop.add_timeout(
+            connect_timeout, self.on_connect_timeout)
+
+    def on_connect_timeout(self):
+        if not self.future.done():
+            self.future.set_exception(TimeoutError())
+        self.close_streams()
+
+    def clear_timeouts(self):
+        if self.timeout is not None:
+            self.io_loop.remove_timeout(self.timeout)
+        if self.connect_timeout is not None:
+            self.io_loop.remove_timeout(self.connect_timeout)
+
+    def close_streams(self):
+        for stream in self.streams:
+            stream.close()
+
 
 class TCPClient(object):
     """A non-blocking TCP connection factory.
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    def __init__(self, resolver=None, io_loop=None):
-        self.io_loop = io_loop or IOLoop.current()
+    def __init__(self, resolver=None):
         if resolver is not None:
             self.resolver = resolver
             self._own_resolver = False
         else:
-            self.resolver = Resolver(io_loop=io_loop)
+            self.resolver = Resolver()
             self._own_resolver = True
 
     def close(self):
@@ -156,7 +187,8 @@ class TCPClient(object):
 
     @gen.coroutine
     def connect(self, host, port, af=socket.AF_UNSPEC, ssl_options=None,
-                max_buffer_size=None, source_ip=None, source_port=None):
+                max_buffer_size=None, source_ip=None, source_port=None,
+                timeout=None):
         """Connect to the given host and port.
 
         Asynchronously returns an `.IOStream` (or `.SSLIOStream` if
@@ -168,25 +200,45 @@ class TCPClient(object):
         use a specific interface, it has to be handled outside
         of Tornado as this depends very much on the platform.
 
+        Raises `TimeoutError` if the input future does not complete before
+        ``timeout``, which may be specified in any form allowed by
+        `.IOLoop.add_timeout` (i.e. a `datetime.timedelta` or an absolute time
+        relative to `.IOLoop.time`)
+
         Similarly, when the user requires a certain source port, it can
         be specified using the ``source_port`` arg.
 
         .. versionchanged:: 4.5
            Added the ``source_ip`` and ``source_port`` arguments.
         """
-        addrinfo = yield self.resolver.resolve(host, port, af)
+        if timeout is not None:
+            if isinstance(timeout, numbers.Real):
+                timeout = IOLoop.current().time() + timeout
+            elif isinstance(timeout, datetime.timedelta):
+                timeout = IOLoop.current().time() + timedelta_to_seconds(timeout)
+            else:
+                raise TypeError("Unsupported timeout %r" % timeout)
+        if timeout is not None:
+            addrinfo = yield gen.with_timeout(
+                timeout, self.resolver.resolve(host, port, af))
+        else:
+            addrinfo = yield self.resolver.resolve(host, port, af)
         connector = _Connector(
-            addrinfo, self.io_loop,
+            addrinfo,
             functools.partial(self._create_stream, max_buffer_size,
                               source_ip=source_ip, source_port=source_port)
         )
-        af, addr, stream = yield connector.start()
+        af, addr, stream = yield connector.start(connect_timeout=timeout)
         # TODO: For better performance we could cache the (af, addr)
         # information here and re-use it on subsequent connections to
         # the same host. (http://tools.ietf.org/html/rfc6555#section-4.2)
         if ssl_options is not None:
-            stream = yield stream.start_tls(False, ssl_options=ssl_options,
-                                            server_hostname=host)
+            if timeout is not None:
+                stream = yield gen.with_timeout(timeout, stream.start_tls(
+                    False, ssl_options=ssl_options, server_hostname=host))
+            else:
+                stream = yield stream.start_tls(False, ssl_options=ssl_options,
+                                                server_hostname=host)
         raise gen.Return(stream)
 
     def _create_stream(self, max_buffer_size, af, addr, source_ip=None,
@@ -214,11 +266,10 @@ class TCPClient(object):
                 raise
         try:
             stream = IOStream(socket_obj,
-                              io_loop=self.io_loop,
                               max_buffer_size=max_buffer_size)
         except socket.error as e:
             fu = Future()
             fu.set_exception(e)
             return fu
         else:
-            return stream.connect(addr)
+            return stream, stream.connect(addr)

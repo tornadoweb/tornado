@@ -66,9 +66,10 @@ installed in this way, so you may wish to download a copy of the
 source tarball or clone the `git repository
 <https://github.com/tornadoweb/tornado>`_ as well.
 
-**Prerequisites**: Tornado runs on Python 2.7, and 3.3+
-For Python 2, version 2.7.9 or newer is *strongly*
-recommended for the improved SSL support. In addition to the requirements
+**Prerequisites**: Tornado runs on Python 2.7, and 3.4+.
+The updates to the `ssl` module in Python 2.7.9 are required
+(in some distributions, these updates may be available in
+older python versions). In addition to the requirements
 which will be installed automatically by ``pip`` or ``setup.py install``,
 the following optional packages may be useful:
 
@@ -86,7 +87,7 @@ the following optional packages may be useful:
 * `monotonic <https://pypi.python.org/pypi/monotonic>`_ or `Monotime
   <https://pypi.python.org/pypi/Monotime>`_ add support for a
   monotonic clock, which improves reliability in environments where
-  clock adjustements are frequent. No longer needed in Python 3.3.
+  clock adjustments are frequent. No longer needed in Python 3.
 
 **Platforms**: Tornado should run on any Unix-like platform, although
 for the best performance and scalability only Linux (with ``epoll``)

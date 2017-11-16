@@ -29,8 +29,7 @@ from tornado.web import RequestHandler, Application, asynchronous, url, stream_r
 
 class SimpleHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
     def get_http_client(self):
-        client = SimpleAsyncHTTPClient(io_loop=self.io_loop,
-                                       force_instance=True)
+        client = SimpleAsyncHTTPClient(force_instance=True)
         self.assertTrue(isinstance(client, SimpleAsyncHTTPClient))
         return client
 
@@ -150,16 +149,16 @@ class SimpleHTTPClientTestMixin(object):
 
     def test_singleton(self):
         # Class "constructor" reuses objects on the same IOLoop
-        self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is
-                        SimpleAsyncHTTPClient(self.io_loop))
+        self.assertTrue(SimpleAsyncHTTPClient() is
+                        SimpleAsyncHTTPClient())
         # unless force_instance is used
-        self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is not
-                        SimpleAsyncHTTPClient(self.io_loop,
-                                              force_instance=True))
+        self.assertTrue(SimpleAsyncHTTPClient() is not
+                        SimpleAsyncHTTPClient(force_instance=True))
         # different IOLoops use different objects
         with closing(IOLoop()) as io_loop2:
-            self.assertTrue(SimpleAsyncHTTPClient(self.io_loop) is not
-                            SimpleAsyncHTTPClient(io_loop2))
+            client1 = self.io_loop.run_sync(gen.coroutine(SimpleAsyncHTTPClient))
+            client2 = io_loop2.run_sync(gen.coroutine(SimpleAsyncHTTPClient))
+            self.assertTrue(client1 is not client2)
 
     def test_connection_limit(self):
         with closing(self.create_client(max_clients=2)) as client:
@@ -272,16 +271,9 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipIfNoIPv6
     def test_ipv6(self):
-        try:
-            [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
-            port = sock.getsockname()[1]
-            self.http_server.add_socket(sock)
-        except socket.gaierror as e:
-            if e.args[0] == socket.EAI_ADDRFAMILY:
-                # python supports ipv6, but it's not configured on the network
-                # interface, so skip this test.
-                return
-            raise
+        [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
+        port = sock.getsockname()[1]
+        self.http_server.add_socket(sock)
         url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
 
         # ipv6 is currently enabled by default but can be disabled
@@ -327,7 +319,7 @@ class SimpleHTTPClientTestMixin(object):
         self.assertNotIn("Content-Length", response.headers)
 
     def test_host_header(self):
-        host_re = re.compile(b"^localhost:[0-9]+$")
+        host_re = re.compile(b"^127.0.0.1:[0-9]+$")
         response = self.fetch("/host_echo")
         self.assertTrue(host_re.match(response.body))
 
@@ -481,8 +473,7 @@ class SimpleHTTPClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPTestCase):
         self.http_client = self.create_client()
 
     def create_client(self, **kwargs):
-        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
-                                     **kwargs)
+        return SimpleAsyncHTTPClient(force_instance=True, **kwargs)
 
 
 class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
@@ -491,7 +482,7 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         self.http_client = self.create_client()
 
     def create_client(self, **kwargs):
-        return SimpleAsyncHTTPClient(self.io_loop, force_instance=True,
+        return SimpleAsyncHTTPClient(force_instance=True,
                                      defaults=dict(validate_cert=False),
                                      **kwargs)
 
@@ -499,8 +490,6 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         resp = self.fetch("/hello", ssl_options={})
         self.assertEqual(resp.body, b"Hello world!")
 
-    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
-                     'ssl.SSLContext not present')
     def test_ssl_context(self):
         resp = self.fetch("/hello",
                           ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
@@ -513,8 +502,6 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
                 "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
         self.assertRaises(ssl.SSLError, resp.rethrow)
 
-    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
-                     'ssl.SSLContext not present')
     def test_ssl_context_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
             ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
@@ -544,24 +531,22 @@ class CreateAsyncHTTPClientTestCase(AsyncTestCase):
 
     def test_max_clients(self):
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
-        with closing(AsyncHTTPClient(
-                self.io_loop, force_instance=True)) as client:
+        with closing(AsyncHTTPClient(force_instance=True)) as client:
             self.assertEqual(client.max_clients, 10)
         with closing(AsyncHTTPClient(
-                self.io_loop, max_clients=11, force_instance=True)) as client:
+                max_clients=11, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 11)
 
         # Now configure max_clients statically and try overriding it
         # with each way max_clients can be passed
         AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=12)
-        with closing(AsyncHTTPClient(
-                self.io_loop, force_instance=True)) as client:
+        with closing(AsyncHTTPClient(force_instance=True)) as client:
             self.assertEqual(client.max_clients, 12)
         with closing(AsyncHTTPClient(
-                self.io_loop, max_clients=13, force_instance=True)) as client:
+                max_clients=13, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 13)
         with closing(AsyncHTTPClient(
-                self.io_loop, max_clients=14, force_instance=True)) as client:
+                max_clients=14, force_instance=True)) as client:
             self.assertEqual(client.max_clients, 14)
 
 
@@ -644,7 +629,6 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
     def setUp(self):
         super(HostnameMappingTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(
-            self.io_loop,
             hostname_mapping={
                 'www.example.com': '127.0.0.1',
                 ('foo.example.com', 8000): ('127.0.0.1', self.get_http_port()),
@@ -676,7 +660,6 @@ class ResolveTimeoutTestCase(AsyncHTTPTestCase):
 
         super(ResolveTimeoutTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(
-            self.io_loop,
             resolver=BadResolver())
 
     def get_app(self):
@@ -703,7 +686,7 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
                             ('/large', LargeHeaders)])
 
     def get_http_client(self):
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_header_size=1024)
+        return SimpleAsyncHTTPClient(max_header_size=1024)
 
     def test_small_headers(self):
         response = self.fetch('/small')
@@ -730,7 +713,7 @@ class MaxBodySizeTest(AsyncHTTPTestCase):
                             ('/large', LargeBody)])
 
     def get_http_client(self):
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024 * 64)
+        return SimpleAsyncHTTPClient(max_body_size=1024 * 64)
 
     def test_small_body(self):
         response = self.fetch('/small')
@@ -754,7 +737,7 @@ class MaxBufferSizeTest(AsyncHTTPTestCase):
 
     def get_http_client(self):
         # 100KB body with 64KB buffer
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop, max_body_size=1024 * 100, max_buffer_size=1024 * 64)
+        return SimpleAsyncHTTPClient(max_body_size=1024 * 100, max_buffer_size=1024 * 64)
 
     def test_large_body(self):
         response = self.fetch('/large')

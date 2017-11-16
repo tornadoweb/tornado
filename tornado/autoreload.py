@@ -63,12 +63,11 @@ import sys
 # file.py gets added to the path, which can cause confusion as imports
 # may become relative in spite of the future import.
 #
-# We address the former problem by setting the $PYTHONPATH environment
-# variable before re-execution so the new process will see the correct
-# path.  We attempt to address the latter problem when tornado.autoreload
-# is run as __main__, although we can't fix the general case because
-# we cannot reliably reconstruct the original command line
-# (http://bugs.python.org/issue14208).
+# We address the former problem by reconstructing the original command
+# line (Python >= 3.4) or by setting the $PYTHONPATH environment
+# variable (Python < 3.4) before re-execution so the new process will
+# see the correct path.  We attempt to address the latter problem when
+# tornado.autoreload is run as __main__.
 
 if __name__ == "__main__":
     # This sys.path manipulation must come before our imports (as much
@@ -111,13 +110,13 @@ _reload_attempted = False
 _io_loops = weakref.WeakKeyDictionary()  # type: ignore
 
 
-def start(io_loop=None, check_time=500):
+def start(check_time=500):
     """Begins watching source files for changes.
 
-    .. versionchanged:: 4.1
-       The ``io_loop`` argument is deprecated.
+    .. versionchanged:: 5.0
+       The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
-    io_loop = io_loop or ioloop.IOLoop.current()
+    io_loop = ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return
     _io_loops[io_loop] = True
@@ -125,7 +124,7 @@ def start(io_loop=None, check_time=500):
         gen_log.warning("tornado.autoreload started more than once in the same process")
     modify_times = {}
     callback = functools.partial(_reload_on_update, modify_times)
-    scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
+    scheduler = ioloop.PeriodicCallback(callback, check_time)
     scheduler.start()
 
 
@@ -137,7 +136,7 @@ def wait():
     the command-line interface in `main`)
     """
     io_loop = ioloop.IOLoop()
-    start(io_loop)
+    io_loop.add_callback(start)
     io_loop.start()
 
 
@@ -209,21 +208,29 @@ def _reload():
         # ioloop.set_blocking_log_threshold so it doesn't fire
         # after the exec.
         signal.setitimer(signal.ITIMER_REAL, 0, 0)
-    # sys.path fixes: see comments at top of file.  If sys.path[0] is an empty
-    # string, we were (probably) invoked with -m and the effective path
-    # is about to change on re-exec.  Add the current directory to $PYTHONPATH
-    # to ensure that the new process sees the same path we did.
-    path_prefix = '.' + os.pathsep
-    if (sys.path[0] == '' and
-            not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
-        os.environ["PYTHONPATH"] = (path_prefix +
-                                    os.environ.get("PYTHONPATH", ""))
+    # sys.path fixes: see comments at top of file.  If __main__.__spec__
+    # exists, we were invoked with -m and the effective path is about to
+    # change on re-exec.  Reconstruct the original command line to
+    # ensure that the new process sees the same path we did.  If
+    # __spec__ is not available (Python < 3.4), check instead if
+    # sys.path[0] is an empty string and add the current directory to
+    # $PYTHONPATH.
+    spec = getattr(sys.modules['__main__'], '__spec__', None)
+    if spec:
+        argv = ['-m', spec.name] + sys.argv[1:]
+    else:
+        argv = sys.argv
+        path_prefix = '.' + os.pathsep
+        if (sys.path[0] == '' and
+                not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
+            os.environ["PYTHONPATH"] = (path_prefix +
+                                        os.environ.get("PYTHONPATH", ""))
     if not _has_execv:
-        subprocess.Popen([sys.executable] + sys.argv)
+        subprocess.Popen([sys.executable] + argv)
         sys.exit(0)
     else:
         try:
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            os.execv(sys.executable, [sys.executable] + argv)
         except OSError:
             # Mac OS X versions prior to 10.6 do not support execv in
             # a process that contains multiple threads.  Instead of
@@ -236,8 +243,7 @@ def _reload():
             # Unfortunately the errno returned in this case does not
             # appear to be consistent, so we can't easily check for
             # this error specifically.
-            os.spawnv(os.P_NOWAIT, sys.executable,
-                      [sys.executable] + sys.argv)
+            os.spawnv(os.P_NOWAIT, sys.executable, [sys.executable] + argv)
             # At this point the IOLoop has been closed and finally
             # blocks will experience errors if we allow the stack to
             # unwind, so just exit uncleanly.

@@ -287,7 +287,7 @@ Multiple modules
 * New function `tornado.options.add_parse_callback` schedules a callback
   to be run after the command line or config file has been parsed.  The
   keyword argument ``final=False`` can be used on either parsing function
-  to supress these callbacks.
+  to suppress these callbacks.
 * `tornado.options.define` now takes a ``callback`` argument.  This callback
   will be run with the new value whenever the option is changed.  This is
   especially useful for options that set other options, such as by reading
@@ -381,7 +381,7 @@ Multiple modules
   when it is available (and continue to use the standard ``unittest`` module
   when ``unittest2`` is not available)
 * `tornado.testing.ExpectLog` can be used as a finer-grained alternative
-  to `tornado.testing.LogTrapTestCase`
+  to ``tornado.testing.LogTrapTestCase``
 * The command-line interface to `tornado.testing.main` now supports
   additional arguments from the underlying `unittest` module:
   ``verbose``, ``quiet``, ``failfast``, ``catch``, ``buffer``.
@@ -395,9 +395,9 @@ Multiple modules
   instead of putting all possible options in `tornado.testing.main`.
 * `.AsyncHTTPTestCase` no longer calls `.AsyncHTTPClient.close` for tests
   that use the singleton `.IOLoop.instance`.
-* `.LogTrapTestCase` no longer fails when run in unknown logging
+* ``LogTrapTestCase`` no longer fails when run in unknown logging
   configurations.  This allows tests to be run under nose, which does its
-  own log buffering (`.LogTrapTestCase` doesn't do anything useful in this
+  own log buffering (``LogTrapTestCase`` doesn't do anything useful in this
   case, but at least it doesn't break things any more).
 
 ``tornado.util``

@@ -7,7 +7,7 @@ import thor
 import threading
 from tornado import gen
 from tornado.options import parse_command_line
-from tornado.testing import AsyncHTTPTestCase, LogTrapTestCase
+from tornado.testing import AsyncHTTPTestCase
 from tornado.web import RequestHandler, Application, asynchronous
 import unittest
 
@@ -229,11 +229,11 @@ class TestMixin(object):
             headers=[('If-None-Match', etags)],
             expected_status=200)
 
-class DefaultHTTPTest(AsyncHTTPTestCase, LogTrapTestCase, TestMixin):
+class DefaultHTTPTest(AsyncHTTPTestCase, TestMixin):
     def get_app(self):
         return Application(self.get_handlers(), **self.get_app_kwargs())
 
-class GzipHTTPTest(AsyncHTTPTestCase, LogTrapTestCase, TestMixin):
+class GzipHTTPTest(AsyncHTTPTestCase, TestMixin):
     def get_app(self):
         return Application(self.get_handlers(), gzip=True, **self.get_app_kwargs())
 

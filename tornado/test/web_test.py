@@ -356,7 +356,7 @@ class AuthRedirectTest(WebTestCase):
         response = self.wait()
         self.assertEqual(response.code, 302)
         self.assertTrue(re.match(
-            'http://example.com/login\?next=http%3A%2F%2Flocalhost%3A[0-9]+%2Fabsolute',
+            'http://example.com/login\?next=http%3A%2F%2F127.0.0.1%3A[0-9]+%2Fabsolute',
             response.headers['Location']), response.headers['Location'])
 
 
@@ -379,7 +379,7 @@ class ConnectionCloseTest(WebTestCase):
     def test_connection_close(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("127.0.0.1", self.get_http_port()))
-        self.stream = IOStream(s, io_loop=self.io_loop)
+        self.stream = IOStream(s)
         self.stream.write(b"GET / HTTP/1.0\r\n\r\n")
         self.wait()
 
@@ -916,6 +916,10 @@ class ErrorResponseTest(WebTestCase):
             response = self.fetch("/default?status=503")
             self.assertEqual(response.code, 503)
             self.assertTrue(b"503: Service Unavailable" in response.body)
+
+            response = self.fetch("/default?status=435")
+            self.assertEqual(response.code, 435)
+            self.assertTrue(b"435: Unknown" in response.body)
 
     def test_write_error(self):
         with ExpectLog(app_log, "Uncaught exception"):
@@ -1477,7 +1481,7 @@ class StatusReasonTest(SimpleHandlerTestCase):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't expose the reason string
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     def test_status(self):
         response = self.fetch("/?code=304")
@@ -1489,9 +1493,9 @@ class StatusReasonTest(SimpleHandlerTestCase):
         response = self.fetch("/?code=682&reason=Bar")
         self.assertEqual(response.code, 682)
         self.assertEqual(response.reason, "Bar")
-        with ExpectLog(app_log, 'Uncaught exception'):
-            response = self.fetch("/?code=682")
-        self.assertEqual(response.code, 500)
+        response = self.fetch("/?code=682")
+        self.assertEqual(response.code, 682)
+        self.assertEqual(response.reason, "Unknown")
 
 
 @wsgi_safe
@@ -1516,7 +1520,7 @@ class RaiseWithReasonTest(SimpleHandlerTestCase):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't expose the reason string
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     def test_raise_with_reason(self):
         response = self.fetch("/")
@@ -2111,7 +2115,7 @@ class StreamingRequestBodyTest(WebTestCase):
         # Use a raw connection so we can control the sending of data.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect(("127.0.0.1", self.get_http_port()))
-        stream = IOStream(s, io_loop=self.io_loop)
+        stream = IOStream(s)
         stream.write(b"GET " + url + b" HTTP/1.1\r\n")
         if connection_close:
             stream.write(b"Connection: close\r\n")
@@ -2207,7 +2211,7 @@ class BaseStreamingRequestFlowControlTest(object):
 
     def get_http_client(self):
         # simple_httpclient only: curl doesn't support body_producer.
-        return SimpleAsyncHTTPClient(io_loop=self.io_loop)
+        return SimpleAsyncHTTPClient()
 
     # Test all the slightly different code paths for fixed, chunked, etc bodies.
     def test_flow_control_fixed_body(self):
@@ -2876,12 +2880,23 @@ class RedirectHandlerTest(WebTestCase):
     def get_handlers(self):
         return [
             ('/src', WebRedirectHandler, {'url': '/dst'}),
+            ('/src2', WebRedirectHandler, {'url': '/dst2?foo=bar'}),
             (r'/(.*?)/(.*?)/(.*)', WebRedirectHandler, {'url': '/{1}/{0}/{2}'})]
 
     def test_basic_redirect(self):
         response = self.fetch('/src', follow_redirects=False)
         self.assertEqual(response.code, 301)
         self.assertEqual(response.headers['Location'], '/dst')
+
+    def test_redirect_with_argument(self):
+        response = self.fetch('/src?foo=bar', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst?foo=bar')
+
+    def test_redirect_with_appending_argument(self):
+        response = self.fetch('/src2?foo2=bar2', follow_redirects=False)
+        self.assertEqual(response.code, 301)
+        self.assertEqual(response.headers['Location'], '/dst2?foo=bar&foo2=bar2')
 
     def test_redirect_pattern(self):
         response = self.fetch('/a/b/c', follow_redirects=False)

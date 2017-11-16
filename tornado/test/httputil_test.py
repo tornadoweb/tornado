@@ -3,7 +3,7 @@
 
 
 from __future__ import absolute_import, division, print_function
-from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp, HTTPServerRequest, parse_request_start_line, parse_cookie
+from tornado.httputil import url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp, HTTPServerRequest, parse_request_start_line, parse_cookie, qs_to_qsl, PY3
 from tornado.escape import utf8, native_str
 from tornado.log import gen_log
 from tornado.testing import ExpectLog
@@ -14,6 +14,11 @@ import datetime
 import logging
 import pickle
 import time
+
+if PY3:
+    import urllib.parse as urllib_parse
+else:
+    import urlparse as urllib_parse
 
 
 class TestUrlConcat(unittest.TestCase):
@@ -100,6 +105,17 @@ class TestUrlConcat(unittest.TestCase):
             dict(y='y'),
         )
         self.assertEqual(url, "https://localhost/path?y=y")
+
+
+class QsParseTest(unittest.TestCase):
+
+    def test_parsing(self):
+        qsstring = "a=1&b=2&a=3"
+        qs = urllib_parse.parse_qs(qsstring)
+        qsl = list(qs_to_qsl(qs))
+        self.assertIn(('a', '1'), qsl)
+        self.assertIn(('a', '3'), qsl)
+        self.assertIn(('b', '2'), qsl)
 
 
 class MultipartFormDataTest(unittest.TestCase):
@@ -401,6 +417,10 @@ class HTTPServerRequestTest(unittest.TestCase):
     def test_body_is_a_byte_string(self):
         requets = HTTPServerRequest(uri='/')
         self.assertIsInstance(requets.body, bytes)
+
+    def test_repr_does_not_contain_headers(self):
+        request = HTTPServerRequest(uri='/', headers={'Canary': 'Coal Mine'})
+        self.assertTrue('Canary' not in repr(request))
 
 
 class ParseRequestStartLineTest(unittest.TestCase):
