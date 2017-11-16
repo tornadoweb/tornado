@@ -41,6 +41,7 @@ def read_stream_body(stream, callback):
             chunks.append(chunk)
 
         def finish(self):
+            conn.detach()
             callback((self.start_line, self.headers, b''.join(chunks)))
     conn = HTTP1Connection(stream, True)
     conn.read_response(Delegate())
@@ -549,6 +550,16 @@ class XHeaderTest(HandlerBaseTestCase):
             self.fetch_json("/", headers=https_forwarded)["remote_protocol"],
             "https")
 
+        https_multi_forwarded = {"X-Forwarded-Proto": "https , http"}
+        self.assertEqual(
+            self.fetch_json("/", headers=https_multi_forwarded)["remote_protocol"],
+            "http")
+
+        http_multi_forwarded = {"X-Forwarded-Proto": "http,https"}
+        self.assertEqual(
+            self.fetch_json("/", headers=http_multi_forwarded)["remote_protocol"],
+            "https")
+
         bad_forwarded = {"X-Forwarded-Proto": "unknown"}
         self.assertEqual(
             self.fetch_json("/", headers=bad_forwarded)["remote_protocol"],
@@ -614,6 +625,7 @@ class UnixSocketTest(AsyncTestCase):
 
     def tearDown(self):
         self.stream.close()
+        self.io_loop.run_sync(self.server.close_all_connections)
         self.server.stop()
         shutil.rmtree(self.tmpdir)
         super(UnixSocketTest, self).tearDown()

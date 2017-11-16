@@ -48,6 +48,12 @@ else:
     from cStringIO import StringIO
 
 try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
+
+try:
     from collections.abc import Generator as GeneratorType  # type: ignore
 except ImportError:
     from types import GeneratorType  # type: ignore
@@ -211,6 +217,9 @@ class AsyncTestCase(unittest.TestCase):
         super(AsyncTestCase, self).setUp()
         self.io_loop = self.get_new_ioloop()
         self.io_loop.make_current()
+        if hasattr(self.io_loop, 'asyncio_loop'):
+            # Ensure that asyncio's current event loop matches ours.
+            asyncio.set_event_loop(self.io_loop.asyncio_loop)
 
     def tearDown(self):
         # Clean up Subprocess, so it can be used again with a new ioloop.
@@ -222,6 +231,8 @@ class AsyncTestCase(unittest.TestCase):
         # set FD_CLOEXEC on its file descriptors)
         self.io_loop.close(all_fds=True)
         super(AsyncTestCase, self).tearDown()
+        if hasattr(self.io_loop, 'asyncio_loop'):
+            asyncio.set_event_loop(None)
         # In case an exception escaped or the StackContext caught an exception
         # when there wasn't a wait() to re-raise it, do so here.
         # This is our last chance to raise an exception in a way that the
@@ -407,7 +418,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
     def get_url(self, path):
         """Returns an absolute url for the given path on the test server."""
-        return '%s://localhost:%s%s' % (self.get_protocol(),
+        return '%s://127.0.0.1:%s%s' % (self.get_protocol(),
                                         self.get_http_port(), path)
 
     def tearDown(self):
