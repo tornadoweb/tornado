@@ -169,6 +169,21 @@ def _value_from_stopiteration(e):
         return None
 
 
+def _create_future():
+    future = Future()
+    # Fixup asyncio debug info by removing extraneous stack entries
+    source_traceback = getattr(future, "_source_traceback", ())
+    while source_traceback:
+        # Each traceback entry is equivalent to a
+        # (filename, self.lineno, self.name, self.line) tuple
+        filename = source_traceback[-1][0]
+        if filename == __file__:
+            del source_traceback[-1]
+        else:
+            break
+    return future
+
+
 def engine(func):
     """Callback-oriented decorator for asynchronous generators.
 
@@ -277,7 +292,7 @@ def _make_coroutine_wrapper(func, replace_callback):
 
     @functools.wraps(wrapped)
     def wrapper(*args, **kwargs):
-        future = Future()
+        future = _create_future()
 
         if replace_callback and 'callback' in kwargs:
             callback = kwargs.pop('callback')
@@ -290,7 +305,11 @@ def _make_coroutine_wrapper(func, replace_callback):
             result = _value_from_stopiteration(e)
         except Exception:
             future_set_exc_info(future, sys.exc_info())
-            return future
+            try:
+                return future
+            finally:
+                # Avoid circular references
+                future = None
         else:
             if isinstance(result, GeneratorType):
                 # Inline the first iteration of Runner.run.  This lets us
@@ -302,7 +321,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                     orig_stack_contexts = stack_context._state.contexts
                     yielded = next(result)
                     if stack_context._state.contexts is not orig_stack_contexts:
-                        yielded = Future()
+                        yielded = _create_future()
                         yielded.set_exception(
                             stack_context.StackContextInconsistentError(
                                 'stack_context inconsistency (probably caused '
@@ -601,7 +620,7 @@ def Task(func, *args, **kwargs):
        a subclass of `YieldPoint`.  It still behaves the same way when
        yielded.
     """
-    future = Future()
+    future = _create_future()
 
     def handle_exception(typ, value, tb):
         if future.done():
@@ -810,7 +829,7 @@ def multi_future(children, quiet_exceptions=()):
     assert all(is_future(i) for i in children)
     unfinished_children = set(children)
 
-    future = Future()
+    future = _create_future()
     if not children:
         future.set_result({} if keys is not None else [])
 
@@ -858,7 +877,7 @@ def maybe_future(x):
     if is_future(x):
         return x
     else:
-        fut = Future()
+        fut = _create_future()
         fut.set_result(x)
         return fut
 
@@ -895,7 +914,7 @@ def with_timeout(timeout, future, quiet_exceptions=()):
     # callers and B) concurrent futures can only be cancelled while they are
     # in the queue, so cancellation cannot reliably bound our waiting time.
     future = convert_yielded(future)
-    result = Future()
+    result = _create_future()
     chain_future(future, result)
     io_loop = IOLoop.current()
 
@@ -942,7 +961,7 @@ def sleep(duration):
 
     .. versionadded:: 4.1
     """
-    f = Future()
+    f = _create_future()
     IOLoop.current().call_later(duration, lambda: f.set_result(None))
     return f
 
