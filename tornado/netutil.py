@@ -439,12 +439,14 @@ class OverrideResolver(Resolver):
     def close(self):
         self.resolver.close()
 
-    def resolve(self, host, port, *args, **kwargs):
-        if (host, port) in self.mapping:
+    def resolve(self, host, port, family=socket.AF_UNSPEC, *args, **kwargs):
+        if (host, port, family) in self.mapping:
+            host, port = self.mapping[(host, port, family)]
+        elif (host, port) in self.mapping:
             host, port = self.mapping[(host, port)]
         elif host in self.mapping:
             host = self.mapping[host]
-        return self.resolver.resolve(host, port, *args, **kwargs)
+        return self.resolver.resolve(host, port, family, *args, **kwargs)
 
 
 # These are the keyword arguments to ssl.wrap_socket that must be translated
