@@ -430,7 +430,8 @@ class OverrideResolver(Resolver):
     This can be used to make local DNS changes (e.g. for testing)
     without modifying system-wide settings.
 
-    The mapping can contain either host strings or host-port pairs.
+    The mapping can contain either host strings or host-port pairs or
+    host-port-family triplets.
     """
     def initialize(self, resolver, mapping):
         self.resolver = resolver
