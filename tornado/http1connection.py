@@ -23,7 +23,8 @@ from __future__ import absolute_import, division, print_function
 
 import re
 
-from tornado.concurrent import Future, future_add_done_callback
+from tornado.concurrent import (Future, future_add_done_callback,
+                                future_set_result_unless_cancelled)
 from tornado.escape import native_str, utf8
 from tornado import gen
 from tornado import httputil
@@ -291,7 +292,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._close_callback = None
             callback()
         if not self._finish_future.done():
-            self._finish_future.set_result(None)
+            future_set_result_unless_cancelled(self._finish_future, None)
         self._clear_callbacks()
 
     def close(self):
@@ -299,7 +300,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             self.stream.close()
         self._clear_callbacks()
         if not self._finish_future.done():
-            self._finish_future.set_result(None)
+            future_set_result_unless_cancelled(self._finish_future, None)
 
     def detach(self):
         """Take control of the underlying stream.
@@ -313,7 +314,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         stream = self.stream
         self.stream = None
         if not self._finish_future.done():
-            self._finish_future.set_result(None)
+            future_set_result_unless_cancelled(self._finish_future, None)
         return stream
 
     def set_body_timeout(self, timeout):
@@ -483,7 +484,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self._write_future is not None:
             future = self._write_future
             self._write_future = None
-            future.set_result(None)
+            future_set_result_unless_cancelled(future, None)
 
     def _can_keep_alive(self, start_line, headers):
         if self.params.no_keep_alive:
@@ -510,7 +511,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         # default state for the next request.
         self.stream.set_nodelay(False)
         if not self._finish_future.done():
-            self._finish_future.set_result(None)
+            future_set_result_unless_cancelled(self._finish_future, None)
 
     def _parse_headers(self, data):
         # The lstrip removes newlines that some implementations sometimes

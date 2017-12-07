@@ -75,7 +75,9 @@ import hmac
 import time
 import uuid
 
-from tornado.concurrent import Future, return_future, chain_future, future_set_exc_info
+from tornado.concurrent import (Future, return_future, chain_future,
+                                future_set_exc_info,
+                                future_set_result_unless_cancelled)
 from tornado import gen
 from tornado import httpclient
 from tornado import escape
@@ -295,7 +297,7 @@ class OpenIdMixin(object):
         claimed_id = self.get_argument("openid.claimed_id", None)
         if claimed_id:
             user["claimed_id"] = claimed_id
-        future.set_result(user)
+        future_set_result_unless_cancelled(future, user)
 
     def get_auth_http_client(self):
         """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
@@ -519,7 +521,7 @@ class OAuthMixin(object):
             future.set_exception(AuthError("Error getting user"))
             return
         user["access_token"] = access_token
-        future.set_result(user)
+        future_set_result_unless_cancelled(future, user)
 
     def _oauth_request_parameters(self, url, access_token, parameters={},
                                   method="GET"):
@@ -668,7 +670,7 @@ class OAuth2Mixin(object):
                                            (response.error, response.request.url)))
             return
 
-        future.set_result(escape.json_decode(response.body))
+        future_set_result_unless_cancelled(future, escape.json_decode(response.body))
 
     def get_auth_http_client(self):
         """Returns the `.AsyncHTTPClient` instance to be used for auth requests.
@@ -811,7 +813,7 @@ class TwitterMixin(OAuthMixin):
                 "Error response %s fetching %s" % (response.error,
                                                    response.request.url)))
             return
-        future.set_result(escape.json_decode(response.body))
+        future_set_result_unless_cancelled(future, escape.json_decode(response.body))
 
     def _oauth_consumer_token(self):
         self.require_setting("twitter_consumer_key", "Twitter OAuth")
@@ -915,7 +917,7 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             return
 
         args = escape.json_decode(response.body)
-        future.set_result(args)
+        future_set_result_unless_cancelled(future, args)
 
 
 class FacebookGraphMixin(OAuth2Mixin):
@@ -1011,7 +1013,7 @@ class FacebookGraphMixin(OAuth2Mixin):
 
     def _on_get_user_info(self, future, session, fields, user):
         if user is None:
-            future.set_result(None)
+            future_set_result_unless_cancelled(future, None)
             return
 
         fieldmap = {}
@@ -1024,7 +1026,7 @@ class FacebookGraphMixin(OAuth2Mixin):
         # This should change in Tornado 5.0.
         fieldmap.update({"access_token": session["access_token"],
                          "session_expires": str(session.get("expires_in"))})
-        future.set_result(fieldmap)
+        future_set_result_unless_cancelled(future, fieldmap)
 
     @_auth_return_future
     def facebook_request(self, path, callback, access_token=None,
