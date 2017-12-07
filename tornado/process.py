@@ -29,7 +29,7 @@ import time
 
 from binascii import hexlify
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import ioloop
 from tornado.iostream import PipeIOStream
 from tornado.log import gen_log
@@ -296,7 +296,7 @@ class Subprocess(object):
                 # Unfortunately we don't have the original args any more.
                 future.set_exception(CalledProcessError(ret, None))
             else:
-                future.set_result(ret)
+                future_set_result_unless_cancelled(future, ret)
         self.set_exit_callback(callback)
         return future
 

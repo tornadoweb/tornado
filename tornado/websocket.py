@@ -28,7 +28,7 @@ import tornado.escape
 import tornado.web
 import zlib
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.escape import utf8, native_str, to_unicode
 from tornado import gen, httpclient, httputil
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -1140,7 +1140,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         # ability to see exceptions.
         self.final_callback = None
 
-        self.connect_future.set_result(self)
+        future_set_result_unless_cancelled(self.connect_future, self)
 
     def write_message(self, message, binary=False):
         """Sends a message to the WebSocket server."""
@@ -1160,7 +1160,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         assert self.read_future is None
         future = Future()
         if self.read_queue:
-            future.set_result(self.read_queue.popleft())
+            future_set_result_unless_cancelled(future, self.read_queue.popleft())
         else:
             self.read_future = future
         if callback is not None:
@@ -1171,7 +1171,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         if self._on_message_callback:
             self._on_message_callback(message)
         elif self.read_future is not None:
-            self.read_future.set_result(message)
+            future_set_result_unless_cancelled(self.read_future, message)
             self.read_future = None
         else:
             self.read_queue.append(message)

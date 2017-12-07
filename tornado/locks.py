@@ -17,7 +17,7 @@ from __future__ import absolute_import, division, print_function
 import collections
 
 from tornado import gen, ioloop
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 
 __all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore', 'Lock']
 
@@ -129,7 +129,7 @@ class Condition(_TimeoutGarbageCollector):
         if timeout:
             def on_timeout():
                 if not waiter.done():
-                    waiter.set_result(False)
+                    future_set_result_unless_cancelled(waiter, False)
                 self._garbage_collect()
             io_loop = ioloop.IOLoop.current()
             timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -147,7 +147,7 @@ class Condition(_TimeoutGarbageCollector):
                 waiters.append(waiter)
 
         for waiter in waiters:
-            waiter.set_result(True)
+            future_set_result_unless_cancelled(waiter, True)
 
     def notify_all(self):
         """Wake all waiters."""

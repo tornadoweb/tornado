@@ -377,7 +377,7 @@ class DummyExecutor(object):
     def submit(self, fn, *args, **kwargs):
         future = Future()
         try:
-            future.set_result(fn(*args, **kwargs))
+            future_set_result_unless_cancelled(future, fn(*args, **kwargs))
         except Exception:
             future_set_exc_info(future, sys.exc_info())
         return future
@@ -479,7 +479,7 @@ def return_future(f):
     def wrapper(*args, **kwargs):
         future = Future()
         callback, args, kwargs = replacer.replace(
-            lambda value=_NO_RESULT: future.set_result(value),
+            lambda value=_NO_RESULT: future_set_result_unless_cancelled(future, value),
             args, kwargs)
 
         def handle_error(typ, value, tb):
@@ -545,6 +545,18 @@ def chain_future(a, b):
         # concurrent.futures.Future
         from tornado.ioloop import IOLoop
         IOLoop.current().add_future(a, copy)
+
+
+def future_set_result_unless_cancelled(future, value):
+    """Set the given ``value`` as the `Future`'s result, if not cancelled.
+
+    Avoids asyncio.InvalidStateError when calling set_result() on
+    a cancelled `asyncio.Future`.
+
+    .. versionadded:: 5.0
+    """
+    if not future.cancelled():
+        future.set_result(value)
 
 
 def future_set_exc_info(future, exc_info):
