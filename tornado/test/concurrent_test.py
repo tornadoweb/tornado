@@ -22,7 +22,8 @@ import socket
 import sys
 import traceback
 
-from tornado.concurrent import Future, return_future, ReturnValueIgnoredError, run_on_executor
+from tornado.concurrent import (Future, return_future, ReturnValueIgnoredError,
+                                run_on_executor, future_set_result_unless_cancelled)
 from tornado.escape import utf8, to_unicode
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -38,6 +39,23 @@ try:
     from concurrent import futures
 except ImportError:
     futures = None
+
+
+class MiscFutureTest(AsyncTestCase):
+
+    def test_future_set_result_unless_cancelled(self):
+        fut = Future()
+        future_set_result_unless_cancelled(fut, 42)
+        self.assertEqual(fut.result(), 42)
+        self.assertFalse(fut.cancelled())
+
+        fut = Future()
+        fut.cancel()
+        is_cancelled = fut.cancelled()
+        future_set_result_unless_cancelled(fut, 42)
+        self.assertEqual(fut.cancelled(), is_cancelled)
+        if not is_cancelled:
+            self.assertEqual(fut.result(), 42)
 
 
 class ReturnFutureTest(AsyncTestCase):
