@@ -89,8 +89,17 @@ class IOLoop(Configurable):
 
         import errno
         import functools
-        import tornado.ioloop
         import socket
+
+        import tornado.ioloop
+        from tornado import gen
+        from tornado.iostream import IOStream
+
+        @gen.coroutine
+        def handle_connection(connection, address):
+            stream = IOStream(connection)
+            message = yield stream.read_until_close()
+            print("message from client:", message.decode().strip())
 
         def connection_ready(sock, fd, events):
             while True:
@@ -107,7 +116,7 @@ class IOLoop(Configurable):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setblocking(0)
-            sock.bind(("", port))
+            sock.bind(("", 8888))
             sock.listen(128)
 
             io_loop = tornado.ioloop.IOLoop.current()
