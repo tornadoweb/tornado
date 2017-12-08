@@ -165,7 +165,7 @@ of form-encoding may override `~.RequestHandler.prepare` to parse their
 requests::
 
     def prepare(self):
-        if self.request.headers["Content-Type"].startswith("application/json"):
+        if self.request.headers.get("Content-Type", "").startswith("application/json"):
             self.json_args = json.loads(self.request.body)
         else:
             self.json_args = None
