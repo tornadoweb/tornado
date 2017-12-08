@@ -8,14 +8,16 @@ matrix:
     fast_finish: true
 
 language: python
+# For a list of available versions, run
+#     aws s3 ls s3://travis-python-archives/binaries/ubuntu/14.04/x86_64/
 python:
     - 2.7
-    - pypy-5.7.1
+    - pypy2.7-5.8.0
     - 3.4
     - 3.5
     - 3.6
     - nightly
-    - pypy3.5-5.7.1-beta
+    - pypy3.5-5.8.0
 
 install:
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install futures mock monotonic; fi
