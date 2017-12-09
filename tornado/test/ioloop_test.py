@@ -775,6 +775,7 @@ class TestPeriodicCallback(unittest.TestCase):
         io_loop.call_later(50, io_loop.stop)
         io_loop.start()
         self.assertEqual(calls, [1010, 1020, 1030, 1040, 1050])
+        io_loop.close()
 
 
 class TestIOLoopConfiguration(unittest.TestCase):
