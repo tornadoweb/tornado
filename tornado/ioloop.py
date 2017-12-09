@@ -504,11 +504,18 @@ class IOLoop(Configurable):
             self.add_future(future_cell[0], lambda future: self.stop())
         self.add_callback(run)
         if timeout is not None:
-            timeout_handle = self.add_timeout(self.time() + timeout, self.stop)
+            def timeout_callback():
+                # If we can cancel the future, do so and wait on it. If not,
+                # Just stop the loop and return with the task still pending.
+                # (If we neither cancel nor wait for the task, a warning
+                # will be logged).
+                if not future_cell[0].cancel():
+                    self.stop()
+            timeout_handle = self.add_timeout(self.time() + timeout, timeout_callback)
         self.start()
         if timeout is not None:
             self.remove_timeout(timeout_handle)
-        if not future_cell[0].done():
+        if future_cell[0].cancelled() or not future_cell[0].done():
             raise TimeoutError('Operation timed out after %s seconds' % timeout)
         return future_cell[0].result()
 
