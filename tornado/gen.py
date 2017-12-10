@@ -1218,20 +1218,10 @@ def _argument_adapter(callback):
     return wrapper
 
 
-# Convert Awaitables into Futures. It is unfortunately possible
-# to have infinite recursion here if those Awaitables assume that
-# we're using a different coroutine runner and yield objects
-# we don't understand. If that happens, the solution is to
-# register that runner's yieldable objects with convert_yielded.
-if sys.version_info >= (3, 3):
-    exec(textwrap.dedent("""
-    @coroutine
-    def _wrap_awaitable(x):
-        if hasattr(x, '__await__'):
-            x = x.__await__()
-        return (yield from x)
-    """))
-else:
+# Convert Awaitables into Futures.
+try:
+    import asyncio
+except ImportError:
     # Py2-compatible version for use with Cython.
     # Copied from PEP 380.
     @coroutine
@@ -1278,6 +1268,8 @@ else:
                         _r = _value_from_stopiteration(_e)
                         break
         raise Return(_r)
+else:
+    _wrap_awaitable = asyncio.ensure_future
 
 
 def convert_yielded(yielded):
