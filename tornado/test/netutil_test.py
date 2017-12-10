@@ -96,6 +96,7 @@ class BlockingResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
         super(BlockingResolverErrorTest, self).tearDown()
 
 
+@skipIfNoNetwork
 @unittest.skipIf(futures is None, "futures module not present")
 class OverrideResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
