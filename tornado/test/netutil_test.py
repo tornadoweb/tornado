@@ -8,7 +8,7 @@ from subprocess import Popen
 import sys
 import time
 
-from tornado.netutil import BlockingResolver, ThreadedResolver, is_valid_ip, bind_sockets
+from tornado.netutil import BlockingResolver, OverrideResolver, ThreadedResolver, is_valid_ip, bind_sockets
 from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncTestCase, gen_test, bind_unused_port
 from tornado.test.util import unittest, skipIfNoNetwork
@@ -94,6 +94,26 @@ class BlockingResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
     def tearDown(self):
         socket.getaddrinfo = self.real_getaddrinfo
         super(BlockingResolverErrorTest, self).tearDown()
+
+
+class OverrideResolverTest(AsyncTestCase, _ResolverTestMixin):
+    def setUp(self):
+        super(OverrideResolverTest, self).setUp()
+        mapping = {
+            ('localhost', 80): ('127.0.0.1', 80),
+            ('localhost', 80, socket.AF_INET): ('127.0.0.1', 80),
+            ('localhost', 80, socket.AF_INET6): ('::1', 80)
+        }
+        self.resolver = OverrideResolver(ThreadedResolver(), mapping)
+
+    def test_resolve_multiaddr(self):
+        self.resolver.resolve('localhost', 80, socket.AF_INET, callback=self.stop)
+        result = self.wait()
+        self.assertIn((socket.AF_INET, ('127.0.0.1', 80)), result)
+
+        self.resolver.resolve('localhost', 80, socket.AF_INET6, callback=self.stop)
+        result = self.wait()
+        self.assertIn((socket.AF_INET6, ('::1', 80, 0, 0)), result)
 
 
 @skipIfNoNetwork
