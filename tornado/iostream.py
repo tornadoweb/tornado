@@ -909,6 +909,24 @@ class BaseIOStream(object):
         else:
             self._add_io_state(ioloop.IOLoop.READ)
 
+    def _handle_read_exception(self, e):
+        """Handle an exception occurred during read_from_fd()
+        or readinto_from_fd().
+        """
+        # Should be mostly pointless on Python 3 (PEP 475)
+        # However, see https://bugs.python.org/issue32275
+        if errno_from_exception(e) == errno.EINTR:
+            return 'continue'
+        # ssl.SSLError is a subclass of socket.error
+        if self._is_connreset(e):
+            # Treat ECONNRESET as a connection close rather than
+            # an error to minimize log spam  (the exception will
+            # be available on self.error for apps that care).
+            self.close(exc_info=e)
+            return
+        self.close(exc_info=e)
+        raise
+
     def _read_to_buffer(self):
         """Reads from the socket and appends the result to the read buffer.
 
@@ -920,17 +938,10 @@ class BaseIOStream(object):
             try:
                 chunk = self.read_from_fd()
             except (socket.error, IOError, OSError) as e:
-                if errno_from_exception(e) == errno.EINTR:
+                r = self._handle_read_exception(e)
+                if r == 'continue':
                     continue
-                # ssl.SSLError is a subclass of socket.error
-                if self._is_connreset(e):
-                    # Treat ECONNRESET as a connection close rather than
-                    # an error to minimize log spam  (the exception will
-                    # be available on self.error for apps that care).
-                    self.close(exc_info=e)
-                    return
-                self.close(exc_info=e)
-                raise
+                return r
             break
         if chunk is None:
             return 0
@@ -952,17 +963,10 @@ class BaseIOStream(object):
                 nbytes = self.readinto_from_fd(
                     memoryview(self._read_into)[self._read_into_pos:])
             except (socket.error, IOError, OSError) as e:
-                if errno_from_exception(e) == errno.EINTR:
+                r = self._handle_read_exception(e)
+                if r == 'continue':
                     continue
-                # ssl.SSLError is a subclass of socket.error
-                if self._is_connreset(e):
-                    # Treat ECONNRESET as a connection close rather than
-                    # an error to minimize log spam  (the exception will
-                    # be available on self.error for apps that care).
-                    self.close(exc_info=e)
-                    return
-                self.close(exc_info=e)
-                raise
+                return r
             break
         if not nbytes:
             return
