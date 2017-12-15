@@ -183,6 +183,21 @@ class SecureCookieV2Test(unittest.TestCase):
         self.assertEqual(new_handler.get_secure_cookie('foo'), None)
 
 
+class FinishTest(WebTestCase):
+    def get_handlers(self):
+        class FinishHandler(RequestHandler):
+            def get(self):
+                self.write("The finish method should return Future.")
+                f = self.finish()
+                assert isinstance(f, Future)
+
+        return [("/finish", FinishHandler)]
+
+    def test_finish_method_return_future(self):
+        response = self.fetch(self.get_url('/finish'))
+        self.assertEqual(response.code, 200)
+
+
 class CookieTest(WebTestCase):
     def get_handlers(self):
         class SetCookieHandler(RequestHandler):
