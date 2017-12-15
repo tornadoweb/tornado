@@ -1009,12 +1009,13 @@ class RequestHandler(object):
             # are keepalive connections)
             self.request.connection.set_close_callback(None)
 
-        self.flush(include_footers=True)
+        future = self.flush(include_footers=True)
         self.request.finish()
         self._log()
         self._finished = True
         self.on_finish()
         self._break_cycles()
+        return future
 
     def _break_cycles(self):
         # Break up a reference cycle between this handler and the
