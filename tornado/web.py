@@ -1025,12 +1025,13 @@ class RequestHandler(object):
             # are keepalive connections)
             self.request.connection.set_close_callback(None)
 
-        self.flush(include_footers=True)
+        future = self.flush(include_footers=True)
         self.request.connection.finish()
         self._log()
         self._finished = True
         self.on_finish()
         self._break_cycles()
+        return future
 
     def detach(self):
         """Take control of the underlying stream.
