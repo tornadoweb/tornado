@@ -96,26 +96,24 @@ class BlockingResolverErrorTest(AsyncTestCase, _ResolverErrorTestMixin):
         super(BlockingResolverErrorTest, self).tearDown()
 
 
-@skipIfNoNetwork
-@unittest.skipIf(futures is None, "futures module not present")
 class OverrideResolverTest(AsyncTestCase, _ResolverTestMixin):
     def setUp(self):
         super(OverrideResolverTest, self).setUp()
         mapping = {
-            ('localhost', 80): ('127.0.0.1', 80),
-            ('localhost', 80, socket.AF_INET): ('127.0.0.1', 80),
-            ('localhost', 80, socket.AF_INET6): ('::1', 80)
+            ('google.com', 80): ('1.2.3.4', 80),
+            ('google.com', 80, socket.AF_INET): ('1.2.3.4', 80),
+            ('google.com', 80, socket.AF_INET6): ('2a02:6b8:7c:40c:c51e:495f:e23a:3', 80)
         }
-        self.resolver = OverrideResolver(ThreadedResolver(), mapping)
+        self.resolver = OverrideResolver(BlockingResolver(), mapping)
 
     def test_resolve_multiaddr(self):
-        self.resolver.resolve('localhost', 80, socket.AF_INET, callback=self.stop)
+        self.resolver.resolve('google.com', 80, socket.AF_INET, callback=self.stop)
         result = self.wait()
-        self.assertIn((socket.AF_INET, ('127.0.0.1', 80)), result)
+        self.assertIn((socket.AF_INET, ('1.2.3.4', 80)), result)
 
-        self.resolver.resolve('localhost', 80, socket.AF_INET6, callback=self.stop)
+        self.resolver.resolve('google.com', 80, socket.AF_INET6, callback=self.stop)
         result = self.wait()
-        self.assertIn((socket.AF_INET6, ('::1', 80, 0, 0)), result)
+        self.assertIn((socket.AF_INET6, ('2a02:6b8:7c:40c:c51e:495f:e23a:3', 80, 0, 0)), result)
 
 
 @skipIfNoNetwork
