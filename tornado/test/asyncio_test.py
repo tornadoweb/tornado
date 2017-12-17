@@ -30,7 +30,6 @@ else:
 class AsyncIOLoopTest(AsyncTestCase):
     def get_new_ioloop(self):
         io_loop = AsyncIOLoop()
-        asyncio.set_event_loop(io_loop.asyncio_loop)
         return io_loop
 
     def test_asyncio_callback(self):
