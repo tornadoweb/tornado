@@ -942,7 +942,9 @@ def split_host_and_port(netloc):
 
 
 def qs_to_qsl(qs):
-    """Generator rewinding a result of ``parse_qs`` back to name-value pairs. 
+    """Generator converting a result of ``parse_qs`` back to name-value pairs. 
+
+    .. versionadded:: 5.0
     """
     for k, vs in qs.items():
         for v in vs:

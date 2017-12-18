@@ -210,6 +210,9 @@ class TCPClient(object):
 
         .. versionchanged:: 4.5
            Added the ``source_ip`` and ``source_port`` arguments.
+
+        .. versionchanged:: 5.0
+           Added the ``timeout`` argument.
         """
         if timeout is not None:
             if isinstance(timeout, numbers.Real):

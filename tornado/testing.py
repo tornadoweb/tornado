@@ -388,6 +388,9 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
         If the path begins with http:// or https://, it will be treated as a
         full URL and will be fetched as-is.
+
+        .. versionchanged:: 5.0
+           Added support for absolute URLs.
         """
         if path.lower().startswith(('http://', 'https://')):
             self.http_client.fetch(path, self.stop, **kwargs)

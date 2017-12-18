@@ -110,7 +110,7 @@ And again with a `.Future` instead of a callback:
 The raw `.Future` version is more complex, but ``Futures`` are
 nonetheless recommended practice in Tornado because they have two
 major advantages.  Error handling is more consistent since the
-`.Future.result` method can simply raise an exception (as opposed to
+``Future.result`` method can simply raise an exception (as opposed to
 the ad-hoc error handling common in callback-oriented interfaces), and
 ``Futures`` lend themselves well to use with coroutines.  Coroutines
 will be discussed in depth in the next section of this guide.  Here is

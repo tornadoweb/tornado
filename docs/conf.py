@@ -79,7 +79,7 @@ latex_documents = [
     ]
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3.5/', None),
+    'python': ('https://docs.python.org/3.6/', None),
     }
 
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
