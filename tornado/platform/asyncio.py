@@ -6,10 +6,11 @@ This module integrates Tornado with the ``asyncio`` module introduced
 in Python 3.4. This makes it possible to combine the two libraries on
 the same event loop.
 
-Most applications should use `AsyncIOMainLoop` to run Tornado on the
-default ``asyncio`` event loop.  Applications that need to run event
-loops on multiple threads may use `AsyncIOLoop` to create multiple
-loops.
+.. deprecated:: 5.0
+
+   While the code in this module is still used, it is now enabled
+   automatically when `asyncio` is available, so applications should
+   no longer need to refer to this module directly.
 
 .. note::
 
@@ -143,15 +144,12 @@ class BaseAsyncIOLoop(IOLoop):
 class AsyncIOMainLoop(BaseAsyncIOLoop):
     """``AsyncIOMainLoop`` creates an `.IOLoop` that corresponds to the
     current ``asyncio`` event loop (i.e. the one returned by
-    ``asyncio.get_event_loop()``).  Recommended usage::
+    ``asyncio.get_event_loop()``).
 
-        from tornado.platform.asyncio import AsyncIOMainLoop
-        import asyncio
-        AsyncIOMainLoop().install()
-        asyncio.get_event_loop().run_forever()
+    .. deprecated:: 5.0
 
-    See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
-    installing alternative IOLoops.
+       Now used automatically when appropriate; it is no longer necessary
+       to refer to this class directly.
     """
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
@@ -162,14 +160,20 @@ class AsyncIOLoop(BaseAsyncIOLoop):
     """``AsyncIOLoop`` is an `.IOLoop` that runs on an ``asyncio`` event loop.
     This class follows the usual Tornado semantics for creating new
     ``IOLoops``; these loops are not necessarily related to the
-    ``asyncio`` default event loop.  Recommended usage::
-
-        from tornado.ioloop import IOLoop
-        IOLoop.configure('tornado.platform.asyncio.AsyncIOLoop')
-        IOLoop.current().start()
+    ``asyncio`` default event loop.
 
     Each ``AsyncIOLoop`` creates a new ``asyncio.EventLoop``; this object
     can be accessed with the ``asyncio_loop`` attribute.
+
+    .. versionchanged:: 5.0
+
+       When an ``AsyncIOLoop`` becomes the current `.IOLoop`, it also sets
+       the current `asyncio` event loop.
+
+    .. deprecated:: 5.0
+
+       Now used automatically when appropriate; it is no longer necessary
+       to refer to this class directly.
     """
     def initialize(self, **kwargs):
         loop = asyncio.new_event_loop()

@@ -37,7 +37,7 @@ could be written with ``gen`` as:
    :hide:
 
 Most asynchronous functions in Tornado return a `.Future`;
-yielding this object returns its `~.Future.result`.
+yielding this object returns its ``Future.result``.
 
 You can also yield a list or dict of ``Futures``, which will be
 started at the same time and run in parallel; a list or dict of results will

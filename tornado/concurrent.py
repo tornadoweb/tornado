@@ -403,6 +403,9 @@ def run_on_executor(*args, **kwargs):
         def foo(self):
             pass
 
+    This decorator should not be confused with the similarly-named
+    `.IOLoop.run_in_executor`.
+
     .. versionchanged:: 4.2
        Added keyword arguments to use alternative attributes.
 
@@ -445,7 +448,7 @@ def return_future(f):
 
     From the caller's perspective, the callback argument is optional.
     If one is given, it will be invoked when the function is complete
-    with `Future.result()` as an argument.  If the function fails, the
+    with ``Future.result()`` as an argument.  If the function fails, the
     callback will not be run and an exception will be raised into the
     surrounding `.StackContext`.
 
@@ -526,7 +529,11 @@ def chain_future(a, b):
     The result (success or failure) of ``a`` will be copied to ``b``, unless
     ``b`` has already been completed or cancelled by the time ``a`` finishes.
 
-    Accepts both Tornado/asyncio `Future` objects and `concurrent.futures.Future`.
+    .. versionchanged:: 5.0
+
+       Now accepts both Tornado/asyncio `Future` objects and
+       `concurrent.futures.Future`.
+
     """
     def copy(future):
         assert future is a
@@ -581,8 +588,10 @@ def future_add_done_callback(future, callback):
     ``callback`` is invoked with one argument, the ``future``.
 
     If ``future`` is already done, ``callback`` is invoked immediately.
-    This may differ from the behavior of `.Future.add_done_callback`,
+    This may differ from the behavior of ``Future.add_done_callback``,
     which makes no such guarantee.
+
+    .. versionadded:: 5.0
     """
     if future.done():
         callback(future)
