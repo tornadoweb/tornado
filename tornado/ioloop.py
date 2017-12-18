@@ -300,7 +300,17 @@ class IOLoop(Configurable):
 
         Intended primarily for use by test frameworks in between tests.
         """
+        old = IOLoop._current.instance
+        if old is not None:
+            old._clear_current_hook()
         IOLoop._current.instance = None
+
+    def _clear_current_hook(self):
+        """Instance method called when an IOLoop ceases to be current.
+
+        May be overridden by subclasses as a counterpart to make_current.
+        """
+        pass
 
     @classmethod
     def configurable_base(cls):

@@ -31,7 +31,6 @@ import asyncio
 
 class BaseAsyncIOLoop(IOLoop):
     def initialize(self, asyncio_loop, close_loop=False, **kwargs):
-        super(BaseAsyncIOLoop, self).initialize(**kwargs)
         self.asyncio_loop = asyncio_loop
         self.close_loop = close_loop
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
@@ -40,6 +39,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.readers = set()
         self.writers = set()
         self.closing = False
+        super(BaseAsyncIOLoop, self).initialize(**kwargs)
 
     def close(self, all_fds=False):
         self.closing = True
@@ -105,21 +105,14 @@ class BaseAsyncIOLoop(IOLoop):
     def start(self):
         old_current = IOLoop.current(instance=False)
         try:
-            old_asyncio = asyncio.get_event_loop()
-        except RuntimeError:
-            old_asyncio = None
-        try:
             self._setup_logging()
             self.make_current()
-            # This is automatic in 3.5, but must be done manually in 3.4.
-            asyncio.set_event_loop(self.asyncio_loop)
             self.asyncio_loop.run_forever()
         finally:
             if old_current is None:
                 IOLoop.clear_current()
             else:
                 old_current.make_current()
-            asyncio.set_event_loop(old_asyncio)
 
     def stop(self):
         self.asyncio_loop.stop()
@@ -187,6 +180,17 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             # we have to close it.
             loop.close()
             raise
+
+    def make_current(self):
+        super(AsyncIOLoop, self).make_current()
+        try:
+            self.old_asyncio = asyncio.get_event_loop()
+        except RuntimeError:
+            self.old_asyncio = None
+        asyncio.set_event_loop(self.asyncio_loop)
+
+    def _clear_current_hook(self):
+        asyncio.set_event_loop(self.old_asyncio)
 
 
 def to_tornado_future(asyncio_future):

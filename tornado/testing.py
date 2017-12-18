@@ -217,9 +217,6 @@ class AsyncTestCase(unittest.TestCase):
         super(AsyncTestCase, self).setUp()
         self.io_loop = self.get_new_ioloop()
         self.io_loop.make_current()
-        if hasattr(self.io_loop, 'asyncio_loop'):
-            # Ensure that asyncio's current event loop matches ours.
-            asyncio.set_event_loop(self.io_loop.asyncio_loop)
 
     def tearDown(self):
         # Clean up Subprocess, so it can be used again with a new ioloop.
@@ -231,8 +228,6 @@ class AsyncTestCase(unittest.TestCase):
         # set FD_CLOEXEC on its file descriptors)
         self.io_loop.close(all_fds=True)
         super(AsyncTestCase, self).tearDown()
-        if hasattr(self.io_loop, 'asyncio_loop'):
-            asyncio.set_event_loop(None)
         # In case an exception escaped or the StackContext caught an exception
         # when there wasn't a wait() to re-raise it, do so here.
         # This is our last chance to raise an exception in a way that the
