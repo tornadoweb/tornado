@@ -1089,6 +1089,8 @@ class IOStream(BaseIOStream):
        :hide:
 
     """
+    SSLIOStream = None  # redefined below
+
     def __init__(self, socket, *args, **kwargs):
         self.socket = socket
         self.socket.setblocking(False)
@@ -1192,7 +1194,8 @@ class IOStream(BaseIOStream):
         self._add_io_state(self.io_loop.WRITE)
         return future
 
-    def start_tls(self, server_side, ssl_options=None, server_hostname=None):
+    def start_tls(self, server_side, ssl_options=None, server_hostname=None,
+                  wait_for_handshake=True):
         """Convert this `IOStream` to an `SSLIOStream`.
 
         This enables protocols that begin in clear-text mode and
@@ -1217,6 +1220,10 @@ class IOStream(BaseIOStream):
         `SSLIOStream`.  After this method has been called,
         any other operation on the original stream is undefined.
 
+        If ``wait_for_handshake`` is true (the default), the SSL
+        handshake is finished by the time the returned Future is done.
+        If false, the SSL handshake may still be pending.
+
         If a close callback is defined on this stream, it will be
         transferred to the new stream.
 
@@ -1226,6 +1233,9 @@ class IOStream(BaseIOStream):
            SSL certificates are validated by default; pass
            ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
            suitably-configured `ssl.SSLContext` to disable.
+
+        .. versionchanged:: 5.0
+           Added the ``wait_for_handshake`` argument.
         """
         if (self._read_callback or self._read_future or
                 self._write_callback or self._write_futures or
@@ -1250,30 +1260,33 @@ class IOStream(BaseIOStream):
         self._close_callback = None
 
         future = Future()
-        ssl_stream = SSLIOStream(socket, ssl_options=ssl_options)
+        ssl_stream = self.SSLIOStream(socket, ssl_options=ssl_options)
         # Wrap the original close callback so we can fail our Future as well.
         # If we had an "unwrap" counterpart to this method we would need
         # to restore the original callback after our Future resolves
         # so that repeated wrap/unwrap calls don't build up layers.
 
-        def close_callback():
-            if not future.done():
-                # Note that unlike most Futures returned by IOStream,
-                # this one passes the underlying error through directly
-                # instead of wrapping everything in a StreamClosedError
-                # with a real_error attribute. This is because once the
-                # connection is established it's more helpful to raise
-                # the SSLError directly than to hide it behind a
-                # StreamClosedError (and the client is expecting SSL
-                # issues rather than network issues since this method is
-                # named start_tls).
-                future.set_exception(ssl_stream.error or StreamClosedError())
-            if orig_close_callback is not None:
-                orig_close_callback()
-        ssl_stream.set_close_callback(close_callback)
-        ssl_stream._ssl_connect_callback = lambda: future.set_result(ssl_stream)
-        ssl_stream.max_buffer_size = self.max_buffer_size
-        ssl_stream.read_chunk_size = self.read_chunk_size
+        if wait_for_handshake:
+            def close_callback():
+                if not future.done():
+                    # Note that unlike most Futures returned by IOStream,
+                    # this one passes the underlying error through directly
+                    # instead of wrapping everything in a StreamClosedError
+                    # with a real_error attribute. This is because once the
+                    # connection is established it's more helpful to raise
+                    # the SSLError directly than to hide it behind a
+                    # StreamClosedError (and the client is expecting SSL
+                    # issues rather than network issues since this method is
+                    # named start_tls).
+                    future.set_exception(ssl_stream.error or StreamClosedError())
+                if orig_close_callback is not None:
+                    orig_close_callback()
+            ssl_stream.set_close_callback(close_callback)
+            ssl_stream._ssl_connect_callback = lambda: future.set_result(ssl_stream)
+            ssl_stream.max_buffer_size = self.max_buffer_size
+            ssl_stream.read_chunk_size = self.read_chunk_size
+        else:
+            future.set_result(ssl_stream)
         return future
 
     def _handle_connect(self):
@@ -1562,6 +1575,9 @@ class SSLIOStream(IOStream):
         if isinstance(e, ssl.SSLError) and e.args[0] == ssl.SSL_ERROR_EOF:
             return True
         return super(SSLIOStream, self)._is_connreset(e)
+
+
+IOStream.SSLIOStream = SSLIOStream
 
 
 class PipeIOStream(BaseIOStream):

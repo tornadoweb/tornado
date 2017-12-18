@@ -1,9 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 import socket
+import ssl
 
 from tornado import gen
-from tornado.iostream import IOStream
+from tornado.iostream import IOStream, SSLIOStream
 from tornado.log import app_log
 from tornado.stack_context import NullContext
 from tornado.tcpserver import TCPServer
@@ -114,3 +116,43 @@ class TCPServerTest(AsyncTestCase):
                 c.close()
 
         # Here tearDown() would re-raise the EBADF encountered in the IO loop
+
+    @gen_test
+    def test_custom_iostream(self):
+        server_stream = []
+
+        class MySSLIOStream(SSLIOStream):
+            pass
+
+        class MyIOStream(IOStream):
+            SSLIOStream = MySSLIOStream
+
+        class MyTCPServer(TCPServer):
+            IOStream = MyIOStream
+
+            @gen.coroutine
+            def handle_stream(self, stream, address):
+                server_stream.append(stream)
+                stream.close()
+
+        @gen.coroutine
+        def accept_one_client(server):
+            sock, port = bind_unused_port()
+            server.add_socket(sock)
+            client = IOStream(socket.socket())
+            yield client.connect(('localhost', port))
+            yield client.close()
+            server.stop()
+
+        server = MyTCPServer()
+        yield accept_one_client(server)
+        self.assertIsInstance(server_stream.pop(), MyIOStream)
+
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        ssl_ctx.load_cert_chain(
+            os.path.join(os.path.dirname(__file__), 'test.crt'),
+            os.path.join(os.path.dirname(__file__), 'test.key'))
+
+        server = MyTCPServer(ssl_options=ssl_ctx)
+        yield accept_one_client(server)
+        self.assertIsInstance(server_stream.pop(), MySSLIOStream)

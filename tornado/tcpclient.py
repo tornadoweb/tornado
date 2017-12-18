@@ -173,6 +173,8 @@ class TCPClient(object):
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
     """
+    IOStream = IOStream
+
     def __init__(self, resolver=None):
         if resolver is not None:
             self.resolver = resolver
@@ -268,8 +270,8 @@ class TCPClient(object):
                 # Fail loudly if unable to use the IP/port.
                 raise
         try:
-            stream = IOStream(socket_obj,
-                              max_buffer_size=max_buffer_size)
+            stream = self.IOStream(socket_obj,
+                                   max_buffer_size=max_buffer_size)
         except socket.error as e:
             fu = Future()
             fu.set_exception(e)
