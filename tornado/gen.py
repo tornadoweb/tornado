@@ -970,10 +970,25 @@ def sleep(duration):
     return f
 
 
-_null_future = Future()
-_null_future.set_result(None)
+class _NullFuture(object):
+    """_NullFuture resembles a Future that finished with a result of None.
 
-moment = Future()
+    It's not actually a `Future` to avoid depending on a particular event loop.
+    Handled as a special case in the coroutine runner.
+    """
+    def result(self):
+        return None
+
+    def done(self):
+        return True
+
+
+# _null_future is used as a dummy value in the coroutine runner. It differs
+# from moment in that moment always adds a delay of one IOLoop iteration
+# while _null_future is processed as soon as possible.
+_null_future = _NullFuture()
+
+moment = _NullFuture()
 moment.__doc__ = \
     """A special object which may be yielded to allow the IOLoop to run for
 one iteration.
@@ -989,7 +1004,6 @@ Usage: ``yield gen.moment``
    ``yield None`` (or ``yield`` with no argument) is now equivalent to
     ``yield gen.moment``.
 """
-moment.set_result(None)
 
 
 class Runner(object):
@@ -1287,8 +1301,10 @@ def convert_yielded(yielded):
     .. versionadded:: 4.1
     """
     # Lists and dicts containing YieldPoints were handled earlier.
-    if yielded is None:
+    if yielded is None or yielded is moment:
         return moment
+    elif yielded is _null_future:
+        return _null_future
     elif isinstance(yielded, (list, dict)):
         return multi(yielded)
     elif is_future(yielded):

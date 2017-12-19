@@ -175,15 +175,15 @@ class Queue(object):
         `datetime.timedelta` object for a deadline relative to the
         current time.
         """
+        future = Future()
         try:
             self.put_nowait(item)
         except QueueFull:
-            future = Future()
             self._putters.append((item, future))
             _set_timeout(future, timeout)
-            return future
         else:
-            return gen._null_future
+            future.set_result(None)
+        return future
 
     def put_nowait(self, item):
         """Put an item into the queue without blocking.
