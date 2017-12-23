@@ -520,7 +520,7 @@ class TwistedResolver(Resolver):
     recommended only when threads cannot be used, since it has
     limitations compared to the standard ``getaddrinfo``-based
     `~tornado.netutil.Resolver` and
-    `~tornado.netutil.ThreadedResolver`.  Specifically, it returns at
+    `~tornado.netutil.DefaultExecutorResolver`.  Specifically, it returns at
     most one result, and arguments other than ``host`` and ``family``
     are ignored.  It may fail to resolve when ``family`` is not
     ``socket.AF_UNSPEC``.

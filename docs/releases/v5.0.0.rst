@@ -71,6 +71,8 @@ Backwards-compatibility notes
 Other notes
 ~~~~~~~~~~~
 
+- The ``futures`` (`concurrent.futures` backport) package is now required
+  on Python 2.7.
 - The ``certifi`` and ``backports.ssl-match-hostname`` packages are no
   longer required on Python 2.7.
 - Python 3.6 or higher is recommended, because it features more
@@ -204,6 +206,9 @@ Other notes
 `tornado.netutil`
 ~~~~~~~~~~~~~~~~~
 
+- The default `.Resolver` now uses `.IOLoop.run_in_executor`.
+  `.ExecutorResolver`, `.BlockingResolver`, and `.ThreadedResolver` are
+  deprecated.
 - The ``io_loop`` arguments to `.add_accept_handler`,
   `.ExecutorResolver`, and `.ThreadedResolver` have been removed.
 - `.add_accept_handler` returns a callable which can be used to remove
