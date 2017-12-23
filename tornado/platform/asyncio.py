@@ -140,6 +140,12 @@ class BaseAsyncIOLoop(IOLoop):
 
     add_callback_from_signal = add_callback
 
+    def run_in_executor(self, executor, func, *args):
+        return self.asyncio_loop.run_in_executor(executor, func, *args)
+
+    def set_default_executor(self, executor):
+        return self.asyncio_loop.set_default_executor(executor)
+
 
 class AsyncIOMainLoop(BaseAsyncIOLoop):
     """``AsyncIOMainLoop`` creates an `.IOLoop` that corresponds to the
