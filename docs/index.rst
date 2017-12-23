@@ -73,10 +73,6 @@ older python versions). In addition to the requirements
 which will be installed automatically by ``pip`` or ``setup.py install``,
 the following optional packages may be useful:
 
-* `concurrent.futures <https://pypi.python.org/pypi/futures>`_ is the
-  recommended thread pool for use with Tornado and enables the use of
-  `~tornado.netutil.ThreadedResolver`.  It is needed only on Python 2;
-  Python 3 includes this package in the standard library.
 * `pycurl <http://pycurl.sourceforge.net>`_ is used by the optional
   ``tornado.curl_httpclient``.  Libcurl version 7.22 or higher is required.
 * `Twisted <http://www.twistedmatrix.com>`_ may be used with the classes in

@@ -27,11 +27,7 @@ hundreds of milliseconds of CPU time, far more than a typical network
 or disk access).
 
 A function can be blocking in some respects and non-blocking in
-others.  For example, `tornado.httpclient` in the default
-configuration blocks on DNS resolution but not on other network access
-(to mitigate this use `.ThreadedResolver` or a
-``tornado.curl_httpclient`` with a properly-configured build of
-``libcurl``).  In the context of Tornado we generally talk about
+others.  In the context of Tornado we generally talk about
 blocking in the context of network I/O, although all kinds of blocking
 are to be minimized.
 
