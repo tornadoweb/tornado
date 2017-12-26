@@ -2138,7 +2138,7 @@ class StreamingRequestBodyTest(WebTestCase):
         stream.write(b"4\r\nqwer\r\n")
         data = yield self.data
         self.assertEquals(data, b"qwer")
-        stream.write(b"0\r\n")
+        stream.write(b"0\r\n\r\n")
         yield self.finished
         data = yield gen.Task(stream.read_until_close)
         # This would ideally use an HTTP1Connection to read the response.
