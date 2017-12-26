@@ -172,7 +172,7 @@ class RequestHandler(object):
         self._headers_written = False
         self._finished = False
         self._auto_finish = True
-        self._transforms = None  # will be set in _execute
+        self._transforms = []  # will be set in _execute
         self._prepared_future = None
         self._headers = None  # type: httputil.HTTPHeaders
         self.path_args = None
