@@ -786,9 +786,12 @@ class KeepAliveTest(AsyncHTTPTestCase):
     def test_keepalive_chunked(self):
         self.http_version = b'HTTP/1.0'
         self.connect()
-        self.stream.write(b'POST / HTTP/1.0\r\nConnection: keep-alive\r\n'
+        self.stream.write(b'POST / HTTP/1.0\r\n'
+                          b'Connection: keep-alive\r\n'
                           b'Transfer-Encoding: chunked\r\n'
-                          b'\r\n0\r\n')
+                          b'\r\n'
+                          b'0\r\n'
+                          b'\r\n')
         self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
