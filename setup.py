@@ -135,6 +135,9 @@ if setuptools is not None:
         install_requires.append('backports_abc>=0.4')
     kwargs['install_requires'] = install_requires
 
+    python_requires = '>= 2.7, !=3.0.*, !=3.1.*, !=3.2.*, != 3.3.*'
+    kwargs['python_requires'] = python_requires
+
 # Verify that the SSL module has all the modern upgrades. Check for several
 # names individually since they were introduced at different versions,
 # although they should all be present by Python 3.4 or 2.7.9.
