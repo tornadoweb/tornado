@@ -16,7 +16,7 @@ Highlights
   this change, code changes may be required for compatibility with
   Tornado 5.0, as detailed in the following section.
 - Support for Python 2.7 and 3.4 are deprecated; Tornado 6.0 will
-  require Python 3.5+. TODO(bdarnell): decide whether to drop py2 in 5.0
+  require Python 3.5+.
 
 Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -213,6 +213,7 @@ Other notes
   `.ExecutorResolver`, and `.ThreadedResolver` have been removed.
 - `.add_accept_handler` returns a callable which can be used to remove
   all handlers that were added.
+- `.OverrideResolver` now accepts per-family overrides.
 
 `tornado.options`
 ~~~~~~~~~~~~~~~~~

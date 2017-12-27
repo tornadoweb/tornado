@@ -464,8 +464,21 @@ class OverrideResolver(Resolver):
     This can be used to make local DNS changes (e.g. for testing)
     without modifying system-wide settings.
 
-    The mapping can contain either host strings or host-port pairs or
-    host-port-family triplets.
+    The mapping can be in three formats::
+
+        {
+            # Hostname to host or ip
+            "example.com": "127.0.1.1",
+
+            # Host+port to host+port
+            ("login.example.com", 443): ("localhost", 1443),
+
+            # Host+port+address family to host+port
+            ("login.example.com", 443, socket.AF_INET6): ("::1", 1443),
+        }
+
+    .. versionchanged:: 5.0
+       Added support for host-port-family triplets.
     """
     def initialize(self, resolver, mapping):
         self.resolver = resolver
