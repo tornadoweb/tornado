@@ -47,14 +47,15 @@ either::
    tornado.options.parse_config_file, the only options that are set are
    ones that were previously defined with tornado.options.define.
 
-Command line formats are what you would expect (``--myoption=myvalue``).
-Config files are just Python files. Global names become options, e.g.::
+Command line formats are what you would expect (``--myoption=myvalue``
+or ``--myflag`` in the case of boolean flags). Config files are just Python
+files. Global names become options, e.g.::
 
     myoption = "myvalue"
     myotheroption = "myothervalue"
 
 We support `datetimes <datetime.datetime>`, `timedeltas
-<datetime.timedelta>`, ints, and floats (just pass a ``type`` kwarg to
+<datetime.timedelta>`, bools, ints, and floats (just pass a ``type`` kwarg to
 `define`). We also accept multi-value options. See the documentation for
 `define()` below.
 
@@ -190,7 +191,7 @@ class OptionParser(object):
                multiple=False, group=None, callback=None):
         """Defines a new command line option.
 
-        If ``type`` is given (one of str, float, int, datetime, or timedelta)
+        If ``type`` is given (one of str, float, int, bool, datetime, or timedelta)
         or can be inferred from the ``default``, we parse the command line
         arguments based on the given type. If ``multiple`` is True, we accept
         comma-separated values, and the option value is always a list.
