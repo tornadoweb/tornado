@@ -159,7 +159,7 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
     """
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
-                                                close_loop=False, **kwargs)
+                                                close_loop=True, **kwargs)
 
 
 class AsyncIOLoop(BaseAsyncIOLoop):

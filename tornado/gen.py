@@ -258,26 +258,6 @@ def coroutine(func, replace_callback=True):
     return _make_coroutine_wrapper(func, replace_callback=True)
 
 
-# Ties lifetime of runners to their result futures. Github Issue #1769
-# Generators, like any object in Python, must be strong referenced
-# in order to not be cleaned up by the garbage collector. When using
-# coroutines, the Runner object is what strong-refs the inner
-# generator. However, the only item that strong-reffed the Runner
-# was the last Future that the inner generator yielded (via the
-# Future's internal done_callback list). Usually this is enough, but
-# it is also possible for this Future to not have any strong references
-# other than other objects referenced by the Runner object (usually
-# when using other callback patterns and/or weakrefs). In this
-# situation, if a garbage collection ran, a cycle would be detected and
-# Runner objects could be destroyed along with their inner generators
-# and everything in their local scope.
-# This map provides strong references to Runner objects as long as
-# their result future objects also have strong references (typically
-# from the parent coroutine's Runner). This keeps the coroutine's
-# Runner alive.
-_futures_to_runners = weakref.WeakKeyDictionary()
-
-
 def _make_coroutine_wrapper(func, replace_callback):
     """The inner workings of ``@gen.coroutine`` and ``@gen.engine``.
 
@@ -332,7 +312,12 @@ def _make_coroutine_wrapper(func, replace_callback):
                 except Exception:
                     future_set_exc_info(future, sys.exc_info())
                 else:
-                    _futures_to_runners[future] = Runner(result, future, yielded)
+                    # Provide strong references to Runner objects as long
+                    # as their result future objects also have strong
+                    # references (typically from the parent coroutine's
+                    # Runner). This keeps the coroutine's Runner alive.
+                    # (Github Issue #1769)
+                    future._gen_runner = Runner(result, future, yielded)
                 yielded = None
                 try:
                     return future
