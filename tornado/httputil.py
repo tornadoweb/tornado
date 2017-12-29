@@ -850,11 +850,11 @@ def parse_response_start_line(line):
     ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')
     """
     line = native_str(line)
-    match = re.match("(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)", line)
+    match = re.match("(HTTP/1.[0-9]) ([0-9]+)([^\r]*)", line)
     if not match:
         raise HTTPInputError("Error parsing response start line")
     return ResponseStartLine(match.group(1), int(match.group(2)),
-                             match.group(3))
+                             match.group(3).lstrip(' '))
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some
