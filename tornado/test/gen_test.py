@@ -4,6 +4,7 @@ import gc
 import contextlib
 import datetime
 import functools
+import platform
 import sys
 import textwrap
 import time
@@ -1478,12 +1479,14 @@ class WaitIteratorTest(AsyncTestCase):
 
 
 class RunnerGCTest(AsyncTestCase):
-    """Github issue 1769: Runner objects can get GCed unexpectedly"""
-    @skipOnTravis
+    def is_pypy3(self):
+        return (platform.python_implementation() == 'PyPy' and
+                sys.version_info > (3,))
+
     @gen_test
     def test_gc(self):
-        """Runners shouldn't GC if future is alive"""
-        # Create the weakref
+        # Github issue 1769: Runner objects can get GCed unexpectedly
+        # while their future is alive.
         weakref_scope = [None]
 
         def callback():
@@ -1501,6 +1504,85 @@ class RunnerGCTest(AsyncTestCase):
             datetime.timedelta(seconds=0.2),
             tester()
         )
+
+    def test_gc_infinite_coro(self):
+        # Github issue 2229: suspended coroutines should be GCed when
+        # their loop is closed, even if they're involved in a reference
+        # cycle.
+        if IOLoop.configured_class().__name__.endswith('TwistedIOLoop'):
+            raise unittest.SkipTest("Test may fail on TwistedIOLoop")
+
+        loop = self.get_new_ioloop()
+        result = []
+        wfut = []
+
+        @gen.coroutine
+        def infinite_coro():
+            try:
+                while True:
+                    yield gen.sleep(1e-3)
+                    result.append(True)
+            finally:
+                # coroutine finalizer
+                result.append(None)
+
+        @gen.coroutine
+        def do_something():
+            fut = infinite_coro()
+            fut._refcycle = fut
+            wfut.append(weakref.ref(fut))
+            yield gen.sleep(0.2)
+
+        loop.run_sync(do_something)
+        loop.close()
+        gc.collect()
+        # Future was collected
+        self.assertIs(wfut[0](), None)
+        # At least one wakeup
+        self.assertGreaterEqual(len(result), 2)
+        if not self.is_pypy3():
+            # coroutine finalizer was called (not on PyPy3 apparently)
+            self.assertIs(result[-1], None)
+
+    @skipBefore35
+    def test_gc_infinite_async_await(self):
+        # Same as test_gc_infinite_coro, but with a `async def` function
+        import asyncio
+
+        namespace = exec_test(globals(), locals(), """
+        async def infinite_coro(result):
+            try:
+                while True:
+                    await gen.sleep(1e-3)
+                    result.append(True)
+            finally:
+                # coroutine finalizer
+                result.append(None)
+        """)
+
+        infinite_coro = namespace['infinite_coro']
+        loop = self.get_new_ioloop()
+        result = []
+        wfut = []
+
+        @gen.coroutine
+        def do_something():
+            fut = asyncio.get_event_loop().create_task(infinite_coro(result))
+            fut._refcycle = fut
+            wfut.append(weakref.ref(fut))
+            yield gen.sleep(0.2)
+
+        loop.run_sync(do_something)
+        with ExpectLog('asyncio', "Task was destroyed but it is pending"):
+            loop.close()
+            gc.collect()
+        # Future was collected
+        self.assertIs(wfut[0](), None)
+        # At least one wakeup and one finally
+        self.assertGreaterEqual(len(result), 2)
+        if not self.is_pypy3():
+            # coroutine finalizer was called (not on PyPy3 apparently)
+            self.assertIs(result[-1], None)
 
 
 if __name__ == '__main__':
