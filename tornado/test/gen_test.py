@@ -1511,6 +1511,9 @@ class RunnerGCTest(AsyncTestCase):
         """Github issue 2229: suspended coroutines should be GCed when
         their loop is closed, even if they're involved in a reference
         cycle"""
+        if IOLoop.configured_class().__name__.endswith('TwistedIOLoop'):
+            raise unittest.SkipTest("Test may fail on TwistedIOLoop")
+
         loop = self.get_new_ioloop()
         result = []
         wfut = []
