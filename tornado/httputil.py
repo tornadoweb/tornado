@@ -850,7 +850,7 @@ def parse_response_start_line(line):
     ResponseStartLine(version='HTTP/1.1', code=200, reason='OK')
     """
     line = native_str(line)
-    match = re.match("(HTTP/1.[0-9]) ([0-9]+) ([^\r]*)", line)
+    match = re.match("(HTTP/1.[0-9]) ([0-9]+)([^\r]*)", line)
     if not match:
         raise HTTPInputError("Error parsing response start line")
     return ResponseStartLine(match.group(1), int(match.group(2)),
