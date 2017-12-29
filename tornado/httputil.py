@@ -854,7 +854,7 @@ def parse_response_start_line(line):
     if not match:
         raise HTTPInputError("Error parsing response start line")
     return ResponseStartLine(match.group(1), int(match.group(2)),
-                             match.group(3))
+                             match.group(3).lstrip(' '))
 
 # _parseparam and _parse_header are copied and modified from python2.7's cgi.py
 # The original 2.7 version of this code did not correctly support some
