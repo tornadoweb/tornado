@@ -1486,9 +1486,8 @@ class RunnerGCTest(AsyncTestCase):
 
     @gen_test
     def test_gc(self):
-        """Github issue 1769: Runner objects can get GCed unexpectedly
-        while their future is alive"""
-        # Create the weakref
+        # Github issue 1769: Runner objects can get GCed unexpectedly
+        # while their future is alive.
         weakref_scope = [None]
 
         def callback():
@@ -1508,9 +1507,9 @@ class RunnerGCTest(AsyncTestCase):
         )
 
     def test_gc_infinite_coro(self):
-        """Github issue 2229: suspended coroutines should be GCed when
-        their loop is closed, even if they're involved in a reference
-        cycle"""
+        # Github issue 2229: suspended coroutines should be GCed when
+        # their loop is closed, even if they're involved in a reference
+        # cycle.
         if IOLoop.configured_class().__name__.endswith('TwistedIOLoop'):
             raise unittest.SkipTest("Test may fail on TwistedIOLoop")
 
@@ -1548,7 +1547,7 @@ class RunnerGCTest(AsyncTestCase):
 
     @skipBefore35
     def test_gc_infinite_async_await(self):
-        """Same as test_gc_infinite_coro, but with a `async def` function"""
+        # Same as test_gc_infinite_coro, but with a `async def` function
         import asyncio
 
         namespace = exec_test(globals(), locals(), """
@@ -1585,6 +1584,32 @@ class RunnerGCTest(AsyncTestCase):
         if not self.is_pypy3():
             # coroutine finalizer was called (not on PyPy3 apparently)
             self.assertIs(result[-1], None)
+
+    @gen_test
+    def test_no_future_cycle(self):
+        # Check that no reference cycle remains after a coroutine is done
+        if platform.python_implementation() == 'PyPy':
+            raise unittest.SkipTest("test irrelevant on PyPy")
+
+        class MyObj(object):
+            pass
+        obj = MyObj()
+        wobj = weakref.ref(obj)
+
+        @gen.coroutine
+        def coro(obj):
+            yield gen.moment
+
+        # `obj` is kept alive by the generator, use it as proof
+        # that the generator was collected
+        fut = coro(obj)
+        wfut = weakref.ref(fut)
+        yield fut
+        del obj
+        self.assertIs(wobj(), None)
+        yield gen.moment  # Drain lingering reference to the future
+        del fut
+        self.assertIs(wfut(), None)
 
 
 if __name__ == '__main__':
