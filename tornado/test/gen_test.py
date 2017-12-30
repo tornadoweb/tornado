@@ -1585,32 +1585,6 @@ class RunnerGCTest(AsyncTestCase):
             # coroutine finalizer was called (not on PyPy3 apparently)
             self.assertIs(result[-1], None)
 
-    @gen_test
-    def test_no_future_cycle(self):
-        # Check that no reference cycle remains after a coroutine is done
-        if platform.python_implementation() == 'PyPy':
-            raise unittest.SkipTest("test irrelevant on PyPy")
-
-        class MyObj(object):
-            pass
-        obj = MyObj()
-        wobj = weakref.ref(obj)
-
-        @gen.coroutine
-        def coro(obj):
-            yield gen.moment
-
-        # `obj` is kept alive by the generator, use it as proof
-        # that the generator was collected
-        fut = coro(obj)
-        wfut = weakref.ref(fut)
-        yield fut
-        del obj
-        self.assertIs(wobj(), None)
-        yield gen.moment  # Drain lingering reference to the future
-        del fut
-        self.assertIs(wfut(), None)
-
 
 if __name__ == '__main__':
     unittest.main()
