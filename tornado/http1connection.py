@@ -595,7 +595,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             if chunk_len == 0:
                 crlf = yield self.stream.read_bytes(2)
                 if crlf != b'\r\n':
-                    raise HTTPInputError("improperly terminated chunked request")
+                    raise httputil.HTTPInputError("improperly terminated chunked request")
                 return
             total_size += chunk_len
             if total_size > self._max_body_size:
