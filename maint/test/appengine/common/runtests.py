@@ -25,7 +25,7 @@ if __name__ == "__main__":
                              "--skip_sdk_update_check",
                              ],
                             cwd=tornado_root)
-            
+
     try:
         for i in xrange(50):
             with contextlib.closing(socket.socket()) as sock:
