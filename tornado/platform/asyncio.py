@@ -130,13 +130,17 @@ class BaseAsyncIOLoop(IOLoop):
         timeout.cancel()
 
     def add_callback(self, callback, *args, **kwargs):
-        if self.closing:
-            # TODO: this is racy; we need a lock to ensure that the
-            # loop isn't closed during call_soon_threadsafe.
-            raise RuntimeError("IOLoop is closing")
-        self.asyncio_loop.call_soon_threadsafe(
-            self._run_callback,
-            functools.partial(stack_context.wrap(callback), *args, **kwargs))
+        try:
+            self.asyncio_loop.call_soon_threadsafe(
+                self._run_callback,
+                functools.partial(stack_context.wrap(callback), *args, **kwargs))
+        except RuntimeError:
+            # "Event loop is closed". Swallow the exception for
+            # consistency with PollIOLoop (and logical consistency
+            # with the fact that we can't guarantee that an
+            # add_callback that completes without error will
+            # eventually execute).
+            pass
 
     add_callback_from_signal = add_callback
 
