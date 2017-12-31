@@ -109,10 +109,12 @@ class TestMixin(object):
     def run_redbot(self, url, method, body, headers):
         red = HttpResource(url, method=method, req_body=body,
                            req_hdrs=headers)
+
         def work():
             red.run(thor.stop)
             thor.run()
             self.io_loop.add_callback(self.stop)
+
         thread = threading.Thread(target=work)
         thread.start()
         self.wait()

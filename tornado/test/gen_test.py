@@ -1326,7 +1326,6 @@ class WithTimeoutTest(AsyncTestCase):
                                    executor.submit(lambda: time.sleep(0.01)))
 
 
-
 class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_empty_iterator(self):
