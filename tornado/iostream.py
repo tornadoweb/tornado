@@ -1388,7 +1388,7 @@ class SSLIOStream(IOStream):
                     err.args[0] in (errno.EBADF, errno.ENOTCONN)):
                 return self.close(exc_info=err)
             raise
-        except AttributeError:
+        except AttributeError as err:
             # On Linux, if the connection was reset before the call to
             # wrap_socket, do_handshake will fail with an
             # AttributeError.
