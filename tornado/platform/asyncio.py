@@ -158,6 +158,12 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
        to refer to this class directly.
     """
     def initialize(self, **kwargs):
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # Need to create new event loop to associate with this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
                                                 close_loop=False, **kwargs)
 

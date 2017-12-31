@@ -502,6 +502,28 @@ class TestIOLoopCurrent(unittest.TestCase):
         # current() was not affected by the failed construction.
         self.assertIs(self.io_loop, IOLoop.current())
 
+    def test_thread_current(self):
+        self.io_loop = IOLoop.current()
+        other_io_loop = [None]
+        def f():
+            try:
+                other_io_loop[0] = IOLoop.current()
+            except Exception as e:
+                other_io_loop[0] = e
+
+        t = threading.Thread(target=f)
+        t.start()
+        t.join()
+        res = other_io_loop[0]
+        if isinstance(res, Exception):
+            raise res
+        else:
+            try:
+                self.assertIsInstance(res, IOLoop)
+                self.assertIsNot(res, self.io_loop)
+            finally:
+                res.close()
+
 
 class TestIOLoopAddCallback(AsyncTestCase):
     def setUp(self):
