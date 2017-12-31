@@ -316,8 +316,12 @@ def _make_coroutine_wrapper(func, replace_callback):
                     # as their result future objects also have strong
                     # references (typically from the parent coroutine's
                     # Runner). This keeps the coroutine's Runner alive.
-                    # (Github Issue #1769)
-                    future._gen_runner = Runner(result, future, yielded)
+                    # We do this by exploiting the public API
+                    # add_done_callback() instead of putting a private
+                    # attribute on the Future.
+                    # (Github issues #1769, #2229).
+                    runner = Runner(result, future, yielded)
+                    future.add_done_callback(lambda _: runner)
                 yielded = None
                 try:
                     return future

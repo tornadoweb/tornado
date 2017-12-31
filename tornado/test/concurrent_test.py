@@ -213,6 +213,10 @@ class ReturnFutureTest(AsyncTestCase):
                        ".*ZeroDivisionError"):
             yield gen.moment
             yield gen.moment
+            if IOLoop.configured_class().__name__.endswith('TwistedIOLoop'):
+                # For some reason, TwistedIOLoop needs a third iteration
+                # in order to drain references to the future
+                yield gen.moment
             del g
             gc.collect()  # for PyPy
 
