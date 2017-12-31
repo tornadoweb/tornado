@@ -1003,7 +1003,7 @@ class RequestHandler(object):
                 assert not self._write_buffer, "Cannot send body with %s" % self._status_code
                 self._clear_headers_for_304()
             elif "Content-Length" not in self._headers:
-                content_length = sum(len(part) for part in self._write_buffer)
+                content_length = len(b''.join(self._write_buffer))
                 self.set_header("Content-Length", content_length)
 
         if hasattr(self.request, "connection"):
