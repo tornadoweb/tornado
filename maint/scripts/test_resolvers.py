@@ -44,7 +44,7 @@ def main():
         'unspec': socket.AF_UNSPEC,
         'inet': socket.AF_INET,
         'inet6': socket.AF_INET6,
-        }[options.family]
+    }[options.family]
 
     for host in args:
         print('Resolving %s' % host)

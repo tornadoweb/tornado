@@ -640,7 +640,7 @@ class TestIOLoopFutures(AsyncTestCase):
         res = yield [
             namespace["async_wrapper"](event1, event2),
             namespace["async_wrapper"](event2, event1)
-            ]
+        ]
 
         self.assertEqual([event1, event2], res)
 

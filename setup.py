@@ -171,8 +171,8 @@ setup(
             "templates/utf8.html",
             "test.crt",
             "test.key",
-            ],
-        },
+        ],
+    },
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
@@ -188,6 +188,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
-        ],
+    ],
     **kwargs
 )

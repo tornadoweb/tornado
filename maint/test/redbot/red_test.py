@@ -49,7 +49,7 @@ class TestMixin(object):
             ('/post', PostHandler),
             ('/chunked', ChunkedHandler),
             ('/cache/(.*)', CacheHandler),
-            ]
+        ]
 
     def get_app_kwargs(self):
         return dict(static_path='.')
@@ -62,7 +62,7 @@ class TestMixin(object):
             # For our small test responses the Content-Encoding header
             # wipes out any gains from compression
             rs.CONNEG_GZIP_BAD,
-            ]
+        ]
 
     def get_allowed_errors(self):
         return []
@@ -245,7 +245,7 @@ class GzipHTTPTest(AsyncHTTPTestCase, TestMixin):
             # it doesn't seem likely to cause any problems as long as we're
             # using the correct Vary header.
             rs.VARY_ETAG_DOESNT_CHANGE,
-            ]
+        ]
 
 if __name__ == '__main__':
     parse_command_line()

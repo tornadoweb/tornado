@@ -66,7 +66,7 @@ def main():
         'ExceptionBenchmark().call_wrapped(50)',
         'ExceptionBenchmark().enter_exit(500)',
         'ExceptionBenchmark().call_wrapped(500)',
-        ]
+    ]
     for cmd in cmds:
         print(cmd)
         subprocess.check_call(base_cmd + [cmd])

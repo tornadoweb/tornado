@@ -87,7 +87,7 @@ class ChatSocketHandler(tornado.websocket.WebSocketHandler):
         chat = {
             "id": str(uuid.uuid4()),
             "body": parsed["body"],
-            }
+        }
         chat["html"] = tornado.escape.to_basestring(
             self.render_string("message.html", message=chat))
 

@@ -30,7 +30,7 @@ TMPDIR = r'c:\tornado_bootstrap'
 PYTHON_VERSIONS = [
     (r'c:\python27\python.exe', 'http://www.python.org/ftp/python/2.7.3/python-2.7.3.msi'),
     (r'c:\python36\python.exe', 'http://www.python.org/ftp/python/3.6.0/python-3.6.0.msi'),
-    ]
+]
 
 SCRIPTS_DIR = r'c:\python27\scripts'
 EASY_INSTALL = os.path.join(SCRIPTS_DIR, 'easy_install.exe')
