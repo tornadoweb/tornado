@@ -98,6 +98,13 @@ from tornado import stack_context
 from tornado.util import basestring_type, exec_in
 
 
+def _load_python_file(path):
+    config = {'__file__': os.path.abspath(path)}
+    with open(path, 'rb') as f:
+        exec_in(native_str(f.read()), config, config)
+    return config
+
+
 class Error(Exception):
     """Exception raised by errors in the options module."""
     pass
@@ -299,12 +306,16 @@ class OptionParser(object):
 
         return remaining
 
-    def parse_config_file(self, path, final=True):
-        """Parses and loads the Python config file at the given path.
+    def parse_config_file(self, path, final=True, loader=_load_python_file):
+        """Parses and loads a config file at the given path.
 
         If ``final`` is ``False``, parse callbacks will not be run.
         This is useful for applications that wish to combine configurations
         from multiple sources.
+
+        ``loader`` should be a callback that accepts the file ``path`` to
+        load, and returns a config dictionary. The default callback execs
+        the file contents as Python, in a restricted environment.
 
         .. versionchanged:: 4.1
            Config files are now always interpreted as utf-8 instead of
@@ -314,13 +325,10 @@ class OptionParser(object):
            The special variable ``__file__`` is available inside config
            files, specifying the absolute path to the config file itself.
         """
-        config = {'__file__': os.path.abspath(path)}
-        with open(path, 'rb') as f:
-            exec_in(native_str(f.read()), config, config)
-        for name in config:
+        for name, val in loader(path).items():
             normalized = self._normalize_name(name)
             if normalized in self._options:
-                self._options[normalized].set(config[name])
+                self._options[normalized].set(val)
 
         if final:
             self.run_parse_callbacks()
