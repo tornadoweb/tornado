@@ -14,9 +14,8 @@
 from __future__ import absolute_import, division, print_function
 
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
-from tornado.log import app_log
 from tornado.routing import HostMatches, PathMatches, ReversibleRouter, Router, Rule, RuleRouter
-from tornado.testing import AsyncHTTPTestCase, ExpectLog
+from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
 

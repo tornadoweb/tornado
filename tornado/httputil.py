@@ -61,7 +61,7 @@ except ImportError:
     SSLError = _SSLError  # type: ignore
 
 try:
-    import typing
+    import typing  # noqa: F401
 except ImportError:
     pass
 

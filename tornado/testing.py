@@ -42,11 +42,6 @@ import signal
 import socket
 import sys
 
-if PY3:
-    from io import StringIO
-else:
-    from cStringIO import StringIO
-
 try:
     import asyncio
 except ImportError:

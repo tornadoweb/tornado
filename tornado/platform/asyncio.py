@@ -22,7 +22,6 @@ the same event loop.
 from __future__ import absolute_import, division, print_function
 import functools
 
-import tornado.concurrent
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop
 from tornado import stack_context

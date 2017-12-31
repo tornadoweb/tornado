@@ -20,7 +20,6 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import socket
-import time
 import numbers
 import datetime
 

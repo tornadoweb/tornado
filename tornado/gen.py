@@ -81,7 +81,6 @@ import functools
 import itertools
 import os
 import sys
-import textwrap
 import types
 import weakref
 
