@@ -229,3 +229,30 @@ def to_asyncio_future(tornado_future):
        so this method is now equivalent to `tornado.gen.convert_yielded`.
     """
     return convert_yielded(tornado_future)
+
+
+class AnyThreadEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+    """Event loop policy that allows loop creation on any thread.
+
+    The default `asyncio` event loop policy only automatically creates
+    event loops in the main threads. Other threads must create event
+    loops explicitly or `asyncio.get_event_loop` (and therefore
+    `.IOLoop.current`) will fail. Installing this policy allows event
+    loops to be created automatically on any thread, matching the
+    behavior of Tornado versions prior to 5.0 (or 5.0 on Python 2).
+
+    Usage::
+
+        asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+
+    .. versionadded:: 5.0
+
+    """
+    def get_event_loop(self):
+        try:
+            return super().get_event_loop()
+        except RuntimeError:
+            # "There is no current event loop in thread %r"
+            loop = self.new_event_loop()
+            self.set_event_loop(loop)
+            return loop
