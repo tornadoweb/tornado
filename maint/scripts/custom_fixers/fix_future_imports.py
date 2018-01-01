@@ -55,4 +55,4 @@ class FixFutureImports(fixer_base.BaseFix):
             # No comments or docstring, just insert at the start
             pos = 0
         tree.insert_child(pos, self.new_future_import(None))
-        tree.insert_child(pos+1, Newline())  # terminates the import stmt
+        tree.insert_child(pos + 1, Newline())  # terminates the import stmt

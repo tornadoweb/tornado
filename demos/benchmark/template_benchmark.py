@@ -61,7 +61,7 @@ def main():
         sys.exit(0)
     t = Timer(render)
     results = t.timeit(options.num) / options.num
-    print('%0.3f ms per iteration' % (results*1000))
+    print('%0.3f ms per iteration' % (results * 1000))
 
 if __name__ == '__main__':
     main()
