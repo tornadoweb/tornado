@@ -8,8 +8,7 @@ from lib2to3.fixer_util import FromImport, Name, Comma, Newline
 
 # copied from fix_tuple_params.py
 def is_docstring(stmt):
-    return isinstance(stmt, pytree.Node) and \
-           stmt.children[0].type == token.STRING
+    return isinstance(stmt, pytree.Node) and stmt.children[0].type == token.STRING
 
 
 class FixFutureImports(fixer_base.BaseFix):

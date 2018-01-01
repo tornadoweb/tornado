@@ -939,8 +939,8 @@ def with_timeout(timeout, future, quiet_exceptions=()):
         # We know this future will resolve on the IOLoop, so we don't
         # need the extra thread-safety of IOLoop.add_future (and we also
         # don't care about StackContext here.
-        future_add_done_callback(future,
-            lambda future: io_loop.remove_timeout(timeout_handle))
+        future_add_done_callback(
+            future, lambda future: io_loop.remove_timeout(timeout_handle))
     else:
         # concurrent.futures.Futures may resolve on any thread, so we
         # need to route them back to the IOLoop.
@@ -1150,8 +1150,7 @@ class Runner(object):
                 try:
                     yielded.start(self)
                     if yielded.is_ready():
-                        future_set_result_unless_cancelled(self.future,
-                            yielded.get_result())
+                        future_set_result_unless_cancelled(self.future, yielded.get_result())
                     else:
                         self.yield_point = yielded
                 except Exception:

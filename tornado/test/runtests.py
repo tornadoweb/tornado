@@ -180,8 +180,8 @@ def main():
         # logged anything at info level or above (except for the one
         # allowed info message "PASS")
         if (log_counter.info_count > 1 or
-            log_counter.warning_count > 0 or
-            log_counter.error_count > 0):
+                log_counter.warning_count > 0 or
+                log_counter.error_count > 0):
             logging.error("logged %d infos, %d warnings, and %d errors",
                           log_counter.info_count, log_counter.warning_count,
                           log_counter.error_count)
