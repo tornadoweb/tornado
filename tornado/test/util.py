@@ -41,6 +41,7 @@ skipPypy3V58 = unittest.skipIf(platform.python_implementation() == 'PyPy' and
                                sys.pypy_version_info < (5, 9),
                                'pypy3 5.8 has buggy ssl module')
 
+
 def _detect_ipv6():
     if not socket.has_ipv6:
         # socket.has_ipv6 check reports whether ipv6 was present at compile
@@ -56,6 +57,7 @@ def _detect_ipv6():
         if sock is not None:
             sock.close()
     return True
+
 
 skipIfNoIPv6 = unittest.skipIf(not _detect_ipv6(), 'ipv6 support not present')
 

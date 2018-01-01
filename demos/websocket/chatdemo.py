@@ -51,6 +51,7 @@ class MainHandler(tornado.web.RequestHandler):
     def get(self):
         self.render("index.html", messages=ChatSocketHandler.cache)
 
+
 class ChatSocketHandler(tornado.websocket.WebSocketHandler):
     waiters = set()
     cache = []

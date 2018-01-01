@@ -11,18 +11,22 @@ from tornado.testing import AsyncHTTPTestCase
 from tornado.web import RequestHandler, Application, asynchronous
 import unittest
 
+
 class HelloHandler(RequestHandler):
     def get(self):
         self.write("Hello world")
+
 
 class RedirectHandler(RequestHandler):
     def get(self, path):
         self.redirect(path, status=int(self.get_argument('status', '302')))
 
+
 class PostHandler(RequestHandler):
     def post(self):
         assert self.get_argument('foo') == 'bar'
         self.redirect('/hello', status=303)
+
 
 class ChunkedHandler(RequestHandler):
     @asynchronous
@@ -34,12 +38,14 @@ class ChunkedHandler(RequestHandler):
         yield gen.Task(self.flush)
         self.finish()
 
+
 class CacheHandler(RequestHandler):
     def get(self, computed_etag):
         self.write(computed_etag)
 
     def compute_etag(self):
         return self._write_buffer[0]
+
 
 class TestMixin(object):
     def get_handlers(self):
@@ -231,9 +237,11 @@ class TestMixin(object):
             headers=[('If-None-Match', etags)],
             expected_status=200)
 
+
 class DefaultHTTPTest(AsyncHTTPTestCase, TestMixin):
     def get_app(self):
         return Application(self.get_handlers(), **self.get_app_kwargs())
+
 
 class GzipHTTPTest(AsyncHTTPTestCase, TestMixin):
     def get_app(self):
@@ -248,6 +256,7 @@ class GzipHTTPTest(AsyncHTTPTestCase, TestMixin):
             # using the correct Vary header.
             rs.VARY_ETAG_DOESNT_CHANGE,
         ]
+
 
 if __name__ == '__main__':
     parse_command_line()

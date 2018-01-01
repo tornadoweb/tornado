@@ -36,8 +36,10 @@ TEST_MODULES = [
     #'tornado.test.wsgi_test',
 ]
 
+
 def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
+
 
 def main():
     print "Content-Type: text/plain\r\n\r\n",
@@ -49,6 +51,7 @@ def main():
             print "PASS"
         else:
             raise
+
 
 if __name__ == '__main__':
     main()

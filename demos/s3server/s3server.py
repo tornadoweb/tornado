@@ -43,6 +43,7 @@ from tornado import httpserver
 from tornado import ioloop
 from tornado import web
 
+
 def start(port, root_directory="/tmp/s3", bucket_depth=0):
     """Starts the mock S3 server on the given port at the given path."""
     application = S3Application(root_directory, bucket_depth)

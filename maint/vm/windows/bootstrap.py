@@ -37,6 +37,7 @@ EASY_INSTALL = os.path.join(SCRIPTS_DIR, 'easy_install.exe')
 
 PY_PACKAGES = ['tox', 'virtualenv', 'pip']
 
+
 def download_to_cache(url, local_name=None):
     if local_name is None:
         local_name = url.split('/')[-1]
@@ -46,6 +47,7 @@ def download_to_cache(url, local_name=None):
         with open(filename, 'wb') as f:
             f.write(data)
     return filename
+
 
 def main():
     if not os.path.exists(TMPDIR):
