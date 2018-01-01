@@ -1173,7 +1173,6 @@ class TestStreamBuffer(unittest.TestCase):
     def check_append_all_then_skip_all(self, buf, objs, input_type):
         self.assertEqual(len(buf), 0)
 
-        total_expected = b''.join(objs)
         expected = b''
 
         for o in objs:
@@ -1181,8 +1180,6 @@ class TestStreamBuffer(unittest.TestCase):
             buf.append(input_type(o))
             self.assertEqual(len(buf), len(expected))
             self.check_peek(buf, expected)
-
-        total_size = len(expected)
 
         while expected:
             n = self.random.randrange(1, len(expected) + 1)

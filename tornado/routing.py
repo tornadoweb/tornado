@@ -582,7 +582,7 @@ class PathMatches(Matcher):
             else:
                 try:
                     unescaped_fragment = re_unescape(fragment)
-                except ValueError as exc:
+                except ValueError:
                     # If we can't unescape part of it, we can't
                     # reverse this url.
                     return (None, None)
