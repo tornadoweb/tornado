@@ -19,6 +19,7 @@ To run the tests with tox, cd to e:\maint\vm\windows and run
 To run under cygwin (which must be installed separately), run
   cd /cygdrive/e; python -m tornado.test.runtests
 """
+from __future__ import absolute_import, division, print_function
 
 import os
 import subprocess
@@ -55,9 +56,9 @@ def main():
     os.chdir(TMPDIR)
     for exe, url in PYTHON_VERSIONS:
         if os.path.exists(exe):
-            print "%s already exists, skipping" % exe
+            print("%s already exists, skipping" % exe)
             continue
-        print "Installing %s" % url
+        print("Installing %s" % url)
         filename = download_to_cache(url)
         # http://blog.jaraco.com/2012/01/how-i-install-python-on-windows.html
         subprocess.check_call(['msiexec', '/i', filename,

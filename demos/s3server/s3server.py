@@ -42,6 +42,12 @@ from tornado import escape
 from tornado import httpserver
 from tornado import ioloop
 from tornado import web
+from tornado.util import unicode_type
+
+try:
+    long
+except NameError:
+    long = int
 
 
 def start(port, root_directory="/tmp/s3", bucket_depth=0):
@@ -87,9 +93,9 @@ class BaseRequestHandler(web.RequestHandler):
                     ''.join(parts))
 
     def _render_parts(self, value, parts=[]):
-        if isinstance(value, (unicode, bytes)):
+        if isinstance(value, (unicode_type, bytes)):
             parts.append(escape.xhtml_escape(value))
-        elif isinstance(value, int) or isinstance(value, long):
+        elif isinstance(value, (int, long)):
             parts.append(str(value))
         elif isinstance(value, datetime.datetime):
             parts.append(value.strftime("%Y-%m-%dT%H:%M:%S.000Z"))

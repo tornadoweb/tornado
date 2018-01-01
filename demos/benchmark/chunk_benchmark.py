@@ -9,6 +9,11 @@ from tornado.ioloop import IOLoop
 from tornado.options import define, options, parse_command_line
 from tornado.web import RequestHandler, Application
 
+try:
+    xrange
+except NameError:
+    xrange = range
+
 define('port', default=8888)
 define('num_chunks', default=1000)
 define('chunk_size', default=2048)

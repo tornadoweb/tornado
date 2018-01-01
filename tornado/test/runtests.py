@@ -126,7 +126,7 @@ def main():
         # and even
         # `python3.4 -W error -c 'import asyncio; asyncio.get_event_loop()'`
         # would generate a warning.
-        warnings.filterwarnings("ignore", category=ResourceWarning,
+        warnings.filterwarnings("ignore", category=ResourceWarning,  # noqa: F821
                                 module=r"asyncio\..*")
 
     logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
