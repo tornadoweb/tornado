@@ -293,7 +293,8 @@ class RuleRouter(Router):
             ])
 
         In the examples above, ``Target`` can be a nested `Router` instance, an instance of
-        `~.httputil.HTTPServerConnectionDelegate` or an old-style callable, accepting a request argument.
+        `~.httputil.HTTPServerConnectionDelegate` or an old-style callable,
+        accepting a request argument.
 
         :arg rules: a list of `Rule` instances or tuples of `Rule`
             constructor arguments.

@@ -301,7 +301,8 @@ class AsyncTestCase(unittest.TestCase):
                     except Exception:
                         self.__failure = sys.exc_info()
                     self.stop()
-                self.__timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout, timeout_func)
+                self.__timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout,
+                                                          timeout_func)
             while True:
                 self.__running = True
                 self.io_loop.start()
@@ -440,7 +441,8 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
         By default includes a self-signed testing certificate.
         """
         # Testing keys were generated with:
-        # openssl req -new -keyout tornado/test/test.key -out tornado/test/test.crt -nodes -days 3650 -x509
+        # openssl req -new -keyout tornado/test/test.key \
+        #                     -out tornado/test/test.crt -nodes -days 3650 -x509
         module_dir = os.path.dirname(__file__)
         return dict(
             certfile=os.path.join(module_dir, 'test', 'test.crt'),
