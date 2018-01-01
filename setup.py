@@ -104,7 +104,7 @@ http://api.mongodb.org/python/current/installation.html#osx
 
 kwargs = {}
 
-version = "5.0.dev1"
+version = "5.0a1"
 
 with open('README.rst') as f:
     kwargs['long_description'] = f.read()
@@ -134,6 +134,9 @@ if setuptools is not None:
     if sys.version_info < (3, 5):
         install_requires.append('backports_abc>=0.4')
     kwargs['install_requires'] = install_requires
+
+    python_requires = '>= 2.7, !=3.0.*, !=3.1.*, !=3.2.*, != 3.3.*'
+    kwargs['python_requires'] = python_requires
 
 # Verify that the SSL module has all the modern upgrades. Check for several
 # names individually since they were introduced at different versions,

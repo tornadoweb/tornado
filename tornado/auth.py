@@ -850,8 +850,8 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
     .. versionadded:: 3.2
     """
-    _OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
-    _OAUTH_ACCESS_TOKEN_URL = "https://accounts.google.com/o/oauth2/token"
+    _OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+    _OAUTH_ACCESS_TOKEN_URL = "https://www.googleapis.com/oauth2/v4/token"
     _OAUTH_USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
     _OAUTH_NO_CALLBACKS = False
     _OAUTH_SETTINGS_KEY = 'google_oauth'
