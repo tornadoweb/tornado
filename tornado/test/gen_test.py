@@ -1480,6 +1480,7 @@ class WaitIteratorTest(AsyncTestCase):
 
 class RunnerGCTest(AsyncTestCase):
     """Github issue 1769: Runner objects can get GCed unexpectedly"""
+    @skipOnTravis
     @gen_test
     def test_gc(self):
         """Runners shouldn't GC if future is alive"""

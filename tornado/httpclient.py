@@ -657,6 +657,8 @@ def main():
     define("print_body", type=bool, default=True)
     define("follow_redirects", type=bool, default=True)
     define("validate_cert", type=bool, default=True)
+    define("proxy_host", type=str)
+    define("proxy_port", type=int)
     args = parse_command_line()
     client = HTTPClient()
     for arg in args:
@@ -664,6 +666,8 @@ def main():
             response = client.fetch(arg,
                                     follow_redirects=options.follow_redirects,
                                     validate_cert=options.validate_cert,
+                                    proxy_host=options.proxy_host,
+                                    proxy_port=options.proxy_port,
                                     )
         except HTTPError as e:
             if e.response is not None:
