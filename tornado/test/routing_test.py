@@ -13,7 +13,7 @@
 
 from __future__ import absolute_import, division, print_function
 
-from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
+from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine  # noqa: E501
 from tornado.routing import HostMatches, PathMatches, ReversibleRouter, Router, Rule, RuleRouter
 from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
@@ -29,7 +29,9 @@ class BasicRouter(Router):
 
             def finish(self):
                 self.connection.write_headers(
-                    ResponseStartLine("HTTP/1.1", 200, "OK"), HTTPHeaders({"Content-Length": "2"}), b"OK"
+                    ResponseStartLine("HTTP/1.1", 200, "OK"),
+                    HTTPHeaders({"Content-Length": "2"}),
+                    b"OK"
                 )
                 self.connection.finish()
 
@@ -179,7 +181,8 @@ class RuleRouterTest(AsyncHTTPTestCase):
 
         app.add_handlers(".*", [
             (HostMatches("www.example.com"), [
-                (PathMatches("/first_handler"), "tornado.test.routing_test.SecondHandler", {}, "second_handler")
+                (PathMatches("/first_handler"),
+                 "tornado.test.routing_test.SecondHandler", {}, "second_handler")
             ]),
             Rule(PathMatches("/.*handler"), router),
             Rule(PathMatches("/first_handler"), FirstHandler, name="first_handler"),
