@@ -277,6 +277,51 @@ def coroutine(func, replace_callback=True):
 # Runner alive.
 _futures_to_runners = weakref.WeakKeyDictionary()
 
+current_coroutine = [None, None]
+
+
+def _coroutine_belongs_to(class_or_instance, coro):
+    """Since methods aren't bound until 'runtime' we have to
+    determine at that point whether or not a coroutine is a bound
+    method of an instance or an unbound method of a class.
+
+    First we check that the class or instance has a method by
+    that name, then we check that the method's wrapped function
+    is exactly equivalent to that stored as a coroutine.
+    """
+    if not hasattr(class_or_instance, coro.__name__):
+        return False
+    method = getattr(class_or_instance, coro.__name__)
+    if hasattr(method, '__wrapped__') and method.__wrapped__ is coro:
+        return True
+    return False
+
+
+def _set_current_coroutine(handle, arguments):
+    """This function exposes the currently running class instance
+    and function handle for the coroutine in progress. This is
+    useful when, for example, you need global access to a
+    RequestHandler, but don't want to pass the instance down the
+    stack.
+
+    The current coroutine is changed by reference so if the user
+    decides to store it in another name the changes are reflected
+    there (to avoid potentially pernicious bugs).
+    """
+    if arguments.args and _coroutine_belongs_to(
+            arguments.args[0], handle):
+        current_coroutine[0] = arguments.args[0]
+    current_coroutine[1] = handle
+
+
+def _unset_current_coroutine():
+    """Ensure coroutine state doesn't persist from one context to
+    the next. This ensures, for example,
+    ``tornado.web.RequestHandler`` instances never share state.
+    """
+    current_coroutine[0] = None
+    current_coroutine[1] = None
+
 
 def _make_coroutine_wrapper(func, replace_callback):
     """The inner workings of ``@gen.coroutine`` and ``@gen.engine``.
@@ -301,6 +346,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                 future, lambda future: callback(future.result()))
 
         try:
+            _set_current_coroutine(func, Arguments(args, kwargs))
             result = func(*args, **kwargs)
         except (Return, StopIteration) as e:
             result = _value_from_stopiteration(e)
@@ -332,7 +378,8 @@ def _make_coroutine_wrapper(func, replace_callback):
                 except Exception:
                     future_set_exc_info(future, sys.exc_info())
                 else:
-                    _futures_to_runners[future] = Runner(result, future, yielded)
+                    _futures_to_runners[future] = Runner(result, future, yielded,
+                            Arguments(args, kwargs))
                 yielded = None
                 try:
                     return future
@@ -346,6 +393,9 @@ def _make_coroutine_wrapper(func, replace_callback):
                     # used in the absence of cycles).  We can avoid the
                     # cycle by clearing the local variable after we return it.
                     future = None
+        finally:
+            _unset_current_coroutine()
+
         future_set_result_unless_cancelled(future, result)
         return future
 
@@ -1014,7 +1064,8 @@ class Runner(object):
     The results of the generator are stored in ``result_future`` (a
     `.Future`)
     """
-    def __init__(self, gen, result_future, first_yielded):
+    def __init__(self, gen, result_future, first_yielded, arguments):
+        self.arguments = arguments
         self.gen = gen
         self.result_future = result_future
         self.future = _null_future
@@ -1100,6 +1151,7 @@ class Runner(object):
                             # for faster GC on CPython.
                             exc_info = None
                     else:
+                        _set_current_coroutine(self.gen, self.arguments)
                         yielded = self.gen.send(value)
 
                     if stack_context._state.contexts is not orig_stack_contexts:
@@ -1134,6 +1186,7 @@ class Runner(object):
                     return
                 yielded = None
         finally:
+            _unset_current_coroutine()
             self.running = False
 
     def handle_yield(self, yielded):
