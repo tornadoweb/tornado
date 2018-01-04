@@ -670,6 +670,68 @@ class GenCoroutineTest(AsyncTestCase):
         super(GenCoroutineTest, self).tearDown()
         assert self.finished
 
+    @gen_test
+    def test_coro_exposure_for_bound_methods(self):
+        _self = self
+
+        @gen.coroutine
+        def nested_coro():
+            _self.assertIs(gen.coroutine_stack[-1][0], None)
+            _self.assertIs(gen.coroutine_stack[-1][1], nested_coro.__wrapped__)
+            raise gen.Return(42)
+
+        class NewStyle(object):
+            @gen.coroutine
+            def f(self):
+                _self.assertIs(gen.coroutine_stack[-1][0], new_style)
+                _self.assertIs(gen.coroutine_stack[-1][1], new_style.f.__wrapped__)
+                retval = yield nested_coro()
+                raise gen.Return(retval)
+
+        new_style = NewStyle()
+        self.assertEquals(gen.coroutine_stack[-1][0], self)
+        self.assertEquals(gen.coroutine_stack[-1][1],
+                self.test_coro_exposure_for_bound_methods.__wrapped__)
+        result = new_style.f()
+        result = yield new_style.f()
+        self.assertEquals(result, 42)
+
+        self.assertEquals(gen.coroutine_stack[-1][0], self)
+        self.assertEquals(gen.coroutine_stack[-1][1],
+                self.test_coro_exposure_for_bound_methods.__wrapped__)
+
+        self.finished = True
+        """
+        class OldStyle:
+            @gen.coroutine
+            def f(self):
+                yield gen.Task(self.io_loop.add_callback)
+                raise gen.Return(42)
+        """
+
+    """
+    def test_coro_exposure_for_unbound_methods(self):
+        pass
+
+    def test_coro_exposure_for_functions(self):
+        pass
+
+    def test_coro_exposure_for_expected_wrapper_exceptions(self):
+        pass
+
+    def test_coro_exposure_for_unexpected_wrapper_exceptions(self):
+        pass
+
+    def test_coro_exposure_for_generator_initialization(self):
+        pass
+
+    def test_coro_exposure_for_expected_runner_exceptions(self):
+        pass
+
+    def test_coro_exposure_for_unexpected_runner_exceptions(self):
+        pass
+    """
+
     def test_attributes(self):
         self.finished = True
 
