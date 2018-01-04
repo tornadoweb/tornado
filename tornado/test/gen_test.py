@@ -673,30 +673,28 @@ class GenCoroutineTest(AsyncTestCase):
     @gen_test
     def test_coro_exposure_for_bound_methods(self):
         _self = self
+
         @gen.coroutine
+        def nested_coro():
+            _self.assertIs(gen.coroutine_stack[-1][0], None)
+            _self.assertIs(gen.coroutine_stack[-1][1], nested_coro.__wrapped__)
+            raise gen.Return(42)
+
         class NewStyle(object):
             @gen.coroutine
             def f(self):
-                yield gen.Task(_self.io_loop.add_callback)
-                raise gen.Return(42)
+                _self.assertIs(gen.coroutine_stack[-1][0], new_style)
+                _self.assertIs(gen.coroutine_stack[-1][1], new_style.f.__wrapped__)
+                retval = yield nested_coro()
+                raise gen.Return(retval)
 
         new_style = NewStyle()
         self.assertEquals(gen.coroutine_stack[-1][0], self)
         self.assertEquals(gen.coroutine_stack[-1][1],
                 self.test_coro_exposure_for_bound_methods.__wrapped__)
-        print("Firing up genny...")
         result = new_style.f()
-        print("STACK", gen.coroutine_stack)
-        self.assertIs(gen.coroutine_stack[-1][0], new_style)
-        self.assertIs(gen.coroutine_stack[-1][1], new_style.f)
-        print("Yielding...")
         result = yield new_style.f()
-        print("Yielded.")
         self.assertEquals(result, 42)
-
-        try:
-            result = yield new_style.f()
-        except StopIteration: pass
 
         self.assertEquals(gen.coroutine_stack[-1][0], self)
         self.assertEquals(gen.coroutine_stack[-1][1],

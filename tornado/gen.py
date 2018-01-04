@@ -312,7 +312,6 @@ def _set_current_coroutine(handle, arguments):
             arguments.args[0], handle):
         kls = arguments.args[0]
     coroutine_stack.append((kls, handle))
-    print("Set coroutine to", coroutine_stack[-1])
 
 
 def _unset_current_coroutine():
@@ -321,7 +320,6 @@ def _unset_current_coroutine():
     ``tornado.web.RequestHandler`` instances never share state.
     """
     old = coroutine_stack.pop()
-    print("Unsetting", old)
 
 
 def _make_coroutine_wrapper(func, replace_callback):
@@ -1154,7 +1152,10 @@ class Runner(object):
                             exc_info = None
                     else:
                         _set_current_coroutine(self.handle, self.arguments)
-                        yielded = self.gen.send(value)
+                        try:
+                            yielded = self.gen.send(value)
+                        finally:
+                            _unset_current_coroutine()
 
                     if stack_context._state.contexts is not orig_stack_contexts:
                         self.gen.throw(
@@ -1188,7 +1189,6 @@ class Runner(object):
                     return
                 yielded = None
         finally:
-            _unset_current_coroutine()
             self.running = False
 
     def handle_yield(self, yielded):
