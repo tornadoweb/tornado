@@ -670,6 +670,70 @@ class GenCoroutineTest(AsyncTestCase):
         super(GenCoroutineTest, self).tearDown()
         assert self.finished
 
+    @gen_test
+    def test_coro_exposure_for_bound_methods(self):
+        _self = self
+        @gen.coroutine
+        class NewStyle(object):
+            @gen.coroutine
+            def f(self):
+                yield gen.Task(_self.io_loop.add_callback)
+                raise gen.Return(42)
+
+        new_style = NewStyle()
+        self.assertEquals(gen.coroutine_stack[-1][0], self)
+        self.assertEquals(gen.coroutine_stack[-1][1],
+                self.test_coro_exposure_for_bound_methods.__wrapped__)
+        print("Firing up genny...")
+        result = new_style.f()
+        print("STACK", gen.coroutine_stack)
+        self.assertIs(gen.coroutine_stack[-1][0], new_style)
+        self.assertIs(gen.coroutine_stack[-1][1], new_style.f)
+        print("Yielding...")
+        result = yield new_style.f()
+        print("Yielded.")
+        self.assertEquals(result, 42)
+
+        try:
+            result = yield new_style.f()
+        except StopIteration: pass
+
+        self.assertEquals(gen.coroutine_stack[-1][0], self)
+        self.assertEquals(gen.coroutine_stack[-1][1],
+                self.test_coro_exposure_for_bound_methods.__wrapped__)
+
+        self.finished = True
+        """
+        class OldStyle:
+            @gen.coroutine
+            def f(self):
+                yield gen.Task(self.io_loop.add_callback)
+                raise gen.Return(42)
+        """
+
+    """
+    def test_coro_exposure_for_unbound_methods(self):
+        pass
+
+    def test_coro_exposure_for_functions(self):
+        pass
+
+    def test_coro_exposure_for_expected_wrapper_exceptions(self):
+        pass
+
+    def test_coro_exposure_for_unexpected_wrapper_exceptions(self):
+        pass
+
+    def test_coro_exposure_for_generator_initialization(self):
+        pass
+
+    def test_coro_exposure_for_expected_runner_exceptions(self):
+        pass
+
+    def test_coro_exposure_for_unexpected_runner_exceptions(self):
+        pass
+    """
+
     def test_attributes(self):
         self.finished = True
 

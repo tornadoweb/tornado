@@ -277,8 +277,7 @@ def coroutine(func, replace_callback=True):
 # Runner alive.
 _futures_to_runners = weakref.WeakKeyDictionary()
 
-current_coroutine = [None, None]
-
+coroutine_stack = []
 
 def _coroutine_belongs_to(class_or_instance, coro):
     """Since methods aren't bound until 'runtime' we have to
@@ -308,10 +307,12 @@ def _set_current_coroutine(handle, arguments):
     decides to store it in another name the changes are reflected
     there (to avoid potentially pernicious bugs).
     """
+    kls = None
     if arguments.args and _coroutine_belongs_to(
             arguments.args[0], handle):
-        current_coroutine[0] = arguments.args[0]
-    current_coroutine[1] = handle
+        kls = arguments.args[0]
+    coroutine_stack.append((kls, handle))
+    print("Set coroutine to", coroutine_stack[-1])
 
 
 def _unset_current_coroutine():
@@ -319,8 +320,8 @@ def _unset_current_coroutine():
     the next. This ensures, for example,
     ``tornado.web.RequestHandler`` instances never share state.
     """
-    current_coroutine[0] = None
-    current_coroutine[1] = None
+    old = coroutine_stack.pop()
+    print("Unsetting", old)
 
 
 def _make_coroutine_wrapper(func, replace_callback):
@@ -379,7 +380,7 @@ def _make_coroutine_wrapper(func, replace_callback):
                     future_set_exc_info(future, sys.exc_info())
                 else:
                     _futures_to_runners[future] = Runner(result, future, yielded,
-                            Arguments(args, kwargs))
+                            Arguments(args, kwargs), wrapped)
                 yielded = None
                 try:
                     return future
@@ -1064,7 +1065,8 @@ class Runner(object):
     The results of the generator are stored in ``result_future`` (a
     `.Future`)
     """
-    def __init__(self, gen, result_future, first_yielded, arguments):
+    def __init__(self, gen, result_future, first_yielded, arguments, handle):
+        self.handle = handle
         self.arguments = arguments
         self.gen = gen
         self.result_future = result_future
@@ -1151,7 +1153,7 @@ class Runner(object):
                             # for faster GC on CPython.
                             exc_info = None
                     else:
-                        _set_current_coroutine(self.gen, self.arguments)
+                        _set_current_coroutine(self.handle, self.arguments)
                         yielded = self.gen.send(value)
 
                     if stack_context._state.contexts is not orig_stack_contexts:
