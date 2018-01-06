@@ -1,7 +1,7 @@
-What's new in Tornado 4.5.2
+What's new in Tornado 4.5.3
 ===========================
 
-Aug 27, 2017
+Jan 6, 2018
 ------------
 
 `tornado.curl_httpclient`
