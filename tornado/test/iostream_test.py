@@ -9,7 +9,7 @@ from tornado.netutil import ssl_wrap_socket
 from tornado.stack_context import NullContext
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
-from tornado.test.util import unittest, skipIfNonUnix, refusing_port
+from tornado.test.util import unittest, skipIfNonUnix, refusing_port, skipPypy3V58
 from tornado.web import RequestHandler, Application
 import errno
 import logging
@@ -539,6 +539,7 @@ class TestIOStreamMixin(object):
             client.close()
 
     @skipIfNonUnix
+    @skipPypy3V58
     def test_inline_read_error(self):
         # An error on an inline read is raised without logging (on the
         # assumption that it will eventually be noticed or logged further
@@ -557,6 +558,7 @@ class TestIOStreamMixin(object):
             server.close()
             client.close()
 
+    @skipPypy3V58
     def test_async_read_error_logging(self):
         # Socket errors on asynchronous reads should be logged (but only
         # once).
@@ -993,7 +995,7 @@ class TestIOStreamStartTLS(AsyncTestCase):
         server_future = self.server_start_tls(_server_ssl_options())
         client_future = self.client_start_tls(
             ssl.create_default_context(),
-            server_hostname=b'127.0.0.1')
+            server_hostname='127.0.0.1')
         with ExpectLog(gen_log, "SSL Error"):
             with self.assertRaises(ssl.SSLError):
                 # The client fails to connect with an SSL error.

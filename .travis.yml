@@ -1,7 +1,6 @@
 # https://travis-ci.org/tornadoweb/tornado
 language: python
 python:
-    - 2.7.8
     - 2.7
     - pypy
     - 3.3
@@ -9,7 +8,7 @@ python:
     - 3.5
     - 3.6
     - nightly
-    - pypy3
+    - pypy3.5-5.8.0
 
 install:
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install futures mock monotonic trollius; fi

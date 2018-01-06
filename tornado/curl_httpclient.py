@@ -493,6 +493,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
 
     def _curl_debug(self, debug_type, debug_msg):
         debug_types = ('I', '<', '>', '<', '>')
+        debug_msg = native_str(debug_msg)
         if debug_type == 0:
             curl_log.debug('%s', debug_msg.strip())
         elif debug_type in (1, 2):

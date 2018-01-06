@@ -189,6 +189,13 @@ class WebSocketTest(WebSocketBaseTestCase):
         response = self.fetch('/echo')
         self.assertEqual(response.code, 400)
 
+    def test_missing_websocket_key(self):
+        response = self.fetch('/echo',
+                              headers={'Connection': 'Upgrade',
+                                       'Upgrade': 'WebSocket',
+                                       'Sec-WebSocket-Version': '13'})
+        self.assertEqual(response.code, 400)
+
     def test_bad_websocket_version(self):
         response = self.fetch('/echo',
                               headers={'Connection': 'Upgrade',

@@ -974,7 +974,8 @@ class RequestHandler(object):
                 if self.check_etag_header():
                     self._write_buffer = []
                     self.set_status(304)
-            if self._status_code in (204, 304):
+            if (self._status_code in (204, 304) or
+                (self._status_code >= 100 and self._status_code < 200)):
                 assert not self._write_buffer, "Cannot send body with %s" % self._status_code
                 self._clear_headers_for_304()
             elif "Content-Length" not in self._headers:

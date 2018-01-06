@@ -356,7 +356,7 @@ class AuthRedirectTest(WebTestCase):
         response = self.wait()
         self.assertEqual(response.code, 302)
         self.assertTrue(re.match(
-            'http://example.com/login\?next=http%3A%2F%2Flocalhost%3A[0-9]+%2Fabsolute',
+            'http://example.com/login\?next=http%3A%2F%2F127.0.0.1%3A[0-9]+%2Fabsolute',
             response.headers['Location']), response.headers['Location'])
 
 
@@ -2134,7 +2134,7 @@ class StreamingRequestBodyTest(WebTestCase):
         stream.write(b"4\r\nqwer\r\n")
         data = yield self.data
         self.assertEquals(data, b"qwer")
-        stream.write(b"0\r\n")
+        stream.write(b"0\r\n\r\n")
         yield self.finished
         data = yield gen.Task(stream.read_until_close)
         # This would ideally use an HTTP1Connection to read the response.

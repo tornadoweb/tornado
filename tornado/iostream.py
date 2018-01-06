@@ -1061,7 +1061,12 @@ class IOStream(BaseIOStream):
         return chunk
 
     def write_to_fd(self, data):
-        return self.socket.send(data)
+        try:
+            return self.socket.send(data)
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def connect(self, address, callback=None, server_hostname=None):
         """Connects the socket to a remote address without blocking.
@@ -1471,6 +1476,10 @@ class SSLIOStream(IOStream):
                 # simply return 0 bytes written.
                 return 0
             raise
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def read_from_fd(self):
         if self._ssl_accepting:
@@ -1528,7 +1537,12 @@ class PipeIOStream(BaseIOStream):
         os.close(self.fd)
 
     def write_to_fd(self, data):
-        return os.write(self.fd, data)
+        try:
+            return os.write(self.fd, data)
+        finally:
+            # Avoid keeping to data, which can be a memoryview.
+            # See https://github.com/tornadoweb/tornado/pull/2008
+            del data
 
     def read_from_fd(self):
         try:
