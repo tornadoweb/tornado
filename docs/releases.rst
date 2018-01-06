@@ -5,6 +5,7 @@ Release notes
    :maxdepth: 2
 
    releases/v5.0.0
+   releases/v4.5.3
    releases/v4.5.2
    releases/v4.5.1
    releases/v4.5.0
