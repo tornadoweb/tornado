@@ -171,13 +171,14 @@ setup(
             "templates/utf8.html",
             "test.crt",
             "test.key",
-            ],
-        },
+        ],
+    },
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
     license="http://www.apache.org/licenses/LICENSE-2.0",
-    description="Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed.",
+    description=("Tornado is a Python web framework and asynchronous networking library,"
+                 " originally developed at FriendFeed."),
     classifiers=[
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 2',
@@ -188,6 +189,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
-        ],
+    ],
     **kwargs
 )

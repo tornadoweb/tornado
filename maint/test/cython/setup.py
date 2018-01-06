@@ -8,7 +8,7 @@ except:
 if Cython is None:
     ext_modules = None
 else:
-    ext_modules=Cython.Build.cythonize('cythonapp.pyx')
+    ext_modules = Cython.Build.cythonize('cythonapp.pyx')
 
 setup(
     name='cythonapp',

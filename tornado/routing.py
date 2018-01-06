@@ -293,7 +293,8 @@ class RuleRouter(Router):
             ])
 
         In the examples above, ``Target`` can be a nested `Router` instance, an instance of
-        `~.httputil.HTTPServerConnectionDelegate` or an old-style callable, accepting a request argument.
+        `~.httputil.HTTPServerConnectionDelegate` or an old-style callable,
+        accepting a request argument.
 
         :arg rules: a list of `Rule` instances or tuples of `Rule`
             constructor arguments.
@@ -582,7 +583,7 @@ class PathMatches(Matcher):
             else:
                 try:
                     unescaped_fragment = re_unescape(fragment)
-                except ValueError as exc:
+                except ValueError:
                     # If we can't unescape part of it, we can't
                     # reverse this url.
                     return (None, None)

@@ -733,7 +733,8 @@ class RequestHandler(object):
         if not isinstance(chunk, (bytes, unicode_type, dict)):
             message = "write() only accepts bytes, unicode, and dict objects"
             if isinstance(chunk, list):
-                message += ". Lists not accepted for security reasons; see http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"
+                message += ". Lists not accepted for security reasons; see " + \
+                    "http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"
             raise TypeError(message)
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
@@ -999,7 +1000,7 @@ class RequestHandler(object):
                     self._write_buffer = []
                     self.set_status(304)
             if (self._status_code in (204, 304) or
-                (self._status_code >= 100 and self._status_code < 200)):
+                    (self._status_code >= 100 and self._status_code < 200)):
                 assert not self._write_buffer, "Cannot send body with %s" % self._status_code
                 self._clear_headers_for_304()
             elif "Content-Length" not in self._headers:
@@ -1735,7 +1736,7 @@ def stream_request_body(cls):
 
     See the `file receiver demo <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload/>`_
     for example usage.
-    """
+    """  # noqa: E501
     if not issubclass(cls, RequestHandler):
         raise TypeError("expected subclass of RequestHandler, got %r", cls)
     cls._stream_request_body = True
@@ -2818,7 +2819,7 @@ class OutputTransform(object):
         pass
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
-        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes]
+        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes] # noqa: E501
         return status_code, headers, chunk
 
     def transform_chunk(self, chunk, finishing):
@@ -2859,7 +2860,7 @@ class GZipContentEncoding(OutputTransform):
         return ctype.startswith('text/') or ctype in self.CONTENT_TYPES
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
-        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes]
+        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes] # noqa: E501
         # TODO: can/should this type be inherited from the superclass?
         if 'Vary' in headers:
             headers['Vary'] += ', Accept-Encoding'

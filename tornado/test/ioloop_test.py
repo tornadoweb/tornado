@@ -20,7 +20,6 @@ from tornado.platform.select import _Select
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis, skipBefore35, exec_test
-from tornado.concurrent import Future
 
 try:
     from concurrent import futures
@@ -641,7 +640,7 @@ class TestIOLoopFutures(AsyncTestCase):
         res = yield [
             namespace["async_wrapper"](event1, event2),
             namespace["async_wrapper"](event2, event1)
-            ]
+        ]
 
         self.assertEqual([event1, event2], res)
 

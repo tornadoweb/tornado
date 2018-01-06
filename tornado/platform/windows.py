@@ -8,7 +8,7 @@ import ctypes.wintypes  # type: ignore
 
 # See: http://msdn.microsoft.com/en-us/library/ms724935(VS.85).aspx
 SetHandleInformation = ctypes.windll.kernel32.SetHandleInformation
-SetHandleInformation.argtypes = (ctypes.wintypes.HANDLE, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)
+SetHandleInformation.argtypes = (ctypes.wintypes.HANDLE, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)  # noqa: E501
 SetHandleInformation.restype = ctypes.wintypes.BOOL
 
 HANDLE_FLAG_INHERIT = 0x00000001

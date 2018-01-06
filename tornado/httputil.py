@@ -61,7 +61,7 @@ except ImportError:
     SSLError = _SSLError  # type: ignore
 
 try:
-    import typing
+    import typing  # noqa: F401
 except ImportError:
     pass
 
@@ -942,7 +942,7 @@ def split_host_and_port(netloc):
 
 
 def qs_to_qsl(qs):
-    """Generator converting a result of ``parse_qs`` back to name-value pairs. 
+    """Generator converting a result of ``parse_qs`` back to name-value pairs.
 
     .. versionadded:: 5.0
     """

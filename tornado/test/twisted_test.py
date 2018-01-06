@@ -67,6 +67,7 @@ if PY3:
     import _thread as thread
 else:
     import thread
+    ResourceWarning = None
 
 try:
     import asyncio
