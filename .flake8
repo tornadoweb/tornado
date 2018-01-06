@@ -10,3 +10,4 @@ ignore =
     E402,
     # E722 do not use bare except
     E722,
+doctests = true
