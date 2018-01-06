@@ -1,5 +1,5 @@
 [flake8]
-exclude = .git,.tox,__pycache__
+exclude = .git,.tox,__pycache__,.eggs,build
 max-line-length = 100
 ignore =
     # E231 missing whitespace after ','
