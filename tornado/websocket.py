@@ -757,17 +757,17 @@ class WebSocketProtocol13(WebSocketProtocol):
         else:
             finbit = 0
         frame = struct.pack("B", finbit | opcode | flags)
-        l = len(data)
+        data_len = len(data)
         if self.mask_outgoing:
             mask_bit = 0x80
         else:
             mask_bit = 0
-        if l < 126:
-            frame += struct.pack("B", l | mask_bit)
-        elif l <= 0xFFFF:
-            frame += struct.pack("!BH", 126 | mask_bit, l)
+        if data_len < 126:
+            frame += struct.pack("B", data_len | mask_bit)
+        elif data_len <= 0xFFFF:
+            frame += struct.pack("!BH", 126 | mask_bit, data_len)
         else:
-            frame += struct.pack("!BQ", 127 | mask_bit, l)
+            frame += struct.pack("!BQ", 127 | mask_bit, data_len)
         if self.mask_outgoing:
             mask = os.urandom(4)
             data = mask + _websocket_mask(mask, data)

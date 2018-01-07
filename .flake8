@@ -1,9 +1,7 @@
 [flake8]
-exclude = .git,.tox,__pycache__
+exclude = .git,.tox,__pycache__,.eggs,build
 max-line-length = 100
 ignore =
-    # E231 missing whitespace after ','
-    E231,
     # E265 block comment should start with '# '
     E265,
     # E266 too many leading '#' for block comment
@@ -12,5 +10,4 @@ ignore =
     E402,
     # E722 do not use bare except
     E722,
-    # E741 ambiguous variable name 'l'
-    E741,
+doctests = true

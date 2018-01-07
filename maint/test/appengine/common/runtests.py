@@ -51,7 +51,7 @@ if __name__ == "__main__":
         for sig in [signal.SIGTERM, signal.SIGTERM, signal.SIGKILL]:
             os.kill(proc.pid, sig)
             res = os.waitpid(proc.pid, os.WNOHANG)
-            if res != (0,0):
+            if res != (0, 0):
                 break
             time.sleep(0.1)
         else:
