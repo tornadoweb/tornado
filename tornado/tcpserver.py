@@ -108,7 +108,6 @@ class TCPServer(object):
     """
     def __init__(self, ssl_options=None, max_buffer_size=None,
                  read_chunk_size=None):
-        self.io_loop = IOLoop.current()
         self.ssl_options = ssl_options
         self._sockets = {}   # fd -> socket object
         self._handlers = {}  # fd -> remove_handler callable
@@ -296,7 +295,7 @@ class TCPServer(object):
 
             future = self.handle_stream(stream, address)
             if future is not None:
-                self.io_loop.add_future(gen.convert_yielded(future),
-                                        lambda f: f.result())
+                IOLoop.current().add_future(gen.convert_yielded(future),
+                                            lambda f: f.result())
         except Exception:
             app_log.error("Error in connection callback", exc_info=True)

@@ -2,19 +2,21 @@
 
 
 from __future__ import absolute_import, division, print_function
+
 from tornado import netutil
 from tornado.escape import json_decode, json_encode, utf8, _unicode, recursive_unicode, native_str
 from tornado import gen
 from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
-from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
+from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine  # noqa: E501
 from tornado.iostream import IOStream
 from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test  # noqa: E501
 from tornado.test.util import unittest, skipOnTravis
 from tornado.web import Application, RequestHandler, asynchronous, stream_request_body
+
 from contextlib import closing
 import datetime
 import gzip
@@ -41,6 +43,7 @@ def read_stream_body(stream, callback):
             chunks.append(chunk)
 
         def finish(self):
+            conn.detach()
             callback((self.start_line, self.headers, b''.join(chunks)))
     conn = HTTP1Connection(stream, True)
     conn.read_response(Delegate())
@@ -150,7 +153,6 @@ class TLSv1Test(BaseSSLTest, SSLTestMixin):
         return ssl.PROTOCOL_TLSv1
 
 
-@unittest.skipIf(not hasattr(ssl, 'SSLContext'), 'ssl.SSLContext not present')
 class SSLContextTest(BaseSSLTest, SSLTestMixin):
     def get_ssl_options(self):
         context = ssl_options_to_context(
@@ -550,6 +552,16 @@ class XHeaderTest(HandlerBaseTestCase):
             self.fetch_json("/", headers=https_forwarded)["remote_protocol"],
             "https")
 
+        https_multi_forwarded = {"X-Forwarded-Proto": "https , http"}
+        self.assertEqual(
+            self.fetch_json("/", headers=https_multi_forwarded)["remote_protocol"],
+            "http")
+
+        http_multi_forwarded = {"X-Forwarded-Proto": "http,https"}
+        self.assertEqual(
+            self.fetch_json("/", headers=http_multi_forwarded)["remote_protocol"],
+            "https")
+
         bad_forwarded = {"X-Forwarded-Proto": "unknown"}
         self.assertEqual(
             self.fetch_json("/", headers=bad_forwarded)["remote_protocol"],
@@ -615,6 +627,7 @@ class UnixSocketTest(AsyncTestCase):
 
     def tearDown(self):
         self.stream.close()
+        self.io_loop.run_sync(self.server.close_all_connections)
         self.server.stop()
         shutil.rmtree(self.tmpdir)
         super(UnixSocketTest, self).tearDown()
@@ -797,9 +810,12 @@ class KeepAliveTest(AsyncHTTPTestCase):
     def test_keepalive_chunked(self):
         self.http_version = b'HTTP/1.0'
         self.connect()
-        self.stream.write(b'POST / HTTP/1.0\r\nConnection: keep-alive\r\n'
+        self.stream.write(b'POST / HTTP/1.0\r\n'
+                          b'Connection: keep-alive\r\n'
                           b'Transfer-Encoding: chunked\r\n'
-                          b'\r\n0\r\n')
+                          b'\r\n'
+                          b'0\r\n'
+                          b'\r\n')
         self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')

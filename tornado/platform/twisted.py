@@ -32,7 +32,7 @@ import sys
 import twisted.internet.abstract  # type: ignore
 from twisted.internet.defer import Deferred  # type: ignore
 from twisted.internet.posixbase import PosixReactorBase  # type: ignore
-from twisted.internet.interfaces import IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor  # type: ignore
+from twisted.internet.interfaces import IReactorFDSet, IDelayedCall, IReactorTime, IReadDescriptor, IWriteDescriptor  # type: ignore # noqa: E501
 from twisted.python import failure, log  # type: ignore
 from twisted.internet import error  # type: ignore
 import twisted.names.cache  # type: ignore
@@ -42,7 +42,7 @@ import twisted.names.resolve  # type: ignore
 
 from zope.interface import implementer  # type: ignore
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_exc_info
 from tornado.escape import utf8
 from tornado import gen
 import tornado.ioloop
@@ -317,6 +317,7 @@ class _TestReactor(TornadoReactor):
     """
     def __init__(self):
         # always use a new ioloop
+        IOLoop.clear_current()
         IOLoop(make_current=True)
         super(_TestReactor, self).__init__()
         IOLoop.clear_current()
@@ -519,7 +520,7 @@ class TwistedResolver(Resolver):
     recommended only when threads cannot be used, since it has
     limitations compared to the standard ``getaddrinfo``-based
     `~tornado.netutil.Resolver` and
-    `~tornado.netutil.ThreadedResolver`.  Specifically, it returns at
+    `~tornado.netutil.DefaultExecutorResolver`.  Specifically, it returns at
     most one result, and arguments other than ``host`` and ``family``
     are ignored.  It may fail to resolve when ``family`` is not
     ``socket.AF_UNSPEC``.
@@ -585,6 +586,6 @@ if hasattr(gen.convert_yielded, 'register'):
                 # Should never happen, but just in case
                 raise Exception("errback called without error")
             except:
-                f.set_exc_info(sys.exc_info())
+                future_set_exc_info(f, sys.exc_info())
         d.addCallbacks(f.set_result, errback)
         return f

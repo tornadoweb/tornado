@@ -23,7 +23,8 @@ from __future__ import absolute_import, division, print_function
 
 import re
 
-from tornado.concurrent import Future
+from tornado.concurrent import (Future, future_add_done_callback,
+                                future_set_result_unless_cancelled)
 from tornado.escape import native_str, utf8
 from tornado import gen
 from tornado import httputil
@@ -291,7 +292,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._close_callback = None
             callback()
         if not self._finish_future.done():
-            self._finish_future.set_result(None)
+            future_set_result_unless_cancelled(self._finish_future, None)
         self._clear_callbacks()
 
     def close(self):
@@ -299,7 +300,7 @@ class HTTP1Connection(httputil.HTTPConnection):
             self.stream.close()
         self._clear_callbacks()
         if not self._finish_future.done():
-            self._finish_future.set_result(None)
+            future_set_result_unless_cancelled(self._finish_future, None)
 
     def detach(self):
         """Take control of the underlying stream.
@@ -313,7 +314,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         stream = self.stream
         self.stream = None
         if not self._finish_future.done():
-            self._finish_future.set_result(None)
+            future_set_result_unless_cancelled(self._finish_future, None)
         return stream
 
     def set_body_timeout(self, timeout):
@@ -361,13 +362,11 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # but if they do, leave it alone.
                 'Transfer-Encoding' not in headers)
             # If connection to a 1.1 client will be closed, inform client
-            if (self._request_start_line.version == 'HTTP/1.1' and
-                self._disconnect_on_finish):
+            if (self._request_start_line.version == 'HTTP/1.1' and self._disconnect_on_finish):
                 headers['Connection'] = 'close'
             # If a 1.0 client asked for keep-alive, add the header.
             if (self._request_start_line.version == 'HTTP/1.0' and
-                (self._request_headers.get('Connection', '').lower() ==
-                 'keep-alive')):
+                    self._request_headers.get('Connection', '').lower() == 'keep-alive'):
                 headers['Connection'] = 'Keep-Alive'
         if self._chunking_output:
             headers['Transfer-Encoding'] = 'chunked'
@@ -470,7 +469,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self._pending_write is None:
             self._finish_request(None)
         else:
-            self._pending_write.add_done_callback(self._finish_request)
+            future_add_done_callback(self._pending_write, self._finish_request)
 
     def _on_write_complete(self, future):
         exc = future.exception()
@@ -483,7 +482,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         if self._write_future is not None:
             future = self._write_future
             self._write_future = None
-            future.set_result(None)
+            future_set_result_unless_cancelled(future, None)
 
     def _can_keep_alive(self, start_line, headers):
         if self.params.no_keep_alive:
@@ -510,7 +509,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         # default state for the next request.
         self.stream.set_nodelay(False)
         if not self._finish_future.done():
-            self._finish_future.set_result(None)
+            future_set_result_unless_cancelled(self._finish_future, None)
 
     def _parse_headers(self, data):
         # The lstrip removes newlines that some implementations sometimes
@@ -598,6 +597,9 @@ class HTTP1Connection(httputil.HTTPConnection):
             chunk_len = yield self.stream.read_until(b"\r\n", max_bytes=64)
             chunk_len = int(chunk_len.strip(), 16)
             if chunk_len == 0:
+                crlf = yield self.stream.read_bytes(2)
+                if crlf != b'\r\n':
+                    raise httputil.HTTPInputError("improperly terminated chunked request")
                 return
             total_size += chunk_len
             if total_size > self._max_body_size:

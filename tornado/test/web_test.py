@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
+
 from tornado.concurrent import Future
 from tornado import gen
-from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring
+from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring  # noqa: E501
 from tornado.httputil import format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
@@ -12,7 +13,12 @@ from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import unittest, skipBefore35, exec_test
 from tornado.util import ObjectDict, unicode_type, timedelta_to_seconds, PY3
-from tornado.web import RequestHandler, authenticated, Application, asynchronous, url, HTTPError, StaticFileHandler, _create_signature_v1, create_signed_value, decode_signed_value, ErrorHandler, UIModule, MissingArgumentError, stream_request_body, Finish, removeslash, addslash, RedirectHandler as WebRedirectHandler, get_signature_key_version, GZipContentEncoding
+from tornado.web import (
+    Application, RequestHandler, StaticFileHandler, RedirectHandler as WebRedirectHandler,
+    HTTPError, MissingArgumentError, ErrorHandler, authenticated, asynchronous, url,
+    _create_signature_v1, create_signed_value, decode_signed_value, get_signature_key_version,
+    UIModule, Finish, stream_request_body, removeslash, addslash, GZipContentEncoding,
+)
 
 import binascii
 import contextlib
@@ -356,7 +362,7 @@ class AuthRedirectTest(WebTestCase):
         response = self.wait()
         self.assertEqual(response.code, 302)
         self.assertTrue(re.match(
-            'http://example.com/login\?next=http%3A%2F%2Flocalhost%3A[0-9]+%2Fabsolute',
+            'http://example.com/login\?next=http%3A%2F%2F127.0.0.1%3A[0-9]+%2Fabsolute',
             response.headers['Location']), response.headers['Location'])
 
 
@@ -635,7 +641,12 @@ class WSGISafeWebTest(WebTestCase):
 {% end %}
 </body></html>""",
             "entry.html": """\
-{{ set_resources(embedded_css=".entry { margin-bottom: 1em; }", embedded_javascript="js_embed()", css_files=["/base.css", "/foo.css"], javascript_files="/common.js", html_head="<meta>", html_body='<script src="/analytics.js"/>') }}
+{{ set_resources(embedded_css=".entry { margin-bottom: 1em; }",
+                 embedded_javascript="js_embed()",
+                 css_files=["/base.css", "/foo.css"],
+                 javascript_files="/common.js",
+                 html_head="<meta>",
+                 html_body='<script src="/analytics.js"/>') }}
 <div class="entry">...</div>""",
         })
         return dict(template_loader=loader,
@@ -657,8 +668,10 @@ class WSGISafeWebTest(WebTestCase):
             url("/multi_header", MultiHeaderHandler),
             url("/redirect", RedirectHandler),
             url("/web_redirect_permanent", WebRedirectHandler, {"url": "/web_redirect_newpath"}),
-            url("/web_redirect", WebRedirectHandler, {"url": "/web_redirect_newpath", "permanent": False}),
-            url("//web_redirect_double_slash", WebRedirectHandler, {"url": '/web_redirect_newpath'}),
+            url("/web_redirect", WebRedirectHandler,
+                {"url": "/web_redirect_newpath", "permanent": False}),
+            url("//web_redirect_double_slash", WebRedirectHandler,
+                {"url": '/web_redirect_newpath'}),
             url("/header_injection", HeaderInjectionHandler),
             url("/get_argument", GetArgumentHandler),
             url("/get_arguments", GetArgumentsHandler),
@@ -763,7 +776,7 @@ js_embed()
 //]]>
 </script>
 <script src="/analytics.js"/>
-</body></html>""")
+</body></html>""")  # noqa: E501
 
     def test_optional_path(self):
         self.assertEqual(self.fetch_json("/optional_path/foo"),
@@ -2138,7 +2151,7 @@ class StreamingRequestBodyTest(WebTestCase):
         stream.write(b"4\r\nqwer\r\n")
         data = yield self.data
         self.assertEquals(data, b"qwer")
-        stream.write(b"0\r\n")
+        stream.write(b"0\r\n\r\n")
         yield self.finished
         data = yield gen.Task(stream.read_until_close)
         # This would ideally use an HTTP1Connection to read the response.

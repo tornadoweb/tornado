@@ -102,7 +102,8 @@ class LogFormatter(logging.Formatter):
        Added support for ``colorama``. Changed the constructor
        signature to be compatible with `logging.config.dictConfig`.
     """
-    DEFAULT_FORMAT = '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s'
+    DEFAULT_FORMAT = \
+        '%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s'
     DEFAULT_DATE_FORMAT = '%y%m%d %H:%M:%S'
     DEFAULT_COLORS = {
         logging.DEBUG: 4,  # Blue

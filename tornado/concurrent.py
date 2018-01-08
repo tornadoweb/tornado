@@ -39,6 +39,11 @@ except ImportError:
     futures = None
 
 try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
+try:
     import typing
 except ImportError:
     typing = None
@@ -138,16 +143,17 @@ class Future(object):
     Tornado they are normally used with `.IOLoop.add_future` or by
     yielding them in a `.gen.coroutine`.
 
-    `tornado.concurrent.Future` is similar to
-    `concurrent.futures.Future`, but not thread-safe (and therefore
-    faster for use with single-threaded event loops).
+    `tornado.concurrent.Future` is an alias for `asyncio.Future` when
+    that package is available (Python 3.4+). Unlike
+    `concurrent.futures.Future`, the ``Futures`` used by Tornado and
+    `asyncio` are not thread-safe (and therefore faster for use with
+    single-threaded event loops).
 
-    In addition to ``exception`` and ``set_exception``, methods ``exc_info``
-    and ``set_exc_info`` are supported to capture tracebacks in Python 2.
-    The traceback is automatically available in Python 3, but in the
-    Python 2 futures backport this information is discarded.
-    This functionality was previously available in a separate class
-    ``TracebackFuture``, which is now a deprecated alias for this class.
+    In addition to ``exception`` and ``set_exception``, Tornado's
+    ``Future`` implementation supports storing an ``exc_info`` triple
+    to support better tracebacks on Python 2. To set an ``exc_info``
+    triple, use `future_set_exc_info`, and to retrieve one, call
+    `result()` (which will raise it).
 
     .. versionchanged:: 4.0
        `tornado.concurrent.Future` is always a thread-unsafe ``Future``
@@ -164,6 +170,17 @@ class Future(object):
        where it results in undesired logging it may be necessary to
        suppress the logging by ensuring that the exception is observed:
        ``f.add_done_callback(lambda f: f.exception())``.
+
+    .. versionchanged:: 5.0
+
+       This class was previoiusly available under the name
+       ``TracebackFuture``. This name, which was deprecated since
+       version 4.0, has been removed. When `asyncio` is available
+       ``tornado.concurrent.Future`` is now an alias for
+       `asyncio.Future`. Like `asyncio.Future`, callbacks are now
+       always scheduled on the `.IOLoop` and are never run
+       synchronously.
+
     """
     def __init__(self):
         self._done = False
@@ -265,7 +282,8 @@ class Future(object):
         `add_done_callback` directly.
         """
         if self._done:
-            fn(self)
+            from tornado.ioloop import IOLoop
+            IOLoop.current().add_callback(fn, self)
         else:
             self._callbacks.append(fn)
 
@@ -320,12 +338,10 @@ class Future(object):
 
     def _set_done(self):
         self._done = True
+        from tornado.ioloop import IOLoop
+        loop = IOLoop.current()
         for cb in self._callbacks:
-            try:
-                cb(self)
-            except Exception:
-                app_log.exception('Exception in callback %r for %r',
-                                  cb, self)
+            loop.add_callback(cb, self)
         self._callbacks = None
 
     # On Python 3.3 or older, objects with a destructor part of a reference
@@ -344,7 +360,8 @@ class Future(object):
                           self, ''.join(tb).rstrip())
 
 
-TracebackFuture = Future
+if asyncio is not None:
+    Future = asyncio.Future  # noqa
 
 if futures is None:
     FUTURES = Future  # type: typing.Union[type, typing.Tuple[type, ...]]
@@ -358,11 +375,11 @@ def is_future(x):
 
 class DummyExecutor(object):
     def submit(self, fn, *args, **kwargs):
-        future = TracebackFuture()
+        future = Future()
         try:
-            future.set_result(fn(*args, **kwargs))
+            future_set_result_unless_cancelled(future, fn(*args, **kwargs))
         except Exception:
-            future.set_exc_info(sys.exc_info())
+            future_set_exc_info(future, sys.exc_info())
         return future
 
     def shutdown(self, wait=True):
@@ -385,6 +402,9 @@ def run_on_executor(*args, **kwargs):
         @run_on_executor(executor='_thread_pool')
         def foo(self):
             pass
+
+    This decorator should not be confused with the similarly-named
+    `.IOLoop.run_in_executor`.
 
     .. versionchanged:: 4.2
        Added keyword arguments to use alternative attributes.
@@ -428,7 +448,7 @@ def return_future(f):
 
     From the caller's perspective, the callback argument is optional.
     If one is given, it will be invoked when the function is complete
-    with `Future.result()` as an argument.  If the function fails, the
+    with ``Future.result()`` as an argument.  If the function fails, the
     callback will not be run and an exception will be raised into the
     surrounding `.StackContext`.
 
@@ -460,13 +480,13 @@ def return_future(f):
 
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
-        future = TracebackFuture()
+        future = Future()
         callback, args, kwargs = replacer.replace(
-            lambda value=_NO_RESULT: future.set_result(value),
+            lambda value=_NO_RESULT: future_set_result_unless_cancelled(future, value),
             args, kwargs)
 
         def handle_error(typ, value, tb):
-            future.set_exc_info((typ, value, tb))
+            future_set_exc_info(future, (typ, value, tb))
             return True
         exc_info = None
         with ExceptionStackContext(handle_error):
@@ -498,7 +518,7 @@ def return_future(f):
                     callback()
                 else:
                     callback(future.result())
-            future.add_done_callback(wrap(run_callback))
+            future_add_done_callback(future, wrap(run_callback))
         return future
     return wrapper
 
@@ -508,17 +528,72 @@ def chain_future(a, b):
 
     The result (success or failure) of ``a`` will be copied to ``b``, unless
     ``b`` has already been completed or cancelled by the time ``a`` finishes.
+
+    .. versionchanged:: 5.0
+
+       Now accepts both Tornado/asyncio `Future` objects and
+       `concurrent.futures.Future`.
+
     """
     def copy(future):
         assert future is a
         if b.done():
             return
-        if (isinstance(a, TracebackFuture) and
-                isinstance(b, TracebackFuture) and
+        if (hasattr(a, 'exc_info') and
                 a.exc_info() is not None):
-            b.set_exc_info(a.exc_info())
+            future_set_exc_info(b, a.exc_info())
         elif a.exception() is not None:
             b.set_exception(a.exception())
         else:
             b.set_result(a.result())
-    a.add_done_callback(copy)
+    if isinstance(a, Future):
+        future_add_done_callback(a, copy)
+    else:
+        # concurrent.futures.Future
+        from tornado.ioloop import IOLoop
+        IOLoop.current().add_future(a, copy)
+
+
+def future_set_result_unless_cancelled(future, value):
+    """Set the given ``value`` as the `Future`'s result, if not cancelled.
+
+    Avoids asyncio.InvalidStateError when calling set_result() on
+    a cancelled `asyncio.Future`.
+
+    .. versionadded:: 5.0
+    """
+    if not future.cancelled():
+        future.set_result(value)
+
+
+def future_set_exc_info(future, exc_info):
+    """Set the given ``exc_info`` as the `Future`'s exception.
+
+    Understands both `asyncio.Future` and Tornado's extensions to
+    enable better tracebacks on Python 2.
+
+    .. versionadded:: 5.0
+    """
+    if hasattr(future, 'set_exc_info'):
+        # Tornado's Future
+        future.set_exc_info(exc_info)
+    else:
+        # asyncio.Future
+        future.set_exception(exc_info[1])
+
+
+def future_add_done_callback(future, callback):
+    """Arrange to call ``callback`` when ``future`` is complete.
+
+    ``callback`` is invoked with one argument, the ``future``.
+
+    If ``future`` is already done, ``callback`` is invoked immediately.
+    This may differ from the behavior of ``Future.add_done_callback``,
+    which makes no such guarantee.
+
+    .. versionadded:: 5.0
+    """
+    if future.done():
+        callback(future)
+    else:
+        future.add_done_callback(callback)

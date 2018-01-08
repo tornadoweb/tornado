@@ -17,7 +17,7 @@ from __future__ import absolute_import, division, print_function
 import collections
 
 from tornado import gen, ioloop
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 
 __all__ = ['Condition', 'Event', 'Semaphore', 'BoundedSemaphore', 'Lock']
 
@@ -100,6 +100,11 @@ class Condition(_TimeoutGarbageCollector):
         yield condition.wait(timeout=datetime.timedelta(seconds=1))
 
     The method returns False if there's no notification before the deadline.
+
+    .. versionchanged:: 5.0
+       Previously, waiters could be notified synchronously from within
+       `notify`. Now, the notification will always be received on the
+       next iteration of the `.IOLoop`.
     """
 
     def __init__(self):
@@ -122,7 +127,8 @@ class Condition(_TimeoutGarbageCollector):
         self._waiters.append(waiter)
         if timeout:
             def on_timeout():
-                waiter.set_result(False)
+                if not waiter.done():
+                    future_set_result_unless_cancelled(waiter, False)
                 self._garbage_collect()
             io_loop = ioloop.IOLoop.current()
             timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -140,7 +146,7 @@ class Condition(_TimeoutGarbageCollector):
                 waiters.append(waiter)
 
         for waiter in waiters:
-            waiter.set_result(True)
+            future_set_result_unless_cancelled(waiter, True)
 
     def notify_all(self):
         """Wake all waiters."""
@@ -271,6 +277,8 @@ class Semaphore(_TimeoutGarbageCollector):
        @gen.coroutine
        def simulator(futures):
            for f in futures:
+               # simulate the asynchronous passage of time
+               yield gen.moment
                yield gen.moment
                f.set_result(None)
 
@@ -387,7 +395,8 @@ class Semaphore(_TimeoutGarbageCollector):
             self._waiters.append(waiter)
             if timeout:
                 def on_timeout():
-                    waiter.set_exception(gen.TimeoutError())
+                    if not waiter.done():
+                        waiter.set_exception(gen.TimeoutError())
                     self._garbage_collect()
                 io_loop = ioloop.IOLoop.current()
                 timeout_handle = io_loop.add_timeout(timeout, on_timeout)
@@ -457,7 +466,7 @@ class Lock(object):
     ``async with`` includes both the ``yield`` and the ``acquire``
     (just as it does with `threading.Lock`):
 
-    >>> async def f():  # doctest: +SKIP
+    >>> async def f2():  # doctest: +SKIP
     ...    async with lock:
     ...        # Do something holding the lock.
     ...        pass

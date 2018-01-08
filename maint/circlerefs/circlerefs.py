@@ -70,8 +70,15 @@ class DummyHandler(web.RequestHandler):
         self.write('ok\n')
 
 
+class DummyAsyncHandler(web.RequestHandler):
+    @gen.coroutine
+    def get(self):
+        raise web.Finish('ok\n')
+
+
 application = web.Application([
     (r'/dummy/', DummyHandler),
+    (r'/dummyasync/', DummyAsyncHandler),
     (r'/collect/', CollectHandler),
 ], debug=True)
 
@@ -90,11 +97,12 @@ def main():
     # poke at it with a browser.
     client = httpclient.AsyncHTTPClient()
     yield client.fetch('http://127.0.0.1:8888/dummy/')
+    yield client.fetch('http://127.0.0.1:8888/dummyasync/', raise_error=False)
 
     # Now report on the results.
-    gc.collect()
     resp = yield client.fetch('http://127.0.0.1:8888/collect/')
     print(resp.body)
+
 
 if __name__ == "__main__":
     ioloop.IOLoop.current().run_sync(main)

@@ -20,10 +20,10 @@ from tornado.log import gen_log
 from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler
+from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler  # noqa: E501
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, unittest, skipBefore35, exec_test
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35, exec_test
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -271,16 +271,9 @@ class SimpleHTTPClientTestMixin(object):
 
     @skipIfNoIPv6
     def test_ipv6(self):
-        try:
-            [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
-            port = sock.getsockname()[1]
-            self.http_server.add_socket(sock)
-        except socket.gaierror as e:
-            if e.args[0] == socket.EAI_ADDRFAMILY:
-                # python supports ipv6, but it's not configured on the network
-                # interface, so skip this test.
-                return
-            raise
+        [sock] = bind_sockets(None, '::1', family=socket.AF_INET6)
+        port = sock.getsockname()[1]
+        self.http_server.add_socket(sock)
         url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
 
         # ipv6 is currently enabled by default but can be disabled
@@ -326,7 +319,7 @@ class SimpleHTTPClientTestMixin(object):
         self.assertNotIn("Content-Length", response.headers)
 
     def test_host_header(self):
-        host_re = re.compile(b"^localhost:[0-9]+$")
+        host_re = re.compile(b"^127.0.0.1:[0-9]+$")
         response = self.fetch("/host_echo")
         self.assertTrue(host_re.match(response.body))
 
@@ -497,8 +490,6 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
         resp = self.fetch("/hello", ssl_options={})
         self.assertEqual(resp.body, b"Hello world!")
 
-    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
-                     'ssl.SSLContext not present')
     def test_ssl_context(self):
         resp = self.fetch("/hello",
                           ssl_options=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
@@ -511,8 +502,6 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
                 "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
         self.assertRaises(ssl.SSLError, resp.rethrow)
 
-    @unittest.skipIf(not hasattr(ssl, 'SSLContext'),
-                     'ssl.SSLContext not present')
     def test_ssl_context_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
             ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)

@@ -242,6 +242,11 @@ class _RoutingDelegate(httputil.HTTPMessageDelegate):
             start_line=start_line, headers=headers)
 
         self.delegate = self.router.find_handler(request)
+        if self.delegate is None:
+            app_log.debug("Delegate for %s %s request not found",
+                          start_line.method, start_line.path)
+            self.delegate = _DefaultMessageDelegate(self.request_conn)
+
         return self.delegate.headers_received(start_line, headers)
 
     def data_received(self, chunk):
@@ -252,6 +257,16 @@ class _RoutingDelegate(httputil.HTTPMessageDelegate):
 
     def on_connection_close(self):
         self.delegate.on_connection_close()
+
+
+class _DefaultMessageDelegate(httputil.HTTPMessageDelegate):
+    def __init__(self, connection):
+        self.connection = connection
+
+    def finish(self):
+        self.connection.write_headers(
+            httputil.ResponseStartLine("HTTP/1.1", 404, "Not Found"), httputil.HTTPHeaders())
+        self.connection.finish()
 
 
 class RuleRouter(Router):
@@ -278,7 +293,8 @@ class RuleRouter(Router):
             ])
 
         In the examples above, ``Target`` can be a nested `Router` instance, an instance of
-        `~.httputil.HTTPServerConnectionDelegate` or an old-style callable, accepting a request argument.
+        `~.httputil.HTTPServerConnectionDelegate` or an old-style callable,
+        accepting a request argument.
 
         :arg rules: a list of `Rule` instances or tuples of `Rule`
             constructor arguments.
@@ -567,7 +583,7 @@ class PathMatches(Matcher):
             else:
                 try:
                     unescaped_fragment = re_unescape(fragment)
-                except ValueError as exc:
+                except ValueError:
                     # If we can't unescape part of it, we can't
                     # reverse this url.
                     return (None, None)

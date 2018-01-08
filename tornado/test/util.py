@@ -9,15 +9,8 @@ import textwrap
 
 from tornado.testing import bind_unused_port
 
-# Encapsulate the choice of unittest or unittest2 here.
-# To be used as 'from tornado.test.util import unittest'.
-if sys.version_info < (2, 7):
-    # In py26, we must always use unittest2.
-    import unittest2 as unittest  # type: ignore
-else:
-    # Otherwise, use whichever version of unittest was imported in
-    # tornado.testing.
-    from tornado.testing import unittest
+# Delegate the choice of unittest or unittest2 to tornado.testing.
+from tornado.testing import unittest
 
 skipIfNonUnix = unittest.skipIf(os.name != 'posix' or sys.platform == 'cygwin',
                                 "non-unix platform")
@@ -35,9 +28,6 @@ skipOnAppEngine = unittest.skipIf('APPENGINE_RUNTIME' in os.environ,
 skipIfNoNetwork = unittest.skipIf('NO_NETWORK' in os.environ,
                                   'network access disabled')
 
-skipIfNoIPv6 = unittest.skipIf(not socket.has_ipv6, 'ipv6 support not present')
-
-
 skipBefore33 = unittest.skipIf(sys.version_info < (3, 3), 'PEP 380 (yield from) not available')
 skipBefore35 = unittest.skipIf(sys.version_info < (3, 5), 'PEP 492 (async/await) not available')
 skipNotCPython = unittest.skipIf(platform.python_implementation() != 'CPython',
@@ -50,6 +40,26 @@ skipPypy3V58 = unittest.skipIf(platform.python_implementation() == 'PyPy' and
                                sys.version_info > (3,) and
                                sys.pypy_version_info < (5, 9),
                                'pypy3 5.8 has buggy ssl module')
+
+
+def _detect_ipv6():
+    if not socket.has_ipv6:
+        # socket.has_ipv6 check reports whether ipv6 was present at compile
+        # time. It's usually true even when ipv6 doesn't work for other reasons.
+        return False
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET6)
+        sock.bind(('::1', 0))
+    except socket.error:
+        return False
+    finally:
+        if sock is not None:
+            sock.close()
+    return True
+
+
+skipIfNoIPv6 = unittest.skipIf(not _detect_ipv6(), 'ipv6 support not present')
 
 
 def refusing_port():

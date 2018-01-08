@@ -26,7 +26,7 @@ from tornado.queues import Queue
 from tornado.tcpclient import TCPClient, _Connector
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, gen_test
-from tornado.test.util import skipIfNoIPv6, unittest, refusing_port, skipIfNonUnix, skipOnTravis
+from tornado.test.util import skipIfNoIPv6, unittest, refusing_port, skipIfNonUnix
 from tornado.gen import TimeoutError
 
 # Fake address families for testing.  Used in place of AF_INET
@@ -230,6 +230,9 @@ class ConnectorTest(AsyncTestCase):
         else:
             self.streams.pop(addr)
             future.set_exception(IOError())
+        # Run the loop to allow callbacks to be run.
+        self.io_loop.add_callback(self.stop)
+        self.wait()
 
     def assert_connector_streams_closed(self, conn):
         for stream in conn.streams:

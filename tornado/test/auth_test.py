@@ -5,7 +5,11 @@
 
 
 from __future__ import absolute_import, division, print_function
-from tornado.auth import OpenIdMixin, OAuthMixin, OAuth2Mixin, TwitterMixin, AuthError, GoogleOAuth2Mixin, FacebookGraphMixin
+
+from tornado.auth import (
+    AuthError, OpenIdMixin, OAuthMixin, OAuth2Mixin,
+    GoogleOAuth2Mixin, FacebookGraphMixin, TwitterMixin,
+)
 from tornado.concurrent import Future
 from tornado.escape import json_decode
 from tornado import gen
@@ -294,10 +298,14 @@ class AuthTest(AsyncHTTPTestCase):
                 ('/facebook/client/login', FacebookClientLoginHandler, dict(test=self)),
 
                 ('/twitter/client/login', TwitterClientLoginHandler, dict(test=self)),
-                ('/twitter/client/login_gen_engine', TwitterClientLoginGenEngineHandler, dict(test=self)),
-                ('/twitter/client/login_gen_coroutine', TwitterClientLoginGenCoroutineHandler, dict(test=self)),
-                ('/twitter/client/show_user', TwitterClientShowUserHandler, dict(test=self)),
-                ('/twitter/client/show_user_future', TwitterClientShowUserFutureHandler, dict(test=self)),
+                ('/twitter/client/login_gen_engine',
+                 TwitterClientLoginGenEngineHandler, dict(test=self)),
+                ('/twitter/client/login_gen_coroutine',
+                 TwitterClientLoginGenCoroutineHandler, dict(test=self)),
+                ('/twitter/client/show_user',
+                 TwitterClientShowUserHandler, dict(test=self)),
+                ('/twitter/client/show_user_future',
+                 TwitterClientShowUserFutureHandler, dict(test=self)),
 
                 # simulated servers
                 ('/openid/server/authenticate', OpenIdServerAuthenticateHandler),
@@ -308,7 +316,8 @@ class AuthTest(AsyncHTTPTestCase):
                 ('/facebook/server/me', FacebookServerMeHandler),
                 ('/twitter/server/access_token', TwitterServerAccessTokenHandler),
                 (r'/twitter/api/users/show/(.*)\.json', TwitterServerShowUserHandler),
-                (r'/twitter/api/account/verify_credentials\.json', TwitterServerVerifyCredentialsHandler),
+                (r'/twitter/api/account/verify_credentials\.json',
+                 TwitterServerVerifyCredentialsHandler),
             ],
             http_client=self.http_client,
             twitter_consumer_key='test_twitter_consumer_key',
@@ -323,7 +332,10 @@ class AuthTest(AsyncHTTPTestCase):
             '/openid/server/authenticate?' in response.headers['Location'])
 
     def test_openid_get_user(self):
-        response = self.fetch('/openid/client/login?openid.mode=blah&openid.ns.ax=http://openid.net/srv/ax/1.0&openid.ax.type.email=http://axschema.org/contact/email&openid.ax.value.email=foo@example.com')
+        response = self.fetch('/openid/client/login?openid.mode=blah'
+                              '&openid.ns.ax=http://openid.net/srv/ax/1.0'
+                              '&openid.ax.type.email=http://axschema.org/contact/email'
+                              '&openid.ax.value.email=foo@example.com')
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed["email"], "foo@example.com")

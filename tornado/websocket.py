@@ -28,7 +28,7 @@ import tornado.escape
 import tornado.web
 import zlib
 
-from tornado.concurrent import TracebackFuture
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.escape import utf8, native_str, to_unicode
 from tornado import gen, httpclient, httputil
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -539,7 +539,8 @@ class _PerMessageDeflateCompressor(object):
             self._compressor = None
 
     def _create_compressor(self):
-        return zlib.compressobj(self._compression_level, zlib.DEFLATED, -self._max_wbits, self._mem_level)
+        return zlib.compressobj(self._compression_level,
+                                zlib.DEFLATED, -self._max_wbits, self._mem_level)
 
     def compress(self, data):
         compressor = self._compressor or self._create_compressor()
@@ -756,17 +757,17 @@ class WebSocketProtocol13(WebSocketProtocol):
         else:
             finbit = 0
         frame = struct.pack("B", finbit | opcode | flags)
-        l = len(data)
+        data_len = len(data)
         if self.mask_outgoing:
             mask_bit = 0x80
         else:
             mask_bit = 0
-        if l < 126:
-            frame += struct.pack("B", l | mask_bit)
-        elif l <= 0xFFFF:
-            frame += struct.pack("!BH", 126 | mask_bit, l)
+        if data_len < 126:
+            frame += struct.pack("B", data_len | mask_bit)
+        elif data_len <= 0xFFFF:
+            frame += struct.pack("!BH", 126 | mask_bit, data_len)
         else:
-            frame += struct.pack("!BQ", 127 | mask_bit, l)
+            frame += struct.pack("!BQ", 127 | mask_bit, data_len)
         if self.mask_outgoing:
             mask = os.urandom(4)
             data = mask + _websocket_mask(mask, data)
@@ -1052,7 +1053,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
                  compression_options=None, ping_interval=None, ping_timeout=None,
                  max_message_size=None):
         self.compression_options = compression_options
-        self.connect_future = TracebackFuture()
+        self.connect_future = Future()
         self.protocol = None
         self.read_future = None
         self.read_queue = collections.deque()
@@ -1140,7 +1141,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         # ability to see exceptions.
         self.final_callback = None
 
-        self.connect_future.set_result(self)
+        future_set_result_unless_cancelled(self.connect_future, self)
 
     def write_message(self, message, binary=False):
         """Sends a message to the WebSocket server."""
@@ -1158,9 +1159,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         ready.
         """
         assert self.read_future is None
-        future = TracebackFuture()
+        future = Future()
         if self.read_queue:
-            future.set_result(self.read_queue.popleft())
+            future_set_result_unless_cancelled(future, self.read_queue.popleft())
         else:
             self.read_future = future
         if callback is not None:
@@ -1171,7 +1172,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         if self._on_message_callback:
             self._on_message_callback(message)
         elif self.read_future is not None:
-            self.read_future.set_result(message)
+            future_set_result_unless_cancelled(self.read_future, message)
             self.read_future = None
         else:
             self.read_queue.append(message)

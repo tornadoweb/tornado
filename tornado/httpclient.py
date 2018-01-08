@@ -44,7 +44,7 @@ import functools
 import time
 import weakref
 
-from tornado.concurrent import TracebackFuture
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado.escape import utf8, native_str
 from tornado import gen, httputil, stack_context
 from tornado.ioloop import IOLoop
@@ -238,7 +238,7 @@ class AsyncHTTPClient(Configurable):
         # where normal dicts get converted to HTTPHeaders objects.
         request.headers = httputil.HTTPHeaders(request.headers)
         request = _RequestProxy(request, self.defaults)
-        future = TracebackFuture()
+        future = Future()
         if callback is not None:
             callback = stack_context.wrap(callback)
 
@@ -259,7 +259,7 @@ class AsyncHTTPClient(Configurable):
             if raise_error and response.error:
                 future.set_exception(response.error)
             else:
-                future.set_result(response)
+                future_set_result_unless_cancelled(future, response)
         self.fetch_impl(request, handle_response)
         return future
 
@@ -657,6 +657,8 @@ def main():
     define("print_body", type=bool, default=True)
     define("follow_redirects", type=bool, default=True)
     define("validate_cert", type=bool, default=True)
+    define("proxy_host", type=str)
+    define("proxy_port", type=int)
     args = parse_command_line()
     client = HTTPClient()
     for arg in args:
@@ -664,6 +666,8 @@ def main():
             response = client.fetch(arg,
                                     follow_redirects=options.follow_redirects,
                                     validate_cert=options.validate_cert,
+                                    proxy_host=options.proxy_host,
+                                    proxy_port=options.proxy_port,
                                     )
         except HTTPError as e:
             if e.response is not None:

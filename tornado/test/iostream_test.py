@@ -2,19 +2,20 @@ from __future__ import absolute_import, division, print_function
 from tornado.concurrent import Future
 from tornado import gen
 from tornado import netutil
-from tornado.iostream import IOStream, SSLIOStream, PipeIOStream, StreamClosedError
+from tornado.iostream import IOStream, SSLIOStream, PipeIOStream, StreamClosedError, _StreamBuffer
 from tornado.httputil import HTTPHeaders
 from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket
 from tornado.stack_context import NullContext
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test  # noqa: E501
 from tornado.test.util import unittest, skipIfNonUnix, refusing_port, skipPypy3V58
 from tornado.web import RequestHandler, Application
 import errno
 import logging
 import os
 import platform
+import random
 import socket
 import ssl
 import sys
@@ -880,7 +881,6 @@ class TestIOStreamSSL(TestIOStreamMixin, AsyncTestCase):
 # This will run some tests that are basically redundant but it's the
 # simplest way to make sure that it works to pass an SSLContext
 # instead of an ssl_options dict to the SSLIOStream constructor.
-@unittest.skipIf(not hasattr(ssl, 'SSLContext'), 'ssl.SSLContext not present')
 class TestIOStreamSSLContext(TestIOStreamMixin, AsyncTestCase):
     def _make_server_iostream(self, connection, **kwargs):
         context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
@@ -983,8 +983,6 @@ class TestIOStreamStartTLS(AsyncTestCase):
         with self.assertRaises((ssl.SSLError, socket.error)):
             yield server_future
 
-    @unittest.skipIf(not hasattr(ssl, 'create_default_context'),
-                     'ssl.create_default_context not present')
     @gen_test
     def test_check_hostname(self):
         # Test that server_hostname parameter to start_tls is being used.
@@ -1139,3 +1137,114 @@ class TestPipeIOStream(AsyncTestCase):
 
         ws.close()
         rs.close()
+
+
+class TestStreamBuffer(unittest.TestCase):
+    """
+    Unit tests for the private _StreamBuffer class.
+    """
+
+    def setUp(self):
+        self.random = random.Random(42)
+
+    def to_bytes(self, b):
+        if isinstance(b, (bytes, bytearray)):
+            return bytes(b)
+        elif isinstance(b, memoryview):
+            return b.tobytes()   # For py2
+        else:
+            raise TypeError(b)
+
+    def make_streambuffer(self, large_buf_threshold=10):
+        buf = _StreamBuffer()
+        assert buf._large_buf_threshold
+        buf._large_buf_threshold = large_buf_threshold
+        return buf
+
+    def check_peek(self, buf, expected):
+        size = 1
+        while size < 2 * len(expected):
+            got = self.to_bytes(buf.peek(size))
+            self.assertTrue(got)   # Not empty
+            self.assertLessEqual(len(got), size)
+            self.assertTrue(expected.startswith(got), (expected, got))
+            size = (size * 3 + 1) // 2
+
+    def check_append_all_then_skip_all(self, buf, objs, input_type):
+        self.assertEqual(len(buf), 0)
+
+        expected = b''
+
+        for o in objs:
+            expected += o
+            buf.append(input_type(o))
+            self.assertEqual(len(buf), len(expected))
+            self.check_peek(buf, expected)
+
+        while expected:
+            n = self.random.randrange(1, len(expected) + 1)
+            expected = expected[n:]
+            buf.advance(n)
+            self.assertEqual(len(buf), len(expected))
+            self.check_peek(buf, expected)
+
+        self.assertEqual(len(buf), 0)
+
+    def test_small(self):
+        objs = [b'12', b'345', b'67', b'89a', b'bcde', b'fgh', b'ijklmn']
+
+        buf = self.make_streambuffer()
+        self.check_append_all_then_skip_all(buf, objs, bytes)
+
+        buf = self.make_streambuffer()
+        self.check_append_all_then_skip_all(buf, objs, bytearray)
+
+        buf = self.make_streambuffer()
+        self.check_append_all_then_skip_all(buf, objs, memoryview)
+
+        # Test internal algorithm
+        buf = self.make_streambuffer(10)
+        for i in range(9):
+            buf.append(b'x')
+        self.assertEqual(len(buf._buffers), 1)
+        for i in range(9):
+            buf.append(b'x')
+        self.assertEqual(len(buf._buffers), 2)
+        buf.advance(10)
+        self.assertEqual(len(buf._buffers), 1)
+        buf.advance(8)
+        self.assertEqual(len(buf._buffers), 0)
+        self.assertEqual(len(buf), 0)
+
+    def test_large(self):
+        objs = [b'12' * 5,
+                b'345' * 2,
+                b'67' * 20,
+                b'89a' * 12,
+                b'bcde' * 1,
+                b'fgh' * 7,
+                b'ijklmn' * 2]
+
+        buf = self.make_streambuffer()
+        self.check_append_all_then_skip_all(buf, objs, bytes)
+
+        buf = self.make_streambuffer()
+        self.check_append_all_then_skip_all(buf, objs, bytearray)
+
+        buf = self.make_streambuffer()
+        self.check_append_all_then_skip_all(buf, objs, memoryview)
+
+        # Test internal algorithm
+        buf = self.make_streambuffer(10)
+        for i in range(3):
+            buf.append(b'x' * 11)
+        self.assertEqual(len(buf._buffers), 3)
+        buf.append(b'y')
+        self.assertEqual(len(buf._buffers), 4)
+        buf.append(b'z')
+        self.assertEqual(len(buf._buffers), 4)
+        buf.advance(33)
+        self.assertEqual(len(buf._buffers), 1)
+        buf.advance(2)
+        self.assertEqual(len(buf._buffers), 0)
+        self.assertEqual(len(buf), 0)

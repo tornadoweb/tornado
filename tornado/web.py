@@ -80,7 +80,7 @@ import types
 from inspect import isclass
 from io import BytesIO
 
-from tornado.concurrent import Future
+from tornado.concurrent import Future, future_set_result_unless_cancelled
 from tornado import escape
 from tornado import gen
 from tornado import httputil
@@ -309,11 +309,15 @@ class RequestHandler(object):
     def set_status(self, status_code, reason=None):
         """Sets the status code for our response.
 
-        :arg int status_code: Response status code. If ``reason`` is ``None``,
-            it must be present in `httplib.responses <http.client.responses>`.
+        :arg int status_code: Response status code.
         :arg string reason: Human-readable reason phrase describing the status
             code. If ``None``, it will be filled in from
-            `httplib.responses <http.client.responses>`.
+            `http.client.responses` or "Unknown".
+
+        .. versionchanged:: 5.0
+
+           No longer validates that the response code is in
+           `http.client.responses`.
         """
         self._status_code = status_code
         if reason is not None:
@@ -729,7 +733,8 @@ class RequestHandler(object):
         if not isinstance(chunk, (bytes, unicode_type, dict)):
             message = "write() only accepts bytes, unicode, and dict objects"
             if isinstance(chunk, list):
-                message += ". Lists not accepted for security reasons; see http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"
+                message += ". Lists not accepted for security reasons; see " + \
+                    "http://www.tornadoweb.org/en/stable/web.html#tornado.web.RequestHandler.write"
             raise TypeError(message)
         if isinstance(chunk, dict):
             chunk = escape.json_encode(chunk)
@@ -995,7 +1000,7 @@ class RequestHandler(object):
                     self._write_buffer = []
                     self.set_status(304)
             if (self._status_code in (204, 304) or
-                (self._status_code >= 100 and self._status_code < 200)):
+                    (self._status_code >= 100 and self._status_code < 200)):
                 assert not self._write_buffer, "Cannot send body with %s" % self._status_code
                 self._clear_headers_for_304()
             elif "Content-Length" not in self._headers:
@@ -1512,7 +1517,7 @@ class RequestHandler(object):
             if self._prepared_future is not None:
                 # Tell the Application we've finished with prepare()
                 # and are ready for the body to arrive.
-                self._prepared_future.set_result(None)
+                future_set_result_unless_cancelled(self._prepared_future, None)
             if self._finished:
                 return
 
@@ -1537,6 +1542,9 @@ class RequestHandler(object):
                 self._handle_request_exception(e)
             except Exception:
                 app_log.error("Exception in exception handler", exc_info=True)
+            finally:
+                # Unset result to avoid circular references
+                result = None
             if (self._prepared_future is not None and
                     not self._prepared_future.done()):
                 # In case we failed before setting _prepared_future, do it
@@ -1728,7 +1736,7 @@ def stream_request_body(cls):
 
     See the `file receiver demo <https://github.com/tornadoweb/tornado/tree/master/demos/file_upload/>`_
     for example usage.
-    """
+    """  # noqa: E501
     if not issubclass(cls, RequestHandler):
         raise TypeError("expected subclass of RequestHandler, got %r", cls)
     cls._stream_request_body = True
@@ -2106,7 +2114,7 @@ class _HandlerDelegate(httputil.HTTPMessageDelegate):
 
     def finish(self):
         if self.stream_request_body:
-            self.request.body.set_result(None)
+            future_set_result_unless_cancelled(self.request.body, None)
         else:
             self.request.body = b''.join(self.chunks)
             self.request._parse_body()
@@ -2273,6 +2281,10 @@ class RedirectHandler(RequestHandler):
 
     .. versionchanged:: 4.5
        Added support for substitutions into the destination URL.
+
+    .. versionchanged:: 5.0
+       If any query arguments are present, they will be copied to the
+       destination URL.
     """
     def initialize(self, url, permanent=True):
         self._url = url
@@ -2807,7 +2819,7 @@ class OutputTransform(object):
         pass
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
-        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes]
+        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes] # noqa: E501
         return status_code, headers, chunk
 
     def transform_chunk(self, chunk, finishing):
@@ -2848,7 +2860,7 @@ class GZipContentEncoding(OutputTransform):
         return ctype.startswith('text/') or ctype in self.CONTENT_TYPES
 
     def transform_first_chunk(self, status_code, headers, chunk, finishing):
-        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes]
+        # type: (int, httputil.HTTPHeaders, bytes, bool) -> typing.Tuple[int, httputil.HTTPHeaders, bytes] # noqa: E501
         # TODO: can/should this type be inherited from the superclass?
         if 'Vary' in headers:
             headers['Vary'] += ', Accept-Encoding'
