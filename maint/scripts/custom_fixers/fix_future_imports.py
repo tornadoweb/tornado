@@ -5,10 +5,11 @@ from lib2to3 import pytree
 from lib2to3.pgen2 import token
 from lib2to3.fixer_util import FromImport, Name, Comma, Newline
 
+
 # copied from fix_tuple_params.py
 def is_docstring(stmt):
-    return isinstance(stmt, pytree.Node) and \
-           stmt.children[0].type == token.STRING
+    return isinstance(stmt, pytree.Node) and stmt.children[0].type == token.STRING
+
 
 class FixFutureImports(fixer_base.BaseFix):
     BM_compatible = True
@@ -55,4 +56,4 @@ class FixFutureImports(fixer_base.BaseFix):
             # No comments or docstring, just insert at the start
             pos = 0
         tree.insert_child(pos, self.new_future_import(None))
-        tree.insert_child(pos+1, Newline())  # terminates the import stmt
+        tree.insert_child(pos + 1, Newline())  # terminates the import stmt

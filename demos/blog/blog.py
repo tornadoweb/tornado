@@ -92,7 +92,8 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def get_current_user(self):
         user_id = self.get_secure_cookie("blogdemo_user")
-        if not user_id: return None
+        if not user_id:
+            return None
         return self.db.get("SELECT * FROM authors WHERE id = %s", int(user_id))
 
     def any_author_exists(self):
@@ -112,7 +113,8 @@ class HomeHandler(BaseHandler):
 class EntryHandler(BaseHandler):
     def get(self, slug):
         entry = self.db.get("SELECT * FROM entries WHERE slug = %s", slug)
-        if not entry: raise tornado.web.HTTPError(404)
+        if not entry:
+            raise tornado.web.HTTPError(404)
         self.render("entry.html", entry=entry)
 
 
@@ -148,7 +150,8 @@ class ComposeHandler(BaseHandler):
         html = markdown.markdown(text)
         if id:
             entry = self.db.get("SELECT * FROM entries WHERE id = %s", int(id))
-            if not entry: raise tornado.web.HTTPError(404)
+            if not entry:
+                raise tornado.web.HTTPError(404)
             slug = entry.slug
             self.db.execute(
                 "UPDATE entries SET title = %s, markdown = %s, html = %s "
@@ -158,10 +161,12 @@ class ComposeHandler(BaseHandler):
                 "ascii", "ignore")
             slug = re.sub(r"[^\w]+", " ", slug)
             slug = "-".join(slug.lower().strip().split())
-            if not slug: slug = "entry"
+            if not slug:
+                slug = "entry"
             while True:
                 e = self.db.get("SELECT * FROM entries WHERE slug = %s", slug)
-                if not e: break
+                if not e:
+                    break
                 slug += "-2"
             self.db.execute(
                 "INSERT INTO entries (author_id,title,slug,markdown,html,"

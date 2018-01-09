@@ -240,7 +240,7 @@ class OptionsTest(unittest.TestCase):
             ('foo_bar', 'foo_bar'),
             ('foo-bar', 'foo_bar'),
             ('foo_bar', 'foo-bar'),
-            ]
+        ]
         for a, b in tests:
             with subTest(self, a=a, b=b):
                 options = OptionParser()

@@ -46,6 +46,7 @@ define("num_runs", type=int, default=1)
 
 define("ioloop", type=str, default=None)
 
+
 class RootHandler(RequestHandler):
     def get(self):
         self.write("Hello, world")
@@ -53,8 +54,10 @@ class RootHandler(RequestHandler):
     def _log(self):
         pass
 
+
 def handle_sigchld(sig, frame):
     IOLoop.current().add_callback_from_signal(IOLoop.current().stop)
+
 
 def main():
     parse_command_line()
@@ -62,6 +65,7 @@ def main():
         IOLoop.configure(options.ioloop)
     for i in xrange(options.num_runs):
         run()
+
 
 def run():
     io_loop = IOLoop(make_current=True)
@@ -82,6 +86,7 @@ def run():
     io_loop.start()
     io_loop.close()
     io_loop.clear_current()
+
 
 if __name__ == '__main__':
     main()

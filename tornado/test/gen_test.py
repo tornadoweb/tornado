@@ -16,7 +16,7 @@ from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test
+from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test  # noqa: E501
 from tornado.web import Application, RequestHandler, asynchronous, HTTPError
 
 from tornado import gen
@@ -1021,7 +1021,7 @@ class GenCoroutineTest(AsyncTestCase):
         self.finished = True
 
     @skipNotCPython
-    @unittest.skipIf((3,) < sys.version_info < (3,6),
+    @unittest.skipIf((3,) < sys.version_info < (3, 6),
                      "asyncio.Future has reference cycles")
     def test_coroutine_refcounting(self):
         # On CPython, tasks and their arguments should be released immediately
@@ -1326,7 +1326,6 @@ class WithTimeoutTest(AsyncTestCase):
                                    executor.submit(lambda: time.sleep(0.01)))
 
 
-
 class WaitIteratorTest(AsyncTestCase):
     @gen_test
     def test_empty_iterator(self):
@@ -1480,6 +1479,7 @@ class WaitIteratorTest(AsyncTestCase):
 
 class RunnerGCTest(AsyncTestCase):
     """Github issue 1769: Runner objects can get GCed unexpectedly"""
+    @skipOnTravis
     @gen_test
     def test_gc(self):
         """Runners shouldn't GC if future is alive"""

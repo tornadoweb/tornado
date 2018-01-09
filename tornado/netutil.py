@@ -25,6 +25,7 @@ import socket
 import stat
 
 from tornado.concurrent import dummy_executor, run_on_executor
+from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.platform.auto import set_close_exec
 from tornado.util import PY3, Configurable, errno_from_exception
@@ -292,11 +293,16 @@ class Resolver(Configurable):
 
     The implementations of this interface included with Tornado are
 
-    * `tornado.netutil.BlockingResolver`
-    * `tornado.netutil.ThreadedResolver`
+    * `tornado.netutil.DefaultExecutorResolver`
+    * `tornado.netutil.BlockingResolver` (deprecated)
+    * `tornado.netutil.ThreadedResolver` (deprecated)
     * `tornado.netutil.OverrideResolver`
     * `tornado.platform.twisted.TwistedResolver`
     * `tornado.platform.caresresolver.CaresResolver`
+
+    .. versionchanged:: 5.0
+       The default implementation has changed from `BlockingResolver` to
+       `DefaultExecutorResolver`.
     """
     @classmethod
     def configurable_base(cls):
@@ -304,7 +310,7 @@ class Resolver(Configurable):
 
     @classmethod
     def configurable_default(cls):
-        return BlockingResolver
+        return DefaultExecutorResolver
 
     def resolve(self, host, port, family=socket.AF_UNSPEC, callback=None):
         """Resolves an address.
@@ -335,6 +341,31 @@ class Resolver(Configurable):
         pass
 
 
+def _resolve_addr(host, port, family=socket.AF_UNSPEC):
+    # On Solaris, getaddrinfo fails if the given port is not found
+    # in /etc/services and no socket type is given, so we must pass
+    # one here.  The socket type used here doesn't seem to actually
+    # matter (we discard the one we get back in the results),
+    # so the addresses we return should still be usable with SOCK_DGRAM.
+    addrinfo = socket.getaddrinfo(host, port, family, socket.SOCK_STREAM)
+    results = []
+    for family, socktype, proto, canonname, address in addrinfo:
+        results.append((family, address))
+    return results
+
+
+class DefaultExecutorResolver(Resolver):
+    """Resolver implementation using `.IOLoop.run_in_executor`.
+
+    .. versionadded:: 5.0
+    """
+    @gen.coroutine
+    def resolve(self, host, port, family=socket.AF_UNSPEC):
+        result = yield IOLoop.current().run_in_executor(
+            None, _resolve_addr, host, port, family)
+        raise gen.Return(result)
+
+
 class ExecutorResolver(Resolver):
     """Resolver implementation using a `concurrent.futures.Executor`.
 
@@ -347,6 +378,10 @@ class ExecutorResolver(Resolver):
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+    .. deprecated:: 5.0
+       The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
+       of this class.
     """
     def initialize(self, executor=None, close_executor=True):
         self.io_loop = IOLoop.current()
@@ -364,16 +399,7 @@ class ExecutorResolver(Resolver):
 
     @run_on_executor
     def resolve(self, host, port, family=socket.AF_UNSPEC):
-        # On Solaris, getaddrinfo fails if the given port is not found
-        # in /etc/services and no socket type is given, so we must pass
-        # one here.  The socket type used here doesn't seem to actually
-        # matter (we discard the one we get back in the results),
-        # so the addresses we return should still be usable with SOCK_DGRAM.
-        addrinfo = socket.getaddrinfo(host, port, family, socket.SOCK_STREAM)
-        results = []
-        for family, socktype, proto, canonname, address in addrinfo:
-            results.append((family, address))
-        return results
+        return _resolve_addr(host, port, family)
 
 
 class BlockingResolver(ExecutorResolver):
@@ -381,6 +407,10 @@ class BlockingResolver(ExecutorResolver):
 
     The `.IOLoop` will be blocked during the resolution, although the
     callback will not be run until the next `.IOLoop` iteration.
+
+    .. deprecated:: 5.0
+       The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
+       of this class.
     """
     def initialize(self):
         super(BlockingResolver, self).initialize()
@@ -401,6 +431,10 @@ class ThreadedResolver(ExecutorResolver):
     .. versionchanged:: 3.1
        All ``ThreadedResolvers`` share a single thread pool, whose
        size is set by the first one to be created.
+
+    .. deprecated:: 5.0
+       The default `Resolver` now uses `.IOLoop.run_in_executor`; use that instead
+       of this class.
     """
     _threadpool = None  # type: ignore
     _threadpool_pid = None  # type: int
@@ -430,7 +464,21 @@ class OverrideResolver(Resolver):
     This can be used to make local DNS changes (e.g. for testing)
     without modifying system-wide settings.
 
-    The mapping can contain either host strings or host-port pairs.
+    The mapping can be in three formats::
+
+        {
+            # Hostname to host or ip
+            "example.com": "127.0.1.1",
+
+            # Host+port to host+port
+            ("login.example.com", 443): ("localhost", 1443),
+
+            # Host+port+address family to host+port
+            ("login.example.com", 443, socket.AF_INET6): ("::1", 1443),
+        }
+
+    .. versionchanged:: 5.0
+       Added support for host-port-family triplets.
     """
     def initialize(self, resolver, mapping):
         self.resolver = resolver
@@ -439,12 +487,14 @@ class OverrideResolver(Resolver):
     def close(self):
         self.resolver.close()
 
-    def resolve(self, host, port, *args, **kwargs):
-        if (host, port) in self.mapping:
+    def resolve(self, host, port, family=socket.AF_UNSPEC, *args, **kwargs):
+        if (host, port, family) in self.mapping:
+            host, port = self.mapping[(host, port, family)]
+        elif (host, port) in self.mapping:
             host, port = self.mapping[(host, port)]
         elif host in self.mapping:
             host = self.mapping[host]
-        return self.resolver.resolve(host, port, *args, **kwargs)
+        return self.resolver.resolve(host, port, family, *args, **kwargs)
 
 
 # These are the keyword arguments to ssl.wrap_socket that must be translated

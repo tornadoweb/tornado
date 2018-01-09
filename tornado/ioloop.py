@@ -16,14 +16,19 @@
 
 """An I/O event loop for non-blocking sockets.
 
-Typical applications will use a single `IOLoop` object, in the
-`IOLoop.instance` singleton.  The `IOLoop.start` method should usually
-be called at the end of the ``main()`` function.  Atypical applications may
-use more than one `IOLoop`, such as one `IOLoop` per thread, or per `unittest`
-case.
+On Python 3, `.IOLoop` is a wrapper around the `asyncio` event loop.
 
-In addition to I/O events, the `IOLoop` can also schedule time-based events.
-`IOLoop.add_timeout` is a non-blocking alternative to `time.sleep`.
+Typical applications will use a single `IOLoop` object, accessed via
+`IOLoop.current` class method. The `IOLoop.start` method (or
+equivalently, `asyncio.AbstractEventLoop.run_forever`) should usually
+be called at the end of the ``main()`` function. Atypical applications
+may use more than one `IOLoop`, such as one `IOLoop` per thread, or
+per `unittest` case.
+
+In addition to I/O events, the `IOLoop` can also schedule time-based
+events. `IOLoop.add_timeout` is a non-blocking alternative to
+`time.sleep`.
+
 """
 
 from __future__ import absolute_import, division, print_function
@@ -44,11 +49,14 @@ import time
 import traceback
 import math
 
-from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback
+from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
 from tornado.log import app_log, gen_log
 from tornado.platform.auto import set_close_exec, Waker
 from tornado import stack_context
-from tornado.util import PY3, Configurable, errno_from_exception, timedelta_to_seconds, TimeoutError, unicode_type, import_object
+from tornado.util import (
+    PY3, Configurable, errno_from_exception, timedelta_to_seconds,
+    TimeoutError, unicode_type, import_object,
+)
 
 try:
     import signal
@@ -77,11 +85,12 @@ _POLL_TIMEOUT = 3600.0
 class IOLoop(Configurable):
     """A level-triggered I/O loop.
 
-    We use ``epoll`` (Linux) or ``kqueue`` (BSD and Mac OS X) if they
-    are available, or else we fall back on select(). If you are
-    implementing a system that needs to handle thousands of
-    simultaneous connections, you should use a system that supports
-    either ``epoll`` or ``kqueue``.
+    On Python 3, `IOLoop` is a wrapper around the `asyncio` event
+    loop. On Python 2, it uses ``epoll`` (Linux) or ``kqueue`` (BSD
+    and Mac OS X) if they are available, or else we fall back on
+    select(). If you are implementing a system that needs to handle
+    thousands of simultaneous connections, you should use a system
+    that supports either ``epoll`` or ``kqueue``.
 
     Example usage for a simple TCP server:
 
@@ -148,6 +157,13 @@ class IOLoop(Configurable):
     .. versionchanged:: 4.2
        Added the ``make_current`` keyword argument to the `IOLoop`
        constructor.
+
+    .. versionchanged:: 5.0
+
+       Uses the `asyncio` event loop by default. The
+       ``IOLoop.configure`` method cannot be used on Python 3 except
+       to redundantly specify the `asyncio` event loop.
+
     """
     # Constants from the epoll module
     _EPOLLIN = 0x001
@@ -291,6 +307,9 @@ class IOLoop(Configurable):
         .. versionchanged:: 4.1
            An `IOLoop` created while there is no current `IOLoop`
            will automatically become current.
+
+        .. versionchanged:: 5.0
+           This method also sets the current `asyncio` event loop.
         """
         IOLoop._current.instance = self
 
@@ -299,8 +318,21 @@ class IOLoop(Configurable):
         """Clears the `IOLoop` for the current thread.
 
         Intended primarily for use by test frameworks in between tests.
+
+        .. versionchanged:: 5.0
+           This method also clears the current `asyncio` event loop.
         """
+        old = IOLoop._current.instance
+        if old is not None:
+            old._clear_current_hook()
         IOLoop._current.instance = None
+
+    def _clear_current_hook(self):
+        """Instance method called when an IOLoop ceases to be current.
+
+        May be overridden by subclasses as a counterpart to make_current.
+        """
+        pass
 
     @classmethod
     def configurable_base(cls):
@@ -397,6 +429,11 @@ class IOLoop(Configurable):
         documentation for the `signal` module for more information.
         If ``action`` is None, the process will be killed if it is
         blocked for too long.
+
+        .. deprecated:: 5.0
+
+           Not implemented on the `asyncio` event loop. Use the environment
+           variable ``PYTHONASYNCIODEBUG=1`` instead.
         """
         raise NotImplementedError()
 
@@ -406,6 +443,11 @@ class IOLoop(Configurable):
 
         Equivalent to ``set_blocking_signal_threshold(seconds,
         self.log_stack)``
+
+        .. deprecated:: 5.0
+
+           Not implemented on the `asyncio` event loop. Use the environment
+           variable ``PYTHONASYNCIODEBUG=1`` instead.
         """
         self.set_blocking_signal_threshold(seconds, self.log_stack)
 
@@ -492,6 +534,9 @@ class IOLoop(Configurable):
 
         .. versionchanged:: 4.3
            Returning a non-``None``, non-yieldable value is now an error.
+
+        .. versionchanged:: 5.0
+           If a timeout occurs, the ``func`` coroutine will be cancelled.
         """
         future_cell = [None]
 
@@ -664,15 +709,16 @@ class IOLoop(Configurable):
         """
         assert is_future(future)
         callback = stack_context.wrap(callback)
-        future_add_done_callback(future,
-                           lambda future: self.add_callback(callback, future))
+        future_add_done_callback(
+            future, lambda future: self.add_callback(callback, future))
 
     def run_in_executor(self, executor, func, *args):
         """Runs a function in a ``concurrent.futures.Executor``. If
         ``executor`` is ``None``, the IO loop's default executor will be used.
 
-        Use `functools.partial` to pass keyword arguments to `func`.
+        Use `functools.partial` to pass keyword arguments to ``func``.
 
+        .. versionadded:: 5.0
         """
         if ThreadPoolExecutor is None:
             raise RuntimeError(
@@ -691,7 +737,10 @@ class IOLoop(Configurable):
         return t_future
 
     def set_default_executor(self, executor):
-        """Sets the default executor to use with :meth:`run_in_executor`."""
+        """Sets the default executor to use with :meth:`run_in_executor`.
+
+        .. versionadded:: 5.0
+        """
         self._executor = executor
 
     def _run_callback(self, callback):

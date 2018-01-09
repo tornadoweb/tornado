@@ -2,19 +2,21 @@
 
 
 from __future__ import absolute_import, division, print_function
+
 from tornado import netutil
 from tornado.escape import json_decode, json_encode, utf8, _unicode, recursive_unicode, native_str
 from tornado import gen
 from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
-from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine
+from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine  # noqa: E501
 from tornado.iostream import IOStream
 from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test  # noqa: E501
 from tornado.test.util import unittest, skipOnTravis
 from tornado.web import Application, RequestHandler, asynchronous, stream_request_body
+
 from contextlib import closing
 import datetime
 import gzip
@@ -808,9 +810,12 @@ class KeepAliveTest(AsyncHTTPTestCase):
     def test_keepalive_chunked(self):
         self.http_version = b'HTTP/1.0'
         self.connect()
-        self.stream.write(b'POST / HTTP/1.0\r\nConnection: keep-alive\r\n'
+        self.stream.write(b'POST / HTTP/1.0\r\n'
+                          b'Connection: keep-alive\r\n'
                           b'Transfer-Encoding: chunked\r\n'
-                          b'\r\n0\r\n')
+                          b'\r\n'
+                          b'0\r\n'
+                          b'\r\n')
         self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')

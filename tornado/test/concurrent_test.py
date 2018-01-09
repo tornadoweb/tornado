@@ -201,6 +201,7 @@ class ReturnFutureTest(AsyncTestCase):
                 app_log.error('%s: %s', context['message'],
                               type(context.get('exception')))
             self.io_loop.asyncio_loop.set_exception_handler(exc_handler)
+
         @gen.coroutine
         def f():
             yield gen.moment

@@ -42,11 +42,6 @@ import signal
 import socket
 import sys
 
-if PY3:
-    from io import StringIO
-else:
-    from cStringIO import StringIO
-
 try:
     import asyncio
 except ImportError:
@@ -217,9 +212,6 @@ class AsyncTestCase(unittest.TestCase):
         super(AsyncTestCase, self).setUp()
         self.io_loop = self.get_new_ioloop()
         self.io_loop.make_current()
-        if hasattr(self.io_loop, 'asyncio_loop'):
-            # Ensure that asyncio's current event loop matches ours.
-            asyncio.set_event_loop(self.io_loop.asyncio_loop)
 
     def tearDown(self):
         # Clean up Subprocess, so it can be used again with a new ioloop.
@@ -231,8 +223,6 @@ class AsyncTestCase(unittest.TestCase):
         # set FD_CLOEXEC on its file descriptors)
         self.io_loop.close(all_fds=True)
         super(AsyncTestCase, self).tearDown()
-        if hasattr(self.io_loop, 'asyncio_loop'):
-            asyncio.set_event_loop(None)
         # In case an exception escaped or the StackContext caught an exception
         # when there wasn't a wait() to re-raise it, do so here.
         # This is our last chance to raise an exception in a way that the
@@ -311,7 +301,8 @@ class AsyncTestCase(unittest.TestCase):
                     except Exception:
                         self.__failure = sys.exc_info()
                     self.stop()
-                self.__timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout, timeout_func)
+                self.__timeout = self.io_loop.add_timeout(self.io_loop.time() + timeout,
+                                                          timeout_func)
             while True:
                 self.__running = True
                 self.io_loop.start()
@@ -393,6 +384,9 @@ class AsyncHTTPTestCase(AsyncTestCase):
 
         If the path begins with http:// or https://, it will be treated as a
         full URL and will be fetched as-is.
+
+        .. versionchanged:: 5.0
+           Added support for absolute URLs.
         """
         if path.lower().startswith(('http://', 'https://')):
             self.http_client.fetch(path, self.stop, **kwargs)
@@ -447,7 +441,8 @@ class AsyncHTTPSTestCase(AsyncHTTPTestCase):
         By default includes a self-signed testing certificate.
         """
         # Testing keys were generated with:
-        # openssl req -new -keyout tornado/test/test.key -out tornado/test/test.crt -nodes -days 3650 -x509
+        # openssl req -new -keyout tornado/test/test.key \
+        #                     -out tornado/test/test.crt -nodes -days 3650 -x509
         module_dir = os.path.dirname(__file__)
         return dict(
             certfile=os.path.join(module_dir, 'test', 'test.crt'),

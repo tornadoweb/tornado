@@ -67,6 +67,7 @@ if PY3:
     import _thread as thread
 else:
     import thread
+    ResourceWarning = None
 
 try:
     import asyncio
@@ -505,14 +506,6 @@ class CompatibilityTests(unittest.TestCase):
 
 @skipIfNoTwisted
 class ConvertDeferredTest(unittest.TestCase):
-    def setUp(self):
-        if asyncio is not None:
-            asyncio.set_event_loop(asyncio.new_event_loop())
-
-    def tearDown(self):
-        if asyncio is not None:
-            asyncio.set_event_loop(None)
-
     def test_success(self):
         @inlineCallbacks
         def fn():

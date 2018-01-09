@@ -20,14 +20,15 @@ python:
     - pypy3.5-5.8.0
 
 install:
-    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install futures mock monotonic; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then travis_retry pip install futures mock; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install mock monotonic; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then travis_retry pip install mock; fi
     # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
     #- if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycares; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install pycurl; fi
     # Twisted runs on 2.x and 3.3+, but is flaky on pypy.
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then travis_retry pip install Twisted; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' || $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install sphinx sphinx_rtd_theme; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then travis_retry pip install flake8; fi
     # On travis the extension should always be built
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export TORNADO_EXTENSION=1; fi
     - travis_retry python setup.py install
@@ -66,7 +67,6 @@ script:
     - LANG=C python $TARGET
     - LANG=en_US.utf-8 python $TARGET
     - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then python -bb $TARGET; fi
-    - if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.netutil.ThreadedResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.twisted.TwistedIOLoop; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --resolver=tornado.platform.twisted.TwistedResolver; fi
@@ -78,6 +78,7 @@ script:
     - export TORNADO_EXTENSION=0
     - if [[ $TRAVIS_PYTHON_VERSION == 3.6 ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' || $TRAVIS_PYTHON_VERSION == 3.6 ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then flake8; fi
 
 after_success:
     # call codecov from project root

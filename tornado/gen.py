@@ -37,7 +37,7 @@ could be written with ``gen`` as:
    :hide:
 
 Most asynchronous functions in Tornado return a `.Future`;
-yielding this object returns its `~.Future.result`.
+yielding this object returns its ``Future.result``.
 
 You can also yield a list or dict of ``Futures``, which will be
 started at the same time and run in parallel; a list or dict of results will
@@ -81,7 +81,6 @@ import functools
 import itertools
 import os
 import sys
-import textwrap
 import types
 import weakref
 
@@ -940,8 +939,8 @@ def with_timeout(timeout, future, quiet_exceptions=()):
         # We know this future will resolve on the IOLoop, so we don't
         # need the extra thread-safety of IOLoop.add_future (and we also
         # don't care about StackContext here.
-        future_add_done_callback(future,
-            lambda future: io_loop.remove_timeout(timeout_handle))
+        future_add_done_callback(
+            future, lambda future: io_loop.remove_timeout(timeout_handle))
     else:
         # concurrent.futures.Futures may resolve on any thread, so we
         # need to route them back to the IOLoop.
@@ -970,10 +969,25 @@ def sleep(duration):
     return f
 
 
-_null_future = Future()
-_null_future.set_result(None)
+class _NullFuture(object):
+    """_NullFuture resembles a Future that finished with a result of None.
 
-moment = Future()
+    It's not actually a `Future` to avoid depending on a particular event loop.
+    Handled as a special case in the coroutine runner.
+    """
+    def result(self):
+        return None
+
+    def done(self):
+        return True
+
+
+# _null_future is used as a dummy value in the coroutine runner. It differs
+# from moment in that moment always adds a delay of one IOLoop iteration
+# while _null_future is processed as soon as possible.
+_null_future = _NullFuture()
+
+moment = _NullFuture()
 moment.__doc__ = \
     """A special object which may be yielded to allow the IOLoop to run for
 one iteration.
@@ -989,7 +1003,6 @@ Usage: ``yield gen.moment``
    ``yield None`` (or ``yield`` with no argument) is now equivalent to
     ``yield gen.moment``.
 """
-moment.set_result(None)
 
 
 class Runner(object):
@@ -1137,8 +1150,7 @@ class Runner(object):
                 try:
                     yielded.start(self)
                     if yielded.is_ready():
-                        future_set_result_unless_cancelled(self.future,
-                            yielded.get_result())
+                        future_set_result_unless_cancelled(self.future, yielded.get_result())
                     else:
                         self.yield_point = yielded
                 except Exception:
@@ -1287,8 +1299,10 @@ def convert_yielded(yielded):
     .. versionadded:: 4.1
     """
     # Lists and dicts containing YieldPoints were handled earlier.
-    if yielded is None:
+    if yielded is None or yielded is moment:
         return moment
+    elif yielded is _null_future:
+        return _null_future
     elif isinstance(yielded, (list, dict)):
         return multi(yielded)
     elif is_future(yielded):

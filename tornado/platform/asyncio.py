@@ -6,10 +6,11 @@ This module integrates Tornado with the ``asyncio`` module introduced
 in Python 3.4. This makes it possible to combine the two libraries on
 the same event loop.
 
-Most applications should use `AsyncIOMainLoop` to run Tornado on the
-default ``asyncio`` event loop.  Applications that need to run event
-loops on multiple threads may use `AsyncIOLoop` to create multiple
-loops.
+.. deprecated:: 5.0
+
+   While the code in this module is still used, it is now enabled
+   automatically when `asyncio` is available, so applications should
+   no longer need to refer to this module directly.
 
 .. note::
 
@@ -21,7 +22,6 @@ loops.
 from __future__ import absolute_import, division, print_function
 import functools
 
-import tornado.concurrent
 from tornado.gen import convert_yielded
 from tornado.ioloop import IOLoop
 from tornado import stack_context
@@ -31,7 +31,6 @@ import asyncio
 
 class BaseAsyncIOLoop(IOLoop):
     def initialize(self, asyncio_loop, close_loop=False, **kwargs):
-        super(BaseAsyncIOLoop, self).initialize(**kwargs)
         self.asyncio_loop = asyncio_loop
         self.close_loop = close_loop
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
@@ -40,6 +39,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.readers = set()
         self.writers = set()
         self.closing = False
+        super(BaseAsyncIOLoop, self).initialize(**kwargs)
 
     def close(self, all_fds=False):
         self.closing = True
@@ -105,21 +105,14 @@ class BaseAsyncIOLoop(IOLoop):
     def start(self):
         old_current = IOLoop.current(instance=False)
         try:
-            old_asyncio = asyncio.get_event_loop()
-        except RuntimeError:
-            old_asyncio = None
-        try:
             self._setup_logging()
             self.make_current()
-            # This is automatic in 3.5, but must be done manually in 3.4.
-            asyncio.set_event_loop(self.asyncio_loop)
             self.asyncio_loop.run_forever()
         finally:
             if old_current is None:
                 IOLoop.clear_current()
             else:
                 old_current.make_current()
-            asyncio.set_event_loop(old_asyncio)
 
     def stop(self):
         self.asyncio_loop.stop()
@@ -136,29 +129,36 @@ class BaseAsyncIOLoop(IOLoop):
         timeout.cancel()
 
     def add_callback(self, callback, *args, **kwargs):
-        if self.closing:
-            # TODO: this is racy; we need a lock to ensure that the
-            # loop isn't closed during call_soon_threadsafe.
-            raise RuntimeError("IOLoop is closing")
-        self.asyncio_loop.call_soon_threadsafe(
-            self._run_callback,
-            functools.partial(stack_context.wrap(callback), *args, **kwargs))
+        try:
+            self.asyncio_loop.call_soon_threadsafe(
+                self._run_callback,
+                functools.partial(stack_context.wrap(callback), *args, **kwargs))
+        except RuntimeError:
+            # "Event loop is closed". Swallow the exception for
+            # consistency with PollIOLoop (and logical consistency
+            # with the fact that we can't guarantee that an
+            # add_callback that completes without error will
+            # eventually execute).
+            pass
 
     add_callback_from_signal = add_callback
+
+    def run_in_executor(self, executor, func, *args):
+        return self.asyncio_loop.run_in_executor(executor, func, *args)
+
+    def set_default_executor(self, executor):
+        return self.asyncio_loop.set_default_executor(executor)
 
 
 class AsyncIOMainLoop(BaseAsyncIOLoop):
     """``AsyncIOMainLoop`` creates an `.IOLoop` that corresponds to the
     current ``asyncio`` event loop (i.e. the one returned by
-    ``asyncio.get_event_loop()``).  Recommended usage::
+    ``asyncio.get_event_loop()``).
 
-        from tornado.platform.asyncio import AsyncIOMainLoop
-        import asyncio
-        AsyncIOMainLoop().install()
-        asyncio.get_event_loop().run_forever()
+    .. deprecated:: 5.0
 
-    See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
-    installing alternative IOLoops.
+       Now used automatically when appropriate; it is no longer necessary
+       to refer to this class directly.
     """
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
@@ -169,14 +169,20 @@ class AsyncIOLoop(BaseAsyncIOLoop):
     """``AsyncIOLoop`` is an `.IOLoop` that runs on an ``asyncio`` event loop.
     This class follows the usual Tornado semantics for creating new
     ``IOLoops``; these loops are not necessarily related to the
-    ``asyncio`` default event loop.  Recommended usage::
-
-        from tornado.ioloop import IOLoop
-        IOLoop.configure('tornado.platform.asyncio.AsyncIOLoop')
-        IOLoop.current().start()
+    ``asyncio`` default event loop.
 
     Each ``AsyncIOLoop`` creates a new ``asyncio.EventLoop``; this object
     can be accessed with the ``asyncio_loop`` attribute.
+
+    .. versionchanged:: 5.0
+
+       When an ``AsyncIOLoop`` becomes the current `.IOLoop`, it also sets
+       the current `asyncio` event loop.
+
+    .. deprecated:: 5.0
+
+       Now used automatically when appropriate; it is no longer necessary
+       to refer to this class directly.
     """
     def initialize(self, **kwargs):
         loop = asyncio.new_event_loop()
@@ -187,6 +193,17 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             # we have to close it.
             loop.close()
             raise
+
+    def make_current(self):
+        super(AsyncIOLoop, self).make_current()
+        try:
+            self.old_asyncio = asyncio.get_event_loop()
+        except RuntimeError:
+            self.old_asyncio = None
+        asyncio.set_event_loop(self.asyncio_loop)
+
+    def _clear_current_hook(self):
+        asyncio.set_event_loop(self.old_asyncio)
 
 
 def to_tornado_future(asyncio_future):
@@ -215,3 +232,30 @@ def to_asyncio_future(tornado_future):
        so this method is now equivalent to `tornado.gen.convert_yielded`.
     """
     return convert_yielded(tornado_future)
+
+
+class AnyThreadEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+    """Event loop policy that allows loop creation on any thread.
+
+    The default `asyncio` event loop policy only automatically creates
+    event loops in the main threads. Other threads must create event
+    loops explicitly or `asyncio.get_event_loop` (and therefore
+    `.IOLoop.current`) will fail. Installing this policy allows event
+    loops to be created automatically on any thread, matching the
+    behavior of Tornado versions prior to 5.0 (or 5.0 on Python 2).
+
+    Usage::
+
+        asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+
+    .. versionadded:: 5.0
+
+    """
+    def get_event_loop(self):
+        try:
+            return super().get_event_loop()
+        except RuntimeError:
+            # "There is no current event loop in thread %r"
+            loop = self.new_event_loop()
+            self.set_event_loop(loop)
+            return loop

@@ -20,7 +20,6 @@ from tornado.platform.select import _Select
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
 from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis, skipBefore35, exec_test
-from tornado.concurrent import Future
 
 try:
     from concurrent import futures
@@ -171,10 +170,9 @@ class TestIOLoop(AsyncTestCase):
         other_ioloop.close()
 
     def test_add_callback_while_closing(self):
-        # Issue #635: add_callback() should raise a clean exception
-        # if called while another thread is closing the IOLoop.
-        if IOLoop.configured_class().__name__.endswith('AsyncIOLoop'):
-            raise unittest.SkipTest("AsyncIOMainLoop shutdown not thread safe")
+        # add_callback should not fail if it races with another thread
+        # closing the IOLoop. The callbacks are dropped silently
+        # without executing.
         closing = threading.Event()
 
         def target():
@@ -187,11 +185,7 @@ class TestIOLoop(AsyncTestCase):
         thread.start()
         closing.wait()
         for i in range(1000):
-            try:
-                other_ioloop.add_callback(lambda: None)
-            except RuntimeError as e:
-                self.assertEqual("IOLoop is closing", str(e))
-                break
+            other_ioloop.add_callback(lambda: None)
 
     def test_handle_callback_exception(self):
         # IOLoop.handle_callback_exception can be overridden to catch
@@ -646,7 +640,7 @@ class TestIOLoopFutures(AsyncTestCase):
         res = yield [
             namespace["async_wrapper"](event1, event2),
             namespace["async_wrapper"](event2, event1)
-            ]
+        ]
 
         self.assertEqual([event1, event2], res)
 

@@ -8,12 +8,11 @@ from tornado.log import gen_log, app_log
 from tornado.netutil import ssl_wrap_socket
 from tornado.stack_context import NullContext
 from tornado.tcpserver import TCPServer
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, bind_unused_port, ExpectLog, gen_test  # noqa: E501
 from tornado.test.util import unittest, skipIfNonUnix, refusing_port, skipPypy3V58
 from tornado.web import RequestHandler, Application
 import errno
 import hashlib
-import io
 import logging
 import os
 import platform
@@ -1319,7 +1318,6 @@ class TestStreamBuffer(unittest.TestCase):
     def check_append_all_then_skip_all(self, buf, objs, input_type):
         self.assertEqual(len(buf), 0)
 
-        total_expected = b''.join(objs)
         expected = b''
 
         for o in objs:
@@ -1327,8 +1325,6 @@ class TestStreamBuffer(unittest.TestCase):
             buf.append(input_type(o))
             self.assertEqual(len(buf), len(expected))
             self.check_peek(buf, expected)
-
-        total_size = len(expected)
 
         while expected:
             n = self.random.randrange(1, len(expected) + 1)

@@ -67,7 +67,7 @@ _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE,
                     errno.ETIMEDOUT)
 
 if hasattr(errno, "WSAECONNRESET"):
-    _ERRNO_CONNRESET += (errno.WSAECONNRESET, errno.WSAECONNABORTED, errno.WSAETIMEDOUT)  # type: ignore
+    _ERRNO_CONNRESET += (errno.WSAECONNRESET, errno.WSAECONNABORTED, errno.WSAETIMEDOUT)  # type: ignore # noqa: E501
 
 if sys.platform == 'darwin':
     # OSX appears to have a race condition that causes send(2) to return
@@ -1530,7 +1530,7 @@ class SSLIOStream(IOStream):
                     err.args[0] in (errno.EBADF, errno.ENOTCONN)):
                 return self.close(exc_info=err)
             raise
-        except AttributeError:
+        except AttributeError as err:
             # On Linux, if the connection was reset before the call to
             # wrap_socket, do_handshake will fail with an
             # AttributeError.

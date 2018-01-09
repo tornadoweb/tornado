@@ -282,6 +282,12 @@ class Configurable(object):
     Configurable subclasses must define the class methods
     `configurable_base` and `configurable_default`, and use the instance
     method `initialize` instead of ``__init__``.
+
+    .. versionchanged:: 5.0
+
+       It is now possible for configuration to be specified at
+       multiple levels of a class hierarchy.
+
     """
     __impl_class = None  # type: type
     __impl_kwargs = None  # type: Dict[str, Any]

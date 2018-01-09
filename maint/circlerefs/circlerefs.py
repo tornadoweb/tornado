@@ -76,7 +76,6 @@ class DummyAsyncHandler(web.RequestHandler):
         raise web.Finish('ok\n')
 
 
-
 application = web.Application([
     (r'/dummy/', DummyHandler),
     (r'/dummyasync/', DummyAsyncHandler),

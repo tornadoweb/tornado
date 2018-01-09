@@ -362,13 +362,11 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # but if they do, leave it alone.
                 'Transfer-Encoding' not in headers)
             # If connection to a 1.1 client will be closed, inform client
-            if (self._request_start_line.version == 'HTTP/1.1' and
-                self._disconnect_on_finish):
+            if (self._request_start_line.version == 'HTTP/1.1' and self._disconnect_on_finish):
                 headers['Connection'] = 'close'
             # If a 1.0 client asked for keep-alive, add the header.
             if (self._request_start_line.version == 'HTTP/1.0' and
-                (self._request_headers.get('Connection', '').lower() ==
-                 'keep-alive')):
+                    self._request_headers.get('Connection', '').lower() == 'keep-alive'):
                 headers['Connection'] = 'Keep-Alive'
         if self._chunking_output:
             headers['Transfer-Encoding'] = 'chunked'
@@ -599,6 +597,9 @@ class HTTP1Connection(httputil.HTTPConnection):
             chunk_len = yield self.stream.read_until(b"\r\n", max_bytes=64)
             chunk_len = int(chunk_len.strip(), 16)
             if chunk_len == 0:
+                crlf = yield self.stream.read_bytes(2)
+                if crlf != b'\r\n':
+                    raise httputil.HTTPInputError("improperly terminated chunked request")
                 return
             total_size += chunk_len
             if total_size > self._max_body_size:

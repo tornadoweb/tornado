@@ -104,7 +104,7 @@ http://api.mongodb.org/python/current/installation.html#osx
 
 kwargs = {}
 
-version = "5.0.dev1"
+version = "5.0a1"
 
 with open('README.rst') as f:
     kwargs['long_description'] = f.read()
@@ -127,11 +127,16 @@ if (platform.python_implementation() == 'CPython' and
 if setuptools is not None:
     # If setuptools is not available, you're on your own for dependencies.
     install_requires = []
+    if sys.version_info < (3, 2):
+        install_requires.append('futures')
     if sys.version_info < (3, 4):
         install_requires.append('singledispatch')
     if sys.version_info < (3, 5):
         install_requires.append('backports_abc>=0.4')
     kwargs['install_requires'] = install_requires
+
+    python_requires = '>= 2.7, !=3.0.*, !=3.1.*, !=3.2.*, != 3.3.*'
+    kwargs['python_requires'] = python_requires
 
 # Verify that the SSL module has all the modern upgrades. Check for several
 # names individually since they were introduced at different versions,
@@ -166,13 +171,14 @@ setup(
             "templates/utf8.html",
             "test.crt",
             "test.key",
-            ],
-        },
+        ],
+    },
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
     license="http://www.apache.org/licenses/LICENSE-2.0",
-    description="Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed.",
+    description=("Tornado is a Python web framework and asynchronous networking library,"
+                 " originally developed at FriendFeed."),
     classifiers=[
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 2',
@@ -183,6 +189,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
-        ],
+    ],
     **kwargs
 )

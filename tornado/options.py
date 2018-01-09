@@ -16,9 +16,19 @@
 
 """A command line parsing module that lets modules define their own options.
 
-Each module defines its own options which are added to the global
-option namespace, e.g.::
+This module is inspired by Google's `gflags
+<https://github.com/google/python-gflags>`_. The primary difference
+with libraries such as `argparse` is that a global registry is used so
+that options may be defined in any module (it also enables
+`tornado.log` by default). The rest of Tornado does not depend on this
+module, so feel free to use `argparse` or other configuration
+libraries if you prefer them.
 
+Options must be defined with `tornado.options.define` before use,
+generally at the top level of a module. The options are then
+accessible as attributes of `tornado.options.options`::
+
+    # myapp/db.py
     from tornado.options import define, options
 
     define("mysql_host", default="127.0.0.1:3306", help="Main user DB")
@@ -29,34 +39,36 @@ option namespace, e.g.::
         db = database.Connection(options.mysql_host)
         ...
 
+    # myapp/server.py
+    from tornado.options import define, options
+
+    define("port", default=8080, help="port to listen on")
+
+    def start_server():
+        app = make_app()
+        app.listen(options.port)
+
 The ``main()`` method of your application does not need to be aware of all of
 the options used throughout your program; they are all automatically loaded
 when the modules are loaded.  However, all modules that define options
 must have been imported before the command line is parsed.
 
 Your ``main()`` method can parse the command line or parse a config file with
-either::
+either `parse_command_line` or `parse_config_file`::
 
-    tornado.options.parse_command_line()
-    # or
-    tornado.options.parse_config_file("/etc/server.conf")
+    import myapp.db, myapp.server
+    import tornado.options
 
-.. note:
+    if __name__ == '__main__':
+        tornado.options.parse_command_line()
+        # or
+        tornado.options.parse_config_file("/etc/server.conf")
 
-   When using tornado.options.parse_command_line or
-   tornado.options.parse_config_file, the only options that are set are
-   ones that were previously defined with tornado.options.define.
+.. note::
 
-Command line formats are what you would expect (``--myoption=myvalue``).
-Config files are just Python files. Global names become options, e.g.::
-
-    myoption = "myvalue"
-    myotheroption = "myothervalue"
-
-We support `datetimes <datetime.datetime>`, `timedeltas
-<datetime.timedelta>`, ints, and floats (just pass a ``type`` kwarg to
-`define`). We also accept multi-value options. See the documentation for
-`define()` below.
+   When using multiple ``parse_*`` functions, pass ``final=False`` to all
+   but the last one, or side effects may occur twice (in particular,
+   this can result in log messages being doubled).
 
 `tornado.options.options` is a singleton instance of `OptionParser`, and
 the top-level functions in this module (`define`, `parse_command_line`, etc)
@@ -80,6 +92,7 @@ instances to define isolated sets of options, such as for subcommands.
    options can be defined, set, and read with any mix of the two.
    Dashes are typical for command-line usage while config files require
    underscores.
+
 """
 
 from __future__ import absolute_import, division, print_function
@@ -190,13 +203,13 @@ class OptionParser(object):
                multiple=False, group=None, callback=None):
         """Defines a new command line option.
 
-        If ``type`` is given (one of str, float, int, datetime, or timedelta)
-        or can be inferred from the ``default``, we parse the command line
-        arguments based on the given type. If ``multiple`` is True, we accept
-        comma-separated values, and the option value is always a list.
+        ``type`` can be any of `str`, `int`, `float`, `bool`,
+        `~datetime.datetime`, or `~datetime.timedelta`. If no ``type``
+        is given but a ``default`` is, ``type`` is the type of
+        ``default``. Otherwise, ``type`` defaults to `str`.
 
-        For multi-value integers, we also accept the syntax ``x:y``, which
-        turns into ``range(x, y)`` - very useful for long integer ranges.
+        If ``multiple`` is True, the option value is a list of ``type``
+        instead of an instance of ``type``.
 
         ``help`` and ``metavar`` are used to construct the
         automatically generated command line help string. The help
@@ -208,9 +221,7 @@ class OptionParser(object):
         groups. By default, command line options are grouped by the
         file in which they are defined.
 
-        Command line option names must be unique globally. They can be parsed
-        from the command line with `parse_command_line` or parsed from a
-        config file with `parse_config_file`.
+        Command line option names must be unique globally.
 
         If a ``callback`` is given, it will be run with the new value whenever
         the option is changed.  This can be used to combine command-line
@@ -222,6 +233,7 @@ class OptionParser(object):
         With this definition, options in the file specified by ``--config`` will
         override options set earlier on the command line, but can be overridden
         by later flags.
+
         """
         normalized = self._normalize_name(name)
         if normalized in self._options:
@@ -259,6 +271,14 @@ class OptionParser(object):
         """Parses all options given on the command line (defaults to
         `sys.argv`).
 
+        Options look like ``--option=value`` and are parsed according
+        to their ``type``. For boolean options, ``--option`` is
+        equivalent to ``--option=true``
+
+        If the option has ``multiple=True``, comma-separated values
+        are accepted. For multi-value integer options, the syntax
+        ``x:y`` is also accepted and equivalent to ``range(x, y)``.
+
         Note that ``args[0]`` is ignored since it is the program name
         in `sys.argv`.
 
@@ -267,6 +287,7 @@ class OptionParser(object):
         If ``final`` is ``False``, parse callbacks will not be run.
         This is useful for applications that wish to combine configurations
         from multiple sources.
+
         """
         if args is None:
             args = sys.argv
@@ -299,11 +320,36 @@ class OptionParser(object):
         return remaining
 
     def parse_config_file(self, path, final=True):
-        """Parses and loads the Python config file at the given path.
+        """Parses and loads the config file at the given path.
+
+        The config file contains Python code that will be executed (so
+        it is **not safe** to use untrusted config files). Anything in
+        the global namespace that matches a defined option will be
+        used to set that option's value.
+
+        Options are not parsed from strings as they would be on the
+        command line; they should be set to the correct type (this
+        means if you have ``datetime`` or ``timedelta`` options you
+        will need to import those modules in the config file.
+
+        Example (using the options defined in the top-level docs of
+        this module)::
+
+            port = 80
+            mysql_host = 'mydb.example.com:3306'
+            memcache_hosts = ['cache1.example.com:11011',
+                              'cache2.example.com:11011']
 
         If ``final`` is ``False``, parse callbacks will not be run.
         This is useful for applications that wish to combine configurations
         from multiple sources.
+
+        .. note::
+
+            `tornado.options` is primarily a command-line library.
+            Config file support is provided for applications that wish
+            to use it, but applications that prefer config files may
+            wish to look at other libraries instead.
 
         .. versionchanged:: 4.1
            Config files are now always interpreted as utf-8 instead of
@@ -312,6 +358,7 @@ class OptionParser(object):
         .. versionchanged:: 4.4
            The special variable ``__file__`` is available inside config
            files, specifying the absolute path to the config file itself.
+
         """
         config = {'__file__': os.path.abspath(path)}
         with open(path, 'rb') as f:

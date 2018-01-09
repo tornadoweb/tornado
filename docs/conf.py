@@ -18,7 +18,7 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
-    ]
+]
 
 primary_domain = 'py'
 default_role = 'py:obj'
@@ -36,7 +36,7 @@ coverage_ignore_modules = [
     "tornado.platform.asyncio",
     "tornado.platform.caresresolver",
     "tornado.platform.twisted",
-    ]
+]
 # I wish this could go in a per-module file...
 coverage_ignore_classes = [
     # tornado.gen
@@ -56,7 +56,7 @@ coverage_ignore_classes = [
     "WebSocketProtocol",
     "WebSocketProtocol13",
     "WebSocketProtocol76",
-    ]
+]
 
 coverage_ignore_functions = [
     # various modules
@@ -76,11 +76,11 @@ html_favicon = 'favicon.ico'
 
 latex_documents = [
     ('index', 'tornado.tex', 'Tornado Documentation', 'The Tornado Authors', 'manual', False),
-    ]
+]
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3.5/', None),
-    }
+    'python': ('https://docs.python.org/3.6/', None),
+}
 
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 

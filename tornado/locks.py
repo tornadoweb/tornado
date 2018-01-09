@@ -467,7 +467,7 @@ class Lock(object):
     ``async with`` includes both the ``yield`` and the ``acquire``
     (just as it does with `threading.Lock`):
 
-    >>> async def f():  # doctest: +SKIP
+    >>> async def f2():  # doctest: +SKIP
     ...    async with lock:
     ...        # Do something holding the lock.
     ...        pass

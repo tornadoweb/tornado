@@ -41,6 +41,8 @@
    .. automethod:: IOLoop.call_later
    .. automethod:: IOLoop.remove_timeout
    .. automethod:: IOLoop.spawn_callback
+   .. automethod:: IOLoop.run_in_executor
+   .. automethod:: IOLoop.set_default_executor
    .. automethod:: IOLoop.time
    .. autoclass:: PeriodicCallback
       :members:
