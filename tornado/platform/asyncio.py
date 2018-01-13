@@ -186,6 +186,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
        to refer to this class directly.
     """
     def initialize(self, **kwargs):
+        self.is_current = False
         loop = asyncio.new_event_loop()
         try:
             super(AsyncIOLoop, self).initialize(loop, **kwargs)
@@ -195,16 +196,25 @@ class AsyncIOLoop(BaseAsyncIOLoop):
             loop.close()
             raise
 
+    def close(self, all_fds=False):
+        if self.is_current:
+            self.clear_current()
+        super(AsyncIOLoop, self).close(all_fds=all_fds)
+
     def make_current(self):
-        super(AsyncIOLoop, self).make_current()
-        try:
-            self.old_asyncio = asyncio.get_event_loop()
-        except RuntimeError:
-            self.old_asyncio = None
+        if not self.is_current:
+            super(AsyncIOLoop, self).make_current()
+            try:
+                self.old_asyncio = asyncio.get_event_loop()
+            except RuntimeError:
+                self.old_asyncio = None
+            self.is_current = True
         asyncio.set_event_loop(self.asyncio_loop)
 
     def _clear_current_hook(self):
-        asyncio.set_event_loop(self.old_asyncio)
+        if self.is_current:
+            asyncio.set_event_loop(self.old_asyncio)
+            self.is_current = False
 
 
 def to_tornado_future(asyncio_future):

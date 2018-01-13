@@ -310,6 +310,9 @@ class IOLoop(Configurable):
         .. versionchanged:: 5.0
            This method also sets the current `asyncio` event loop.
         """
+        old = getattr(IOLoop._current, "instance", None)
+        if old is not None:
+            old.clear_current()
         IOLoop._current.instance = self
 
     @staticmethod
@@ -924,8 +927,9 @@ class PollIOLoop(IOLoop):
         if self._stopped:
             self._stopped = False
             return
-        old_current = getattr(IOLoop._current, "instance", None)
-        IOLoop._current.instance = self
+        old_current = IOLoop.current(instance=False)
+        if old_current is not self:
+            self.make_current()
         self._thread_ident = thread.get_ident()
         self._running = True
 
@@ -1068,7 +1072,10 @@ class PollIOLoop(IOLoop):
             self._stopped = False
             if self._blocking_signal_threshold is not None:
                 signal.setitimer(signal.ITIMER_REAL, 0, 0)
-            IOLoop._current.instance = old_current
+            if old_current is None:
+                IOLoop.clear_current()
+            elif old_current is not self:
+                old_current.make_current()
             if old_wakeup_fd is not None:
                 signal.set_wakeup_fd(old_wakeup_fd)
 
