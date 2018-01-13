@@ -1,12 +1,12 @@
-#!/usr/bin/env python
-
 from __future__ import absolute_import, division, print_function
+
 import gc
 import locale  # system locale module, not tornado.locale
 import logging
 import operator
 import textwrap
 import sys
+
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop

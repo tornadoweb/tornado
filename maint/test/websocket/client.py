@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import logging
 
 from tornado import gen
