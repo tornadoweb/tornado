@@ -321,7 +321,7 @@ class IOLoop(Configurable):
         .. versionchanged:: 5.0
            This method also clears the current `asyncio` event loop.
         """
-        old = IOLoop._current.instance
+        old = getattr(IOLoop._current, "instance", None)
         if old is not None:
             old._clear_current_hook()
         IOLoop._current.instance = None

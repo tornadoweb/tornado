@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from concurrent.futures import ThreadPoolExecutor
 import contextlib
 import datetime
 import functools
@@ -493,6 +494,16 @@ class TestIOLoopCurrent(unittest.TestCase):
             IOLoop(make_current=True)
         # current() was not affected by the failed construction.
         self.assertIs(self.io_loop, IOLoop.current())
+
+
+class TestIOLoopCurrentAsync(AsyncTestCase):
+    @gen_test
+    def test_clear_without_current(self):
+        # If there is no current IOLoop, clear_current is a no-op (but
+        # should not fail). Use a thread so we see the threading.Local
+        # in a pristine state.
+        with ThreadPoolExecutor(1) as e:
+            yield e.submit(IOLoop.clear_current)
 
 
 class TestIOLoopAddCallback(AsyncTestCase):
