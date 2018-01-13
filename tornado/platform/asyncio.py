@@ -30,9 +30,8 @@ import asyncio
 
 
 class BaseAsyncIOLoop(IOLoop):
-    def initialize(self, asyncio_loop, close_loop=False, **kwargs):
+    def initialize(self, asyncio_loop, **kwargs):
         self.asyncio_loop = asyncio_loop
-        self.close_loop = close_loop
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
         self.handlers = {}
         # Set of fds listening for reads/writes
@@ -48,8 +47,7 @@ class BaseAsyncIOLoop(IOLoop):
             self.remove_handler(fd)
             if all_fds:
                 self.close_fd(fileobj)
-        if self.close_loop:
-            self.asyncio_loop.close()
+        self.asyncio_loop.close()
 
     def add_handler(self, fd, handler, events):
         fd, fileobj = self.split_fd(fd)
@@ -159,10 +157,13 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
 
        Now used automatically when appropriate; it is no longer necessary
        to refer to this class directly.
+
+    .. versionchanged:: 5.0
+
+       Closing an `AsyncIOMainLoop` now closes the underlying asyncio loop.
     """
     def initialize(self, **kwargs):
-        super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
-                                                close_loop=False, **kwargs)
+        super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(), **kwargs)
 
 
 class AsyncIOLoop(BaseAsyncIOLoop):
@@ -187,7 +188,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
     def initialize(self, **kwargs):
         loop = asyncio.new_event_loop()
         try:
-            super(AsyncIOLoop, self).initialize(loop, close_loop=True, **kwargs)
+            super(AsyncIOLoop, self).initialize(loop, **kwargs)
         except Exception:
             # If initialize() does not succeed (taking ownership of the loop),
             # we have to close it.
