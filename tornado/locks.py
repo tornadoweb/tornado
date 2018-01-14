@@ -99,8 +99,7 @@ class Condition(_TimeoutGarbageCollector):
         # Wait up to 1 second.
         yield condition.wait(timeout=datetime.timedelta(seconds=1))
 
-    The method raises `tornado.util.TimeoutError` if there's no notification
-    before the deadline.
+    The method returns False if there's no notification before the deadline.
 
     .. versionchanged:: 5.0
        Previously, waiters could be notified synchronously from within
