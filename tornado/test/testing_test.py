@@ -7,6 +7,7 @@ from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, 
 from tornado.web import Application
 import contextlib
 import os
+import platform
 import traceback
 import warnings
 
@@ -120,6 +121,8 @@ class AsyncTestCaseWrapperTest(unittest.TestCase):
         self.assertIn("should be decorated", result.errors[0][1])
 
     @skipBefore35
+    @unittest.skipIf(platform.python_implementation() == 'PyPy',
+                     'pypy destructor warnings cannot be silenced')
     def test_undecorated_coroutine(self):
         namespace = exec_test(globals(), locals(), """
         class Test(AsyncTestCase):
