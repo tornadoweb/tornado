@@ -27,6 +27,7 @@ from __future__ import absolute_import, division, print_function
 
 import collections
 import errno
+import io
 import numbers
 import os
 import socket
@@ -260,6 +261,8 @@ class BaseIOStream(object):
         self._read_regex = None
         self._read_max_bytes = None
         self._read_bytes = None
+        self._read_into = None
+        self._read_into_pos = 0
         self._read_partial = False
         self._read_until_close = False
         self._read_callback = None
@@ -408,6 +411,33 @@ class BaseIOStream(object):
         self._streaming_callback = stack_context.wrap(streaming_callback)
         try:
             self._try_inline_read()
+        except:
+            if future is not None:
+                future.add_done_callback(lambda f: f.exception())
+            raise
+        return future
+
+    def read_into(self, buf, callback=None, partial=False):
+        """Asynchronously read a number of bytes.
+
+        ``buf`` must be a writable buffer into which data will be read.
+        If a callback is given, it will be run with the number of read
+        bytes as an argument; if not, this method returns a `.Future`.
+
+        If ``partial`` is true, the callback is run as soon as any bytes
+        have been read.  Otherwise, it is run when the ``buf`` has been
+        entirely filled with read data.
+
+        .. versionadded:: 5.0
+        """
+        future = self._set_read_callback(callback)
+        assert not memoryview(buf).readonly
+        self._read_into = buf
+        self._read_into_pos = 0
+        self._read_partial = partial
+        self._streaming_callback = None
+        try:
+            self._try_inline_read_into()
         except:
             if future is not None:
                 future.add_done_callback(lambda f: f.exception())
@@ -737,6 +767,11 @@ class BaseIOStream(object):
             self._pending_callbacks -= 1
 
     def _handle_read(self):
+        if self._read_into is not None:
+            if self._read_to_user_buffer():
+                self._run_read_into_callback(self._read_into_pos)
+            return
+        # Other kinds of reads go here
         try:
             pos = self._read_to_buffer_loop()
         except UnsatisfiableReadError:
@@ -779,6 +814,67 @@ class BaseIOStream(object):
             # afterwards.  If we didn't, we have to do it now.
             self._maybe_add_error_listener()
 
+    def _run_read_into_callback(self, size):
+        self._read_into = None
+        callback = self._read_callback
+        future = self._read_future
+        if callback is not None:
+            assert future is None
+            self._read_callback = None
+            self._run_callback(callback, size)
+        else:
+            self._read_future = None
+            future.set_result(size)
+            # If we scheduled a callback, we will add the error listener
+            # afterwards.  If we didn't, we have to do it now.
+            self._maybe_add_error_listener()
+
+    def _try_inline_read_into(self):
+        buf = self._read_into
+        n = len(buf)
+        available_bytes = self._read_buffer_size
+        assert self._read_into_pos == 0
+
+        # First copy data already in read buffer
+        if available_bytes >= n:
+            end = self._read_buffer_pos + n
+            buf[:] = memoryview(self._read_buffer)[self._read_buffer_pos:end]
+            del self._read_buffer[:end]
+            self._read_buffer_size -= n
+            self._read_buffer_pos = 0
+            assert len(buf) == n  # didn't change
+            self._run_read_into_callback(n)
+            return
+        elif available_bytes > 0:
+            buf[:available_bytes] = memoryview(self._read_buffer)[self._read_buffer_pos:]
+            del self._read_buffer[:]
+            self._read_buffer_size = 0
+            self._read_buffer_pos = 0
+            assert len(buf) == n  # didn't change
+            if self._read_partial:
+                self._run_read_into_callback(available_bytes)
+                return
+            self._read_into_pos = available_bytes
+
+        # Try non-blocking read
+        try:
+            if self._read_to_user_buffer():
+                self._run_read_into_callback(self._read_into_pos)
+                return
+        except Exception as e:
+            # If there was an in _read_to_buffer, we called close() already,
+            # but couldn't run the close callback because of _pending_callbacks.
+            # Before we escape from this function, run the close callback if
+            # applicable.
+            self._maybe_run_close_callback()
+            raise
+        # We couldn't satisfy the read inline, so either close the stream
+        # or listen for new data.
+        if self.closed():
+            self._maybe_run_close_callback()
+        else:
+            self._add_io_state(ioloop.IOLoop.READ)
+
     def _try_inline_read(self):
         """Attempt to complete the current read operation from buffered data.
 
@@ -812,6 +908,24 @@ class BaseIOStream(object):
         else:
             self._add_io_state(ioloop.IOLoop.READ)
 
+    def _handle_read_exception(self, e):
+        """Handle an exception occurred during read_from_fd()
+        or readinto_from_fd().
+        """
+        # Should be mostly pointless on Python 3 (PEP 475)
+        # However, see https://bugs.python.org/issue32275
+        if errno_from_exception(e) == errno.EINTR:
+            return 'continue'
+        # ssl.SSLError is a subclass of socket.error
+        if self._is_connreset(e):
+            # Treat ECONNRESET as a connection close rather than
+            # an error to minimize log spam  (the exception will
+            # be available on self.error for apps that care).
+            self.close(exc_info=e)
+            return
+        self.close(exc_info=e)
+        raise
+
     def _read_to_buffer(self):
         """Reads from the socket and appends the result to the read buffer.
 
@@ -823,17 +937,10 @@ class BaseIOStream(object):
             try:
                 chunk = self.read_from_fd()
             except (socket.error, IOError, OSError) as e:
-                if errno_from_exception(e) == errno.EINTR:
+                r = self._handle_read_exception(e)
+                if r == 'continue':
                     continue
-                # ssl.SSLError is a subclass of socket.error
-                if self._is_connreset(e):
-                    # Treat ECONNRESET as a connection close rather than
-                    # an error to minimize log spam  (the exception will
-                    # be available on self.error for apps that care).
-                    self.close(exc_info=e)
-                    return
-                self.close(exc_info=e)
-                raise
+                return r
             break
         if chunk is None:
             return 0
@@ -844,6 +951,27 @@ class BaseIOStream(object):
             self.close()
             raise StreamBufferFullError("Reached maximum read buffer size")
         return len(chunk)
+
+    def _read_to_user_buffer(self):
+        """Reads from the socket into the read_into buffer.
+
+        Returns True if the read was satisfied.
+        """
+        while True:
+            try:
+                nbytes = self.readinto_from_fd(
+                    memoryview(self._read_into)[self._read_into_pos:])
+            except (socket.error, IOError, OSError) as e:
+                r = self._handle_read_exception(e)
+                if r == 'continue':
+                    continue
+                return r
+            break
+        if not nbytes:
+            return
+        self._read_into_pos += nbytes
+        if self._read_into_pos == len(self._read_into) or self._read_partial:
+            return True
 
     def _run_streaming_callback(self):
         if self._streaming_callback is not None and self._read_buffer_size:
@@ -1117,6 +1245,20 @@ class IOStream(BaseIOStream):
             self.close()
             return None
         return chunk
+
+    def readinto_from_fd(self, mem):
+        assert len(mem) > 0
+        try:
+            nbytes = self.socket.recv_into(mem)
+        except socket.error as e:
+            if e.args[0] in _ERRNO_WOULDBLOCK:
+                return None
+            else:
+                raise
+        if not nbytes:
+            self.close()
+            return None
+        return nbytes
 
     def write_to_fd(self, data):
         try:
@@ -1557,6 +1699,33 @@ class SSLIOStream(IOStream):
             return None
         return chunk
 
+    def readinto_from_fd(self, mem):
+        assert len(mem) > 0
+        if self._ssl_accepting:
+            # If the handshake hasn't finished yet, there can't be anything
+            # to read (attempting to read may or may not raise an exception
+            # depending on the SSL version)
+            return None
+        try:
+            # See comment in read_from_fd() above about SSLSocket.read()
+            nbytes = self.socket.read(len(mem), mem)
+        except ssl.SSLError as e:
+            # SSLError is a subclass of socket.error, so this except
+            # block must come first.
+            if e.args[0] == ssl.SSL_ERROR_WANT_READ:
+                return None
+            else:
+                raise
+        except socket.error as e:
+            if e.args[0] in _ERRNO_WOULDBLOCK:
+                return None
+            else:
+                raise
+        if not nbytes:
+            self.close()
+            return None
+        return nbytes
+
     def _is_connreset(self, e):
         if isinstance(e, ssl.SSLError) and e.args[0] == ssl.SSL_ERROR_EOF:
             return True
@@ -1573,6 +1742,7 @@ class PipeIOStream(BaseIOStream):
     """
     def __init__(self, fd, *args, **kwargs):
         self.fd = fd
+        self._fio = io.FileIO(self.fd, "r+")
         _set_nonblocking(fd)
         super(PipeIOStream, self).__init__(*args, **kwargs)
 
@@ -1580,7 +1750,7 @@ class PipeIOStream(BaseIOStream):
         return self.fd
 
     def close_fd(self):
-        os.close(self.fd)
+        self._fio.close()
 
     def write_to_fd(self, data):
         try:
@@ -1592,21 +1762,42 @@ class PipeIOStream(BaseIOStream):
 
     def read_from_fd(self):
         try:
-            chunk = os.read(self.fd, self.read_chunk_size)
+            chunk = self._fio.read(self.read_chunk_size)
         except (IOError, OSError) as e:
-            if errno_from_exception(e) in _ERRNO_WOULDBLOCK:
-                return None
-            elif errno_from_exception(e) == errno.EBADF:
+            if errno_from_exception(e) == errno.EBADF:
                 # If the writing half of a pipe is closed, select will
                 # report it as readable but reads will fail with EBADF.
                 self.close(exc_info=e)
                 return None
             else:
                 raise
+        if chunk is None:
+            # Read would block
+            return None
         if not chunk:
             self.close()
             return None
         return chunk
+
+    def readinto_from_fd(self, mem):
+        assert len(mem) > 0
+        try:
+            nbytes = self._fio.readinto(mem)
+        except (IOError, OSError) as e:
+            if errno_from_exception(e) == errno.EBADF:
+                # If the writing half of a pipe is closed, select will
+                # report it as readable but reads will fail with EBADF.
+                self.close(exc_info=e)
+                return None
+            else:
+                raise
+        if nbytes is None:
+            # Read would block
+            return None
+        if nbytes == 0:
+            self.close()
+            return None
+        return nbytes
 
 
 def doctests():
