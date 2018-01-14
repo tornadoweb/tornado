@@ -213,6 +213,9 @@ class ReturnFutureTest(AsyncTestCase):
                        ".*ZeroDivisionError"):
             yield gen.moment
             yield gen.moment
+            # For some reason, TwistedIOLoop and pypy3 need a third iteration
+            # in order to drain references to the future
+            yield gen.moment
             del g
             gc.collect()  # for PyPy
 
@@ -425,3 +428,7 @@ class RunOnExecutorTest(AsyncTestCase):
         o = Object()
         answer = yield o.f()
         self.assertEqual(answer, 42)
+
+
+if __name__ == '__main__':
+    unittest.main()

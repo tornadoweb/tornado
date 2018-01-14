@@ -30,9 +30,8 @@ import asyncio
 
 
 class BaseAsyncIOLoop(IOLoop):
-    def initialize(self, asyncio_loop, close_loop=False, **kwargs):
+    def initialize(self, asyncio_loop, **kwargs):
         self.asyncio_loop = asyncio_loop
-        self.close_loop = close_loop
         # Maps fd to (fileobj, handler function) pair (as in IOLoop.add_handler)
         self.handlers = {}
         # Set of fds listening for reads/writes
@@ -48,8 +47,7 @@ class BaseAsyncIOLoop(IOLoop):
             self.remove_handler(fd)
             if all_fds:
                 self.close_fd(fileobj)
-        if self.close_loop:
-            self.asyncio_loop.close()
+        self.asyncio_loop.close()
 
     def add_handler(self, fd, handler, events):
         fd, fileobj = self.split_fd(fd)
@@ -159,10 +157,13 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
 
        Now used automatically when appropriate; it is no longer necessary
        to refer to this class directly.
+
+    .. versionchanged:: 5.0
+
+       Closing an `AsyncIOMainLoop` now closes the underlying asyncio loop.
     """
     def initialize(self, **kwargs):
-        super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(),
-                                                close_loop=False, **kwargs)
+        super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(), **kwargs)
 
 
 class AsyncIOLoop(BaseAsyncIOLoop):
@@ -185,25 +186,35 @@ class AsyncIOLoop(BaseAsyncIOLoop):
        to refer to this class directly.
     """
     def initialize(self, **kwargs):
+        self.is_current = False
         loop = asyncio.new_event_loop()
         try:
-            super(AsyncIOLoop, self).initialize(loop, close_loop=True, **kwargs)
+            super(AsyncIOLoop, self).initialize(loop, **kwargs)
         except Exception:
             # If initialize() does not succeed (taking ownership of the loop),
             # we have to close it.
             loop.close()
             raise
 
+    def close(self, all_fds=False):
+        if self.is_current:
+            self.clear_current()
+        super(AsyncIOLoop, self).close(all_fds=all_fds)
+
     def make_current(self):
-        super(AsyncIOLoop, self).make_current()
-        try:
-            self.old_asyncio = asyncio.get_event_loop()
-        except RuntimeError:
-            self.old_asyncio = None
+        if not self.is_current:
+            super(AsyncIOLoop, self).make_current()
+            try:
+                self.old_asyncio = asyncio.get_event_loop()
+            except RuntimeError:
+                self.old_asyncio = None
+            self.is_current = True
         asyncio.set_event_loop(self.asyncio_loop)
 
     def _clear_current_hook(self):
-        asyncio.set_event_loop(self.old_asyncio)
+        if self.is_current:
+            asyncio.set_event_loop(self.old_asyncio)
+            self.is_current = False
 
 
 def to_tornado_future(asyncio_future):
