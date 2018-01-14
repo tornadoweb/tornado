@@ -254,6 +254,8 @@ class BaseIOStream(object):
         self._read_buffer = bytearray()
         self._read_buffer_pos = 0
         self._read_buffer_size = 0
+        self._user_read_buffer = False
+        self._after_user_read_buffer = None
         self._write_buffer = _StreamBuffer()
         self._total_write_index = 0
         self._total_write_done_index = 0
@@ -412,6 +414,50 @@ class BaseIOStream(object):
         self._read_bytes = num_bytes
         self._read_partial = partial
         self._streaming_callback = stack_context.wrap(streaming_callback)
+        try:
+            self._try_inline_read()
+        except:
+            if future is not None:
+                future.add_done_callback(lambda f: f.exception())
+            raise
+        return future
+
+    def read_into(self, buf, callback=None, partial=False):
+        """Asynchronously read a number of bytes.
+
+        ``buf`` must be a writable buffer into which data will be read.
+        If a callback is given, it will be run with the number of read
+        bytes as an argument; if not, this method returns a `.Future`.
+
+        If ``partial`` is true, the callback is run as soon as any bytes
+        have been read.  Otherwise, it is run when the ``buf`` has been
+        entirely filled with read data.
+
+        .. versionadded:: 5.0
+        """
+        future = self._set_read_callback(callback)
+
+        # First copy data already in read buffer
+        available_bytes = self._read_buffer_size
+        n = len(buf)
+        if available_bytes >= n:
+            end = self._read_buffer_pos + n
+            buf[:] = memoryview(self._read_buffer)[self._read_buffer_pos:end]
+            del self._read_buffer[:end]
+            self._after_user_read_buffer = self._read_buffer
+        elif available_bytes > 0:
+            buf[:available_bytes] = memoryview(self._read_buffer)[self._read_buffer_pos:]
+
+        # Set up the supplied buffer as our temporary read buffer.
+        # The original (if it had any data remaining) has been
+        # saved for later.
+        self._user_read_buffer = True
+        self._read_buffer = buf
+        self._read_buffer_pos = 0
+        self._read_buffer_size = available_bytes
+        self._read_bytes = n
+        self._read_partial = partial
+
         try:
             self._try_inline_read()
         except:
@@ -767,6 +813,15 @@ class BaseIOStream(object):
         return self._read_future
 
     def _run_read_callback(self, size, streaming):
+        if self._user_read_buffer:
+            self._read_buffer = self._after_user_read_buffer or bytearray()
+            self._after_user_read_buffer = None
+            self._read_buffer_pos = 0
+            self._read_buffer_size = len(self._read_buffer)
+            self._user_read_buffer = False
+            result = size
+        else:
+            result = self._consume(size)
         if streaming:
             callback = self._streaming_callback
         else:
@@ -776,10 +831,11 @@ class BaseIOStream(object):
                 assert callback is None
                 future = self._read_future
                 self._read_future = None
-                future.set_result(self._consume(size))
+
+                future.set_result(result)
         if callback is not None:
             assert (self._read_future is None) or streaming
-            self._run_callback(callback, self._consume(size))
+            self._run_callback(callback, result)
         else:
             # If we scheduled a callback, we will add the error listener
             # afterwards.  If we didn't, we have to do it now.
@@ -828,7 +884,10 @@ class BaseIOStream(object):
         try:
             while True:
                 try:
-                    buf = bytearray(self.read_chunk_size)
+                    if self._user_read_buffer:
+                        buf = memoryview(self._read_buffer)[self._read_buffer_size:]
+                    else:
+                        buf = bytearray(self.read_chunk_size)
                     bytes_read = self.read_from_fd(buf)
                 except (socket.error, IOError, OSError) as e:
                     if errno_from_exception(e) == errno.EINTR:
@@ -848,7 +907,8 @@ class BaseIOStream(object):
             elif bytes_read == 0:
                 self.close()
                 return 0
-            self._read_buffer += memoryview(buf)[:bytes_read]
+            if not self._user_read_buffer:
+                self._read_buffer += memoryview(buf)[:bytes_read]
             self._read_buffer_size += bytes_read
         finally:
             # Break the reference to buf so we don't waste a chunk's worth of

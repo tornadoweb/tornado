@@ -12,6 +12,7 @@ from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase
 from tornado.test.util import unittest, skipIfNonUnix, refusing_port, skipPypy3V58
 from tornado.web import RequestHandler, Application
 import errno
+import hashlib
 import logging
 import os
 import platform
@@ -673,6 +674,143 @@ class TestReadWriteMixin(object):
         finally:
             rs.close()
             ws.close()
+
+    def test_read_into(self):
+        rs, ws = self.make_iostream_pair()
+
+        def sleep_some():
+            self.io_loop.run_sync(lambda: gen.sleep(0.05))
+        try:
+            buf = bytearray(10)
+            rs.read_into(buf, callback=self.stop)
+            ws.write(b"hello")
+            sleep_some()
+            self.assertTrue(rs.reading())
+            ws.write(b"world!!")
+            data = self.wait()
+            self.assertFalse(rs.reading())
+            self.assertEqual(data, 10)
+            self.assertEqual(bytes(buf), b"helloworld")
+
+            # Existing buffer is fed into user buffer
+            rs.read_into(buf, callback=self.stop)
+            sleep_some()
+            self.assertTrue(rs.reading())
+            ws.write(b"1234567890")
+            data = self.wait()
+            self.assertFalse(rs.reading())
+            self.assertEqual(data, 10)
+            self.assertEqual(bytes(buf), b"!!12345678")
+
+            # Existing buffer can satisfy read immediately
+            buf = bytearray(4)
+            ws.write(b"abcdefghi")
+            rs.read_into(buf, callback=self.stop)
+            data = self.wait()
+            self.assertEqual(data, 4)
+            self.assertEqual(bytes(buf), b"90ab")
+
+            rs.read_bytes(7, self.stop)
+            data = self.wait()
+            self.assertEqual(data, b"cdefghi")
+        finally:
+            ws.close()
+            rs.close()
+
+    def test_read_into_partial(self):
+        rs, ws = self.make_iostream_pair()
+
+        def sleep_some():
+            self.io_loop.run_sync(lambda: gen.sleep(0.05))
+        try:
+            # Partial read
+            buf = bytearray(10)
+            rs.read_into(buf, callback=self.stop, partial=True)
+            ws.write(b"hello")
+            data = self.wait()
+            self.assertFalse(rs.reading())
+            self.assertEqual(data, 5)
+            self.assertEqual(bytes(buf), b"hello\0\0\0\0\0")
+
+            # Full read despite partial=True
+            ws.write(b"world!1234567890")
+            rs.read_into(buf, callback=self.stop, partial=True)
+            data = self.wait()
+            self.assertEqual(data, 10)
+            self.assertEqual(bytes(buf), b"world!1234")
+
+            # Existing buffer can satisfy read immediately
+            rs.read_into(buf, callback=self.stop, partial=True)
+            data = self.wait()
+            self.assertEqual(data, 6)
+            self.assertEqual(bytes(buf), b"5678901234")
+
+        finally:
+            ws.close()
+            rs.close()
+
+    def test_read_into_zero_bytes(self):
+        rs, ws = self.make_iostream_pair()
+        try:
+            buf = bytearray()
+            fut = rs.read_into(buf)
+            self.assertEqual(fut.result(), 0)
+        finally:
+            ws.close()
+            rs.close()
+
+    def test_many_mixed_reads(self):
+        # Stress buffer handling when going back and forth between
+        # read_bytes() (using an internal buffer) and read_into()
+        # (using a user-allocated buffer).
+        r = random.Random(42)
+        nbytes = 1000000
+        rs, ws = self.make_iostream_pair()
+
+        produce_hash = hashlib.sha1()
+        consume_hash = hashlib.sha1()
+
+        @gen.coroutine
+        def produce():
+            remaining = nbytes
+            while remaining > 0:
+                size = r.randint(1, min(1000, remaining))
+                data = os.urandom(size)
+                produce_hash.update(data)
+                yield ws.write(data)
+                remaining -= size
+            assert remaining == 0
+
+        @gen.coroutine
+        def consume():
+            remaining = nbytes
+            while remaining > 0:
+                if r.random() > 0.5:
+                    # read_bytes()
+                    size = r.randint(1, min(1000, remaining))
+                    data = yield rs.read_bytes(size)
+                    consume_hash.update(data)
+                    remaining -= size
+                else:
+                    # read_into()
+                    size = r.randint(1, min(1000, remaining))
+                    buf = bytearray(size)
+                    n = yield rs.read_into(buf)
+                    assert n == size
+                    consume_hash.update(buf)
+                    remaining -= size
+            assert remaining == 0
+
+        @gen.coroutine
+        def main():
+            yield [produce(), consume()]
+            assert produce_hash.hexdigest() == consume_hash.hexdigest()
+
+        try:
+            self.io_loop.run_sync(main)
+        finally:
+            ws.close()
+            rs.close()
 
 
 class TestIOStreamMixin(TestReadWriteMixin):
