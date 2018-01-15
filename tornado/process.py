@@ -198,7 +198,9 @@ class Subprocess(object):
 
     * ``stdin``, ``stdout``, and ``stderr`` may have the value
       ``tornado.process.Subprocess.STREAM``, which will make the corresponding
-      attribute of the resulting Subprocess a `.PipeIOStream`.
+      attribute of the resulting Subprocess a `.PipeIOStream`. If this option
+      is used, the caller is responsible for closing the streams when done
+      with them.
 
     The ``Subprocess.STREAM`` option and the ``set_exit_callback`` and
     ``wait_for_exit`` methods do not work on Windows. There is

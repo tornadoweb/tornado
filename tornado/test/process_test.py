@@ -157,6 +157,8 @@ class SubprocessTest(AsyncTestCase):
                              stdin=Subprocess.STREAM,
                              stdout=Subprocess.STREAM, stderr=subprocess.STDOUT)
         self.addCleanup(lambda: (subproc.proc.terminate(), subproc.proc.wait()))
+        self.addCleanup(subproc.stdout.close)
+        self.addCleanup(subproc.stdin.close)
         subproc.stdout.read_until(b'>>> ', self.stop)
         self.wait()
         subproc.stdin.write(b"print('hello')\n")
@@ -195,6 +197,8 @@ class SubprocessTest(AsyncTestCase):
         subproc.stderr.read_until(b'\n', self.stop)
         data = self.wait()
         self.assertEqual(data, b'hello\n')
+        # More mysterious EBADF: This fails if done with self.addCleanup instead of here.
+        subproc.stderr.close()
 
     def test_sigchild(self):
         # Twisted's SIGCHLD handler and Subprocess's conflict with each other.
@@ -224,6 +228,7 @@ class SubprocessTest(AsyncTestCase):
         subproc = Subprocess([sys.executable, '-c',
                               'import time; time.sleep(30)'],
                              stdout=Subprocess.STREAM)
+        self.addCleanup(subproc.stdout.close)
         subproc.set_exit_callback(self.stop)
         os.kill(subproc.pid, signal.SIGTERM)
         try:

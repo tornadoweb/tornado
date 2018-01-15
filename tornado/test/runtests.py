@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import gc
+import io
 import locale  # system locale module, not tornado.locale
 import logging
 import operator
@@ -64,16 +65,21 @@ def all():
     return unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
 
 
-class TornadoTextTestRunner(unittest.TextTestRunner):
-    def run(self, test):
-        result = super(TornadoTextTestRunner, self).run(test)
-        if result.skipped:
-            skip_reasons = set(reason for (test, reason) in result.skipped)
-            self.stream.write(textwrap.fill(
-                "Some tests were skipped because: %s" %
-                ", ".join(sorted(skip_reasons))))
-            self.stream.write("\n")
-        return result
+def test_runner_factory(stderr):
+    class TornadoTextTestRunner(unittest.TextTestRunner):
+        def __init__(self, *args, **kwargs):
+            super(TornadoTextTestRunner, self).__init__(*args, stream=stderr, **kwargs)
+
+        def run(self, test):
+            result = super(TornadoTextTestRunner, self).run(test)
+            if result.skipped:
+                skip_reasons = set(reason for (test, reason) in result.skipped)
+                self.stream.write(textwrap.fill(
+                    "Some tests were skipped because: %s" %
+                    ", ".join(sorted(skip_reasons))))
+                self.stream.write("\n")
+            return result
+    return TornadoTextTestRunner
 
 
 class LogCounter(logging.Filter):
@@ -91,6 +97,19 @@ class LogCounter(logging.Filter):
         elif record.levelno >= logging.INFO:
             self.info_count += 1
         return True
+
+
+class CountingStderr(io.IOBase):
+    def __init__(self, real):
+        self.real = real
+        self.byte_count = 0
+
+    def write(self, data):
+        self.byte_count += len(data)
+        return self.real.write(data)
+
+    def flush(self):
+        return self.real.flush()
 
 
 def main():
@@ -163,6 +182,12 @@ def main():
     add_parse_callback(
         lambda: logging.getLogger().handlers[0].addFilter(log_counter))
 
+    # Certain errors (especially "unclosed resource" errors raised in
+    # destructors) go directly to stderr instead of logging. Count
+    # anything written by anything but the test runner as an error.
+    orig_stderr = sys.stderr
+    sys.stderr = CountingStderr(orig_stderr)
+
     import tornado.testing
     kwargs = {}
     if sys.version_info >= (3, 2):
@@ -172,19 +197,19 @@ def main():
         # suppresses this behavior, although this looks like an implementation
         # detail.  http://bugs.python.org/issue15626
         kwargs['warnings'] = False
-    kwargs['testRunner'] = TornadoTextTestRunner
+    kwargs['testRunner'] = test_runner_factory(orig_stderr)
     try:
         tornado.testing.main(**kwargs)
     finally:
         # The tests should run clean; consider it a failure if they
-        # logged anything at info level or above (except for the one
-        # allowed info message "PASS")
-        if (log_counter.info_count > 1 or
+        # logged anything at info level or above.
+        if (log_counter.info_count > 0 or
                 log_counter.warning_count > 0 or
-                log_counter.error_count > 0):
-            logging.error("logged %d infos, %d warnings, and %d errors",
+                log_counter.error_count > 0 or
+                sys.stderr.byte_count > 0):
+            logging.error("logged %d infos, %d warnings, %d errors, and %d bytes to stderr",
                           log_counter.info_count, log_counter.warning_count,
-                          log_counter.error_count)
+                          log_counter.error_count, sys.stderr.byte_count)
             sys.exit(1)
 
 

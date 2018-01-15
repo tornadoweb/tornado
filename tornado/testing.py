@@ -29,7 +29,7 @@ except ImportError:
     netutil = None  # type: ignore
     SimpleAsyncHTTPClient = None  # type: ignore
     Subprocess = None  # type: ignore
-from tornado.log import gen_log, app_log
+from tornado.log import app_log
 from tornado.stack_context import ExceptionStackContext
 from tornado.util import raise_exc_info, basestring_type, PY3
 import functools
@@ -638,6 +638,12 @@ def main(**kwargs):
     to show many test details as they are run.
     See http://docs.python.org/library/unittest.html#unittest.main
     for full argument list.
+
+    .. versionchanged:: 5.0
+
+       This function produces no output of its own; only that produced
+       by the `unittest` module (Previously it would add a PASS or FAIL
+       log message).
     """
     from tornado.options import define, options, parse_command_line
 
@@ -673,23 +679,16 @@ def main(**kwargs):
     if __name__ == '__main__' and len(argv) == 1:
         print("No tests specified", file=sys.stderr)
         sys.exit(1)
-    try:
-        # In order to be able to run tests by their fully-qualified name
-        # on the command line without importing all tests here,
-        # module must be set to None.  Python 3.2's unittest.main ignores
-        # defaultTest if no module is given (it tries to do its own
-        # test discovery, which is incompatible with auto2to3), so don't
-        # set module if we're not asking for a specific test.
-        if len(argv) > 1:
-            unittest.main(module=None, argv=argv, **kwargs)
-        else:
-            unittest.main(defaultTest="all", argv=argv, **kwargs)
-    except SystemExit as e:
-        if e.code == 0:
-            gen_log.info('PASS')
-        else:
-            gen_log.error('FAIL')
-        raise
+    # In order to be able to run tests by their fully-qualified name
+    # on the command line without importing all tests here,
+    # module must be set to None.  Python 3.2's unittest.main ignores
+    # defaultTest if no module is given (it tries to do its own
+    # test discovery, which is incompatible with auto2to3), so don't
+    # set module if we're not asking for a specific test.
+    if len(argv) > 1:
+        unittest.main(module=None, argv=argv, **kwargs)
+    else:
+        unittest.main(defaultTest="all", argv=argv, **kwargs)
 
 
 if __name__ == '__main__':
