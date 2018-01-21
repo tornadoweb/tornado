@@ -309,7 +309,6 @@ Other notes
   improve performance.
 - Requests with invalid websocket headers now get a response with
   status code 400 instead of a closed connection.
-- `.WebSocketHandler.write_message` now raises `.StreamClosedError` if
-  called after the connection is closed.
-  TODO(bdarnell): fix this up with WebSocketClosedError
+- `.WebSocketHandler.write_message` now raises `.WebSocketClosedError` if
+  the connection closes while the write is in progress.
 - The ``io_loop`` argument to `.websocket_connect` has been removed.

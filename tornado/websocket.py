@@ -237,6 +237,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
         is allowed.
 
         If the connection is already closed, raises `WebSocketClosedError`.
+        Returns a `.Future` which can be used for flow control.
 
         .. versionchanged:: 3.2
            `WebSocketClosedError` was added (previously a closed connection
@@ -244,6 +245,10 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         .. versionchanged:: 4.3
            Returns a `.Future` which can be used for flow control.
+
+        .. versionchanged:: 5.0
+           Consistently raises `WebSocketClosedError`. Previously could
+           sometimes raise `.StreamClosedError`.
         """
         if self.ws_connection is None:
             raise WebSocketClosedError()
@@ -788,7 +793,23 @@ class WebSocketProtocol13(WebSocketProtocol):
         if self._compressor:
             message = self._compressor.compress(message)
             flags |= self.RSV1
-        return self._write_frame(True, opcode, message, flags=flags)
+        # For historical reasons, write methods in Tornado operate in a semi-synchronous
+        # mode in which awaiting the Future they return is optional (But errors can
+        # still be raised). This requires us to go through an awkward dance here
+        # to transform the errors that may be returned while presenting the same
+        # semi-synchronous interface.
+        try:
+            fut = self._write_frame(True, opcode, message, flags=flags)
+        except StreamClosedError:
+            raise WebSocketClosedError()
+
+        @gen.coroutine
+        def wrapper():
+            try:
+                yield fut
+            except StreamClosedError:
+                raise WebSocketClosedError()
+        return wrapper()
 
     def write_ping(self, data):
         """Send ping frame."""
@@ -1144,8 +1165,16 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         future_set_result_unless_cancelled(self.connect_future, self)
 
     def write_message(self, message, binary=False):
-        """Sends a message to the WebSocket server."""
-        return self.protocol.write_message(message, binary)
+        """Sends a message to the WebSocket server.
+
+        If the stream is closed, raises `WebSocketClosedError`.
+        Returns a `.Future` which can be used for flow control.
+
+        .. versionchanged:: 5.0
+           Exception raised on a closed stream changed from `.StreamClosedError`
+           to `WebSocketClosedError`.
+        """
+        return self.protocol.write_message(message, binary=binary)
 
     def read_message(self, callback=None):
         """Reads a message from the WebSocket server.
