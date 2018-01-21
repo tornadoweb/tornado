@@ -38,6 +38,7 @@ class BaseAsyncIOLoop(IOLoop):
         self.readers = set()
         self.writers = set()
         self.closing = False
+        IOLoop._ioloop_for_asyncio[asyncio_loop] = self
         super(BaseAsyncIOLoop, self).initialize(**kwargs)
 
     def close(self, all_fds=False):
@@ -101,16 +102,16 @@ class BaseAsyncIOLoop(IOLoop):
         handler_func(fileobj, events)
 
     def start(self):
-        old_current = IOLoop.current(instance=False)
+        try:
+            old_loop = asyncio.get_event_loop()
+        except RuntimeError:
+            old_loop = None
         try:
             self._setup_logging()
-            self.make_current()
+            asyncio.set_event_loop(self.asyncio_loop)
             self.asyncio_loop.run_forever()
         finally:
-            if old_current is None:
-                IOLoop.clear_current()
-            else:
-                old_current.make_current()
+            asyncio.set_event_loop(old_loop)
 
     def stop(self):
         self.asyncio_loop.stop()
@@ -165,6 +166,11 @@ class AsyncIOMainLoop(BaseAsyncIOLoop):
     def initialize(self, **kwargs):
         super(AsyncIOMainLoop, self).initialize(asyncio.get_event_loop(), **kwargs)
 
+    def make_current(self):
+        # AsyncIOMainLoop already refers to the current asyncio loop so
+        # nothing to do here.
+        pass
+
 
 class AsyncIOLoop(BaseAsyncIOLoop):
     """``AsyncIOLoop`` is an `.IOLoop` that runs on an ``asyncio`` event loop.
@@ -203,7 +209,6 @@ class AsyncIOLoop(BaseAsyncIOLoop):
 
     def make_current(self):
         if not self.is_current:
-            super(AsyncIOLoop, self).make_current()
             try:
                 self.old_asyncio = asyncio.get_event_loop()
             except RuntimeError:
