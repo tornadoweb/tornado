@@ -167,8 +167,8 @@ Other notes
 - ``tornado.ioloop.TimeoutError`` is now an alias for
   `tornado.util.TimeoutError`.
 - `.IOLoop.instance` is now a deprecated alias for `.IOLoop.current`.
-- `.IOLoop.initialized`, `.IOLoop.install`, and
-  `.IOLoop.clear_instance` are all deprecated.
+- `.IOLoop.install` and `.IOLoop.clear_instance` are deprecated.
+- ``IOLoop.initialized`` has been removed.
 - On Python 3, the `asyncio`-backed `.IOLoop` is always used and
   alternative `.IOLoop` implementations cannot be configured.
 - `~.IOLoop.run_sync` cancels its argument on a timeout. This

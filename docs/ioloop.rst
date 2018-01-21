@@ -19,7 +19,6 @@
    .. automethod:: IOLoop.run_sync
    .. automethod:: IOLoop.close
    .. automethod:: IOLoop.instance
-   .. automethod:: IOLoop.initialized
    .. automethod:: IOLoop.install
    .. automethod:: IOLoop.clear_instance
 

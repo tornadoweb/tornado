@@ -125,10 +125,6 @@ def fork_processes(num_processes, max_restarts=100):
     assert _task_id is None
     if num_processes is None or num_processes <= 0:
         num_processes = cpu_count()
-    if ioloop.IOLoop.initialized():
-        raise RuntimeError("Cannot run in multiple processes: IOLoop instance "
-                           "has already been initialized. You cannot call "
-                           "IOLoop.instance() before calling start_processes()")
     gen_log.info("Starting %d processes", num_processes)
     children = {}
 

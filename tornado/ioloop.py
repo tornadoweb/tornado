@@ -221,29 +221,6 @@ class IOLoop(Configurable):
         """
         return IOLoop.current()
 
-    @staticmethod
-    def initialized():
-        """Returns true if there is a current IOLoop.
-
-        .. versionchanged:: 5.0
-
-           Redefined in terms of `current()` instead of `instance()`.
-
-        .. deprecated:: 5.0
-
-           This method only knows about `IOLoop` objects (and not, for
-           example, `asyncio` event loops), so it is of limited use.
-        """
-        if asyncio is None:
-            return IOLoop.current(instance=False) is not None
-        else:
-            # Asyncio gives us no way to ask whether an instance
-            # exists without creating one. Even calling
-            # `IOLoop.current(instance=False)` will create the asyncio
-            # loop (but not the Tornado loop, which would break the
-            # ability to use this function for "is it safe to fork?".
-            return False
-
     def install(self):
         """Deprecated alias for `make_current()`.
 
