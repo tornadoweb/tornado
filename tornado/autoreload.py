@@ -348,6 +348,5 @@ if __name__ == "__main__":
     # sys.path before our imports
     # Ensure that any global variables accessed by main() are in the module namespace
     # instead of the __main__ namespace
-    import tornado.autoreload
-    tornado.autoreload.main()
+    main()
 
