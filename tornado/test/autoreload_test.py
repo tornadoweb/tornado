@@ -62,9 +62,8 @@ sys.stdout.flush()
 if 'TESTAPP_STARTED' not in os.environ:
     os.environ['TESTAPP_STARTED'] = '1'
 else:
-    # Force the autoreload to exit
-    autoreload.add_reload_hook(lambda: os._exit(0))
-    autoreload._reload()
+    # Avoid the autoreload to be caught by SystemExit
+    os._exit(0)
 """
 
         touch = """\
