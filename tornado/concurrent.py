@@ -337,11 +337,12 @@ class Future(object):
 
     def _set_done(self):
         self._done = True
-        from tornado.ioloop import IOLoop
-        loop = IOLoop.current()
-        for cb in self._callbacks:
-            loop.add_callback(cb, self)
-        self._callbacks = None
+        if self._callbacks:
+            from tornado.ioloop import IOLoop
+            loop = IOLoop.current()
+            for cb in self._callbacks:
+                loop.add_callback(cb, self)
+            self._callbacks = None
 
     # On Python 3.3 or older, objects with a destructor part of a reference
     # cycle are never destroyed. It's no longer the case on Python 3.4 thanks to
