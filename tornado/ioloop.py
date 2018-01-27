@@ -47,6 +47,7 @@ import threading
 import time
 import traceback
 import math
+import weakref
 
 from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
 from tornado.log import app_log, gen_log
@@ -180,10 +181,11 @@ class IOLoop(Configurable):
     WRITE = _EPOLLOUT
     ERROR = _EPOLLERR | _EPOLLHUP
 
-    # Global lock for creating global IOLoop instance
-    _instance_lock = threading.Lock()
-
+    # In Python 2, _current.instance points to the current IOLoop.
     _current = threading.local()
+
+    # In Python 3, _ioloop_for_asyncio maps from asyncio loops to IOLoops.
+    _ioloop_for_asyncio = weakref.WeakKeyDictionary()
 
     @classmethod
     def configure(cls, impl, **kwargs):
@@ -218,21 +220,6 @@ class IOLoop(Configurable):
         .. deprecated:: 5.0
         """
         return IOLoop.current()
-
-    @staticmethod
-    def initialized():
-        """Returns true if there is a current IOLoop.
-
-        .. versionchanged:: 5.0
-
-           Redefined in terms of `current()` instead of `instance()`.
-
-        .. deprecated:: 5.0
-
-           This method only knows about `IOLoop` objects (and not, for
-           example, `asyncio` event loops), so it is of limited use.
-        """
-        return IOLoop.current(instance=False) is not None
 
     def install(self):
         """Deprecated alias for `make_current()`.
@@ -276,22 +263,36 @@ class IOLoop(Configurable):
            Added ``instance`` argument to control the fallback to
            `IOLoop.instance()`.
         .. versionchanged:: 5.0
+           On Python 3, control of the current `IOLoop` is delegated
+           to `asyncio`, with this and other methods as pass-through accessors.
            The ``instance`` argument now controls whether an `IOLoop`
            is created automatically when there is none, instead of
            whether we fall back to `IOLoop.instance()` (which is now
-           an alias for this method)
+           an alias for this method). ``instance=False`` is deprecated,
+           since even if we do not create an `IOLoop`, this method
+           may initialize the asyncio loop.
         """
-        current = getattr(IOLoop._current, "instance", None)
-        if current is None and instance:
-            current = None
-            if asyncio is not None:
-                from tornado.platform.asyncio import AsyncIOLoop, AsyncIOMainLoop
-                if IOLoop.configured_class() is AsyncIOLoop:
-                    current = AsyncIOMainLoop()
-            if current is None:
+        if asyncio is None:
+            current = getattr(IOLoop._current, "instance", None)
+            if current is None and instance:
                 current = IOLoop()
-            if IOLoop._current.instance is not current:
-                raise RuntimeError("new IOLoop did not become current")
+                if IOLoop._current.instance is not current:
+                    raise RuntimeError("new IOLoop did not become current")
+        else:
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                if not instance:
+                    return None
+                raise
+            try:
+                return IOLoop._ioloop_for_asyncio[loop]
+            except KeyError:
+                if instance:
+                    from tornado.platform.asyncio import AsyncIOMainLoop
+                    current = AsyncIOMainLoop(make_current=True)
+                else:
+                    current = None
         return current
 
     def make_current(self):
@@ -310,6 +311,8 @@ class IOLoop(Configurable):
         .. versionchanged:: 5.0
            This method also sets the current `asyncio` event loop.
         """
+        # The asyncio event loops override this method.
+        assert asyncio is None
         old = getattr(IOLoop._current, "instance", None)
         if old is not None:
             old.clear_current()
@@ -324,10 +327,11 @@ class IOLoop(Configurable):
         .. versionchanged:: 5.0
            This method also clears the current `asyncio` event loop.
         """
-        old = getattr(IOLoop._current, "instance", None)
+        old = IOLoop.current(instance=False)
         if old is not None:
             old._clear_current_hook()
-        IOLoop._current.instance = None
+        if asyncio is None:
+            IOLoop._current.instance = None
 
     def _clear_current_hook(self):
         """Instance method called when an IOLoop ceases to be current.
@@ -352,7 +356,9 @@ class IOLoop(Configurable):
             if IOLoop.current(instance=False) is None:
                 self.make_current()
         elif make_current:
-            if IOLoop.current(instance=False) is not None:
+            current = IOLoop.current(instance=False)
+            # AsyncIO loops can already be current by this point.
+            if current is not None and current is not self:
                 raise RuntimeError("current IOLoop already exists")
             self.make_current()
 

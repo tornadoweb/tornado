@@ -66,7 +66,6 @@ class ProcessTest(unittest.TestCase):
         # place for it).
         skip_if_twisted()
         with ExpectLog(gen_log, "(Starting .* processes|child .* exited|uncaught exception)"):
-            self.assertFalse(IOLoop.initialized())
             sock, port = bind_unused_port()
 
             def get_url(path):

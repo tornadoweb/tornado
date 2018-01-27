@@ -725,6 +725,8 @@ class TestIOLoopRunSync(unittest.TestCase):
         self.io_loop.run_sync(namespace['f'])
 
 
+@unittest.skipIf(asyncio is not None,
+                 'IOLoop configuration not available')
 class TestPeriodicCallback(unittest.TestCase):
     def setUp(self):
         self.io_loop = FakeTimeIOLoop()
@@ -830,6 +832,8 @@ class TestIOLoopConfiguration(unittest.TestCase):
         self.assertEqual(cls, 'AsyncIOMainLoop')
 
     @unittest.skipIf(twisted is None, "twisted module not present")
+    @unittest.skipIf(asyncio is not None,
+                     "IOLoop configuration not available")
     def test_twisted(self):
         cls = self.run_python(
             'from tornado.platform.twisted import TwistedIOLoop',
