@@ -78,6 +78,11 @@ Other notes
 - Python 3.6 or higher is recommended, because it features more
   efficient garbage collection of `asyncio.Future` objects.
 
+`tornado.auth`
+~~~~~~~~~~~~~~
+
+- `.GoogleOAuth2Mixin` now uses a newer set of URLs.
+
 `tornado.autoreload`
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -140,6 +145,8 @@ Other notes
 `tornado.httpserver`
 ~~~~~~~~~~~~~~~~~~~~
 
+- It is now possible for a client to reuse a connection after sending
+  a chunked request.
 - If a client sends a malformed request, the server now responds with
   a 400 error instead of simply closing the connection.
 - ``Content-Length`` and ``Transfer-Encoding`` headers are no longer
@@ -171,6 +178,8 @@ Other notes
 - ``IOLoop.initialized`` has been removed.
 - On Python 3, the `asyncio`-backed `.IOLoop` is always used and
   alternative `.IOLoop` implementations cannot be configured.
+  `.IOLoop.current` and related methods pass through to
+  `asyncio.get_event_loop`.
 - `~.IOLoop.run_sync` cancels its argument on a timeout. This
   results in better stack traces (and avoids log messages about leaks)
   in native coroutines.
@@ -187,11 +196,16 @@ Other notes
   `.IOLoop.set_blocking_log_threshold` methods are deprecated because
   they are not implemented for the `asyncio` event loop`. Use the
   ``PYTHONASYNCIODEBUG=1`` environment variable instead.
+- `.IOLoop.clear_current` now works if it is called before any
+  current loop is established.
+- The ``IOLoop.initialized`` method has been removed.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~
 
 - The ``io_loop`` argument to the `.IOStream` constructor has been removed.
+- New method `.BaseIOStream.read_into` provides a minimal-copy alternative to
+  `.BaseIOStream.read_bytes`.
 - `.BaseIOStream.write` is now much more efficient for very large amounts of data.
 - Fixed some cases in which ``IOStream.error`` could be inaccurate.
 - Writing a `memoryview` can no longer result in "BufferError:
@@ -228,9 +242,12 @@ Other notes
   when appropriate; referencing them explicitly is no longer
   recommended.
 - Starting an `.IOLoop` or making it current now also sets the
-  `asyncio` event loop for the current thread.
+  `asyncio` event loop for the current thread. Closing an `.IOLoop`
+  closes the corresponding `asyncio` event loop.
 - `.to_tornado_future` and `.to_asyncio_future` are deprecated since
   they are now no-ops.
+- `~.AnyThreadEventLoopPolicy` can now be used to easily allow the creation
+  of event loops on any thread (similar to Tornado's prior policy).
 
 `tornado.platform.caresresolver`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -282,6 +299,9 @@ Other notes
 - The deprecated ``tornado.testing.get_unused_port`` and
   ``tornado.testing.LogTrapTestCase`` have been removed.
 - `.AsyncHTTPTestCase.fetch` now supports absolute URLs.
+- `.AsyncHTTPTestCase.fetch` now connects to ``127.0.0.1``
+  instead of ``localhost`` to be more robust against faulty
+  ipv6 configurations.
 
 `tornado.util`
 ~~~~~~~~~~~~~~
