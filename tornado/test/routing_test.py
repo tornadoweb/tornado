@@ -171,8 +171,11 @@ class RuleRouterTest(AsyncHTTPTestCase):
         app = Application()
 
         def request_callable(request):
-            request.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK")
-            request.finish()
+            request.connection.write_headers(
+                ResponseStartLine("HTTP/1.1", 200, "OK"),
+                HTTPHeaders({"Content-Length": "2"}))
+            request.connection.write(b"OK")
+            request.connection.finish()
 
         router = CustomRouter()
         router.add_routes({

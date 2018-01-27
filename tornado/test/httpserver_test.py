@@ -485,6 +485,7 @@ bar
 class XHeaderTest(HandlerBaseTestCase):
     class Handler(RequestHandler):
         def get(self):
+            self.set_header('request-version', self.request.version)
             self.write(dict(remote_ip=self.request.remote_ip,
                             remote_protocol=self.request.protocol))
 
@@ -530,11 +531,14 @@ class XHeaderTest(HandlerBaseTestCase):
             "127.0.0.1")
 
     def test_trusted_downstream(self):
-
         valid_ipv4_list = {"X-Forwarded-For": "127.0.0.1, 4.4.4.4, 5.5.5.5"}
-        self.assertEqual(
-            self.fetch_json("/", headers=valid_ipv4_list)["remote_ip"],
-            "4.4.4.4")
+        resp = self.fetch("/", headers=valid_ipv4_list)
+        if resp.headers['request-version'].startswith('HTTP/2'):
+            # This is a hack - there's nothing that fundamentally requires http/1
+            # here but tornado_http2 doesn't support it yet.
+            self.skipTest('requires HTTP/1.x')
+        result = json_decode(resp.body)
+        self.assertEqual(result['remote_ip'], "4.4.4.4")
 
     def test_scheme_headers(self):
         self.assertEqual(self.fetch_json("/")["remote_protocol"], "http")

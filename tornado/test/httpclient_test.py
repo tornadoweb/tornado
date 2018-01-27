@@ -603,12 +603,19 @@ class SyncHTTPClientTest(unittest.TestCase):
     def tearDown(self):
         def stop_server():
             self.server.stop()
-            # Delay the shutdown of the IOLoop by one iteration because
+            # Delay the shutdown of the IOLoop by several iterations because
             # the server may still have some cleanup work left when
             # the client finishes with the response (this is noticeable
             # with http/2, which leaves a Future with an unexamined
             # StreamClosedError on the loop).
-            self.server_ioloop.add_callback(self.server_ioloop.stop)
+            @gen.coroutine
+            def slow_stop():
+                # The number of iterations is difficult to predict. Typically,
+                # one is sufficient, although sometimes it needs more.
+                for i in range(5):
+                    yield
+                self.server_ioloop.stop()
+            self.server_ioloop.add_callback(slow_stop)
         self.server_ioloop.add_callback(stop_server)
         self.server_thread.join()
         self.http_client.close()
