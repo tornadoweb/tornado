@@ -6,8 +6,8 @@ import traceback
 
 from tornado.escape import utf8, native_str, to_unicode
 from tornado.template import Template, DictLoader, ParseError, Loader
-from tornado.test.util import unittest, is_coverage_running
-from tornado.util import ObjectDict, unicode_type, PY3
+from tornado.test.util import unittest
+from tornado.util import ObjectDict, unicode_type
 
 
 class TemplateTest(unittest.TestCase):
@@ -175,11 +175,6 @@ try{% set y = 1/x %}
         self.assertEqual(template.generate(), '0')
 
     def test_non_ascii_name(self):
-        if PY3 and is_coverage_running():
-            try:
-                os.fsencode(u"t\u00e9st.html")
-            except UnicodeEncodeError:
-                self.skipTest("coverage tries to access unencodable filename")
         loader = DictLoader({u"t\u00e9st.html": "hello"})
         self.assertEqual(loader.load(u"t\u00e9st.html").generate(), b"hello")
 

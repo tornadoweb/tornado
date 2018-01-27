@@ -6,6 +6,9 @@ sudo: false
 
 matrix:
     fast_finish: true
+    # Nightly python is failing as of 2018-01-26
+    allow_failures:
+    - python: nightly
 
 language: python
 # For a list of available versions, run

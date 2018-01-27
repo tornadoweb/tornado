@@ -7,7 +7,6 @@ import traceback
 from tornado.concurrent import Future
 from tornado import gen
 from tornado.httpclient import HTTPError, HTTPRequest
-from tornado.iostream import StreamClosedError
 from tornado.log import gen_log, app_log
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
@@ -25,7 +24,7 @@ except ImportError:
     traceback.print_exc()
     raise
 
-from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError
+from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError, WebSocketClosedError
 
 try:
     from tornado import speedups
@@ -50,10 +49,11 @@ class TestWebSocketHandler(WebSocketHandler):
 
 
 class EchoHandler(TestWebSocketHandler):
+    @gen.coroutine
     def on_message(self, message):
         try:
-            self.write_message(message, isinstance(message, bytes))
-        except StreamClosedError:
+            yield self.write_message(message, isinstance(message, bytes))
+        except WebSocketClosedError:
             pass
 
 
@@ -342,7 +342,7 @@ class WebSocketTest(WebSocketBaseTestCase):
         ws = yield self.ws_connect('/close_reason')
         msg = yield ws.read_message()
         self.assertIs(msg, None)
-        with self.assertRaises(StreamClosedError):
+        with self.assertRaises(WebSocketClosedError):
             ws.write_message('hello')
 
     @gen_test

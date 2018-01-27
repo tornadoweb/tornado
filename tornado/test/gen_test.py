@@ -1069,6 +1069,20 @@ class GenCoroutineTest(AsyncTestCase):
         actual = repr(coro)
         self.assertIn(expected, actual)
 
+    @unittest.skipIf(asyncio is None, "asyncio module not present")
+    @gen_test
+    def test_asyncio_gather(self):
+        # This demonstrates that tornado coroutines can be understood
+        # by asyncio (This failed prior to Tornado 5.0).
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            raise gen.Return(1)
+
+        ret = yield asyncio.gather(f(), f())
+        self.assertEqual(ret, [1, 1])
+        self.finished = True
+
 
 class GenSequenceHandler(RequestHandler):
     @asynchronous
