@@ -8,6 +8,7 @@ from tornado.concurrent import Future
 from tornado import gen
 from tornado.httpclient import HTTPError, HTTPRequest
 from tornado.log import gen_log, app_log
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
 from tornado.test.util import unittest, skipBefore35, exec_test
@@ -183,6 +184,10 @@ class WebSocketTest(WebSocketBaseTestCase):
         ], template_loader=DictLoader({
             'message.html': '<b>{{ message }}</b>',
         }))
+
+    def get_http_client(self):
+        # These tests require HTTP/1; force the use of SimpleAsyncHTTPClient.
+        return SimpleAsyncHTTPClient()
 
     def tearDown(self):
         super(WebSocketTest, self).tearDown()
