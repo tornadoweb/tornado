@@ -14,7 +14,7 @@
 from __future__ import absolute_import, division, print_function
 
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine  # noqa: E501
-from tornado.routing import HostMatches, PathMatches, ReversibleRouter, Router, Rule, RuleRouter
+from tornado.routing import HostMatches, PathMatches, ReversibleRouter, Router, Rule, RuleRouter, RadixTreeRouter  # noqa: E501
 from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, HTTPError, RequestHandler
 from tornado.wsgi import WSGIContainer
@@ -245,3 +245,10 @@ class WSGIContainerTestCase(AsyncHTTPTestCase):
     def test_delegate_not_found(self):
         response = self.fetch("/404")
         self.assertEqual(response.code, 404)
+
+
+class RadixTreeRouterTestCase(AsyncHTTPTestCase):
+    def test_add_route(self):
+        router = RadixTreeRouter()
+        router.add_route("/", FirstHandler)
+        router.add_route("/user/:name/hello", FirstHandler)

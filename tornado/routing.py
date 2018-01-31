@@ -662,6 +662,11 @@ class Node(object):
         self.indices = indices  # TODO: for speed up finding(in future, maybe use binary search)
         self.children = []  # list of Node
 
+    def __repr__(self):
+        return " <Node path={}, ntype={}, handler={}, wild_child={}, indices={}, children={} >".format(  # noqa E501
+            self.path, self.ntype, self.handler, self.wild_child, self.indices, self.children
+        )
+
     def add_route(self, path, target):
         """map path to target"""
         cursor = self
@@ -677,17 +682,26 @@ class Node(object):
             if cursor.wild_child:
                 # find '/'
                 end = 0
-                for i in range(path):
+                for i in range(len(path)):
                     if path[i] != '/':
                         end += 1
                     else:
                         break
 
+                # if end is latest index of path
+                latest = False
+                if end == len(path):
+                    latest = True
+
                 if len(cursor.children) == 1:
                     if cursor.children[0].path != path[:end]:
-                        cursor = cursor.children[0]
-                        path = path[end:]
-                        continue
+                        if latest:
+                            cursor.handler = target
+                            return
+                        else:
+                            cursor = cursor.children[0]
+                            path = path[end:]
+                            continue
                     else:
                         raise RouterError(path[:end] + " confict with " + cursor.children[0].path)
                 elif len(cursor.children) == 0:
@@ -695,26 +709,39 @@ class Node(object):
                     child = Node(path[:end], ntype)
                     cursor.children = [child]
 
-                    path = path[end:]
-                    cursor = child
-                    continue
+                    if latest:
+                        cursor.handler = target
+                        return
+                    else:
+                        path = path[end:]
+                        cursor = child
+                        continue
                 else:
                     raise RouterError("only one wildchard child is permit")
             else:
                 # find ':' or '*'
                 end = 0
-                for i in range(path):
+                for i in range(len(path)):
                     if path[i] != ':' and path[i] != '*':
                         end += 1
                     else:
                         break
 
+                # if end is latest index of path
+                latest = False
+                if end == len(path):
+                    latest = True
+
                 child = Node(path[:end], ntype_static)
                 cursor.indices += path[0]
                 cursor.children.append(child)
                 cursor = child
-                path = path[end:]
-                continue
+                if latest:
+                    cursor.handler = target
+                    return
+                else:
+                    path = path[end:]
+                    continue
 
 
 class RadixTreeRouter(Router):
@@ -724,8 +751,11 @@ class RadixTreeRouter(Router):
     def add_route(self, path, target):
         """it does not implement `add_rules` because it does not compatible with `Rule` object"""
         if self.root is None:
-            self.root = Node("", ntype_root)
-            self.root.insert_route(path, target)
+            self.root = Node("/", ntype_root)
+            if path == '/':
+                self.root.handler = target
+                return
+            self.root.add_route(path[1:], target)
         else:
             cursor = self.root
             while True:
@@ -733,7 +763,7 @@ class RadixTreeRouter(Router):
 
                 # find max common part
                 max_index = 0
-                for i in range(len(path)):
+                for i in range(max_len):
                     if path[i] == cursor.path[i]:
                         max_index += 1
                     else:
