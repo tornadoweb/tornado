@@ -814,6 +814,9 @@ def multi_future(children, quiet_exceptions=()):
     else:
         keys = None
     children = list(map(convert_yielded, children))
+    # filter out NullFutures, like gen.moment
+    children = [child for child in children
+                if not isinstance(child, _NullFuture)]
     assert all(is_future(i) for i in children)
     unfinished_children = set(children)
 
