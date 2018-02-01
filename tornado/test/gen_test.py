@@ -1603,10 +1603,12 @@ class RunnerGCTest(AsyncTestCase):
         # now that it's not a real Future
         @gen.coroutine
         def wait_a_moment():
-            yield gen.multi([gen.moment, gen.moment])
+            result = yield gen.multi([gen.moment, gen.moment])
+            raise gen.Return(result)
 
         loop = self.get_new_ioloop()
-        loop.run_sync(wait_a_moment)
+        result = loop.run_sync(wait_a_moment)
+        self.assertEqual(result, [None, None])
 
 
 if __name__ == '__main__':
