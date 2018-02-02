@@ -605,7 +605,7 @@ class URLSpec(Rule):
         * ``pattern``: Regular expression to be matched. Any capturing
           groups in the regex will be passed in to the handler's
           get/post/etc methods as arguments (by keyword if named, by
-          position if unnamed. Named and unnamed capturing groups may
+          position if unnamed. Named and unnamed capturing groups
           may not be mixed in the same rule).
 
         * ``handler``: `~.web.RequestHandler` subclass to be invoked.
