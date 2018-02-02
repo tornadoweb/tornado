@@ -814,7 +814,7 @@ def multi_future(children, quiet_exceptions=()):
     else:
         keys = None
     children = list(map(convert_yielded, children))
-    assert all(is_future(i) for i in children)
+    assert all(is_future(i) or isinstance(i, _NullFuture) for i in children)
     unfinished_children = set(children)
 
     future = _create_future()

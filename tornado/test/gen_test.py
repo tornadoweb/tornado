@@ -1598,6 +1598,18 @@ class RunnerGCTest(AsyncTestCase):
             # coroutine finalizer was called (not on PyPy3 apparently)
             self.assertIs(result[-1], None)
 
+    def test_multi_moment(self):
+        # Test gen.multi with moment
+        # now that it's not a real Future
+        @gen.coroutine
+        def wait_a_moment():
+            result = yield gen.multi([gen.moment, gen.moment])
+            raise gen.Return(result)
+
+        loop = self.get_new_ioloop()
+        result = loop.run_sync(wait_a_moment)
+        self.assertEqual(result, [None, None])
+
 
 if __name__ == '__main__':
     unittest.main()
