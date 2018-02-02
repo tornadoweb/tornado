@@ -639,3 +639,183 @@ def _unquote_or_none(s):
     if s is None:
         return s
     return url_unescape(s, encoding=None, plus=False)
+
+
+# radix tree router implementation
+
+ntype_static = 0  # static path, like `/`, `/this`, `/that`
+ntype_root = 1  # hint that this node is the root, it's static node of course
+ntype_param = 2  # node with path like `:name` in `/user/:name/hello`
+ntype_catchall = 3  # node with path like `:filename` in `/sys/*filename`
+
+
+class RouterError(Exception):
+    pass
+
+
+class Node(object):
+    def __init__(self, path, ntype, handler=None, wild_child=False, indices=""):
+        self.path = path
+        self.ntype = ntype  # node type, such as root, param, catchAll
+        self.handler = handler
+        self.wild_child = wild_child  # children's type is param/catchAll or not
+        self.indices = indices  # TODO: for speed up finding(in future, maybe use binary search)
+        self.children = []  # list of Node
+
+    def __repr__(self):
+        return " <Node path={}, ntype={}, handler={}, wild_child={}, indices={}, children={} >".format(  # noqa E501
+            self.path, self.ntype, self.handler, self.wild_child, self.indices, self.children
+        )
+
+    def add_route(self, path, target):
+        """map path to target"""
+        cursor = self
+
+        while True:
+            if len(path) == 0:
+                return
+
+            if path[0] == ':' or path[0] == '*':
+                cursor.wild_child = True
+
+            # only one wildchard child is permit
+            if cursor.wild_child:
+                # find '/'
+                end = 0
+                for i in range(len(path)):
+                    if path[i] != '/':
+                        end += 1
+                    else:
+                        break
+
+                # if end is latest index of path
+                latest = False
+                if end == len(path):
+                    latest = True
+
+                if len(cursor.children) == 1:
+                    if cursor.children[0].path != path[:end]:
+                        if latest:
+                            cursor.handler = target
+                            return
+                        else:
+                            cursor = cursor.children[0]
+                            path = path[end:]
+                            continue
+                    else:
+                        raise RouterError(path[:end] + " confict with " + cursor.children[0].path)
+                elif len(cursor.children) == 0:
+                    ntype = ntype_param if path[0] == ':' else ntype_catchall
+                    child = Node(path[:end], ntype)
+                    cursor.children = [child]
+
+                    if latest:
+                        cursor.handler = target
+                        return
+                    else:
+                        path = path[end:]
+                        cursor = child
+                        continue
+                else:
+                    raise RouterError("only one wildchard child is permit")
+            else:
+                # find ':' or '*'
+                end = 0
+                for i in range(len(path)):
+                    if path[i] != ':' and path[i] != '*':
+                        end += 1
+                    else:
+                        break
+
+                # if end is latest index of path
+                latest = False
+                if end == len(path):
+                    latest = True
+
+                child = Node(path[:end], ntype_static)
+                cursor.indices += path[0]
+                cursor.children.append(child)
+                cursor = child
+                if latest:
+                    cursor.handler = target
+                    return
+                else:
+                    path = path[end:]
+                    continue
+
+
+class RadixTreeRouter(Router):
+    def __init__(self, root=None):
+        self.root = root
+
+    def add_route(self, path, target):
+        """it does not implement `add_rules` because it does not compatible with `Rule` object"""
+        if self.root is None:
+            self.root = Node("/", ntype_root)
+            if path == '/':
+                self.root.handler = target
+                return
+            self.root.add_route(path[1:], target)
+        else:
+            cursor = self.root
+            while True:
+                max_len = min(len(cursor.path), len(path))
+
+                # find max common part
+                max_index = 0
+                for i in range(max_len):
+                    if path[i] == cursor.path[i]:
+                        max_index += 1
+                    else:
+                        break
+
+                # if max_index is shorter than cursor, then cursor should split to 2 part
+                if max_index < len(cursor.path):
+                    child = Node(
+                        cursor.path[max_index:],
+                        cursor.ntype,
+                        cursor.handler,
+                        cursor.wild_child,
+                        cursor.indices,
+                    )
+                    cursor.path = self.cursor.path[:max_len]
+                    cursor.handler = None
+                    cursor.indices = path[max_len]
+                    cursor.children = [child]
+
+                # if max_len is equal to path
+                if max_len == len(path):
+                    cursor.handler = target
+                    return
+
+                # if max_len is shorter than path
+                if max_len < len(path):
+                    # note that until here, path[:max_len] is same with root.path
+
+                    # find where is the end
+                    end = max_len
+                    for i in range(max_len, len(path)):
+                        if path[i] != ':' and path[i] != '*':
+                            end += 1
+                            continue
+                        else:
+                            break
+
+                    # path is full static path
+                    if end == len(path):
+                        child = Node(path, ntype_static, target)
+                        cursor.indices += path[max_len]
+                        cursor.children.append(child)
+                        return
+
+                    # end is smaller that len(path)
+                    child = Node(path[max_len:end], ntype_static, wild_child=True)
+                    child.wild_child = True
+                    cursor.indices += path[max_len]
+                    cursor.children.append(child)
+
+                    child.add_route(path[end:], target)
+                    return
+
+    def find_handler(self, request, **kwargs):
+        pass
