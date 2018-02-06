@@ -15,8 +15,9 @@ Highlights
   Tornado. While care has been taken to minimize the disruption from
   this change, code changes may be required for compatibility with
   Tornado 5.0, as detailed in the following section.
-- Support for Python 2.7 and 3.4 are deprecated; Tornado 6.0 will
-  require Python 3.5+.
+- Tornado 5.0 supports Python 2.7.9+ and 3.4+. Python 2.7 and 3.4 are
+  deprecated and support for them will be removed in Tornado 6.0,
+  which will require Python 3.5+.
 
 Backwards-compatibility notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
