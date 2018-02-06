@@ -2499,8 +2499,9 @@ class StaticFileHandler(RequestHandler):
 
         .. versionadded:: 3.1
         """
-        if self.check_etag_header():
-            return True
+        # If client sent If-None-Match, use it, ignore If-Modified-Since
+        if self.request.headers.get('If-None-Match'):
+            return self.check_etag_header()
 
         # Check the If-Modified-Since, and don't send the result if the
         # content has not been modified

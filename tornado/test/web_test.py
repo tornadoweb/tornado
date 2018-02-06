@@ -1081,6 +1081,13 @@ class StaticFileTest(WebTestCase):
             'If-None-Match': response1.headers['Etag']})
         self.assertEqual(response2.code, 304)
 
+    def test_static_304_etag_modified_bug(self):
+        response1 = self.get_and_head("/static/robots.txt")
+        response2 = self.get_and_head("/static/robots.txt", headers={
+            'If-None-Match': '"MISMATCH"',
+            'If-Modified-Since': response1.headers['Last-Modified']})
+        self.assertEqual(response2.code, 200)
+
     def test_static_if_modified_since_pre_epoch(self):
         # On windows, the functions that work with time_t do not accept
         # negative values, and at least one client (processing.js) seems
