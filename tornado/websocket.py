@@ -662,8 +662,7 @@ class WebSocketProtocol13(WebSocketProtocol):
             self.request.headers.get("Sec-Websocket-Key"))
 
     def _accept_connection(self):
-        subprotocols = self.request.headers.get("Sec-WebSocket-Protocol", '')
-        subprotocols = [s.strip() for s in subprotocols.split(',')]
+        subprotocols = [s.strip() for s in self.request.headers.get_list("Sec-WebSocket-Protocol")]
         if subprotocols:
             selected = self.handler.select_subprotocol(subprotocols)
             if selected:
