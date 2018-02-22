@@ -1072,7 +1072,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     """
     def __init__(self, request, on_message_callback=None,
                  compression_options=None, ping_interval=None, ping_timeout=None,
-                 max_message_size=None):
+                 max_message_size=None, subprotocols=[]):
         self.compression_options = compression_options
         self.connect_future = Future()
         self.protocol = None
@@ -1084,6 +1084,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.ping_interval = ping_interval
         self.ping_timeout = ping_timeout
         self.max_message_size = max_message_size
+        self.subprotocols_requested = subprotocols
+        self.subprotocol = None
 
         scheme, sep, rest = request.url.partition(':')
         scheme = {'ws': 'http', 'wss': 'https'}[scheme]
@@ -1102,6 +1104,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             # if requested in self.compression_options.
             request.headers['Sec-WebSocket-Extensions'] = (
                 'permessage-deflate; client_max_window_bits')
+
+        if self.subprotocols_requested:
+            request.headers['Sec-WebSocket-Protocol'] = ','.join(self.subprotocols_requested)
 
         self.tcp_client = TCPClient()
         super(WebSocketClientConnection, self).__init__(
@@ -1147,6 +1152,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.headers = headers
         self.protocol = self.get_websocket_protocol()
         self.protocol._process_server_headers(self.key, self.headers)
+        if self.subprotocols_requested:
+            self.subprotocol = self.headers.get("Sec-WebSocket-Protocol")
+
         self.protocol.start_pinging()
         self.protocol._receive_frame()
 
@@ -1220,7 +1228,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 def websocket_connect(url, callback=None, connect_timeout=None,
                       on_message_callback=None, compression_options=None,
                       ping_interval=None, ping_timeout=None,
-                      max_message_size=None):
+                      max_message_size=None, subprotocols=[]):
     """Client-side websocket support.
 
     Takes a url and returns a Future whose result is a
@@ -1271,7 +1279,9 @@ def websocket_connect(url, callback=None, connect_timeout=None,
                                      compression_options=compression_options,
                                      ping_interval=ping_interval,
                                      ping_timeout=ping_timeout,
-                                     max_message_size=max_message_size)
+                                     max_message_size=max_message_size,
+                                     subprotocols=subprotocols)
     if callback is not None:
         IOLoop.current().add_future(conn.connect_future, callback)
     return conn.connect_future
+
