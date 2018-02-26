@@ -115,13 +115,13 @@ class LogFormatter(logging.Formatter):
                  style='%', color=True, colors=DEFAULT_COLORS):
         r"""
         :arg bool color: Enables color support.
-        :arg string fmt: Log message format.
+        :arg str fmt: Log message format.
           It will be applied to the attributes dict of log records. The
           text between ``%(color)s`` and ``%(end_color)s`` will be colored
           depending on the level if color support is on.
         :arg dict colors: color mappings from logging level to terminal color
           code
-        :arg string datefmt: Datetime format.
+        :arg str datefmt: Datetime format.
           Used for formatting ``(asctime)`` placeholder in ``prefix_fmt``.
 
         .. versionchanged:: 3.2
