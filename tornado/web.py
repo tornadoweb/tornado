@@ -309,7 +309,7 @@ class RequestHandler(object):
         """Sets the status code for our response.
 
         :arg int status_code: Response status code.
-        :arg string reason: Human-readable reason phrase describing the status
+        :arg str reason: Human-readable reason phrase describing the status
             code. If ``None``, it will be filled in from
             `http.client.responses` or "Unknown".
 
@@ -2170,11 +2170,11 @@ class HTTPError(Exception):
     :arg int status_code: HTTP status code.  Must be listed in
         `httplib.responses <http.client.responses>` unless the ``reason``
         keyword argument is given.
-    :arg string log_message: Message to be written to the log for this error
+    :arg str log_message: Message to be written to the log for this error
         (will not be shown to the user unless the `Application` is in debug
         mode).  May contain ``%s``-style placeholders, which will be filled
         in with remaining positional parameters.
-    :arg string reason: Keyword-only argument.  The HTTP "reason" phrase
+    :arg str reason: Keyword-only argument.  The HTTP "reason" phrase
         to pass in the status line along with ``status_code``.  Normally
         determined automatically from ``status_code``, but can be used
         to use a non-standard numeric code.

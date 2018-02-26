@@ -25,6 +25,7 @@ default_role = 'py:obj'
 
 autodoc_member_order = "bysource"
 autoclass_content = "both"
+autodoc_inherit_docstrings = False
 
 # Without this line sphinx includes a copy of object.__init__'s docstring
 # on any class that doesn't define __init__.

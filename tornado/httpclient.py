@@ -321,8 +321,8 @@ class HTTPRequest(object):
                  ssl_options=None):
         r"""All parameters except ``url`` are optional.
 
-        :arg string url: URL to fetch
-        :arg string method: HTTP method, e.g. "GET" or "POST"
+        :arg str url: URL to fetch
+        :arg str method: HTTP method, e.g. "GET" or "POST"
         :arg headers: Additional HTTP headers to pass on the request
         :type headers: `~tornado.httputil.HTTPHeaders` or `dict`
         :arg body: HTTP request body as a string (byte or unicode; if unicode
@@ -338,9 +338,9 @@ class HTTPRequest(object):
            to pass a ``Content-Length`` in the headers as otherwise chunked
            encoding will be used, and many servers do not support chunked
            encoding on requests.  New in Tornado 4.0
-        :arg string auth_username: Username for HTTP authentication
-        :arg string auth_password: Password for HTTP authentication
-        :arg string auth_mode: Authentication mode; default is "basic".
+        :arg str auth_username: Username for HTTP authentication
+        :arg str auth_password: Password for HTTP authentication
+        :arg str auth_mode: Authentication mode; default is "basic".
            Allowed values are implementation-defined; ``curl_httpclient``
            supports "basic" and "digest"; ``simple_httpclient`` only supports
            "basic"
@@ -353,19 +353,19 @@ class HTTPRequest(object):
         :arg bool follow_redirects: Should redirects be followed automatically
            or return the 3xx response? Default True.
         :arg int max_redirects: Limit for ``follow_redirects``, default 5.
-        :arg string user_agent: String to send as ``User-Agent`` header
+        :arg str user_agent: String to send as ``User-Agent`` header
         :arg bool decompress_response: Request a compressed response from
            the server and decompress it after downloading.  Default is True.
            New in Tornado 4.0.
         :arg bool use_gzip: Deprecated alias for ``decompress_response``
            since Tornado 4.0.
-        :arg string network_interface: Network interface to use for request.
+        :arg str network_interface: Network interface to use for request.
            ``curl_httpclient`` only; see note below.
-        :arg callable streaming_callback: If set, ``streaming_callback`` will
+        :arg collections.abc.Callable streaming_callback: If set, ``streaming_callback`` will
            be run with each chunk of data as it is received, and
            ``HTTPResponse.body`` and ``HTTPResponse.buffer`` will be empty in
            the final response.
-        :arg callable header_callback: If set, ``header_callback`` will
+        :arg collections.abc.Callable header_callback: If set, ``header_callback`` will
            be run with each header line as it is received (including the
            first line, e.g. ``HTTP/1.0 200 OK\r\n``, and a final line
            containing only ``\r\n``.  All lines include the trailing newline
@@ -373,28 +373,28 @@ class HTTPRequest(object):
            response.  This is most useful in conjunction with
            ``streaming_callback``, because it's the only way to get access to
            header data while the request is in progress.
-        :arg callable prepare_curl_callback: If set, will be called with
+        :arg collections.abc.Callable prepare_curl_callback: If set, will be called with
            a ``pycurl.Curl`` object to allow the application to make additional
            ``setopt`` calls.
-        :arg string proxy_host: HTTP proxy hostname.  To use proxies,
+        :arg str proxy_host: HTTP proxy hostname.  To use proxies,
            ``proxy_host`` and ``proxy_port`` must be set; ``proxy_username``,
            ``proxy_pass`` and ``proxy_auth_mode`` are optional.  Proxies are
            currently only supported with ``curl_httpclient``.
         :arg int proxy_port: HTTP proxy port
-        :arg string proxy_username: HTTP proxy username
-        :arg string proxy_password: HTTP proxy password
-        :arg string proxy_auth_mode: HTTP proxy Authentication mode;
+        :arg str proxy_username: HTTP proxy username
+        :arg str proxy_password: HTTP proxy password
+        :arg str proxy_auth_mode: HTTP proxy Authentication mode;
            default is "basic". supports "basic" and "digest"
         :arg bool allow_nonstandard_methods: Allow unknown values for ``method``
            argument? Default is False.
         :arg bool validate_cert: For HTTPS requests, validate the server's
            certificate? Default is True.
-        :arg string ca_certs: filename of CA certificates in PEM format,
+        :arg str ca_certs: filename of CA certificates in PEM format,
            or None to use defaults.  See note below when used with
            ``curl_httpclient``.
-        :arg string client_key: Filename for client SSL key, if any.  See
+        :arg str client_key: Filename for client SSL key, if any.  See
            note below when used with ``curl_httpclient``.
-        :arg string client_cert: Filename for client SSL certificate, if any.
+        :arg str client_cert: Filename for client SSL certificate, if any.
            See note below when used with ``curl_httpclient``.
         :arg ssl.SSLContext ssl_options: `ssl.SSLContext` object for use in
            ``simple_httpclient`` (unsupported by ``curl_httpclient``).
