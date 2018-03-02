@@ -1220,6 +1220,11 @@ class RequestHandler(object):
 
         See http://en.wikipedia.org/wiki/Cross-site_request_forgery
 
+        This property is of type `bytes`, but it contains only ASCII
+        characters. If a character string is required, there is no
+        need to base64-encode it; just decode the byte string as
+        UTF-8.
+
         .. versionchanged:: 3.2.2
            The xsrf token will now be have a random mask applied in every
            request, which makes it safe to include the token in pages
