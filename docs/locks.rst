@@ -3,8 +3,10 @@
 
 .. versionadded:: 4.2
 
-Coordinate coroutines with synchronization primitives analogous to those the
-standard library provides to threads.
+Coordinate coroutines with synchronization primitives analogous to
+those the standard library provides to threads. These classes are very
+similar to those provided in the standard library's `asyncio package
+<https://docs.python.org/3/library/asyncio-sync.html>`_.
 
 .. warning::
 

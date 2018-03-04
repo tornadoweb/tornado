@@ -1,4 +1,4 @@
-``tornado.gen`` --- Simplify asynchronous code
+``tornado.gen`` --- Generator-based coroutines
 ==============================================
 
 .. testsetup::

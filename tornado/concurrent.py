@@ -12,13 +12,19 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-"""Utilities for working with threads and ``Futures``.
+"""Utilities for working with ``Future`` objects.
 
 ``Futures`` are a pattern for concurrent programming introduced in
-Python 3.2 in the `concurrent.futures` package. This package defines
-a mostly-compatible `Future` class designed for use from coroutines,
-as well as some utility functions for interacting with the
-`concurrent.futures` package.
+Python 3.2 in the `concurrent.futures` package, and also adopted (in a
+slightly different form) in Python 3.4's `asyncio` package. This
+package defines a ``Future`` class that is an alias for `asyncio.Future`
+when available, and a compatible implementation for older versions of
+Python. It also includes some utility functions for interacting with
+``Future`` objects.
+
+While this package is an important part of Tornado's internal
+implementation, applications rarely need to interact with it
+directly.
 """
 from __future__ import absolute_import, division, print_function
 
@@ -404,7 +410,11 @@ def run_on_executor(*args, **kwargs):
             pass
 
     This decorator should not be confused with the similarly-named
-    `.IOLoop.run_in_executor`.
+    `.IOLoop.run_in_executor`. In general, using ``run_in_executor``
+    when *calling* a blocking method is recommended instead of using
+    this decorator when *defining* a method. If compatibility with older
+    versions of Tornado is required, consider defining an executor
+    and using ``executor.submit()`` at the call site.
 
     .. versionchanged:: 4.2
        Added keyword arguments to use alternative attributes.
@@ -441,6 +451,10 @@ def return_future(f):
     """Decorator to make a function that returns via callback return a
     `Future`.
 
+    This decorator was provided to ease the transition from
+    callback-oriented code to coroutines. It is not recommended for
+    new code.
+
     The wrapped function should take a ``callback`` keyword argument
     and invoke it with one argument when it has finished.  To signal failure,
     the function can simply raise an exception (which will be
@@ -475,6 +489,7 @@ def return_future(f):
     Note that ``@return_future`` and ``@gen.engine`` can be applied to the
     same function, provided ``@return_future`` appears first.  However,
     consider using ``@gen.coroutine`` instead of this combination.
+
     """
     replacer = ArgReplacer(f, 'callback')
 
