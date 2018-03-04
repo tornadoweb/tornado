@@ -292,3 +292,46 @@ disable XSRF protection by making ``check_xsrf_cookie()`` do nothing.
 However, if you support both cookie and non-cookie-based authentication,
 it is important that XSRF protection be used whenever the current
 request is authenticated with a cookie.
+
+.. _dnsrebinding:
+
+DNS Rebinding
+~~~~~~~~~~~~~
+
+`DNS rebinding <https://en.wikipedia.org/wiki/DNS_rebinding>`_ is an
+attack that can bypass the same-origin policy and allow external sites
+to access resources on private networks. This attack involves a DNS
+name (with a short TTL) that alternates between returning an IP
+address controlled by the attacker and one controlled by the victim
+(often a guessable private IP address such as ``127.0.0.1`` or
+``192.168.1.1``).
+
+Applications that use TLS are *not* vulnerable to this attack (because
+the browser will display certificate mismatch warnings that block
+automated access to the target site).
+
+Applications that cannot use TLS and rely on network-level access
+controls (for example, assuming that a server on ``127.0.0.1`` can
+only be accessed by the local machine) should guard against DNS
+rebinding by validating the ``Host`` HTTP header. This means passing a
+restrictive hostname pattern to either a `.HostMatches` router or the
+first argument of `.Application.add_handlers`::
+
+    # BAD: uses a default host pattern of r'.*'
+    app = Application([('/foo', FooHandler)])
+
+    # GOOD: only matches localhost or its ip address.
+    app = Application()
+    app.add_handlers(r'(localhost|127\.0\.0\.1)',
+                     [('/foo', FooHandler)])
+
+    # GOOD: same as previous example using tornado.routing.
+    app = Application([
+        (HostMatches(r'(localhost|127\.0\.0\.1)'),
+            [('/foo', FooHandler)]),
+        ])
+
+In addition, the ``default_host`` argument to `.Application` and the
+`.DefaultHostMatches` router must not be used in applications that may
+be vulnerable to DNS rebinding, because it has a similar effect to a
+wildcard host pattern.

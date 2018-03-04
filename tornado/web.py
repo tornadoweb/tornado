@@ -1888,6 +1888,17 @@ class Application(ReversibleRouter):
     If there's no match for the current request's host, then ``default_host``
     parameter value is matched against host regular expressions.
 
+
+    .. warning::
+
+       Applications that do not use TLS may be vulnerable to :ref:`DNS
+       rebinding <dnsrebinding>` attacks. This attack is especially
+       relevant to applications that only listen on ``127.0.0.1` or
+       other private networks. Appropriate host patterns must be used
+       (instead of the default of ``r'.*'``) to prevent this risk. The
+       ``default_host`` argument must not be used in applications that
+       may be vulnerable to DNS rebinding.
+
     You can serve static files by sending the ``static_path`` setting
     as a keyword argument. We will serve those files from the
     ``/static/`` URI (this is configurable with the
@@ -1898,6 +1909,7 @@ class Application(ReversibleRouter):
 
     .. versionchanged:: 4.5
        Integration with the new `tornado.routing` module.
+
     """
     def __init__(self, handlers=None, default_host=None, transforms=None,
                  **settings):
