@@ -6,9 +6,6 @@ sudo: false
 
 matrix:
     fast_finish: true
-    # Nightly python is failing as of 2018-01-26
-    allow_failures:
-    - python: nightly
 
 language: python
 # For a list of available versions, run
@@ -23,6 +20,9 @@ python:
     - pypy3.5-5.8.0
 
 install:
+    # On nightly, upgrade setuptools first to work around
+    # https://github.com/pypa/setuptools/issues/1257
+    - if [[ $TRAVIS_PYTHON_VERSION == 'nightly' ]]; then travis_retry pip install -U setuptools; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install mock monotonic; fi
     - if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then travis_retry pip install mock; fi
     # TODO(bdarnell): pycares tests are currently disabled on travis due to ipv6 issues.
@@ -62,8 +62,9 @@ script:
     # We use "python -m coverage" instead of the "bin/coverage" script
     # so we can pass additional arguments to python.
     # coverage needs a function that was removed in python 3.6 so we can't
-    # run it with nightly cpython.
-    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then export TARGET="-m coverage run $TARGET"; fi
+    # run it with nightly cpython. Coverage is very slow on pypy.
+    - if [[ $TRAVIS_PYTHON_VERSION != nightly && $TRAVIS_PYTHON_VERSION != 'pypy'* ]]; then export RUN_COVERAGE=1; fi
+    - if [[ "$RUN_COVERAGE" == 1 ]]; then export TARGET="-m coverage run $TARGET"; fi
     - python $TARGET
     - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then python $TARGET --ioloop=tornado.platform.select.SelectIOLoop; fi
     - python -O $TARGET
@@ -77,7 +78,7 @@ script:
     #- if [[ $TRAVIS_PYTHON_VERSION != pypy* ]]; then python $TARGET --resolver=tornado.platform.caresresolver.CaresResolver; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy3' ]]; then ../nodeps/bin/python -m tornado.test.runtests; fi
     # make coverage reports for Codecov to find
-    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then coverage xml; fi
+    - if [[ "$RUN_COVERAGE" == 1 ]]; then coverage xml; fi
     - export TORNADO_EXTENSION=0
     - if [[ $TRAVIS_PYTHON_VERSION == 3.6 ]]; then cd ../docs && mkdir sphinx-out && sphinx-build -E -n -W -b html . sphinx-out; fi
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' || $TRAVIS_PYTHON_VERSION == 3.6 ]]; then cd ../docs && mkdir sphinx-doctest-out && sphinx-build -E -n -b doctest . sphinx-out; fi
@@ -85,4 +86,4 @@ script:
 
 after_success:
     # call codecov from project root
-    - if [[ $TRAVIS_PYTHON_VERSION != nightly ]]; then cd ../ && codecov; fi
+    - if [[ "$RUN_COVERAGE" == 1 ]]; then cd ../ && codecov; fi
