@@ -244,7 +244,7 @@ class IOLoop(Configurable):
            Previously, this method would clear the `IOLoop` used as
            the global singleton by `IOLoop.instance()`. Now that
            `instance()` is an alias for `current()`,
-           `clear_instance()` is an alias for `clear_instance()`.
+           `clear_instance()` is an alias for `clear_current()`.
 
         .. deprecated:: 5.0
 
