@@ -1,6 +1,20 @@
-"""``tornado.gen`` is a generator-based interface to make it easier to
-work in an asynchronous environment.  Code using the ``gen`` module
-is technically asynchronous, but it is written as a single generator
+"""``tornado.gen`` implements generator-based coroutines.
+
+.. note::
+
+   The "decorator and generator" approach in this module is a
+   precursor to native coroutines (using ``async def`` and ``await``)
+   which were introduced in Python 3.5. Applications that do not
+   require compatibility with older versions of Python should use
+   native coroutines instead. Some parts of this module are still
+   useful with native coroutines, notably `multi`, `sleep`,
+   `WaitIterator`, and `with_timeout`. Some of these functions have
+   counterparts in the `asyncio` module which may be used as well,
+   although the two may not necessarily be 100% compatible.
+
+Coroutines provide an easier way to work in an asynchronous
+environment than chaining callbacks. Code using coroutines is
+technically asynchronous, but it is written as a single generator
 instead of a collection of separate functions.
 
 For example, the following asynchronous handler:
@@ -706,6 +720,10 @@ def multi(children, quiet_exceptions=()):
     This function is available under the names ``multi()`` and ``Multi()``
     for historical reasons.
 
+    Cancelling a `.Future` returned by ``multi()`` does not cancel its
+    children. `asyncio.gather` is similar to ``multi()``, but it does
+    cancel its children.
+
     .. versionchanged:: 4.2
        If multiple yieldables fail, any exceptions after the first
        (which is raised) will be logged. Added the ``quiet_exceptions``
@@ -886,6 +904,10 @@ def with_timeout(timeout, future, quiet_exceptions=()):
 
     Does not support `YieldPoint` subclasses.
 
+    The wrapped `.Future` is not canceled when the timeout expires,
+    permitting it to be reused. `asyncio.wait_for` is similar to this
+    function but it does cancel the wrapped `.Future` on timeout.
+
     .. versionadded:: 4.0
 
     .. versionchanged:: 4.1
@@ -894,6 +916,7 @@ def with_timeout(timeout, future, quiet_exceptions=()):
 
     .. versionchanged:: 4.4
        Added support for yieldable objects other than `.Future`.
+
     """
     # TODO: allow YieldPoints in addition to other yieldables?
     # Tricky to do with stack_context semantics.

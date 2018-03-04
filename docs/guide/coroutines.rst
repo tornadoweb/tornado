@@ -65,22 +65,6 @@ will work with ``await``::
         executor = concurrent.futures.ThreadPoolExecutor()
         await tornado.gen.convert_yielded(executor.submit(g))
 
-While native coroutines are not visibly tied to a particular framework
-(i.e. they do not use a decorator like `tornado.gen.coroutine` or
-`asyncio.coroutine`), not all coroutines are compatible with each
-other. There is a *coroutine runner* which is selected by the first
-coroutine to be called, and then shared by all coroutines which are
-called directly with ``await``. The Tornado coroutine runner is
-designed to be versatile and accept awaitable objects from any
-framework; other coroutine runners may be more limited (for example,
-the ``asyncio`` coroutine runner does not accept coroutines from other
-frameworks). For this reason, it is recommended to use the Tornado
-coroutine runner for any application which combines multiple
-frameworks. To call a coroutine using the Tornado runner from within a
-coroutine that is already using the asyncio runner, use the
-`tornado.platform.asyncio.to_asyncio_future` adapter.
-
-
 How it works
 ~~~~~~~~~~~~
 
@@ -165,42 +149,21 @@ used to start the ``main`` function of a batch-oriented program::
 Coroutine patterns
 ~~~~~~~~~~~~~~~~~~
 
-Interaction with callbacks
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-To interact with asynchronous code that uses callbacks instead of
-`.Future`, wrap the call in a `.Task`.  This will add the callback
-argument for you and return a `.Future` which you can yield:
-
-.. testcode::
-
-    @gen.coroutine
-    def call_task():
-        # Note that there are no parens on some_function.
-        # This will be translated by Task into
-        #   some_function(other_args, callback=callback)
-        yield gen.Task(some_function, other_args)
-
-.. testoutput::
-   :hide:
-
 Calling blocking functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The simplest way to call a blocking function from a coroutine is to
-use a `~concurrent.futures.ThreadPoolExecutor`, which returns
+use `.IOLoop.run_in_executor`, which returns
 ``Futures`` that are compatible with coroutines::
-
-    thread_pool = ThreadPoolExecutor(4)
 
     @gen.coroutine
     def call_blocking():
-        yield thread_pool.submit(blocking_func, args)
+        yield IOLoop.current().run_in_executor(blocking_func, args)
 
 Parallelism
 ^^^^^^^^^^^
 
-The coroutine decorator recognizes lists and dicts whose values are
+The `.coroutine` decorator recognizes lists and dicts whose values are
 ``Futures``, and waits for all of those ``Futures`` in parallel:
 
 .. testcode::
@@ -223,6 +186,13 @@ The coroutine decorator recognizes lists and dicts whose values are
 
 .. testoutput::
    :hide:
+
+Lists and dicts must be wrapped in `tornado.gen.multi` for use with
+``await``::
+
+    async def parallel_fetch(url1, url2):
+        resp1, resp2 = await gen.multi([http_client.fetch(url1),
+                                        http_client.fetch(url2)])
 
 Interleaving
 ^^^^^^^^^^^^
@@ -254,11 +224,12 @@ background processing.
 Looping
 ^^^^^^^
 
-Looping is tricky with coroutines since there is no way in Python
-to ``yield`` on every iteration of a ``for`` or ``while`` loop and
-capture the result of the yield.  Instead, you'll need to separate
-the loop condition from accessing the results, as in this example
-from `Motor <https://motor.readthedocs.io/en/stable/>`_::
+In native coroutines, ``async for`` can be used. In older versions of
+Python, looping is tricky with coroutines since there is no way to
+``yield`` on every iteration of a ``for`` or ``while`` loop and
+capture the result of the yield. Instead, you'll need to separate the
+loop condition from accessing the results, as in this example from
+`Motor <https://motor.readthedocs.io/en/stable/>`_::
 
     import motor
     db = motor.MotorClient().test

@@ -12,7 +12,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Asynchronous queues for coroutines.
+"""Asynchronous queues for coroutines. These classes are very similar
+to those provided in the standard library's `asyncio package
+<https://docs.python.org/3/library/asyncio-queue.html>`_.
 
 .. warning::
 
@@ -20,6 +22,7 @@
    are *not* thread-safe. To use these queues from another thread,
    use `.IOLoop.add_callback` to transfer control to the `.IOLoop` thread
    before calling any queue methods.
+
 """
 
 from __future__ import absolute_import, division, print_function

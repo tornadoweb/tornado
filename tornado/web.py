@@ -46,12 +46,14 @@ Thread-safety notes
 -------------------
 
 In general, methods on `RequestHandler` and elsewhere in Tornado are
-not thread-safe.  In particular, methods such as
+not thread-safe. In particular, methods such as
 `~RequestHandler.write()`, `~RequestHandler.finish()`, and
-`~RequestHandler.flush()` must only be called from the main thread.  If
+`~RequestHandler.flush()` must only be called from the main thread. If
 you use multiple threads it is important to use `.IOLoop.add_callback`
 to transfer control back to the main thread before finishing the
-request.
+request, or to limit your use of other threads to
+`.IOLoop.run_in_executor` and ensure that your callbacks running in
+the executor do not refer to Tornado objects.
 
 """
 
