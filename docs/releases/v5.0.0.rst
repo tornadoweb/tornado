@@ -1,7 +1,7 @@
 What's new in Tornado 5.0
 =========================
 
-In progress
+Mar 5, 2018
 -----------
 
 Highlights
@@ -322,6 +322,8 @@ Other notes
   garbage collection.
 - `.RedirectHandler` now copies any query arguments from the request
   to the redirect location.
+- If both ``If-None-Match`` and ``If-Modified-Since`` headers are present
+  in a request to `.StaticFileHandler`, the latter is now ignored.
 
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
