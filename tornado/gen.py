@@ -1292,7 +1292,12 @@ except ImportError:
                         break
         raise Return(_r)
 else:
-    _wrap_awaitable = asyncio.ensure_future
+    try:
+        _wrap_awaitable = asyncio.ensure_future
+    except AttributeError:
+        # asyncio.ensure_future was introduced in Python 3.4.4, but
+        # Debian jessie still ships with 3.4.2 so try the old name.
+        _wrap_awaitable = getattr(asyncio, 'async')
 
 
 def convert_yielded(yielded):
