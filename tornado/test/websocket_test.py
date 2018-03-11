@@ -621,6 +621,34 @@ class ClientPeriodicPingTest(WebSocketBaseTestCase):
         # TODO: test that the connection gets closed if ping responses stop.
 
 
+class ManualPingTest(WebSocketBaseTestCase):
+    def get_app(self):
+        class PingHandler(TestWebSocketHandler):
+            def on_ping(self, data):
+                self.write_message(data, binary=isinstance(data, bytes))
+
+        self.close_future = Future()
+        return Application([
+            ('/', PingHandler, dict(close_future=self.close_future)),
+        ])
+
+    @gen_test
+    def test_manual_ping(self):
+        ws = yield self.ws_connect('/')
+
+        self.assertRaises(ValueError, ws.ping, 'a' * 126)
+
+        ws.ping('hello')
+        resp = yield ws.read_message()
+        # on_ping always sees bytes.
+        self.assertEqual(resp, b'hello')
+
+        ws.ping(b'binary hello')
+        resp = yield ws.read_message()
+        self.assertEqual(resp, b'binary hello')
+        yield self.close(ws)
+
+
 class MaxMessageSizeTest(WebSocketBaseTestCase):
     def get_app(self):
         self.close_future = Future()
