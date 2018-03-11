@@ -104,7 +104,7 @@ class BaseAsyncIOLoop(IOLoop):
     def start(self):
         try:
             old_loop = asyncio.get_event_loop()
-        except RuntimeError:
+        except (RuntimeError, AssertionError):
             old_loop = None
         try:
             self._setup_logging()
@@ -211,7 +211,7 @@ class AsyncIOLoop(BaseAsyncIOLoop):
         if not self.is_current:
             try:
                 self.old_asyncio = asyncio.get_event_loop()
-            except RuntimeError:
+            except (RuntimeError, AssertionError):
                 self.old_asyncio = None
             self.is_current = True
         asyncio.set_event_loop(self.asyncio_loop)
@@ -270,7 +270,9 @@ class AnyThreadEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
     def get_event_loop(self):
         try:
             return super().get_event_loop()
-        except RuntimeError:
+        except (RuntimeError, AssertionError):
+            # This was an AssertionError in python 3.4.2 (which ships with debian jessie)
+            # and changed to a RuntimeError in 3.4.3.
             # "There is no current event loop in thread %r"
             loop = self.new_event_loop()
             self.set_event_loop(loop)
