@@ -281,7 +281,7 @@ class IOLoop(Configurable):
         else:
             try:
                 loop = asyncio.get_event_loop()
-            except RuntimeError:
+            except (RuntimeError, AssertionError):
                 if not instance:
                     return None
                 raise

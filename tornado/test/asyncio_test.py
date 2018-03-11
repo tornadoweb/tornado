@@ -150,7 +150,7 @@ class AnyThreadEventLoopPolicyTest(unittest.TestCase):
     def run_policy_test(self, accessor, expected_type):
         # With the default policy, non-main threads don't get an event
         # loop.
-        self.assertRaises(RuntimeError,
+        self.assertRaises((RuntimeError, AssertionError),
                           self.executor.submit(accessor).result)
         # Set the policy and we can get a loop.
         asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
