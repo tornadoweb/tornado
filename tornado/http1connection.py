@@ -519,12 +519,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         # RFC 7230 section allows for both CRLF and bare LF.
         eol = data.find("\n")
         start_line = data[:eol].rstrip("\r")
-        try:
-            headers = httputil.HTTPHeaders.parse(data[eol:])
-        except ValueError:
-            # probably form split() if there was no ':' in the line
-            raise httputil.HTTPInputError("Malformed HTTP headers: %r" %
-                                          data[eol:100])
+        headers = httputil.HTTPHeaders.parse(data[eol:])
         return start_line, headers
 
     def _read_body(self, code, headers, delegate):
