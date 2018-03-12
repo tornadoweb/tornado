@@ -312,8 +312,23 @@ class WebSocketHandler(tornado.web.RequestHandler):
         """
         raise NotImplementedError
 
-    def ping(self, data):
-        """Send ping frame to the remote end."""
+    def ping(self, data=b''):
+        """Send ping frame to the remote end.
+
+        The data argument allows a small amount of data (up to 125
+        bytes) to be sent as a part of the ping message. Note that not
+        all websocket implementations expose this data to
+        applications.
+
+        Consider using the ``websocket_ping_interval`` application
+        setting instead of sending pings manually.
+
+        .. versionchanged:: 5.1
+
+           The data argument is now optional.
+
+        """
+        data = utf8(data)
         if self.ws_connection is None:
             raise WebSocketClosedError()
         self.ws_connection.write_ping(data)
@@ -755,12 +770,19 @@ class WebSocketProtocol13(WebSocketProtocol):
             **self._get_compressor_options(other_side, agreed_parameters, compression_options))
 
     def _write_frame(self, fin, opcode, data, flags=0):
+        data_len = len(data)
+        if opcode & 0x8:
+            # All control frames MUST have a payload length of 125
+            # bytes or less and MUST NOT be fragmented.
+            if not fin:
+                raise ValueError("control frames may not be fragmented")
+            if data_len > 125:
+                raise ValueError("control frame payloads may not exceed 125 bytes")
         if fin:
             finbit = self.FIN
         else:
             finbit = 0
         frame = struct.pack("B", finbit | opcode | flags)
-        data_len = len(data)
         if self.mask_outgoing:
             mask_bit = 0x80
         else:
@@ -1203,6 +1225,25 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             self.read_future = None
         else:
             self.read_queue.append(message)
+
+    def ping(self, data=b''):
+        """Send ping frame to the remote end.
+
+        The data argument allows a small amount of data (up to 125
+        bytes) to be sent as a part of the ping message. Note that not
+        all websocket implementations expose this data to
+        applications.
+
+        Consider using the ``ping_interval`` argument to
+        `websocket_connect` instead of sending pings manually.
+
+        .. versionadded:: 5.1
+
+        """
+        data = utf8(data)
+        if self.protocol is None:
+            raise WebSocketClosedError()
+        self.protocol.write_ping(data)
 
     def on_pong(self, data):
         pass

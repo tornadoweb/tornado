@@ -421,6 +421,10 @@ def run_on_executor(*args, **kwargs):
 
     .. versionchanged:: 5.0
        Always uses the current IOLoop instead of ``self.io_loop``.
+
+    .. versionchanged:: 5.1
+       Returns a `.Future` compatible with ``await`` instead of a
+       `concurrent.futures.Future`.
     """
     def run_on_executor_decorator(fn):
         executor = kwargs.get("executor", "executor")
@@ -428,12 +432,14 @@ def run_on_executor(*args, **kwargs):
         @functools.wraps(fn)
         def wrapper(self, *args, **kwargs):
             callback = kwargs.pop("callback", None)
-            future = getattr(self, executor).submit(fn, self, *args, **kwargs)
+            async_future = Future()
+            conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
+            chain_future(conc_future, async_future)
             if callback:
                 from tornado.ioloop import IOLoop
                 IOLoop.current().add_future(
-                    future, lambda future: callback(future.result()))
-            return future
+                    async_future, lambda future: callback(future.result()))
+            return async_future
         return wrapper
     if args and kwargs:
         raise ValueError("cannot combine positional and keyword args")

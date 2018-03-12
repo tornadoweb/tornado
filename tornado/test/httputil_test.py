@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function
 from tornado.httputil import (
     url_concat, parse_multipart_form_data, HTTPHeaders, format_timestamp,
     HTTPServerRequest, parse_request_start_line, parse_cookie, qs_to_qsl,
+    HTTPInputError,
 )
 from tornado.escape import utf8, native_str
 from tornado.util import PY3
@@ -282,6 +283,13 @@ Foo: even
                          [("Asdf", "qwer zxcv"),
                           ("Foo", "bar baz"),
                           ("Foo", "even more lines")])
+
+    def test_malformed_continuation(self):
+        # If the first line starts with whitespace, it's a
+        # continuation line with nothing to continue, so reject it
+        # (with a proper error).
+        data = " Foo: bar"
+        self.assertRaises(HTTPInputError, HTTPHeaders.parse, data)
 
     def test_unicode_newlines(self):
         # Ensure that only \r\n is recognized as a header separator, and not

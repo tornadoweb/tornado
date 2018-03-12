@@ -425,7 +425,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
             self.wait()
 
     def test_malformed_headers(self):
-        with ExpectLog(gen_log, '.*Malformed HTTP headers'):
+        with ExpectLog(gen_log, '.*Malformed HTTP message.*no colon in header line'):
             self.stream.write(b'GET / HTTP/1.0\r\nasdf\r\n\r\n')
             self.io_loop.add_timeout(datetime.timedelta(seconds=0.05),
                                      self.stop)

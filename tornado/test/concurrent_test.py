@@ -31,7 +31,7 @@ from tornado.log import app_log
 from tornado import stack_context
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, ExpectLog, bind_unused_port, gen_test
-from tornado.test.util import unittest
+from tornado.test.util import unittest, skipBefore35, exec_test
 
 
 try:
@@ -428,6 +428,26 @@ class RunOnExecutorTest(AsyncTestCase):
         o = Object()
         answer = yield o.f()
         self.assertEqual(answer, 42)
+
+    @skipBefore35
+    @gen_test
+    def test_async_await(self):
+        class Object(object):
+            def __init__(self):
+                self.executor = futures.thread.ThreadPoolExecutor(1)
+
+            @run_on_executor()
+            def f(self):
+                return 42
+
+        o = Object()
+        namespace = exec_test(globals(), locals(), """
+        async def f():
+            answer = await o.f()
+            return answer
+        """)
+        result = yield namespace['f']()
+        self.assertEqual(result, 42)
 
 
 if __name__ == '__main__':
