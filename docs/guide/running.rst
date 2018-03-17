@@ -219,7 +219,7 @@ significantly improving rendering performance.
 
 In production, you probably want to serve static files from a more
 optimized static file server like `nginx <http://nginx.net/>`_. You
-can configure most any web server to recognize the version tags used
+can configure almost any web server to recognize the version tags used
 by ``static_url()`` and set caching headers accordingly.  Here is the
 relevant portion of the nginx configuration we use at FriendFeed::
 
