@@ -328,6 +328,10 @@ class Resolver(Configurable):
 
         .. versionchanged:: 4.4
            Standardized all implementations to raise `IOError`.
+
+        .. deprecated:: 5.1
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         raise NotImplementedError()
 
