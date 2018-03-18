@@ -73,6 +73,7 @@ import hashlib
 import hmac
 import time
 import uuid
+import warnings
 
 from tornado.concurrent import (Future, return_future, chain_future,
                                 future_set_exc_info,
@@ -113,6 +114,9 @@ def _auth_return_future(f):
 
     Note that when using this decorator the ``callback`` parameter
     inside the function will actually be a future.
+
+    .. deprecated:: 5.1
+       Will be removed in 6.0.
     """
     replacer = ArgReplacer(f, 'callback')
 
@@ -121,6 +125,8 @@ def _auth_return_future(f):
         future = Future()
         callback, args, kwargs = replacer.replace(future, args, kwargs)
         if callback is not None:
+            warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                          DeprecationWarning)
             future.add_done_callback(
                 functools.partial(_auth_future_to_callback, callback))
 
@@ -162,6 +168,11 @@ class OpenIdMixin(object):
            not strictly necessary as this method is synchronous,
            but they are supplied for consistency with
            `OAuthMixin.authorize_redirect`.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument and returned awaitable will be removed
+           in Tornado 6.0; this will be an ordinary synchronous function.
         """
         callback_uri = callback_uri or self.request.uri
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs)
@@ -179,6 +190,11 @@ class OpenIdMixin(object):
         is present and `authenticate_redirect` if it is not).
 
         The result of this method will generally be used to set a cookie.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         # Verify the OpenID response via direct request to the OP
         args = dict((k, v[-1]) for k, v in self.request.arguments.items())
@@ -329,25 +345,29 @@ class OAuthMixin(object):
         """Redirects the user to obtain OAuth authorization for this service.
 
         The ``callback_uri`` may be omitted if you have previously
-        registered a callback URI with the third-party service.  For
-        some services (including Friendfeed), you must use a
-        previously-registered callback URI and cannot specify a
-        callback via this method.
+        registered a callback URI with the third-party service. For
+        some services, you must use a previously-registered callback
+        URI and cannot specify a callback via this method.
 
         This method sets a cookie called ``_oauth_request_token`` which is
         subsequently used (and cleared) in `get_authenticated_user` for
         security purposes.
 
-        Note that this method is asynchronous, although it calls
-        `.RequestHandler.finish` for you so it may not be necessary
-        to pass a callback or use the `.Future` it returns.  However,
-        if this method is called from a function decorated with
-        `.gen.coroutine`, you must call it with ``yield`` to keep the
-        response from being closed prematurely.
+        This method is asynchronous and must be called with ``await``
+        or ``yield`` (This is different from other ``auth*_redirect``
+        methods defined in this module). It calls
+        `.RequestHandler.finish` for you so you should not write any
+        other response after it returns.
 
         .. versionchanged:: 3.1
            Now returns a `.Future` and takes an optional callback, for
            compatibility with `.gen.coroutine`.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
+
         """
         if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
             raise Exception("This service does not support oauth_callback")
@@ -381,6 +401,11 @@ class OAuthMixin(object):
         requests to this service on behalf of the user.  The dictionary will
         also contain other fields such as ``name``, depending on the service
         used.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         future = callback
         request_key = escape.utf8(self.get_argument("oauth_token"))
@@ -479,7 +504,9 @@ class OAuthMixin(object):
             return
 
         access_token = _oauth_parse_response(response.body)
-        self._oauth_get_user_future(access_token).add_done_callback(
+        fut = self._oauth_get_user_future(access_token)
+        fut = gen.convert_yielded(fut)
+        fut.add_done_callback(
             functools.partial(self._on_oauth_get_user, access_token, future))
 
     def _oauth_consumer_token(self):
@@ -504,7 +531,18 @@ class OAuthMixin(object):
 
         For backwards compatibility, the callback-based ``_oauth_get_user``
         method is also supported.
+
+        .. versionchanged:: 5.1
+
+           Subclasses may also define this method with ``async def``.
+
+        .. deprecated:: 5.1
+
+           The ``_oauth_get_user`` fallback is deprecated and support for it
+           will be removed in 6.0.
         """
+        warnings.warn("_oauth_get_user is deprecated, override _oauth_get_user_future instead",
+                      DeprecationWarning)
         # By default, call the old-style _oauth_get_user, but new code
         # should override this method instead.
         self._oauth_get_user(access_token, callback)
@@ -588,6 +626,11 @@ class OAuth2Mixin(object):
            not strictly necessary as this method is synchronous,
            but they are supplied for consistency with
            `OAuthMixin.authorize_redirect`.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument and returned awaitable will be removed
+           in Tornado 6.0; this will be an ordinary synchronous function.
         """
         args = {
             "redirect_uri": redirect_uri,
@@ -648,6 +691,11 @@ class OAuth2Mixin(object):
            :hide:
 
         .. versionadded:: 4.3
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         all_args = {}
         if access_token:
@@ -734,6 +782,11 @@ class TwitterMixin(OAuthMixin):
         .. versionchanged:: 3.1
            Now returns a `.Future` and takes an optional callback, for
            compatibility with `.gen.coroutine`.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         http = self.get_auth_http_client()
         http.fetch(self._oauth_request_token_url(callback_uri=callback_uri),
@@ -781,6 +834,10 @@ class TwitterMixin(OAuthMixin):
         .. testoutput::
            :hide:
 
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         if path.startswith('http:') or path.startswith('https:'):
             # Raw urls are useful for e.g. search which doesn't follow the
@@ -896,6 +953,10 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         .. testoutput::
            :hide:
 
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """  # noqa: E501
         http = self.get_auth_http_client()
         body = urllib_parse.urlencode({
@@ -973,6 +1034,11 @@ class FacebookGraphMixin(OAuth2Mixin):
         .. versionchanged:: 4.5
            The ``session_expires`` field was updated to support changes made to the
            Facebook API in March 2017.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         http = self.get_auth_http_client()
         args = {
@@ -991,6 +1057,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                    functools.partial(self._on_access_token, redirect_uri, client_id,
                                      client_secret, callback, fields))
 
+    @gen.coroutine
     def _on_access_token(self, redirect_uri, client_id, client_secret,
                          future, fields, response):
         if response.error:
@@ -1003,10 +1070,8 @@ class FacebookGraphMixin(OAuth2Mixin):
             "expires_in": args.get("expires_in")
         }
 
-        self.facebook_request(
+        user = yield self.facebook_request(
             path="/me",
-            callback=functools.partial(
-                self._on_get_user_info, future, session, fields),
             access_token=session["access_token"],
             appsecret_proof=hmac.new(key=client_secret.encode('utf8'),
                                      msg=session["access_token"].encode('utf8'),
@@ -1014,7 +1079,6 @@ class FacebookGraphMixin(OAuth2Mixin):
             fields=",".join(fields)
         )
 
-    def _on_get_user_info(self, future, session, fields, user):
         if user is None:
             future_set_result_unless_cancelled(future, None)
             return
@@ -1050,7 +1114,7 @@ class FacebookGraphMixin(OAuth2Mixin):
 
         Example usage:
 
-        ..testcode::
+        .. testcode::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
@@ -1080,6 +1144,11 @@ class FacebookGraphMixin(OAuth2Mixin):
 
         .. versionchanged:: 3.1
            Added the ability to override ``self._FACEBOOK_BASE_URL``.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         url = self._FACEBOOK_BASE_URL + path
         # Thanks to the _auth_return_future decorator, our "callback"

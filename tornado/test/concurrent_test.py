@@ -31,7 +31,7 @@ from tornado.log import app_log
 from tornado import stack_context
 from tornado.tcpserver import TCPServer
 from tornado.testing import AsyncTestCase, ExpectLog, bind_unused_port, gen_test
-from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
 
 
 try:
@@ -99,7 +99,8 @@ class ReturnFutureTest(AsyncTestCase):
             self.return_value(callback=self.stop)
 
     def test_callback_kw(self):
-        future = self.sync_future(callback=self.stop)
+        with ignore_deprecation():
+            future = self.sync_future(callback=self.stop)
         result = self.wait()
         self.assertEqual(result, 42)
         self.assertEqual(future.result(), 42)
@@ -107,7 +108,8 @@ class ReturnFutureTest(AsyncTestCase):
     def test_callback_positional(self):
         # When the callback is passed in positionally, future_wrap shouldn't
         # add another callback in the kwargs.
-        future = self.sync_future(self.stop)
+        with ignore_deprecation():
+            future = self.sync_future(self.stop)
         result = self.wait()
         self.assertEqual(result, 42)
         self.assertEqual(future.result(), 42)
@@ -154,20 +156,23 @@ class ReturnFutureTest(AsyncTestCase):
         self.assertEqual(future.result(), 42)
 
     def test_error_in_callback(self):
-        self.sync_future(callback=lambda future: 1 / 0)
+        with ignore_deprecation():
+            self.sync_future(callback=lambda future: 1 / 0)
         # The exception gets caught by our StackContext and will be re-raised
         # when we wait.
         self.assertRaises(ZeroDivisionError, self.wait)
 
     def test_no_result_future(self):
-        future = self.no_result_future(self.stop)
+        with ignore_deprecation():
+            future = self.no_result_future(self.stop)
         result = self.wait()
         self.assertIs(result, None)
         # result of this future is undefined, but not an error
         future.result()
 
     def test_no_result_future_callback(self):
-        future = self.no_result_future(callback=lambda: self.stop())
+        with ignore_deprecation():
+            future = self.no_result_future(callback=lambda: self.stop())
         result = self.wait()
         self.assertIs(result, None)
         future.result()
@@ -334,12 +339,14 @@ class ClientTestMixin(object):
         super(ClientTestMixin, self).tearDown()  # type: ignore
 
     def test_callback(self):
-        self.client.capitalize("hello", callback=self.stop)
+        with ignore_deprecation():
+            self.client.capitalize("hello", callback=self.stop)
         result = self.wait()
         self.assertEqual(result, "HELLO")
 
     def test_callback_error(self):
-        self.client.capitalize("HELLO", callback=self.stop)
+        with ignore_deprecation():
+            self.client.capitalize("HELLO", callback=self.stop)
         self.assertRaisesRegexp(CapError, "already capitalized", self.wait)
 
     def test_future(self):
