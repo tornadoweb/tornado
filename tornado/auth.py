@@ -73,6 +73,7 @@ import hashlib
 import hmac
 import time
 import uuid
+import warnings
 
 from tornado.concurrent import (Future, return_future, chain_future,
                                 future_set_exc_info,
@@ -113,6 +114,9 @@ def _auth_return_future(f):
 
     Note that when using this decorator the ``callback`` parameter
     inside the function will actually be a future.
+
+    .. deprecated:: 5.1
+       Will be removed in 6.0.
     """
     replacer = ArgReplacer(f, 'callback')
 
@@ -121,6 +125,8 @@ def _auth_return_future(f):
         future = Future()
         callback, args, kwargs = replacer.replace(future, args, kwargs)
         if callback is not None:
+            warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                          DeprecationWarning)
             future.add_done_callback(
                 functools.partial(_auth_future_to_callback, callback))
 
@@ -179,6 +185,11 @@ class OpenIdMixin(object):
         is present and `authenticate_redirect` if it is not).
 
         The result of this method will generally be used to set a cookie.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         # Verify the OpenID response via direct request to the OP
         args = dict((k, v[-1]) for k, v in self.request.arguments.items())
@@ -381,6 +392,11 @@ class OAuthMixin(object):
         requests to this service on behalf of the user.  The dictionary will
         also contain other fields such as ``name``, depending on the service
         used.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         future = callback
         request_key = escape.utf8(self.get_argument("oauth_token"))
@@ -648,6 +664,11 @@ class OAuth2Mixin(object):
            :hide:
 
         .. versionadded:: 4.3
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         all_args = {}
         if access_token:
@@ -781,6 +802,10 @@ class TwitterMixin(OAuthMixin):
         .. testoutput::
            :hide:
 
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         if path.startswith('http:') or path.startswith('https:'):
             # Raw urls are useful for e.g. search which doesn't follow the
@@ -896,6 +921,10 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
         .. testoutput::
            :hide:
 
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """  # noqa: E501
         http = self.get_auth_http_client()
         body = urllib_parse.urlencode({
@@ -973,6 +1002,11 @@ class FacebookGraphMixin(OAuth2Mixin):
         .. versionchanged:: 4.5
            The ``session_expires`` field was updated to support changes made to the
            Facebook API in March 2017.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         http = self.get_auth_http_client()
         args = {
@@ -991,6 +1025,7 @@ class FacebookGraphMixin(OAuth2Mixin):
                    functools.partial(self._on_access_token, redirect_uri, client_id,
                                      client_secret, callback, fields))
 
+    @gen.coroutine
     def _on_access_token(self, redirect_uri, client_id, client_secret,
                          future, fields, response):
         if response.error:
@@ -1003,10 +1038,8 @@ class FacebookGraphMixin(OAuth2Mixin):
             "expires_in": args.get("expires_in")
         }
 
-        self.facebook_request(
+        user = yield self.facebook_request(
             path="/me",
-            callback=functools.partial(
-                self._on_get_user_info, future, session, fields),
             access_token=session["access_token"],
             appsecret_proof=hmac.new(key=client_secret.encode('utf8'),
                                      msg=session["access_token"].encode('utf8'),
@@ -1014,7 +1047,6 @@ class FacebookGraphMixin(OAuth2Mixin):
             fields=",".join(fields)
         )
 
-    def _on_get_user_info(self, future, session, fields, user):
         if user is None:
             future_set_result_unless_cancelled(future, None)
             return
@@ -1080,6 +1112,11 @@ class FacebookGraphMixin(OAuth2Mixin):
 
         .. versionchanged:: 3.1
            Added the ability to override ``self._FACEBOOK_BASE_URL``.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         url = self._FACEBOOK_BASE_URL + path
         # Thanks to the _auth_return_future decorator, our "callback"
