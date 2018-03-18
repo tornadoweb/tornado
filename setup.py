@@ -68,10 +68,10 @@ Fedora users should issue the following command:
 
     $ sudo dnf install gcc python-devel
 
-If you are seeing this message on OSX please read the documentation
-here:
+MacOS users should run:
 
-http://api.mongodb.org/python/current/installation.html#osx
+    $ xcode-select --install
+
 ********************************************************************
 """
 

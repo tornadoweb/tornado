@@ -608,6 +608,7 @@ class SyncHTTPClientTest(unittest.TestCase):
             # the client finishes with the response (this is noticeable
             # with http/2, which leaves a Future with an unexamined
             # StreamClosedError on the loop).
+
             @gen.coroutine
             def slow_stop():
                 # The number of iterations is difficult to predict. Typically,
