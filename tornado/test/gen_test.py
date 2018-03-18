@@ -823,7 +823,7 @@ class GenCoroutineTest(AsyncTestCase):
 
         with ignore_deprecation():
             f2(callback=(yield gen.Callback('cb')))
-        results = yield [namespace['f1'](), gen.Wait('cb')]
+            results = yield [namespace['f1'](), gen.Wait('cb')]
         self.assertEqual(results, [42, 43])
         self.finished = True
 
@@ -935,46 +935,48 @@ class GenCoroutineTest(AsyncTestCase):
 
     @gen_test
     def test_replace_context_exception(self):
-        # Test exception handling: exceptions thrown into the stack context
-        # can be caught and replaced.
-        # Note that this test and the following are for behavior that is
-        # not really supported any more:  coroutines no longer create a
-        # stack context automatically; but one is created after the first
-        # YieldPoint (i.e. not a Future).
-        @gen.coroutine
-        def f2():
-            (yield gen.Callback(1))()
-            yield gen.Wait(1)
-            self.io_loop.add_callback(lambda: 1 / 0)
-            try:
-                yield gen.Task(self.io_loop.add_timeout,
-                               self.io_loop.time() + 10)
-            except ZeroDivisionError:
-                raise KeyError()
+        with ignore_deprecation():
+            # Test exception handling: exceptions thrown into the stack context
+            # can be caught and replaced.
+            # Note that this test and the following are for behavior that is
+            # not really supported any more:  coroutines no longer create a
+            # stack context automatically; but one is created after the first
+            # YieldPoint (i.e. not a Future).
+            @gen.coroutine
+            def f2():
+                (yield gen.Callback(1))()
+                yield gen.Wait(1)
+                self.io_loop.add_callback(lambda: 1 / 0)
+                try:
+                    yield gen.Task(self.io_loop.add_timeout,
+                                   self.io_loop.time() + 10)
+                except ZeroDivisionError:
+                    raise KeyError()
 
-        future = f2()
-        with self.assertRaises(KeyError):
-            yield future
-        self.finished = True
+            future = f2()
+            with self.assertRaises(KeyError):
+                yield future
+            self.finished = True
 
     @gen_test
     def test_swallow_context_exception(self):
-        # Test exception handling: exceptions thrown into the stack context
-        # can be caught and ignored.
-        @gen.coroutine
-        def f2():
-            (yield gen.Callback(1))()
-            yield gen.Wait(1)
-            self.io_loop.add_callback(lambda: 1 / 0)
-            try:
-                yield gen.Task(self.io_loop.add_timeout,
-                               self.io_loop.time() + 10)
-            except ZeroDivisionError:
-                raise gen.Return(42)
+        with ignore_deprecation():
+            # Test exception handling: exceptions thrown into the stack context
+            # can be caught and ignored.
+            @gen.coroutine
+            def f2():
+                (yield gen.Callback(1))()
+                yield gen.Wait(1)
+                self.io_loop.add_callback(lambda: 1 / 0)
+                try:
+                    yield gen.Task(self.io_loop.add_timeout,
+                                   self.io_loop.time() + 10)
+                except ZeroDivisionError:
+                    raise gen.Return(42)
 
-        result = yield f2()
-        self.assertEqual(result, 42)
-        self.finished = True
+            result = yield f2()
+            self.assertEqual(result, 42)
+            self.finished = True
 
     @gen_test
     def test_moment(self):
@@ -1099,32 +1101,30 @@ class GenSequenceHandler(RequestHandler):
         @asynchronous
         @gen.engine
         def get(self):
-            self.io_loop = self.request.connection.stream.io_loop
-            self.io_loop.add_callback((yield gen.Callback("k1")))
-            yield gen.Wait("k1")
-            self.write("1")
-            self.io_loop.add_callback((yield gen.Callback("k2")))
-            yield gen.Wait("k2")
-            self.write("2")
-            # reuse an old key
-            self.io_loop.add_callback((yield gen.Callback("k1")))
-            yield gen.Wait("k1")
-            self.finish("3")
+            # The outer ignore_deprecation applies at definition time.
+            # We need another for serving time.
+            with ignore_deprecation():
+                self.io_loop = self.request.connection.stream.io_loop
+                self.io_loop.add_callback((yield gen.Callback("k1")))
+                yield gen.Wait("k1")
+                self.write("1")
+                self.io_loop.add_callback((yield gen.Callback("k2")))
+                yield gen.Wait("k2")
+                self.write("2")
+                # reuse an old key
+                self.io_loop.add_callback((yield gen.Callback("k1")))
+                yield gen.Wait("k1")
+                self.finish("3")
 
 
 class GenCoroutineSequenceHandler(RequestHandler):
     @gen.coroutine
     def get(self):
-        self.io_loop = self.request.connection.stream.io_loop
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
+        yield gen.moment
         self.write("1")
-        self.io_loop.add_callback((yield gen.Callback("k2")))
-        yield gen.Wait("k2")
+        yield gen.moment
         self.write("2")
-        # reuse an old key
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
+        yield gen.moment
         self.finish("3")
 
 
@@ -1132,16 +1132,11 @@ class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
     @asynchronous
     @gen.coroutine
     def get(self):
-        self.io_loop = self.request.connection.stream.io_loop
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
+        yield gen.moment
         self.write("1")
-        self.io_loop.add_callback((yield gen.Callback("k2")))
-        yield gen.Wait("k2")
+        yield gen.moment
         self.write("2")
-        # reuse an old key
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
+        yield gen.moment
         # just write, don't finish
         self.write("3")
 

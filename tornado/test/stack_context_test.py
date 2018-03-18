@@ -6,11 +6,12 @@ from tornado.log import app_log
 from tornado.stack_context import (StackContext, wrap, NullContext, StackContextInconsistentError,
                                    ExceptionStackContext, run_with_stack_context, _state)
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, ignore_deprecation
+from tornado.test.util import unittest
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
 import logging
+import warnings
 
 
 class TestRequestHandler(RequestHandler):
@@ -61,6 +62,13 @@ class StackContextTest(AsyncTestCase):
     def setUp(self):
         super(StackContextTest, self).setUp()
         self.active_contexts = []
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
+
+    def tearDown(self):
+        self.warning_catcher.__exit__(None, None, None)
+        super(StackContextTest, self).tearDown()
 
     @contextlib.contextmanager
     def context(self, name):
@@ -215,16 +223,15 @@ class StackContextTest(AsyncTestCase):
         self.wait()
 
     def test_yield_in_with(self):
-        with ignore_deprecation():
-            @gen.engine
-            def f():
-                self.callback = yield gen.Callback('a')
-                with StackContext(functools.partial(self.context, 'c1')):
-                    # This yield is a problem: the generator will be suspended
-                    # and the StackContext's __exit__ is not called yet, so
-                    # the context will be left on _state.contexts for anything
-                    # that runs before the yield resolves.
-                    yield gen.Wait('a')
+        @gen.engine
+        def f():
+            self.callback = yield gen.Callback('a')
+            with StackContext(functools.partial(self.context, 'c1')):
+                # This yield is a problem: the generator will be suspended
+                # and the StackContext's __exit__ is not called yet, so
+                # the context will be left on _state.contexts for anything
+                # that runs before the yield resolves.
+                yield gen.Wait('a')
 
         with self.assertRaises(StackContextInconsistentError):
             f()
@@ -245,15 +252,14 @@ class StackContextTest(AsyncTestCase):
 
     def test_yield_in_with_exception_stack_context(self):
         # As above, but with ExceptionStackContext instead of StackContext.
-        with ignore_deprecation():
-            @gen.engine
-            def f():
-                with ExceptionStackContext(lambda t, v, tb: False):
-                    yield gen.Task(self.io_loop.add_callback)
+        @gen.engine
+        def f():
+            with ExceptionStackContext(lambda t, v, tb: False):
+                yield gen.Task(self.io_loop.add_callback)
 
-            with self.assertRaises(StackContextInconsistentError):
-                f()
-                self.wait()
+        with self.assertRaises(StackContextInconsistentError):
+            f()
+            self.wait()
 
     @gen_test
     def test_yield_outside_with_exception_stack_context(self):
