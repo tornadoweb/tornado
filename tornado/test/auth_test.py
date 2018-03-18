@@ -18,6 +18,7 @@ from tornado import gen
 from tornado.httputil import url_concat
 from tornado.log import gen_log
 from tornado.testing import AsyncHTTPTestCase, ExpectLog
+from tornado.test.util import ignore_deprecation
 from tornado.web import RequestHandler, Application, asynchronous, HTTPError
 
 
@@ -121,12 +122,13 @@ class OAuth1ClientLoginHandler(RequestHandler, OAuthMixin):
             return
         yield self.authorize_redirect(http_client=self.settings['http_client'])
 
-    def _oauth_get_user(self, access_token, callback):
+    @gen.coroutine
+    def _oauth_get_user_future(self, access_token):
         if self.get_argument('fail_in_get_user', None):
             raise Exception("failing in get_user")
         if access_token != dict(key='uiop', secret='5678'):
             raise Exception("incorrect access token %r" % access_token)
-        callback(dict(email='foo@example.com'))
+        return dict(email='foo@example.com')
 
 
 class OAuth1ClientLoginCoroutineHandler(OAuth1ClientLoginHandler):
@@ -465,9 +467,10 @@ class AuthTest(AsyncHTTPTestCase):
             response.headers['Set-Cookie'])
 
     def test_oauth10_get_user_legacy(self):
-        response = self.fetch(
-            '/legacy/oauth10/client/login?oauth_token=zxcv',
-            headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
+        with ignore_deprecation():
+            response = self.fetch(
+                '/legacy/oauth10/client/login?oauth_token=zxcv',
+                headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['email'], 'foo@example.com')
@@ -502,9 +505,10 @@ class AuthTest(AsyncHTTPTestCase):
             response.headers['Set-Cookie'])
 
     def test_oauth10a_get_user_legacy(self):
-        response = self.fetch(
-            '/legacy/oauth10a/client/login?oauth_token=zxcv',
-            headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
+        with ignore_deprecation():
+            response = self.fetch(
+                '/legacy/oauth10a/client/login?oauth_token=zxcv',
+                headers={'Cookie': '_oauth_request_token=enhjdg==|MTIzNA=='})
         response.rethrow()
         parsed = json_decode(response.body)
         self.assertEqual(parsed['email'], 'foo@example.com')

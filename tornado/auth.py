@@ -527,7 +527,14 @@ class OAuthMixin(object):
 
         For backwards compatibility, the callback-based ``_oauth_get_user``
         method is also supported.
+
+        .. deprecated:: 5.1
+
+           The ``_oauth_get_user`` fallback is deprecated and support for it
+           will be removed in 6.0.
         """
+        warnings.warn("_oauth_get_user is deprecated, override _oauth_get_user_future instead",
+                      DeprecationWarning)
         # By default, call the old-style _oauth_get_user, but new code
         # should override this method instead.
         self._oauth_get_user(access_token, callback)
