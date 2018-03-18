@@ -25,7 +25,9 @@ except ImportError:
     traceback.print_exc()
     raise
 
-from tornado.websocket import WebSocketHandler, websocket_connect, WebSocketError, WebSocketClosedError
+from tornado.websocket import (
+    WebSocketHandler, websocket_connect, WebSocketError, WebSocketClosedError,
+)
 
 try:
     from tornado import speedups
