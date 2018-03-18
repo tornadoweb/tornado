@@ -33,6 +33,7 @@ import platform
 import textwrap
 import traceback
 import sys
+import warnings
 
 from tornado.log import app_log
 from tornado.stack_context import ExceptionStackContext, wrap
@@ -496,6 +497,15 @@ def return_future(f):
     same function, provided ``@return_future`` appears first.  However,
     consider using ``@gen.coroutine`` instead of this combination.
 
+    .. versionchanged:: 5.1
+
+       Now raises a `.DeprecationWarning` if a callback argument is passed to
+       the decorated function and deprecation warnings are enabled.
+
+    .. deprecated:: 5.1
+
+       New code should use coroutines directly instead of wrapping
+       callback-based code with this decorator.
     """
     replacer = ArgReplacer(f, 'callback')
 
@@ -533,6 +543,9 @@ def return_future(f):
         # immediate exception, and again when the future resolves and
         # the callback triggers its exception by calling future.result()).
         if callback is not None:
+            warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                          DeprecationWarning)
+
             def run_callback(future):
                 result = future.result()
                 if result is _NO_RESULT:

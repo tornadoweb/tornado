@@ -168,6 +168,11 @@ class OpenIdMixin(object):
            not strictly necessary as this method is synchronous,
            but they are supplied for consistency with
            `OAuthMixin.authorize_redirect`.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument and returned awaitable will be removed
+           in Tornado 6.0; this will be an ordinary synchronous function.
         """
         callback_uri = callback_uri or self.request.uri
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs)
@@ -349,16 +354,18 @@ class OAuthMixin(object):
         subsequently used (and cleared) in `get_authenticated_user` for
         security purposes.
 
-        Note that this method is asynchronous, although it calls
-        `.RequestHandler.finish` for you so it may not be necessary
-        to pass a callback or use the `.Future` it returns.  However,
-        if this method is called from a function decorated with
-        `.gen.coroutine`, you must call it with ``yield`` to keep the
-        response from being closed prematurely.
+        This method is asynchronous and must be called with ``await``
+        or ``yield``. It calls `.RequestHandler.finish` for you so you
+        should not write any other response after it returns.
 
         .. versionchanged:: 3.1
            Now returns a `.Future` and takes an optional callback, for
            compatibility with `.gen.coroutine`.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
             raise Exception("This service does not support oauth_callback")
@@ -604,6 +611,11 @@ class OAuth2Mixin(object):
            not strictly necessary as this method is synchronous,
            but they are supplied for consistency with
            `OAuthMixin.authorize_redirect`.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument and returned awaitable will be removed
+           in Tornado 6.0; this will be an ordinary synchronous function.
         """
         args = {
             "redirect_uri": redirect_uri,
@@ -755,6 +767,11 @@ class TwitterMixin(OAuthMixin):
         .. versionchanged:: 3.1
            Now returns a `.Future` and takes an optional callback, for
            compatibility with `.gen.coroutine`.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in 6.0.
+           Use the returned awaitable object instead.
         """
         http = self.get_auth_http_client()
         http.fetch(self._oauth_request_token_url(callback_uri=callback_uri),

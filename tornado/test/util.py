@@ -6,6 +6,7 @@ import platform
 import socket
 import sys
 import textwrap
+import warnings
 
 from tornado.testing import bind_unused_port
 
@@ -107,3 +108,11 @@ def subTest(test, *args, **kwargs):
     except AttributeError:
         subTest = contextlib.contextmanager(lambda *a, **kw: (yield))
     return subTest(*args, **kwargs)
+
+
+@contextlib.contextmanager
+def ignore_deprecation():
+    """Context manager to ignore deprecation warnings."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', DeprecationWarning)
+        yield
