@@ -345,18 +345,19 @@ class OAuthMixin(object):
         """Redirects the user to obtain OAuth authorization for this service.
 
         The ``callback_uri`` may be omitted if you have previously
-        registered a callback URI with the third-party service.  For
-        some services (including Friendfeed), you must use a
-        previously-registered callback URI and cannot specify a
-        callback via this method.
+        registered a callback URI with the third-party service. For
+        some services, you must use a previously-registered callback
+        URI and cannot specify a callback via this method.
 
         This method sets a cookie called ``_oauth_request_token`` which is
         subsequently used (and cleared) in `get_authenticated_user` for
         security purposes.
 
         This method is asynchronous and must be called with ``await``
-        or ``yield``. It calls `.RequestHandler.finish` for you so you
-        should not write any other response after it returns.
+        or ``yield`` (This is different from other ``auth*_redirect``
+        methods defined in this module). It calls
+        `.RequestHandler.finish` for you so you should not write any
+        other response after it returns.
 
         .. versionchanged:: 3.1
            Now returns a `.Future` and takes an optional callback, for
@@ -366,6 +367,7 @@ class OAuthMixin(object):
 
            The ``callback`` argument is deprecated and will be removed in 6.0.
            Use the returned awaitable object instead.
+
         """
         if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
             raise Exception("This service does not support oauth_callback")
@@ -1112,7 +1114,7 @@ class FacebookGraphMixin(OAuth2Mixin):
 
         Example usage:
 
-        ..testcode::
+        .. testcode::
 
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
