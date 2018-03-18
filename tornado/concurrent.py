@@ -426,6 +426,12 @@ def run_on_executor(*args, **kwargs):
     .. versionchanged:: 5.1
        Returns a `.Future` compatible with ``await`` instead of a
        `concurrent.futures.Future`.
+
+    .. deprecated:: 5.1
+
+       The ``callback`` argument is deprecated and will be removed in
+       6.0. The decorator itself is discouraged in new code but will
+       not be removed in 6.0.
     """
     def run_on_executor_decorator(fn):
         executor = kwargs.get("executor", "executor")
@@ -437,6 +443,8 @@ def run_on_executor(*args, **kwargs):
             conc_future = getattr(self, executor).submit(fn, self, *args, **kwargs)
             chain_future(conc_future, async_future)
             if callback:
+                warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                              DeprecationWarning)
                 from tornado.ioloop import IOLoop
                 IOLoop.current().add_future(
                     async_future, lambda future: callback(future.result()))

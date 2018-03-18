@@ -13,7 +13,7 @@ from tornado.netutil import (
 )
 from tornado.stack_context import ExceptionStackContext
 from tornado.testing import AsyncTestCase, gen_test, bind_unused_port
-from tornado.test.util import unittest, skipIfNoNetwork
+from tornado.test.util import unittest, skipIfNoNetwork, ignore_deprecation
 
 try:
     from concurrent import futures
@@ -38,7 +38,8 @@ else:
 
 class _ResolverTestMixin(object):
     def test_localhost(self):
-        self.resolver.resolve('localhost', 80, callback=self.stop)
+        with ignore_deprecation():
+            self.resolver.resolve('localhost', 80, callback=self.stop)
         result = self.wait()
         self.assertIn((socket.AF_INET, ('127.0.0.1', 80)), result)
 
@@ -59,7 +60,8 @@ class _ResolverErrorTestMixin(object):
             return True  # Halt propagation.
 
         with ExceptionStackContext(handler):
-            self.resolver.resolve('an invalid domain', 80, callback=self.stop)
+            with ignore_deprecation():
+                self.resolver.resolve('an invalid domain', 80, callback=self.stop)
 
         result = self.wait()
         self.assertIsInstance(result, Exception)
@@ -108,13 +110,12 @@ class OverrideResolverTest(AsyncTestCase, _ResolverTestMixin):
         }
         self.resolver = OverrideResolver(BlockingResolver(), mapping)
 
+    @gen_test
     def test_resolve_multiaddr(self):
-        self.resolver.resolve('google.com', 80, socket.AF_INET, callback=self.stop)
-        result = self.wait()
+        result = yield self.resolver.resolve('google.com', 80, socket.AF_INET)
         self.assertIn((socket.AF_INET, ('1.2.3.4', 80)), result)
 
-        self.resolver.resolve('google.com', 80, socket.AF_INET6, callback=self.stop)
-        result = self.wait()
+        result = yield self.resolver.resolve('google.com', 80, socket.AF_INET6)
         self.assertIn((socket.AF_INET6, ('2a02:6b8:7c:40c:c51e:495f:e23a:3', 80, 0, 0)), result)
 
 
