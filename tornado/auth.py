@@ -502,7 +502,9 @@ class OAuthMixin(object):
             return
 
         access_token = _oauth_parse_response(response.body)
-        self._oauth_get_user_future(access_token).add_done_callback(
+        fut = self._oauth_get_user_future(access_token)
+        fut = gen.convert_yielded(fut)
+        fut.add_done_callback(
             functools.partial(self._on_oauth_get_user, access_token, future))
 
     def _oauth_consumer_token(self):
@@ -527,6 +529,10 @@ class OAuthMixin(object):
 
         For backwards compatibility, the callback-based ``_oauth_get_user``
         method is also supported.
+
+        .. versionchanged:: 5.1
+
+           Subclasses may also define this method with ``async def``.
 
         .. deprecated:: 5.1
 
