@@ -1,0 +1,12 @@
+What's new in Tornado 5.0.1
+===========================
+
+Mar 18, 2018
+------------
+
+Bug fix
+~~~~~~~
+
+- This release restores support for versions of Python 3.4 prior to
+  3.4.4. This is important for compatibility with Debian Jessie which
+  has 3.4.2 as its version of Python 3.
