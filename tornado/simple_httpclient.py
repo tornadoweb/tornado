@@ -227,10 +227,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                 self._timeout = self.io_loop.add_timeout(
                     self.start_time + timeout,
                     stack_context.wrap(functools.partial(self._on_timeout, "while connecting")))
-            self.tcp_client.connect(host, port, af=af,
-                                    ssl_options=ssl_options,
-                                    max_buffer_size=self.max_buffer_size,
-                                    callback=self._on_connect)
+            fut = self.tcp_client.connect(host, port, af=af,
+                                          ssl_options=ssl_options,
+                                          max_buffer_size=self.max_buffer_size)
+            fut.add_done_callback(stack_context.wrap(self._on_connect))
 
     def _get_ssl_options(self, scheme):
         if scheme == "https":
@@ -275,7 +275,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.io_loop.remove_timeout(self._timeout)
             self._timeout = None
 
-    def _on_connect(self, stream):
+    def _on_connect(self, stream_fut):
+        stream = stream_fut.result()
         if self.final_callback is None:
             # final_callback is cleared if we've hit our timeout.
             stream.close()

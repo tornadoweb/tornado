@@ -240,7 +240,7 @@ def engine(func):
     return wrapper
 
 
-def coroutine(func, replace_callback=True):
+def coroutine(func):
     """Decorator for asynchronous generators.
 
     Any generator that yields objects from this module must be wrapped
@@ -274,6 +274,10 @@ def coroutine(func, replace_callback=True):
        `.IOLoop.run_sync` for top-level calls, or passing the `.Future`
        to `.IOLoop.add_future`.
 
+    .. deprecated:: 5.1
+
+       The ``callback`` argument is deprecated and will be removed in 6.0.
+       Use the returned awaitable object instead.
     """
     return _make_coroutine_wrapper(func, replace_callback=True)
 
@@ -296,6 +300,8 @@ def _make_coroutine_wrapper(func, replace_callback):
         future = _create_future()
 
         if replace_callback and 'callback' in kwargs:
+            warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                          DeprecationWarning, stacklevel=2)
             callback = kwargs.pop('callback')
             IOLoop.current().add_future(
                 future, lambda future: callback(future.result()))

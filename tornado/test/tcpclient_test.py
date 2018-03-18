@@ -77,8 +77,7 @@ class TCPClientTest(AsyncTestCase):
     def skipIfLocalhostV4(self):
         # The port used here doesn't matter, but some systems require it
         # to be non-zero if we do not also pass AI_PASSIVE.
-        Resolver().resolve('localhost', 80, callback=self.stop)
-        addrinfo = self.wait()
+        addrinfo = yield Resolver().resolve('localhost', 80)
         families = set(addr[0] for addr in addrinfo)
         if socket.AF_INET6 not in families:
             self.skipTest("localhost does not resolve to ipv6")

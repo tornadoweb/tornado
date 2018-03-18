@@ -821,7 +821,8 @@ class GenCoroutineTest(AsyncTestCase):
             yield gen.Task(self.io_loop.add_callback)
             raise gen.Return(43)
 
-        f2(callback=(yield gen.Callback('cb')))
+        with ignore_deprecation():
+            f2(callback=(yield gen.Callback('cb')))
         results = yield [namespace['f1'](), gen.Wait('cb')]
         self.assertEqual(results, [42, 43])
         self.finished = True
@@ -885,10 +886,11 @@ class GenCoroutineTest(AsyncTestCase):
 
     @gen_test
     def test_pass_callback(self):
-        @gen.coroutine
-        def f():
-            raise gen.Return(42)
-        result = yield gen.Task(f)
+        with ignore_deprecation():
+            @gen.coroutine
+            def f():
+                raise gen.Return(42)
+            result = yield gen.Task(f)
         self.assertEqual(result, 42)
         self.finished = True
 
