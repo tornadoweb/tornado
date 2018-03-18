@@ -9,6 +9,7 @@ import sys
 import textwrap
 import time
 import weakref
+import warnings
 
 from tornado.concurrent import return_future, Future
 from tornado.escape import url_escape
@@ -17,7 +18,7 @@ from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test  # noqa: E501
+from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test, ignore_deprecation  # noqa: E501
 from tornado.web import Application, RequestHandler, asynchronous, HTTPError
 
 from tornado import gen
@@ -35,8 +36,15 @@ except ImportError:
 
 class GenEngineTest(AsyncTestCase):
     def setUp(self):
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
         super(GenEngineTest, self).setUp()
         self.named_contexts = []
+
+    def tearDown(self):
+        super(GenEngineTest, self).tearDown()
+        self.warning_catcher.__exit__(None, None, None)
 
     def named_context(self, name):
         @contextlib.contextmanager
@@ -1085,20 +1093,21 @@ class GenCoroutineTest(AsyncTestCase):
 
 
 class GenSequenceHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
-    def get(self):
-        self.io_loop = self.request.connection.stream.io_loop
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
-        self.write("1")
-        self.io_loop.add_callback((yield gen.Callback("k2")))
-        yield gen.Wait("k2")
-        self.write("2")
-        # reuse an old key
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
-        self.finish("3")
+    with ignore_deprecation():
+        @asynchronous
+        @gen.engine
+        def get(self):
+            self.io_loop = self.request.connection.stream.io_loop
+            self.io_loop.add_callback((yield gen.Callback("k1")))
+            yield gen.Wait("k1")
+            self.write("1")
+            self.io_loop.add_callback((yield gen.Callback("k2")))
+            yield gen.Wait("k2")
+            self.write("2")
+            # reuse an old key
+            self.io_loop.add_callback((yield gen.Callback("k1")))
+            yield gen.Wait("k1")
+            self.finish("3")
 
 
 class GenCoroutineSequenceHandler(RequestHandler):
@@ -1136,8 +1145,7 @@ class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
 
 
 class GenTaskHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
+    @gen.coroutine
     def get(self):
         client = AsyncHTTPClient()
         response = yield gen.Task(client.fetch, self.get_argument('url'))
@@ -1146,13 +1154,14 @@ class GenTaskHandler(RequestHandler):
 
 
 class GenExceptionHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
-    def get(self):
-        # This test depends on the order of the two decorators.
-        io_loop = self.request.connection.stream.io_loop
-        yield gen.Task(io_loop.add_callback)
-        raise Exception("oops")
+    with ignore_deprecation():
+        @asynchronous
+        @gen.engine
+        def get(self):
+            # This test depends on the order of the two decorators.
+            io_loop = self.request.connection.stream.io_loop
+            yield gen.Task(io_loop.add_callback)
+            raise Exception("oops")
 
 
 class GenCoroutineExceptionHandler(RequestHandler):
@@ -1165,8 +1174,7 @@ class GenCoroutineExceptionHandler(RequestHandler):
 
 
 class GenYieldExceptionHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
+    @gen.coroutine
     def get(self):
         io_loop = self.request.connection.stream.io_loop
         # Test the interaction of the two stack_contexts.

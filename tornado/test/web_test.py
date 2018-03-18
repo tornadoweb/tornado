@@ -582,8 +582,7 @@ class RedirectHandler(RequestHandler):
 
 
 class EmptyFlushCallbackHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
+    @gen.coroutine
     def get(self):
         # Ensure that the flush callback is run whether or not there
         # was any output.  The gen.Task and direct yield forms are

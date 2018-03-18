@@ -96,6 +96,7 @@ import itertools
 import os
 import sys
 import types
+import warnings
 
 from tornado.concurrent import (Future, is_future, chain_future, future_set_exc_info,
                                 future_add_done_callback, future_set_result_unless_cancelled)
@@ -213,7 +214,14 @@ def engine(func):
     they are finished.  One notable exception is the
     `~tornado.web.RequestHandler` :ref:`HTTP verb methods <verbs>`,
     which use ``self.finish()`` in place of a callback argument.
+
+    .. deprecated:: 5.1
+
+       This decorator will be removed in 6.0. Use `coroutine` or
+       ``async def`` instead.
     """
+    warnings.warn("gen.engine is deprecated, use gen.coroutine or async def instead",
+                  DeprecationWarning)
     func = _make_coroutine_wrapper(func, replace_callback=False)
 
     @functools.wraps(func)

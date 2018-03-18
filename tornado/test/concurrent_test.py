@@ -178,10 +178,29 @@ class ReturnFutureTest(AsyncTestCase):
         future.result()
 
     @gen_test
+    def test_future_traceback_legacy(self):
+        with ignore_deprecation():
+            @return_future
+            @gen.engine
+            def f(callback):
+                yield gen.Task(self.io_loop.add_callback)
+                try:
+                    1 / 0
+                except ZeroDivisionError:
+                    self.expected_frame = traceback.extract_tb(
+                        sys.exc_info()[2], limit=1)[0]
+                    raise
+            try:
+                yield f()
+                self.fail("didn't get expected exception")
+            except ZeroDivisionError:
+                tb = traceback.extract_tb(sys.exc_info()[2])
+                self.assertIn(self.expected_frame, tb)
+
+    @gen_test
     def test_future_traceback(self):
-        @return_future
-        @gen.engine
-        def f(callback):
+        @gen.coroutine
+        def f():
             yield gen.Task(self.io_loop.add_callback)
             try:
                 1 / 0
@@ -311,9 +330,8 @@ class DecoratorCapClient(BaseCapClient):
 
 
 class GeneratorCapClient(BaseCapClient):
-    @return_future
-    @gen.engine
-    def capitalize(self, request_data, callback):
+    @gen.coroutine
+    def capitalize(self, request_data):
         logging.debug('capitalize')
         stream = IOStream(socket.socket())
         logging.debug('connecting')
@@ -323,7 +341,7 @@ class GeneratorCapClient(BaseCapClient):
         data = yield gen.Task(stream.read_until, b'\n')
         logging.debug('returning')
         stream.close()
-        callback(self.process_response(data))
+        raise gen.Return(self.process_response(data))
 
 
 class ClientTestMixin(object):
@@ -362,22 +380,18 @@ class ClientTestMixin(object):
         self.assertRaisesRegexp(CapError, "already capitalized", future.result)
 
     def test_generator(self):
-        @gen.engine
+        @gen.coroutine
         def f():
             result = yield self.client.capitalize("hello")
             self.assertEqual(result, "HELLO")
-            self.stop()
-        f()
-        self.wait()
+        self.io_loop.run_sync(f)
 
     def test_generator_error(self):
-        @gen.engine
+        @gen.coroutine
         def f():
             with self.assertRaisesRegexp(CapError, "already capitalized"):
                 yield self.client.capitalize("HELLO")
-            self.stop()
-        f()
-        self.wait()
+        self.io_loop.run_sync(f)
 
 
 class ManualClientTest(ClientTestMixin, AsyncTestCase):
