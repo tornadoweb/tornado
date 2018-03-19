@@ -16,6 +16,7 @@
 from __future__ import absolute_import, division, print_function
 
 from contextlib import closing
+from unittest import skip
 import os
 import socket
 
@@ -112,6 +113,7 @@ class TCPClientTest(AsyncTestCase):
             self.skipTest('TwistedResolver does not support multiple addresses')
         self.do_test_connect(socket.AF_INET6, 'localhost')
 
+    @skip('fails in docker build container')
     def test_connect_unspec_ipv4(self):
         self.do_test_connect(socket.AF_UNSPEC, '127.0.0.1')
 
@@ -120,6 +122,7 @@ class TCPClientTest(AsyncTestCase):
         self.skipIfLocalhostV4()
         self.do_test_connect(socket.AF_UNSPEC, '::1')
 
+    @skip('fails in docker build container')
     def test_connect_unspec_dual(self):
         self.do_test_connect(socket.AF_UNSPEC, 'localhost')
 
@@ -130,6 +133,7 @@ class TCPClientTest(AsyncTestCase):
         with self.assertRaises(IOError):
             yield self.client.connect('127.0.0.1', port)
 
+    @skip('can connect to 8.8.8.8')
     def test_source_ip_fail(self):
         '''
         Fail when trying to use the source IP Address '8.8.8.8'.
