@@ -646,7 +646,12 @@ def Task(func, *args, **kwargs):
        ``gen.Task`` is now a function that returns a `.Future`, instead of
        a subclass of `YieldPoint`.  It still behaves the same way when
        yielded.
+
+    .. deprecated:: 5.1
+       This function is deprecated and will be removed in 6.0.
     """
+    warnings.warn("gen.Task is deprecated, use Futures instead",
+                  DeprecationWarning)
     future = _create_future()
 
     def handle_exception(typ, value, tb):

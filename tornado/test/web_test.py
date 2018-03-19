@@ -11,7 +11,7 @@ from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
 from tornado.util import ObjectDict, unicode_type, timedelta_to_seconds, PY3
 from tornado.web import (
     Application, RequestHandler, StaticFileHandler, RedirectHandler as WebRedirectHandler,
@@ -587,8 +587,9 @@ class EmptyFlushCallbackHandler(RequestHandler):
         # Ensure that the flush callback is run whether or not there
         # was any output.  The gen.Task and direct yield forms are
         # equivalent.
-        yield gen.Task(self.flush)  # "empty" flush, but writes headers
-        yield gen.Task(self.flush)  # empty flush
+        with ignore_deprecation():
+            yield gen.Task(self.flush)  # "empty" flush, but writes headers
+            yield gen.Task(self.flush)  # empty flush
         self.write("o")
         yield self.flush()  # flushes the "o"
         yield self.flush()  # empty flush
@@ -1807,7 +1808,6 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
 
         @asynchronous
         def get(self):
-            from tornado.ioloop import IOLoop
             IOLoop.current().add_callback(lambda: 1 / 0)
             IOLoop.current().add_callback(lambda: 1 / 0)
 
@@ -2159,7 +2159,7 @@ class StreamingRequestBodyTest(WebTestCase):
         self.assertEquals(data, b"qwer")
         stream.write(b"0\r\n\r\n")
         yield self.finished
-        data = yield gen.Task(stream.read_until_close)
+        data = yield stream.read_until_close()
         # This would ideally use an HTTP1Connection to read the response.
         self.assertTrue(data.endswith(b"{}"))
         stream.close()
@@ -2167,14 +2167,14 @@ class StreamingRequestBodyTest(WebTestCase):
     @gen_test
     def test_early_return(self):
         stream = self.connect(b"/early_return", connection_close=False)
-        data = yield gen.Task(stream.read_until_close)
+        data = yield stream.read_until_close()
         self.assertTrue(data.startswith(b"HTTP/1.1 401"))
 
     @gen_test
     def test_early_return_with_data(self):
         stream = self.connect(b"/early_return", connection_close=False)
         stream.write(b"4\r\nasdf\r\n")
-        data = yield gen.Task(stream.read_until_close)
+        data = yield stream.read_until_close()
         self.assertTrue(data.startswith(b"HTTP/1.1 401"))
 
     @gen_test
@@ -2213,12 +2213,12 @@ class BaseFlowControlHandler(RequestHandler):
         # Note that asynchronous prepare() does not block data_received,
         # so we don't use in_method here.
         self.methods.append('prepare')
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
 
     @gen.coroutine
     def post(self):
         with self.in_method('post'):
-            yield gen.Task(IOLoop.current().add_callback)
+            yield gen.moment
         self.write(dict(methods=self.methods))
 
 
@@ -2279,7 +2279,7 @@ class DecoratedStreamingRequestFlowControlTest(
             @gen.coroutine
             def data_received(self, data):
                 with self.in_method('data_received'):
-                    yield gen.Task(IOLoop.current().add_callback)
+                    yield gen.moment
         return [('/', DecoratedFlowControlHandler, dict(test=self))]
 
 
@@ -2292,7 +2292,8 @@ class NativeStreamingRequestFlowControlTest(
             data_received = exec_test(globals(), locals(), """
             async def data_received(self, data):
                 with self.in_method('data_received'):
-                    await gen.Task(IOLoop.current().add_callback)
+                    import asyncio
+                    await asyncio.sleep(0)
             """)["data_received"]
         return [('/', NativeFlowControlHandler, dict(test=self))]
 

@@ -201,7 +201,7 @@ class ReturnFutureTest(AsyncTestCase):
     def test_future_traceback(self):
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             try:
                 1 / 0
             except ZeroDivisionError:
@@ -335,10 +335,10 @@ class GeneratorCapClient(BaseCapClient):
         logging.debug('capitalize')
         stream = IOStream(socket.socket())
         logging.debug('connecting')
-        yield gen.Task(stream.connect, ('127.0.0.1', self.port))
+        yield stream.connect(('127.0.0.1', self.port))
         stream.write(utf8(request_data + '\n'))
         logging.debug('reading')
-        data = yield gen.Task(stream.read_until, b'\n')
+        data = yield stream.read_until(b'\n')
         logging.debug('returning')
         stream.close()
         raise gen.Return(self.process_response(data))

@@ -77,7 +77,7 @@ class AsyncIOLoopTest(AsyncTestCase):
         # as demonstrated by other tests in the package.
         @gen.coroutine
         def tornado_coroutine():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             raise gen.Return(42)
         native_coroutine_without_adapter = exec_test(globals(), locals(), """
         async def native_coroutine_without_adapter():

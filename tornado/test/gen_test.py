@@ -714,7 +714,7 @@ class GenCoroutineTest(AsyncTestCase):
     def test_async_gen_return(self):
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             raise gen.Return(42)
         result = yield f()
         self.assertEqual(result, 42)
@@ -735,7 +735,7 @@ class GenCoroutineTest(AsyncTestCase):
         namespace = exec_test(globals(), locals(), """
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             return 42
         """)
         result = yield namespace['f']()
@@ -762,15 +762,20 @@ class GenCoroutineTest(AsyncTestCase):
     @skipBefore35
     @gen_test
     def test_async_await(self):
+        @gen.coroutine
+        def f1():
+            yield gen.moment
+            raise gen.Return(42)
+
         # This test verifies that an async function can await a
         # yield-based gen.coroutine, and that a gen.coroutine
         # (the test method itself) can yield an async function.
         namespace = exec_test(globals(), locals(), """
-        async def f():
-            await gen.Task(self.io_loop.add_callback)
-            return 42
+        async def f2():
+            result = await f1()
+            return result
         """)
-        result = yield namespace['f']()
+        result = yield namespace['f2']()
         self.assertEqual(result, 42)
         self.finished = True
 
@@ -792,18 +797,22 @@ class GenCoroutineTest(AsyncTestCase):
     @skipBefore35
     @gen_test
     def test_async_await_mixed_multi_native_future(self):
+        @gen.coroutine
+        def f1():
+            yield gen.moment
+
         namespace = exec_test(globals(), locals(), """
-        async def f1():
-            await gen.Task(self.io_loop.add_callback)
+        async def f2():
+            await f1()
             return 42
         """)
 
         @gen.coroutine
-        def f2():
-            yield gen.Task(self.io_loop.add_callback)
+        def f3():
+            yield gen.moment
             raise gen.Return(43)
 
-        results = yield [namespace['f1'](), f2()]
+        results = yield [namespace['f2'](), f3()]
         self.assertEqual(results, [42, 43])
         self.finished = True
 
@@ -854,7 +863,7 @@ class GenCoroutineTest(AsyncTestCase):
         # Without a return value we don't need python 3.3.
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             return
         result = yield f()
         self.assertEqual(result, None)
@@ -877,7 +886,7 @@ class GenCoroutineTest(AsyncTestCase):
     def test_async_raise(self):
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             1 / 0
         future = f()
         with self.assertRaises(ZeroDivisionError):
@@ -1145,7 +1154,8 @@ class GenTaskHandler(RequestHandler):
     @gen.coroutine
     def get(self):
         client = AsyncHTTPClient()
-        response = yield gen.Task(client.fetch, self.get_argument('url'))
+        with ignore_deprecation():
+            response = yield gen.Task(client.fetch, self.get_argument('url'))
         response.rethrow()
         self.finish(b"got response: " + response.body)
 
@@ -1175,14 +1185,14 @@ class GenYieldExceptionHandler(RequestHandler):
     def get(self):
         io_loop = self.request.connection.stream.io_loop
         # Test the interaction of the two stack_contexts.
-
-        def fail_task(callback):
-            io_loop.add_callback(lambda: 1 / 0)
-        try:
-            yield gen.Task(fail_task)
-            raise Exception("did not get expected exception")
-        except ZeroDivisionError:
-            self.finish('ok')
+        with ignore_deprecation():
+            def fail_task(callback):
+                io_loop.add_callback(lambda: 1 / 0)
+            try:
+                yield gen.Task(fail_task)
+                raise Exception("did not get expected exception")
+            except ZeroDivisionError:
+                self.finish('ok')
 
 
 # "Undecorated" here refers to the absence of @asynchronous.
@@ -1190,22 +1200,22 @@ class UndecoratedCoroutinesHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):
         self.chunks = []
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         self.chunks.append('1')
 
     @gen.coroutine
     def get(self):
         self.chunks.append('2')
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         self.chunks.append('3')
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         self.write(''.join(self.chunks))
 
 
 class AsyncPrepareErrorHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         raise HTTPError(403)
 
     def get(self):
@@ -1216,7 +1226,8 @@ class NativeCoroutineHandler(RequestHandler):
     if sys.version_info > (3, 5):
         exec(textwrap.dedent("""
         async def get(self):
-            await gen.Task(IOLoop.current().add_callback)
+            import asyncio
+            await asyncio.sleep(0)
             self.write("ok")
         """))
 
