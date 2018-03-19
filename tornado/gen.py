@@ -261,9 +261,6 @@ def coroutine(func):
     ``callback`` argument is not visible inside the decorated
     function; it is handled by the decorator itself.
 
-    From the caller's perspective, ``@gen.coroutine`` is similar to
-    the combination of ``@return_future`` and ``@gen.engine``.
-
     .. warning::
 
        When exceptions occur inside a coroutine, the exception
