@@ -378,7 +378,7 @@ class SimpleHTTPClientTestMixin(object):
     @gen.coroutine
     def async_body_producer(self, write):
         yield write(b'1234')
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         yield write(b'5678')
 
     def test_sync_body_producer_chunked(self):
@@ -412,7 +412,8 @@ class SimpleHTTPClientTestMixin(object):
         namespace = exec_test(globals(), locals(), """
         async def body_producer(write):
             await write(b'1234')
-            await gen.Task(IOLoop.current().add_callback)
+            import asyncio
+            await asyncio.sleep(0)
             await write(b'5678')
         """)
         response = self.fetch("/echo_post", method="POST",
@@ -425,7 +426,8 @@ class SimpleHTTPClientTestMixin(object):
         namespace = exec_test(globals(), locals(), """
         async def body_producer(write):
             await write(b'1234')
-            await gen.Task(IOLoop.current().add_callback)
+            import asyncio
+            await asyncio.sleep(0)
             await write(b'5678')
         """)
         response = self.fetch("/echo_post", method="POST",

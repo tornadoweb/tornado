@@ -9,6 +9,7 @@ import sys
 import textwrap
 import time
 import weakref
+import warnings
 
 from tornado.concurrent import return_future, Future
 from tornado.escape import url_escape
@@ -17,7 +18,7 @@ from tornado.ioloop import IOLoop
 from tornado.log import app_log
 from tornado import stack_context
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test  # noqa: E501
+from tornado.test.util import unittest, skipOnTravis, skipBefore33, skipBefore35, skipNotCPython, exec_test, ignore_deprecation  # noqa: E501
 from tornado.web import Application, RequestHandler, asynchronous, HTTPError
 
 from tornado import gen
@@ -35,8 +36,15 @@ except ImportError:
 
 class GenEngineTest(AsyncTestCase):
     def setUp(self):
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
         super(GenEngineTest, self).setUp()
         self.named_contexts = []
+
+    def tearDown(self):
+        super(GenEngineTest, self).tearDown()
+        self.warning_catcher.__exit__(None, None, None)
 
     def named_context(self, name):
         @contextlib.contextmanager
@@ -659,6 +667,236 @@ class GenEngineTest(AsyncTestCase):
         self.assertIs(self.task_ref(), None)
 
 
+# GenBasicTest duplicates the non-deprecated portions of GenEngineTest
+# with gen.coroutine to ensure we don't lose coverage when gen.engine
+# goes away.
+class GenBasicTest(AsyncTestCase):
+    @gen.coroutine
+    def delay(self, iterations, arg):
+        """Returns arg after a number of IOLoop iterations."""
+        for i in range(iterations):
+            yield gen.moment
+        raise gen.Return(arg)
+
+    @return_future
+    def async_future(self, result, callback):
+        self.io_loop.add_callback(callback, result)
+
+    @gen.coroutine
+    def async_exception(self, e):
+        yield gen.moment
+        raise e
+
+    @gen.coroutine
+    def add_one_async(self, x):
+        yield gen.moment
+        raise gen.Return(x + 1)
+
+    def test_no_yield(self):
+        @gen.coroutine
+        def f():
+            pass
+        self.io_loop.run_sync(f)
+
+    def test_exception_phase1(self):
+        @gen.coroutine
+        def f():
+            1 / 0
+        self.assertRaises(ZeroDivisionError, self.io_loop.run_sync, f)
+
+    def test_exception_phase2(self):
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            1 / 0
+        self.assertRaises(ZeroDivisionError, self.io_loop.run_sync, f)
+
+    def test_bogus_yield(self):
+        @gen.coroutine
+        def f():
+            yield 42
+        self.assertRaises(gen.BadYieldError, self.io_loop.run_sync, f)
+
+    def test_bogus_yield_tuple(self):
+        @gen.coroutine
+        def f():
+            yield (1, 2)
+        self.assertRaises(gen.BadYieldError, self.io_loop.run_sync, f)
+
+    def test_reuse(self):
+        @gen.coroutine
+        def f():
+            yield gen.moment
+        self.io_loop.run_sync(f)
+        self.io_loop.run_sync(f)
+
+    def test_none(self):
+        @gen.coroutine
+        def f():
+            yield None
+        self.io_loop.run_sync(f)
+
+    def test_multi(self):
+        @gen.coroutine
+        def f():
+            results = yield [self.add_one_async(1), self.add_one_async(2)]
+            self.assertEqual(results, [2, 3])
+        self.io_loop.run_sync(f)
+
+    def test_multi_dict(self):
+        @gen.coroutine
+        def f():
+            results = yield dict(foo=self.add_one_async(1), bar=self.add_one_async(2))
+            self.assertEqual(results, dict(foo=2, bar=3))
+        self.io_loop.run_sync(f)
+
+    def test_multi_delayed(self):
+        @gen.coroutine
+        def f():
+            # callbacks run at different times
+            responses = yield gen.multi_future([
+                self.delay(3, "v1"),
+                self.delay(1, "v2"),
+            ])
+            self.assertEqual(responses, ["v1", "v2"])
+        self.io_loop.run_sync(f)
+
+    def test_multi_dict_delayed(self):
+        @gen.coroutine
+        def f():
+            # callbacks run at different times
+            responses = yield gen.multi_future(dict(
+                foo=self.delay(3, "v1"),
+                bar=self.delay(1, "v2"),
+            ))
+            self.assertEqual(responses, dict(foo="v1", bar="v2"))
+        self.io_loop.run_sync(f)
+
+    @skipOnTravis
+    @gen_test
+    def test_multi_performance(self):
+        # Yielding a list used to have quadratic performance; make
+        # sure a large list stays reasonable.  On my laptop a list of
+        # 2000 used to take 1.8s, now it takes 0.12.
+        start = time.time()
+        yield [gen.moment for i in range(2000)]
+        end = time.time()
+        self.assertLess(end - start, 1.0)
+
+    @gen_test
+    def test_multi_empty(self):
+        # Empty lists or dicts should return the same type.
+        x = yield []
+        self.assertTrue(isinstance(x, list))
+        y = yield {}
+        self.assertTrue(isinstance(y, dict))
+
+    @gen_test
+    def test_future(self):
+        result = yield self.async_future(1)
+        self.assertEqual(result, 1)
+
+    @gen_test
+    def test_multi_future(self):
+        results = yield [self.async_future(1), self.async_future(2)]
+        self.assertEqual(results, [1, 2])
+
+    @gen_test
+    def test_multi_future_duplicate(self):
+        f = self.async_future(2)
+        results = yield [self.async_future(1), f, self.async_future(3), f]
+        self.assertEqual(results, [1, 2, 3, 2])
+
+    @gen_test
+    def test_multi_dict_future(self):
+        results = yield dict(foo=self.async_future(1), bar=self.async_future(2))
+        self.assertEqual(results, dict(foo=1, bar=2))
+
+    @gen_test
+    def test_multi_exceptions(self):
+        with ExpectLog(app_log, "Multiple exceptions in yield list"):
+            with self.assertRaises(RuntimeError) as cm:
+                yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                                 self.async_exception(RuntimeError("error 2"))])
+        self.assertEqual(str(cm.exception), "error 1")
+
+        # With only one exception, no error is logged.
+        with self.assertRaises(RuntimeError):
+            yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                             self.async_future(2)])
+
+        # Exception logging may be explicitly quieted.
+        with self.assertRaises(RuntimeError):
+            yield gen.Multi([self.async_exception(RuntimeError("error 1")),
+                             self.async_exception(RuntimeError("error 2"))],
+                            quiet_exceptions=RuntimeError)
+
+    @gen_test
+    def test_multi_future_exceptions(self):
+        with ExpectLog(app_log, "Multiple exceptions in yield list"):
+            with self.assertRaises(RuntimeError) as cm:
+                yield [self.async_exception(RuntimeError("error 1")),
+                       self.async_exception(RuntimeError("error 2"))]
+        self.assertEqual(str(cm.exception), "error 1")
+
+        # With only one exception, no error is logged.
+        with self.assertRaises(RuntimeError):
+            yield [self.async_exception(RuntimeError("error 1")),
+                   self.async_future(2)]
+
+        # Exception logging may be explicitly quieted.
+        with self.assertRaises(RuntimeError):
+            yield gen.multi_future(
+                [self.async_exception(RuntimeError("error 1")),
+                 self.async_exception(RuntimeError("error 2"))],
+                quiet_exceptions=RuntimeError)
+
+    def test_sync_raise_return(self):
+        @gen.coroutine
+        def f():
+            raise gen.Return()
+
+        self.io_loop.run_sync(f)
+
+    def test_async_raise_return(self):
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            raise gen.Return()
+
+        self.io_loop.run_sync(f)
+
+    def test_sync_raise_return_value(self):
+        @gen.coroutine
+        def f():
+            raise gen.Return(42)
+
+        self.assertEqual(42, self.io_loop.run_sync(f))
+
+    def test_sync_raise_return_value_tuple(self):
+        @gen.coroutine
+        def f():
+            raise gen.Return((1, 2))
+
+        self.assertEqual((1, 2), self.io_loop.run_sync(f))
+
+    def test_async_raise_return_value(self):
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            raise gen.Return(42)
+
+        self.assertEqual(42, self.io_loop.run_sync(f))
+
+    def test_async_raise_return_value_tuple(self):
+        @gen.coroutine
+        def f():
+            yield gen.moment
+            raise gen.Return((1, 2))
+
+        self.assertEqual((1, 2), self.io_loop.run_sync(f))
+
+
 class GenCoroutineTest(AsyncTestCase):
     def setUp(self):
         # Stray StopIteration exceptions can lead to tests exiting prematurely,
@@ -706,7 +944,7 @@ class GenCoroutineTest(AsyncTestCase):
     def test_async_gen_return(self):
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             raise gen.Return(42)
         result = yield f()
         self.assertEqual(result, 42)
@@ -727,7 +965,7 @@ class GenCoroutineTest(AsyncTestCase):
         namespace = exec_test(globals(), locals(), """
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             return 42
         """)
         result = yield namespace['f']()
@@ -754,15 +992,20 @@ class GenCoroutineTest(AsyncTestCase):
     @skipBefore35
     @gen_test
     def test_async_await(self):
+        @gen.coroutine
+        def f1():
+            yield gen.moment
+            raise gen.Return(42)
+
         # This test verifies that an async function can await a
         # yield-based gen.coroutine, and that a gen.coroutine
         # (the test method itself) can yield an async function.
         namespace = exec_test(globals(), locals(), """
-        async def f():
-            await gen.Task(self.io_loop.add_callback)
-            return 42
+        async def f2():
+            result = await f1()
+            return result
         """)
-        result = yield namespace['f']()
+        result = yield namespace['f2']()
         self.assertEqual(result, 42)
         self.finished = True
 
@@ -784,18 +1027,22 @@ class GenCoroutineTest(AsyncTestCase):
     @skipBefore35
     @gen_test
     def test_async_await_mixed_multi_native_future(self):
+        @gen.coroutine
+        def f1():
+            yield gen.moment
+
         namespace = exec_test(globals(), locals(), """
-        async def f1():
-            await gen.Task(self.io_loop.add_callback)
+        async def f2():
+            await f1()
             return 42
         """)
 
         @gen.coroutine
-        def f2():
-            yield gen.Task(self.io_loop.add_callback)
+        def f3():
+            yield gen.moment
             raise gen.Return(43)
 
-        results = yield [namespace['f1'](), f2()]
+        results = yield [namespace['f2'](), f3()]
         self.assertEqual(results, [42, 43])
         self.finished = True
 
@@ -813,8 +1060,9 @@ class GenCoroutineTest(AsyncTestCase):
             yield gen.Task(self.io_loop.add_callback)
             raise gen.Return(43)
 
-        f2(callback=(yield gen.Callback('cb')))
-        results = yield [namespace['f1'](), gen.Wait('cb')]
+        with ignore_deprecation():
+            f2(callback=(yield gen.Callback('cb')))
+            results = yield [namespace['f1'](), gen.Wait('cb')]
         self.assertEqual(results, [42, 43])
         self.finished = True
 
@@ -845,7 +1093,7 @@ class GenCoroutineTest(AsyncTestCase):
         # Without a return value we don't need python 3.3.
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             return
         result = yield f()
         self.assertEqual(result, None)
@@ -868,7 +1116,7 @@ class GenCoroutineTest(AsyncTestCase):
     def test_async_raise(self):
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             1 / 0
         future = f()
         with self.assertRaises(ZeroDivisionError):
@@ -877,10 +1125,11 @@ class GenCoroutineTest(AsyncTestCase):
 
     @gen_test
     def test_pass_callback(self):
-        @gen.coroutine
-        def f():
-            raise gen.Return(42)
-        result = yield gen.Task(f)
+        with ignore_deprecation():
+            @gen.coroutine
+            def f():
+                raise gen.Return(42)
+            result = yield gen.Task(f)
         self.assertEqual(result, 42)
         self.finished = True
 
@@ -925,46 +1174,48 @@ class GenCoroutineTest(AsyncTestCase):
 
     @gen_test
     def test_replace_context_exception(self):
-        # Test exception handling: exceptions thrown into the stack context
-        # can be caught and replaced.
-        # Note that this test and the following are for behavior that is
-        # not really supported any more:  coroutines no longer create a
-        # stack context automatically; but one is created after the first
-        # YieldPoint (i.e. not a Future).
-        @gen.coroutine
-        def f2():
-            (yield gen.Callback(1))()
-            yield gen.Wait(1)
-            self.io_loop.add_callback(lambda: 1 / 0)
-            try:
-                yield gen.Task(self.io_loop.add_timeout,
-                               self.io_loop.time() + 10)
-            except ZeroDivisionError:
-                raise KeyError()
+        with ignore_deprecation():
+            # Test exception handling: exceptions thrown into the stack context
+            # can be caught and replaced.
+            # Note that this test and the following are for behavior that is
+            # not really supported any more:  coroutines no longer create a
+            # stack context automatically; but one is created after the first
+            # YieldPoint (i.e. not a Future).
+            @gen.coroutine
+            def f2():
+                (yield gen.Callback(1))()
+                yield gen.Wait(1)
+                self.io_loop.add_callback(lambda: 1 / 0)
+                try:
+                    yield gen.Task(self.io_loop.add_timeout,
+                                   self.io_loop.time() + 10)
+                except ZeroDivisionError:
+                    raise KeyError()
 
-        future = f2()
-        with self.assertRaises(KeyError):
-            yield future
-        self.finished = True
+            future = f2()
+            with self.assertRaises(KeyError):
+                yield future
+            self.finished = True
 
     @gen_test
     def test_swallow_context_exception(self):
-        # Test exception handling: exceptions thrown into the stack context
-        # can be caught and ignored.
-        @gen.coroutine
-        def f2():
-            (yield gen.Callback(1))()
-            yield gen.Wait(1)
-            self.io_loop.add_callback(lambda: 1 / 0)
-            try:
-                yield gen.Task(self.io_loop.add_timeout,
-                               self.io_loop.time() + 10)
-            except ZeroDivisionError:
-                raise gen.Return(42)
+        with ignore_deprecation():
+            # Test exception handling: exceptions thrown into the stack context
+            # can be caught and ignored.
+            @gen.coroutine
+            def f2():
+                (yield gen.Callback(1))()
+                yield gen.Wait(1)
+                self.io_loop.add_callback(lambda: 1 / 0)
+                try:
+                    yield gen.Task(self.io_loop.add_timeout,
+                                   self.io_loop.time() + 10)
+                except ZeroDivisionError:
+                    raise gen.Return(42)
 
-        result = yield f2()
-        self.assertEqual(result, 42)
-        self.finished = True
+            result = yield f2()
+            self.assertEqual(result, 42)
+            self.finished = True
 
     @gen_test
     def test_moment(self):
@@ -1085,35 +1336,34 @@ class GenCoroutineTest(AsyncTestCase):
 
 
 class GenSequenceHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
-    def get(self):
-        self.io_loop = self.request.connection.stream.io_loop
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
-        self.write("1")
-        self.io_loop.add_callback((yield gen.Callback("k2")))
-        yield gen.Wait("k2")
-        self.write("2")
-        # reuse an old key
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
-        self.finish("3")
+    with ignore_deprecation():
+        @asynchronous
+        @gen.engine
+        def get(self):
+            # The outer ignore_deprecation applies at definition time.
+            # We need another for serving time.
+            with ignore_deprecation():
+                self.io_loop = self.request.connection.stream.io_loop
+                self.io_loop.add_callback((yield gen.Callback("k1")))
+                yield gen.Wait("k1")
+                self.write("1")
+                self.io_loop.add_callback((yield gen.Callback("k2")))
+                yield gen.Wait("k2")
+                self.write("2")
+                # reuse an old key
+                self.io_loop.add_callback((yield gen.Callback("k1")))
+                yield gen.Wait("k1")
+                self.finish("3")
 
 
 class GenCoroutineSequenceHandler(RequestHandler):
     @gen.coroutine
     def get(self):
-        self.io_loop = self.request.connection.stream.io_loop
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
+        yield gen.moment
         self.write("1")
-        self.io_loop.add_callback((yield gen.Callback("k2")))
-        yield gen.Wait("k2")
+        yield gen.moment
         self.write("2")
-        # reuse an old key
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
+        yield gen.moment
         self.finish("3")
 
 
@@ -1121,38 +1371,34 @@ class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
     @asynchronous
     @gen.coroutine
     def get(self):
-        self.io_loop = self.request.connection.stream.io_loop
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
+        yield gen.moment
         self.write("1")
-        self.io_loop.add_callback((yield gen.Callback("k2")))
-        yield gen.Wait("k2")
+        yield gen.moment
         self.write("2")
-        # reuse an old key
-        self.io_loop.add_callback((yield gen.Callback("k1")))
-        yield gen.Wait("k1")
+        yield gen.moment
         # just write, don't finish
         self.write("3")
 
 
 class GenTaskHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
+    @gen.coroutine
     def get(self):
         client = AsyncHTTPClient()
-        response = yield gen.Task(client.fetch, self.get_argument('url'))
+        with ignore_deprecation():
+            response = yield gen.Task(client.fetch, self.get_argument('url'))
         response.rethrow()
         self.finish(b"got response: " + response.body)
 
 
 class GenExceptionHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
-    def get(self):
-        # This test depends on the order of the two decorators.
-        io_loop = self.request.connection.stream.io_loop
-        yield gen.Task(io_loop.add_callback)
-        raise Exception("oops")
+    with ignore_deprecation():
+        @asynchronous
+        @gen.engine
+        def get(self):
+            # This test depends on the order of the two decorators.
+            io_loop = self.request.connection.stream.io_loop
+            yield gen.Task(io_loop.add_callback)
+            raise Exception("oops")
 
 
 class GenCoroutineExceptionHandler(RequestHandler):
@@ -1165,19 +1411,18 @@ class GenCoroutineExceptionHandler(RequestHandler):
 
 
 class GenYieldExceptionHandler(RequestHandler):
-    @asynchronous
-    @gen.engine
+    @gen.coroutine
     def get(self):
         io_loop = self.request.connection.stream.io_loop
         # Test the interaction of the two stack_contexts.
-
-        def fail_task(callback):
-            io_loop.add_callback(lambda: 1 / 0)
-        try:
-            yield gen.Task(fail_task)
-            raise Exception("did not get expected exception")
-        except ZeroDivisionError:
-            self.finish('ok')
+        with ignore_deprecation():
+            def fail_task(callback):
+                io_loop.add_callback(lambda: 1 / 0)
+            try:
+                yield gen.Task(fail_task)
+                raise Exception("did not get expected exception")
+            except ZeroDivisionError:
+                self.finish('ok')
 
 
 # "Undecorated" here refers to the absence of @asynchronous.
@@ -1185,22 +1430,22 @@ class UndecoratedCoroutinesHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):
         self.chunks = []
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         self.chunks.append('1')
 
     @gen.coroutine
     def get(self):
         self.chunks.append('2')
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         self.chunks.append('3')
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         self.write(''.join(self.chunks))
 
 
 class AsyncPrepareErrorHandler(RequestHandler):
     @gen.coroutine
     def prepare(self):
-        yield gen.Task(IOLoop.current().add_callback)
+        yield gen.moment
         raise HTTPError(403)
 
     def get(self):
@@ -1211,7 +1456,8 @@ class NativeCoroutineHandler(RequestHandler):
     if sys.version_info > (3, 5):
         exec(textwrap.dedent("""
         async def get(self):
-            await gen.Task(IOLoop.current().add_callback)
+            import asyncio
+            await asyncio.sleep(0)
             self.write("ok")
         """))
 

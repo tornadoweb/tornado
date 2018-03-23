@@ -693,14 +693,14 @@ class TestIOLoopRunSync(unittest.TestCase):
     def test_async_result(self):
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             raise gen.Return(42)
         self.assertEqual(self.io_loop.run_sync(f), 42)
 
     def test_async_exception(self):
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_callback)
+            yield gen.moment
             1 / 0
         with self.assertRaises(ZeroDivisionError):
             self.io_loop.run_sync(f)
@@ -713,16 +713,20 @@ class TestIOLoopRunSync(unittest.TestCase):
     def test_timeout(self):
         @gen.coroutine
         def f():
-            yield gen.Task(self.io_loop.add_timeout, self.io_loop.time() + 1)
+            yield gen.sleep(1)
         self.assertRaises(TimeoutError, self.io_loop.run_sync, f, timeout=0.01)
 
     @skipBefore35
     def test_native_coroutine(self):
+        @gen.coroutine
+        def f1():
+            yield gen.moment
+
         namespace = exec_test(globals(), locals(), """
-        async def f():
-            await gen.Task(self.io_loop.add_callback)
+        async def f2():
+            await f1()
         """)
-        self.io_loop.run_sync(namespace['f'])
+        self.io_loop.run_sync(namespace['f2'])
 
 
 @unittest.skipIf(asyncio is not None,

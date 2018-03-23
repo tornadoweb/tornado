@@ -11,6 +11,7 @@ from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
 import logging
+import warnings
 
 
 class TestRequestHandler(RequestHandler):
@@ -61,6 +62,13 @@ class StackContextTest(AsyncTestCase):
     def setUp(self):
         super(StackContextTest, self).setUp()
         self.active_contexts = []
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
+
+    def tearDown(self):
+        self.warning_catcher.__exit__(None, None, None)
+        super(StackContextTest, self).tearDown()
 
     @contextlib.contextmanager
     def context(self, name):

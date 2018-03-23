@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 from tornado import netutil
+from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode, utf8, _unicode, recursive_unicode, native_str
-from tornado import gen
 from tornado.http1connection import HTTP1Connection
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine  # noqa: E501
@@ -1120,7 +1120,9 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             stream.write(b'PUT /streaming?expected_size=10240 HTTP/1.1\r\n'
                          b'Content-Length: 10240\r\n\r\n')
             stream.write(b'a' * 10240)
-            start_line, headers, response = yield gen.Task(read_stream_body, stream)
+            fut = Future()
+            read_stream_body(stream, callback=fut.set_result)
+            start_line, headers, response = yield fut
             self.assertEqual(response, b'10240')
             # Without the ?expected_size parameter, we get the old default value
             stream.write(b'PUT /streaming HTTP/1.1\r\n'

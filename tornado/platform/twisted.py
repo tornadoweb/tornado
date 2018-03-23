@@ -554,7 +554,9 @@ class TwistedResolver(Resolver):
             resolved_family = socket.AF_INET6
         else:
             deferred = self.resolver.getHostByName(utf8(host))
-            resolved = yield gen.Task(deferred.addBoth)
+            fut = Future()
+            deferred.addBoth(fut.set_result)
+            resolved = yield fut
             if isinstance(resolved, failure.Failure):
                 try:
                     resolved.raiseException()

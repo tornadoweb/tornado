@@ -96,6 +96,7 @@ import itertools
 import os
 import sys
 import types
+import warnings
 
 from tornado.concurrent import (Future, is_future, chain_future, future_set_exc_info,
                                 future_add_done_callback, future_set_result_unless_cancelled)
@@ -213,7 +214,14 @@ def engine(func):
     they are finished.  One notable exception is the
     `~tornado.web.RequestHandler` :ref:`HTTP verb methods <verbs>`,
     which use ``self.finish()`` in place of a callback argument.
+
+    .. deprecated:: 5.1
+
+       This decorator will be removed in 6.0. Use `coroutine` or
+       ``async def`` instead.
     """
+    warnings.warn("gen.engine is deprecated, use gen.coroutine or async def instead",
+                  DeprecationWarning)
     func = _make_coroutine_wrapper(func, replace_callback=False)
 
     @functools.wraps(func)
@@ -232,7 +240,7 @@ def engine(func):
     return wrapper
 
 
-def coroutine(func, replace_callback=True):
+def coroutine(func):
     """Decorator for asynchronous generators.
 
     Any generator that yields objects from this module must be wrapped
@@ -253,9 +261,6 @@ def coroutine(func, replace_callback=True):
     ``callback`` argument is not visible inside the decorated
     function; it is handled by the decorator itself.
 
-    From the caller's perspective, ``@gen.coroutine`` is similar to
-    the combination of ``@return_future`` and ``@gen.engine``.
-
     .. warning::
 
        When exceptions occur inside a coroutine, the exception
@@ -266,6 +271,10 @@ def coroutine(func, replace_callback=True):
        `.IOLoop.run_sync` for top-level calls, or passing the `.Future`
        to `.IOLoop.add_future`.
 
+    .. deprecated:: 5.1
+
+       The ``callback`` argument is deprecated and will be removed in 6.0.
+       Use the returned awaitable object instead.
     """
     return _make_coroutine_wrapper(func, replace_callback=True)
 
@@ -288,6 +297,8 @@ def _make_coroutine_wrapper(func, replace_callback):
         future = _create_future()
 
         if replace_callback and 'callback' in kwargs:
+            warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                          DeprecationWarning, stacklevel=2)
             callback = kwargs.pop('callback')
             IOLoop.current().add_future(
                 future, lambda future: callback(future.result()))
@@ -513,8 +524,13 @@ class YieldPoint(object):
     """Base class for objects that may be yielded from the generator.
 
     .. deprecated:: 4.0
-       Use `Futures <.Future>` instead.
+       Use `Futures <.Future>` instead. This class and all its subclasses
+       will be removed in 6.0
     """
+    def __init__(self):
+        warnings.warn("YieldPoint is deprecated, use Futures instead",
+                      DeprecationWarning)
+
     def start(self, runner):
         """Called by the runner after the generator has yielded.
 
@@ -551,9 +567,11 @@ class Callback(YieldPoint):
     is given it will be returned by `Wait`.
 
     .. deprecated:: 4.0
-       Use `Futures <.Future>` instead.
+       Use `Futures <.Future>` instead. This class will be removed in 6.0.
     """
     def __init__(self, key):
+        warnings.warn("gen.Callback is deprecated, use Futures instead",
+                      DeprecationWarning)
         self.key = key
 
     def start(self, runner):
@@ -571,9 +589,11 @@ class Wait(YieldPoint):
     """Returns the argument passed to the result of a previous `Callback`.
 
     .. deprecated:: 4.0
-       Use `Futures <.Future>` instead.
+       Use `Futures <.Future>` instead. This class will be removed in 6.0.
     """
     def __init__(self, key):
+        warnings.warn("gen.Wait is deprecated, use Futures instead",
+                      DeprecationWarning)
         self.key = key
 
     def start(self, runner):
@@ -595,9 +615,11 @@ class WaitAll(YieldPoint):
     `WaitAll` is equivalent to yielding a list of `Wait` objects.
 
     .. deprecated:: 4.0
-       Use `Futures <.Future>` instead.
+       Use `Futures <.Future>` instead. This class will be removed in 6.0.
     """
     def __init__(self, keys):
+        warnings.warn("gen.WaitAll is deprecated, use gen.multi instead",
+                      DeprecationWarning)
         self.keys = keys
 
     def start(self, runner):
@@ -621,7 +643,12 @@ def Task(func, *args, **kwargs):
        ``gen.Task`` is now a function that returns a `.Future`, instead of
        a subclass of `YieldPoint`.  It still behaves the same way when
        yielded.
+
+    .. deprecated:: 5.1
+       This function is deprecated and will be removed in 6.0.
     """
+    warnings.warn("gen.Task is deprecated, use Futures instead",
+                  DeprecationWarning)
     future = _create_future()
 
     def handle_exception(typ, value, tb):
@@ -645,7 +672,12 @@ class YieldFuture(YieldPoint):
 
         .. versionchanged:: 5.0
            The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+        .. deprecated:: 5.1
+           This class will be removed in 6.0.
         """
+        warnings.warn("YieldFuture is deprecated, use Futures instead",
+                      DeprecationWarning)
         self.future = future
         self.io_loop = IOLoop.current()
 
@@ -761,9 +793,11 @@ class MultiYieldPoint(YieldPoint):
        remains as an alias for the equivalent `multi` function.
 
     .. deprecated:: 4.3
-       Use `multi` instead.
+       Use `multi` instead. This class will be removed in 6.0.
     """
     def __init__(self, children, quiet_exceptions=()):
+        warnings.warn("MultiYieldPoint is deprecated, use Futures instead",
+                      DeprecationWarning)
         self.keys = None
         if isinstance(children, dict):
             self.keys = list(children.keys())
