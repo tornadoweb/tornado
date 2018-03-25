@@ -11,6 +11,11 @@ import platform
 import traceback
 import warnings
 
+try:
+    import asyncio
+except ImportError:
+    asyncio = None
+
 
 @contextlib.contextmanager
 def set_environ(name, value):
@@ -308,6 +313,31 @@ class GenTest(AsyncTestCase):
             self.fail("did not get expected exception")
         except ioloop.TimeoutError:
             self.finished = True
+
+
+@unittest.skipIf(asyncio is None, "asyncio module not present")
+class GetNewIOLoopTest(AsyncTestCase):
+    def get_new_ioloop(self):
+        # Use the current loop instead of creating a new one here.
+        return ioloop.IOLoop.current()
+
+    def setUp(self):
+        # This simulates the effect of an asyncio test harness like
+        # pytest-asyncio.
+        self.orig_loop = asyncio.get_event_loop()
+        self.new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.new_loop)
+        super(GetNewIOLoopTest, self).setUp()
+
+    def tearDown(self):
+        super(GetNewIOLoopTest, self).tearDown()
+        # AsyncTestCase must not affect the existing asyncio loop.
+        self.assertFalse(asyncio.get_event_loop().is_closed())
+        asyncio.set_event_loop(self.orig_loop)
+        self.new_loop.close()
+
+    def test_loop(self):
+        self.assertIs(self.io_loop.asyncio_loop, self.new_loop)
 
 
 if __name__ == '__main__':

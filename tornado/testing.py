@@ -74,6 +74,12 @@ else:
         import unittest  # type: ignore
 
 
+if asyncio is None:
+    _NON_OWNED_IOLOOPS = ()
+else:
+    import tornado.platform.asyncio
+    _NON_OWNED_IOLOOPS = tornado.platform.asyncio.AsyncIOMainLoop
+
 def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.
 
@@ -216,11 +222,12 @@ class AsyncTestCase(unittest.TestCase):
         # Clean up Subprocess, so it can be used again with a new ioloop.
         Subprocess.uninitialize()
         self.io_loop.clear_current()
-        # Try to clean up any file descriptors left open in the ioloop.
-        # This avoids leaks, especially when tests are run repeatedly
-        # in the same process with autoreload (because curl does not
-        # set FD_CLOEXEC on its file descriptors)
-        self.io_loop.close(all_fds=True)
+        if not isinstance(self.io_loop, _NON_OWNED_IOLOOPS):
+            # Try to clean up any file descriptors left open in the ioloop.
+            # This avoids leaks, especially when tests are run repeatedly
+            # in the same process with autoreload (because curl does not
+            # set FD_CLOEXEC on its file descriptors)
+            self.io_loop.close(all_fds=True)
         super(AsyncTestCase, self).tearDown()
         # In case an exception escaped or the StackContext caught an exception
         # when there wasn't a wait() to re-raise it, do so here.
@@ -229,9 +236,15 @@ class AsyncTestCase(unittest.TestCase):
         self.__rethrow()
 
     def get_new_ioloop(self):
-        """Creates a new `.IOLoop` for this test.  May be overridden in
-        subclasses for tests that require a specific `.IOLoop` (usually
-        the singleton `.IOLoop.instance()`).
+        """Returns the `.IOLoop` to use for this test.
+
+        By default, a new `.IOLoop` is created for each test.
+        Subclasses may override this method to return
+        `.IOLoop.current()` if it is not appropriate to use a new
+        `.IOLoop` in each tests (for example, if there are global
+        singletons using the default `.IOLoop`) or if a per-test event
+        loop is being provided by another system (such as
+        ``pytest-asyncio``).
         """
         return IOLoop()
 
