@@ -123,6 +123,44 @@ class AsyncIOLoopTest(AsyncTestCase):
 
 
 @unittest.skipIf(asyncio is None, "asyncio module not present")
+class LeakTest(unittest.TestCase):
+    def setUp(self):
+        # Trigger a cleanup of the mapping so we start with a clean slate.
+        AsyncIOLoop().close()
+        # If we don't clean up after ourselves other tests may fail on
+        # py34.
+        self.orig_policy = asyncio.get_event_loop_policy()
+        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+
+    def tearDown(self):
+        asyncio.get_event_loop().close()
+        asyncio.set_event_loop_policy(self.orig_policy)
+
+    def test_ioloop_close_leak(self):
+        orig_count = len(IOLoop._ioloop_for_asyncio)
+        for i in range(10):
+            # Create and close an AsyncIOLoop using Tornado interfaces.
+            loop = AsyncIOLoop()
+            loop.close()
+        new_count = len(IOLoop._ioloop_for_asyncio) - orig_count
+        self.assertEqual(new_count, 0)
+
+    def test_asyncio_close_leak(self):
+        orig_count = len(IOLoop._ioloop_for_asyncio)
+        for i in range(10):
+            # Create and close an AsyncIOMainLoop using asyncio interfaces.
+            loop = asyncio.new_event_loop()
+            loop.call_soon(IOLoop.current)
+            loop.call_soon(loop.stop)
+            loop.run_forever()
+            loop.close()
+        new_count = len(IOLoop._ioloop_for_asyncio) - orig_count
+        # Because the cleanup is run on new loop creation, we have one
+        # dangling entry in the map (but only one).
+        self.assertEqual(new_count, 1)
+
+
+@unittest.skipIf(asyncio is None, "asyncio module not present")
 class AnyThreadEventLoopPolicyTest(unittest.TestCase):
     def setUp(self):
         self.orig_policy = asyncio.get_event_loop_policy()

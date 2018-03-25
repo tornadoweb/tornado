@@ -47,7 +47,6 @@ import threading
 import time
 import traceback
 import math
-import weakref
 
 from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
 from tornado.log import app_log, gen_log
@@ -185,7 +184,7 @@ class IOLoop(Configurable):
     _current = threading.local()
 
     # In Python 3, _ioloop_for_asyncio maps from asyncio loops to IOLoops.
-    _ioloop_for_asyncio = weakref.WeakKeyDictionary()
+    _ioloop_for_asyncio = dict()
 
     @classmethod
     def configure(cls, impl, **kwargs):
