@@ -91,6 +91,7 @@ And again with a `.Future` instead of a callback:
 .. testcode::
 
     from tornado.concurrent import Future
+    from tornado.httpclient import AsyncHTTPClient
 
     def async_fetch_future(url):
         http_client = AsyncHTTPClient()
