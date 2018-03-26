@@ -53,7 +53,7 @@ supplies the *initialization arguments* which will be passed to
 name, which will allow it to be used with
 `.RequestHandler.reverse_url`.
 
-For example, in this fragment the root URL ``/`` is mapped to
+In the following fragment for example, the root URL ``/`` is mapped to
 ``MainHandler`` and URLs of the form ``/story/`` followed by a number
 are mapped to ``StoryHandler``.  That number is passed (as a string) to
 ``StoryHandler.get``.
@@ -173,7 +173,7 @@ requests::
 Overriding RequestHandler methods
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In addition to ``get()``/``post()``/etc, certain other methods in
+In addition to ``get()``/``post()``/etc, other methods in
 `.RequestHandler` are designed to be overridden by subclasses when
 necessary. On every request, the following sequence of calls takes
 place:
