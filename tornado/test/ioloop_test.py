@@ -10,6 +10,13 @@ import sys
 import threading
 import time
 import types
+try:
+    from unittest import mock  # type: ignore
+except ImportError:
+    try:
+        import mock  # type: ignore
+    except ImportError:
+        mock = None
 
 from tornado.escape import native_str
 from tornado import gen
@@ -788,6 +795,26 @@ class TestPeriodicCallback(unittest.TestCase):
         self.assertEqual(calls, [1010, 1020, 1030, 1040, 1050])
         io_loop.close()
 
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_jitter(self):
+        # Check Period
+        calls = []
+        io_loop = FakeTimeIOLoop()
+
+        def cb():
+            calls.append(io_loop.time())
+        pc = PeriodicCallback(cb, 10000, jitter=0.5)
+        io_loop.make_current()
+        random_times = [0, 1, 0.5, 0.25]
+
+        def mock_random():
+            return random_times.pop(0)
+        with mock.patch('random.random', mock_random):
+            pc.start()
+            io_loop.call_later(50, io_loop.stop)
+            io_loop.start()
+        self.assertEqual(calls, [1010, 1025, 1037.5, 1048.75])
+        io_loop.close()
 
 class TestPeriodicCallbackMath(unittest.TestCase):
     def simulate_calls(self, pc, durations):
