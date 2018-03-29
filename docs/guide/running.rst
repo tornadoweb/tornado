@@ -200,7 +200,7 @@ in your HTML::
           <title>FriendFeed - {{ _("Home") }}</title>
        </head>
        <body>
-         <div><img src="{{ static_url("images/logo.png") }}"/></div>
+         <div><img src="{{ static_url('images/logo.png') }}"/></div>
        </body>
      </html>
 
