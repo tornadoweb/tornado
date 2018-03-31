@@ -789,8 +789,10 @@ class TestPeriodicCallbackMath(unittest.TestCase):
     def simulate_calls(self, pc, durations):
         """Simulate a series of calls to the PeriodicCallback.
 
-        Pass a list of call durations in seconds. This method
-        returns the times at which each call would be made.
+        Pass a list of call durations in seconds (negative values
+        work to simulate clock adjustments during the call, or more or
+        less equivalently, between calls). This method returns the
+        times at which each call would be made.
         """
         calls = []
         now = 1000
@@ -822,6 +824,22 @@ class TestPeriodicCallbackMath(unittest.TestCase):
         self.assertEqual(self.simulate_calls(pc, call_durations),
                          expected)
 
+    def test_clock_backwards(self):
+        pc = PeriodicCallback(None, 10000)
+        # Backwards jumps are ignored, potentially resulting in a
+        # slightly slow schedule (although we assume that when
+        # time.time() and time.monotonic() are different, time.time()
+        # is getting adjusted by NTP and is therefore more accurate)
+        self.assertEqual(self.simulate_calls(pc, [-2, -1, -3, -2, 0]),
+                         [1010, 1020, 1030, 1040, 1050])
+
+        # For big jumps, we should perhaps alter the schedule, but we
+        # don't currently. This trace shows that we run callbacks
+        # every 10s of time.time(), but the first and second calls are
+        # 110s of real time apart because the backwards jump is
+        # ignored.
+        self.assertEqual(self.simulate_calls(pc, [-100, 0, 0]),
+                         [1010, 1020, 1030])
 
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
