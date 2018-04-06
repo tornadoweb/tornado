@@ -854,8 +854,8 @@ class TestPeriodicCallbackMath(unittest.TestCase):
 
     @unittest.skipIf(mock is None, 'mock package not present')
     def test_jitter(self):
-        random_times = [0, 1, 0.5, 0.25]
-        expected = [1010, 1025, 1037.5, 1048.75]
+        random_times = [0.5, 1, 0, 0.75]
+        expected = [1010, 1022.5, 1030, 1041.25]
         call_durations = [0] * len(random_times)
         pc = PeriodicCallback(None, 10000, jitter=0.5)
 

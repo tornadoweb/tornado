@@ -1163,9 +1163,12 @@ class PeriodicCallback(object):
     time-related functions in Tornado use seconds.
 
     If ``jitter`` is specified, each callback time will be randomly selected
-    between ``callback_time`` and ``callback_time * (1 + jitter)``.
+    within a window of ``jitter * callback_time`` milliseconds.
     Jitter can be used to reduce alignment of events with similar periods.
     A jitter of 0.1 means allowing a 10% variation in callback time.
+    The window is centered on ``callback_time`` so the total number of calls
+    within a given interval should not be significantly affected by adding
+    jitter.
 
     If the callback runs for longer than ``callback_time`` milliseconds,
     subsequent invocations will be skipped to get back on schedule.
@@ -1230,7 +1233,7 @@ class PeriodicCallback(object):
         callback_time_sec = self.callback_time / 1000.0
         if self.jitter:
             # apply jitter fraction
-            callback_time_sec *= 1 + (self.jitter * random.random())
+            callback_time_sec *= 1 + (self.jitter * (random.random() - 0.5))
         if self._next_timeout <= current_time:
             # The period should be measured from the start of one call
             # to the start of the next. If one call takes too long,
