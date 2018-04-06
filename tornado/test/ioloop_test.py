@@ -795,26 +795,6 @@ class TestPeriodicCallback(unittest.TestCase):
         self.assertEqual(calls, [1010, 1020, 1030, 1040, 1050])
         io_loop.close()
 
-    @unittest.skipIf(mock is None, 'mock package not present')
-    def test_jitter(self):
-        # Check Period
-        calls = []
-        io_loop = FakeTimeIOLoop()
-
-        def cb():
-            calls.append(io_loop.time())
-        pc = PeriodicCallback(cb, 10000, jitter=0.5)
-        io_loop.make_current()
-        random_times = [0, 1, 0.5, 0.25]
-
-        def mock_random():
-            return random_times.pop(0)
-        with mock.patch('random.random', mock_random):
-            pc.start()
-            io_loop.call_later(50, io_loop.stop)
-            io_loop.start()
-        self.assertEqual(calls, [1010, 1025, 1037.5, 1048.75])
-        io_loop.close()
 
 class TestPeriodicCallbackMath(unittest.TestCase):
     def simulate_calls(self, pc, durations):
@@ -871,6 +851,20 @@ class TestPeriodicCallbackMath(unittest.TestCase):
         # ignored.
         self.assertEqual(self.simulate_calls(pc, [-100, 0, 0]),
                          [1010, 1020, 1030])
+
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_jitter(self):
+        random_times = [0, 1, 0.5, 0.25]
+        expected = [1010, 1025, 1037.5, 1048.75]
+        call_durations = [0] * len(random_times)
+        pc = PeriodicCallback(None, 10000, jitter=0.5)
+
+        def mock_random():
+            return random_times.pop(0)
+        with mock.patch('random.random', mock_random):
+            self.assertEqual(self.simulate_calls(pc, call_durations),
+                             expected)
+
 
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
