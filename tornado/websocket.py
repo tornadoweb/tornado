@@ -1201,9 +1201,9 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         assert self.read_future is None
         future = Future()
         self.read_future = future
-        self._receive_frame()
         if callback is not None:
             self.io_loop.add_future(future, callback)
+        self.protocol._receive_frame()
         return future
 
     def on_message(self, message):
