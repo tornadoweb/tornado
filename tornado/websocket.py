@@ -1209,6 +1209,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     def on_message(self, message):
         if self._on_message_callback:
             self._on_message_callback(message)
+            self.protocol._receive_frame()
         else:
             future_set_result_unless_cancelled(self.read_future, message)
             self.read_future = None
