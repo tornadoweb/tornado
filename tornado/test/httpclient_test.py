@@ -20,7 +20,7 @@ from tornado.log import gen_log
 from tornado import netutil
 from tornado.stack_context import ExceptionStackContext, NullContext
 from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test, ExpectLog
-from tornado.test.util import unittest, skipOnTravis
+from tornado.test.util import unittest, skipOnTravis, ignore_deprecation
 from tornado.web import Application, RequestHandler, url
 from tornado.httputil import format_timestamp, HTTPHeaders
 
@@ -212,8 +212,7 @@ Transfer-Encoding: chunked
                 stream.read_until(b"\r\n\r\n",
                                   functools.partial(write_response, stream))
             netutil.add_accept_handler(sock, accept_callback)
-            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
-            resp = self.wait()
+            resp = self.fetch("http://127.0.0.1:%d/" % port)
             resp.rethrow()
             self.assertEqual(resp.body, b"12")
             self.io_loop.remove_handler(sock.fileno())
@@ -272,8 +271,7 @@ Transfer-Encoding: chunked
 
     def test_credentials_in_url(self):
         url = self.get_url("/auth").replace("http://", "http://me:secret@")
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        response = self.fetch(url)
         self.assertEqual(b"Basic " + base64.b64encode(b"me:secret"),
                          response.body)
 
@@ -353,14 +351,14 @@ Transfer-Encoding: chunked
         self.assertEqual(len(exc_info), 1)
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 
+    @gen_test
     def test_configure_defaults(self):
         defaults = dict(user_agent='TestDefaultUserAgent', allow_ipv6=False)
         # Construct a new instance of the configured client class
         client = self.http_client.__class__(force_instance=True,
                                             defaults=defaults)
         try:
-            client.fetch(self.get_url('/user_agent'), callback=self.stop)
-            response = self.wait()
+            response = yield client.fetch(self.get_url('/user_agent'))
             self.assertEqual(response.body, b'TestDefaultUserAgent')
         finally:
             client.close()
@@ -400,8 +398,7 @@ X-XSS-Protection: 1;
                 stream.read_until(b"\r\n\r\n",
                                   functools.partial(write_response, stream))
             netutil.add_accept_handler(sock, accept_callback)
-            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
-            resp = self.wait()
+            resp = self.fetch("http://127.0.0.1:%d/" % port)
             resp.rethrow()
             self.assertEqual(resp.headers['X-XSS-Protection'], "1; mode=block")
             self.io_loop.remove_handler(sock.fileno())
@@ -431,8 +428,9 @@ X-XSS-Protection: 1;
             self.stop()
         self.io_loop.handle_callback_exception = handle_callback_exception
         with NullContext():
-            self.http_client.fetch(self.get_url('/hello'),
-                                   lambda response: 1 / 0)
+            with ignore_deprecation():
+                self.http_client.fetch(self.get_url('/hello'),
+                                       lambda response: 1 / 0)
         self.wait()
         self.assertEqual(exc_info[0][0], ZeroDivisionError)
 

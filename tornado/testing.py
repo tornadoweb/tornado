@@ -397,14 +397,19 @@ class AsyncHTTPTestCase(AsyncTestCase):
         If the path begins with http:// or https://, it will be treated as a
         full URL and will be fetched as-is.
 
+        Unlike awaiting `.AsyncHTTPClient.fetch` in a coroutine, no
+        exception is raised for non-200 response codes (as if the
+        ``raise_error=True`` option were used).
+
         .. versionchanged:: 5.0
            Added support for absolute URLs.
+
         """
         if path.lower().startswith(('http://', 'https://')):
-            self.http_client.fetch(path, self.stop, **kwargs)
+            url = path
         else:
-            self.http_client.fetch(self.get_url(path), self.stop, **kwargs)
-        return self.wait()
+            url = self.get_url(path)
+        return self.io_loop.run_sync(lambda: self.http_client.fetch(url, raise_error=False, **kwargs))
 
     def get_httpserver_options(self):
         """May be overridden by subclasses to return additional

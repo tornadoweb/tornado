@@ -202,9 +202,9 @@ class OpenIdMixin(object):
         url = self._OPENID_ENDPOINT
         if http_client is None:
             http_client = self.get_auth_http_client()
-        http_client.fetch(url, functools.partial(
-            self._on_authentication_verified, callback),
-            method="POST", body=urllib_parse.urlencode(args))
+        fut = http_client.fetch(url, method="POST", body=urllib_parse.urlencode(args))
+        fut.add_done_callback(functools.partial(
+            self._on_authentication_verified, callback))
 
     def _openid_args(self, callback_uri, ax_attrs=[], oauth_scope=None):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)
@@ -254,11 +254,16 @@ class OpenIdMixin(object):
             })
         return args
 
-    def _on_authentication_verified(self, future, response):
-        if response.error or b"is_valid:true" not in response.body:
+    def _on_authentication_verified(self, future, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
             future.set_exception(AuthError(
-                "Invalid OpenID response: %s" % (response.error or
-                                                 response.body)))
+                "Error response %s" % e))
+            return
+        if b"is_valid:true" not in response.body:
+            future.set_exception(AuthError(
+                "Invalid OpenID response: %s" % response.body))
             return
 
         # Make sure we got back at least an email from attribute exchange
@@ -374,17 +379,17 @@ class OAuthMixin(object):
         if http_client is None:
             http_client = self.get_auth_http_client()
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
-            http_client.fetch(
+            fut = http_client.fetch(
                 self._oauth_request_token_url(callback_uri=callback_uri,
-                                              extra_params=extra_params),
-                functools.partial(
-                    self._on_request_token,
-                    self._OAUTH_AUTHORIZE_URL,
-                    callback_uri,
-                    callback))
+                                              extra_params=extra_params))
+            fut.add_done_callback(functools.partial(
+                self._on_request_token,
+                self._OAUTH_AUTHORIZE_URL,
+                callback_uri,
+                callback))
         else:
-            http_client.fetch(
-                self._oauth_request_token_url(),
+            fut = http_client.fetch(self._oauth_request_token_url())
+            fut.add_done_callback(
                 functools.partial(
                     self._on_request_token, self._OAUTH_AUTHORIZE_URL,
                     callback_uri,
@@ -427,8 +432,8 @@ class OAuthMixin(object):
             token["verifier"] = oauth_verifier
         if http_client is None:
             http_client = self.get_auth_http_client()
-        http_client.fetch(self._oauth_access_token_url(token),
-                          functools.partial(self._on_access_token, callback))
+        fut = http_client.fetch(self._oauth_access_token_url(token))
+        fut.add_done_callback(functools.partial(self._on_access_token, callback))
 
     def _oauth_request_token_url(self, callback_uri=None, extra_params=None):
         consumer_token = self._oauth_consumer_token()
@@ -456,9 +461,11 @@ class OAuthMixin(object):
         return url + "?" + urllib_parse.urlencode(args)
 
     def _on_request_token(self, authorize_url, callback_uri, callback,
-                          response):
-        if response.error:
-            raise Exception("Could not get request token: %s" % response.error)
+                          response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
+            raise Exception("Could not get request token: %s" % e)
         request_token = _oauth_parse_response(response.body)
         data = (base64.b64encode(escape.utf8(request_token["key"])) + b"|" +
                 base64.b64encode(escape.utf8(request_token["secret"])))
@@ -498,8 +505,10 @@ class OAuthMixin(object):
         args["oauth_signature"] = signature
         return url + "?" + urllib_parse.urlencode(args)
 
-    def _on_access_token(self, future, response):
-        if response.error:
+    def _on_access_token(self, future, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception:
             future.set_exception(AuthError("Could not fetch access token"))
             return
 
@@ -707,15 +716,16 @@ class OAuth2Mixin(object):
         callback = functools.partial(self._on_oauth2_request, callback)
         http = self.get_auth_http_client()
         if post_args is not None:
-            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
-                       callback=callback)
+            fut = http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args))
         else:
-            http.fetch(url, callback=callback)
+            fut = http.fetch(url)
+        fut.add_done_callback(callback)
 
-    def _on_oauth2_request(self, future, response):
-        if response.error:
-            future.set_exception(AuthError("Error response %s fetching %s" %
-                                           (response.error, response.request.url)))
+    def _on_oauth2_request(self, future, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
+            future.set_exception(AuthError("Error response %s" % e))
             return
 
         future_set_result_unless_cancelled(future, escape.json_decode(response.body))
@@ -857,18 +867,19 @@ class TwitterMixin(OAuthMixin):
         if args:
             url += "?" + urllib_parse.urlencode(args)
         http = self.get_auth_http_client()
-        http_callback = functools.partial(self._on_twitter_request, callback)
+        http_callback = functools.partial(self._on_twitter_request, callback, url)
         if post_args is not None:
-            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
-                       callback=http_callback)
+            fut = http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args))
         else:
-            http.fetch(url, callback=http_callback)
+            fut = http.fetch(url)
+        fut.add_done_callback(http_callback)
 
-    def _on_twitter_request(self, future, response):
-        if response.error:
+    def _on_twitter_request(self, future, url, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
             future.set_exception(AuthError(
-                "Error response %s fetching %s" % (response.error,
-                                                   response.request.url)))
+                "Error response %s fetching %s" % (e, url)))
             return
         future_set_result_unless_cancelled(future, escape.json_decode(response.body))
 
@@ -967,16 +978,18 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             "grant_type": "authorization_code",
         })
 
-        http.fetch(self._OAUTH_ACCESS_TOKEN_URL,
-                   functools.partial(self._on_access_token, callback),
-                   method="POST",
-                   headers={'Content-Type': 'application/x-www-form-urlencoded'},
-                   body=body)
+        fut = http.fetch(self._OAUTH_ACCESS_TOKEN_URL,
+                         method="POST",
+                         headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                         body=body)
+        fut.add_done_callback(functools.partial(self._on_access_token, callback))
 
-    def _on_access_token(self, future, response):
+    def _on_access_token(self, future, response_fut):
         """Callback function for the exchange to the access token."""
-        if response.error:
-            future.set_exception(AuthError('Google auth error: %s' % str(response)))
+        try:
+            response = response_fut.result()
+        except Exception as e:
+            future.set_exception(AuthError('Google auth error: %s' % str(e)))
             return
 
         args = escape.json_decode(response.body)
@@ -1053,15 +1066,17 @@ class FacebookGraphMixin(OAuth2Mixin):
         if extra_fields:
             fields.update(extra_fields)
 
-        http.fetch(self._oauth_request_token_url(**args),
-                   functools.partial(self._on_access_token, redirect_uri, client_id,
-                                     client_secret, callback, fields))
+        fut = http.fetch(self._oauth_request_token_url(**args))
+        fut.add_done_callback(functools.partial(self._on_access_token, redirect_uri, client_id,
+                                                client_secret, callback, fields))
 
     @gen.coroutine
     def _on_access_token(self, redirect_uri, client_id, client_secret,
-                         future, fields, response):
-        if response.error:
-            future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
+                         future, fields, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
+            future.set_exception(AuthError('Facebook auth error: %s' % str(e)))
             return
 
         args = escape.json_decode(response.body)

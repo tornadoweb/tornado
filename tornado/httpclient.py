@@ -42,6 +42,7 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import time
+import warnings
 import weakref
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
@@ -238,6 +239,12 @@ class AsyncHTTPClient(Configurable):
         In the callback interface, `HTTPError` is not automatically raised.
         Instead, you must check the response's ``error`` attribute or
         call its `~HTTPResponse.rethrow` method.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in 6.0. Use the returned `.Future` instead.
+
         """
         if self._closed:
             raise RuntimeError("fetch() called on closed AsyncHTTPClient")
@@ -253,6 +260,8 @@ class AsyncHTTPClient(Configurable):
         request = _RequestProxy(request, self.defaults)
         future = Future()
         if callback is not None:
+            warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                          DeprecationWarning)
             callback = stack_context.wrap(callback)
 
             def handle_future(future):

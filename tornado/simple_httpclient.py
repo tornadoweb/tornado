@@ -498,7 +498,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             final_callback = self.final_callback
             self.final_callback = None
             self._release()
-            self.client.fetch(new_request, final_callback)
+            fut = self.client.fetch(new_request, raise_error=False)
+            fut.add_done_callback(lambda f: final_callback(f.result()))
             self._on_end_request()
             return
         if self.request.streaming_callback:

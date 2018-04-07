@@ -109,21 +109,17 @@ class SSLTestMixin(object):
         # misbehaving.
         with ExpectLog(gen_log, '(SSL Error|uncaught exception)'):
             with ExpectLog(gen_log, 'Uncaught exception', required=False):
-                self.http_client.fetch(
+                response = self.fetch(
                     self.get_url("/").replace('https:', 'http:'),
-                    self.stop,
                     request_timeout=3600,
                     connect_timeout=3600)
-                response = self.wait()
         self.assertEqual(response.code, 599)
 
     def test_error_logging(self):
         # No stack traces are logged for SSL errors.
         with ExpectLog(gen_log, 'SSL Error') as expect_log:
-            self.http_client.fetch(
-                self.get_url("/").replace("https:", "http:"),
-                self.stop)
-            response = self.wait()
+            response = self.fetch(
+                self.get_url("/").replace("https:", "http:"))
             self.assertEqual(response.code, 599)
         self.assertFalse(expect_log.logged_stack)
 

@@ -350,16 +350,14 @@ class AuthRedirectTest(WebTestCase):
                  dict(login_url='http://example.com/login'))]
 
     def test_relative_auth_redirect(self):
-        self.http_client.fetch(self.get_url('/relative'), self.stop,
-                               follow_redirects=False)
-        response = self.wait()
+        response = self.fetch(self.get_url('/relative'),
+                              follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertEqual(response.headers['Location'], '/login?next=%2Frelative')
 
     def test_absolute_auth_redirect(self):
-        self.http_client.fetch(self.get_url('/absolute'), self.stop,
-                               follow_redirects=False)
-        response = self.wait()
+        response = self.fetch(self.get_url('/absolute'),
+                              follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertTrue(re.match(
             'http://example.com/login\?next=http%3A%2F%2F127.0.0.1%3A[0-9]+%2Fabsolute',

@@ -22,7 +22,7 @@ from tornado.netutil import Resolver, bind_sockets
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler  # noqa: E501
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
+from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test
 from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35, exec_test
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
@@ -167,8 +167,8 @@ class SimpleHTTPClientTestMixin(object):
             # Send 4 requests.  Two can be sent immediately, while the others
             # will be queued
             for i in range(4):
-                client.fetch(self.get_url("/trigger"),
-                             lambda response, i=i: (seen.append(i), self.stop()))
+                client.fetch(self.get_url("/trigger")).add_done_callback(
+                    lambda fut, i=i: (seen.append(i), self.stop()))
             self.wait(condition=lambda: len(self.triggers) == 2)
             self.assertEqual(len(client.queue), 2)
 
@@ -187,12 +187,12 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual(set(seen), set([0, 1, 2, 3]))
             self.assertEqual(len(self.triggers), 0)
 
+    @gen_test
     def test_redirect_connection_limit(self):
         # following redirects should not consume additional connections
         with closing(self.create_client(max_clients=1)) as client:
-            client.fetch(self.get_url('/countdown/3'), self.stop,
-                         max_redirects=3)
-            response = self.wait()
+            response = yield client.fetch(self.get_url('/countdown/3'),
+                                          max_redirects=3)
             response.rethrow()
 
     def test_gzip(self):
@@ -236,6 +236,7 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual("POST", response.request.method)
 
     @skipOnTravis
+    @gen_test
     def test_connect_timeout(self):
         timeout = 0.1
         timeout_min, timeout_max = 0.099, 1.0
@@ -245,9 +246,9 @@ class SimpleHTTPClientTestMixin(object):
                 return Future()  # never completes
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
-            client.fetch(self.get_url('/hello'), self.stop,
-                         connect_timeout=timeout)
-            response = self.wait()
+            response = yield client.fetch(self.get_url('/hello'),
+                                          connect_timeout=timeout,
+                                          raise_error=False)
             self.assertEqual(response.code, 599)
             self.assertTrue(timeout_min < response.request_time < timeout_max,
                             response.request_time)
@@ -277,12 +278,10 @@ class SimpleHTTPClientTestMixin(object):
         url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
 
         # ipv6 is currently enabled by default but can be disabled
-        self.http_client.fetch(url, self.stop, allow_ipv6=False)
-        response = self.wait()
+        response = self.fetch(url, allow_ipv6=False)
         self.assertEqual(response.code, 599)
 
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        response = self.fetch(url)
         self.assertEqual(response.body, b"Hello world!")
 
     def xtest_multiple_content_length_accepted(self):
@@ -324,16 +323,14 @@ class SimpleHTTPClientTestMixin(object):
         self.assertTrue(host_re.match(response.body))
 
         url = self.get_url("/host_echo").replace("http://", "http://me:secret@")
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        response = self.fetch(url)
         self.assertTrue(host_re.match(response.body), response.body)
 
     def test_connection_refused(self):
         cleanup_func, port = refusing_port()
         self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
-            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
-            response = self.wait()
+            response = self.fetch("http://127.0.0.1:%d/" % port)
         self.assertEqual(599, response.code)
 
         if sys.platform != 'cygwin':
@@ -350,19 +347,22 @@ class SimpleHTTPClientTestMixin(object):
 
     def test_queue_timeout(self):
         with closing(self.create_client(max_clients=1)) as client:
-            client.fetch(self.get_url('/trigger'), self.stop,
-                         request_timeout=10)
             # Wait for the trigger request to block, not complete.
+            fut1 = client.fetch(self.get_url('/trigger'),
+                                request_timeout=10, raise_error=False)
             self.wait()
-            client.fetch(self.get_url('/hello'), self.stop,
-                         connect_timeout=0.1)
-            response = self.wait()
+            fut2 = client.fetch(self.get_url('/hello'),
+                                connect_timeout=0.1, raise_error=False)
+            fut2.add_done_callback(self.stop)
+            response = self.wait().result()
 
             self.assertEqual(response.code, 599)
             self.assertTrue(response.request_time < 1, response.request_time)
             self.assertEqual(str(response.error), "HTTP 599: Timeout in request queue")
             self.triggers.popleft()()
+            fut1.add_done_callback(self.stop)
             self.wait()
+            fut1.result()
 
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
@@ -640,15 +640,13 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         return Application([url("/hello", HelloWorldHandler), ])
 
     def test_hostname_mapping(self):
-        self.http_client.fetch(
-            'http://www.example.com:%d/hello' % self.get_http_port(), self.stop)
-        response = self.wait()
+        response = self.fetch(
+            'http://www.example.com:%d/hello' % self.get_http_port())
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
 
     def test_port_mapping(self):
-        self.http_client.fetch('http://foo.example.com:8000/hello', self.stop)
-        response = self.wait()
+        response = self.fetch('http://foo.example.com:8000/hello')
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
 
