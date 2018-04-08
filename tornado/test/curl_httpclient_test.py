@@ -32,13 +32,15 @@ class CurlHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
 
 
 class DigestAuthHandler(RequestHandler):
+    def initialize(self, username, password):
+        self.username = username
+        self.password = password
+
     def get(self):
         realm = 'test'
         opaque = 'asdf'
         # Real implementations would use a random nonce.
         nonce = "1234"
-        username = 'foo'
-        password = 'bar'
 
         auth_header = self.request.headers.get('Authorization', None)
         if auth_header is not None:
@@ -53,9 +55,9 @@ class DigestAuthHandler(RequestHandler):
             assert param_dict['realm'] == realm
             assert param_dict['opaque'] == opaque
             assert param_dict['nonce'] == nonce
-            assert param_dict['username'] == username
+            assert param_dict['username'] == self.username
             assert param_dict['uri'] == self.request.path
-            h1 = md5(utf8('%s:%s:%s' % (username, realm, password))).hexdigest()
+            h1 = md5(utf8('%s:%s:%s' % (self.username, realm, self.password))).hexdigest()
             h2 = md5(utf8('%s:%s' % (self.request.method,
                                      self.request.path))).hexdigest()
             digest = md5(utf8('%s:%s:%s' % (h1, nonce, h2))).hexdigest()
@@ -88,7 +90,8 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
 
     def get_app(self):
         return Application([
-            ('/digest', DigestAuthHandler),
+            ('/digest', DigestAuthHandler, {'username': 'foo', 'password': 'bar'}),
+            ('/digest_non_ascii', DigestAuthHandler, {'username': 'foo', 'password': 'barユ£'}),
             ('/custom_reason', CustomReasonHandler),
             ('/custom_fail_reason', CustomFailReasonHandler),
         ])
@@ -133,3 +136,9 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
         for i in range(5):
             response = self.fetch(u'/ユニコード')
             self.assertIsNot(response.error, None)
+
+    def test_basic_auth_non_ascii(self):
+        response = self.fetch('/digest_non_ascii', auth_mode='digest',
+                              auth_username='foo', auth_password='barユ£')
+        self.assertEqual(response.body, b'ok')
+

@@ -450,7 +450,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             else:
                 raise ValueError("Unsupported auth_mode %s" % request.auth_mode)
 
-            curl.setopt(pycurl.USERPWD, native_str(userpwd))
+            curl.setopt(pycurl.USERPWD, utf8(userpwd))
             curl_log.debug("%s %s (username: %r)", request.method, request.url,
                            request.auth_username)
         else:
