@@ -54,8 +54,10 @@ from tornado.util import Configurable
 class HTTPClient(object):
     """A blocking HTTP client.
 
-    This interface is provided for convenience and testing; most applications
-    that are running an IOLoop will want to use `AsyncHTTPClient` instead.
+    This interface is provided to make it easier to share code between
+    synchronous and asynchronous applications. Applications that are
+    running an `.IOLoop` must use `AsyncHTTPClient` instead.
+
     Typical usage looks like this::
 
         http_client = httpclient.HTTPClient()
@@ -70,8 +72,19 @@ class HTTPClient(object):
             # Other errors are possible, such as IOError.
             print("Error: " + str(e))
         http_client.close()
+
+    .. versionchanged:: 5.0
+
+       Due to limitations in `asyncio`, it is no longer possible to
+       use the synchronous ``HTTPClient`` while an `.IOLoop` is running.
+       Use `AsyncHTTPClient` instead.
+
     """
     def __init__(self, async_client_class=None, **kwargs):
+        # Initialize self._closed at the beginning of the constructor
+        # so that an exception raised here doesn't lead to confusing
+        # failures in __del__.
+        self._closed = True
         self._io_loop = IOLoop(make_current=False)
         if async_client_class is None:
             async_client_class = AsyncHTTPClient

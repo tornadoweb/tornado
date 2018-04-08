@@ -47,7 +47,6 @@ import threading
 import time
 import traceback
 import math
-import weakref
 
 from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
 from tornado.log import app_log, gen_log
@@ -185,7 +184,7 @@ class IOLoop(Configurable):
     _current = threading.local()
 
     # In Python 3, _ioloop_for_asyncio maps from asyncio loops to IOLoops.
-    _ioloop_for_asyncio = weakref.WeakKeyDictionary()
+    _ioloop_for_asyncio = dict()
 
     @classmethod
     def configure(cls, impl, **kwargs):
@@ -1214,11 +1213,31 @@ class PeriodicCallback(object):
 
     def _schedule_next(self):
         if self._running:
-            current_time = self.io_loop.time()
-
-            if self._next_timeout <= current_time:
-                callback_time_sec = self.callback_time / 1000.0
-                self._next_timeout += (math.floor((current_time - self._next_timeout) /
-                                                  callback_time_sec) + 1) * callback_time_sec
-
+            self._update_next(self.io_loop.time())
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
+
+    def _update_next(self, current_time):
+        callback_time_sec = self.callback_time / 1000.0
+        if self._next_timeout <= current_time:
+            # The period should be measured from the start of one call
+            # to the start of the next. If one call takes too long,
+            # skip cycles to get back to a multiple of the original
+            # schedule.
+            self._next_timeout += (math.floor((current_time - self._next_timeout) /
+                                              callback_time_sec) + 1) * callback_time_sec
+        else:
+            # If the clock moved backwards, ensure we advance the next
+            # timeout instead of recomputing the same value again.
+            # This may result in long gaps between callbacks if the
+            # clock jumps backwards by a lot, but the far more common
+            # scenario is a small NTP adjustment that should just be
+            # ignored.
+            #
+            # Note that on some systems if time.time() runs slower
+            # than time.monotonic() (most common on windows), we
+            # effectively experience a small backwards time jump on
+            # every iteration because PeriodicCallback uses
+            # time.time() while asyncio schedules callbacks using
+            # time.monotonic().
+            # https://github.com/tornadoweb/tornado/issues/2333
+            self._next_timeout += callback_time_sec

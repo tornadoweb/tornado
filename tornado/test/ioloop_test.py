@@ -785,6 +785,62 @@ class TestPeriodicCallback(unittest.TestCase):
         io_loop.close()
 
 
+class TestPeriodicCallbackMath(unittest.TestCase):
+    def simulate_calls(self, pc, durations):
+        """Simulate a series of calls to the PeriodicCallback.
+
+        Pass a list of call durations in seconds (negative values
+        work to simulate clock adjustments during the call, or more or
+        less equivalently, between calls). This method returns the
+        times at which each call would be made.
+        """
+        calls = []
+        now = 1000
+        pc._next_timeout = now
+        for d in durations:
+            pc._update_next(now)
+            calls.append(pc._next_timeout)
+            now = pc._next_timeout + d
+        return calls
+
+    def test_basic(self):
+        pc = PeriodicCallback(None, 10000)
+        self.assertEqual(self.simulate_calls(pc, [0] * 5),
+                         [1010, 1020, 1030, 1040, 1050])
+
+    def test_overrun(self):
+        # If a call runs for too long, we skip entire cycles to get
+        # back on schedule.
+        call_durations = [9, 9, 10, 11, 20, 20, 35, 35, 0, 0, 0]
+        expected = [
+            1010, 1020, 1030,  # first 3 calls on schedule
+            1050, 1070,  # next 2 delayed one cycle
+            1100, 1130,  # next 2 delayed 2 cycles
+            1170, 1210,  # next 2 delayed 3 cycles
+            1220, 1230,  # then back on schedule.
+        ]
+
+        pc = PeriodicCallback(None, 10000)
+        self.assertEqual(self.simulate_calls(pc, call_durations),
+                         expected)
+
+    def test_clock_backwards(self):
+        pc = PeriodicCallback(None, 10000)
+        # Backwards jumps are ignored, potentially resulting in a
+        # slightly slow schedule (although we assume that when
+        # time.time() and time.monotonic() are different, time.time()
+        # is getting adjusted by NTP and is therefore more accurate)
+        self.assertEqual(self.simulate_calls(pc, [-2, -1, -3, -2, 0]),
+                         [1010, 1020, 1030, 1040, 1050])
+
+        # For big jumps, we should perhaps alter the schedule, but we
+        # don't currently. This trace shows that we run callbacks
+        # every 10s of time.time(), but the first and second calls are
+        # 110s of real time apart because the backwards jump is
+        # ignored.
+        self.assertEqual(self.simulate_calls(pc, [-100, 0, 0]),
+                         [1010, 1020, 1030])
+
 class TestIOLoopConfiguration(unittest.TestCase):
     def run_python(self, *statements):
         statements = [
