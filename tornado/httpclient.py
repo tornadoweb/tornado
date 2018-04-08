@@ -245,6 +245,12 @@ class AsyncHTTPClient(Configurable):
            The ``callback`` argument is deprecated and will be removed
            in 6.0. Use the returned `.Future` instead.
 
+           The ``raise_error=False`` argument currently suppresses
+           *all* errors, encapsulating them in `HTTPResponse` objects
+           with a 599 response code. This will change in Tornado 6.0:
+           ``raise_error=False`` will only affect the `HTTPError`
+           raised when a non-200 response code is used.
+
         """
         if self._closed:
             raise RuntimeError("fetch() called on closed AsyncHTTPClient")
@@ -279,8 +285,13 @@ class AsyncHTTPClient(Configurable):
 
         def handle_response(response):
             if raise_error and response.error:
+                if isinstance(response.error, HTTPError):
+                    response.error.response = response
                 future.set_exception(response.error)
             else:
+                if response.error and not response._error_is_response_code:
+                    warnings.warn("raise_error=False will allow '%s' to be raised in the future" %
+                                  response.error, DeprecationWarning)
                 future_set_result_unless_cancelled(future, response)
         self.fetch_impl(request, handle_response)
         return future
@@ -594,8 +605,10 @@ class HTTPResponse(object):
             self.effective_url = request.url
         else:
             self.effective_url = effective_url
+        self._error_is_response_code = False
         if error is None:
             if self.code < 200 or self.code >= 300:
+                self._error_is_response_code = True
                 self.error = HTTPError(self.code, message=self.reason,
                                        response=self)
             else:

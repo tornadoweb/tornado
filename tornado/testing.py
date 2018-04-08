@@ -13,7 +13,7 @@ from __future__ import absolute_import, division, print_function
 
 try:
     from tornado import gen
-    from tornado.httpclient import AsyncHTTPClient
+    from tornado.httpclient import AsyncHTTPClient, HTTPError, HTTPResponse
     from tornado.httpserver import HTTPServer
     from tornado.simple_httpclient import SimpleAsyncHTTPClient
     from tornado.ioloop import IOLoop, TimeoutError
@@ -404,12 +404,27 @@ class AsyncHTTPTestCase(AsyncTestCase):
         .. versionchanged:: 5.0
            Added support for absolute URLs.
 
+        .. deprecated:: 5.1
+
+           This method currently turns any exception into an
+           `.HTTPResponse` with status code 599. In Tornado 6.0,
+           errors other than `tornado.httpclient.HTTPError`
+           will be passed through, and this method will only suppress
+           errors that would be raised due to non-200 response codes.
+
         """
         if path.lower().startswith(('http://', 'https://')):
             url = path
         else:
             url = self.get_url(path)
-        return self.io_loop.run_sync(lambda: self.http_client.fetch(url, raise_error=False, **kwargs))
+        try:
+            return self.io_loop.run_sync(lambda: self.http_client.fetch(url, **kwargs))
+        except HTTPError as e:
+            if e.response is not None:
+                return e.response
+            return HTTPResponse(None, 599, error=e, effective_url='unknown')
+        except Exception as e:
+            return HTTPResponse(None, 599, error=e, effective_url='unknown')
 
     def get_httpserver_options(self):
         """May be overridden by subclasses to return additional

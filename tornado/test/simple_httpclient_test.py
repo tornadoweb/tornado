@@ -23,7 +23,7 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler  # noqa: E501
 from tornado.test import httpclient_test
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35, exec_test
+from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35, exec_test, ignore_deprecation
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -246,13 +246,14 @@ class SimpleHTTPClientTestMixin(object):
                 return Future()  # never completes
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
-            response = yield client.fetch(self.get_url('/hello'),
-                                          connect_timeout=timeout,
-                                          raise_error=False)
-            self.assertEqual(response.code, 599)
-            self.assertTrue(timeout_min < response.request_time < timeout_max,
-                            response.request_time)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout while connecting")
+            with ignore_deprecation():
+                response = yield client.fetch(self.get_url('/hello'),
+                                              connect_timeout=timeout,
+                                              raise_error=False)
+                self.assertEqual(response.code, 599)
+                self.assertTrue(timeout_min < response.request_time < timeout_max,
+                                response.request_time)
+                self.assertEqual(str(response.error), "HTTP 599: Timeout while connecting")
 
     @skipOnTravis
     def test_request_timeout(self):
@@ -346,23 +347,24 @@ class SimpleHTTPClientTestMixin(object):
                             response.error)
 
     def test_queue_timeout(self):
-        with closing(self.create_client(max_clients=1)) as client:
-            # Wait for the trigger request to block, not complete.
-            fut1 = client.fetch(self.get_url('/trigger'),
-                                request_timeout=10, raise_error=False)
-            self.wait()
-            fut2 = client.fetch(self.get_url('/hello'),
-                                connect_timeout=0.1, raise_error=False)
-            fut2.add_done_callback(self.stop)
-            response = self.wait().result()
+        with ignore_deprecation():
+            with closing(self.create_client(max_clients=1)) as client:
+                # Wait for the trigger request to block, not complete.
+                fut1 = client.fetch(self.get_url('/trigger'),
+                                    request_timeout=10, raise_error=False)
+                self.wait()
+                fut2 = client.fetch(self.get_url('/hello'),
+                                    connect_timeout=0.1, raise_error=False)
+                fut2.add_done_callback(self.stop)
+                response = self.wait().result()
 
-            self.assertEqual(response.code, 599)
-            self.assertTrue(response.request_time < 1, response.request_time)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout in request queue")
-            self.triggers.popleft()()
-            fut1.add_done_callback(self.stop)
-            self.wait()
-            fut1.result()
+                self.assertEqual(response.code, 599)
+                self.assertTrue(response.request_time < 1, response.request_time)
+                self.assertEqual(str(response.error), "HTTP 599: Timeout in request queue")
+                self.triggers.popleft()()
+                fut1.add_done_callback(self.stop)
+                self.wait()
+                fut1.result()
 
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
