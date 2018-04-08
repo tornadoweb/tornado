@@ -16,14 +16,17 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
+from tornado.iostream import UnsatisfiableReadError
 from tornado.log import gen_log
 from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, HTTPStreamClosedError
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler  # noqa: E501
 from tornado.test import httpclient_test
-from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog
-from tornado.test.util import skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35, exec_test
+from tornado.testing import (AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase,
+                             ExpectLog, gen_test)
+from tornado.test.util import (skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35,
+                               exec_test, ignore_deprecation)
 from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
 
 
@@ -167,8 +170,8 @@ class SimpleHTTPClientTestMixin(object):
             # Send 4 requests.  Two can be sent immediately, while the others
             # will be queued
             for i in range(4):
-                client.fetch(self.get_url("/trigger"),
-                             lambda response, i=i: (seen.append(i), self.stop()))
+                client.fetch(self.get_url("/trigger")).add_done_callback(
+                    lambda fut, i=i: (seen.append(i), self.stop()))
             self.wait(condition=lambda: len(self.triggers) == 2)
             self.assertEqual(len(client.queue), 2)
 
@@ -187,12 +190,12 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual(set(seen), set([0, 1, 2, 3]))
             self.assertEqual(len(self.triggers), 0)
 
+    @gen_test
     def test_redirect_connection_limit(self):
         # following redirects should not consume additional connections
         with closing(self.create_client(max_clients=1)) as client:
-            client.fetch(self.get_url('/countdown/3'), self.stop,
-                         max_redirects=3)
-            response = self.wait()
+            response = yield client.fetch(self.get_url('/countdown/3'),
+                                          max_redirects=3)
             response.rethrow()
 
     def test_gzip(self):
@@ -236,6 +239,7 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual("POST", response.request.method)
 
     @skipOnTravis
+    @gen_test
     def test_connect_timeout(self):
         timeout = 0.1
         timeout_min, timeout_max = 0.099, 1.0
@@ -245,13 +249,14 @@ class SimpleHTTPClientTestMixin(object):
                 return Future()  # never completes
 
         with closing(self.create_client(resolver=TimeoutResolver())) as client:
-            client.fetch(self.get_url('/hello'), self.stop,
-                         connect_timeout=timeout)
-            response = self.wait()
-            self.assertEqual(response.code, 599)
-            self.assertTrue(timeout_min < response.request_time < timeout_max,
-                            response.request_time)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout while connecting")
+            with ignore_deprecation():
+                response = yield client.fetch(self.get_url('/hello'),
+                                              connect_timeout=timeout,
+                                              raise_error=False)
+                self.assertEqual(response.code, 599)
+                self.assertTrue(timeout_min < response.request_time < timeout_max,
+                                response.request_time)
+                self.assertEqual(str(response.error), "Timeout while connecting")
 
     @skipOnTravis
     def test_request_timeout(self):
@@ -261,11 +266,12 @@ class SimpleHTTPClientTestMixin(object):
             timeout = 0.5
             timeout_min, timeout_max = 0.4, 0.6
 
-        response = self.fetch('/trigger?wake=false', request_timeout=timeout)
-        self.assertEqual(response.code, 599)
+        with ignore_deprecation():
+            response = self.fetch('/trigger?wake=false', request_timeout=timeout)
+            self.assertEqual(response.code, 599)
         self.assertTrue(timeout_min < response.request_time < timeout_max,
                         response.request_time)
-        self.assertEqual(str(response.error), "HTTP 599: Timeout during request")
+        self.assertEqual(str(response.error), "Timeout during request")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
@@ -277,12 +283,10 @@ class SimpleHTTPClientTestMixin(object):
         url = '%s://[::1]:%d/hello' % (self.get_protocol(), port)
 
         # ipv6 is currently enabled by default but can be disabled
-        self.http_client.fetch(url, self.stop, allow_ipv6=False)
-        response = self.wait()
-        self.assertEqual(response.code, 599)
+        with self.assertRaises(Exception):
+            self.fetch(url, allow_ipv6=False, raise_error=True)
 
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        response = self.fetch(url)
         self.assertEqual(response.body, b"Hello world!")
 
     def xtest_multiple_content_length_accepted(self):
@@ -324,16 +328,15 @@ class SimpleHTTPClientTestMixin(object):
         self.assertTrue(host_re.match(response.body))
 
         url = self.get_url("/host_echo").replace("http://", "http://me:secret@")
-        self.http_client.fetch(url, self.stop)
-        response = self.wait()
+        response = self.fetch(url)
         self.assertTrue(host_re.match(response.body), response.body)
 
     def test_connection_refused(self):
         cleanup_func, port = refusing_port()
         self.addCleanup(cleanup_func)
         with ExpectLog(gen_log, ".*", required=False):
-            self.http_client.fetch("http://127.0.0.1:%d/" % port, self.stop)
-            response = self.wait()
+            with ignore_deprecation():
+                response = self.fetch("http://127.0.0.1:%d/" % port)
         self.assertEqual(599, response.code)
 
         if sys.platform != 'cygwin':
@@ -349,20 +352,24 @@ class SimpleHTTPClientTestMixin(object):
                             response.error)
 
     def test_queue_timeout(self):
-        with closing(self.create_client(max_clients=1)) as client:
-            client.fetch(self.get_url('/trigger'), self.stop,
-                         request_timeout=10)
-            # Wait for the trigger request to block, not complete.
-            self.wait()
-            client.fetch(self.get_url('/hello'), self.stop,
-                         connect_timeout=0.1)
-            response = self.wait()
+        with ignore_deprecation():
+            with closing(self.create_client(max_clients=1)) as client:
+                # Wait for the trigger request to block, not complete.
+                fut1 = client.fetch(self.get_url('/trigger'),
+                                    request_timeout=10, raise_error=False)
+                self.wait()
+                fut2 = client.fetch(self.get_url('/hello'),
+                                    connect_timeout=0.1, raise_error=False)
+                fut2.add_done_callback(self.stop)
+                response = self.wait().result()
 
-            self.assertEqual(response.code, 599)
-            self.assertTrue(response.request_time < 1, response.request_time)
-            self.assertEqual(str(response.error), "HTTP 599: Timeout in request queue")
-            self.triggers.popleft()()
-            self.wait()
+                self.assertEqual(response.code, 599)
+                self.assertTrue(response.request_time < 1, response.request_time)
+                self.assertEqual(str(response.error), "Timeout in request queue")
+                self.triggers.popleft()()
+                fut1.add_done_callback(self.stop)
+                self.wait()
+                fut1.result()
 
     def test_no_content_length(self):
         response = self.fetch("/no_content_length")
@@ -500,25 +507,25 @@ class SimpleHTTPSClientTestCase(SimpleHTTPClientTestMixin, AsyncHTTPSTestCase):
     def test_ssl_options_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception",
                        required=False):
-            resp = self.fetch(
-                "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED))
-        self.assertRaises(ssl.SSLError, resp.rethrow)
+            with self.assertRaises(ssl.SSLError):
+                self.fetch(
+                    "/hello", ssl_options=dict(cert_reqs=ssl.CERT_REQUIRED),
+                    raise_error=True)
 
     def test_ssl_context_handshake_fail(self):
         with ExpectLog(gen_log, "SSL Error|Uncaught exception"):
             ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
             ctx.verify_mode = ssl.CERT_REQUIRED
-            resp = self.fetch("/hello", ssl_options=ctx)
-        self.assertRaises(ssl.SSLError, resp.rethrow)
+            with self.assertRaises(ssl.SSLError):
+                self.fetch("/hello", ssl_options=ctx, raise_error=True)
 
     def test_error_logging(self):
         # No stack traces are logged for SSL errors (in this case,
         # failure to validate the testing self-signed cert).
         # The SSLError is exposed through ssl.SSLError.
         with ExpectLog(gen_log, '.*') as expect_log:
-            response = self.fetch("/", validate_cert=True)
-            self.assertEqual(response.code, 599)
-            self.assertIsInstance(response.error, ssl.SSLError)
+            with self.assertRaises(ssl.SSLError):
+                self.fetch("/", validate_cert=True, raise_error=True)
         self.assertFalse(expect_log.logged_stack)
 
 
@@ -619,7 +626,8 @@ class HTTP204NoContentTestCase(AsyncHTTPTestCase):
     def test_204_invalid_content_length(self):
         # 204 status with non-zero content length is malformed
         with ExpectLog(gen_log, ".*Response with code 204 should not have body"):
-            response = self.fetch("/?error=1")
+            with ignore_deprecation():
+                response = self.fetch("/?error=1")
             if not self.http1:
                 self.skipTest("requires HTTP/1.x")
             if self.http_client.configured_class != SimpleAsyncHTTPClient:
@@ -640,15 +648,13 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
         return Application([url("/hello", HelloWorldHandler), ])
 
     def test_hostname_mapping(self):
-        self.http_client.fetch(
-            'http://www.example.com:%d/hello' % self.get_http_port(), self.stop)
-        response = self.wait()
+        response = self.fetch(
+            'http://www.example.com:%d/hello' % self.get_http_port())
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
 
     def test_port_mapping(self):
-        self.http_client.fetch('http://foo.example.com:8000/hello', self.stop)
-        response = self.wait()
+        response = self.fetch('http://foo.example.com:8000/hello')
         response.rethrow()
         self.assertEqual(response.body, b'Hello world!')
 
@@ -668,8 +674,8 @@ class ResolveTimeoutTestCase(AsyncHTTPTestCase):
         return Application([url("/hello", HelloWorldHandler), ])
 
     def test_resolve_timeout(self):
-        response = self.fetch('/hello', connect_timeout=0.1)
-        self.assertEqual(response.code, 599)
+        with self.assertRaises(TypeError):
+            self.fetch('/hello', connect_timeout=0.1, raise_error=True)
 
 
 class MaxHeaderSizeTest(AsyncHTTPTestCase):
@@ -697,8 +703,8 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
 
     def test_large_headers(self):
         with ExpectLog(gen_log, "Unsatisfiable read"):
-            response = self.fetch('/large')
-        self.assertEqual(response.code, 599)
+            with self.assertRaises(UnsatisfiableReadError):
+                self.fetch('/large', raise_error=True)
 
 
 class MaxBodySizeTest(AsyncHTTPTestCase):
@@ -724,8 +730,8 @@ class MaxBodySizeTest(AsyncHTTPTestCase):
 
     def test_large_body(self):
         with ExpectLog(gen_log, "Malformed HTTP message from None: Content-Length too long"):
-            response = self.fetch('/large')
-        self.assertEqual(response.code, 599)
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch('/large', raise_error=True)
 
 
 class MaxBufferSizeTest(AsyncHTTPTestCase):
@@ -765,5 +771,5 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
         # Make sure the invalid headers are detected
         with ExpectLog(gen_log, ("Malformed HTTP message from None: Response "
                                  "with both Transfer-Encoding and Content-Length")):
-            response = self.fetch('/chunkwithcl')
-        self.assertEqual(response.code, 599)
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch('/chunkwithcl', raise_error=True)

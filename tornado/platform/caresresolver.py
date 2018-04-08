@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 import pycares  # type: ignore
 import socket
 
+from tornado.concurrent import Future
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.netutil import Resolver, is_valid_ip
@@ -55,11 +56,10 @@ class CaresResolver(Resolver):
             addresses = [host]
         else:
             # gethostbyname doesn't take callback as a kwarg
-            self.channel.gethostbyname(host, family, (yield gen.Callback(1)))
-            callback_args = yield gen.Wait(1)
-            assert isinstance(callback_args, gen.Arguments)
-            assert not callback_args.kwargs
-            result, error = callback_args.args
+            fut = Future()
+            self.channel.gethostbyname(host, family,
+                                       lambda result, error: fut.set_result((result, error)))
+            result, error = yield fut
             if error:
                 raise IOError('C-Ares returned error %s: %s while resolving %s' %
                               (error, pycares.errno.strerror(error), host))

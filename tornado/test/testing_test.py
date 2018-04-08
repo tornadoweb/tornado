@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from tornado import gen, ioloop
 from tornado.log import app_log
-from tornado.test.util import unittest, skipBefore35, exec_test
+from tornado.test.util import unittest, skipBefore35, exec_test, ignore_deprecation
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, bind_unused_port, gen_test, ExpectLog
 from tornado.web import Application
 import contextlib
@@ -99,13 +99,15 @@ class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):
     def test_fetch_full_http_url(self):
         path = 'http://localhost:%d/path' % self.external_port
 
-        response = self.fetch(path, request_timeout=0.1)
+        with ignore_deprecation():
+            response = self.fetch(path, request_timeout=0.1, raise_error=False)
         self.assertEqual(response.request.url, path)
 
     def test_fetch_full_https_url(self):
         path = 'https://localhost:%d/path' % self.external_port
 
-        response = self.fetch(path, request_timeout=0.1)
+        with ignore_deprecation():
+            response = self.fetch(path, request_timeout=0.1)
         self.assertEqual(response.request.url, path)
 
     @classmethod

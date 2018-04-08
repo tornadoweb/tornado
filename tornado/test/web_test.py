@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from tornado.concurrent import Future
 from tornado import gen
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring  # noqa: E501
+from tornado.httpclient import HTTPClientError
 from tornado.httputil import format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
@@ -350,16 +351,14 @@ class AuthRedirectTest(WebTestCase):
                  dict(login_url='http://example.com/login'))]
 
     def test_relative_auth_redirect(self):
-        self.http_client.fetch(self.get_url('/relative'), self.stop,
-                               follow_redirects=False)
-        response = self.wait()
+        response = self.fetch(self.get_url('/relative'),
+                              follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertEqual(response.headers['Location'], '/login?next=%2Frelative')
 
     def test_absolute_auth_redirect(self):
-        self.http_client.fetch(self.get_url('/absolute'), self.stop,
-                               follow_redirects=False)
-        response = self.wait()
+        response = self.fetch(self.get_url('/absolute'),
+                              follow_redirects=False)
         self.assertEqual(response.code, 302)
         self.assertTrue(re.match(
             'http://example.com/login\?next=http%3A%2F%2F127.0.0.1%3A[0-9]+%2Fabsolute',
@@ -2334,8 +2333,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
-                response = self.fetch("/high")
-        self.assertEqual(response.code, 599)
+                with self.assertRaises(HTTPClientError):
+                    self.fetch("/high", raise_error=True)
         self.assertEqual(str(self.server_error),
                          "Tried to write 40 bytes less than Content-Length")
 
@@ -2347,8 +2346,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
-                response = self.fetch("/low")
-        self.assertEqual(response.code, 599)
+                with self.assertRaises(HTTPClientError):
+                    self.fetch("/low", raise_error=True)
         self.assertEqual(str(self.server_error),
                          "Tried to write more data than Content-Length")
 
@@ -2369,7 +2368,8 @@ class ClientCloseTest(SimpleHandlerTestCase):
                 self.write('requires HTTP/1.x')
 
     def test_client_close(self):
-        response = self.fetch('/')
+        with ignore_deprecation():
+            response = self.fetch('/')
         if response.body == b'requires HTTP/1.x':
             self.skipTest('requires HTTP/1.x')
         self.assertEqual(response.code, 599)

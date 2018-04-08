@@ -80,6 +80,7 @@ else:
     import tornado.platform.asyncio
     _NON_OWNED_IOLOOPS = tornado.platform.asyncio.AsyncIOMainLoop
 
+
 def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.
 
@@ -386,7 +387,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
         """
         raise NotImplementedError()
 
-    def fetch(self, path, **kwargs):
+    def fetch(self, path, raise_error=False, **kwargs):
         """Convenience method to synchronously fetch a URL.
 
         The given path will be appended to the local server's host and
@@ -397,14 +398,36 @@ class AsyncHTTPTestCase(AsyncTestCase):
         If the path begins with http:// or https://, it will be treated as a
         full URL and will be fetched as-is.
 
+        If ``raise_error`` is True, a `tornado.httpclient.HTTPError` will
+        be raised if the response code is not 200. This is the same behavior
+        as the ``raise_error`` argument to `.AsyncHTTPClient.fetch`, but
+        the default is False here (it's True in `.AsyncHTTPClient`) because
+        tests often need to deal with non-200 response codes.
+
         .. versionchanged:: 5.0
            Added support for absolute URLs.
+
+        .. versionchanged:: 5.1
+
+           Added the ``raise_error`` argument.
+
+        .. deprecated:: 5.1
+
+           This method currently turns any exception into an
+           `.HTTPResponse` with status code 599. In Tornado 6.0,
+           errors other than `tornado.httpclient.HTTPError` will be
+           passed through, and ``raise_error=False`` will only
+           suppress errors that would be raised due to non-200
+           response codes.
+
         """
         if path.lower().startswith(('http://', 'https://')):
-            self.http_client.fetch(path, self.stop, **kwargs)
+            url = path
         else:
-            self.http_client.fetch(self.get_url(path), self.stop, **kwargs)
-        return self.wait()
+            url = self.get_url(path)
+        return self.io_loop.run_sync(
+            lambda: self.http_client.fetch(url, raise_error=raise_error, **kwargs),
+            timeout=get_async_test_timeout())
 
     def get_httpserver_options(self):
         """May be overridden by subclasses to return additional

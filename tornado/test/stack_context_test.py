@@ -6,7 +6,7 @@ from tornado.log import app_log
 from tornado.stack_context import (StackContext, wrap, NullContext, StackContextInconsistentError,
                                    ExceptionStackContext, run_with_stack_context, _state)
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest
+from tornado.test.util import unittest, ignore_deprecation
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
@@ -48,8 +48,9 @@ class HTTPStackContextTest(AsyncHTTPTestCase):
 
     def test_stack_context(self):
         with ExpectLog(app_log, "Uncaught exception GET /"):
-            self.http_client.fetch(self.get_url('/'), self.handle_response)
-            self.wait()
+            with ignore_deprecation():
+                self.http_client.fetch(self.get_url('/'), self.handle_response)
+                self.wait()
         self.assertEqual(self.response.code, 500)
         self.assertTrue(b'got expected exception' in self.response.body)
 

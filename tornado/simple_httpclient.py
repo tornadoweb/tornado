@@ -35,6 +35,39 @@ except ImportError:
     ssl = None
 
 
+class HTTPTimeoutError(HTTPError):
+    """Error raised by SimpleAsyncHTTPClient on timeout.
+
+    For historical reasons, this is a subclass of `.HTTPClientError`
+    which simulates a response code of 599.
+
+    .. versionadded:: 5.1
+    """
+    def __init__(self, message):
+        super(HTTPTimeoutError, self).__init__(599, message=message)
+
+    def __str__(self):
+        return self.message
+
+
+class HTTPStreamClosedError(HTTPError):
+    """Error raised by SimpleAsyncHTTPClient when the underlying stream is closed.
+
+    When a more specific exception is available (such as `ConnectionResetError`),
+    it may be raised instead of this one.
+
+    For historical reasons, this is a subclass of `.HTTPClientError`
+    which simulates a response code of 599.
+
+    .. versionadded:: 5.1
+    """
+    def __init__(self, message):
+        super(HTTPStreamClosedError, self).__init__(599, message=message)
+
+    def __str__(self):
+        return self.message
+
+
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
 
@@ -168,7 +201,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
         error_message = "Timeout {0}".format(info) if info else "Timeout"
         timeout_response = HTTPResponse(
-            request, 599, error=HTTPError(599, error_message),
+            request, 599, error=HTTPTimeoutError(error_message),
             request_time=self.io_loop.time() - request.start_time)
         self.io_loop.add_callback(callback, timeout_response)
         del self.waiting[key]
@@ -261,14 +294,14 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
     def _on_timeout(self, info=None):
         """Timeout callback of _HTTPConnection instance.
 
-        Raise a timeout HTTPError when a timeout occurs.
+        Raise a `HTTPTimeoutError` when a timeout occurs.
 
         :info string key: More detailed timeout information.
         """
         self._timeout = None
         error_message = "Timeout {0}".format(info) if info else "Timeout"
         if self.final_callback is not None:
-            raise HTTPError(599, error_message)
+            raise HTTPTimeoutError(error_message)
 
     def _remove_timeout(self):
         if self._timeout is not None:
@@ -413,7 +446,7 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._remove_timeout()
             if isinstance(value, StreamClosedError):
                 if value.real_error is None:
-                    value = HTTPError(599, "Stream closed")
+                    value = HTTPStreamClosedError("Stream closed")
                 else:
                     value = value.real_error
             self._run_callback(HTTPResponse(self.request, 599, error=value,
@@ -439,8 +472,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             if self.stream.error:
                 raise self.stream.error
             try:
-                raise HTTPError(599, message)
-            except HTTPError:
+                raise HTTPStreamClosedError(message)
+            except HTTPStreamClosedError:
                 self._handle_exception(*sys.exc_info())
 
     def headers_received(self, first_line, headers):
@@ -498,7 +531,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             final_callback = self.final_callback
             self.final_callback = None
             self._release()
-            self.client.fetch(new_request, final_callback)
+            fut = self.client.fetch(new_request, raise_error=False)
+            fut.add_done_callback(lambda f: final_callback(f.result()))
             self._on_end_request()
             return
         if self.request.streaming_callback:
