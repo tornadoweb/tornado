@@ -4,6 +4,7 @@ from tornado import netutil
 from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode, utf8, _unicode, recursive_unicode, native_str
 from tornado.http1connection import HTTP1Connection
+from tornado.httpclient import HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine  # noqa: E501
 from tornado.iostream import IOStream
@@ -109,18 +110,19 @@ class SSLTestMixin(object):
         # misbehaving.
         with ExpectLog(gen_log, '(SSL Error|uncaught exception)'):
             with ExpectLog(gen_log, 'Uncaught exception', required=False):
-                response = self.fetch(
-                    self.get_url("/").replace('https:', 'http:'),
-                    request_timeout=3600,
-                    connect_timeout=3600)
-        self.assertEqual(response.code, 599)
+                with self.assertRaises((IOError, HTTPError)):
+                    self.fetch(
+                        self.get_url("/").replace('https:', 'http:'),
+                        request_timeout=3600,
+                        connect_timeout=3600,
+                        raise_error=True)
 
     def test_error_logging(self):
         # No stack traces are logged for SSL errors.
         with ExpectLog(gen_log, 'SSL Error') as expect_log:
-            response = self.fetch(
-                self.get_url("/").replace("https:", "http:"))
-            self.assertEqual(response.code, 599)
+            with self.assertRaises((IOError, HTTPError)):
+                self.fetch(self.get_url("/").replace("https:", "http:"),
+                           raise_error=True)
         self.assertFalse(expect_log.logged_stack)
 
 # Python's SSL implementation differs significantly between versions.
@@ -961,11 +963,14 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
 
     def test_large_headers(self):
         with ExpectLog(gen_log, "Unsatisfiable read", required=False):
-            response = self.fetch("/", headers={'X-Filler': 'a' * 1000})
-        # 431 is "Request Header Fields Too Large", defined in RFC
-        # 6585. However, many implementations just close the
-        # connection in this case, resulting in a 599.
-        self.assertIn(response.code, (431, 599))
+            try:
+                self.fetch("/", headers={'X-Filler': 'a' * 1000}, raise_error=True)
+                self.fail("did not raise expected exception")
+            except HTTPError as e:
+                # 431 is "Request Header Fields Too Large", defined in RFC
+                # 6585. However, many implementations just close the
+                # connection in this case, resulting in a 599.
+                self.assertIn(e.response.code, (431, 599))
 
 
 @skipOnTravis
@@ -1062,24 +1067,25 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             response = self.fetch('/buffered', method='PUT', body=b'a' * 10240)
         self.assertEqual(response.code, 400)
 
+    @unittest.skipIf(os.name == 'nt', 'flaky on windows')
     def test_large_body_buffered_chunked(self):
+        # This test is flaky on windows for unknown reasons.
         with ExpectLog(gen_log, '.*chunked body too large'):
             response = self.fetch('/buffered', method='PUT',
                                   body_producer=lambda write: write(b'a' * 10240))
-        # this test is flaky on windows; accept 400 (expected) or 599
-        self.assertIn(response.code, [400, 599])
+        self.assertEqual(response.code, 400)
 
     def test_large_body_streaming(self):
         with ExpectLog(gen_log, '.*Content-Length too long'):
             response = self.fetch('/streaming', method='PUT', body=b'a' * 10240)
         self.assertEqual(response.code, 400)
 
+    @unittest.skipIf(os.name == 'nt', 'flaky on windows')
     def test_large_body_streaming_chunked(self):
         with ExpectLog(gen_log, '.*chunked body too large'):
             response = self.fetch('/streaming', method='PUT',
                                   body_producer=lambda write: write(b'a' * 10240))
-        # this test is flaky on windows; accept 400 (expected) or 599
-        self.assertIn(response.code, [400, 599])
+        self.assertEqual(response.code, 400)
 
     def test_large_body_streaming_override(self):
         response = self.fetch('/streaming?expected_size=10240', method='PUT',

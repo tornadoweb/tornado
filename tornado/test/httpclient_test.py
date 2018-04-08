@@ -254,10 +254,10 @@ Transfer-Encoding: chunked
         # on an unknown mode.
         with ExpectLog(gen_log, "uncaught exception", required=False):
             with self.assertRaises((ValueError, HTTPError)):
-                response = self.fetch("/auth", auth_username="Aladdin",
-                                      auth_password="open sesame",
-                                      auth_mode="asdf")
-                response.rethrow()
+                self.fetch("/auth", auth_username="Aladdin",
+                           auth_password="open sesame",
+                           auth_mode="asdf",
+                           raise_error=True)
 
     def test_follow_redirect(self):
         response = self.fetch("/countdown/2", follow_redirects=False)
@@ -481,8 +481,7 @@ X-XSS-Protection: 1;
         # These methods require a body.
         for method in ('POST', 'PUT', 'PATCH'):
             with self.assertRaises(ValueError) as context:
-                resp = self.fetch('/all_methods', method=method)
-                resp.rethrow()
+                self.fetch('/all_methods', method=method, raise_error=True)
             self.assertIn('must not be None', str(context.exception))
 
             resp = self.fetch('/all_methods', method=method,
@@ -492,16 +491,14 @@ X-XSS-Protection: 1;
         # These methods don't allow a body.
         for method in ('GET', 'DELETE', 'OPTIONS'):
             with self.assertRaises(ValueError) as context:
-                resp = self.fetch('/all_methods', method=method, body=b'asdf')
-                resp.rethrow()
+                self.fetch('/all_methods', method=method, body=b'asdf', raise_error=True)
             self.assertIn('must be None', str(context.exception))
 
             # In most cases this can be overridden, but curl_httpclient
             # does not allow body with a GET at all.
             if method != 'GET':
-                resp = self.fetch('/all_methods', method=method, body=b'asdf',
-                                  allow_nonstandard_methods=True)
-                resp.rethrow()
+                self.fetch('/all_methods', method=method, body=b'asdf',
+                           allow_nonstandard_methods=True, raise_error=True)
                 self.assertEqual(resp.code, 200)
 
     # This test causes odd failures with the combination of

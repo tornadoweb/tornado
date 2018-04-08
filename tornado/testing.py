@@ -13,7 +13,7 @@ from __future__ import absolute_import, division, print_function
 
 try:
     from tornado import gen
-    from tornado.httpclient import AsyncHTTPClient, HTTPError, HTTPResponse
+    from tornado.httpclient import AsyncHTTPClient
     from tornado.httpserver import HTTPServer
     from tornado.simple_httpclient import SimpleAsyncHTTPClient
     from tornado.ioloop import IOLoop, TimeoutError
@@ -79,6 +79,7 @@ if asyncio is None:
 else:
     import tornado.platform.asyncio
     _NON_OWNED_IOLOOPS = tornado.platform.asyncio.AsyncIOMainLoop
+
 
 def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.
@@ -386,7 +387,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
         """
         raise NotImplementedError()
 
-    def fetch(self, path, **kwargs):
+    def fetch(self, path, raise_error=False, **kwargs):
         """Convenience method to synchronously fetch a URL.
 
         The given path will be appended to the local server's host and
@@ -397,34 +398,36 @@ class AsyncHTTPTestCase(AsyncTestCase):
         If the path begins with http:// or https://, it will be treated as a
         full URL and will be fetched as-is.
 
-        Unlike awaiting `.AsyncHTTPClient.fetch` in a coroutine, no
-        exception is raised for non-200 response codes (as if the
-        ``raise_error=True`` option were used).
+        If ``raise_error`` is True, a `tornado.httpclient.HTTPError` will
+        be raised if the response code is not 200. This is the same behavior
+        as the ``raise_error`` argument to `.AsyncHTTPClient.fetch`, but
+        the default is False here (it's True in `.AsyncHTTPClient`) because
+        tests often need to deal with non-200 response codes.
 
         .. versionchanged:: 5.0
            Added support for absolute URLs.
+
+        .. versionchanged:: 5.1
+
+           Added the ``raise_error`` argument.
 
         .. deprecated:: 5.1
 
            This method currently turns any exception into an
            `.HTTPResponse` with status code 599. In Tornado 6.0,
-           errors other than `tornado.httpclient.HTTPError`
-           will be passed through, and this method will only suppress
-           errors that would be raised due to non-200 response codes.
+           errors other than `tornado.httpclient.HTTPError` will be
+           passed through, and ``raise_error=False`` will only
+           suppress errors that would be raised due to non-200
+           response codes.
 
         """
         if path.lower().startswith(('http://', 'https://')):
             url = path
         else:
             url = self.get_url(path)
-        try:
-            return self.io_loop.run_sync(lambda: self.http_client.fetch(url, **kwargs))
-        except HTTPError as e:
-            if e.response is not None:
-                return e.response
-            return HTTPResponse(None, 599, error=e, effective_url='unknown')
-        except Exception as e:
-            return HTTPResponse(None, 599, error=e, effective_url='unknown')
+        return self.io_loop.run_sync(
+            lambda: self.http_client.fetch(url, raise_error=raise_error, **kwargs),
+            timeout=get_async_test_timeout())
 
     def get_httpserver_options(self):
         """May be overridden by subclasses to return additional

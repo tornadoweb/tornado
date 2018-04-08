@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from tornado.concurrent import Future
-from tornado import gen
+from tornado import gen, httpclient
 from tornado.escape import json_decode, utf8, to_unicode, recursive_unicode, native_str, to_basestring  # noqa: E501
 from tornado.httputil import format_timestamp
 from tornado.ioloop import IOLoop
@@ -2332,8 +2332,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
-                response = self.fetch("/high")
-        self.assertEqual(response.code, 599)
+                with self.assertRaises(httpclient.HTTPError):
+                    self.fetch("/high", raise_error=True)
         self.assertEqual(str(self.server_error),
                          "Tried to write 40 bytes less than Content-Length")
 
@@ -2345,8 +2345,8 @@ class IncorrectContentLengthTest(SimpleHandlerTestCase):
             with ExpectLog(gen_log,
                            "(Cannot send error response after headers written"
                            "|Failed to flush partial response)"):
-                response = self.fetch("/low")
-        self.assertEqual(response.code, 599)
+                with self.assertRaises(httpclient.HTTPError):
+                    self.fetch("/low", raise_error=True)
         self.assertEqual(str(self.server_error),
                          "Tried to write more data than Content-Length")
 
@@ -2367,7 +2367,8 @@ class ClientCloseTest(SimpleHandlerTestCase):
                 self.write('requires HTTP/1.x')
 
     def test_client_close(self):
-        response = self.fetch('/')
+        with ignore_deprecation():
+            response = self.fetch('/')
         if response.body == b'requires HTTP/1.x':
             self.skipTest('requires HTTP/1.x')
         self.assertEqual(response.code, 599)
