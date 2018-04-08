@@ -13,14 +13,14 @@ import sys
 
 from tornado.escape import to_unicode
 from tornado import gen
-from tornado.httpclient import AsyncHTTPClient, HTTPError
+from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.iostream import UnsatisfiableReadError
 from tornado.log import gen_log
 from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets
-from tornado.simple_httpclient import SimpleAsyncHTTPClient
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, HTTPStreamClosedError
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler  # noqa: E501
 from tornado.test import httpclient_test
 from tornado.testing import (AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase,
@@ -256,7 +256,7 @@ class SimpleHTTPClientTestMixin(object):
                 self.assertEqual(response.code, 599)
                 self.assertTrue(timeout_min < response.request_time < timeout_max,
                                 response.request_time)
-                self.assertEqual(str(response.error), "HTTP 599: Timeout while connecting")
+                self.assertEqual(str(response.error), "Timeout while connecting")
 
     @skipOnTravis
     def test_request_timeout(self):
@@ -271,7 +271,7 @@ class SimpleHTTPClientTestMixin(object):
             self.assertEqual(response.code, 599)
         self.assertTrue(timeout_min < response.request_time < timeout_max,
                         response.request_time)
-        self.assertEqual(str(response.error), "HTTP 599: Timeout during request")
+        self.assertEqual(str(response.error), "Timeout during request")
         # trigger the hanging request to let it clean up after itself
         self.triggers.popleft()()
 
@@ -365,7 +365,7 @@ class SimpleHTTPClientTestMixin(object):
 
                 self.assertEqual(response.code, 599)
                 self.assertTrue(response.request_time < 1, response.request_time)
-                self.assertEqual(str(response.error), "HTTP 599: Timeout in request queue")
+                self.assertEqual(str(response.error), "Timeout in request queue")
                 self.triggers.popleft()()
                 fut1.add_done_callback(self.stop)
                 self.wait()
@@ -730,7 +730,7 @@ class MaxBodySizeTest(AsyncHTTPTestCase):
 
     def test_large_body(self):
         with ExpectLog(gen_log, "Malformed HTTP message from None: Content-Length too long"):
-            with self.assertRaises(HTTPError):
+            with self.assertRaises(HTTPStreamClosedError):
                 self.fetch('/large', raise_error=True)
 
 
@@ -771,5 +771,5 @@ class ChunkedWithContentLengthTest(AsyncHTTPTestCase):
         # Make sure the invalid headers are detected
         with ExpectLog(gen_log, ("Malformed HTTP message from None: Response "
                                  "with both Transfer-Encoding and Content-Length")):
-            with self.assertRaises(HTTPError):
+            with self.assertRaises(HTTPStreamClosedError):
                 self.fetch('/chunkwithcl', raise_error=True)
