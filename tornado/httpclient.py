@@ -637,7 +637,7 @@ class HTTPResponse(object):
         return "%s(%s)" % (self.__class__.__name__, args)
 
 
-class HTTPError(Exception):
+class HTTPClientError(Exception):
     """Exception thrown for an unsuccessful HTTP request.
 
     Attributes:
@@ -650,12 +650,18 @@ class HTTPError(Exception):
     Note that if ``follow_redirects`` is False, redirects become HTTPErrors,
     and you can look at ``error.response.headers['Location']`` to see the
     destination of the redirect.
+
+    .. versionchanged:: 5.1
+
+       Renamed from ``HTTPError`` to ``HTTPClientError`` to avoid collisions with
+       `tornado.web.HTTPError`. The name ``tornado.httpclient.HTTPError`` remains
+       as an alias.
     """
     def __init__(self, code, message=None, response=None):
         self.code = code
         self.message = message or httputil.responses.get(code, "Unknown")
         self.response = response
-        super(HTTPError, self).__init__(code, message, response)
+        super(HTTPClientError, self).__init__(code, message, response)
 
     def __str__(self):
         return "HTTP %d: %s" % (self.code, self.message)
@@ -665,6 +671,9 @@ class HTTPError(Exception):
     # (especially on pypy, which doesn't have the same recursion
     # detection as cpython).
     __repr__ = __str__
+
+
+HTTPError = HTTPClientError
 
 
 class _RequestProxy(object):
