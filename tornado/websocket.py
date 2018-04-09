@@ -713,7 +713,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.start_pinging()
         self._run_callback(self.handler.open, *self.handler.open_args,
                            **self.handler.open_kwargs)
-        self._receive_frame()
 
     def _parse_extensions_header(self, headers):
         extensions = headers.get("Sec-WebSocket-Extensions", '')
@@ -958,13 +957,6 @@ class WebSocketProtocol13(WebSocketProtocol):
         if self._final_frame:
             handled_future = self._handle_message(opcode, data)
 
-        if not self.client_terminated:
-            if handled_future:
-                # on_message is a coroutine, process more frames once it's done.
-                handled_future.add_done_callback(
-                    lambda future: self._receive_frame())
-            else:
-                self._receive_frame()
 
     def _handle_message(self, opcode, data):
         """Execute on_message, returning its Future if it is a coroutine."""
@@ -1097,7 +1089,6 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.connect_future = Future()
         self.protocol = None
         self.read_future = None
-        self.read_queue = collections.deque()
         self.key = base64.b64encode(os.urandom(16))
         self._on_message_callback = on_message_callback
         self.close_code = self.close_reason = None
@@ -1168,7 +1159,6 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         self.protocol = self.get_websocket_protocol()
         self.protocol._process_server_headers(self.key, self.headers)
         self.protocol.start_pinging()
-        self.protocol._receive_frame()
 
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
@@ -1207,24 +1197,22 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         is given it will be called with the future when it is
         ready.
         """
+
         assert self.read_future is None
         future = Future()
-        if self.read_queue:
-            future_set_result_unless_cancelled(future, self.read_queue.popleft())
-        else:
-            self.read_future = future
+        self.read_future = future
         if callback is not None:
             self.io_loop.add_future(future, callback)
+        self.protocol._receive_frame()
         return future
 
     def on_message(self, message):
         if self._on_message_callback:
             self._on_message_callback(message)
-        elif self.read_future is not None:
+            self.protocol._receive_frame()
+        else:
             future_set_result_unless_cancelled(self.read_future, message)
             self.read_future = None
-        else:
-            self.read_queue.append(message)
 
     def ping(self, data=b''):
         """Send ping frame to the remote end.
