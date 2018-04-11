@@ -1410,7 +1410,12 @@ class IOStream(BaseIOStream):
         return future
 
     def _handle_connect(self):
-        err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        try:
+            err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        except socket.error as e:
+            err = e.args[0]
+            if err == errno.ENOPROTOOPT:
+                err = 0
         if err != 0:
             self.error = socket.error(err, os.strerror(err))
             # IOLoop implementations may vary: some of them return
