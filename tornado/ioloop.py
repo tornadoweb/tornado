@@ -47,6 +47,7 @@ import threading
 import time
 import traceback
 import math
+import random
 
 from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
 from tornado.log import app_log, gen_log
@@ -1161,6 +1162,14 @@ class PeriodicCallback(object):
     Note that the timeout is given in milliseconds, while most other
     time-related functions in Tornado use seconds.
 
+    If ``jitter`` is specified, each callback time will be randomly selected
+    within a window of ``jitter * callback_time`` milliseconds.
+    Jitter can be used to reduce alignment of events with similar periods.
+    A jitter of 0.1 means allowing a 10% variation in callback time.
+    The window is centered on ``callback_time`` so the total number of calls
+    within a given interval should not be significantly affected by adding
+    jitter.
+
     If the callback runs for longer than ``callback_time`` milliseconds,
     subsequent invocations will be skipped to get back on schedule.
 
@@ -1168,12 +1177,16 @@ class PeriodicCallback(object):
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+    .. versionchanged:: 5.1
+       The ``jitter`` argument is added.
     """
-    def __init__(self, callback, callback_time):
+    def __init__(self, callback, callback_time, jitter=0):
         self.callback = callback
         if callback_time <= 0:
             raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
+        self.jitter = jitter
         self._running = False
         self._timeout = None
 
@@ -1218,6 +1231,9 @@ class PeriodicCallback(object):
 
     def _update_next(self, current_time):
         callback_time_sec = self.callback_time / 1000.0
+        if self.jitter:
+            # apply jitter fraction
+            callback_time_sec *= 1 + (self.jitter * (random.random() - 0.5))
         if self._next_timeout <= current_time:
             # The period should be measured from the start of one call
             # to the start of the next. If one call takes too long,
