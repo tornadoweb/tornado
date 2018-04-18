@@ -382,7 +382,7 @@ class HTTP1Connection(httputil.HTTPConnection):
         # are fixed.
         header_lines = (native_str(n) + ": " + native_str(v) for n, v in headers.get_all())
         if PY3:
-            lines.extend(l.encode('latin1') for l in header_lines)
+            lines.extend(l.encode('utf-8') for l in header_lines)
         else:
             lines.extend(header_lines)
         for line in lines:
