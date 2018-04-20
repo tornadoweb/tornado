@@ -2825,6 +2825,7 @@ class FallbackHandler(RequestHandler):
     def prepare(self):
         self.fallback(self.request)
         self._finished = True
+        self.on_finish()
 
 
 class OutputTransform(object):
