@@ -372,7 +372,7 @@ class RequestHandler(object):
         elif isinstance(value, bytes):  # py3
             # Non-ascii characters in headers are not well supported,
             # but if you pass bytes, use latin1 so they pass through as-is.
-            retval = value.decode('latin1')
+            retval = value.decode('utf-8')
         elif isinstance(value, unicode_type):  # py2
             # TODO: This is inconsistent with the use of latin1 above,
             # but it's been that way for a long time. Should it change?
