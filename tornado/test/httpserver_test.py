@@ -1152,10 +1152,10 @@ class LegacyInterfaceTest(AsyncHTTPTestCase):
                 request.connection.finish()
                 return
             message = b"Hello world"
-            request.write(utf8("HTTP/1.1 200 OK\r\n"
-                               "Content-Length: %d\r\n\r\n" % len(message)))
-            request.write(message)
-            request.finish()
+            request.connection.write(utf8("HTTP/1.1 200 OK\r\n"
+                                          "Content-Length: %d\r\n\r\n" % len(message)))
+            request.connection.write(message)
+            request.connection.finish()
         return handle_request
 
     def test_legacy_interface(self):
