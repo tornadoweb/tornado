@@ -11,7 +11,7 @@ import socket
 import ssl
 import sys
 
-from tornado.escape import to_unicode
+from tornado.escape import to_unicode, utf8
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
@@ -57,9 +57,16 @@ class HangHandler(RequestHandler):
 
 
 class ContentLengthHandler(RequestHandler):
+    @asynchronous
     def get(self):
-        self.set_header("Content-Length", self.get_argument("value"))
-        self.write("ok")
+        self.stream = self.request.connection.detach()
+        IOLoop.current().spawn_callback(self.write_response)
+
+    @gen.coroutine
+    def write_response(self):
+        yield self.stream.write(utf8("HTTP/1.0 200 OK\r\nContent-Length: %s\r\n\r\nok" %
+                                     self.get_argument("value")))
+        self.stream.close()
 
 
 class HeadHandler(RequestHandler):
@@ -289,16 +296,17 @@ class SimpleHTTPClientTestMixin(object):
         response = self.fetch(url)
         self.assertEqual(response.body, b"Hello world!")
 
-    def xtest_multiple_content_length_accepted(self):
+    def test_multiple_content_length_accepted(self):
         response = self.fetch("/content_length?value=2,2")
         self.assertEqual(response.body, b"ok")
         response = self.fetch("/content_length?value=2,%202,2")
         self.assertEqual(response.body, b"ok")
 
-        response = self.fetch("/content_length?value=2,4")
-        self.assertEqual(response.code, 599)
-        response = self.fetch("/content_length?value=2,%202,3")
-        self.assertEqual(response.code, 599)
+        with ExpectLog(gen_log, ".*Multiple unequal Content-Lengths"):
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/content_length?value=2,4", raise_error=True)
+            with self.assertRaises(HTTPStreamClosedError):
+                self.fetch("/content_length?value=2,%202,3", raise_error=True)
 
     def test_head_request(self):
         response = self.fetch("/head", method="HEAD")
