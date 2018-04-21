@@ -1016,7 +1016,7 @@ class RequestHandler(object):
             self.request.connection.set_close_callback(None)
 
         self.flush(include_footers=True)
-        self.request.finish()
+        self.request.connection.finish()
         self._log()
         self._finished = True
         self.on_finish()

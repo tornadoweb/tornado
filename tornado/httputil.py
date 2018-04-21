@@ -29,6 +29,7 @@ import email.utils
 import numbers
 import re
 import time
+import warnings
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
@@ -380,10 +381,15 @@ class HTTPServerRequest(object):
         """Returns True if this request supports HTTP/1.1 semantics.
 
         .. deprecated:: 4.0
-           Applications are less likely to need this information with the
-           introduction of `.HTTPConnection`.  If you still need it, access
-           the ``version`` attribute directly.
+
+           Applications are less likely to need this information with
+           the introduction of `.HTTPConnection`. If you still need
+           it, access the ``version`` attribute directly. This method
+           will be removed in Tornado 6.0.
+
         """
+        warnings.warn("supports_http_1_1() is deprecated, use request.version instead",
+                      DeprecationWarning)
         return self.version == "HTTP/1.1"
 
     @property
@@ -412,8 +418,10 @@ class HTTPServerRequest(object):
 
         .. deprecated:: 4.0
            Use ``request.connection`` and the `.HTTPConnection` methods
-           to write the response.
+           to write the response. This method will be removed in Tornado 6.0.
         """
+        warnings.warn("req.write deprecated, use req.connection.write and write_headers instead",
+                      DeprecationWarning)
         assert isinstance(chunk, bytes)
         assert self.version.startswith("HTTP/1."), \
             "deprecated interface only supported in HTTP/1.x"
@@ -424,8 +432,10 @@ class HTTPServerRequest(object):
 
         .. deprecated:: 4.0
            Use ``request.connection`` and the `.HTTPConnection` methods
-           to write the response.
+           to write the response. This method will be removed in Tornado 6.0.
         """
+        warnings.warn("req.finish deprecated, use req.connection.finish instead",
+                      DeprecationWarning)
         self.connection.finish()
         self._finish_time = time.time()
 

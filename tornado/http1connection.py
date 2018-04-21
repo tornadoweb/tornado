@@ -277,8 +277,14 @@ class HTTP1Connection(httputil.HTTPConnection):
     def set_close_callback(self, callback):
         """Sets a callback that will be run when the connection is closed.
 
-        .. deprecated:: 4.0
-            Use `.HTTPMessageDelegate.on_connection_close` instead.
+        Note that this callback is slightly different from
+        `.HTTPMessageDelegate.on_connection_close`: The
+        `.HTTPMessageDelegate` method is called when the connection is
+        closed while recieving a message. This callback is used when
+        there is not an active delegate (for example, on the server
+        side this callback is used if the client closes the connection
+        after sending its request but before receiving all the
+        response.
         """
         self._close_callback = stack_context.wrap(callback)
 
