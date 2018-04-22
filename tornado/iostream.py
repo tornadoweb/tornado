@@ -1635,11 +1635,19 @@ class SSLIOStream(IOStream):
         handshake to complete). It may only be called once per stream.
 
         .. versionadded:: 4.2
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         if (self._ssl_connect_callback is not None or
                 self._ssl_connect_future is not None):
             raise RuntimeError("Already waiting")
         if callback is not None:
+            warnings.warn("callback argument is deprecated, use returned Future instead",
+                          DeprecationWarning)
             self._ssl_connect_callback = stack_context.wrap(callback)
             future = None
         else:

@@ -1215,7 +1215,8 @@ class WaitForHandshakeTest(AsyncTestCase):
                 # The handshake has not yet completed.
                 test.assertIsNone(stream.socket.cipher())
                 self.stream = stream
-                stream.wait_for_handshake(self.handshake_done)
+                with ignore_deprecation():
+                    stream.wait_for_handshake(self.handshake_done)
 
             def handshake_done(self):
                 # Now the handshake is done and ssl information is available.
@@ -1250,7 +1251,8 @@ class WaitForHandshakeTest(AsyncTestCase):
 
         class TestServer(TCPServer):
             def handle_stream(self, stream, address):
-                stream.wait_for_handshake(self.handshake_done)
+                with ignore_deprecation():
+                    stream.wait_for_handshake(self.handshake_done)
                 test.assertRaises(RuntimeError, stream.wait_for_handshake)
 
             def handshake_done(self):
@@ -1266,10 +1268,12 @@ class WaitForHandshakeTest(AsyncTestCase):
         class TestServer(TCPServer):
             def handle_stream(self, stream, address):
                 self.stream = stream
-                stream.wait_for_handshake(self.handshake_done)
+                with ignore_deprecation():
+                    stream.wait_for_handshake(self.handshake_done)
 
             def handshake_done(self):
-                self.stream.wait_for_handshake(self.handshake2_done)
+                with ignore_deprecation():
+                    self.stream.wait_for_handshake(self.handshake2_done)
 
             def handshake2_done(self):
                 handshake_future.set_result(None)
