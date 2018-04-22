@@ -560,6 +560,12 @@ class BaseIOStream(object):
 
         .. versionchanged:: 4.5
             Added support for `memoryview` arguments.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         self._check_closed()
         if data:
@@ -569,6 +575,8 @@ class BaseIOStream(object):
             self._write_buffer.append(data)
             self._total_write_index += len(data)
         if callback is not None:
+            warnings.warn("callback argument is deprecated, use returned Future instead",
+                          DeprecationWarning)
             self._write_callback = stack_context.wrap(callback)
             future = None
         else:

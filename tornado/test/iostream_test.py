@@ -109,8 +109,9 @@ class TestIOStreamWebMixin(object):
         def write_callback():
             written[0] = True
             cond.notify()
-        stream.write(b"GET / HTTP/1.0\r\nConnection: close\r\n\r\n",
-                     callback=write_callback)
+        with ignore_deprecation():
+            stream.write(b"GET / HTTP/1.0\r\nConnection: close\r\n\r\n",
+                         callback=write_callback)
         self.assertTrue(not connected[0])
         # by the time the write has flushed, the connection callback has
         # also run

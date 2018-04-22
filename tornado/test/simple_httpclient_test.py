@@ -576,14 +576,16 @@ class HTTP100ContinueTestCase(AsyncHTTPTestCase):
             request.connection.finish()
             return
         self.request = request
-        self.request.connection.stream.write(
-            b"HTTP/1.1 100 CONTINUE\r\n\r\n",
-            self.respond_200)
+        with ignore_deprecation():
+            self.request.connection.stream.write(
+                b"HTTP/1.1 100 CONTINUE\r\n\r\n",
+                self.respond_200)
 
     def respond_200(self):
-        self.request.connection.stream.write(
-            b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA",
-            self.request.connection.stream.close)
+        with ignore_deprecation():
+            self.request.connection.stream.write(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA",
+                self.request.connection.stream.close)
 
     def get_app(self):
         # Not a full Application, but works as an HTTPServer callback
