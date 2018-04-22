@@ -441,7 +441,8 @@ class IOLoop(Configurable):
         .. deprecated:: 5.0
 
            Not implemented on the `asyncio` event loop. Use the environment
-           variable ``PYTHONASYNCIODEBUG=1`` instead.
+           variable ``PYTHONASYNCIODEBUG=1`` instead. This method will be
+           removed in Tornado 6.0.
         """
         raise NotImplementedError()
 
@@ -455,7 +456,8 @@ class IOLoop(Configurable):
         .. deprecated:: 5.0
 
            Not implemented on the `asyncio` event loop. Use the environment
-           variable ``PYTHONASYNCIODEBUG=1`` instead.
+           variable ``PYTHONASYNCIODEBUG=1`` instead. This method will be
+           removed in Tornado 6.0.
         """
         self.set_blocking_signal_threshold(seconds, self.log_stack)
 
@@ -463,6 +465,10 @@ class IOLoop(Configurable):
         """Signal handler to log the stack trace of the current thread.
 
         For use with `set_blocking_signal_threshold`.
+
+        .. deprecated:: 5.1
+
+           This method will be removed in Tornado 6.0.
         """
         gen_log.warning('IOLoop blocked for %f seconds in\n%s',
                         self._blocking_signal_threshold,
@@ -789,6 +795,16 @@ class IOLoop(Configurable):
 
         The exception itself is not passed explicitly, but is available
         in `sys.exc_info`.
+
+        .. versionchanged:: 5.0
+
+           When the `asyncio` event loop is used (which is now the
+           default on Python 3), some callback errors will be handled by
+           `asyncio` instead of this method.
+
+        .. deprecated: 5.1
+
+           Support for this method will be removed in Tornado 6.0.
         """
         app_log.error("Exception in callback %r", callback, exc_info=True)
 
