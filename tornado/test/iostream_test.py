@@ -195,7 +195,8 @@ class TestReadWriteMixin(object):
                 chunks.append(data)
                 cond.notify()
 
-            fut = rs.read_bytes(6, streaming_callback=streaming_callback)
+            with ignore_deprecation():
+                fut = rs.read_bytes(6, streaming_callback=streaming_callback)
             ws.write(b"1234")
             while not chunks:
                 yield cond.wait()
@@ -253,7 +254,8 @@ class TestReadWriteMixin(object):
         self.assertEqual(data, b"abcd\r\n")
 
         streaming_fut = Future()
-        rs.read_until_close(streaming_callback=streaming_fut.set_result)
+        with ignore_deprecation():
+            rs.read_until_close(streaming_callback=streaming_fut.set_result)
         data = yield streaming_fut
         self.assertEqual(data, b"efgh")
         rs.close()
@@ -298,7 +300,8 @@ class TestReadWriteMixin(object):
 
             @gen.coroutine
             def rs_task():
-                yield rs.read_until_close(streaming_callback=chunks.append)
+                with ignore_deprecation():
+                    yield rs.read_until_close(streaming_callback=chunks.append)
 
             @gen.coroutine
             def ws_task():

@@ -423,15 +423,20 @@ class BaseIOStream(object):
 
         .. deprecated:: 5.1
 
-           The ``callback`` argument is deprecated and will be removed
-           in Tornado 6.0. Use the returned `.Future` instead.
+           The ``callback`` and ``streaming_callback`` arguments are
+           deprecated and will be removed in Tornado 6.0. Use the
+           returned `.Future` (and ``partial=True`` for
+           ``streaming_callback``) instead.
 
         """
         future = self._set_read_callback(callback)
         assert isinstance(num_bytes, numbers.Integral)
         self._read_bytes = num_bytes
         self._read_partial = partial
-        self._streaming_callback = stack_context.wrap(streaming_callback)
+        if streaming_callback is not None:
+            warnings.warn("streaming_callback is deprecated, use partial instead",
+                          DeprecationWarning)
+            self._streaming_callback = stack_context.wrap(streaming_callback)
         try:
             self._try_inline_read()
         except:
@@ -511,12 +516,17 @@ class BaseIOStream(object):
 
         .. deprecated:: 5.1
 
-           The ``callback`` argument is deprecated and will be removed
-           in Tornado 6.0. Use the returned `.Future` instead.
+           The ``callback`` and ``streaming_callback`` arguments are
+           deprecated and will be removed in Tornado 6.0. Use the
+           returned `.Future` (and `read_bytes` with ``partial=True``
+           for ``streaming_callback``) instead.
 
         """
         future = self._set_read_callback(callback)
-        self._streaming_callback = stack_context.wrap(streaming_callback)
+        if streaming_callback is not None:
+            warnings.warn("streaming_callback is deprecated, use read_bytes(partial=True) instead",
+                          DeprecationWarning)
+            self._streaming_callback = stack_context.wrap(streaming_callback)
         if self.closed():
             if self._streaming_callback is not None:
                 self._run_read_callback(self._read_buffer_size, True)
