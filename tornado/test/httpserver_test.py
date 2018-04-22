@@ -13,7 +13,7 @@ from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test  # noqa: E501
-from tornado.test.util import unittest, skipOnTravis
+from tornado.test.util import unittest, skipOnTravis, ignore_deprecation
 from tornado.web import Application, RequestHandler, asynchronous, stream_request_body
 
 from contextlib import closing
@@ -209,7 +209,8 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
 
     def raw_fetch(self, headers, body, newline=b"\r\n"):
         with closing(IOStream(socket.socket())) as stream:
-            stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
+            with ignore_deprecation():
+                stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
             self.wait()
             stream.write(
                 newline.join(headers +
@@ -389,8 +390,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
     def setUp(self):
         super(HTTPServerRawTest, self).setUp()
         self.stream = IOStream(socket.socket())
-        self.stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
-        self.wait()
+        self.io_loop.run_sync(lambda: self.stream.connect(('127.0.0.1', self.get_http_port())))
 
     def tearDown(self):
         self.stream.close()
@@ -618,8 +618,7 @@ class UnixSocketTest(AsyncTestCase):
         self.server = HTTPServer(app)
         self.server.add_socket(sock)
         self.stream = IOStream(socket.socket(socket.AF_UNIX))
-        self.stream.connect(self.sockfile, self.stop)
-        self.wait()
+        self.io_loop.run_sync(lambda: self.stream.connect(self.sockfile))
 
     def tearDown(self):
         self.stream.close()

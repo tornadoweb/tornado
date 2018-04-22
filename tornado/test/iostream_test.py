@@ -100,8 +100,9 @@ class TestIOStreamWebMixin(object):
         def connected_callback():
             connected[0] = True
             cond.notify()
-        stream.connect(("127.0.0.1", self.get_http_port()),
-                       callback=connected_callback)
+        with ignore_deprecation():
+            stream.connect(("127.0.0.1", self.get_http_port()),
+                           callback=connected_callback)
         # unlike the previous tests, try to write before the connection
         # is complete.
         written = [False]
@@ -885,7 +886,8 @@ class TestIOStreamMixin(TestReadWriteMixin):
         stream.set_close_callback(self.stop)
         # log messages vary by platform and ioloop implementation
         with ExpectLog(gen_log, ".*", required=False):
-            stream.connect(("127.0.0.1", port), connect_callback)
+            with ignore_deprecation():
+                stream.connect(("127.0.0.1", port), connect_callback)
             self.wait()
         self.assertFalse(self.connect_called)
         self.assertTrue(isinstance(stream.error, socket.error), stream.error)
@@ -909,7 +911,8 @@ class TestIOStreamMixin(TestReadWriteMixin):
         with mock.patch('socket.socket.connect',
                         side_effect=socket.gaierror(errno.EIO, 'boom')):
             with ExpectLog(gen_log, "Connect error"):
-                stream.connect(('localhost', 80), callback=self.stop)
+                with ignore_deprecation():
+                    stream.connect(('localhost', 80), callback=self.stop)
                 self.wait()
                 self.assertIsInstance(stream.error, socket.gaierror)
 

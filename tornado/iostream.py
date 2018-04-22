@@ -1291,9 +1291,17 @@ class IOStream(BaseIOStream):
            ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
            suitably-configured `ssl.SSLContext` to the
            `SSLIOStream` constructor to disable.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         self._connecting = True
         if callback is not None:
+            warnings.warn("callback argument is deprecated, use returned Future instead",
+                          DeprecationWarning)
             self._connect_callback = stack_context.wrap(callback)
             future = None
         else:
@@ -1577,9 +1585,13 @@ class SSLIOStream(IOStream):
 
     def connect(self, address, callback=None, server_hostname=None):
         self._server_hostname = server_hostname
-        # Pass a dummy callback to super.connect(), which is slightly
-        # more efficient than letting it return a Future we ignore.
-        super(SSLIOStream, self).connect(address, callback=lambda: None)
+        # Ignore the result of connect(). If it fails,
+        # wait_for_handshake will raise an error too. This is
+        # necessary for the old semantics of the connect callback
+        # (which takes no arguments). In 6.0 this can be refactored to
+        # be a regular coroutine.
+        fut = super(SSLIOStream, self).connect(address)
+        fut.add_done_callback(lambda f: f.exception())
         return self.wait_for_handshake(callback)
 
     def _handle_connect(self):
