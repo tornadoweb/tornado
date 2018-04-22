@@ -33,6 +33,7 @@ import os
 import socket
 import sys
 import re
+import warnings
 
 from tornado.concurrent import Future
 from tornado import ioloop
@@ -342,6 +343,12 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Added the ``max_bytes`` argument.  The ``callback`` argument is
             now optional and a `.Future` will be returned if it is omitted.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         future = self._set_read_callback(callback)
         self._read_regex = re.compile(regex)
@@ -375,6 +382,11 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Added the ``max_bytes`` argument.  The ``callback`` argument is
             now optional and a `.Future` will be returned if it is omitted.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
         """
         future = self._set_read_callback(callback)
         self._read_delimiter = delimiter
@@ -408,6 +420,12 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Added the ``partial`` argument.  The callback argument is now
             optional and a `.Future` will be returned if it is omitted.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         future = self._set_read_callback(callback)
         assert isinstance(num_bytes, numbers.Integral)
@@ -434,6 +452,12 @@ class BaseIOStream(object):
         entirely filled with read data.
 
         .. versionadded:: 5.0
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         future = self._set_read_callback(callback)
 
@@ -484,6 +508,11 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             The callback argument is now optional and a `.Future` will
             be returned if it is omitted.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
 
         """
         future = self._set_read_callback(callback)
@@ -807,6 +836,8 @@ class BaseIOStream(object):
         assert self._read_callback is None, "Already reading"
         assert self._read_future is None, "Already reading"
         if callback is not None:
+            warnings.warn("callbacks are deprecated, use returned Future instead",
+                          DeprecationWarning)
             self._read_callback = stack_context.wrap(callback)
         else:
             self._read_future = Future()

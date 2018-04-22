@@ -20,6 +20,7 @@ import re
 import socket
 import sys
 import traceback
+import warnings
 
 from tornado.concurrent import (Future, return_future, ReturnValueIgnoredError,
                                 run_on_executor, future_set_result_unless_cancelled)
@@ -249,20 +250,16 @@ class ReturnFutureTest(AsyncTestCase):
 
 
 class CapServer(TCPServer):
+    @gen.coroutine
     def handle_stream(self, stream, address):
-        logging.debug("handle_stream")
-        self.stream = stream
-        self.stream.read_until(b"\n", self.handle_read)
-
-    def handle_read(self, data):
-        logging.debug("handle_read")
+        data = yield stream.read_until(b"\n")
         data = to_unicode(data)
         if data == data.upper():
-            self.stream.write(b"error\talready capitalized\n")
+            stream.write(b"error\talready capitalized\n")
         else:
             # data already has \n
-            self.stream.write(utf8("ok\t%s" % data.upper()))
-        self.stream.close()
+            stream.write(utf8("ok\t%s" % data.upper()))
+        stream.close()
 
 
 class CapError(Exception):
@@ -397,9 +394,29 @@ class ClientTestMixin(object):
 class ManualClientTest(ClientTestMixin, AsyncTestCase):
     client_class = ManualCapClient
 
+    def setUp(self):
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
+        super(ManualClientTest, self).setUp()
+
+    def tearDown(self):
+        super(ManualClientTest, self).tearDown()
+        self.warning_catcher.__exit__(None, None, None)
+
 
 class DecoratorClientTest(ClientTestMixin, AsyncTestCase):
     client_class = DecoratorCapClient
+
+    def setUp(self):
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
+        super(DecoratorClientTest, self).setUp()
+
+    def tearDown(self):
+        super(DecoratorClientTest, self).tearDown()
+        self.warning_catcher.__exit__(None, None, None)
 
 
 class GeneratorClientTest(ClientTestMixin, AsyncTestCase):

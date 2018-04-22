@@ -19,11 +19,13 @@ the protocol (known as "draft 76") and are not compatible with this module.
 from __future__ import absolute_import, division, print_function
 
 import base64
+import contextlib
 import hashlib
 import os
 import struct
 import tornado.escape
 import tornado.web
+import warnings
 import zlib
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
@@ -42,6 +44,14 @@ if PY3:
     xrange = range
 else:
     from urlparse import urlparse  # py3
+
+
+@contextlib.contextmanager
+def ignore_deprecation():
+    """Context manager to ignore deprecation warnings."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', DeprecationWarning)
+        yield
 
 
 class WebSocketError(Exception):
@@ -838,7 +848,8 @@ class WebSocketProtocol13(WebSocketProtocol):
 
     def _receive_frame(self):
         try:
-            self.stream.read_bytes(2, self._on_frame_start)
+            with ignore_deprecation():
+                self.stream.read_bytes(2, self._on_frame_start)
         except StreamClosedError:
             self._abort()
 
@@ -863,16 +874,17 @@ class WebSocketProtocol13(WebSocketProtocol):
             self._abort()
             return
         try:
-            if payloadlen < 126:
-                self._frame_length = payloadlen
-                if self._masked_frame:
-                    self.stream.read_bytes(4, self._on_masking_key)
-                else:
-                    self._read_frame_data(False)
-            elif payloadlen == 126:
-                self.stream.read_bytes(2, self._on_frame_length_16)
-            elif payloadlen == 127:
-                self.stream.read_bytes(8, self._on_frame_length_64)
+            with ignore_deprecation():
+                if payloadlen < 126:
+                    self._frame_length = payloadlen
+                    if self._masked_frame:
+                        self.stream.read_bytes(4, self._on_masking_key)
+                    else:
+                        self._read_frame_data(False)
+                elif payloadlen == 126:
+                    self.stream.read_bytes(2, self._on_frame_length_16)
+                elif payloadlen == 127:
+                    self.stream.read_bytes(8, self._on_frame_length_64)
         except StreamClosedError:
             self._abort()
 
@@ -883,16 +895,18 @@ class WebSocketProtocol13(WebSocketProtocol):
         if new_len > (self.handler.max_message_size or 10 * 1024 * 1024):
             self.close(1009, "message too big")
             return
-        self.stream.read_bytes(
-            self._frame_length,
-            self._on_masked_frame_data if masked else self._on_frame_data)
+        with ignore_deprecation():
+            self.stream.read_bytes(
+                self._frame_length,
+                self._on_masked_frame_data if masked else self._on_frame_data)
 
     def _on_frame_length_16(self, data):
         self._wire_bytes_in += len(data)
         self._frame_length = struct.unpack("!H", data)[0]
         try:
             if self._masked_frame:
-                self.stream.read_bytes(4, self._on_masking_key)
+                with ignore_deprecation():
+                    self.stream.read_bytes(4, self._on_masking_key)
             else:
                 self._read_frame_data(False)
         except StreamClosedError:
@@ -903,7 +917,8 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._frame_length = struct.unpack("!Q", data)[0]
         try:
             if self._masked_frame:
-                self.stream.read_bytes(4, self._on_masking_key)
+                with ignore_deprecation():
+                    self.stream.read_bytes(4, self._on_masking_key)
             else:
                 self._read_frame_data(False)
         except StreamClosedError:
