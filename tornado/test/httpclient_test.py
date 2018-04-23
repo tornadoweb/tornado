@@ -4,7 +4,6 @@ import base64
 import binascii
 from contextlib import closing
 import copy
-import functools
 import sys
 import threading
 import datetime
@@ -190,10 +189,15 @@ class HTTPClientCommonTestCase(AsyncHTTPTestCase):
         # over several ioloop iterations, but the connection is already closed.
         sock, port = bind_unused_port()
         with closing(sock):
-            def write_response(stream, request_data):
+            @gen.coroutine
+            def accept_callback(conn, address):
+                # fake an HTTP server using chunked encoding where the final chunks
+                # and connection close all happen at once
+                stream = IOStream(conn)
+                request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
                     self.skipTest("requires HTTP/1.x")
-                stream.write(b"""\
+                yield stream.write(b"""\
 HTTP/1.1 200 OK
 Transfer-Encoding: chunked
 
@@ -203,14 +207,8 @@ Transfer-Encoding: chunked
 2
 0
 
-""".replace(b"\n", b"\r\n"), callback=stream.close)
-
-            def accept_callback(conn, address):
-                # fake an HTTP server using chunked encoding where the final chunks
-                # and connection close all happen at once
-                stream = IOStream(conn)
-                stream.read_until(b"\r\n\r\n",
-                                  functools.partial(write_response, stream))
+""".replace(b"\n", b"\r\n"))
+                stream.close()
             netutil.add_accept_handler(sock, accept_callback)
             resp = self.fetch("http://127.0.0.1:%d/" % port)
             resp.rethrow()
@@ -383,20 +381,20 @@ Transfer-Encoding: chunked
         # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
         sock, port = bind_unused_port()
         with closing(sock):
-            def write_response(stream, request_data):
+            @gen.coroutine
+            def accept_callback(conn, address):
+                stream = IOStream(conn)
+                request_data = yield stream.read_until(b"\r\n\r\n")
                 if b"HTTP/1." not in request_data:
                     self.skipTest("requires HTTP/1.x")
-                stream.write(b"""\
+                yield stream.write(b"""\
 HTTP/1.1 200 OK
 X-XSS-Protection: 1;
 \tmode=block
 
-""".replace(b"\n", b"\r\n"), callback=stream.close)
+""".replace(b"\n", b"\r\n"))
+                stream.close()
 
-            def accept_callback(conn, address):
-                stream = IOStream(conn)
-                stream.read_until(b"\r\n\r\n",
-                                  functools.partial(write_response, stream))
             netutil.add_accept_handler(sock, accept_callback)
             resp = self.fetch("http://127.0.0.1:%d/" % port)
             resp.rethrow()
