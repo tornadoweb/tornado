@@ -1022,6 +1022,20 @@ class RequestHandler(object):
         self.on_finish()
         self._break_cycles()
 
+    def detach(self):
+        """Take control of the underlying stream.
+
+        Returns the underlying `.IOStream` object and stops all
+        further HTTP processing. Intended for implementing protocols
+        like websockets that tunnel over an HTTP handshake.
+
+        This method is only supported when HTTP/1.1 is used.
+
+        .. versionadded:: 5.1
+        """
+        self._finished = True
+        return self.request.connection.detach()
+
     def _break_cycles(self):
         # Break up a reference cycle between this handler and the
         # _ui_module closures to allow for faster GC on CPython.

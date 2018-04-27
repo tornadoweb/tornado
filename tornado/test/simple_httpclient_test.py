@@ -57,9 +57,8 @@ class HangHandler(RequestHandler):
 
 
 class ContentLengthHandler(RequestHandler):
-    @asynchronous
     def get(self):
-        self.stream = self.request.connection.detach()
+        self.stream = self.detach()
         IOLoop.current().spawn_callback(self.write_response)
 
     @gen.coroutine
@@ -107,13 +106,12 @@ class HostEchoHandler(RequestHandler):
 
 
 class NoContentLengthHandler(RequestHandler):
-    @asynchronous
     def get(self):
         if self.request.version.startswith('HTTP/1'):
             # Emulate the old HTTP/1.0 behavior of returning a body with no
             # content-length.  Tornado handles content-length at the framework
             # level so we have to go around it.
-            stream = self.request.connection.detach()
+            stream = self.detach()
             stream.write(b"HTTP/1.0 200 OK\r\n\r\n"
                          b"hello")
             stream.close()

@@ -145,7 +145,6 @@ class WebSocketHandler(tornado.web.RequestHandler):
         self.stream = None
         self._on_close_called = False
 
-    @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         self.open_args = args
         self.open_kwargs = kwargs
@@ -481,7 +480,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
                 self, compression_options=self.get_compression_options())
 
     def _attach_stream(self):
-        self.stream = self.request.connection.detach()
+        self.stream = self.detach()
         self.stream.set_close_callback(self.on_connection_close)
         # disable non-WS methods
         for method in ["write", "redirect", "set_header", "set_cookie",
