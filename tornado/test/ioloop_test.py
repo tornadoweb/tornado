@@ -25,7 +25,8 @@ from tornado.log import app_log
 from tornado.platform.select import _Select
 from tornado.stack_context import ExceptionStackContext, StackContext, wrap, NullContext
 from tornado.testing import AsyncTestCase, bind_unused_port, ExpectLog, gen_test
-from tornado.test.util import unittest, skipIfNonUnix, skipOnTravis, skipBefore35, exec_test
+from tornado.test.util import (unittest, skipIfNonUnix, skipOnTravis,
+                               skipBefore35, exec_test, ignore_deprecation)
 
 try:
     from concurrent import futures
@@ -535,11 +536,12 @@ class TestIOLoopAddCallback(AsyncTestCase):
             self.assertNotIn('c2', self.active_contexts)
             self.stop()
 
-        with StackContext(functools.partial(self.context, 'c1')):
-            wrapped = wrap(f1)
+        with ignore_deprecation():
+            with StackContext(functools.partial(self.context, 'c1')):
+                wrapped = wrap(f1)
 
-        with StackContext(functools.partial(self.context, 'c2')):
-            self.add_callback(wrapped)
+            with StackContext(functools.partial(self.context, 'c2')):
+                self.add_callback(wrapped)
 
         self.wait()
 
@@ -553,11 +555,12 @@ class TestIOLoopAddCallback(AsyncTestCase):
             self.assertNotIn('c2', self.active_contexts)
             self.stop((foo, bar))
 
-        with StackContext(functools.partial(self.context, 'c1')):
-            wrapped = wrap(f1)
+        with ignore_deprecation():
+            with StackContext(functools.partial(self.context, 'c1')):
+                wrapped = wrap(f1)
 
-        with StackContext(functools.partial(self.context, 'c2')):
-            self.add_callback(wrapped, 1, bar=2)
+            with StackContext(functools.partial(self.context, 'c2')):
+                self.add_callback(wrapped, 1, bar=2)
 
         result = self.wait()
         self.assertEqual(result, (1, 2))

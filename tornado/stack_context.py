@@ -64,12 +64,18 @@ Here are a few rules of thumb for when it's necessary:
   persist across asynchronous calls, create a new `StackContext` (or
   `ExceptionStackContext`), and make your asynchronous calls in a ``with``
   block that references your `StackContext`.
+
+.. deprecated:: 5.1
+
+   The ``stack_context`` package is deprecated and will be removed in
+   Tornado 6.0.
 """
 
 from __future__ import absolute_import, division, print_function
 
 import sys
 import threading
+import warnings
 
 from tornado.util import raise_exc_info
 
@@ -107,6 +113,8 @@ class StackContext(object):
     and not necessary in most applications.
     """
     def __init__(self, context_factory):
+        warnings.warn("StackContext is deprecated and will be removed in Tornado 6.0",
+                      DeprecationWarning)
         self.context_factory = context_factory
         self.contexts = []
         self.active = True
