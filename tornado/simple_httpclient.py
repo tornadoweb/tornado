@@ -265,49 +265,6 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                                           max_buffer_size=self.max_buffer_size)
             fut.add_done_callback(stack_context.wrap(self._on_connect))
 
-    def _get_ssl_options(self, scheme):
-        if scheme == "https":
-            if self.request.ssl_options is not None:
-                return self.request.ssl_options
-            # If we are using the defaults, don't construct a
-            # new SSLContext.
-            if (self.request.validate_cert and
-                    self.request.ca_certs is None and
-                    self.request.client_cert is None and
-                    self.request.client_key is None):
-                return _client_ssl_defaults
-            ssl_ctx = ssl.create_default_context(
-                ssl.Purpose.SERVER_AUTH,
-                cafile=self.request.ca_certs)
-            if not self.request.validate_cert:
-                ssl_ctx.check_hostname = False
-                ssl_ctx.verify_mode = ssl.CERT_NONE
-            if self.request.client_cert is not None:
-                ssl_ctx.load_cert_chain(self.request.client_cert,
-                                        self.request.client_key)
-            if hasattr(ssl, 'OP_NO_COMPRESSION'):
-                # See netutil.ssl_options_to_context
-                ssl_ctx.options |= ssl.OP_NO_COMPRESSION
-            return ssl_ctx
-        return None
-
-    def _on_timeout(self, info=None):
-        """Timeout callback of _HTTPConnection instance.
-
-        Raise a `HTTPTimeoutError` when a timeout occurs.
-
-        :info string key: More detailed timeout information.
-        """
-        self._timeout = None
-        error_message = "Timeout {0}".format(info) if info else "Timeout"
-        if self.final_callback is not None:
-            raise HTTPTimeoutError(error_message)
-
-    def _remove_timeout(self):
-        if self._timeout is not None:
-            self.io_loop.remove_timeout(self._timeout)
-            self._timeout = None
-
     def _on_connect(self, stream_fut):
         stream = stream_fut.result()
         if self.final_callback is None:
@@ -389,6 +346,49 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self._read_response()
         else:
             self._write_body(True)
+
+    def _get_ssl_options(self, scheme):
+        if scheme == "https":
+            if self.request.ssl_options is not None:
+                return self.request.ssl_options
+            # If we are using the defaults, don't construct a
+            # new SSLContext.
+            if (self.request.validate_cert and
+                    self.request.ca_certs is None and
+                    self.request.client_cert is None and
+                    self.request.client_key is None):
+                return _client_ssl_defaults
+            ssl_ctx = ssl.create_default_context(
+                ssl.Purpose.SERVER_AUTH,
+                cafile=self.request.ca_certs)
+            if not self.request.validate_cert:
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = ssl.CERT_NONE
+            if self.request.client_cert is not None:
+                ssl_ctx.load_cert_chain(self.request.client_cert,
+                                        self.request.client_key)
+            if hasattr(ssl, 'OP_NO_COMPRESSION'):
+                # See netutil.ssl_options_to_context
+                ssl_ctx.options |= ssl.OP_NO_COMPRESSION
+            return ssl_ctx
+        return None
+
+    def _on_timeout(self, info=None):
+        """Timeout callback of _HTTPConnection instance.
+
+        Raise a `HTTPTimeoutError` when a timeout occurs.
+
+        :info string key: More detailed timeout information.
+        """
+        self._timeout = None
+        error_message = "Timeout {0}".format(info) if info else "Timeout"
+        if self.final_callback is not None:
+            raise HTTPTimeoutError(error_message)
+
+    def _remove_timeout(self):
+        if self._timeout is not None:
+            self.io_loop.remove_timeout(self._timeout)
+            self._timeout = None
 
     def _create_connection(self, stream):
         stream.set_nodelay(True)
