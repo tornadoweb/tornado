@@ -1368,7 +1368,6 @@ class GenCoroutineSequenceHandler(RequestHandler):
 
 
 class GenCoroutineUnfinishedSequenceHandler(RequestHandler):
-    @asynchronous
     @gen.coroutine
     def get(self):
         yield gen.moment

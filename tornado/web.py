@@ -78,6 +78,7 @@ import time
 import tornado
 import traceback
 import types
+import warnings
 from inspect import isclass
 from io import BytesIO
 
@@ -1702,7 +1703,14 @@ def asynchronous(method):
     .. versionchanged:: 4.3 Returning anything but ``None`` or a
        yieldable object from a method decorated with ``@asynchronous``
        is an error. Such return values were previously ignored silently.
+
+    .. deprecated:: 5.1
+
+       This decorator is deprecated and will be removed in Tornado 6.0.
+       Use coroutines instead.
     """
+    warnings.warn("@asynchronous is deprecated, use coroutines instead",
+                  DeprecationWarning)
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
 

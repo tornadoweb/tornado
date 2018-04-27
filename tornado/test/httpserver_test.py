@@ -14,7 +14,7 @@ from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test  # noqa: E501
 from tornado.test.util import unittest, skipOnTravis, ignore_deprecation
-from tornado.web import Application, RequestHandler, asynchronous, stream_request_body
+from tornado.web import Application, RequestHandler, stream_request_body
 
 from contextlib import closing
 import datetime
@@ -668,9 +668,11 @@ class KeepAliveTest(AsyncHTTPTestCase):
                 self.write(''.join(chr(i % 256) * 1024 for i in range(512)))
 
         class FinishOnCloseHandler(RequestHandler):
-            @asynchronous
+            @gen.coroutine
             def get(self):
                 self.flush()
+                never_finish = Event()
+                yield never_finish.wait()
 
             def on_connection_close(self):
                 # This is not very realistic, but finishing the request

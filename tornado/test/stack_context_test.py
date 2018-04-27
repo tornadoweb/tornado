@@ -18,12 +18,13 @@ class TestRequestHandler(RequestHandler):
     def __init__(self, app, request):
         super(TestRequestHandler, self).__init__(app, request)
 
-    @asynchronous
-    def get(self):
-        logging.debug('in get()')
-        # call self.part2 without a self.async_callback wrapper.  Its
-        # exception should still get thrown
-        IOLoop.current().add_callback(self.part2)
+    with ignore_deprecation():
+        @asynchronous
+        def get(self):
+            logging.debug('in get()')
+            # call self.part2 without a self.async_callback wrapper.  Its
+            # exception should still get thrown
+            IOLoop.current().add_callback(self.part2)
 
     def part2(self):
         logging.debug('in part2()')
