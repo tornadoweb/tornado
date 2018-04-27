@@ -1821,18 +1821,19 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
             MultipleExceptionTest.Handler.exc_count += 1
 
     def test_multi_exception(self):
-        # This test verifies that multiple exceptions raised into the same
-        # ExceptionStackContext do not generate extraneous log entries
-        # due to "Cannot send error response after headers written".
-        # log_exception is called, but it does not proceed to send_error.
-        response = self.fetch('/')
-        self.assertEqual(response.code, 500)
-        response = self.fetch('/')
-        self.assertEqual(response.code, 500)
-        # Each of our two requests generated two exceptions, we should have
-        # seen at least three of them by now (the fourth may still be
-        # in the queue).
-        self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
+        with ignore_deprecation():
+            # This test verifies that multiple exceptions raised into the same
+            # ExceptionStackContext do not generate extraneous log entries
+            # due to "Cannot send error response after headers written".
+            # log_exception is called, but it does not proceed to send_error.
+            response = self.fetch('/')
+            self.assertEqual(response.code, 500)
+            response = self.fetch('/')
+            self.assertEqual(response.code, 500)
+            # Each of our two requests generated two exceptions, we should have
+            # seen at least three of them by now (the fourth may still be
+            # in the queue).
+            self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
 
 
 @wsgi_safe

@@ -417,17 +417,18 @@ class TestIOLoop(AsyncTestCase):
                 self.wait()
 
     def test_spawn_callback(self):
-        # An added callback runs in the test's stack_context, so will be
-        # re-raised in wait().
-        self.io_loop.add_callback(lambda: 1 / 0)
-        with self.assertRaises(ZeroDivisionError):
-            self.wait()
-        # A spawned callback is run directly on the IOLoop, so it will be
-        # logged without stopping the test.
-        self.io_loop.spawn_callback(lambda: 1 / 0)
-        self.io_loop.add_callback(self.stop)
-        with ExpectLog(app_log, "Exception in callback"):
-            self.wait()
+        with ignore_deprecation():
+            # An added callback runs in the test's stack_context, so will be
+            # re-raised in wait().
+            self.io_loop.add_callback(lambda: 1 / 0)
+            with self.assertRaises(ZeroDivisionError):
+                self.wait()
+            # A spawned callback is run directly on the IOLoop, so it will be
+            # logged without stopping the test.
+            self.io_loop.spawn_callback(lambda: 1 / 0)
+            self.io_loop.add_callback(self.stop)
+            with ExpectLog(app_log, "Exception in callback"):
+                self.wait()
 
     @skipIfNonUnix
     def test_remove_handler_from_handler(self):
@@ -605,11 +606,12 @@ class TestIOLoopFutures(AsyncTestCase):
 
         # stack_context propagates to the ioloop callback, but the worker
         # task just has its exceptions caught and saved in the Future.
-        with futures.ThreadPoolExecutor(1) as pool:
-            with ExceptionStackContext(handle_exception):
-                self.io_loop.add_future(pool.submit(task), callback)
-            ready.set()
-        self.wait()
+        with ignore_deprecation():
+            with futures.ThreadPoolExecutor(1) as pool:
+                with ExceptionStackContext(handle_exception):
+                    self.io_loop.add_future(pool.submit(task), callback)
+                ready.set()
+            self.wait()
 
         self.assertEqual(self.exception.args[0], "callback")
         self.assertEqual(self.future.exception().args[0], "worker")

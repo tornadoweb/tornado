@@ -1718,7 +1718,7 @@ def asynchronous(method):
     def wrapper(self, *args, **kwargs):
         self._auto_finish = False
         with stack_context.ExceptionStackContext(
-                self._stack_context_handle_exception):
+                self._stack_context_handle_exception, delay_warning=True):
             result = method(self, *args, **kwargs)
             if result is not None:
                 result = gen.convert_yielded(result)

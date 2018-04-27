@@ -182,8 +182,20 @@ class ExceptionStackContext(object):
 
     If the exception handler returns true, the exception will be
     consumed and will not be propagated to other exception handlers.
+
+    .. versionadded:: 5.1
+
+       The ``delay_warning`` argument can be used to delay the emission
+       of DeprecationWarnings until an exception is caught by the
+       ``ExceptionStackContext``, which facilitates certain transitional
+       use cases.
     """
-    def __init__(self, exception_handler):
+    def __init__(self, exception_handler, delay_warning=False):
+        self.delay_warning = delay_warning
+        if not self.delay_warning:
+            warnings.warn(
+                "StackContext is deprecated and will be removed in Tornado 6.0",
+                DeprecationWarning)
         self.exception_handler = exception_handler
         self.active = True
 
@@ -192,6 +204,10 @@ class ExceptionStackContext(object):
 
     def exit(self, type, value, traceback):
         if type is not None:
+            if self.delay_warning:
+                warnings.warn(
+                    "StackContext is deprecated and will be removed in Tornado 6.0",
+                    DeprecationWarning)
             return self.exception_handler(type, value, traceback)
 
     def __enter__(self):

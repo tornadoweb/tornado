@@ -108,9 +108,10 @@ class CurlHTTPClientTestCase(AsyncHTTPTestCase):
             error_event.set()
             return True
 
-        with ExceptionStackContext(error_handler):
-            request = HTTPRequest(self.get_url('/custom_reason'),
-                                  prepare_curl_callback=lambda curl: 1 / 0)
+        with ignore_deprecation():
+            with ExceptionStackContext(error_handler):
+                request = HTTPRequest(self.get_url('/custom_reason'),
+                                      prepare_curl_callback=lambda curl: 1 / 0)
         yield [error_event.wait(), self.http_client.fetch(request)]
         self.assertEqual(1, len(exc_info))
         self.assertIs(exc_info[0][0], ZeroDivisionError)

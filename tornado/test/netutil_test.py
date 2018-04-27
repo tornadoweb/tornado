@@ -59,8 +59,8 @@ class _ResolverErrorTestMixin(object):
             self.stop(exc_val)
             return True  # Halt propagation.
 
-        with ExceptionStackContext(handler):
-            with ignore_deprecation():
+        with ignore_deprecation():
+            with ExceptionStackContext(handler):
                 self.resolver.resolve('an invalid domain', 80, callback=self.stop)
 
         result = self.wait()

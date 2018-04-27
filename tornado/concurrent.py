@@ -528,7 +528,7 @@ def return_future(f):
             future_set_exc_info(future, (typ, value, tb))
             return True
         exc_info = None
-        with ExceptionStackContext(handle_error):
+        with ExceptionStackContext(handle_error, delay_warning=True):
             try:
                 result = f(*args, **kwargs)
                 if result is not None:

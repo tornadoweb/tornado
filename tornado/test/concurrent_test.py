@@ -143,8 +143,9 @@ class ReturnFutureTest(AsyncTestCase):
 
     def test_delayed_failure(self):
         future = self.delayed_failure()
-        self.io_loop.add_future(future, self.stop)
-        future2 = self.wait()
+        with ignore_deprecation():
+            self.io_loop.add_future(future, self.stop)
+            future2 = self.wait()
         self.assertIs(future, future2)
         with self.assertRaises(ZeroDivisionError):
             future.result()
@@ -362,7 +363,7 @@ class ClientTestMixin(object):
     def test_callback_error(self):
         with ignore_deprecation():
             self.client.capitalize("HELLO", callback=self.stop)
-        self.assertRaisesRegexp(CapError, "already capitalized", self.wait)
+            self.assertRaisesRegexp(CapError, "already capitalized", self.wait)
 
     def test_future(self):
         future = self.client.capitalize("hello")
