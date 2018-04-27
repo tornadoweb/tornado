@@ -555,11 +555,13 @@ class FlowControlHandler(RequestHandler):
         @asynchronous
         def get(self):
             self.write("1")
-            self.flush(callback=self.step2)
+            with ignore_deprecation():
+                self.flush(callback=self.step2)
 
     def step2(self):
         self.write("2")
-        self.flush(callback=self.step3)
+        with ignore_deprecation():
+            self.flush(callback=self.step3)
 
     def step3(self):
         self.write("3")

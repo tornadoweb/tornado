@@ -591,6 +591,11 @@ class HTTPConnection(object):
         The ``version`` field of ``start_line`` is ignored.
 
         Returns a `.Future` if no callback is given.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0.
         """
         raise NotImplementedError()
 
@@ -599,6 +604,11 @@ class HTTPConnection(object):
 
         The callback will be run when the write is complete.  If no callback
         is given, returns a Future.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0.
         """
         raise NotImplementedError()
 
