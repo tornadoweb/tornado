@@ -124,6 +124,13 @@ class TornadoReactor(PosixReactorBase):
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+    .. deprecated:: 5.1
+
+       This class will be removed in Tornado 6.0. Use
+       ``twisted.internet.asyncioreactor.AsyncioSelectorReactor``
+       instead.
+
     """
     def __init__(self):
         self._io_loop = tornado.ioloop.IOLoop.current()
@@ -350,6 +357,10 @@ def install():
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
 
+    .. deprecated:: 5.1
+
+       This functio will be removed in Tornado 6.0. Use
+       ``twisted.internet.asyncioreactor.install`` instead.
     """
     reactor = TornadoReactor()
     from twisted.internet.main import installReactor  # type: ignore
@@ -411,6 +422,11 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
 
     See also :meth:`tornado.ioloop.IOLoop.install` for general notes on
     installing alternative IOLoops.
+
+    .. deprecated:: 5.1
+
+       The `asyncio` event loop will be the only available implementation in
+       Tornado 6.0.
     """
     def initialize(self, reactor=None, **kwargs):
         super(TwistedIOLoop, self).initialize(**kwargs)
