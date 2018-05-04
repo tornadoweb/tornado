@@ -26,17 +26,18 @@ class OpenIdClientLoginHandlerLegacy(RequestHandler, OpenIdMixin):
     def initialize(self, test):
         self._OPENID_ENDPOINT = test.get_url('/openid/server/authenticate')
 
-    @asynchronous
-    def get(self):
-        if self.get_argument('openid.mode', None):
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore', DeprecationWarning)
-                self.get_authenticated_user(
-                    self.on_user, http_client=self.settings['http_client'])
-                return
-        res = self.authenticate_redirect()
-        assert isinstance(res, Future)
-        assert res.done()
+    with ignore_deprecation():
+        @asynchronous
+        def get(self):
+            if self.get_argument('openid.mode', None):
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', DeprecationWarning)
+                    self.get_authenticated_user(
+                        self.on_user, http_client=self.settings['http_client'])
+                    return
+            res = self.authenticate_redirect()
+            assert isinstance(res, Future)
+            assert res.done()
 
     def on_user(self, user):
         if user is None:
@@ -78,16 +79,17 @@ class OAuth1ClientLoginHandlerLegacy(RequestHandler, OAuthMixin):
     def _oauth_consumer_token(self):
         return dict(key='asdf', secret='qwer')
 
-    @asynchronous
-    def get(self):
-        if self.get_argument('oauth_token', None):
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore', DeprecationWarning)
-                self.get_authenticated_user(
-                    self.on_user, http_client=self.settings['http_client'])
-            return
-        res = self.authorize_redirect(http_client=self.settings['http_client'])
-        assert isinstance(res, Future)
+    with ignore_deprecation():
+        @asynchronous
+        def get(self):
+            if self.get_argument('oauth_token', None):
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', DeprecationWarning)
+                    self.get_authenticated_user(
+                        self.on_user, http_client=self.settings['http_client'])
+                return
+            res = self.authorize_redirect(http_client=self.settings['http_client'])
+            assert isinstance(res, Future)
 
     def on_user(self, user):
         if user is None:
@@ -226,12 +228,13 @@ class TwitterClientHandler(RequestHandler, TwitterMixin):
 
 
 class TwitterClientLoginHandlerLegacy(TwitterClientHandler):
-    @asynchronous
-    def get(self):
-        if self.get_argument("oauth_token", None):
-            self.get_authenticated_user(self.on_user)
-            return
-        self.authorize_redirect()
+    with ignore_deprecation():
+        @asynchronous
+        def get(self):
+            if self.get_argument("oauth_token", None):
+                self.get_authenticated_user(self.on_user)
+                return
+            self.authorize_redirect()
 
     def on_user(self, user):
         if user is None:

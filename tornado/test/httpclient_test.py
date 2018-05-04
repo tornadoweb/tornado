@@ -228,8 +228,9 @@ Transfer-Encoding: chunked
             if chunk == b'qwer':
                 1 / 0
 
-        with ExceptionStackContext(error_handler):
-            self.fetch('/chunk', streaming_callback=streaming_cb)
+        with ignore_deprecation():
+            with ExceptionStackContext(error_handler):
+                self.fetch('/chunk', streaming_callback=streaming_cb)
 
         self.assertEqual(chunks, [b'asdf', b'qwer'])
         self.assertEqual(1, len(exc_info))
@@ -344,8 +345,9 @@ Transfer-Encoding: chunked
             if header_line.lower().startswith('content-type:'):
                 1 / 0
 
-        with ExceptionStackContext(error_handler):
-            self.fetch('/chunk', header_callback=header_callback)
+        with ignore_deprecation():
+            with ExceptionStackContext(error_handler):
+                self.fetch('/chunk', header_callback=header_callback)
         self.assertEqual(len(exc_info), 1)
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 

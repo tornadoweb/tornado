@@ -17,6 +17,7 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders, ResponseStartLine
 from tornado.ioloop import IOLoop
 from tornado.iostream import UnsatisfiableReadError
+from tornado.locks import Event
 from tornado.log import gen_log
 from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets
@@ -27,7 +28,7 @@ from tornado.testing import (AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCas
                              ExpectLog, gen_test)
 from tornado.test.util import (skipOnTravis, skipIfNoIPv6, refusing_port, skipBefore35,
                                exec_test, ignore_deprecation)
-from tornado.web import RequestHandler, Application, asynchronous, url, stream_request_body
+from tornado.web import RequestHandler, Application, url, stream_request_body
 
 
 class SimpleHTTPClientCommonTestCase(httpclient_test.HTTPClientCommonTestCase):
@@ -42,24 +43,26 @@ class TriggerHandler(RequestHandler):
         self.queue = queue
         self.wake_callback = wake_callback
 
-    @asynchronous
+    @gen.coroutine
     def get(self):
         logging.debug("queuing trigger")
         self.queue.append(self.finish)
         if self.get_argument("wake", "true") == "true":
             self.wake_callback()
+        never_finish = Event()
+        yield never_finish.wait()
 
 
 class HangHandler(RequestHandler):
-    @asynchronous
+    @gen.coroutine
     def get(self):
-        pass
+        never_finish = Event()
+        yield never_finish.wait()
 
 
 class ContentLengthHandler(RequestHandler):
-    @asynchronous
     def get(self):
-        self.stream = self.request.connection.detach()
+        self.stream = self.detach()
         IOLoop.current().spawn_callback(self.write_response)
 
     @gen.coroutine
@@ -107,13 +110,12 @@ class HostEchoHandler(RequestHandler):
 
 
 class NoContentLengthHandler(RequestHandler):
-    @asynchronous
     def get(self):
         if self.request.version.startswith('HTTP/1'):
             # Emulate the old HTTP/1.0 behavior of returning a body with no
             # content-length.  Tornado handles content-length at the framework
             # level so we have to go around it.
-            stream = self.request.connection.detach()
+            stream = self.detach()
             stream.write(b"HTTP/1.0 200 OK\r\n\r\n"
                          b"hello")
             stream.close()

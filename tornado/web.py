@@ -78,6 +78,7 @@ import time
 import tornado
 import traceback
 import types
+import warnings
 from inspect import isclass
 from io import BytesIO
 
@@ -1022,6 +1023,20 @@ class RequestHandler(object):
         self.on_finish()
         self._break_cycles()
 
+    def detach(self):
+        """Take control of the underlying stream.
+
+        Returns the underlying `.IOStream` object and stops all
+        further HTTP processing. Intended for implementing protocols
+        like websockets that tunnel over an HTTP handshake.
+
+        This method is only supported when HTTP/1.1 is used.
+
+        .. versionadded:: 5.1
+        """
+        self._finished = True
+        return self.request.connection.detach()
+
     def _break_cycles(self):
         # Break up a reference cycle between this handler and the
         # _ui_module closures to allow for faster GC on CPython.
@@ -1688,7 +1703,14 @@ def asynchronous(method):
     .. versionchanged:: 4.3 Returning anything but ``None`` or a
        yieldable object from a method decorated with ``@asynchronous``
        is an error. Such return values were previously ignored silently.
+
+    .. deprecated:: 5.1
+
+       This decorator is deprecated and will be removed in Tornado 6.0.
+       Use coroutines instead.
     """
+    warnings.warn("@asynchronous is deprecated, use coroutines instead",
+                  DeprecationWarning)
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
 
@@ -1696,7 +1718,7 @@ def asynchronous(method):
     def wrapper(self, *args, **kwargs):
         self._auto_finish = False
         with stack_context.ExceptionStackContext(
-                self._stack_context_handle_exception):
+                self._stack_context_handle_exception, delay_warning=True):
             result = method(self, *args, **kwargs)
             if result is not None:
                 result = gen.convert_yielded(result)

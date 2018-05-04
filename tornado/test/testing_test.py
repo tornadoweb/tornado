@@ -33,12 +33,13 @@ def set_environ(name, value):
 
 class AsyncTestCaseTest(AsyncTestCase):
     def test_exception_in_callback(self):
-        self.io_loop.add_callback(lambda: 1 / 0)
-        try:
-            self.wait()
-            self.fail("did not get expected exception")
-        except ZeroDivisionError:
-            pass
+        with ignore_deprecation():
+            self.io_loop.add_callback(lambda: 1 / 0)
+            try:
+                self.wait()
+                self.fail("did not get expected exception")
+            except ZeroDivisionError:
+                pass
 
     def test_wait_timeout(self):
         time = self.io_loop.time
@@ -69,15 +70,16 @@ class AsyncTestCaseTest(AsyncTestCase):
         self.wait(timeout=0.15)
 
     def test_multiple_errors(self):
-        def fail(message):
-            raise Exception(message)
-        self.io_loop.add_callback(lambda: fail("error one"))
-        self.io_loop.add_callback(lambda: fail("error two"))
-        # The first error gets raised; the second gets logged.
-        with ExpectLog(app_log, "multiple unhandled exceptions"):
-            with self.assertRaises(Exception) as cm:
-                self.wait()
-        self.assertEqual(str(cm.exception), "error one")
+        with ignore_deprecation():
+            def fail(message):
+                raise Exception(message)
+            self.io_loop.add_callback(lambda: fail("error one"))
+            self.io_loop.add_callback(lambda: fail("error two"))
+            # The first error gets raised; the second gets logged.
+            with ExpectLog(app_log, "multiple unhandled exceptions"):
+                with self.assertRaises(Exception) as cm:
+                    self.wait()
+            self.assertEqual(str(cm.exception), "error one")
 
 
 class AsyncHTTPTestCaseTest(AsyncHTTPTestCase):

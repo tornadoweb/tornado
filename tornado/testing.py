@@ -265,7 +265,7 @@ class AsyncTestCase(unittest.TestCase):
             raise_exc_info(failure)
 
     def run(self, result=None):
-        with ExceptionStackContext(self._handle_exception):
+        with ExceptionStackContext(self._handle_exception, delay_warning=True):
             super(AsyncTestCase, self).run(result)
         # As a last resort, if an exception escaped super.run() and wasn't
         # re-raised in tearDown, raise it here.  This will cause the
@@ -279,6 +279,10 @@ class AsyncTestCase(unittest.TestCase):
 
         Keyword arguments or a single positional argument passed to `stop()` are
         saved and will be returned by `wait()`.
+
+        .. deprecated:: 5.1
+
+           `stop` and `wait` are deprecated; use ``@gen_test`` instead.
         """
         assert _arg is None or not kwargs
         self.__stop_args = kwargs or _arg
@@ -300,6 +304,10 @@ class AsyncTestCase(unittest.TestCase):
 
         .. versionchanged:: 3.1
            Added the ``ASYNC_TEST_TIMEOUT`` environment variable.
+
+        .. deprecated:: 5.1
+
+           `stop` and `wait` are deprecated; use ``@gen_test`` instead.
         """
         if timeout is None:
             timeout = get_async_test_timeout()

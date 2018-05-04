@@ -8,6 +8,7 @@ from tornado.httputil import format_timestamp
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import locale
+from tornado.locks import Event
 from tornado.log import app_log, gen_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
@@ -369,9 +370,11 @@ class ConnectionCloseHandler(RequestHandler):
     def initialize(self, test):
         self.test = test
 
-    @asynchronous
+    @gen.coroutine
     def get(self):
         self.test.on_handler_waiting()
+        never_finish = Event()
+        yield never_finish.wait()
 
     def on_connection_close(self):
         self.test.on_connection_close()
@@ -548,14 +551,17 @@ class OptionalPathHandler(RequestHandler):
 class FlowControlHandler(RequestHandler):
     # These writes are too small to demonstrate real flow control,
     # but at least it shows that the callbacks get run.
-    @asynchronous
-    def get(self):
-        self.write("1")
-        self.flush(callback=self.step2)
+    with ignore_deprecation():
+        @asynchronous
+        def get(self):
+            self.write("1")
+            with ignore_deprecation():
+                self.flush(callback=self.step2)
 
     def step2(self):
         self.write("2")
-        self.flush(callback=self.step3)
+        with ignore_deprecation():
+            self.flush(callback=self.step3)
 
     def step3(self):
         self.write("3")
@@ -1805,27 +1811,29 @@ class MultipleExceptionTest(SimpleHandlerTestCase):
     class Handler(RequestHandler):
         exc_count = 0
 
-        @asynchronous
-        def get(self):
-            IOLoop.current().add_callback(lambda: 1 / 0)
-            IOLoop.current().add_callback(lambda: 1 / 0)
+        with ignore_deprecation():
+            @asynchronous
+            def get(self):
+                IOLoop.current().add_callback(lambda: 1 / 0)
+                IOLoop.current().add_callback(lambda: 1 / 0)
 
         def log_exception(self, typ, value, tb):
             MultipleExceptionTest.Handler.exc_count += 1
 
     def test_multi_exception(self):
-        # This test verifies that multiple exceptions raised into the same
-        # ExceptionStackContext do not generate extraneous log entries
-        # due to "Cannot send error response after headers written".
-        # log_exception is called, but it does not proceed to send_error.
-        response = self.fetch('/')
-        self.assertEqual(response.code, 500)
-        response = self.fetch('/')
-        self.assertEqual(response.code, 500)
-        # Each of our two requests generated two exceptions, we should have
-        # seen at least three of them by now (the fourth may still be
-        # in the queue).
-        self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
+        with ignore_deprecation():
+            # This test verifies that multiple exceptions raised into the same
+            # ExceptionStackContext do not generate extraneous log entries
+            # due to "Cannot send error response after headers written".
+            # log_exception is called, but it does not proceed to send_error.
+            response = self.fetch('/')
+            self.assertEqual(response.code, 500)
+            response = self.fetch('/')
+            self.assertEqual(response.code, 500)
+            # Each of our two requests generated two exceptions, we should have
+            # seen at least three of them by now (the fourth may still be
+            # in the queue).
+            self.assertGreater(MultipleExceptionTest.Handler.exc_count, 2)
 
 
 @wsgi_safe

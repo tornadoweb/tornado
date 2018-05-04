@@ -136,7 +136,7 @@ def _auth_return_future(f):
             else:
                 future_set_exc_info(future, (typ, value, tb))
                 return True
-        with ExceptionStackContext(handle_exception):
+        with ExceptionStackContext(handle_exception, delay_warning=True):
             f(*args, **kwargs)
         return future
     return wrapper

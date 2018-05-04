@@ -64,12 +64,18 @@ Here are a few rules of thumb for when it's necessary:
   persist across asynchronous calls, create a new `StackContext` (or
   `ExceptionStackContext`), and make your asynchronous calls in a ``with``
   block that references your `StackContext`.
+
+.. deprecated:: 5.1
+
+   The ``stack_context`` package is deprecated and will be removed in
+   Tornado 6.0.
 """
 
 from __future__ import absolute_import, division, print_function
 
 import sys
 import threading
+import warnings
 
 from tornado.util import raise_exc_info
 
@@ -107,6 +113,8 @@ class StackContext(object):
     and not necessary in most applications.
     """
     def __init__(self, context_factory):
+        warnings.warn("StackContext is deprecated and will be removed in Tornado 6.0",
+                      DeprecationWarning)
         self.context_factory = context_factory
         self.contexts = []
         self.active = True
@@ -174,8 +182,20 @@ class ExceptionStackContext(object):
 
     If the exception handler returns true, the exception will be
     consumed and will not be propagated to other exception handlers.
+
+    .. versionadded:: 5.1
+
+       The ``delay_warning`` argument can be used to delay the emission
+       of DeprecationWarnings until an exception is caught by the
+       ``ExceptionStackContext``, which facilitates certain transitional
+       use cases.
     """
-    def __init__(self, exception_handler):
+    def __init__(self, exception_handler, delay_warning=False):
+        self.delay_warning = delay_warning
+        if not self.delay_warning:
+            warnings.warn(
+                "StackContext is deprecated and will be removed in Tornado 6.0",
+                DeprecationWarning)
         self.exception_handler = exception_handler
         self.active = True
 
@@ -184,6 +204,10 @@ class ExceptionStackContext(object):
 
     def exit(self, type, value, traceback):
         if type is not None:
+            if self.delay_warning:
+                warnings.warn(
+                    "StackContext is deprecated and will be removed in Tornado 6.0",
+                    DeprecationWarning)
             return self.exception_handler(type, value, traceback)
 
     def __enter__(self):

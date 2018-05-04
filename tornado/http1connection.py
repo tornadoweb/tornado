@@ -21,6 +21,7 @@
 from __future__ import absolute_import, division, print_function
 
 import re
+import warnings
 
 from tornado.concurrent import (Future, future_add_done_callback,
                                 future_set_result_unless_cancelled)
@@ -401,6 +402,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             future.exception()
         else:
             if callback is not None:
+                warnings.warn("callback argument is deprecated, use returned Future instead",
+                              DeprecationWarning)
                 self._write_callback = stack_context.wrap(callback)
             else:
                 future = self._write_future = Future()
@@ -440,6 +443,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._write_future.exception()
         else:
             if callback is not None:
+                warnings.warn("callback argument is deprecated, use returned Future instead",
+                              DeprecationWarning)
                 self._write_callback = stack_context.wrap(callback)
             else:
                 future = self._write_future = Future()
