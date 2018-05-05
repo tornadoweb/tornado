@@ -181,6 +181,15 @@ class WSGIAdapter(object):
     that it is not possible to use `.AsyncHTTPClient`, or the
     `tornado.auth` or `tornado.websocket` modules.
 
+    In multithreaded WSGI servers on Python 3, it may be necessary to
+    permit `asyncio` to create event loops on any thread. Run the
+    following at startup (typically import time for WSGI
+    applications)::
+
+        import asyncio
+        from tornado.platform.asyncio import AnyThreadEventLoopPolicy
+        asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+
     .. versionadded:: 4.0
 
     .. deprecated:: 5.1
