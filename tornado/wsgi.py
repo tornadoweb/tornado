@@ -33,6 +33,7 @@ from __future__ import absolute_import, division, print_function
 import sys
 from io import BytesIO
 import tornado
+import warnings
 
 from tornado.concurrent import Future
 from tornado import escape
@@ -76,6 +77,7 @@ class WSGIApplication(web.Application):
     .. deprecated:: 4.0
 
        Use a regular `.Application` and wrap it in `WSGIAdapter` instead.
+       This class will be removed in Tornado 6.0.
     """
     def __call__(self, environ, start_response):
         return WSGIAdapter(self)(environ, start_response)
@@ -180,8 +182,15 @@ class WSGIAdapter(object):
     `tornado.auth` or `tornado.websocket` modules.
 
     .. versionadded:: 4.0
+
+    .. deprecated:: 5.1
+
+       This class is deprecated and will be removed in Tornado 6.0.
+       Use Tornado's `.HTTPServer` instead of a WSGI container.
     """
     def __init__(self, application):
+        warnings.warn("WSGIAdapter is deprecated, use Tornado's HTTPServer instead",
+                      DeprecationWarning)
         if isinstance(application, WSGIApplication):
             self.application = lambda request: web.Application.__call__(
                 application, request)

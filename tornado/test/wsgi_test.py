@@ -3,6 +3,7 @@ from wsgiref.validate import validator
 
 from tornado.escape import json_decode
 from tornado.test.httpserver_test import TypeCheckHandler
+from tornado.test.util import ignore_deprecation
 from tornado.testing import AsyncHTTPTestCase
 from tornado.web import RequestHandler, Application
 from tornado.wsgi import WSGIApplication, WSGIContainer, WSGIAdapter
@@ -26,7 +27,7 @@ class WSGIContainerTest(AsyncHTTPTestCase):
         self.assertEqual(response.body, b"Hello world!")
 
 
-class WSGIApplicationTest(AsyncHTTPTestCase):
+class WSGIAdapterTest(AsyncHTTPTestCase):
     def get_app(self):
         class HelloHandler(RequestHandler):
             def get(self):
@@ -40,11 +41,13 @@ class WSGIApplicationTest(AsyncHTTPTestCase):
         # another thread instead of using our own WSGIContainer, but this
         # fits better in our async testing framework and the wsgiref
         # validator should keep us honest
-        return WSGIContainer(validator(WSGIApplication([
-            ("/", HelloHandler),
-            ("/path/(.*)", PathQuotingHandler),
-            ("/typecheck", TypeCheckHandler),
-        ])))
+        with ignore_deprecation():
+            return WSGIContainer(validator(WSGIAdapter(
+                Application([
+                    ("/", HelloHandler),
+                    ("/path/(.*)", PathQuotingHandler),
+                    ("/typecheck", TypeCheckHandler),
+                ]))))
 
     def test_simple(self):
         response = self.fetch("/")
@@ -70,18 +73,29 @@ class WSGIApplicationTest(AsyncHTTPTestCase):
 # survives repeated disassembly and reassembly.
 class WSGIConnectionTest(httpserver_test.HTTPConnectionTest):
     def get_app(self):
-        return WSGIContainer(validator(WSGIApplication(self.get_handlers())))
+        with ignore_deprecation():
+            return WSGIContainer(validator(WSGIAdapter(Application(self.get_handlers()))))
 
 
 def wrap_web_tests_application():
     result = {}
     for cls in web_test.wsgi_safe_tests:
-        class WSGIApplicationWrappedTest(cls):  # type: ignore
-            def get_app(self):
-                self.app = WSGIApplication(self.get_handlers(),
-                                           **self.get_app_kwargs())
-                return WSGIContainer(validator(self.app))
-        result["WSGIApplication_" + cls.__name__] = WSGIApplicationWrappedTest
+        def class_factory():
+            class WSGIApplicationWrappedTest(cls):  # type: ignore
+                def setUp(self):
+                    self.warning_catcher = ignore_deprecation()
+                    self.warning_catcher.__enter__()
+                    super(WSGIApplicationWrappedTest, self).setUp()
+
+                def tearDown(self):
+                    super(WSGIApplicationWrappedTest, self).tearDown()
+                    self.warning_catcher.__exit__(None, None, None)
+
+                def get_app(self):
+                    self.app = WSGIApplication(self.get_handlers(),
+                                               **self.get_app_kwargs())
+                    return WSGIContainer(validator(self.app))
+        result["WSGIApplication_" + cls.__name__] = class_factory()
     return result
 
 
@@ -95,7 +109,8 @@ def wrap_web_tests_adapter():
             def get_app(self):
                 self.app = Application(self.get_handlers(),
                                        **self.get_app_kwargs())
-                return WSGIContainer(validator(WSGIAdapter(self.app)))
+                with ignore_deprecation():
+                    return WSGIContainer(validator(WSGIAdapter(self.app)))
         result["WSGIAdapter_" + cls.__name__] = WSGIAdapterWrappedTest
     return result
 
