@@ -46,7 +46,9 @@ coroutines (see the following paragraphs for limitations). Simply use
 ``@gen.coroutine`` decorator, and ``await`` in place of yield. The
 rest of this document still uses the ``yield`` style for compatibility
 with older versions of Python, but ``async`` and ``await`` will run
-faster when they are available::
+faster when they are available.
+
+::
 
     async def fetch_coroutine(url):
         http_client = AsyncHTTPClient()
