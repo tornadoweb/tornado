@@ -125,6 +125,7 @@
    .. automethod:: RequestHandler.compute_etag
    .. automethod:: RequestHandler.create_template_loader
    .. autoattribute:: RequestHandler.current_user
+   .. automethod:: RequestHandler.detach
    .. automethod:: RequestHandler.get_browser_locale
    .. automethod:: RequestHandler.get_current_user
    .. automethod:: RequestHandler.get_login_url
