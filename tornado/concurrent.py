@@ -510,9 +510,22 @@ def return_future(f):
 
     .. deprecated:: 5.1
 
-       New code should use coroutines directly instead of wrapping
-       callback-based code with this decorator.
+       This decorator will be removed in Tornado 6.0. New code should
+       use coroutines directly instead of wrapping callback-based code
+       with this decorator. Interactions with non-Tornado
+       callback-based code should be managed explicitly to avoid
+       relying on the `.ExceptionStackContext` built into this
+       decorator.
     """
+    warnings.warn("@return_future is deprecated, use coroutines instead",
+                  DeprecationWarning)
+    return _non_deprecated_return_future(f)
+
+
+def _non_deprecated_return_future(f):
+    # Allow auth.py to use this decorator without triggering
+    # deprecation warnings. This will go away once auth.py has removed
+    # its legacy interfaces in 6.0.
     replacer = ArgReplacer(f, 'callback')
 
     @functools.wraps(f)

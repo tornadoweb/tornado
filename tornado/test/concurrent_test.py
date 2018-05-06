@@ -59,32 +59,33 @@ class MiscFutureTest(AsyncTestCase):
 
 
 class ReturnFutureTest(AsyncTestCase):
-    @return_future
-    def sync_future(self, callback):
-        callback(42)
+    with ignore_deprecation():
+        @return_future
+        def sync_future(self, callback):
+            callback(42)
 
-    @return_future
-    def async_future(self, callback):
-        self.io_loop.add_callback(callback, 42)
+        @return_future
+        def async_future(self, callback):
+            self.io_loop.add_callback(callback, 42)
 
-    @return_future
-    def immediate_failure(self, callback):
-        1 / 0
+        @return_future
+        def immediate_failure(self, callback):
+            1 / 0
 
-    @return_future
-    def delayed_failure(self, callback):
-        self.io_loop.add_callback(lambda: 1 / 0)
+        @return_future
+        def delayed_failure(self, callback):
+            self.io_loop.add_callback(lambda: 1 / 0)
 
-    @return_future
-    def return_value(self, callback):
-        # Note that the result of both running the callback and returning
-        # a value (or raising an exception) is unspecified; with current
-        # implementations the last event prior to callback resolution wins.
-        return 42
+        @return_future
+        def return_value(self, callback):
+            # Note that the result of both running the callback and returning
+            # a value (or raising an exception) is unspecified; with current
+            # implementations the last event prior to callback resolution wins.
+            return 42
 
-    @return_future
-    def no_result_future(self, callback):
-        callback()
+        @return_future
+        def no_result_future(self, callback):
+            callback()
 
     def test_immediate_failure(self):
         with self.assertRaises(ZeroDivisionError):
@@ -151,9 +152,10 @@ class ReturnFutureTest(AsyncTestCase):
             future.result()
 
     def test_kw_only_callback(self):
-        @return_future
-        def f(**kwargs):
-            kwargs['callback'](42)
+        with ignore_deprecation():
+            @return_future
+            def f(**kwargs):
+                kwargs['callback'](42)
         future = f()
         self.assertEqual(future.result(), 42)
 
@@ -307,14 +309,15 @@ class ManualCapClient(BaseCapClient):
 
 
 class DecoratorCapClient(BaseCapClient):
-    @return_future
-    def capitalize(self, request_data, callback):
-        logging.debug("capitalize")
-        self.request_data = request_data
-        self.stream = IOStream(socket.socket())
-        self.stream.connect(('127.0.0.1', self.port),
-                            callback=self.handle_connect)
-        self.callback = callback
+    with ignore_deprecation():
+        @return_future
+        def capitalize(self, request_data, callback):
+            logging.debug("capitalize")
+            self.request_data = request_data
+            self.stream = IOStream(socket.socket())
+            self.stream.connect(('127.0.0.1', self.port),
+                                callback=self.handle_connect)
+            self.callback = callback
 
     def handle_connect(self):
         logging.debug("handle_connect")

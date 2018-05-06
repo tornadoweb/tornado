@@ -47,9 +47,7 @@ Deprecation notice
   with ``await``.
 - The ``callback`` argument to `.run_on_executor` is deprecated and will
   be removed in 6.0.
-- `.return_future` is deprecated. The wrapped function will no longer
-  accept ``callback`` arguments in Tornado 6.0, although the decorator
-  itself will not be removed.
+- `.return_future` is deprecated and will be removed in 6.0.
 
 `tornado.gen`
 ~~~~~~~~~~~~~

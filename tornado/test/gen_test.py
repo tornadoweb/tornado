@@ -68,9 +68,10 @@ class GenEngineTest(AsyncTestCase):
             self.io_loop.add_callback(functools.partial(
                 self.delay_callback, iterations - 1, callback, arg))
 
-    @return_future
-    def async_future(self, result, callback):
-        self.io_loop.add_callback(callback, result)
+    with ignore_deprecation():
+        @return_future
+        def async_future(self, result, callback):
+            self.io_loop.add_callback(callback, result)
 
     @gen.coroutine
     def async_exception(self, e):
@@ -678,9 +679,10 @@ class GenBasicTest(AsyncTestCase):
             yield gen.moment
         raise gen.Return(arg)
 
-    @return_future
-    def async_future(self, result, callback):
-        self.io_loop.add_callback(callback, result)
+    with ignore_deprecation():
+        @return_future
+        def async_future(self, result, callback):
+            self.io_loop.add_callback(callback, result)
 
     @gen.coroutine
     def async_exception(self, e):

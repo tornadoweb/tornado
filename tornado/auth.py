@@ -74,8 +74,8 @@ import time
 import uuid
 import warnings
 
-from tornado.concurrent import (Future, return_future, chain_future,
-                                future_set_exc_info,
+from tornado.concurrent import (Future, _non_deprecated_return_future,
+                                future_set_exc_info, chain_future,
                                 future_set_result_unless_cancelled)
 from tornado import gen
 from tornado import httpclient
@@ -148,7 +148,7 @@ class OpenIdMixin(object):
 
     * ``_OPENID_ENDPOINT``: the identity provider's URI.
     """
-    @return_future
+    @_non_deprecated_return_future
     def authenticate_redirect(self, callback_uri=None,
                               ax_attrs=["name", "email", "language", "username"],
                               callback=None):
@@ -343,7 +343,7 @@ class OAuthMixin(object):
     Subclasses must also override the `_oauth_get_user_future` and
     `_oauth_consumer_token` methods.
     """
-    @return_future
+    @_non_deprecated_return_future
     def authorize_redirect(self, callback_uri=None, extra_params=None,
                            http_client=None, callback=None):
         """Redirects the user to obtain OAuth authorization for this service.
@@ -524,7 +524,7 @@ class OAuthMixin(object):
         """
         raise NotImplementedError()
 
-    @return_future
+    @_non_deprecated_return_future
     def _oauth_get_user_future(self, access_token, callback):
         """Subclasses must override this to get basic information about the
         user.
@@ -617,7 +617,7 @@ class OAuth2Mixin(object):
     * ``_OAUTH_AUTHORIZE_URL``: The service's authorization url.
     * ``_OAUTH_ACCESS_TOKEN_URL``:  The service's access token url.
     """
-    @return_future
+    @_non_deprecated_return_future
     def authorize_redirect(self, redirect_uri=None, client_id=None,
                            client_secret=None, extra_params=None,
                            callback=None, scope=None, response_type="code"):
@@ -778,7 +778,7 @@ class TwitterMixin(OAuthMixin):
     _OAUTH_NO_CALLBACKS = False
     _TWITTER_BASE_URL = "https://api.twitter.com/1.1"
 
-    @return_future
+    @_non_deprecated_return_future
     def authenticate_redirect(self, callback_uri=None, callback=None):
         """Just like `~OAuthMixin.authorize_redirect`, but
         auto-redirects if authorized.
