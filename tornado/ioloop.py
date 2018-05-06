@@ -104,10 +104,9 @@ class IOLoop(Configurable):
         from tornado import gen
         from tornado.iostream import IOStream
 
-        @gen.coroutine
-        def handle_connection(connection, address):
+        async def handle_connection(connection, address):
             stream = IOStream(connection)
-            message = yield stream.read_until_close()
+            message = await stream.read_until_close()
             print("message from client:", message.decode().strip())
 
         def connection_ready(sock, fd, events):
@@ -504,17 +503,6 @@ class IOLoop(Configurable):
         If the event loop is not currently running, the next call to `start()`
         will return immediately.
 
-        To use asynchronous methods from otherwise-synchronous code (such as
-        unit tests), you can start and stop the event loop like this::
-
-          ioloop = IOLoop()
-          async_method(ioloop=ioloop, callback=ioloop.stop)
-          ioloop.start()
-
-        ``ioloop.start()`` will return after ``async_method`` has run
-        its callback, whether that callback was invoked before or
-        after ``ioloop.start``.
-
         Note that even after `stop` has been called, the `IOLoop` is not
         completely stopped until `IOLoop.start` has also returned.
         Some work that was scheduled before the call to `stop` may still
@@ -525,10 +513,10 @@ class IOLoop(Configurable):
     def run_sync(self, func, timeout=None):
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
-        The function must return either a yieldable object or
-        ``None``. If the function returns a yieldable object, the
-        `IOLoop` will run until the yieldable is resolved (and
-        `run_sync()` will return the yieldable's result). If it raises
+        The function must return either an awaitable object or
+        ``None``. If the function returns an awaitable object, the
+        `IOLoop` will run until the awaitable is resolved (and
+        `run_sync()` will return the awaitable's result). If it raises
         an exception, the `IOLoop` will stop and the exception will be
         re-raised to the caller.
 
@@ -536,21 +524,21 @@ class IOLoop(Configurable):
         a maximum duration for the function.  If the timeout expires,
         a `tornado.util.TimeoutError` is raised.
 
-        This method is useful in conjunction with `tornado.gen.coroutine`
-        to allow asynchronous calls in a ``main()`` function::
+        This method is useful to allow asynchronous calls in a
+        ``main()`` function::
 
-            @gen.coroutine
-            def main():
+            async def main():
                 # do stuff...
 
             if __name__ == '__main__':
                 IOLoop.current().run_sync(main)
 
         .. versionchanged:: 4.3
-           Returning a non-``None``, non-yieldable value is now an error.
+           Returning a non-``None``, non-awaitable value is now an error.
 
         .. versionchanged:: 5.0
            If a timeout occurs, the ``func`` coroutine will be cancelled.
+
         """
         future_cell = [None]
 
@@ -720,6 +708,10 @@ class IOLoop(Configurable):
 
         The callback is invoked with one argument, the
         `.Future`.
+
+        This method only accepts `.Future` objects and not other
+        awaitables (unlike most of Tornado where the two are
+        interchangeable).
         """
         assert is_future(future)
         callback = stack_context.wrap(callback)

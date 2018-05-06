@@ -46,12 +46,11 @@ class TCPServer(object):
       from tornado import gen
 
       class EchoServer(TCPServer):
-          @gen.coroutine
-          def handle_stream(self, stream, address):
+          async def handle_stream(self, stream, address):
               while True:
                   try:
-                      data = yield stream.read_until(b"\n")
-                      yield stream.write(data)
+                      data = await stream.read_until(b"\n")
+                      await stream.write(data)
                   except StreamClosedError:
                       break
 

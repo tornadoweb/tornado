@@ -6,9 +6,9 @@ Coroutines
    from tornado import gen
 
 **Coroutines** are the recommended way to write asynchronous code in
-Tornado.  Coroutines use the Python ``yield`` keyword to suspend and
-resume execution instead of a chain of callbacks (cooperative
-lightweight threads as seen in frameworks like `gevent
+Tornado. Coroutines use the Python ``await`` or ``yield`` keyword to
+suspend and resume execution instead of a chain of callbacks
+(cooperative lightweight threads as seen in frameworks like `gevent
 <http://www.gevent.org>`_ are sometimes called coroutines as well, but
 in Tornado all coroutines use explicit context switches and are called
 as asynchronous functions).
@@ -21,52 +21,74 @@ happen.
 
 Example::
 
-    from tornado import gen
-
-    @gen.coroutine
-    def fetch_coroutine(url):
-        http_client = AsyncHTTPClient()
-        response = yield http_client.fetch(url)
-        # In Python versions prior to 3.3, returning a value from
-        # a generator is not allowed and you must use
-        #   raise gen.Return(response.body)
-        # instead.
-        return response.body
-
-.. _native_coroutines:
-
-Python 3.5: ``async`` and ``await``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Python 3.5 introduces the ``async`` and ``await`` keywords (functions
-using these keywords are also called "native coroutines"). Starting in
-Tornado 4.3, you can use them in place of most ``yield``-based
-coroutines (see the following paragraphs for limitations). Simply use
-``async def foo()`` in place of a function definition with the
-``@gen.coroutine`` decorator, and ``await`` in place of yield. The
-rest of this document still uses the ``yield`` style for compatibility
-with older versions of Python, but ``async`` and ``await`` will run
-faster when they are available::
-
     async def fetch_coroutine(url):
         http_client = AsyncHTTPClient()
         response = await http_client.fetch(url)
         return response.body
 
-The ``await`` keyword is less versatile than the ``yield`` keyword.
-For example, in a ``yield``-based coroutine you can yield a list of
-``Futures``, while in a native coroutine you must wrap the list in
-`tornado.gen.multi`. This also eliminates the integration with
-`concurrent.futures`. You can use `tornado.gen.convert_yielded`
-to convert anything that would work with ``yield`` into a form that
-will work with ``await``::
+.. _native_coroutines:
 
-    async def f():
-        executor = concurrent.futures.ThreadPoolExecutor()
-        await tornado.gen.convert_yielded(executor.submit(g))
+Native vs decorated coroutines
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Python 3.5 introduced the ``async`` and ``await`` keywords (functions
+using these keywords are also called "native coroutines"). For
+compatibility with older versions of Python, you can use "decorated"
+or "yield-based" coroutines using the `tornado.gen.coroutine`
+decorator.
+
+Native coroutines are the recommended form whenever possible. Only use
+decorated coroutines when compatibility with older versions of Python
+is required. Examples in the tornado documentation will generally use
+the native form.
+
+Translation between the two forms is generally straightforward::
+
+    # Decorated:                    # Native:
+
+    # Normal function declaration
+    # with decorator                # "async def" keywords
+    @gen.coroutine
+    def a():                        async def a():
+        # "yield" all async funcs       # "await" all async funcs
+        b = yield c()                   b = await c()
+        # "return" and "yield"
+        # cannot be mixed in
+        # Python 2, so raise a
+        # special exception.            # Return normally
+        raise gen.Return(b)             return b
+
+Other differences between the two forms of coroutine are:
+
+- Native coroutines are generally faster.
+- Native coroutines can use ``async for`` and ``async with``
+  statements which make some patterns much simpler.
+- Native coroutines do not run at all unless you ``await`` or
+  ``yield`` them. Decorated coroutines can start running "in the
+  background" as soon as they are called. Note that for both kinds of
+  coroutines it is important to use ``await`` or ``yield`` so that
+  any exceptions have somewhere to go.
+- Decorated coroutines has additional integration with the
+  `concurrent.futures` package, allowing the result of
+  ``executor.submit`` to be yielded directly. For native coroutines,
+  use `.IOLoop.run_in_executor` instead.
+- Decorated coroutines support some shorthand for waiting on multiple
+  objects by yielding a list or dict. Use `tornado.gen.multi` to do
+  this in native coroutines.
+- Decorated coroutines can support integration with other packages
+  including Twisted via a registry of conversion functions.
+  To access this functionality in native coroutines, use
+  `tornado.gen.convert_yielded`.
+- Decorated coroutines always return a `.Future` object. Native
+  coroutines return an *awaitable* object that is not a `.Future`. In
+  Tornado the two are mostly interchangeable.
 
 How it works
 ~~~~~~~~~~~~
+
+This section explains the operation of decorated coroutines. Native
+coroutines are conceptually similar, but a little more complicated
+because of the extra integration with the Python runtime.
 
 A function containing ``yield`` is a **generator**.  All generators
 are asynchronous; when called they return a generator object instead
@@ -97,12 +119,11 @@ How to call a coroutine
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 Coroutines do not raise exceptions in the normal way: any exception
-they raise will be trapped in the `.Future` until it is yielded. This
-means it is important to call coroutines in the right way, or you may
-have errors that go unnoticed::
+they raise will be trapped in the awaitable object until it is
+yielded. This means it is important to call coroutines in the right
+way, or you may have errors that go unnoticed::
 
-    @gen.coroutine
-    def divide(x, y):
+    async def divide(x, y):
         return x / y
 
     def bad_call():
@@ -111,17 +132,16 @@ have errors that go unnoticed::
         divide(1, 0)
 
 In nearly all cases, any function that calls a coroutine must be a
-coroutine itself, and use the ``yield`` keyword in the call. When you
-are overriding a method defined in a superclass, consult the
-documentation to see if coroutines are allowed (the documentation
-should say that the method "may be a coroutine" or "may return a
-`.Future`")::
+coroutine itself, and use the ``await`` or ``yield`` keyword in the
+call. When you are overriding a method defined in a superclass,
+consult the documentation to see if coroutines are allowed (the
+documentation should say that the method "may be a coroutine" or "may
+return a `.Future`")::
 
-    @gen.coroutine
-    def good_call():
-        # yield will unwrap the Future returned by divide() and raise
+    async def good_call():
+        # await will unwrap the object returned by divide() and raise
         # the exception.
-        yield divide(1, 0)
+        await divide(1, 0)
 
 Sometimes you may want to "fire and forget" a coroutine without waiting
 for its result. In this case it is recommended to use `.IOLoop.spawn_callback`,
@@ -156,49 +176,68 @@ The simplest way to call a blocking function from a coroutine is to
 use `.IOLoop.run_in_executor`, which returns
 ``Futures`` that are compatible with coroutines::
 
-    @gen.coroutine
-    def call_blocking():
-        yield IOLoop.current().run_in_executor(blocking_func, args)
+    async def call_blocking():
+        await IOLoop.current().run_in_executor(blocking_func, args)
 
 Parallelism
 ^^^^^^^^^^^
 
-The `.coroutine` decorator recognizes lists and dicts whose values are
+The `.multi` function accepts lists and dicts whose values are
 ``Futures``, and waits for all of those ``Futures`` in parallel:
 
 .. testcode::
 
-    @gen.coroutine
-    def parallel_fetch(url1, url2):
-        resp1, resp2 = yield [http_client.fetch(url1),
-                              http_client.fetch(url2)]
+    from tornado.gen import multi
 
-    @gen.coroutine
-    def parallel_fetch_many(urls):
-        responses = yield [http_client.fetch(url) for url in urls]
+    async def parallel_fetch(url1, url2):
+        resp1, resp2 = await multi([http_client.fetch(url1),
+                                    http_client.fetch(url2)])
+
+    async def parallel_fetch_many(urls):
+        responses = await multi ([http_client.fetch(url) for url in urls])
         # responses is a list of HTTPResponses in the same order
 
-    @gen.coroutine
-    def parallel_fetch_dict(urls):
-        responses = yield {url: http_client.fetch(url)
-                            for url in urls}
+    async def parallel_fetch_dict(urls):
+        responses = await multi({url: http_client.fetch(url)
+                                 for url in urls})
         # responses is a dict {url: HTTPResponse}
 
 .. testoutput::
    :hide:
 
-Lists and dicts must be wrapped in `tornado.gen.multi` for use with
-``await``::
+In decorated coroutines, it is possible to ``yield`` the list or dict directly::
 
-    async def parallel_fetch(url1, url2):
-        resp1, resp2 = await gen.multi([http_client.fetch(url1),
-                                        http_client.fetch(url2)])
+    @gen.coroutine
+    def parallel_fetch_decorated(url1, url2):
+        resp1, resp2 = yield [http_client.fetch(url1),
+                              http_client.fetch(url2)])
 
 Interleaving
 ^^^^^^^^^^^^
 
 Sometimes it is useful to save a `.Future` instead of yielding it
-immediately, so you can start another operation before waiting:
+immediately, so you can start another operation before waiting.
+
+.. testcode::
+
+    from tornado.gen import convert_yielded
+
+    async def get(self):
+        # convert_yielded() starts the native coroutine in the background.
+        # This is equivalent to asyncio.ensure_future() (both work in Tornado).
+        fetch_future = convert_yielded(self.fetch_next_chunk())
+        while True:
+            chunk = yield fetch_future
+            if chunk is None: break
+            self.write(chunk)
+            fetch_future = convert_yielded(self.fetch_next_chunk())
+            yield self.flush()
+
+.. testoutput::
+   :hide:
+
+This is a little easier to do with decorated coroutines, because they
+start immediately when called:
 
 .. testcode::
 
@@ -214,12 +253,6 @@ immediately, so you can start another operation before waiting:
 
 .. testoutput::
    :hide:
-
-This pattern is most usable with ``@gen.coroutine``. If
-``fetch_next_chunk()`` uses ``async def``, then it must be called as
-``fetch_future =
-tornado.gen.convert_yielded(self.fetch_next_chunk())`` to start the
-background processing.
 
 Looping
 ^^^^^^^
@@ -247,11 +280,10 @@ Running in the background
 coroutine can contain a ``while True:`` loop and use
 `tornado.gen.sleep`::
 
-    @gen.coroutine
-    def minute_loop():
+    async def minute_loop():
         while True:
-            yield do_something()
-            yield gen.sleep(60)
+            await do_something()
+            await gen.sleep(60)
 
     # Coroutines that loop forever are generally started with
     # spawn_callback().
@@ -262,9 +294,8 @@ previous loop runs every ``60+N`` seconds, where ``N`` is the running
 time of ``do_something()``. To run exactly every 60 seconds, use the
 interleaving pattern from above::
 
-    @gen.coroutine
-    def minute_loop2():
+    async def minute_loop2():
         while True:
             nxt = gen.sleep(60)   # Start the clock.
-            yield do_something()  # Run while the clock is ticking.
-            yield nxt             # Wait for the timer to run out.
+            await do_something()  # Run while the clock is ticking.
+            await nxt             # Wait for the timer to run out.

@@ -79,28 +79,24 @@ class Queue(object):
 
         q = Queue(maxsize=2)
 
-        @gen.coroutine
-        def consumer():
-            while True:
-                item = yield q.get()
+        async def consumer():
+            async for item in q:
                 try:
                     print('Doing work on %s' % item)
-                    yield gen.sleep(0.01)
+                    await gen.sleep(0.01)
                 finally:
                     q.task_done()
 
-        @gen.coroutine
-        def producer():
+        async def producer():
             for item in range(5):
-                yield q.put(item)
+                await q.put(item)
                 print('Put %s' % item)
 
-        @gen.coroutine
-        def main():
+        async def main():
             # Start consumer without waiting (since it never finishes).
             IOLoop.current().spawn_callback(consumer)
-            yield producer()     # Wait for producer to put all tasks.
-            yield q.join()       # Wait for consumer to finish all tasks.
+            await producer()     # Wait for producer to put all tasks.
+            await q.join()       # Wait for consumer to finish all tasks.
             print('Done')
 
         IOLoop.current().run_sync(main)
@@ -119,11 +115,14 @@ class Queue(object):
         Doing work on 4
         Done
 
-    In Python 3.5, `Queue` implements the async iterator protocol, so
-    ``consumer()`` could be rewritten as::
 
-        async def consumer():
-            async for item in q:
+    In versions of Python without native coroutines (before 3.5),
+    ``consumer()`` could be written as::
+
+        @gen.coroutine
+        def consumer():
+            while True:
+                item = yield q.get()
                 try:
                     print('Doing work on %s' % item)
                     yield gen.sleep(0.01)
