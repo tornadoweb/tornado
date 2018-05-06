@@ -88,12 +88,13 @@ installed in this way, so you may wish to download a copy of the
 source tarball or clone the `git repository
 <https://github.com/tornadoweb/tornado>`_ as well.
 
-**Prerequisites**: Tornado runs on Python 2.7, and 3.4+.
-The updates to the `ssl` module in Python 2.7.9 are required
-(in some distributions, these updates may be available in
-older python versions). In addition to the requirements
-which will be installed automatically by ``pip`` or ``setup.py install``,
-the following optional packages may be useful:
+**Prerequisites**: Tornado 5.x runs on Python 2.7, and 3.4+ (Tornado
+6.0 will require Python 3.5+; Python 2 will no longer be supported).
+The updates to the `ssl` module in Python 2.7.9 are required (in some
+distributions, these updates may be available in older python
+versions). In addition to the requirements which will be installed
+automatically by ``pip`` or ``setup.py install``, the following
+optional packages may be useful:
 
 * `pycurl <http://pycurl.sourceforge.net>`_ is used by the optional
   ``tornado.curl_httpclient``.  Libcurl version 7.22 or higher is required.

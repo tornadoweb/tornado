@@ -483,7 +483,7 @@ def return_future(f):
 
     If no callback is given, the caller should use the ``Future`` to
     wait for the function to complete (perhaps by yielding it in a
-    `.gen.engine` function, or passing it to `.IOLoop.add_future`).
+    coroutine, or passing it to `.IOLoop.add_future`).
 
     Usage:
 
@@ -494,10 +494,8 @@ def return_future(f):
             # Do stuff (possibly asynchronous)
             callback(result)
 
-        @gen.engine
-        def caller(callback):
-            yield future_func(arg1, arg2)
-            callback()
+        async def caller():
+            await future_func(arg1, arg2)
 
     ..
 

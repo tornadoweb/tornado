@@ -37,15 +37,14 @@ Example usage for Google OAuth:
 
     class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                    tornado.auth.GoogleOAuth2Mixin):
-        @tornado.gen.coroutine
-        def get(self):
+        async def get(self):
             if self.get_argument('code', False):
-                user = yield self.get_authenticated_user(
+                user = await self.get_authenticated_user(
                     redirect_uri='http://your.site.com/auth/google',
                     code=self.get_argument('code'))
                 # Save the user with e.g. set_secure_cookie
             else:
-                yield self.authorize_redirect(
+                await self.authorize_redirect(
                     redirect_uri='http://your.site.com/auth/google',
                     client_id=self.settings['google_oauth']['key'],
                     scope=['profile', 'email'],
@@ -683,16 +682,15 @@ class OAuth2Mixin(object):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
                 @tornado.web.authenticated
-                @tornado.gen.coroutine
-                def get(self):
-                    new_entry = yield self.oauth2_request(
+                async def get(self):
+                    new_entry = await self.oauth2_request(
                         "https://graph.facebook.com/me/feed",
                         post_args={"message": "I am posting from my Tornado application!"},
                         access_token=self.current_user["access_token"])
 
                     if not new_entry:
                         # Call failed; perhaps missing permission?
-                        yield self.authorize_redirect()
+                        await self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
 
@@ -758,13 +756,12 @@ class TwitterMixin(OAuthMixin):
 
         class TwitterLoginHandler(tornado.web.RequestHandler,
                                   tornado.auth.TwitterMixin):
-            @tornado.gen.coroutine
-            def get(self):
+            async def get(self):
                 if self.get_argument("oauth_token", None):
-                    user = yield self.get_authenticated_user()
+                    user = await self.get_authenticated_user()
                     # Save the user using e.g. set_secure_cookie()
                 else:
-                    yield self.authorize_redirect()
+                    await self.authorize_redirect()
 
     .. testoutput::
        :hide:
@@ -829,9 +826,8 @@ class TwitterMixin(OAuthMixin):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.TwitterMixin):
                 @tornado.web.authenticated
-                @tornado.gen.coroutine
-                def get(self):
-                    new_entry = yield self.twitter_request(
+                async def get(self):
+                    new_entry = await self.twitter_request(
                         "/statuses/update",
                         post_args={"status": "Testing Tornado Web Server"},
                         access_token=self.current_user["access_token"])
@@ -942,19 +938,18 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
             class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                            tornado.auth.GoogleOAuth2Mixin):
-                @tornado.gen.coroutine
-                def get(self):
+                async def get(self):
                     if self.get_argument('code', False):
-                        access = yield self.get_authenticated_user(
+                        access = await self.get_authenticated_user(
                             redirect_uri='http://your.site.com/auth/google',
                             code=self.get_argument('code'))
-                        user = yield self.oauth2_request(
+                        user = await self.oauth2_request(
                             "https://www.googleapis.com/oauth2/v1/userinfo",
                             access_token=access["access_token"])
                         # Save the user and access token with
                         # e.g. set_secure_cookie.
                     else:
-                        yield self.authorize_redirect(
+                        await self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
                             client_id=self.settings['google_oauth']['key'],
                             scope=['profile', 'email'],
@@ -1014,17 +1009,16 @@ class FacebookGraphMixin(OAuth2Mixin):
 
             class FacebookGraphLoginHandler(tornado.web.RequestHandler,
                                             tornado.auth.FacebookGraphMixin):
-              @tornado.gen.coroutine
-              def get(self):
+              async def get(self):
                   if self.get_argument("code", False):
-                      user = yield self.get_authenticated_user(
+                      user = await self.get_authenticated_user(
                           redirect_uri='/auth/facebookgraph/',
                           client_id=self.settings["facebook_api_key"],
                           client_secret=self.settings["facebook_secret"],
                           code=self.get_argument("code"))
                       # Save the user with e.g. set_secure_cookie
                   else:
-                      yield self.authorize_redirect(
+                      await self.authorize_redirect(
                           redirect_uri='/auth/facebookgraph/',
                           client_id=self.settings["facebook_api_key"],
                           extra_params={"scope": "read_stream,offline_access"})
@@ -1134,9 +1128,8 @@ class FacebookGraphMixin(OAuth2Mixin):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
                 @tornado.web.authenticated
-                @tornado.gen.coroutine
-                def get(self):
-                    new_entry = yield self.facebook_request(
+                async def get(self):
+                    new_entry = await self.facebook_request(
                         "/me/feed",
                         post_args={"message": "I am posting from my Tornado application!"},
                         access_token=self.current_user["access_token"])

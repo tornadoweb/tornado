@@ -125,14 +125,14 @@ class AsyncHTTPClient(Configurable):
 
     Example usage::
 
-        def handle_response(response):
-            if response.error:
-                print("Error: %s" % response.error)
+        async def f():
+            http_client = AsyncHTTPClient()
+            try:
+                response = await http_client.fetch("http://www.google.com")
+            except Exception as e:
+                print("Error: %s" % e)
             else:
                 print(response.body)
-
-        http_client = AsyncHTTPClient()
-        http_client.fetch("http://www.google.com/", handle_response)
 
     The constructor for this class is magic in several respects: It
     actually creates an instance of an implementation-specific

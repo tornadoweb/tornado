@@ -189,15 +189,14 @@ the Google credentials in a cookie for later access:
 
     class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                    tornado.auth.GoogleOAuth2Mixin):
-        @tornado.gen.coroutine
-        def get(self):
+        async def get(self):
             if self.get_argument('code', False):
-                user = yield self.get_authenticated_user(
+                user = await self.get_authenticated_user(
                     redirect_uri='http://your.site.com/auth/google',
                     code=self.get_argument('code'))
                 # Save the user with e.g. set_secure_cookie
             else:
-                yield self.authorize_redirect(
+                await self.authorize_redirect(
                     redirect_uri='http://your.site.com/auth/google',
                     client_id=self.settings['google_oauth']['key'],
                     scope=['profile', 'email'],

@@ -946,6 +946,11 @@ class RequestHandler(object):
 
         .. versionchanged:: 4.0
            Now returns a `.Future` if no callback is given.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in
+           Tornado 6.0.
         """
         chunk = b"".join(self._write_buffer)
         self._write_buffer = []
