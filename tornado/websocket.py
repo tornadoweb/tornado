@@ -256,17 +256,37 @@ class WebSocketHandler(tornado.web.RequestHandler):
         return self.ws_connection.write_message(message, binary=binary)
 
     def select_subprotocol(self, subprotocols):
-        """Invoked when a new WebSocket requests specific subprotocols.
+        """Override to implement subprotocol negotiation.
 
         ``subprotocols`` is a list of strings identifying the
         subprotocols proposed by the client.  This method may be
         overridden to return one of those strings to select it, or
-        ``None`` to not select a subprotocol.  Failure to select a
-        subprotocol does not automatically abort the connection,
-        although clients may close the connection if none of their
-        proposed subprotocols was selected.
+        ``None`` to not select a subprotocol.
+
+        Failure to select a subprotocol does not automatically abort
+        the connection, although clients may close the connection if
+        none of their proposed subprotocols was selected.
+
+        The list may be empty, in which case this method must return
+        None. This method is always called exactly once even if no
+        subprotocols were proposed so that the handler can be advised
+        of this fact.
+
+        .. versionchanged:: 5.1
+
+           Previously, this method was called with a list containing
+           an empty string instead of an empty list if no subprotocols
+           were proposed by the client.
         """
         return None
+
+    @property
+    def selected_subprotocol(self):
+        """The subprotocol returned by `select_subprotocol`.
+
+        .. versionadded:: 5.1
+        """
+        return self.ws_connection.selected_subprotocol
 
     def get_compression_options(self):
         """Override to return compression options for the connection.
@@ -298,6 +318,13 @@ class WebSocketHandler(tornado.web.RequestHandler):
         The arguments to `open` are extracted from the `tornado.web.URLSpec`
         regular expression, just like the arguments to
         `tornado.web.RequestHandler.get`.
+
+        `open` may be a coroutine. `on_message` will not be called until
+        `open` has returned.
+
+        .. versionchanged:: 5.1
+
+           ``open`` may be a coroutine.
         """
         pass
 
@@ -674,13 +701,17 @@ class WebSocketProtocol13(WebSocketProtocol):
         return WebSocketProtocol13.compute_accept_value(
             self.request.headers.get("Sec-Websocket-Key"))
 
+    @gen.coroutine
     def _accept_connection(self):
-        subprotocols = [s.strip() for s in self.request.headers.get_list("Sec-WebSocket-Protocol")]
-        if subprotocols:
-            selected = self.handler.select_subprotocol(subprotocols)
-            if selected:
-                assert selected in subprotocols
-                self.handler.set_header("Sec-WebSocket-Protocol", selected)
+        subprotocol_header = self.request.headers.get("Sec-WebSocket-Protocol")
+        if subprotocol_header:
+            subprotocols = [s.strip() for s in subprotocol_header.split(',')]
+        else:
+            subprotocols = []
+        self.selected_subprotocol = self.handler.select_subprotocol(subprotocols)
+        if self.selected_subprotocol:
+            assert self.selected_subprotocol in subprotocols
+            self.handler.set_header("Sec-WebSocket-Protocol", self.selected_subprotocol)
 
         extensions = self._parse_extensions_header(self.request.headers)
         for ext in extensions:
@@ -710,9 +741,11 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.stream = self.handler.stream
 
         self.start_pinging()
-        self._run_callback(self.handler.open, *self.handler.open_args,
-                           **self.handler.open_kwargs)
-        IOLoop.current().add_callback(self._receive_frame_loop)
+        open_result = self._run_callback(self.handler.open, *self.handler.open_args,
+                                         **self.handler.open_kwargs)
+        if open_result is not None:
+            yield open_result
+        yield self._receive_frame_loop()
 
     def _parse_extensions_header(self, headers):
         extensions = headers.get("Sec-WebSocket-Extensions", '')
@@ -738,6 +771,8 @@ class WebSocketProtocol13(WebSocketProtocol):
                 self._create_compressors('client', ext[1])
             else:
                 raise ValueError("unsupported extension %r", ext)
+
+        self.selected_subprotocol = headers.get('Sec-WebSocket-Protocol', None)
 
     def _get_compressor_options(self, side, agreed_parameters, compression_options=None):
         """Converts a websocket agreed_parameters set to keyword arguments
@@ -1056,7 +1091,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
     """
     def __init__(self, request, on_message_callback=None,
                  compression_options=None, ping_interval=None, ping_timeout=None,
-                 max_message_size=None):
+                 max_message_size=None, subprotocols=[]):
         self.compression_options = compression_options
         self.connect_future = Future()
         self.protocol = None
@@ -1077,6 +1112,8 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
             'Sec-WebSocket-Key': self.key,
             'Sec-WebSocket-Version': '13',
         })
+        if subprotocols is not None:
+            request.headers['Sec-WebSocket-Protocol'] = ','.join(subprotocols)
         if self.compression_options is not None:
             # Always offer to let the server set our max_wbits (and even though
             # we don't offer it, we will accept a client_no_context_takeover
@@ -1211,11 +1248,19 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
         return WebSocketProtocol13(self, mask_outgoing=True,
                                    compression_options=self.compression_options)
 
+    @property
+    def selected_subprotocol(self):
+        """The subprotocol selected by the server.
+
+        .. versionadded:: 5.1
+        """
+        return self.protocol.selected_subprotocol
+
 
 def websocket_connect(url, callback=None, connect_timeout=None,
                       on_message_callback=None, compression_options=None,
                       ping_interval=None, ping_timeout=None,
-                      max_message_size=None):
+                      max_message_size=None, subprotocols=None):
     """Client-side websocket support.
 
     Takes a url and returns a Future whose result is a
@@ -1238,6 +1283,11 @@ def websocket_connect(url, callback=None, connect_timeout=None,
     ``websocket_connect``. In both styles, a message of ``None``
     indicates that the connection has been closed.
 
+    ``subprotocols`` may be a list of strings specifying proposed
+    subprotocols. The selected protocol may be found on the
+    ``selected_subprotocol`` attribute of the connection object
+    when the connection is complete.
+
     .. versionchanged:: 3.2
        Also accepts ``HTTPRequest`` objects in place of urls.
 
@@ -1250,6 +1300,9 @@ def websocket_connect(url, callback=None, connect_timeout=None,
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+    .. versionchanged:: 5.1
+       Added the ``subprotocols`` argument.
     """
     if isinstance(url, httpclient.HTTPRequest):
         assert connect_timeout is None
@@ -1266,7 +1319,8 @@ def websocket_connect(url, callback=None, connect_timeout=None,
                                      compression_options=compression_options,
                                      ping_interval=ping_interval,
                                      ping_timeout=ping_timeout,
-                                     max_message_size=max_message_size)
+                                     max_message_size=max_message_size,
+                                     subprotocols=subprotocols)
     if callback is not None:
         IOLoop.current().add_future(conn.connect_future, callback)
     return conn.connect_future
