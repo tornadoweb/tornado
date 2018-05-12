@@ -143,6 +143,25 @@ class RenderMessageHandler(TestWebSocketHandler):
         self.write_message(self.render_string('message.html', message=message))
 
 
+class SubprotocolHandler(TestWebSocketHandler):
+    def initialize(self, **kwargs):
+        super(SubprotocolHandler, self).initialize(**kwargs)
+        self.select_subprotocol_called = False
+
+    def select_subprotocol(self, subprotocols):
+        if self.select_subprotocol_called:
+            raise Exception("select_subprotocol called twice")
+        self.select_subprotocol_called = True
+        if 'goodproto' in subprotocols:
+            return 'goodproto'
+        return None
+
+    def open(self):
+        if not self.select_subprotocol_called:
+            raise Exception("select_subprotocol not called")
+        self.write_message("subprotocol=%s" % self.selected_subprotocol)
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, **kwargs):
@@ -182,6 +201,8 @@ class WebSocketTest(WebSocketBaseTestCase):
             ('/coroutine', CoroutineOnMessageHandler,
              dict(close_future=self.close_future)),
             ('/render', RenderMessageHandler,
+             dict(close_future=self.close_future)),
+            ('/subprotocol', SubprotocolHandler,
              dict(close_future=self.close_future)),
         ], template_loader=DictLoader({
             'message.html': '<b>{{ message }}</b>',
@@ -442,6 +463,22 @@ class WebSocketTest(WebSocketBaseTestCase):
             yield websocket_connect(HTTPRequest(url, headers=headers))
 
         self.assertEqual(cm.exception.code, 403)
+
+    @gen_test
+    def test_subprotocols(self):
+        ws = yield self.ws_connect('/subprotocol', subprotocols=['badproto', 'goodproto'])
+        self.assertEqual(ws.selected_subprotocol, 'goodproto')
+        res = yield ws.read_message()
+        self.assertEqual(res, 'subprotocol=goodproto')
+        yield self.close(ws)
+
+    @gen_test
+    def test_subprotocols_not_offered(self):
+        ws = yield self.ws_connect('/subprotocol')
+        self.assertIs(ws.selected_subprotocol, None)
+        res = yield ws.read_message()
+        self.assertEqual(res, 'subprotocol=None')
+        yield self.close(ws)
 
 
 if sys.version_info >= (3, 5):

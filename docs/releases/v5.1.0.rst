@@ -135,9 +135,12 @@ Deprecation notice
 `tornado.websocket`
 ~~~~~~~~~~~~~~~~~~~
 
-- The `.WebSocketHandler.select_subprotocol` method is now called only
-  when a subprotocol header is provided (previously it would be called
-  with a list containing an empty string).
+- `.websocket_connect` now supports subprotocols.
+- `.WebSocketHandler` and `.WebSocketClientConnection` now have
+  ``selected_subprotocol`` attributes to see the subprotocol in use.
+- The `.WebSocketHandler.select_subprotocol` method is now called with
+  an empty list instead of a list containing an empty string if no
+  subprotocols were requested by the client.
 - The ``data`` argument to `.WebSocketHandler.ping` is now optional.
 - Client-side websocket connections no longer buffer more than one
   message in memory at a time.
