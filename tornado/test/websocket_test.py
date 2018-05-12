@@ -7,6 +7,7 @@ import traceback
 from tornado.concurrent import Future
 from tornado import gen
 from tornado.httpclient import HTTPError, HTTPRequest
+from tornado.locks import Event
 from tornado.log import gen_log, app_log
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.template import DictLoader
@@ -162,6 +163,24 @@ class SubprotocolHandler(TestWebSocketHandler):
         self.write_message("subprotocol=%s" % self.selected_subprotocol)
 
 
+class OpenCoroutineHandler(TestWebSocketHandler):
+    def initialize(self, test, **kwargs):
+        super(OpenCoroutineHandler, self).initialize(**kwargs)
+        self.test = test
+        self.open_finished = False
+
+    @gen.coroutine
+    def open(self):
+        yield self.test.message_sent.wait()
+        yield gen.sleep(0.010)
+        self.open_finished = True
+
+    def on_message(self, message):
+        if not self.open_finished:
+            raise Exception('on_message called before open finished')
+        self.write_message('ok')
+
+
 class WebSocketBaseTestCase(AsyncHTTPTestCase):
     @gen.coroutine
     def ws_connect(self, path, **kwargs):
@@ -204,6 +223,8 @@ class WebSocketTest(WebSocketBaseTestCase):
              dict(close_future=self.close_future)),
             ('/subprotocol', SubprotocolHandler,
              dict(close_future=self.close_future)),
+            ('/open_coroutine', OpenCoroutineHandler,
+             dict(close_future=self.close_future, test=self)),
         ], template_loader=DictLoader({
             'message.html': '<b>{{ message }}</b>',
         }))
@@ -478,6 +499,16 @@ class WebSocketTest(WebSocketBaseTestCase):
         self.assertIs(ws.selected_subprotocol, None)
         res = yield ws.read_message()
         self.assertEqual(res, 'subprotocol=None')
+        yield self.close(ws)
+
+    @gen_test
+    def test_open_coroutine(self):
+        self.message_sent = Event()
+        ws = yield self.ws_connect('/open_coroutine')
+        yield ws.write_message('hello')
+        self.message_sent.set()
+        res = yield ws.read_message()
+        self.assertEqual(res, 'ok')
         yield self.close(ws)
 
 

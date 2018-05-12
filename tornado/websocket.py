@@ -318,6 +318,13 @@ class WebSocketHandler(tornado.web.RequestHandler):
         The arguments to `open` are extracted from the `tornado.web.URLSpec`
         regular expression, just like the arguments to
         `tornado.web.RequestHandler.get`.
+
+        `open` may be a coroutine. `on_message` will not be called until
+        `open` has returned.
+
+        .. versionchanged:: 5.1
+
+           ``open`` may be a coroutine.
         """
         pass
 
@@ -694,6 +701,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         return WebSocketProtocol13.compute_accept_value(
             self.request.headers.get("Sec-Websocket-Key"))
 
+    @gen.coroutine
     def _accept_connection(self):
         subprotocol_header = self.request.headers.get("Sec-WebSocket-Protocol")
         if subprotocol_header:
@@ -733,9 +741,11 @@ class WebSocketProtocol13(WebSocketProtocol):
         self.stream = self.handler.stream
 
         self.start_pinging()
-        self._run_callback(self.handler.open, *self.handler.open_args,
-                           **self.handler.open_kwargs)
-        IOLoop.current().add_callback(self._receive_frame_loop)
+        open_result = self._run_callback(self.handler.open, *self.handler.open_args,
+                                         **self.handler.open_kwargs)
+        if open_result is not None:
+            yield open_result
+        yield self._receive_frame_loop()
 
     def _parse_extensions_header(self, headers):
         extensions = headers.get("Sec-WebSocket-Extensions", '')
