@@ -1,63 +1,65 @@
 Running the Tornado Blog example app
 ====================================
-This demo is a simple blogging engine that uses MySQL to store posts and
-Google Accounts for author authentication. Since it depends on MySQL, you
-need to set up MySQL and the database schema for the demo to run.
+
+This demo is a simple blogging engine that uses a database to store posts.
+You must have PostgreSQL or CockroachDB installed to run this demo.
 
 If you have `docker` and `docker-compose` installed, the demo and all
 its prerequisites can be installed with `docker-compose up`.
 
-1. Install prerequisites and build tornado
+1. Install a database if needed
 
-   See http://www.tornadoweb.org/ for installation instructions. If you can
-   run the "helloworld" example application, your environment is set up
-   correctly.
+   Consult the documentation at either https://www.postgresql.org or
+   https://www.cockroachlabs.com to install one of these databases for
+   your platform.
 
-2. Install MySQL if needed
+2. Install Python prerequisites
 
-   Consult the documentation for your platform. Under Ubuntu Linux you
-   can run "apt-get install mysql". Under OS X you can download the
-   MySQL PKG file from http://dev.mysql.com/downloads/mysql/
+   This demo requires Python 3.5 or newer, and the packages listed in
+   requirements.txt. Install them with `pip -r requirements.txt`
 
-3. Install Python prerequisites
+3. Create a database and user for the blog.
 
-   Install the packages MySQL-python, torndb, and markdown (e.g. using pip or
-   easy_install). Note that these packages currently only work on
-   Python 2. Tornado supports Python 3, but this blog demo does not.
+   Connect to the database with `psql -Upostgres` (for PostgreSQL) or
+   `cockroach sql` (for CockroachDB).
 
-3. Connect to MySQL and create a database and user for the blog.
+   Create a database and user, and grant permissions:
 
-   Connect to MySQL as a user that can create databases and users:
-   mysql -u root
+   CREATE DATABASE blog;
+   CREATE USER blog WITH PASSWORD 'blog';
+   GRANT ALL ON DATABASE blog TO blog;
 
-   Create a database named "blog":
-   mysql> CREATE DATABASE blog;
+   (If using CockroachDB in insecure mode, omit the `WITH PASSWORD 'blog'`)
 
-   Allow the "blog" user to connect with the password "blog":
-   mysql> GRANT ALL PRIVILEGES ON blog.* TO 'blog'@'localhost' IDENTIFIED BY 'blog';
+4. Create the tables in your new database (optional):
 
-4. Create the tables in your new database.
+   The blog application will create its tables automatically when starting up.
+   It's also possible to create them separately.
 
-   You can use the provided schema.sql file by running this command:
-   mysql --user=blog --password=blog --database=blog < schema.sql
+   You can use the provided schema.sql file by running this command for PostgreSQL:
+
+   psql -U blog -d blog < schema.sql
+
+   Or this one for CockcroachDB:
+
+   cockroach sql -u blog -d blog < schema.sql
 
    You can run the above command again later if you want to delete the
    contents of the blog and start over after testing.
 
 5. Run the blog example
 
-   With the default user, password, and database you can just run:
+   For PostgreSQL, you can just run
    ./blog.py
 
-   If you've changed anything, you can alter the default MySQL settings
-   with arguments on the command line, e.g.:
-   ./blog.py --mysql_user=casey --mysql_password=happiness --mysql_database=foodblog
+   For CockroachDB, run
+   ./blog.py --db_port=26257
+
+   If you've changed anything from the defaults, use the other `--db_*` flags.
 
 6. Visit your new blog
 
-   Open http://localhost:8888/ in your web browser. You will be redirected to
-   a Google account sign-in page because the blog uses Google accounts for
-   authentication.
+   Open http://localhost:8888/ in your web browser.
 
    Currently the first user to connect will automatically be given the
    ability to create and edit posts.
