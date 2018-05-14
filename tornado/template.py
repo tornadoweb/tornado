@@ -433,6 +433,11 @@ class Loader(BaseLoader):
     """A template loader that loads from a single root directory.
     """
     def __init__(self, root_directory, **kwargs):
+        template_ext_path_dict = kwargs.get("template_ext_path_dict")
+        self.ext_path_dict = template_ext_path_dict
+        if template_ext_path_dict:
+            del kwargs["template_ext_path_dict"]
+
         super(Loader, self).__init__(**kwargs)
         self.root = os.path.abspath(root_directory)
 
@@ -448,7 +453,11 @@ class Loader(BaseLoader):
         return name
 
     def _create_template(self, name):
-        path = os.path.join(self.root, name)
+        if self.ext_path_dict and "{" in name:  # 添加对于绝对路径的直接使用,便于使用非模板目录里的文件
+            path = name.format(**self.ext_path_dict)
+        else:
+            path = os.path.join(self.root, name)
+
         with open(path, "rb") as f:
             template = Template(f.read(), name=name, loader=self)
             return template
