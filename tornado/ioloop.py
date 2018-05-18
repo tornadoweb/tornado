@@ -867,6 +867,7 @@ class PollIOLoop(IOLoop):
         self._pid = os.getpid()
         self._blocking_signal_threshold = None
         self._timeout_counter = itertools.count()
+        self._loop_iter_callback = None
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
@@ -921,6 +922,9 @@ class PollIOLoop(IOLoop):
             self._impl.unregister(fd)
         except Exception:
             gen_log.debug("Error deleting fd from IOLoop", exc_info=True)
+
+    def set_loop_iter_callback(self, fn):
+        self._loop_iter_callback = fn
 
     def set_blocking_signal_threshold(self, seconds, action):
         if not hasattr(signal, "setitimer"):
@@ -1046,6 +1050,7 @@ class PollIOLoop(IOLoop):
 
                 try:
                     event_pairs = self._impl.poll(poll_timeout)
+                    event_pairs_count = len(event_pairs)
                 except Exception as e:
                     # Depending on python version and IOLoop implementation,
                     # different exception types may be thrown and there are
@@ -1081,6 +1086,8 @@ class PollIOLoop(IOLoop):
                         self.handle_callback_exception(self._handlers.get(fd))
                 fd_obj = handler_func = None
 
+                if self._loop_iter_callback:
+                    self._loop_iter_callback(ncallbacks, event_pairs_count)
         finally:
             # reset the stopped flag so another start/stop pair can be issued
             self._stopped = False
