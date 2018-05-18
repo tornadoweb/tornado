@@ -227,6 +227,10 @@ class AsyncHTTPClient(Configurable):
         If it is a string, we construct an `HTTPRequest` using any additional
         kwargs: ``HTTPRequest(request, **kwargs)``
 
+        This method MUST be called from the ioloop thread, its not
+        thread-safe. If we want to call it from another thread we do
+        so by adding it to the IOLoop thread by add_callback.
+
         This method returns a `.Future` whose result is an
         `HTTPResponse`. By default, the ``Future`` will raise an
         `HTTPError` if the request returned a non-200 response code
