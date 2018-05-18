@@ -502,6 +502,9 @@ class TwistedIOLoop(tornado.ioloop.IOLoop):
     def stop(self):
         self.reactor.crash()
 
+    def is_running(self):
+        return self.reactor.running
+
     def add_timeout(self, deadline, callback, *args, **kwargs):
         # This method could be simplified (since tornado 4.0) by
         # overriding call_at instead of add_timeout, but we leave it

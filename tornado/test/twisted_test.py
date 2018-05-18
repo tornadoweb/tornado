@@ -34,7 +34,7 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop, PollIOLoop
 from tornado.platform.auto import set_close_exec
-from tornado.testing import bind_unused_port
+from tornado.testing import AsyncTestCase, bind_unused_port
 from tornado.test.util import unittest
 from tornado.util import import_object, PY3
 from tornado.web import RequestHandler, Application
@@ -221,6 +221,35 @@ class ReactorCallInThread(ReactorTestCase):
     def testCallInThread(self):
         self._reactor.callWhenRunning(self._whenRunningCallback)
         self._reactor.run()
+
+
+@skipIfNoTwisted
+class TwistedIOLoopTest(AsyncTestCase):
+    def setUp(self):
+        super(TwistedIOLoopTest, self).setUp()
+        self._saved_signals = save_signal_handlers()
+
+    def tearDown(self):
+        restore_signal_handlers(self._saved_signals)
+        super(TwistedIOLoopTest, self).tearDown()
+
+    def get_new_ioloop(self):
+        io_loop = TwistedIOLoop()
+        return io_loop
+
+    def test_is_running(self):
+        loop = self.io_loop
+        was_running = [None]
+
+        def cb():
+            was_running[0] = loop.is_running()
+
+        loop.add_callback(cb)
+        loop.add_callback(loop.stop)
+        self.assertFalse(loop.is_running())
+        loop.start()
+        self.assertTrue(was_running[0])
+        self.assertFalse(loop.is_running())
 
 
 if have_twisted:

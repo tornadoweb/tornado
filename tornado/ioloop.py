@@ -575,6 +575,16 @@ class IOLoop(Configurable):
             raise TimeoutError('Operation timed out after %s seconds' % timeout)
         return future_cell[0].result()
 
+    def is_running(self):
+        """Return True if this `IOLoop` is currently running.
+
+        An `IOLoop` is running if its `start()` method has been called
+        and has not yet returned.
+
+        .. versionadded:: 5.0
+        """
+        raise NotImplementedError
+
     def time(self):
         """Returns the current time according to the `IOLoop`'s clock.
 
@@ -1083,6 +1093,7 @@ class PollIOLoop(IOLoop):
 
         finally:
             # reset the stopped flag so another start/stop pair can be issued
+            self._running = False
             self._stopped = False
             if self._blocking_signal_threshold is not None:
                 signal.setitimer(signal.ITIMER_REAL, 0, 0)
@@ -1097,6 +1108,9 @@ class PollIOLoop(IOLoop):
         self._running = False
         self._stopped = True
         self._waker.wake()
+
+    def is_running(self):
+        return self._running
 
     def time(self):
         return self.time_func()

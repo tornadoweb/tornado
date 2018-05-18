@@ -39,6 +39,27 @@ class AsyncIOLoopTest(AsyncTestCase):
         asyncio.get_event_loop().call_soon(self.stop)
         self.wait()
 
+    def test_is_running(self):
+        was_running = [None]
+
+        def cb():
+            was_running[0] = self.io_loop.is_running()
+
+        self.io_loop.add_callback(cb)
+        self.io_loop.add_callback(self.io_loop.stop)
+        self.assertFalse(self.io_loop.is_running())
+        self.io_loop.start()
+        self.assertTrue(was_running[0])
+        self.assertFalse(self.io_loop.is_running())
+
+        was_running = [None]
+        asyncio.get_event_loop().call_soon(cb)
+        asyncio.get_event_loop().call_soon(asyncio.get_event_loop().stop)
+        self.assertFalse(self.io_loop.is_running())
+        asyncio.get_event_loop().run_forever()
+        self.assertTrue(was_running[0])
+        self.assertFalse(self.io_loop.is_running())
+
     @gen_test
     def test_asyncio_future(self):
         # Test that we can yield an asyncio future from a tornado coroutine.
