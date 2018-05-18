@@ -141,14 +141,11 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
             try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             except socket.error as e:
-                if e.args[0] != errno.ENOPROTOOPT:
+                if errno_from_exception(e) != errno.ENOPROTOOPT:
+                    # Hurd doesn't support SO_REUSEADDR.
                     raise
         if reuse_port:
-            try:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            except socket.error as e:
-                if e.args[0] != errno.ENOPROTOOPT:
-                    raise
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         if af == socket.AF_INET6:
             # On linux, ipv6 sockets accept ipv4 too by default,
             # but this makes it impossible to bind to both
@@ -191,7 +188,8 @@ if hasattr(socket, 'AF_UNIX'):
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         except socket.error as e:
-            if e.args[0] != errno.ENOPROTOOPT:
+            if errno_from_exception(e) != errno.ENOPROTOOPT:
+                # Hurd doesn't support SO_REUSEADDR
                 raise
         sock.setblocking(0)
         try:

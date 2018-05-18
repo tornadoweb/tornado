@@ -1413,8 +1413,9 @@ class IOStream(BaseIOStream):
         try:
             err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
         except socket.error as e:
-            err = e.args[0]
-            if err == errno.ENOPROTOOPT:
+            # Hurd doesn't allow SO_ERROR for loopback sockets because all
+            # errors for such sockets are reported synchronously.
+            if errno_from_exception(e) == errno.ENOPROTOOPT:
                 err = 0
         if err != 0:
             self.error = socket.error(err, os.strerror(err))
