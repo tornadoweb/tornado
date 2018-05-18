@@ -542,9 +542,9 @@ class RequestHandler(object):
 
         Newly-set cookies are not immediately visible via `get_cookie`;
         they are not present until the next request.
-        
+
         expires may be a numeric timestamp as returned by `time.time`,
-        a time tuple as returned by `time.gmtime`, or a 
+        a time tuple as returned by `time.gmtime`, or a
         `datetime.datetime` object.
 
         Additional keyword arguments are set on the cookies.Morsel
