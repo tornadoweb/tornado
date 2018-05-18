@@ -130,7 +130,8 @@ class BaseHandler(tornado.web.RequestHandler):
         # self.current_user in prepare instead.
         user_id = self.get_secure_cookie("blogdemo_user")
         if user_id:
-            self.current_user = await self.queryone("SELECT * FROM authors WHERE id = %s", int(user_id))
+            self.current_user = await self.queryone("SELECT * FROM authors WHERE id = %s",
+                                                    int(user_id))
 
     async def any_author_exists(self):
         return bool(await self.query("SELECT * FROM authors LIMIT 1"))

@@ -32,7 +32,7 @@ from tornado.escape import utf8, native_str, to_unicode
 from tornado import gen, httpclient, httputil
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
-from tornado.log import gen_log, app_log
+from tornado.log import gen_log
 from tornado import simple_httpclient
 from tornado.queues import Queue
 from tornado.tcpclient import TCPClient

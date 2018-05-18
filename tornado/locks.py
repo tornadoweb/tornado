@@ -459,7 +459,7 @@ class Lock(object):
     A Lock can be used as an async context manager with the ``async
     with`` statement:
 
-    >>> from tornado import gen, locks
+    >>> from tornado import locks
     >>> lock = locks.Lock()
     >>>
     >>> async def f():
