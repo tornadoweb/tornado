@@ -1,12 +1,13 @@
 from __future__ import absolute_import, division, print_function
 import os
+import shutil
 import subprocess
 from subprocess import Popen
 import sys
 from tempfile import mkdtemp
+import time
 
 from tornado.test.util import unittest
-import tornado.autoreload
 
 
 class AutoreloadTest(unittest.TestCase):
@@ -30,6 +31,7 @@ if 'TESTAPP_STARTED' not in os.environ:
 
         # Create temporary test application
         path = mkdtemp()
+        self.addCleanup(shutil.rmtree, path)
         os.mkdir(os.path.join(path, 'testapp'))
         open(os.path.join(path, 'testapp/__init__.py'), 'w').close()
         with open(os.path.join(path, 'testapp/__main__.py'), 'w') as f:
@@ -48,45 +50,43 @@ if 'TESTAPP_STARTED' not in os.environ:
         out = p.communicate()[0]
         self.assertEqual(out, 'Starting\nStarting\n')
 
-    def test_reload_module_with_argv_preservation(self):
+    def test_reload_wrapper_preservation(self):
+        # This test verifies that when `python -m tornado.autoreload`
+        # is used on an application that also has an internal
+        # autoreload, the reload wrapper is preserved on restart.
         main = """\
 import os
 import sys
-from tornado import autoreload
 
 # This import will fail if path is not set up correctly
 import testapp
 
-print(autoreload._original_argv)
+if 'tornado.autoreload' not in sys.modules:
+    raise Exception('started without autoreload wrapper')
+
+import tornado.autoreload
+
+print('Starting')
 sys.stdout.flush()
 if 'TESTAPP_STARTED' not in os.environ:
     os.environ['TESTAPP_STARTED'] = '1'
+    # Simulate an internal autoreload (one not caused
+    # by the wrapper).
+    tornado.autoreload._reload()
 else:
-    # Avoid the autoreload to be caught by SystemExit
+    # Exit directly so autoreload doesn't catch it.
     os._exit(0)
 """
-
-        touch = """\
-import os
-import time
-import sys
-import stat
-for i in range(50):
-    time.sleep(0.1)
-    
-    # Update the access time and modification time of file
-    st = os.stat(sys.argv[1])
-    os.utime(sys.argv[1], (st[stat.ST_ATIME] + i, st[stat.ST_MTIME] + i)) 
-        """
 
         # Create temporary test application
         path = mkdtemp()
         os.mkdir(os.path.join(path, 'testapp'))
-        open(os.path.join(path, 'testapp/__init__.py'), 'w').close()
-        with open(os.path.join(path, 'testapp/__main__.py'), 'w') as f:
+        self.addCleanup(shutil.rmtree, path)
+        init_file = os.path.join(path, 'testapp', '__init__.py')
+        open(init_file, 'w').close()
+        main_file = os.path.join(path, 'testapp', '__main__.py')
+        with open(main_file, 'w') as f:
             f.write(main)
-        with open(os.path.join(path, 'testapp/touch.py'), 'w') as f:
-            f.write(touch)
 
         # Make sure the tornado module under test is available to the test
         # application
@@ -99,18 +99,14 @@ for i in range(50):
             stdout=subprocess.PIPE, cwd=path,
             env=dict(os.environ, PYTHONPATH=pythonpath),
             universal_newlines=True)
-        touch_proc = Popen(
-            [sys.executable, os.path.join(path, 'testapp/touch.py'),
-             os.path.join(path, 'testapp/__init__.py')]
-            , stdout=subprocess.PIPE, cwd=path,
-            env=dict(os.environ, PYTHONPATH=pythonpath),
-            universal_newlines=True)
 
-        # Once the autoreload process is done, we kill the touching process
-        autoreload_proc.wait()
-        touch_proc.kill()
+        for i in range(20):
+            if autoreload_proc.poll() is not None:
+                break
+            time.sleep(0.1)
+        else:
+            autoreload_proc.kill()
+            raise Exception("subprocess failed to terminate")
 
         out = autoreload_proc.communicate()[0]
-        autoreload_module = os.path.join(os.path.dirname(os.path.abspath(
-            tornado.autoreload.__file__)), 'autoreload.py')
-        self.assertEqual(out, (str([autoreload_module, '-m', 'testapp']) + '\n') * 2)
+        self.assertEqual(out, 'Starting\n' * 2)
