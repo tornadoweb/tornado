@@ -553,8 +553,20 @@ class CompressionTestMixin(object):
 
     def get_app(self):
         self.close_future = Future()
+
+        class LimitedHandler(TestWebSocketHandler):
+            @property
+            def max_message_size(self):
+                return 1024
+
+            def on_message(self, message):
+                self.write_message(str(len(message)))
+
         return Application([
             ('/echo', EchoHandler, dict(
+                close_future=self.close_future,
+                compression_options=self.get_server_compression_options())),
+            ('/limited', LimitedHandler, dict(
                 close_future=self.close_future,
                 compression_options=self.get_server_compression_options())),
         ])
@@ -580,6 +592,22 @@ class CompressionTestMixin(object):
         self.assertEqual(ws.protocol._message_bytes_in, len(self.MESSAGE) * 3)
         self.verify_wire_bytes(ws.protocol._wire_bytes_in,
                                ws.protocol._wire_bytes_out)
+        yield self.close(ws)
+
+    @gen_test
+    def test_size_limit(self):
+        ws = yield self.ws_connect(
+            '/limited',
+            compression_options=self.get_client_compression_options())
+        # Small messages pass through.
+        ws.write_message('a' * 128)
+        response = yield ws.read_message()
+        self.assertEqual(response, '128')
+        # This message is too big after decompression, but it compresses
+        # down to a size that will pass the initial checks.
+        ws.write_message('a' * 2048)
+        response = yield ws.read_message()
+        self.assertIsNone(response)
         yield self.close(ws)
 
 
