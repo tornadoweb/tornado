@@ -44,6 +44,8 @@ if PY3:
 else:
     from urlparse import urlparse  # py3
 
+_default_max_message_size = 10 * 1024 * 1024
+
 
 class WebSocketError(Exception):
     pass
@@ -54,6 +56,10 @@ class WebSocketClosedError(WebSocketError):
 
     .. versionadded:: 3.2
     """
+    pass
+
+
+class _DecompressTooLargeError(Exception):
     pass
 
 
@@ -225,7 +231,7 @@ class WebSocketHandler(tornado.web.RequestHandler):
 
         Default is 10MiB.
         """
-        return self.settings.get('websocket_max_message_size', None)
+        return self.settings.get('websocket_max_message_size', _default_max_message_size)
 
     def write_message(self, message, binary=False):
         """Sends the given message to the client of this Web Socket.
@@ -596,7 +602,8 @@ class _PerMessageDeflateCompressor(object):
 
 
 class _PerMessageDeflateDecompressor(object):
-    def __init__(self, persistent, max_wbits, compression_options=None):
+    def __init__(self, persistent, max_wbits, max_message_size, compression_options=None):
+        self._max_message_size = max_message_size
         if max_wbits is None:
             max_wbits = zlib.MAX_WBITS
         if not (8 <= max_wbits <= zlib.MAX_WBITS):
@@ -613,7 +620,10 @@ class _PerMessageDeflateDecompressor(object):
 
     def decompress(self, data):
         decompressor = self._decompressor or self._create_decompressor()
-        return decompressor.decompress(data + b'\x00\x00\xff\xff')
+        result = decompressor.decompress(data + b'\x00\x00\xff\xff', self._max_message_size)
+        if decompressor.unconsumed_tail:
+            raise _DecompressTooLargeError()
+        return result
 
 
 class WebSocketProtocol13(WebSocketProtocol):
@@ -801,6 +811,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         self._compressor = _PerMessageDeflateCompressor(
             **self._get_compressor_options(side, agreed_parameters, compression_options))
         self._decompressor = _PerMessageDeflateDecompressor(
+            max_message_size=self.handler.max_message_size,
             **self._get_compressor_options(other_side, agreed_parameters, compression_options))
 
     def _write_frame(self, fin, opcode, data, flags=0):
@@ -920,7 +931,7 @@ class WebSocketProtocol13(WebSocketProtocol):
         new_len = payloadlen
         if self._fragmented_message_buffer is not None:
             new_len += len(self._fragmented_message_buffer)
-        if new_len > (self.handler.max_message_size or 10 * 1024 * 1024):
+        if new_len > self.handler.max_message_size:
             self.close(1009, "message too big")
             self._abort()
             return
@@ -971,7 +982,12 @@ class WebSocketProtocol13(WebSocketProtocol):
             return
 
         if self._frame_compressed:
-            data = self._decompressor.decompress(data)
+            try:
+                data = self._decompressor.decompress(data)
+            except _DecompressTooLargeError:
+                self.close(1009, "message too big after decompression")
+                self._abort()
+                return
 
         if opcode == 0x1:
             # UTF-8 data
@@ -1260,7 +1276,7 @@ class WebSocketClientConnection(simple_httpclient._HTTPConnection):
 def websocket_connect(url, callback=None, connect_timeout=None,
                       on_message_callback=None, compression_options=None,
                       ping_interval=None, ping_timeout=None,
-                      max_message_size=None, subprotocols=None):
+                      max_message_size=_default_max_message_size, subprotocols=None):
     """Client-side websocket support.
 
     Takes a url and returns a Future whose result is a
