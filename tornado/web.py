@@ -749,7 +749,18 @@ class RequestHandler(object):
         self._write_buffer.append(chunk)
 
     def render(self, template_name, **kwargs):
-        """Renders the template with the given arguments as the response."""
+        """Renders the template with the given arguments as the response.
+
+        ``render()`` calls ``finish()``, so no other output methods can be called
+        after it.
+
+        Returns a `.Future` with the same semantics as the one returned by `finish`.
+        Awaiting this `.Future` is optional.
+
+        .. versionchanged:: 5.1
+
+           Now returns a `.Future` instead of ``None``.
+        """
         if self._finished:
             raise RuntimeError("Cannot render() after finish()")
         html = self.render_string(template_name, **kwargs)
@@ -810,7 +821,7 @@ class RequestHandler(object):
         if html_bodies:
             hloc = html.index(b'</body>')
             html = html[:hloc] + b''.join(html_bodies) + b'\n' + html[hloc:]
-        self.finish(html)
+        return self.finish(html)
 
     def render_linked_js(self, js_files):
         """Default method used to render the final js links for the
@@ -993,7 +1004,20 @@ class RequestHandler(object):
                 return future
 
     def finish(self, chunk=None):
-        """Finishes this response, ending the HTTP request."""
+        """Finishes this response, ending the HTTP request.
+
+        Passing a ``chunk`` to ``finish()`` is equivalent to passing that
+        chunk to ``write()`` and then calling ``finish()`` with no arguments.
+
+        Returns a `.Future` which may optionally be awaited to track the sending
+        of the response to the client. This `.Future` resolves when all the response
+        data has been sent, and raises an error if the connection is closed before all
+        data can be sent.
+
+        .. versionchanged:: 5.1
+
+           Now returns a `.Future` instead of ``None``.
+        """
         if self._finished:
             raise RuntimeError("finish() called twice")
 
