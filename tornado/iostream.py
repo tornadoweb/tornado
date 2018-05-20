@@ -1410,7 +1410,13 @@ class IOStream(BaseIOStream):
         return future
 
     def _handle_connect(self):
-        err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        try:
+            err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        except socket.error as e:
+            # Hurd doesn't allow SO_ERROR for loopback sockets because all
+            # errors for such sockets are reported synchronously.
+            if errno_from_exception(e) == errno.ENOPROTOOPT:
+                err = 0
         if err != 0:
             self.error = socket.error(err, os.strerror(err))
             # IOLoop implementations may vary: some of them return
