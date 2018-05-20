@@ -233,7 +233,7 @@ def _reload():
                                         os.environ.get("PYTHONPATH", ""))
     if not _has_execv:
         subprocess.Popen([sys.executable] + argv)
-        sys.exit(0)
+        os._exit(0)
     else:
         try:
             os.execv(sys.executable, [sys.executable] + argv)
