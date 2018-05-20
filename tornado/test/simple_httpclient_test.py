@@ -21,7 +21,7 @@ from tornado.locks import Event
 from tornado.log import gen_log
 from tornado.concurrent import Future
 from tornado.netutil import Resolver, bind_sockets
-from tornado.simple_httpclient import SimpleAsyncHTTPClient, HTTPStreamClosedError
+from tornado.simple_httpclient import SimpleAsyncHTTPClient, HTTPStreamClosedError, HTTPTimeoutError
 from tornado.test.httpclient_test import ChunkHandler, CountdownHandler, HelloWorldHandler, RedirectHandler  # noqa: E501
 from tornado.test import httpclient_test
 from tornado.testing import (AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase,
@@ -673,10 +673,11 @@ class HostnameMappingTestCase(AsyncHTTPTestCase):
 
 class ResolveTimeoutTestCase(AsyncHTTPTestCase):
     def setUp(self):
-        # Dummy Resolver subclass that never invokes its callback.
+        # Dummy Resolver subclass that never finishes.
         class BadResolver(Resolver):
+            @gen.coroutine
             def resolve(self, *args, **kwargs):
-                pass
+                yield Event().wait()
 
         super(ResolveTimeoutTestCase, self).setUp()
         self.http_client = SimpleAsyncHTTPClient(
@@ -686,7 +687,7 @@ class ResolveTimeoutTestCase(AsyncHTTPTestCase):
         return Application([url("/hello", HelloWorldHandler), ])
 
     def test_resolve_timeout(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(HTTPTimeoutError):
             self.fetch('/hello', connect_timeout=0.1, raise_error=True)
 
 
