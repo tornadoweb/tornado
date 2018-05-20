@@ -458,6 +458,16 @@ class TestIOLoop(AsyncTestCase):
             client.close()
             server.close()
 
+    @gen_test
+    def test_init_close_race(self):
+        # Regression test for #2367
+        def f():
+            for i in range(10):
+                loop = IOLoop()
+                loop.close()
+
+        yield gen.multi([self.io_loop.run_in_executor(None, f) for i in range(2)])
+
 
 # Deliberately not a subclass of AsyncTestCase so the IOLoop isn't
 # automatically set as current.
