@@ -42,6 +42,7 @@ install:
     - /tmp/nodeps/bin/python -VV
     - /tmp/nodeps/bin/python setup.py install
     - curl-config --version; pip freeze
+    - cat /etc/hosts
 
 script:
     # Run the tests once from the source directory to detect issues
