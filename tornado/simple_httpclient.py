@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from tornado.escape import utf8, _unicode
+from tornado.escape import _unicode
 from tornado import gen
 from tornado.httpclient import HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
 from tornado import httputil
@@ -308,9 +308,9 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
                     if self.request.auth_mode not in (None, "basic"):
                         raise ValueError("unsupported auth_mode %s",
                                          self.request.auth_mode)
-                    auth = utf8(username) + b":" + utf8(password)
-                    self.request.headers["Authorization"] = (b"Basic " +
-                                                             base64.b64encode(auth))
+                    self.request.headers["Authorization"] = (
+                        b"Basic " + base64.b64encode(
+                            httputil.encode_username_password(username, password)))
                 if self.request.user_agent:
                     self.request.headers["User-Agent"] = self.request.user_agent
                 if not self.request.allow_nonstandard_methods:

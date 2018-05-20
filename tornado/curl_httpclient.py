@@ -348,8 +348,8 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             curl.setopt(pycurl.PROXY, request.proxy_host)
             curl.setopt(pycurl.PROXYPORT, request.proxy_port)
             if request.proxy_username:
-                credentials = '%s:%s' % (request.proxy_username,
-                                         request.proxy_password)
+                credentials = httputil.encode_username_password(request.proxy_username,
+                                                                request.proxy_password)
                 curl.setopt(pycurl.PROXYUSERPWD, credentials)
 
             if (request.proxy_auth_mode is None or
@@ -441,8 +441,6 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 curl.setopt(pycurl.INFILESIZE, len(request.body or ''))
 
         if request.auth_username is not None:
-            userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
-
             if request.auth_mode is None or request.auth_mode == "basic":
                 curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
             elif request.auth_mode == "digest":
@@ -450,7 +448,9 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             else:
                 raise ValueError("Unsupported auth_mode %s" % request.auth_mode)
 
-            curl.setopt(pycurl.USERPWD, utf8(userpwd))
+            userpwd = httputil.encode_username_password(request.auth_username,
+                                                        request.auth_password)
+            curl.setopt(pycurl.USERPWD, userpwd)
             curl_log.debug("%s %s (username: %r)", request.method, request.url,
                            request.auth_username)
         else:
