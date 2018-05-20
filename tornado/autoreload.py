@@ -107,6 +107,8 @@ _watched_files = set()
 _reload_hooks = []
 _reload_attempted = False
 _io_loops = weakref.WeakKeyDictionary()  # type: ignore
+_autoreload_is_main = False
+_original_argv = None
 
 
 def start(check_time=500):
@@ -218,7 +220,7 @@ def _reload():
     if spec:
         argv = ['-m', spec.name] + sys.argv[1:]
     else:
-        argv = sys.argv
+        argv = _original_argv if _autoreload_is_main else sys.argv
         path_prefix = '.' + os.pathsep
         if (sys.path[0] == '' and
                 not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
@@ -269,7 +271,15 @@ def main():
     can catch import-time problems like syntax errors that would otherwise
     prevent the script from reaching its call to `wait`.
     """
+    # Remember that we were launched with autoreload as main.
+    # The main module can be tricky; set the variables both in our globals
+    # (which may be __main__) and the real importable version.
+    import tornado.autoreload
+    global _autoreload_is_main
+    global _original_argv
+    tornado.autoreload._autoreload_is_main = _autoreload_is_main = True
     original_argv = sys.argv
+    tornado.autoreload._original_argv = _original_argv = original_argv
     sys.argv = sys.argv[:]
     if len(sys.argv) >= 3 and sys.argv[1] == "-m":
         mode = "module"
@@ -336,4 +346,7 @@ def main():
 if __name__ == "__main__":
     # See also the other __main__ block at the top of the file, which modifies
     # sys.path before our imports
+    # Ensure that any global variables accessed by main() are in the module namespace
+    # instead of the __main__ namespace
     main()
+
