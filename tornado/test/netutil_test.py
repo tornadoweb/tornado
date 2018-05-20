@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import errno
-import os
 import signal
 import socket
 from subprocess import Popen
@@ -218,8 +217,6 @@ class IsValidIPTest(unittest.TestCase):
 
 class TestPortAllocation(unittest.TestCase):
     def test_same_port_allocation(self):
-        if 'TRAVIS' in os.environ:
-            self.skipTest("dual-stack servers often have port conflicts on travis")
         sockets = bind_sockets(None, 'localhost')
         try:
             port = sockets[0].getsockname()[1]
