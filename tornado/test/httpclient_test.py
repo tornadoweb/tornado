@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
 
 import base64
@@ -8,6 +9,7 @@ import sys
 import threading
 import datetime
 from io import BytesIO
+import unicodedata
 
 from tornado.escape import utf8, native_str
 from tornado import gen
@@ -237,6 +239,7 @@ Transfer-Encoding: chunked
         self.assertIs(exc_info[0][0], ZeroDivisionError)
 
     def test_basic_auth(self):
+        # This test data appears in section 2 of RFC 7617.
         self.assertEqual(self.fetch("/auth", auth_username="Aladdin",
                                     auth_password="open sesame").body,
                          b"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
@@ -246,6 +249,20 @@ Transfer-Encoding: chunked
                                     auth_password="open sesame",
                                     auth_mode="basic").body,
                          b"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
+
+    def test_basic_auth_unicode(self):
+        # This test data appears in section 2.1 of RFC 7617.
+        self.assertEqual(self.fetch("/auth", auth_username="test",
+                                    auth_password="123£").body,
+                         b"Basic dGVzdDoxMjPCow==")
+
+        # The standard mandates NFC. Give it a decomposed username
+        # and ensure it is normalized to composed form.
+        username = unicodedata.normalize("NFD", u"josé")
+        self.assertEqual(self.fetch("/auth",
+                                    auth_username=username,
+                                    auth_password="səcrət").body,
+                         b"Basic am9zw6k6c8mZY3LJmXQ=")
 
     def test_unsupported_auth_mode(self):
         # curl and simple clients handle errors a bit differently; the

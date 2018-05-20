@@ -29,11 +29,12 @@ import email.utils
 import numbers
 import re
 import time
+import unicodedata
 import warnings
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import ObjectDict, PY3
+from tornado.util import ObjectDict, PY3, unicode_type
 
 if PY3:
     import http.cookies as Cookie
@@ -947,6 +948,20 @@ def _encode_header(key, pdict):
             # TODO: quote if necessary.
             out.append('%s=%s' % (k, v))
     return '; '.join(out)
+
+
+def encode_username_password(username, password):
+    """Encodes a username/password pair in the format used by HTTP auth.
+
+    The return value is a byte string in the form ``username:password``.
+
+    .. versionadded:: 5.1
+    """
+    if isinstance(username, unicode_type):
+        username = unicodedata.normalize('NFC', username)
+    if isinstance(password, unicode_type):
+        password = unicodedata.normalize('NFC', password)
+    return utf8(username) + b":" + utf8(password)
 
 
 def doctests():
