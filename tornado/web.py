@@ -483,6 +483,9 @@ class RequestHandler(object):
             if default is self._ARG_DEFAULT:
                 raise MissingArgumentError(name)
             return default
+        # return a list if request send a list like `l1=a&l1=b`
+        if len(args) > 1:
+            return args
         return args[-1]
 
     def _get_arguments(self, name, source, strip=True):
