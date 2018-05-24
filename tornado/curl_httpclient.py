@@ -319,17 +319,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
                 self.io_loop.add_callback(request.streaming_callback, chunk)
         else:
             write_function = buffer.write
-        if bytes is str:  # py2
-            curl.setopt(pycurl.WRITEFUNCTION, write_function)
-        else:  # py3
-            # Upstream pycurl doesn't support py3, but ubuntu 12.10 includes
-            # a fork/port.  That version has a bug in which it passes unicode
-            # strings instead of bytes to the WRITEFUNCTION.  This means that
-            # if you use a WRITEFUNCTION (which tornado always does), you cannot
-            # download arbitrary binary data.  This needs to be fixed in the
-            # ported pycurl package, but in the meantime this lambda will
-            # make it work for downloading (utf8) text.
-            curl.setopt(pycurl.WRITEFUNCTION, lambda s: write_function(utf8(s)))
+        curl.setopt(pycurl.WRITEFUNCTION, write_function)
         curl.setopt(pycurl.FOLLOWLOCATION, request.follow_redirects)
         curl.setopt(pycurl.MAXREDIRS, request.max_redirects)
         curl.setopt(pycurl.CONNECTTIMEOUT_MS, int(1000 * request.connect_timeout))
