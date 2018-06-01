@@ -491,9 +491,17 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.request.header_callback('\r\n')
 
     def _should_follow_redirect(self):
-        return (self.request.follow_redirects and
+        if not (self.request.follow_redirects and
                 self.request.max_redirects > 0 and
-                self.code in (301, 302, 303, 307, 308))
+                self.code in (301, 302, 303, 307, 308)):
+           return False
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
+        # According to the spec, the temporary URI may not be specified when the 
+        # request method was HEAD.
+        # TODO: Unless the request method was HEAD, give a warning or raise an
+        # exception when the temporary URI is not specified?
+        redirect_location = self.headers.get("Location")
+        return (redirect_location is not None)
 
     def finish(self):
         data = b''.join(self.chunks)
@@ -515,7 +523,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # compatibility with pre-HTTP/1.1 user agents which don't
             # understand the 303 status.
             if self.code in (302, 303):
-                new_request.method = "GET"
+                if self.request.method != "HEAD":
+                    new_request.method = "GET"
                 new_request.body = None
                 for h in ["Content-Length", "Content-Type",
                           "Content-Encoding", "Transfer-Encoding"]:
