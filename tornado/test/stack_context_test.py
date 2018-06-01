@@ -6,7 +6,7 @@ from tornado.log import app_log
 from tornado.stack_context import (StackContext, wrap, NullContext, StackContextInconsistentError,
                                    ExceptionStackContext, run_with_stack_context, _state)
 from tornado.testing import AsyncHTTPTestCase, AsyncTestCase, ExpectLog, gen_test
-from tornado.test.util import unittest
+from tornado.test.util import unittest, ignore_deprecation
 from tornado.web import asynchronous, Application, RequestHandler
 import contextlib
 import functools
@@ -18,12 +18,13 @@ class TestRequestHandler(RequestHandler):
     def __init__(self, app, request):
         super(TestRequestHandler, self).__init__(app, request)
 
-    @asynchronous
-    def get(self):
-        logging.debug('in get()')
-        # call self.part2 without a self.async_callback wrapper.  Its
-        # exception should still get thrown
-        IOLoop.current().add_callback(self.part2)
+    with ignore_deprecation():
+        @asynchronous
+        def get(self):
+            logging.debug('in get()')
+            # call self.part2 without a self.async_callback wrapper.  Its
+            # exception should still get thrown
+            IOLoop.current().add_callback(self.part2)
 
     def part2(self):
         logging.debug('in part2()')
@@ -48,8 +49,9 @@ class HTTPStackContextTest(AsyncHTTPTestCase):
 
     def test_stack_context(self):
         with ExpectLog(app_log, "Uncaught exception GET /"):
-            self.http_client.fetch(self.get_url('/'), self.handle_response)
-            self.wait()
+            with ignore_deprecation():
+                self.http_client.fetch(self.get_url('/'), self.handle_response)
+                self.wait()
         self.assertEqual(self.response.code, 500)
         self.assertTrue(b'got expected exception' in self.response.body)
 

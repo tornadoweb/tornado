@@ -20,6 +20,7 @@ import re
 import socket
 import sys
 import traceback
+import warnings
 
 from tornado.concurrent import (Future, return_future, ReturnValueIgnoredError,
                                 run_on_executor, future_set_result_unless_cancelled)
@@ -58,32 +59,33 @@ class MiscFutureTest(AsyncTestCase):
 
 
 class ReturnFutureTest(AsyncTestCase):
-    @return_future
-    def sync_future(self, callback):
-        callback(42)
+    with ignore_deprecation():
+        @return_future
+        def sync_future(self, callback):
+            callback(42)
 
-    @return_future
-    def async_future(self, callback):
-        self.io_loop.add_callback(callback, 42)
+        @return_future
+        def async_future(self, callback):
+            self.io_loop.add_callback(callback, 42)
 
-    @return_future
-    def immediate_failure(self, callback):
-        1 / 0
+        @return_future
+        def immediate_failure(self, callback):
+            1 / 0
 
-    @return_future
-    def delayed_failure(self, callback):
-        self.io_loop.add_callback(lambda: 1 / 0)
+        @return_future
+        def delayed_failure(self, callback):
+            self.io_loop.add_callback(lambda: 1 / 0)
 
-    @return_future
-    def return_value(self, callback):
-        # Note that the result of both running the callback and returning
-        # a value (or raising an exception) is unspecified; with current
-        # implementations the last event prior to callback resolution wins.
-        return 42
+        @return_future
+        def return_value(self, callback):
+            # Note that the result of both running the callback and returning
+            # a value (or raising an exception) is unspecified; with current
+            # implementations the last event prior to callback resolution wins.
+            return 42
 
-    @return_future
-    def no_result_future(self, callback):
-        callback()
+        @return_future
+        def no_result_future(self, callback):
+            callback()
 
     def test_immediate_failure(self):
         with self.assertRaises(ZeroDivisionError):
@@ -142,16 +144,18 @@ class ReturnFutureTest(AsyncTestCase):
 
     def test_delayed_failure(self):
         future = self.delayed_failure()
-        self.io_loop.add_future(future, self.stop)
-        future2 = self.wait()
+        with ignore_deprecation():
+            self.io_loop.add_future(future, self.stop)
+            future2 = self.wait()
         self.assertIs(future, future2)
         with self.assertRaises(ZeroDivisionError):
             future.result()
 
     def test_kw_only_callback(self):
-        @return_future
-        def f(**kwargs):
-            kwargs['callback'](42)
+        with ignore_deprecation():
+            @return_future
+            def f(**kwargs):
+                kwargs['callback'](42)
         future = f()
         self.assertEqual(future.result(), 42)
 
@@ -249,20 +253,16 @@ class ReturnFutureTest(AsyncTestCase):
 
 
 class CapServer(TCPServer):
+    @gen.coroutine
     def handle_stream(self, stream, address):
-        logging.debug("handle_stream")
-        self.stream = stream
-        self.stream.read_until(b"\n", self.handle_read)
-
-    def handle_read(self, data):
-        logging.debug("handle_read")
+        data = yield stream.read_until(b"\n")
         data = to_unicode(data)
         if data == data.upper():
-            self.stream.write(b"error\talready capitalized\n")
+            stream.write(b"error\talready capitalized\n")
         else:
             # data already has \n
-            self.stream.write(utf8("ok\t%s" % data.upper()))
-        self.stream.close()
+            stream.write(utf8("ok\t%s" % data.upper()))
+        stream.close()
 
 
 class CapError(Exception):
@@ -309,14 +309,15 @@ class ManualCapClient(BaseCapClient):
 
 
 class DecoratorCapClient(BaseCapClient):
-    @return_future
-    def capitalize(self, request_data, callback):
-        logging.debug("capitalize")
-        self.request_data = request_data
-        self.stream = IOStream(socket.socket())
-        self.stream.connect(('127.0.0.1', self.port),
-                            callback=self.handle_connect)
-        self.callback = callback
+    with ignore_deprecation():
+        @return_future
+        def capitalize(self, request_data, callback):
+            logging.debug("capitalize")
+            self.request_data = request_data
+            self.stream = IOStream(socket.socket())
+            self.stream.connect(('127.0.0.1', self.port),
+                                callback=self.handle_connect)
+            self.callback = callback
 
     def handle_connect(self):
         logging.debug("handle_connect")
@@ -365,7 +366,7 @@ class ClientTestMixin(object):
     def test_callback_error(self):
         with ignore_deprecation():
             self.client.capitalize("HELLO", callback=self.stop)
-        self.assertRaisesRegexp(CapError, "already capitalized", self.wait)
+            self.assertRaisesRegexp(CapError, "already capitalized", self.wait)
 
     def test_future(self):
         future = self.client.capitalize("hello")
@@ -397,9 +398,29 @@ class ClientTestMixin(object):
 class ManualClientTest(ClientTestMixin, AsyncTestCase):
     client_class = ManualCapClient
 
+    def setUp(self):
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
+        super(ManualClientTest, self).setUp()
+
+    def tearDown(self):
+        super(ManualClientTest, self).tearDown()
+        self.warning_catcher.__exit__(None, None, None)
+
 
 class DecoratorClientTest(ClientTestMixin, AsyncTestCase):
     client_class = DecoratorCapClient
+
+    def setUp(self):
+        self.warning_catcher = warnings.catch_warnings()
+        self.warning_catcher.__enter__()
+        warnings.simplefilter('ignore', DeprecationWarning)
+        super(DecoratorClientTest, self).setUp()
+
+    def tearDown(self):
+        super(DecoratorClientTest, self).tearDown()
+        self.warning_catcher.__exit__(None, None, None)
 
 
 class GeneratorClientTest(ClientTestMixin, AsyncTestCase):

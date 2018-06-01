@@ -138,7 +138,12 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
             raise
         set_close_exec(sock.fileno())
         if os.name != 'nt':
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            except socket.error as e:
+                if errno_from_exception(e) != errno.ENOPROTOOPT:
+                    # Hurd doesn't support SO_REUSEADDR.
+                    raise
         if reuse_port:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         if af == socket.AF_INET6:
@@ -180,7 +185,12 @@ if hasattr(socket, 'AF_UNIX'):
         """
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         set_close_exec(sock.fileno())
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        except socket.error as e:
+            if errno_from_exception(e) != errno.ENOPROTOOPT:
+                # Hurd doesn't support SO_REUSEADDR
+                raise
         sock.setblocking(0)
         try:
             st = os.stat(file)

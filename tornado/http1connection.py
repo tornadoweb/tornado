@@ -21,6 +21,7 @@
 from __future__ import absolute_import, division, print_function
 
 import re
+import warnings
 
 from tornado.concurrent import (Future, future_add_done_callback,
                                 future_set_result_unless_cancelled)
@@ -277,8 +278,14 @@ class HTTP1Connection(httputil.HTTPConnection):
     def set_close_callback(self, callback):
         """Sets a callback that will be run when the connection is closed.
 
-        .. deprecated:: 4.0
-            Use `.HTTPMessageDelegate.on_connection_close` instead.
+        Note that this callback is slightly different from
+        `.HTTPMessageDelegate.on_connection_close`: The
+        `.HTTPMessageDelegate` method is called when the connection is
+        closed while recieving a message. This callback is used when
+        there is not an active delegate (for example, on the server
+        side this callback is used if the client closes the connection
+        after sending its request but before receiving all the
+        response.
         """
         self._close_callback = stack_context.wrap(callback)
 
@@ -395,6 +402,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             future.exception()
         else:
             if callback is not None:
+                warnings.warn("callback argument is deprecated, use returned Future instead",
+                              DeprecationWarning)
                 self._write_callback = stack_context.wrap(callback)
             else:
                 future = self._write_future = Future()
@@ -434,6 +443,8 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._write_future.exception()
         else:
             if callback is not None:
+                warnings.warn("callback argument is deprecated, use returned Future instead",
+                              DeprecationWarning)
                 self._write_callback = stack_context.wrap(callback)
             else:
                 future = self._write_future = Future()

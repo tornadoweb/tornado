@@ -37,15 +37,14 @@ Example usage for Google OAuth:
 
     class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                    tornado.auth.GoogleOAuth2Mixin):
-        @tornado.gen.coroutine
-        def get(self):
+        async def get(self):
             if self.get_argument('code', False):
-                user = yield self.get_authenticated_user(
+                user = await self.get_authenticated_user(
                     redirect_uri='http://your.site.com/auth/google',
                     code=self.get_argument('code'))
                 # Save the user with e.g. set_secure_cookie
             else:
-                yield self.authorize_redirect(
+                await self.authorize_redirect(
                     redirect_uri='http://your.site.com/auth/google',
                     client_id=self.settings['google_oauth']['key'],
                     scope=['profile', 'email'],
@@ -75,8 +74,8 @@ import time
 import uuid
 import warnings
 
-from tornado.concurrent import (Future, return_future, chain_future,
-                                future_set_exc_info,
+from tornado.concurrent import (Future, _non_deprecated_return_future,
+                                future_set_exc_info, chain_future,
                                 future_set_result_unless_cancelled)
 from tornado import gen
 from tornado import httpclient
@@ -136,7 +135,7 @@ def _auth_return_future(f):
             else:
                 future_set_exc_info(future, (typ, value, tb))
                 return True
-        with ExceptionStackContext(handle_exception):
+        with ExceptionStackContext(handle_exception, delay_warning=True):
             f(*args, **kwargs)
         return future
     return wrapper
@@ -149,7 +148,7 @@ class OpenIdMixin(object):
 
     * ``_OPENID_ENDPOINT``: the identity provider's URI.
     """
-    @return_future
+    @_non_deprecated_return_future
     def authenticate_redirect(self, callback_uri=None,
                               ax_attrs=["name", "email", "language", "username"],
                               callback=None):
@@ -202,9 +201,9 @@ class OpenIdMixin(object):
         url = self._OPENID_ENDPOINT
         if http_client is None:
             http_client = self.get_auth_http_client()
-        http_client.fetch(url, functools.partial(
-            self._on_authentication_verified, callback),
-            method="POST", body=urllib_parse.urlencode(args))
+        fut = http_client.fetch(url, method="POST", body=urllib_parse.urlencode(args))
+        fut.add_done_callback(functools.partial(
+            self._on_authentication_verified, callback))
 
     def _openid_args(self, callback_uri, ax_attrs=[], oauth_scope=None):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)
@@ -254,11 +253,16 @@ class OpenIdMixin(object):
             })
         return args
 
-    def _on_authentication_verified(self, future, response):
-        if response.error or b"is_valid:true" not in response.body:
+    def _on_authentication_verified(self, future, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
             future.set_exception(AuthError(
-                "Invalid OpenID response: %s" % (response.error or
-                                                 response.body)))
+                "Error response %s" % e))
+            return
+        if b"is_valid:true" not in response.body:
+            future.set_exception(AuthError(
+                "Invalid OpenID response: %s" % response.body))
             return
 
         # Make sure we got back at least an email from attribute exchange
@@ -339,7 +343,7 @@ class OAuthMixin(object):
     Subclasses must also override the `_oauth_get_user_future` and
     `_oauth_consumer_token` methods.
     """
-    @return_future
+    @_non_deprecated_return_future
     def authorize_redirect(self, callback_uri=None, extra_params=None,
                            http_client=None, callback=None):
         """Redirects the user to obtain OAuth authorization for this service.
@@ -374,17 +378,17 @@ class OAuthMixin(object):
         if http_client is None:
             http_client = self.get_auth_http_client()
         if getattr(self, "_OAUTH_VERSION", "1.0a") == "1.0a":
-            http_client.fetch(
+            fut = http_client.fetch(
                 self._oauth_request_token_url(callback_uri=callback_uri,
-                                              extra_params=extra_params),
-                functools.partial(
-                    self._on_request_token,
-                    self._OAUTH_AUTHORIZE_URL,
-                    callback_uri,
-                    callback))
+                                              extra_params=extra_params))
+            fut.add_done_callback(functools.partial(
+                self._on_request_token,
+                self._OAUTH_AUTHORIZE_URL,
+                callback_uri,
+                callback))
         else:
-            http_client.fetch(
-                self._oauth_request_token_url(),
+            fut = http_client.fetch(self._oauth_request_token_url())
+            fut.add_done_callback(
                 functools.partial(
                     self._on_request_token, self._OAUTH_AUTHORIZE_URL,
                     callback_uri,
@@ -427,8 +431,8 @@ class OAuthMixin(object):
             token["verifier"] = oauth_verifier
         if http_client is None:
             http_client = self.get_auth_http_client()
-        http_client.fetch(self._oauth_access_token_url(token),
-                          functools.partial(self._on_access_token, callback))
+        fut = http_client.fetch(self._oauth_access_token_url(token))
+        fut.add_done_callback(functools.partial(self._on_access_token, callback))
 
     def _oauth_request_token_url(self, callback_uri=None, extra_params=None):
         consumer_token = self._oauth_consumer_token()
@@ -456,9 +460,11 @@ class OAuthMixin(object):
         return url + "?" + urllib_parse.urlencode(args)
 
     def _on_request_token(self, authorize_url, callback_uri, callback,
-                          response):
-        if response.error:
-            raise Exception("Could not get request token: %s" % response.error)
+                          response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
+            raise Exception("Could not get request token: %s" % e)
         request_token = _oauth_parse_response(response.body)
         data = (base64.b64encode(escape.utf8(request_token["key"])) + b"|" +
                 base64.b64encode(escape.utf8(request_token["secret"])))
@@ -498,8 +504,10 @@ class OAuthMixin(object):
         args["oauth_signature"] = signature
         return url + "?" + urllib_parse.urlencode(args)
 
-    def _on_access_token(self, future, response):
-        if response.error:
+    def _on_access_token(self, future, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception:
             future.set_exception(AuthError("Could not fetch access token"))
             return
 
@@ -516,7 +524,7 @@ class OAuthMixin(object):
         """
         raise NotImplementedError()
 
-    @return_future
+    @_non_deprecated_return_future
     def _oauth_get_user_future(self, access_token, callback):
         """Subclasses must override this to get basic information about the
         user.
@@ -609,7 +617,7 @@ class OAuth2Mixin(object):
     * ``_OAUTH_AUTHORIZE_URL``: The service's authorization url.
     * ``_OAUTH_ACCESS_TOKEN_URL``:  The service's access token url.
     """
-    @return_future
+    @_non_deprecated_return_future
     def authorize_redirect(self, redirect_uri=None, client_id=None,
                            client_secret=None, extra_params=None,
                            callback=None, scope=None, response_type="code"):
@@ -674,16 +682,15 @@ class OAuth2Mixin(object):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
                 @tornado.web.authenticated
-                @tornado.gen.coroutine
-                def get(self):
-                    new_entry = yield self.oauth2_request(
+                async def get(self):
+                    new_entry = await self.oauth2_request(
                         "https://graph.facebook.com/me/feed",
                         post_args={"message": "I am posting from my Tornado application!"},
                         access_token=self.current_user["access_token"])
 
                     if not new_entry:
                         # Call failed; perhaps missing permission?
-                        yield self.authorize_redirect()
+                        await self.authorize_redirect()
                         return
                     self.finish("Posted a message!")
 
@@ -707,15 +714,16 @@ class OAuth2Mixin(object):
         callback = functools.partial(self._on_oauth2_request, callback)
         http = self.get_auth_http_client()
         if post_args is not None:
-            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
-                       callback=callback)
+            fut = http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args))
         else:
-            http.fetch(url, callback=callback)
+            fut = http.fetch(url)
+        fut.add_done_callback(callback)
 
-    def _on_oauth2_request(self, future, response):
-        if response.error:
-            future.set_exception(AuthError("Error response %s fetching %s" %
-                                           (response.error, response.request.url)))
+    def _on_oauth2_request(self, future, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
+            future.set_exception(AuthError("Error response %s" % e))
             return
 
         future_set_result_unless_cancelled(future, escape.json_decode(response.body))
@@ -748,13 +756,12 @@ class TwitterMixin(OAuthMixin):
 
         class TwitterLoginHandler(tornado.web.RequestHandler,
                                   tornado.auth.TwitterMixin):
-            @tornado.gen.coroutine
-            def get(self):
+            async def get(self):
                 if self.get_argument("oauth_token", None):
-                    user = yield self.get_authenticated_user()
+                    user = await self.get_authenticated_user()
                     # Save the user using e.g. set_secure_cookie()
                 else:
-                    yield self.authorize_redirect()
+                    await self.authorize_redirect()
 
     .. testoutput::
        :hide:
@@ -771,7 +778,7 @@ class TwitterMixin(OAuthMixin):
     _OAUTH_NO_CALLBACKS = False
     _TWITTER_BASE_URL = "https://api.twitter.com/1.1"
 
-    @return_future
+    @_non_deprecated_return_future
     def authenticate_redirect(self, callback_uri=None, callback=None):
         """Just like `~OAuthMixin.authorize_redirect`, but
         auto-redirects if authorized.
@@ -819,9 +826,8 @@ class TwitterMixin(OAuthMixin):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.TwitterMixin):
                 @tornado.web.authenticated
-                @tornado.gen.coroutine
-                def get(self):
-                    new_entry = yield self.twitter_request(
+                async def get(self):
+                    new_entry = await self.twitter_request(
                         "/statuses/update",
                         post_args={"status": "Testing Tornado Web Server"},
                         access_token=self.current_user["access_token"])
@@ -857,18 +863,19 @@ class TwitterMixin(OAuthMixin):
         if args:
             url += "?" + urllib_parse.urlencode(args)
         http = self.get_auth_http_client()
-        http_callback = functools.partial(self._on_twitter_request, callback)
+        http_callback = functools.partial(self._on_twitter_request, callback, url)
         if post_args is not None:
-            http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args),
-                       callback=http_callback)
+            fut = http.fetch(url, method="POST", body=urllib_parse.urlencode(post_args))
         else:
-            http.fetch(url, callback=http_callback)
+            fut = http.fetch(url)
+        fut.add_done_callback(http_callback)
 
-    def _on_twitter_request(self, future, response):
-        if response.error:
+    def _on_twitter_request(self, future, url, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
             future.set_exception(AuthError(
-                "Error response %s fetching %s" % (response.error,
-                                                   response.request.url)))
+                "Error response %s fetching %s" % (e, url)))
             return
         future_set_result_unless_cancelled(future, escape.json_decode(response.body))
 
@@ -931,19 +938,18 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
 
             class GoogleOAuth2LoginHandler(tornado.web.RequestHandler,
                                            tornado.auth.GoogleOAuth2Mixin):
-                @tornado.gen.coroutine
-                def get(self):
+                async def get(self):
                     if self.get_argument('code', False):
-                        access = yield self.get_authenticated_user(
+                        access = await self.get_authenticated_user(
                             redirect_uri='http://your.site.com/auth/google',
                             code=self.get_argument('code'))
-                        user = yield self.oauth2_request(
+                        user = await self.oauth2_request(
                             "https://www.googleapis.com/oauth2/v1/userinfo",
                             access_token=access["access_token"])
                         # Save the user and access token with
                         # e.g. set_secure_cookie.
                     else:
-                        yield self.authorize_redirect(
+                        await self.authorize_redirect(
                             redirect_uri='http://your.site.com/auth/google',
                             client_id=self.settings['google_oauth']['key'],
                             scope=['profile', 'email'],
@@ -967,16 +973,18 @@ class GoogleOAuth2Mixin(OAuth2Mixin):
             "grant_type": "authorization_code",
         })
 
-        http.fetch(self._OAUTH_ACCESS_TOKEN_URL,
-                   functools.partial(self._on_access_token, callback),
-                   method="POST",
-                   headers={'Content-Type': 'application/x-www-form-urlencoded'},
-                   body=body)
+        fut = http.fetch(self._OAUTH_ACCESS_TOKEN_URL,
+                         method="POST",
+                         headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                         body=body)
+        fut.add_done_callback(functools.partial(self._on_access_token, callback))
 
-    def _on_access_token(self, future, response):
+    def _on_access_token(self, future, response_fut):
         """Callback function for the exchange to the access token."""
-        if response.error:
-            future.set_exception(AuthError('Google auth error: %s' % str(response)))
+        try:
+            response = response_fut.result()
+        except Exception as e:
+            future.set_exception(AuthError('Google auth error: %s' % str(e)))
             return
 
         args = escape.json_decode(response.body)
@@ -1001,17 +1009,16 @@ class FacebookGraphMixin(OAuth2Mixin):
 
             class FacebookGraphLoginHandler(tornado.web.RequestHandler,
                                             tornado.auth.FacebookGraphMixin):
-              @tornado.gen.coroutine
-              def get(self):
+              async def get(self):
                   if self.get_argument("code", False):
-                      user = yield self.get_authenticated_user(
+                      user = await self.get_authenticated_user(
                           redirect_uri='/auth/facebookgraph/',
                           client_id=self.settings["facebook_api_key"],
                           client_secret=self.settings["facebook_secret"],
                           code=self.get_argument("code"))
                       # Save the user with e.g. set_secure_cookie
                   else:
-                      yield self.authorize_redirect(
+                      await self.authorize_redirect(
                           redirect_uri='/auth/facebookgraph/',
                           client_id=self.settings["facebook_api_key"],
                           extra_params={"scope": "read_stream,offline_access"})
@@ -1053,15 +1060,17 @@ class FacebookGraphMixin(OAuth2Mixin):
         if extra_fields:
             fields.update(extra_fields)
 
-        http.fetch(self._oauth_request_token_url(**args),
-                   functools.partial(self._on_access_token, redirect_uri, client_id,
-                                     client_secret, callback, fields))
+        fut = http.fetch(self._oauth_request_token_url(**args))
+        fut.add_done_callback(functools.partial(self._on_access_token, redirect_uri, client_id,
+                                                client_secret, callback, fields))
 
     @gen.coroutine
     def _on_access_token(self, redirect_uri, client_id, client_secret,
-                         future, fields, response):
-        if response.error:
-            future.set_exception(AuthError('Facebook auth error: %s' % str(response)))
+                         future, fields, response_fut):
+        try:
+            response = response_fut.result()
+        except Exception as e:
+            future.set_exception(AuthError('Facebook auth error: %s' % str(e)))
             return
 
         args = escape.json_decode(response.body)
@@ -1119,9 +1128,8 @@ class FacebookGraphMixin(OAuth2Mixin):
             class MainHandler(tornado.web.RequestHandler,
                               tornado.auth.FacebookGraphMixin):
                 @tornado.web.authenticated
-                @tornado.gen.coroutine
-                def get(self):
-                    new_entry = yield self.facebook_request(
+                async def get(self):
+                    new_entry = await self.facebook_request(
                         "/me/feed",
                         post_args={"message": "I am posting from my Tornado application!"},
                         access_token=self.current_user["access_token"])

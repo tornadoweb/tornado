@@ -24,8 +24,12 @@
 
    Exceptions
    ----------
-   .. autoexception:: HTTPError
+   .. autoexception:: HTTPClientError
       :members:
+
+   .. exception:: HTTPError
+
+      Alias for `HTTPClientError`.
 
    Command-line interface
    ----------------------

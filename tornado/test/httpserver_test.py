@@ -1,18 +1,20 @@
 from __future__ import absolute_import, division, print_function
 
-from tornado import netutil
+from tornado import gen, netutil
 from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode, utf8, _unicode, recursive_unicode, native_str
 from tornado.http1connection import HTTP1Connection
+from tornado.httpclient import HTTPError
 from tornado.httpserver import HTTPServer
 from tornado.httputil import HTTPHeaders, HTTPMessageDelegate, HTTPServerConnectionDelegate, ResponseStartLine  # noqa: E501
 from tornado.iostream import IOStream
+from tornado.locks import Event
 from tornado.log import gen_log
 from tornado.netutil import ssl_options_to_context
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.testing import AsyncHTTPTestCase, AsyncHTTPSTestCase, AsyncTestCase, ExpectLog, gen_test  # noqa: E501
-from tornado.test.util import unittest, skipOnTravis
-from tornado.web import Application, RequestHandler, asynchronous, stream_request_body
+from tornado.test.util import unittest, skipOnTravis, ignore_deprecation
+from tornado.web import Application, RequestHandler, stream_request_body
 
 from contextlib import closing
 import datetime
@@ -109,22 +111,19 @@ class SSLTestMixin(object):
         # misbehaving.
         with ExpectLog(gen_log, '(SSL Error|uncaught exception)'):
             with ExpectLog(gen_log, 'Uncaught exception', required=False):
-                self.http_client.fetch(
-                    self.get_url("/").replace('https:', 'http:'),
-                    self.stop,
-                    request_timeout=3600,
-                    connect_timeout=3600)
-                response = self.wait()
-        self.assertEqual(response.code, 599)
+                with self.assertRaises((IOError, HTTPError)):
+                    self.fetch(
+                        self.get_url("/").replace('https:', 'http:'),
+                        request_timeout=3600,
+                        connect_timeout=3600,
+                        raise_error=True)
 
     def test_error_logging(self):
         # No stack traces are logged for SSL errors.
         with ExpectLog(gen_log, 'SSL Error') as expect_log:
-            self.http_client.fetch(
-                self.get_url("/").replace("https:", "http:"),
-                self.stop)
-            response = self.wait()
-            self.assertEqual(response.code, 599)
+            with self.assertRaises((IOError, HTTPError)):
+                self.fetch(self.get_url("/").replace("https:", "http:"),
+                           raise_error=True)
         self.assertFalse(expect_log.logged_stack)
 
 # Python's SSL implementation differs significantly between versions.
@@ -210,7 +209,8 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
 
     def raw_fetch(self, headers, body, newline=b"\r\n"):
         with closing(IOStream(socket.socket())) as stream:
-            stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
+            with ignore_deprecation():
+                stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
             self.wait()
             stream.write(
                 newline.join(headers +
@@ -252,31 +252,27 @@ class HTTPConnectionTest(AsyncHTTPTestCase):
                                       newline=newline)
             self.assertEqual(response, b'Hello world')
 
+    @gen_test
     def test_100_continue(self):
         # Run through a 100-continue interaction by hand:
         # When given Expect: 100-continue, we get a 100 response after the
         # headers, and then the real response after the body.
         stream = IOStream(socket.socket())
-        stream.connect(("127.0.0.1", self.get_http_port()), callback=self.stop)
-        self.wait()
-        stream.write(b"\r\n".join([b"POST /hello HTTP/1.1",
-                                   b"Content-Length: 1024",
-                                   b"Expect: 100-continue",
-                                   b"Connection: close",
-                                   b"\r\n"]), callback=self.stop)
-        self.wait()
-        stream.read_until(b"\r\n\r\n", self.stop)
-        data = self.wait()
+        yield stream.connect(("127.0.0.1", self.get_http_port()))
+        yield stream.write(b"\r\n".join([
+            b"POST /hello HTTP/1.1",
+            b"Content-Length: 1024",
+            b"Expect: 100-continue",
+            b"Connection: close",
+            b"\r\n"]))
+        data = yield stream.read_until(b"\r\n\r\n")
         self.assertTrue(data.startswith(b"HTTP/1.1 100 "), data)
         stream.write(b"a" * 1024)
-        stream.read_until(b"\r\n", self.stop)
-        first_line = self.wait()
+        first_line = yield stream.read_until(b"\r\n")
         self.assertTrue(first_line.startswith(b"HTTP/1.1 200"), first_line)
-        stream.read_until(b"\r\n\r\n", self.stop)
-        header_data = self.wait()
+        header_data = yield stream.read_until(b"\r\n\r\n")
         headers = HTTPHeaders.parse(native_str(header_data.decode('latin1')))
-        stream.read_bytes(int(headers["Content-Length"]), self.stop)
-        body = self.wait()
+        body = yield stream.read_bytes(int(headers["Content-Length"]))
         self.assertEqual(body, b"Got 1024 bytes in POST")
         stream.close()
 
@@ -394,8 +390,7 @@ class HTTPServerRawTest(AsyncHTTPTestCase):
     def setUp(self):
         super(HTTPServerRawTest, self).setUp()
         self.stream = IOStream(socket.socket())
-        self.stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
-        self.wait()
+        self.io_loop.run_sync(lambda: self.stream.connect(('127.0.0.1', self.get_http_port())))
 
     def tearDown(self):
         self.stream.close()
@@ -469,6 +464,7 @@ bar
         start_line, headers, response = self.wait()
         self.assertEqual(json_decode(response), {u'foo': [u'bar']})
 
+    @gen_test
     def test_invalid_content_length(self):
         with ExpectLog(gen_log, '.*Only integer Content-Length is allowed'):
             self.stream.write(b"""\
@@ -478,8 +474,7 @@ Content-Length: foo
 bar
 
 """.replace(b"\n", b"\r\n"))
-            self.stream.read_until_close(self.stop)
-            self.wait()
+            yield self.stream.read_until_close()
 
 
 class XHeaderTest(HandlerBaseTestCase):
@@ -623,8 +618,7 @@ class UnixSocketTest(AsyncTestCase):
         self.server = HTTPServer(app)
         self.server.add_socket(sock)
         self.stream = IOStream(socket.socket(socket.AF_UNIX))
-        self.stream.connect(self.sockfile, self.stop)
-        self.wait()
+        self.io_loop.run_sync(lambda: self.stream.connect(self.sockfile))
 
     def tearDown(self):
         self.stream.close()
@@ -633,24 +627,23 @@ class UnixSocketTest(AsyncTestCase):
         shutil.rmtree(self.tmpdir)
         super(UnixSocketTest, self).tearDown()
 
+    @gen_test
     def test_unix_socket(self):
         self.stream.write(b"GET /hello HTTP/1.0\r\n\r\n")
-        self.stream.read_until(b"\r\n", self.stop)
-        response = self.wait()
+        response = yield self.stream.read_until(b"\r\n")
         self.assertEqual(response, b"HTTP/1.1 200 OK\r\n")
-        self.stream.read_until(b"\r\n\r\n", self.stop)
-        headers = HTTPHeaders.parse(self.wait().decode('latin1'))
-        self.stream.read_bytes(int(headers["Content-Length"]), self.stop)
-        body = self.wait()
+        header_data = yield self.stream.read_until(b"\r\n\r\n")
+        headers = HTTPHeaders.parse(header_data.decode('latin1'))
+        body = yield self.stream.read_bytes(int(headers["Content-Length"]))
         self.assertEqual(body, b"Hello world")
 
+    @gen_test
     def test_unix_socket_bad_request(self):
         # Unix sockets don't have remote addresses so they just return an
         # empty string.
         with ExpectLog(gen_log, "Malformed HTTP message from"):
             self.stream.write(b"garbage\r\n\r\n")
-            self.stream.read_until_close(self.stop)
-            response = self.wait()
+            response = yield self.stream.read_until_close()
         self.assertEqual(response, b"HTTP/1.1 400 Bad Request\r\n\r\n")
 
 
@@ -675,9 +668,11 @@ class KeepAliveTest(AsyncHTTPTestCase):
                 self.write(''.join(chr(i % 256) * 1024 for i in range(512)))
 
         class FinishOnCloseHandler(RequestHandler):
-            @asynchronous
+            @gen.coroutine
             def get(self):
                 self.flush()
+                never_finish = Event()
+                yield never_finish.wait()
 
             def on_connection_close(self):
                 # This is not very realistic, but finishing the request
@@ -704,123 +699,129 @@ class KeepAliveTest(AsyncHTTPTestCase):
         super(KeepAliveTest, self).tearDown()
 
     # The next few methods are a crude manual http client
+    @gen.coroutine
     def connect(self):
         self.stream = IOStream(socket.socket())
-        self.stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
-        self.wait()
+        yield self.stream.connect(('127.0.0.1', self.get_http_port()))
 
+    @gen.coroutine
     def read_headers(self):
-        self.stream.read_until(b'\r\n', self.stop)
-        first_line = self.wait()
+        first_line = yield self.stream.read_until(b'\r\n')
         self.assertTrue(first_line.startswith(b'HTTP/1.1 200'), first_line)
-        self.stream.read_until(b'\r\n\r\n', self.stop)
-        header_bytes = self.wait()
+        header_bytes = yield self.stream.read_until(b'\r\n\r\n')
         headers = HTTPHeaders.parse(header_bytes.decode('latin1'))
-        return headers
+        raise gen.Return(headers)
 
+    @gen.coroutine
     def read_response(self):
-        self.headers = self.read_headers()
-        self.stream.read_bytes(int(self.headers['Content-Length']), self.stop)
-        body = self.wait()
+        self.headers = yield self.read_headers()
+        body = yield self.stream.read_bytes(int(self.headers['Content-Length']))
         self.assertEqual(b'Hello world', body)
 
     def close(self):
         self.stream.close()
         del self.stream
 
+    @gen_test
     def test_two_requests(self):
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET / HTTP/1.1\r\n\r\n')
-        self.read_response()
+        yield self.read_response()
         self.stream.write(b'GET / HTTP/1.1\r\n\r\n')
-        self.read_response()
+        yield self.read_response()
         self.close()
 
+    @gen_test
     def test_request_close(self):
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET / HTTP/1.1\r\nConnection: close\r\n\r\n')
-        self.read_response()
-        self.stream.read_until_close(callback=self.stop)
-        data = self.wait()
+        yield self.read_response()
+        data = yield self.stream.read_until_close()
         self.assertTrue(not data)
         self.assertEqual(self.headers['Connection'], 'close')
         self.close()
 
     # keepalive is supported for http 1.0 too, but it's opt-in
+    @gen_test
     def test_http10(self):
         self.http_version = b'HTTP/1.0'
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET / HTTP/1.0\r\n\r\n')
-        self.read_response()
-        self.stream.read_until_close(callback=self.stop)
-        data = self.wait()
+        yield self.read_response()
+        data = yield self.stream.read_until_close()
         self.assertTrue(not data)
         self.assertTrue('Connection' not in self.headers)
         self.close()
 
+    @gen_test
     def test_http10_keepalive(self):
         self.http_version = b'HTTP/1.0'
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
-        self.read_response()
+        yield self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
-        self.read_response()
+        yield self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.close()
 
+    @gen_test
     def test_http10_keepalive_extra_crlf(self):
         self.http_version = b'HTTP/1.0'
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n\r\n')
-        self.read_response()
+        yield self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
-        self.read_response()
+        yield self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.close()
 
+    @gen_test
     def test_pipelined_requests(self):
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n')
-        self.read_response()
-        self.read_response()
+        yield self.read_response()
+        yield self.read_response()
         self.close()
 
+    @gen_test
     def test_pipelined_cancel(self):
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n')
         # only read once
-        self.read_response()
+        yield self.read_response()
         self.close()
 
+    @gen_test
     def test_cancel_during_download(self):
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET /large HTTP/1.1\r\n\r\n')
-        self.read_headers()
-        self.stream.read_bytes(1024, self.stop)
-        self.wait()
+        yield self.read_headers()
+        yield self.stream.read_bytes(1024)
         self.close()
 
+    @gen_test
     def test_finish_while_closed(self):
-        self.connect()
+        yield self.connect()
         self.stream.write(b'GET /finish_on_close HTTP/1.1\r\n\r\n')
-        self.read_headers()
+        yield self.read_headers()
         self.close()
 
+    @gen_test
     def test_keepalive_chunked(self):
         self.http_version = b'HTTP/1.0'
-        self.connect()
+        yield self.connect()
         self.stream.write(b'POST / HTTP/1.0\r\n'
                           b'Connection: keep-alive\r\n'
                           b'Transfer-Encoding: chunked\r\n'
                           b'\r\n'
                           b'0\r\n'
                           b'\r\n')
-        self.read_response()
+        yield self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.stream.write(b'GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n')
-        self.read_response()
+        yield self.read_response()
         self.assertEqual(self.headers['Connection'], 'Keep-Alive')
         self.close()
 
@@ -965,11 +966,14 @@ class MaxHeaderSizeTest(AsyncHTTPTestCase):
 
     def test_large_headers(self):
         with ExpectLog(gen_log, "Unsatisfiable read", required=False):
-            response = self.fetch("/", headers={'X-Filler': 'a' * 1000})
-        # 431 is "Request Header Fields Too Large", defined in RFC
-        # 6585. However, many implementations just close the
-        # connection in this case, resulting in a 599.
-        self.assertIn(response.code, (431, 599))
+            try:
+                self.fetch("/", headers={'X-Filler': 'a' * 1000}, raise_error=True)
+                self.fail("did not raise expected exception")
+            except HTTPError as e:
+                # 431 is "Request Header Fields Too Large", defined in RFC
+                # 6585. However, many implementations just close the
+                # connection in this case, resulting in a 599.
+                self.assertIn(e.response.code, (431, 599))
 
 
 @skipOnTravis
@@ -989,34 +993,35 @@ class IdleTimeoutTest(AsyncHTTPTestCase):
         for stream in self.streams:
             stream.close()
 
+    @gen.coroutine
     def connect(self):
         stream = IOStream(socket.socket())
-        stream.connect(('127.0.0.1', self.get_http_port()), self.stop)
-        self.wait()
+        yield stream.connect(('127.0.0.1', self.get_http_port()))
         self.streams.append(stream)
-        return stream
+        raise gen.Return(stream)
 
+    @gen_test
     def test_unused_connection(self):
-        stream = self.connect()
-        stream.set_close_callback(self.stop)
-        self.wait()
+        stream = yield self.connect()
+        event = Event()
+        stream.set_close_callback(event.set)
+        yield event.wait()
 
+    @gen_test
     def test_idle_after_use(self):
-        stream = self.connect()
-        stream.set_close_callback(lambda: self.stop("closed"))
+        stream = yield self.connect()
+        event = Event()
+        stream.set_close_callback(event.set)
 
         # Use the connection twice to make sure keep-alives are working
         for i in range(2):
             stream.write(b"GET / HTTP/1.1\r\n\r\n")
-            stream.read_until(b"\r\n\r\n", self.stop)
-            self.wait()
-            stream.read_bytes(11, self.stop)
-            data = self.wait()
+            yield stream.read_until(b"\r\n\r\n")
+            data = yield stream.read_bytes(11)
             self.assertEqual(data, b"Hello world")
 
         # Now let the timeout trigger and close the connection.
-        data = self.wait()
-        self.assertEqual(data, "closed")
+        yield event.wait()
 
 
 class BodyLimitsTest(AsyncHTTPTestCase):
@@ -1066,24 +1071,25 @@ class BodyLimitsTest(AsyncHTTPTestCase):
             response = self.fetch('/buffered', method='PUT', body=b'a' * 10240)
         self.assertEqual(response.code, 400)
 
+    @unittest.skipIf(os.name == 'nt', 'flaky on windows')
     def test_large_body_buffered_chunked(self):
+        # This test is flaky on windows for unknown reasons.
         with ExpectLog(gen_log, '.*chunked body too large'):
             response = self.fetch('/buffered', method='PUT',
                                   body_producer=lambda write: write(b'a' * 10240))
-        # this test is flaky on windows; accept 400 (expected) or 599
-        self.assertIn(response.code, [400, 599])
+        self.assertEqual(response.code, 400)
 
     def test_large_body_streaming(self):
         with ExpectLog(gen_log, '.*Content-Length too long'):
             response = self.fetch('/streaming', method='PUT', body=b'a' * 10240)
         self.assertEqual(response.code, 400)
 
+    @unittest.skipIf(os.name == 'nt', 'flaky on windows')
     def test_large_body_streaming_chunked(self):
         with ExpectLog(gen_log, '.*chunked body too large'):
             response = self.fetch('/streaming', method='PUT',
                                   body_producer=lambda write: write(b'a' * 10240))
-        # this test is flaky on windows; accept 400 (expected) or 599
-        self.assertIn(response.code, [400, 599])
+        self.assertEqual(response.code, 400)
 
     def test_large_body_streaming_override(self):
         response = self.fetch('/streaming?expected_size=10240', method='PUT',
@@ -1150,10 +1156,10 @@ class LegacyInterfaceTest(AsyncHTTPTestCase):
                 request.connection.finish()
                 return
             message = b"Hello world"
-            request.write(utf8("HTTP/1.1 200 OK\r\n"
-                               "Content-Length: %d\r\n\r\n" % len(message)))
-            request.write(message)
-            request.finish()
+            request.connection.write(utf8("HTTP/1.1 200 OK\r\n"
+                                          "Content-Length: %d\r\n\r\n" % len(message)))
+            request.connection.write(message)
+            request.connection.finish()
         return handle_request
 
     def test_legacy_interface(self):

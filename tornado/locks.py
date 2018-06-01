@@ -61,22 +61,19 @@ class Condition(_TimeoutGarbageCollector):
 
         condition = Condition()
 
-        @gen.coroutine
-        def waiter():
+        async def waiter():
             print("I'll wait right here")
-            yield condition.wait()  # Yield a Future.
+            await condition.wait()
             print("I'm done waiting")
 
-        @gen.coroutine
-        def notifier():
+        async def notifier():
             print("About to notify")
             condition.notify()
             print("Done notifying")
 
-        @gen.coroutine
-        def runner():
-            # Yield two Futures; wait for waiter() and notifier() to finish.
-            yield [waiter(), notifier()]
+        async def runner():
+            # Wait for waiter() and notifier() in parallel
+            await gen.multi([waiter(), notifier()])
 
         IOLoop.current().run_sync(runner)
 
@@ -93,12 +90,12 @@ class Condition(_TimeoutGarbageCollector):
         io_loop = IOLoop.current()
 
         # Wait up to 1 second for a notification.
-        yield condition.wait(timeout=io_loop.time() + 1)
+        await condition.wait(timeout=io_loop.time() + 1)
 
     ...or a `datetime.timedelta` for a timeout relative to the current time::
 
         # Wait up to 1 second.
-        yield condition.wait(timeout=datetime.timedelta(seconds=1))
+        await condition.wait(timeout=datetime.timedelta(seconds=1))
 
     The method returns False if there's no notification before the deadline.
 
@@ -170,22 +167,19 @@ class Event(object):
 
         event = Event()
 
-        @gen.coroutine
-        def waiter():
+        async def waiter():
             print("Waiting for event")
-            yield event.wait()
+            await event.wait()
             print("Not waiting this time")
-            yield event.wait()
+            await event.wait()
             print("Done")
 
-        @gen.coroutine
-        def setter():
+        async def setter():
             print("About to set the event")
             event.set()
 
-        @gen.coroutine
-        def runner():
-            yield [waiter(), setter()]
+        async def runner():
+            await gen.multi([waiter(), setter()])
 
         IOLoop.current().run_sync(runner)
 
@@ -290,12 +284,11 @@ class Semaphore(_TimeoutGarbageCollector):
        # Ensure reliable doctest output: resolve Futures one at a time.
        futures_q = deque([Future() for _ in range(3)])
 
-       @gen.coroutine
-       def simulator(futures):
+       async def simulator(futures):
            for f in futures:
                # simulate the asynchronous passage of time
-               yield gen.moment
-               yield gen.moment
+               await gen.sleep(0)
+               await gen.sleep(0)
                f.set_result(None)
 
        IOLoop.current().add_callback(simulator, list(futures_q))
@@ -311,20 +304,18 @@ class Semaphore(_TimeoutGarbageCollector):
 
         sem = Semaphore(2)
 
-        @gen.coroutine
-        def worker(worker_id):
-            yield sem.acquire()
+        async def worker(worker_id):
+            await sem.acquire()
             try:
                 print("Worker %d is working" % worker_id)
-                yield use_some_resource()
+                await use_some_resource()
             finally:
                 print("Worker %d is done" % worker_id)
                 sem.release()
 
-        @gen.coroutine
-        def runner():
+        async def runner():
             # Join all workers.
-            yield [worker(i) for i in range(3)]
+            await gen.multi([worker(i) for i in range(3)])
 
         IOLoop.current().run_sync(runner)
 
@@ -340,7 +331,18 @@ class Semaphore(_TimeoutGarbageCollector):
     Workers 0 and 1 are allowed to run concurrently, but worker 2 waits until
     the semaphore has been released once, by worker 0.
 
-    `.acquire` is a context manager, so ``worker`` could be written as::
+    The semaphore can be used as an async context manager::
+
+        async def worker(worker_id):
+            async with sem:
+                print("Worker %d is working" % worker_id)
+                await use_some_resource()
+
+            # Now the semaphore has been released.
+            print("Worker %d is done" % worker_id)
+
+    For compatibility with older versions of Python, `.acquire` is a
+    context manager, so ``worker`` could also be written as::
 
         @gen.coroutine
         def worker(worker_id):
@@ -351,19 +353,9 @@ class Semaphore(_TimeoutGarbageCollector):
             # Now the semaphore has been released.
             print("Worker %d is done" % worker_id)
 
-    In Python 3.5, the semaphore itself can be used as an async context
-    manager::
-
-        async def worker(worker_id):
-            async with sem:
-                print("Worker %d is working" % worker_id)
-                await use_some_resource()
-
-            # Now the semaphore has been released.
-            print("Worker %d is done" % worker_id)
-
     .. versionchanged:: 4.3
        Added ``async with`` support in Python 3.5.
+
     """
     def __init__(self, value=1):
         super(Semaphore, self).__init__()
@@ -464,26 +456,24 @@ class Lock(object):
 
     Releasing an unlocked lock raises `RuntimeError`.
 
-    `acquire` supports the context manager protocol in all Python versions:
+    A Lock can be used as an async context manager with the ``async
+    with`` statement:
 
-    >>> from tornado import gen, locks
+    >>> from tornado import locks
     >>> lock = locks.Lock()
     >>>
-    >>> @gen.coroutine
-    ... def f():
-    ...    with (yield lock.acquire()):
+    >>> async def f():
+    ...    async with lock:
     ...        # Do something holding the lock.
     ...        pass
     ...
     ...    # Now the lock is released.
 
-    In Python 3.5, `Lock` also supports the async context manager
-    protocol. Note that in this case there is no `acquire`, because
-    ``async with`` includes both the ``yield`` and the ``acquire``
-    (just as it does with `threading.Lock`):
+    For compatibility with older versions of Python, the `.acquire`
+    method asynchronously returns a regular context manager:
 
-    >>> async def f2():  # doctest: +SKIP
-    ...    async with lock:
+    >>> async def f2():
+    ...    with (yield lock.acquire()):
     ...        # Do something holding the lock.
     ...        pass
     ...

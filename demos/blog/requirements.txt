@@ -1,6 +1,5 @@
+aiopg
 bcrypt
-futures
-MySQL-python
 markdown
+psycopg2
 tornado
-torndb

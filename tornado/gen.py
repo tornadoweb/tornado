@@ -17,7 +17,7 @@ environment than chaining callbacks. Code using coroutines is
 technically asynchronous, but it is written as a single generator
 instead of a collection of separate functions.
 
-For example, the following asynchronous handler:
+For example, the following callback-based asynchronous handler:
 
 .. testcode::
 

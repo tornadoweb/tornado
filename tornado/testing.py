@@ -80,6 +80,7 @@ else:
     import tornado.platform.asyncio
     _NON_OWNED_IOLOOPS = tornado.platform.asyncio.AsyncIOMainLoop
 
+
 def bind_unused_port(reuse_port=False):
     """Binds a server socket to an available port on localhost.
 
@@ -143,15 +144,16 @@ class AsyncTestCase(unittest.TestCase):
     asynchronous code.
 
     The unittest framework is synchronous, so the test must be
-    complete by the time the test method returns.  This means that
-    asynchronous code cannot be used in quite the same way as usual.
-    To write test functions that use the same ``yield``-based patterns
-    used with the `tornado.gen` module, decorate your test methods
-    with `tornado.testing.gen_test` instead of
-    `tornado.gen.coroutine`.  This class also provides the `stop()`
-    and `wait()` methods for a more manual style of testing.  The test
-    method itself must call ``self.wait()``, and asynchronous
-    callbacks should call ``self.stop()`` to signal completion.
+    complete by the time the test method returns. This means that
+    asynchronous code cannot be used in quite the same way as usual
+    and must be adapted to fit. To write your tests with coroutines,
+    decorate your test methods with `tornado.testing.gen_test` instead
+    of `tornado.gen.coroutine`.
+
+    This class also provides the (deprecated) `stop()` and `wait()`
+    methods for a more manual style of testing. The test method itself
+    must call ``self.wait()``, and asynchronous callbacks should call
+    ``self.stop()`` to signal completion.
 
     By default, a new `.IOLoop` is constructed for each test and is available
     as ``self.io_loop``.  If the code being tested requires a
@@ -182,22 +184,6 @@ class AsyncTestCase(unittest.TestCase):
                 response = self.wait()
                 # Test contents of response
                 self.assertIn("FriendFeed", response.body)
-
-        # This test uses an explicit callback-based style.
-        class MyTestCase3(AsyncTestCase):
-            def test_http_fetch(self):
-                client = AsyncHTTPClient()
-                client.fetch("http://www.tornadoweb.org/", self.handle_fetch)
-                self.wait()
-
-            def handle_fetch(self, response):
-                # Test contents of response (failures and exceptions here
-                # will cause self.wait() to throw an exception and end the
-                # test).
-                # Exceptions thrown here are magically propagated to
-                # self.wait() in test_http_fetch() via stack_context.
-                self.assertIn("FriendFeed", response.body)
-                self.stop()
     """
     def __init__(self, methodName='runTest'):
         super(AsyncTestCase, self).__init__(methodName)
@@ -264,7 +250,7 @@ class AsyncTestCase(unittest.TestCase):
             raise_exc_info(failure)
 
     def run(self, result=None):
-        with ExceptionStackContext(self._handle_exception):
+        with ExceptionStackContext(self._handle_exception, delay_warning=True):
             super(AsyncTestCase, self).run(result)
         # As a last resort, if an exception escaped super.run() and wasn't
         # re-raised in tearDown, raise it here.  This will cause the
@@ -278,6 +264,10 @@ class AsyncTestCase(unittest.TestCase):
 
         Keyword arguments or a single positional argument passed to `stop()` are
         saved and will be returned by `wait()`.
+
+        .. deprecated:: 5.1
+
+           `stop` and `wait` are deprecated; use ``@gen_test`` instead.
         """
         assert _arg is None or not kwargs
         self.__stop_args = kwargs or _arg
@@ -299,6 +289,10 @@ class AsyncTestCase(unittest.TestCase):
 
         .. versionchanged:: 3.1
            Added the ``ASYNC_TEST_TIMEOUT`` environment variable.
+
+        .. deprecated:: 5.1
+
+           `stop` and `wait` are deprecated; use ``@gen_test`` instead.
         """
         if timeout is None:
             timeout = get_async_test_timeout()
@@ -386,7 +380,7 @@ class AsyncHTTPTestCase(AsyncTestCase):
         """
         raise NotImplementedError()
 
-    def fetch(self, path, **kwargs):
+    def fetch(self, path, raise_error=False, **kwargs):
         """Convenience method to synchronously fetch a URL.
 
         The given path will be appended to the local server's host and
@@ -397,14 +391,36 @@ class AsyncHTTPTestCase(AsyncTestCase):
         If the path begins with http:// or https://, it will be treated as a
         full URL and will be fetched as-is.
 
+        If ``raise_error`` is True, a `tornado.httpclient.HTTPError` will
+        be raised if the response code is not 200. This is the same behavior
+        as the ``raise_error`` argument to `.AsyncHTTPClient.fetch`, but
+        the default is False here (it's True in `.AsyncHTTPClient`) because
+        tests often need to deal with non-200 response codes.
+
         .. versionchanged:: 5.0
            Added support for absolute URLs.
+
+        .. versionchanged:: 5.1
+
+           Added the ``raise_error`` argument.
+
+        .. deprecated:: 5.1
+
+           This method currently turns any exception into an
+           `.HTTPResponse` with status code 599. In Tornado 6.0,
+           errors other than `tornado.httpclient.HTTPError` will be
+           passed through, and ``raise_error=False`` will only
+           suppress errors that would be raised due to non-200
+           response codes.
+
         """
         if path.lower().startswith(('http://', 'https://')):
-            self.http_client.fetch(path, self.stop, **kwargs)
+            url = path
         else:
-            self.http_client.fetch(self.get_url(path), self.stop, **kwargs)
-        return self.wait()
+            url = self.get_url(path)
+        return self.io_loop.run_sync(
+            lambda: self.http_client.fetch(url, raise_error=raise_error, **kwargs),
+            timeout=get_async_test_timeout())
 
     def get_httpserver_options(self):
         """May be overridden by subclasses to return additional

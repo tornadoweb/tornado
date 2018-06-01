@@ -42,6 +42,7 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import time
+import warnings
 import weakref
 
 from tornado.concurrent import Future, future_set_result_unless_cancelled
@@ -124,14 +125,14 @@ class AsyncHTTPClient(Configurable):
 
     Example usage::
 
-        def handle_response(response):
-            if response.error:
-                print("Error: %s" % response.error)
+        async def f():
+            http_client = AsyncHTTPClient()
+            try:
+                response = await http_client.fetch("http://www.google.com")
+            except Exception as e:
+                print("Error: %s" % e)
             else:
                 print(response.body)
-
-        http_client = AsyncHTTPClient()
-        http_client.fetch("http://www.google.com/", handle_response)
 
     The constructor for this class is magic in several respects: It
     actually creates an instance of an implementation-specific
@@ -238,6 +239,18 @@ class AsyncHTTPClient(Configurable):
         In the callback interface, `HTTPError` is not automatically raised.
         Instead, you must check the response's ``error`` attribute or
         call its `~HTTPResponse.rethrow` method.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in 6.0. Use the returned `.Future` instead.
+
+           The ``raise_error=False`` argument currently suppresses
+           *all* errors, encapsulating them in `HTTPResponse` objects
+           with a 599 response code. This will change in Tornado 6.0:
+           ``raise_error=False`` will only affect the `HTTPError`
+           raised when a non-200 response code is used.
+
         """
         if self._closed:
             raise RuntimeError("fetch() called on closed AsyncHTTPClient")
@@ -253,6 +266,8 @@ class AsyncHTTPClient(Configurable):
         request = _RequestProxy(request, self.defaults)
         future = Future()
         if callback is not None:
+            warnings.warn("callback arguments are deprecated, use the returned Future instead",
+                          DeprecationWarning)
             callback = stack_context.wrap(callback)
 
             def handle_future(future):
@@ -270,8 +285,13 @@ class AsyncHTTPClient(Configurable):
 
         def handle_response(response):
             if raise_error and response.error:
+                if isinstance(response.error, HTTPError):
+                    response.error.response = response
                 future.set_exception(response.error)
             else:
+                if response.error and not response._error_is_response_code:
+                    warnings.warn("raise_error=False will allow '%s' to be raised in the future" %
+                                  response.error, DeprecationWarning)
                 future_set_result_unless_cancelled(future, response)
         self.fetch_impl(request, handle_response)
         return future
@@ -585,8 +605,10 @@ class HTTPResponse(object):
             self.effective_url = request.url
         else:
             self.effective_url = effective_url
+        self._error_is_response_code = False
         if error is None:
             if self.code < 200 or self.code >= 300:
+                self._error_is_response_code = True
                 self.error = HTTPError(self.code, message=self.reason,
                                        response=self)
             else:
@@ -615,7 +637,7 @@ class HTTPResponse(object):
         return "%s(%s)" % (self.__class__.__name__, args)
 
 
-class HTTPError(Exception):
+class HTTPClientError(Exception):
     """Exception thrown for an unsuccessful HTTP request.
 
     Attributes:
@@ -628,12 +650,18 @@ class HTTPError(Exception):
     Note that if ``follow_redirects`` is False, redirects become HTTPErrors,
     and you can look at ``error.response.headers['Location']`` to see the
     destination of the redirect.
+
+    .. versionchanged:: 5.1
+
+       Renamed from ``HTTPError`` to ``HTTPClientError`` to avoid collisions with
+       `tornado.web.HTTPError`. The name ``tornado.httpclient.HTTPError`` remains
+       as an alias.
     """
     def __init__(self, code, message=None, response=None):
         self.code = code
         self.message = message or httputil.responses.get(code, "Unknown")
         self.response = response
-        super(HTTPError, self).__init__(code, message, response)
+        super(HTTPClientError, self).__init__(code, message, response)
 
     def __str__(self):
         return "HTTP %d: %s" % (self.code, self.message)
@@ -643,6 +671,9 @@ class HTTPError(Exception):
     # (especially on pypy, which doesn't have the same recursion
     # detection as cpython).
     __repr__ = __str__
+
+
+HTTPError = HTTPClientError
 
 
 class _RequestProxy(object):

@@ -107,6 +107,9 @@ _watched_files = set()
 _reload_hooks = []
 _reload_attempted = False
 _io_loops = weakref.WeakKeyDictionary()  # type: ignore
+_autoreload_is_main = False
+_original_argv = None
+_original_spec = None
 
 
 def start(check_time=500):
@@ -214,11 +217,15 @@ def _reload():
     # __spec__ is not available (Python < 3.4), check instead if
     # sys.path[0] is an empty string and add the current directory to
     # $PYTHONPATH.
-    spec = getattr(sys.modules['__main__'], '__spec__', None)
-    if spec:
-        argv = ['-m', spec.name] + sys.argv[1:]
+    if _autoreload_is_main:
+        spec = _original_spec
+        argv = _original_argv
     else:
+        spec = getattr(sys.modules['__main__'], '__spec__', None)
         argv = sys.argv
+    if spec:
+        argv = ['-m', spec.name] + argv[1:]
+    else:
         path_prefix = '.' + os.pathsep
         if (sys.path[0] == '' and
                 not os.environ.get("PYTHONPATH", "").startswith(path_prefix)):
@@ -226,7 +233,7 @@ def _reload():
                                         os.environ.get("PYTHONPATH", ""))
     if not _has_execv:
         subprocess.Popen([sys.executable] + argv)
-        sys.exit(0)
+        os._exit(0)
     else:
         try:
             os.execv(sys.executable, [sys.executable] + argv)
@@ -269,7 +276,17 @@ def main():
     can catch import-time problems like syntax errors that would otherwise
     prevent the script from reaching its call to `wait`.
     """
+    # Remember that we were launched with autoreload as main.
+    # The main module can be tricky; set the variables both in our globals
+    # (which may be __main__) and the real importable version.
+    import tornado.autoreload
+    global _autoreload_is_main
+    global _original_argv, _original_spec
+    tornado.autoreload._autoreload_is_main = _autoreload_is_main = True
     original_argv = sys.argv
+    tornado.autoreload._original_argv = _original_argv = original_argv
+    original_spec = getattr(sys.modules['__main__'], '__spec__', None)
+    tornado.autoreload._original_spec = _original_spec = original_spec
     sys.argv = sys.argv[:]
     if len(sys.argv) >= 3 and sys.argv[1] == "-m":
         mode = "module"

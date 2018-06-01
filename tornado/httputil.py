@@ -29,10 +29,12 @@ import email.utils
 import numbers
 import re
 import time
+import unicodedata
+import warnings
 
 from tornado.escape import native_str, parse_qs_bytes, utf8
 from tornado.log import gen_log
-from tornado.util import ObjectDict, PY3
+from tornado.util import ObjectDict, PY3, unicode_type
 
 if PY3:
     import http.cookies as Cookie
@@ -380,10 +382,15 @@ class HTTPServerRequest(object):
         """Returns True if this request supports HTTP/1.1 semantics.
 
         .. deprecated:: 4.0
-           Applications are less likely to need this information with the
-           introduction of `.HTTPConnection`.  If you still need it, access
-           the ``version`` attribute directly.
+
+           Applications are less likely to need this information with
+           the introduction of `.HTTPConnection`. If you still need
+           it, access the ``version`` attribute directly. This method
+           will be removed in Tornado 6.0.
+
         """
+        warnings.warn("supports_http_1_1() is deprecated, use request.version instead",
+                      DeprecationWarning)
         return self.version == "HTTP/1.1"
 
     @property
@@ -412,8 +419,10 @@ class HTTPServerRequest(object):
 
         .. deprecated:: 4.0
            Use ``request.connection`` and the `.HTTPConnection` methods
-           to write the response.
+           to write the response. This method will be removed in Tornado 6.0.
         """
+        warnings.warn("req.write deprecated, use req.connection.write and write_headers instead",
+                      DeprecationWarning)
         assert isinstance(chunk, bytes)
         assert self.version.startswith("HTTP/1."), \
             "deprecated interface only supported in HTTP/1.x"
@@ -424,8 +433,10 @@ class HTTPServerRequest(object):
 
         .. deprecated:: 4.0
            Use ``request.connection`` and the `.HTTPConnection` methods
-           to write the response.
+           to write the response. This method will be removed in Tornado 6.0.
         """
+        warnings.warn("req.finish deprecated, use req.connection.finish instead",
+                      DeprecationWarning)
         self.connection.finish()
         self._finish_time = time.time()
 
@@ -581,6 +592,11 @@ class HTTPConnection(object):
         The ``version`` field of ``start_line`` is ignored.
 
         Returns a `.Future` if no callback is given.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0.
         """
         raise NotImplementedError()
 
@@ -589,6 +605,11 @@ class HTTPConnection(object):
 
         The callback will be run when the write is complete.  If no callback
         is given, returns a Future.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0.
         """
         raise NotImplementedError()
 
@@ -927,6 +948,20 @@ def _encode_header(key, pdict):
             # TODO: quote if necessary.
             out.append('%s=%s' % (k, v))
     return '; '.join(out)
+
+
+def encode_username_password(username, password):
+    """Encodes a username/password pair in the format used by HTTP auth.
+
+    The return value is a byte string in the form ``username:password``.
+
+    .. versionadded:: 5.1
+    """
+    if isinstance(username, unicode_type):
+        username = unicodedata.normalize('NFC', username)
+    if isinstance(password, unicode_type):
+        password = unicodedata.normalize('NFC', password)
+    return utf8(username) + b":" + utf8(password)
 
 
 def doctests():

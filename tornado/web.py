@@ -78,6 +78,7 @@ import time
 import tornado
 import traceback
 import types
+import warnings
 from inspect import isclass
 from io import BytesIO
 
@@ -542,6 +543,10 @@ class RequestHandler(object):
         Newly-set cookies are not immediately visible via `get_cookie`;
         they are not present until the next request.
 
+        expires may be a numeric timestamp as returned by `time.time`,
+        a time tuple as returned by `time.gmtime`, or a
+        `datetime.datetime` object.
+
         Additional keyword arguments are set on the cookies.Morsel
         directly.
         See https://docs.python.org/3/library/http.cookies.html#http.cookies.Morsel
@@ -744,7 +749,18 @@ class RequestHandler(object):
         self._write_buffer.append(chunk)
 
     def render(self, template_name, **kwargs):
-        """Renders the template with the given arguments as the response."""
+        """Renders the template with the given arguments as the response.
+
+        ``render()`` calls ``finish()``, so no other output methods can be called
+        after it.
+
+        Returns a `.Future` with the same semantics as the one returned by `finish`.
+        Awaiting this `.Future` is optional.
+
+        .. versionchanged:: 5.1
+
+           Now returns a `.Future` instead of ``None``.
+        """
         if self._finished:
             raise RuntimeError("Cannot render() after finish()")
         html = self.render_string(template_name, **kwargs)
@@ -805,7 +821,7 @@ class RequestHandler(object):
         if html_bodies:
             hloc = html.index(b'</body>')
             html = html[:hloc] + b''.join(html_bodies) + b'\n' + html[hloc:]
-        self.finish(html)
+        return self.finish(html)
 
     def render_linked_js(self, js_files):
         """Default method used to render the final js links for the
@@ -945,6 +961,11 @@ class RequestHandler(object):
 
         .. versionchanged:: 4.0
            Now returns a `.Future` if no callback is given.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed in
+           Tornado 6.0.
         """
         chunk = b"".join(self._write_buffer)
         self._write_buffer = []
@@ -983,7 +1004,20 @@ class RequestHandler(object):
                 return future
 
     def finish(self, chunk=None):
-        """Finishes this response, ending the HTTP request."""
+        """Finishes this response, ending the HTTP request.
+
+        Passing a ``chunk`` to ``finish()`` is equivalent to passing that
+        chunk to ``write()`` and then calling ``finish()`` with no arguments.
+
+        Returns a `.Future` which may optionally be awaited to track the sending
+        of the response to the client. This `.Future` resolves when all the response
+        data has been sent, and raises an error if the connection is closed before all
+        data can be sent.
+
+        .. versionchanged:: 5.1
+
+           Now returns a `.Future` instead of ``None``.
+        """
         if self._finished:
             raise RuntimeError("finish() called twice")
 
@@ -1015,12 +1049,27 @@ class RequestHandler(object):
             # are keepalive connections)
             self.request.connection.set_close_callback(None)
 
-        self.flush(include_footers=True)
-        self.request.finish()
+        future = self.flush(include_footers=True)
+        self.request.connection.finish()
         self._log()
         self._finished = True
         self.on_finish()
         self._break_cycles()
+        return future
+
+    def detach(self):
+        """Take control of the underlying stream.
+
+        Returns the underlying `.IOStream` object and stops all
+        further HTTP processing. Intended for implementing protocols
+        like websockets that tunnel over an HTTP handshake.
+
+        This method is only supported when HTTP/1.1 is used.
+
+        .. versionadded:: 5.1
+        """
+        self._finished = True
+        return self.request.connection.detach()
 
     def _break_cycles(self):
         # Break up a reference cycle between this handler and the
@@ -1688,7 +1737,14 @@ def asynchronous(method):
     .. versionchanged:: 4.3 Returning anything but ``None`` or a
        yieldable object from a method decorated with ``@asynchronous``
        is an error. Such return values were previously ignored silently.
+
+    .. deprecated:: 5.1
+
+       This decorator is deprecated and will be removed in Tornado 6.0.
+       Use coroutines instead.
     """
+    warnings.warn("@asynchronous is deprecated, use coroutines instead",
+                  DeprecationWarning)
     # Delay the IOLoop import because it's not available on app engine.
     from tornado.ioloop import IOLoop
 
@@ -1696,7 +1752,7 @@ def asynchronous(method):
     def wrapper(self, *args, **kwargs):
         self._auto_finish = False
         with stack_context.ExceptionStackContext(
-                self._stack_context_handle_exception):
+                self._stack_context_handle_exception, delay_warning=True):
             result = method(self, *args, **kwargs)
             if result is not None:
                 result = gen.convert_yielded(result)
@@ -2825,6 +2881,7 @@ class FallbackHandler(RequestHandler):
     def prepare(self):
         self.fallback(self.request)
         self._finished = True
+        self.on_finish()
 
 
 class OutputTransform(object):

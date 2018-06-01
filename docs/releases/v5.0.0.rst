@@ -176,7 +176,7 @@ Other notes
   `tornado.util.TimeoutError`.
 - `.IOLoop.instance` is now a deprecated alias for `.IOLoop.current`.
 - `.IOLoop.install` and `.IOLoop.clear_instance` are deprecated.
-- ``IOLoop.initialized`` has been removed.
+- The ``IOLoop.initialized`` method has been removed.
 - On Python 3, the `asyncio`-backed `.IOLoop` is always used and
   alternative `.IOLoop` implementations cannot be configured.
   `.IOLoop.current` and related methods pass through to
@@ -199,7 +199,6 @@ Other notes
   ``PYTHONASYNCIODEBUG=1`` environment variable instead.
 - `.IOLoop.clear_current` now works if it is called before any
   current loop is established.
-- The ``IOLoop.initialized`` method has been removed.
 
 `tornado.iostream`
 ~~~~~~~~~~~~~~~~~~

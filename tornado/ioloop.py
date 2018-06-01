@@ -47,6 +47,7 @@ import threading
 import time
 import traceback
 import math
+import random
 
 from tornado.concurrent import Future, is_future, chain_future, future_set_exc_info, future_add_done_callback  # noqa: E501
 from tornado.log import app_log, gen_log
@@ -103,10 +104,9 @@ class IOLoop(Configurable):
         from tornado import gen
         from tornado.iostream import IOStream
 
-        @gen.coroutine
-        def handle_connection(connection, address):
+        async def handle_connection(connection, address):
             stream = IOStream(connection)
-            message = yield stream.read_until_close()
+            message = await stream.read_until_close()
             print("message from client:", message.decode().strip())
 
         def connection_ready(sock, fd, events):
@@ -440,7 +440,8 @@ class IOLoop(Configurable):
         .. deprecated:: 5.0
 
            Not implemented on the `asyncio` event loop. Use the environment
-           variable ``PYTHONASYNCIODEBUG=1`` instead.
+           variable ``PYTHONASYNCIODEBUG=1`` instead. This method will be
+           removed in Tornado 6.0.
         """
         raise NotImplementedError()
 
@@ -454,7 +455,8 @@ class IOLoop(Configurable):
         .. deprecated:: 5.0
 
            Not implemented on the `asyncio` event loop. Use the environment
-           variable ``PYTHONASYNCIODEBUG=1`` instead.
+           variable ``PYTHONASYNCIODEBUG=1`` instead. This method will be
+           removed in Tornado 6.0.
         """
         self.set_blocking_signal_threshold(seconds, self.log_stack)
 
@@ -462,6 +464,10 @@ class IOLoop(Configurable):
         """Signal handler to log the stack trace of the current thread.
 
         For use with `set_blocking_signal_threshold`.
+
+        .. deprecated:: 5.1
+
+           This method will be removed in Tornado 6.0.
         """
         gen_log.warning('IOLoop blocked for %f seconds in\n%s',
                         self._blocking_signal_threshold,
@@ -497,17 +503,6 @@ class IOLoop(Configurable):
         If the event loop is not currently running, the next call to `start()`
         will return immediately.
 
-        To use asynchronous methods from otherwise-synchronous code (such as
-        unit tests), you can start and stop the event loop like this::
-
-          ioloop = IOLoop()
-          async_method(ioloop=ioloop, callback=ioloop.stop)
-          ioloop.start()
-
-        ``ioloop.start()`` will return after ``async_method`` has run
-        its callback, whether that callback was invoked before or
-        after ``ioloop.start``.
-
         Note that even after `stop` has been called, the `IOLoop` is not
         completely stopped until `IOLoop.start` has also returned.
         Some work that was scheduled before the call to `stop` may still
@@ -518,10 +513,10 @@ class IOLoop(Configurable):
     def run_sync(self, func, timeout=None):
         """Starts the `IOLoop`, runs the given function, and stops the loop.
 
-        The function must return either a yieldable object or
-        ``None``. If the function returns a yieldable object, the
-        `IOLoop` will run until the yieldable is resolved (and
-        `run_sync()` will return the yieldable's result). If it raises
+        The function must return either an awaitable object or
+        ``None``. If the function returns an awaitable object, the
+        `IOLoop` will run until the awaitable is resolved (and
+        `run_sync()` will return the awaitable's result). If it raises
         an exception, the `IOLoop` will stop and the exception will be
         re-raised to the caller.
 
@@ -529,21 +524,21 @@ class IOLoop(Configurable):
         a maximum duration for the function.  If the timeout expires,
         a `tornado.util.TimeoutError` is raised.
 
-        This method is useful in conjunction with `tornado.gen.coroutine`
-        to allow asynchronous calls in a ``main()`` function::
+        This method is useful to allow asynchronous calls in a
+        ``main()`` function::
 
-            @gen.coroutine
-            def main():
+            async def main():
                 # do stuff...
 
             if __name__ == '__main__':
                 IOLoop.current().run_sync(main)
 
         .. versionchanged:: 4.3
-           Returning a non-``None``, non-yieldable value is now an error.
+           Returning a non-``None``, non-awaitable value is now an error.
 
         .. versionchanged:: 5.0
            If a timeout occurs, the ``func`` coroutine will be cancelled.
+
         """
         future_cell = [None]
 
@@ -713,6 +708,10 @@ class IOLoop(Configurable):
 
         The callback is invoked with one argument, the
         `.Future`.
+
+        This method only accepts `.Future` objects and not other
+        awaitables (unlike most of Tornado where the two are
+        interchangeable).
         """
         assert is_future(future)
         callback = stack_context.wrap(callback)
@@ -788,6 +787,16 @@ class IOLoop(Configurable):
 
         The exception itself is not passed explicitly, but is available
         in `sys.exc_info`.
+
+        .. versionchanged:: 5.0
+
+           When the `asyncio` event loop is used (which is now the
+           default on Python 3), some callback errors will be handled by
+           `asyncio` instead of this method.
+
+        .. deprecated: 5.1
+
+           Support for this method will be removed in Tornado 6.0.
         """
         app_log.error("Exception in callback %r", callback, exc_info=True)
 
@@ -1161,6 +1170,14 @@ class PeriodicCallback(object):
     Note that the timeout is given in milliseconds, while most other
     time-related functions in Tornado use seconds.
 
+    If ``jitter`` is specified, each callback time will be randomly selected
+    within a window of ``jitter * callback_time`` milliseconds.
+    Jitter can be used to reduce alignment of events with similar periods.
+    A jitter of 0.1 means allowing a 10% variation in callback time.
+    The window is centered on ``callback_time`` so the total number of calls
+    within a given interval should not be significantly affected by adding
+    jitter.
+
     If the callback runs for longer than ``callback_time`` milliseconds,
     subsequent invocations will be skipped to get back on schedule.
 
@@ -1168,12 +1185,16 @@ class PeriodicCallback(object):
 
     .. versionchanged:: 5.0
        The ``io_loop`` argument (deprecated since version 4.1) has been removed.
+
+    .. versionchanged:: 5.1
+       The ``jitter`` argument is added.
     """
-    def __init__(self, callback, callback_time):
+    def __init__(self, callback, callback_time, jitter=0):
         self.callback = callback
         if callback_time <= 0:
             raise ValueError("Periodic callback must have a positive callback_time")
         self.callback_time = callback_time
+        self.jitter = jitter
         self._running = False
         self._timeout = None
 
@@ -1213,11 +1234,34 @@ class PeriodicCallback(object):
 
     def _schedule_next(self):
         if self._running:
-            current_time = self.io_loop.time()
-
-            if self._next_timeout <= current_time:
-                callback_time_sec = self.callback_time / 1000.0
-                self._next_timeout += (math.floor((current_time - self._next_timeout) /
-                                                  callback_time_sec) + 1) * callback_time_sec
-
+            self._update_next(self.io_loop.time())
             self._timeout = self.io_loop.add_timeout(self._next_timeout, self._run)
+
+    def _update_next(self, current_time):
+        callback_time_sec = self.callback_time / 1000.0
+        if self.jitter:
+            # apply jitter fraction
+            callback_time_sec *= 1 + (self.jitter * (random.random() - 0.5))
+        if self._next_timeout <= current_time:
+            # The period should be measured from the start of one call
+            # to the start of the next. If one call takes too long,
+            # skip cycles to get back to a multiple of the original
+            # schedule.
+            self._next_timeout += (math.floor((current_time - self._next_timeout) /
+                                              callback_time_sec) + 1) * callback_time_sec
+        else:
+            # If the clock moved backwards, ensure we advance the next
+            # timeout instead of recomputing the same value again.
+            # This may result in long gaps between callbacks if the
+            # clock jumps backwards by a lot, but the far more common
+            # scenario is a small NTP adjustment that should just be
+            # ignored.
+            #
+            # Note that on some systems if time.time() runs slower
+            # than time.monotonic() (most common on windows), we
+            # effectively experience a small backwards time jump on
+            # every iteration because PeriodicCallback uses
+            # time.time() while asyncio schedules callbacks using
+            # time.monotonic().
+            # https://github.com/tornadoweb/tornado/issues/2333
+            self._next_timeout += callback_time_sec

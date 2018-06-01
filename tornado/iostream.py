@@ -33,6 +33,7 @@ import os
 import socket
 import sys
 import re
+import warnings
 
 from tornado.concurrent import Future
 from tornado import ioloop
@@ -342,6 +343,12 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Added the ``max_bytes`` argument.  The ``callback`` argument is
             now optional and a `.Future` will be returned if it is omitted.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         future = self._set_read_callback(callback)
         self._read_regex = re.compile(regex)
@@ -375,6 +382,11 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Added the ``max_bytes`` argument.  The ``callback`` argument is
             now optional and a `.Future` will be returned if it is omitted.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
         """
         future = self._set_read_callback(callback)
         self._read_delimiter = delimiter
@@ -408,12 +420,23 @@ class BaseIOStream(object):
         .. versionchanged:: 4.0
             Added the ``partial`` argument.  The callback argument is now
             optional and a `.Future` will be returned if it is omitted.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` and ``streaming_callback`` arguments are
+           deprecated and will be removed in Tornado 6.0. Use the
+           returned `.Future` (and ``partial=True`` for
+           ``streaming_callback``) instead.
+
         """
         future = self._set_read_callback(callback)
         assert isinstance(num_bytes, numbers.Integral)
         self._read_bytes = num_bytes
         self._read_partial = partial
-        self._streaming_callback = stack_context.wrap(streaming_callback)
+        if streaming_callback is not None:
+            warnings.warn("streaming_callback is deprecated, use partial instead",
+                          DeprecationWarning)
+            self._streaming_callback = stack_context.wrap(streaming_callback)
         try:
             self._try_inline_read()
         except:
@@ -434,6 +457,12 @@ class BaseIOStream(object):
         entirely filled with read data.
 
         .. versionadded:: 5.0
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         future = self._set_read_callback(callback)
 
@@ -485,9 +514,19 @@ class BaseIOStream(object):
             The callback argument is now optional and a `.Future` will
             be returned if it is omitted.
 
+        .. deprecated:: 5.1
+
+           The ``callback`` and ``streaming_callback`` arguments are
+           deprecated and will be removed in Tornado 6.0. Use the
+           returned `.Future` (and `read_bytes` with ``partial=True``
+           for ``streaming_callback``) instead.
+
         """
         future = self._set_read_callback(callback)
-        self._streaming_callback = stack_context.wrap(streaming_callback)
+        if streaming_callback is not None:
+            warnings.warn("streaming_callback is deprecated, use read_bytes(partial=True) instead",
+                          DeprecationWarning)
+            self._streaming_callback = stack_context.wrap(streaming_callback)
         if self.closed():
             if self._streaming_callback is not None:
                 self._run_read_callback(self._read_buffer_size, True)
@@ -521,6 +560,12 @@ class BaseIOStream(object):
 
         .. versionchanged:: 4.5
             Added support for `memoryview` arguments.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         self._check_closed()
         if data:
@@ -530,6 +575,8 @@ class BaseIOStream(object):
             self._write_buffer.append(data)
             self._total_write_index += len(data)
         if callback is not None:
+            warnings.warn("callback argument is deprecated, use returned Future instead",
+                          DeprecationWarning)
             self._write_callback = stack_context.wrap(callback)
             future = None
         else:
@@ -546,9 +593,14 @@ class BaseIOStream(object):
     def set_close_callback(self, callback):
         """Call the given callback when the stream is closed.
 
-        This is not necessary for applications that use the `.Future`
-        interface; all outstanding ``Futures`` will resolve with a
-        `StreamClosedError` when the stream is closed.
+        This mostly is not necessary for applications that use the
+        `.Future` interface; all outstanding ``Futures`` will resolve
+        with a `StreamClosedError` when the stream is closed. However,
+        it is still useful as a way to signal that the stream has been
+        closed while no other read or write is in progress.
+
+        Unlike other callback-based interfaces, ``set_close_callback``
+        will not be removed in Tornado 6.0.
         """
         self._close_callback = stack_context.wrap(callback)
         self._maybe_add_error_listener()
@@ -807,6 +859,8 @@ class BaseIOStream(object):
         assert self._read_callback is None, "Already reading"
         assert self._read_future is None, "Already reading"
         if callback is not None:
+            warnings.warn("callbacks are deprecated, use returned Future instead",
+                          DeprecationWarning)
             self._read_callback = stack_context.wrap(callback)
         else:
             self._read_future = Future()
@@ -1136,24 +1190,23 @@ class IOStream(BaseIOStream):
         import tornado.iostream
         import socket
 
-        def send_request():
-            stream.write(b"GET / HTTP/1.0\r\nHost: friendfeed.com\r\n\r\n")
-            stream.read_until(b"\r\n\r\n", on_headers)
-
-        def on_headers(data):
+        async def main():
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+            stream = tornado.iostream.IOStream(s)
+            await stream.connect(("friendfeed.com", 80))
+            await stream.write(b"GET / HTTP/1.0\r\nHost: friendfeed.com\r\n\r\n")
+            header_data = await stream.read_until(b"\r\n\r\n")
             headers = {}
-            for line in data.split(b"\r\n"):
-               parts = line.split(b":")
-               if len(parts) == 2:
-                   headers[parts[0].strip()] = parts[1].strip()
-            stream.read_bytes(int(headers[b"Content-Length"]), on_body)
-
-        def on_body(data):
-            print(data)
+            for line in header_data.split(b"\r\n"):
+                parts = line.split(b":")
+                if len(parts) == 2:
+                    headers[parts[0].strip()] = parts[1].strip()
+            body_data = await stream.read_bytes(int(headers[b"Content-Length"]))
+            print(body_data)
             stream.close()
-            tornado.ioloop.IOLoop.current().stop()
 
         if __name__ == '__main__':
+            tornado.ioloop.IOLoop.current().run_sync(main)
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
             stream = tornado.iostream.IOStream(s)
             stream.connect(("friendfeed.com", 80), send_request)
@@ -1237,9 +1290,17 @@ class IOStream(BaseIOStream):
            ``ssl_options=dict(cert_reqs=ssl.CERT_NONE)`` or a
            suitably-configured `ssl.SSLContext` to the
            `SSLIOStream` constructor to disable.
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         self._connecting = True
         if callback is not None:
+            warnings.warn("callback argument is deprecated, use returned Future instead",
+                          DeprecationWarning)
             self._connect_callback = stack_context.wrap(callback)
             future = None
         else:
@@ -1349,7 +1410,13 @@ class IOStream(BaseIOStream):
         return future
 
     def _handle_connect(self):
-        err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        try:
+            err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        except socket.error as e:
+            # Hurd doesn't allow SO_ERROR for loopback sockets because all
+            # errors for such sockets are reported synchronously.
+            if errno_from_exception(e) == errno.ENOPROTOOPT:
+                err = 0
         if err != 0:
             self.error = socket.error(err, os.strerror(err))
             # IOLoop implementations may vary: some of them return
@@ -1523,9 +1590,13 @@ class SSLIOStream(IOStream):
 
     def connect(self, address, callback=None, server_hostname=None):
         self._server_hostname = server_hostname
-        # Pass a dummy callback to super.connect(), which is slightly
-        # more efficient than letting it return a Future we ignore.
-        super(SSLIOStream, self).connect(address, callback=lambda: None)
+        # Ignore the result of connect(). If it fails,
+        # wait_for_handshake will raise an error too. This is
+        # necessary for the old semantics of the connect callback
+        # (which takes no arguments). In 6.0 this can be refactored to
+        # be a regular coroutine.
+        fut = super(SSLIOStream, self).connect(address)
+        fut.add_done_callback(lambda f: f.exception())
         return self.wait_for_handshake(callback)
 
     def _handle_connect(self):
@@ -1569,11 +1640,19 @@ class SSLIOStream(IOStream):
         handshake to complete). It may only be called once per stream.
 
         .. versionadded:: 4.2
+
+        .. deprecated:: 5.1
+
+           The ``callback`` argument is deprecated and will be removed
+           in Tornado 6.0. Use the returned `.Future` instead.
+
         """
         if (self._ssl_connect_callback is not None or
                 self._ssl_connect_future is not None):
             raise RuntimeError("Already waiting")
         if callback is not None:
+            warnings.warn("callback argument is deprecated, use returned Future instead",
+                          DeprecationWarning)
             self._ssl_connect_callback = stack_context.wrap(callback)
             future = None
         else:

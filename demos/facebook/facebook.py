@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright 2009 Facebook
 #
@@ -61,12 +61,9 @@ class BaseHandler(tornado.web.RequestHandler):
 
 class MainHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
     @tornado.web.authenticated
-    @tornado.web.asynchronous
-    def get(self):
-        self.facebook_request("/me/home", self._on_stream,
-                              access_token=self.current_user["access_token"])
-
-    def _on_stream(self, stream):
+    async def get(self):
+        stream = await self.facebook_request("/me/home", self._on_stream,
+                                             access_token=self.current_user["access_token"])
         if stream is None:
             # Session may have expired
             self.redirect("/auth/login")
@@ -75,28 +72,22 @@ class MainHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
 
 
 class AuthLoginHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
-    @tornado.web.asynchronous
-    def get(self):
+    async def get(self):
         my_url = (self.request.protocol + "://" + self.request.host +
                   "/auth/login?next=" +
                   tornado.escape.url_escape(self.get_argument("next", "/")))
         if self.get_argument("code", False):
-            self.get_authenticated_user(
+            user = await self.get_authenticated_user(
                 redirect_uri=my_url,
                 client_id=self.settings["facebook_api_key"],
                 client_secret=self.settings["facebook_secret"],
-                code=self.get_argument("code"),
-                callback=self._on_auth)
+                code=self.get_argument("code"))
+            self.set_secure_cookie("fbdemo_user", tornado.escape.json_encode(user))
+            self.redirect(self.get_argument("next", "/"))
             return
         self.authorize_redirect(redirect_uri=my_url,
                                 client_id=self.settings["facebook_api_key"],
                                 extra_params={"scope": "user_posts"})
-
-    def _on_auth(self, user):
-        if not user:
-            raise tornado.web.HTTPError(500, "Facebook auth failed")
-        self.set_secure_cookie("fbdemo_user", tornado.escape.json_encode(user))
-        self.redirect(self.get_argument("next", "/"))
 
 
 class AuthLogoutHandler(BaseHandler, tornado.auth.FacebookGraphMixin):
