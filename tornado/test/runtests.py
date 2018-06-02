@@ -42,6 +42,7 @@ TEST_MODULES = [
     'tornado.test.locks_test',
     'tornado.test.netutil_test',
     'tornado.test.log_test',
+    'tornado.test.mock_test',
     'tornado.test.options_test',
     'tornado.test.process_test',
     'tornado.test.queues_test',
