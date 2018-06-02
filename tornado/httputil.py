@@ -814,7 +814,13 @@ def parse_multipart_form_data(boundary, data, arguments, files):
             gen_log.warning("multipart/form-data value missing name")
             continue
         name = disp_params["name"]
-        if disp_params.get("filename"):
+        filename = disp_params.get("filename*")
+        if filename:
+            filename_tuple = email.utils.decode_rfc2231(filename)
+            filename = email.utils.collapse_rfc2231_value(filename_tuple)
+        else:
+            filename = disp_params.get("filename")
+        if filename:
             ctype = headers.get("Content-Type", "application/unknown")
             files.setdefault(name, []).append(HTTPFile(  # type: ignore
                 filename=disp_params["filename"], body=value,
