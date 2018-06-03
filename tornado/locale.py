@@ -86,6 +86,17 @@ def set_default_locale(code):
     """
     global _default_locale
     global _supported_locales
+    if not code:
+        gen_log.error("your given locale code(%s) is empty!" % code)
+        return
+    code = code.replace("-", "_")
+    parts = code.split("_")
+    if len(parts) > 2:
+        gen_log.error("locale code must like en_US or en_us, not '%s'", code)
+        return
+    elif len(parts) == 2:
+        code = parts[0].lower() + "_" + parts[1].upper()
+
     _default_locale = code
     _supported_locales = frozenset(list(_translations.keys()) + [_default_locale])
 
