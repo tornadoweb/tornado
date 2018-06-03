@@ -291,7 +291,7 @@ class WSGIContainer(object):
             data["headers"] = response_headers
             return response.append
         app_response = self.wsgi_application(
-            WSGIContainer.environ(request), start_response)
+            self.__class__.environ(request), start_response)
         try:
             response.extend(app_response)
             body = b"".join(response)
