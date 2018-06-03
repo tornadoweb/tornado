@@ -319,7 +319,11 @@ class Template(object):
             raise
 
     def generate(self, **kwargs):
-        """Generate this template with the given arguments."""
+        """Generate this template as a string with the given arguments."""
+        return b"".join(self.generate_iter(**kwargs))
+
+    def generate_iter(self, **kwargs):
+        """Generate this template incrementally as an iterator with the given arguments."""
         namespace = {
             "escape": escape.xhtml_escape,
             "xhtml_escape": escape.xhtml_escape,
@@ -493,10 +497,10 @@ class _File(_Node):
     def generate(self, writer):
         writer.write_line("def _tt_execute():", self.line)
         with writer.indent():
-            writer.write_line("_tt_buffer = []", self.line)
-            writer.write_line("_tt_append = _tt_buffer.append", self.line)
             self.body.generate(writer)
-            writer.write_line("return _tt_utf8('').join(_tt_buffer)", self.line)
+            if self.line == 0:
+                writer.write_line("yield _tt_utf8('')", self.line)
+
 
     def each_child(self):
         return (self.body,)
@@ -569,11 +573,8 @@ class _ApplyBlock(_Node):
         writer.apply_counter += 1
         writer.write_line("def %s():" % method_name, self.line)
         with writer.indent():
-            writer.write_line("_tt_buffer = []", self.line)
-            writer.write_line("_tt_append = _tt_buffer.append", self.line)
             self.body.generate(writer)
-            writer.write_line("return _tt_utf8('').join(_tt_buffer)", self.line)
-        writer.write_line("_tt_append(_tt_utf8(%s(%s())))" % (
+        writer.write_line("yield _tt_utf8(%s(_tt_utf8('').join(%s())))" % (
             self.method, method_name), self.line)
 
 
@@ -630,7 +631,7 @@ class _Expression(_Node):
             # so we have to convert to utf8 again.
             writer.write_line("_tt_tmp = _tt_utf8(%s(_tt_tmp))" %
                               writer.current_template.autoescape, self.line)
-        writer.write_line("_tt_append(_tt_tmp)", self.line)
+        writer.write_line("yield _tt_tmp", self.line)
 
 
 class _Module(_Expression):
@@ -654,7 +655,7 @@ class _Text(_Node):
             value = filter_whitespace(self.whitespace, value)
 
         if value:
-            writer.write_line('_tt_append(%r)' % escape.utf8(value), self.line)
+            writer.write_line('yield %r' % escape.utf8(value), self.line)
 
 
 class ParseError(Exception):
