@@ -173,7 +173,7 @@ class ComposeHandler(BaseHandler):
         id = self.get_argument("id", None)
         entry = None
         if id:
-            entry = await self.query("SELECT * FROM entries WHERE id = %s", int(id))
+            entry = await self.queryone("SELECT * FROM entries WHERE id = %s", int(id))
         self.render("compose.html", entry=entry)
 
     @tornado.web.authenticated
