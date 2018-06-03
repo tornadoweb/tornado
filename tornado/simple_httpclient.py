@@ -209,6 +209,7 @@ class SimpleAsyncHTTPClient(AsyncHTTPClient):
 
 class _HTTPConnection(httputil.HTTPMessageDelegate):
     _SUPPORTED_METHODS = set(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+    _SAFE_NETHODS = set(["GET", "HEAD", "OPTIONS"])
 
     def __init__(self, client, request, release_callback,
                  final_callback, max_buffer_size, tcp_client,
@@ -491,17 +492,10 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             self.request.header_callback('\r\n')
 
     def _should_follow_redirect(self):
-        if not (self.request.follow_redirects and
+        return (self.request.follow_redirects and
                 self.request.max_redirects > 0 and
-                self.code in (301, 302, 303, 307, 308)):
-            return False
-        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.4
-        # According to the spec, the temporary URI may not be specified when the
-        # request method was HEAD.
-        # TODO: Unless the request method was HEAD, give a warning or raise an
-        # exception when the temporary URI is not specified?
-        redirect_location = self.headers.get("Location")
-        return (redirect_location is not None)
+                self.code in (301, 302, 303, 307, 308) and
+                self.headers.get("Location") is not None)
 
     def finish(self):
         data = b''.join(self.chunks)
@@ -522,8 +516,8 @@ class _HTTPConnection(httputil.HTTPMessageDelegate):
             # treat 302 the same as 303, and many servers use 302 for
             # compatibility with pre-HTTP/1.1 user agents which don't
             # understand the 303 status.
-            if self.code in (302, 303):
-                if self.request.method != "HEAD":
+            if self.code in (301, 302, 303):
+                if self.request.method not in self._SAFE_NETHODS:
                     new_request.method = "GET"
                 new_request.body = None
                 for h in ["Content-Length", "Content-Type",
