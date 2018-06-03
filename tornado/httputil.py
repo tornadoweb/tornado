@@ -891,7 +891,8 @@ def parse_response_start_line(line):
 # The original 2.7 version of this code did not correctly support some
 # combinations of semicolons and double quotes.
 # It has also been modified to support valueless parameters as seen in
-# websocket extension negotiations.
+# websocket extension negotiations, and to support non-ascii values in
+# RFC 2231/5987 format.
 
 
 def _parseparam(s):
@@ -912,8 +913,10 @@ def _parse_header(line):
 
     Return the main content-type and a dictionary of options.
 
-    >>> d = "CD: fd; foo=\"b\\\\a\\\"r\"; file*=utf-8''T%C3%A4st"
-    >>> d = _parse_header(d)[1]
+    >>> d = "form-data; foo=\"b\\\\a\\\"r\"; file*=utf-8''T%C3%A4st"
+    >>> ct, d = _parse_header(d)
+    >>> ct
+    'form-data'
     >>> d['file'] == r'T\u00e4st'.encode('ascii').decode('unicode_escape')
     True
     >>> d['foo']
@@ -928,9 +931,9 @@ def _parse_header(line):
         if i >= 0:
             name = p[:i].strip().lower()
             value = p[i + 1:].strip()
-            params.append((name, value))
+            params.append((name, native_str(value)))
     params = email.utils.decode_params(params)
-    params.pop(0) # get rid of the dummy again
+    params.pop(0)  # get rid of the dummy again
     pdict = {}
     for name, value in params:
         value = email.utils.collapse_rfc2231_value(value)
