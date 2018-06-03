@@ -3276,7 +3276,7 @@ def decode_signed_value(secret, name, value, max_age_days=31,
 
     if version < min_version:
         return None
-    if version == 1:
+    if version == 1 and not isinstance(secret, dict):
         return _decode_signed_value_v1(secret, name, value,
                                        max_age_days, clock)
     elif version == 2:
