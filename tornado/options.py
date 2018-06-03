@@ -367,15 +367,15 @@ class OptionParser(object):
             if normalized in self._options:
                 option = self._options[normalized]
                 if option.multiple:
-                    if not isinstance(config[name], list):
-                        raise Error("Option %r is required to be a list of %s" %
+                    if not isinstance(config[name], (list, str)):
+                        raise Error("Option %r is required to be a list of %s "
+                                    "or a comma-separated string" %
                                     (option.name, option.type.__name__))
 
                 if type(config[name]) == str and option.type != str:
                     option.parse(config[name])
                 else:
                     option.set(config[name])
-
 
         if final:
             self.run_parse_callbacks()
@@ -500,19 +500,16 @@ class _Option(object):
             basestring_type: self._parse_string,
         }.get(self.type, self.type)
         if self.multiple:
-            if isinstance(value, list):
-                self._value = value
-            else:
-                self._value = []
-                for part in value.split(","):
-                    if issubclass(self.type, numbers.Integral):
-                        # allow ranges of the form X:Y (inclusive at both ends)
-                        lo, _, hi = part.partition(":")
-                        lo = _parse(lo)
-                        hi = _parse(hi) if hi else lo
-                        self._value.extend(range(lo, hi + 1))
-                    else:
-                        self._value.append(_parse(part))
+            self._value = []
+            for part in value.split(","):
+                if issubclass(self.type, numbers.Integral):
+                    # allow ranges of the form X:Y (inclusive at both ends)
+                    lo, _, hi = part.partition(":")
+                    lo = _parse(lo)
+                    hi = _parse(hi) if hi else lo
+                    self._value.extend(range(lo, hi + 1))
+                else:
+                    self._value.append(_parse(part))
         else:
             self._value = _parse(value)
         if self.callback is not None:

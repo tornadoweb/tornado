@@ -25,14 +25,14 @@ except ImportError:
 
 
 class Email(object):
-   def __init__(self, value):
+    def __init__(self, value):
         if isinstance(value, str) and '@' in value:
             self._value = value
         else:
             raise ValueError()
 
-   @property
-   def value(self):
+    @property
+    def value(self):
         return self._value
 
 
