@@ -277,7 +277,8 @@ class AsyncHTTPClient(Configurable):
                 elif exc is not None:
                     response = HTTPResponse(
                         request, 599, error=exc,
-                        request_time=time.time() - request.start_time)
+                        request_time=time.time() - request.start_time,
+                        start_time=request.start_time)
                 else:
                     response = future.result()
                 self.io_loop.add_callback(callback, response)
